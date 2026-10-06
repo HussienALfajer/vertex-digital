@@ -1,0 +1,7 @@
+# Proposes updates of the pinned GitHub Actions (CI pins them to commit SHAs).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -99,7 +99,23 @@ Avoid `max` unless a gain is measured. Agent teams, fast mode and `opusplan` are
 
 ## Cloud sessions
 
-Sessions can run locally or in a Claude Code cloud environment (Ubuntu). The Phase 0 scaffold adds `scripts/cloud-setup.sh` (installs Node 24, PostgreSQL 17, Chromium for Playwright) and `scripts/cloud-session.sh` (a SessionStart hook that starts PostgreSQL, installs dependencies, creates the dev and test databases and migrates them), as in Vertex Hub, and records the one-time environment setup here.
+Sessions can run on the owner's machine (**Local**) or in a Claude Code cloud environment (**Cloud**, Ubuntu 24.04). Skills, subagents, hooks, `CLAUDE.md` files and settings come with the repository, and the two scripts below give a cloud session the same toolchain and databases as the owner's machine.
+
+| Script | Runs | Does |
+|---|---|---|
+| `scripts/cloud-setup.sh` | Once per environment, as its setup script; the result is cached (rebuilt when the script or network list changes, or after about seven days) | Installs Node 24 and pulls the `postgres:17` image |
+| `scripts/cloud-session.sh` | On every cloud session start and resume (SessionStart hook in `.claude/settings.json`); exits at once outside the cloud | Starts PostgreSQL 17, `pnpm install`, creates `.env` and the dev and test databases (`db:setup-local`) |
+
+Later Phase 0 PRs extend both: migrating the dev database with `packages/db`, Chromium for Playwright with the front ends (and the Playwright download domains in the network list below). The dev database in a cloud session is disposable. No secret is needed: `.env` gets a random password on each VM.
+
+### One-time setup (the owner, at claude.ai/code)
+1. Create a cloud environment named `vertex-digital`.
+2. **Network access:** Custom, with the default (Trusted) domains included.
+3. **Setup script:** paste the whole of `scripts/cloud-setup.sh`. Paste it again whenever that file changes.
+4. **Environment variables:** none.
+5. The Claude GitHub App is installed on the repository (needed to clone and push).
+
+If the hook reports "Cloud session problems", fix the environment before running checks: a check that fails for environment reasons says nothing about the code. In a cloud session `/clear` does not exist (start a new session instead), the model and effort are set with `/model` and `/effort` before the first message, and the cleanup line after a merge is for the local checkout.
 
 What always stays local:
 - **Production deploys** (`ssh`): the server's SSH key never goes into a cloud environment.
