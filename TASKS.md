@@ -35,9 +35,9 @@ Phase 0 of `docs/ROADMAP.md`, split into four PRs. Each PR leaves `main` green a
 - [ ] `packages/ui`: tokens from `brand/identity.md`, Vertex Hub components copied and adapted, fonts (Montserrat, Noto Kufi Arabic fallback, Madani when present), VERTEX DIGITAL wordmark draft in the Vertex Media style (Q16: agent draft, designer files later), `conventions.test.ts`, `tokens.test.ts`, `CLAUDE.md`
 - [ ] `apps/store`: Next.js 16, Cache Components, Arabic RTL shell, dark default, i18n catalog, customer sign-in page, performance budget, Playwright smoke and screenshots (dark and light, phone width), `CLAUDE.md`
 - [ ] `apps/admin`: Vite, TanStack Router and Query, RTL shell, theme switch, staff sign-in with TOTP, Playwright smoke and screenshots (light and dark), `CLAUDE.md`; `packages/config/tsconfig/react.json`
-- [ ] CI: E2E job with the report and screenshots as artifacts; Chromium in the cloud scripts; `pnpm test:e2e`; `.claude/launch.json`
+- [ ] CI: E2E job with the report and screenshots as artifacts, added to the required checks of `main` (owner approves); Chromium in the cloud scripts; `pnpm test:e2e`; `.claude/launch.json`
 - [ ] `deploy/`: nginx for both hosts (TLS, limits, headers, Brotli, `/api/admin` split), fail2ban jails, PM2 ecosystem (store, api, worker), atomic releases with rollback, health checks, daily backups, provisioning script, `CLAUDE.md`; `docs/deployment.md`; Sentry account (Q15) noted. No server command without the owner's approval in that session
 - [ ] Checks (with e2e), reviewer, owner acceptance in the browser, PR with auto-merge
 
 ## Branch protection (owner chose option A, 2026-10-06)
-- [ ] After PR 1 is opened and its CI has run: propose the required CI checks for `main`, apply them after the owner approves, then enable auto-merge on PR 1 (so it waits for its own CI)
+- [x] Required checks on `main` (owner approved): `Typecheck, lint, test, build` and `Secret scan` from GitHub Actions, branch up to date before merging; PR required, rules apply to admins, no force-push or deletion. Then auto-merge on PR 1
