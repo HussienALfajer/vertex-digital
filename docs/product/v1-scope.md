@@ -1,6 +1,6 @@
 # Vertex Digital — V1 Scope
 
-Status: drafted from the owner's brief on 2026-10-06; awaiting the owner's approval. Changes to this file need the owner's approval.
+Status: drafted from the owner's brief on 2026-10-06 and revised after the owner's review (code products, partial delivery, validation guard, store switches, customer notifications); awaiting the owner's final approval. Changes to this file need the owner's approval.
 
 ## 1. Business context
 
@@ -96,10 +96,26 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - Linked to staff accounts (one-time link code from the admin panel after 2FA).
 - Deposit cards with receipt and Approve / Reject buttons for deposit reviewers (within an amount limit), supplier and system alerts for owner and managers, daily summary.
 
+#### F26 — Store switches and emergency stop
+- Owner and manager settings, each change re-authenticated and audited, effective at once in the store and the worker:
+  - **Registration open / closed.** Closed by default: only staff-created test customers can sign in until the pilot. Every production deploy before the pilot keeps it closed, so no one can deposit real money before there is something to buy.
+  - **Emergency stop** (one button, also from Telegram for the owner): stops new purchases, new deposits, or both; the store shows a calm maintenance notice; orders already paid keep being fulfilled or refunded, and no money is touched.
+  - **Per-method deposit switch** (Sham Cash, USDT TRC20, USDT BEP20) and **per-supplier switch**.
+- An active switch is shown as a banner in the admin panel and in the daily Telegram summary.
+
+#### F27 — Customer notifications
+- Channels in V1: **email** (free, through the outbox, ADR 0007) and an **in-site notification center** (bell with unread count, live over SSE). Web push joins in F24.
+- Events: deposit credited, deposit rejected (with the reason), order delivered, order partly delivered, order refunded, `awaiting_balance` order completed or expired, ticket reply (F23). Phase 1 wires the deposit events; later features add theirs.
+- Per-event email preferences in the account page; security emails (OTP, password change, new sign-in) cannot be turned off.
+- Messages never contain codes, full player IDs, receipts or amounts beyond what the customer needs.
+
 ### Phase 2 — Selling
 
 #### F08 — Catalog
-- Games and apps (with category, cover, per-game accent color, player ID format and ID guide image, region notes), products (packs) with official price and display order.
+- Games and apps (with category, cover, per-game accent color, ID guide image, region notes), products (packs) with official price and display order.
+- **Two product kinds:**
+  - **Direct top-up:** delivered to an account. Each game defines its **input fields** (player ID, and where needed zone ID, server or region, phone number), with type, format, required flag and the guide image; fields are mapped to the supplier's requirements (SHOP2TOPUP publishes them per category).
+  - **Code:** a gift card or voucher PIN (iTunes, Google Play, PSN, Steam, Razer Gold…) delivered as a code; quantity allowed; region and redemption instructions per product.
 - Product availability: active, paused (manual or by margin guard), out of stock (no healthy supplier).
 - Admin: create and edit games and products, reorder, archive.
 
@@ -117,6 +133,8 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - Order state machine (ADR 0004): `awaiting_balance` → `paid` → `sent_to_supplier` → `delivered`, with `failed` → retry on backup supplier → `refunded`, and `needs_review` for unknown outcomes.
 - Smart routing to the cheapest healthy supplier with automatic fallback (ADR 0005); idempotent supplier orders; webhooks with polling fallback.
 - Automatic refund to the wallet when every route fails.
+- **Partial delivery** (quantity above 1): delivered units are kept; the undelivered units are retried on the next route or refunded, so the customer pays only for what arrived (ADR 0004).
+- **Code delivery:** codes received from the supplier are stored encrypted, shown only to the buying customer on the order page (reveal and copy, each reveal logged), never in emails, push messages, shareable receipts, logs or the Telegram bot; staff see them masked and reveal them only with permission and audit.
 - Measured delivery time per product (median and p90 of recent orders).
 - Admin: order list and detail with the full attempt history; refund (order operator and up).
 
@@ -126,7 +144,8 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - Server-rendered and cached for speed and SEO (Cache Components); fresh prices on price change.
 
 #### F13 — Purchase flow and live order tracking
-- Buy box: pack, player ID with live validation while typing (shows the in-game name when the supplier supports it), quantity, total in USD and SYP.
+- Buy box: pack, the game's input fields (F08) with live player validation (shows the in-game name when the supplier supports it), quantity, total in USD and SYP.
+- **Validation guard:** validation runs only for signed-in, verified customers, after the customer stops typing or leaves the field (never per keystroke); results are cached per game and account for a set time; per-customer and per-IP limits protect the supplier's daily validation quota and stop the store being used as a free name-lookup service. When the quota or the supplier is unavailable, the customer sees a clear warning and confirms the ID manually.
 - Slide-to-pay confirmation (no accidental purchases); idempotent submission.
 - Live order timeline over SSE: paid → sent → delivered (or retrying, refunded), with times.
 - "Balance too low": the order is saved as `awaiting_balance` with its price, the customer is sent to deposit, and the order completes automatically after the deposit is credited (A02), or expires.
@@ -141,7 +160,7 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 #### F16 — Cart, gift top-up and shareable receipt
 - Cart: several packs for one or more player IDs, paid in one wallet debit; each line is its own order.
 - Gift top-up: buy for someone else's player ID with a short message and a shareable gift card image or link.
-- Shareable receipt: a public, non-guessable receipt page and image (no personal data beyond what the customer chooses to show).
+- Shareable receipt: a public, non-guessable receipt page and image (no personal data beyond what the customer chooses to show, and never a code from a code product).
 
 ### Phase 3 — Operations
 
@@ -172,7 +191,7 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - Installable PWA with offline shell; web push (VAPID, self-hosted) for order delivered, deposit credited or rejected, ticket replies.
 
 #### F25 — Live activity
-- Real, anonymized activity feed on the store ("PUBG 660 UC delivered in 14 s, Damascus"), built from actual delivered orders with a delay and no personal data; can be turned off.
+- Real, anonymized activity feed on the store ("PUBG 660 UC delivered in 14 s"), built from actual delivered orders with a delay and no personal data (no names, IDs or locations); can be turned off.
 
 ## 5. Automations (fixed rules in V1)
 
@@ -181,8 +200,8 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 | A01 | USDT deposit TXID submitted | Verify on chain until confirmed or rejected; credit the wallet once (F06) |
 | A02 | Deposit credited | Pay and fulfil the customer's `awaiting_balance` orders, oldest first, while the balance allows (F13) |
 | A03 | Order paid | Route to the cheapest healthy profitable supplier and send, in the worker (F11) |
-| A04 | Supplier attempt failed definitively | Retry on the next profitable route; when none is left, refund to the wallet and notify (F11) |
-| A05 | Supplier webhook or poll result | Move the order to delivered or failed; notify the customer; record delivery time (F11) |
+| A04 | Supplier attempt failed definitively (whole order or some units) | Retry the undelivered units on the next profitable route; when none is left, refund them to the wallet and notify (F11, F27) |
+| A05 | Supplier webhook or poll result | Move the order to delivered, partly delivered or failed; notify the customer (F27); record delivery time (F11) |
 | A06 | Price sync (schedule) | Update costs; changes beyond the threshold go to the review queue; margin guard pauses products without a profitable route (F09, F10) |
 | A07 | Supplier balance below its threshold | Telegram alert to owner and managers (F07, F09) |
 | A08 | Supplier error rate or latency over limits | Mark the supplier degraded or down, exclude it from routing, show service status on the store (F09, F12) |
@@ -192,7 +211,9 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 | A12 | SYP rate lock older than 15 minutes | The quote expires; a new quote at the current rate is needed (F04) |
 | A13 | Unhandled error in any app | Sentry event; Telegram alert with rate limiting (ADR 0002) |
 | A14 | Order in `sent_to_supplier` beyond the product's expected time | Poll the supplier; past the hard limit, mark `needs_review` and alert order operators (F11, F17) |
-| A15 | `awaiting_balance` order past its expiry | Cancel it (no money was taken) and notify the customer (F13) |
+| A15 | `awaiting_balance` order past its expiry | Cancel it (no money was taken) and notify the customer (F13, F27) |
+| A16 | Deposit credited or rejected | Notify the customer by email and in the notification center (F05, F06, F27) |
+| A17 | Emergency stop turned on or off | Store and worker refuse new purchases and/or deposits at once; Telegram notice to owner and managers (F26) |
 
 ## 6. Explicitly out of V1
 
@@ -217,10 +238,10 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 | Phase | Contents | Outcome |
 |---|---|---|
 | 0. Foundation | Repo scaffold, CI, design system (store and admin), both auth skeletons, ALTCHA, security baseline, deployment skeleton, Sentry | A deployable empty store and panel |
-| 1. Money core | F01–F07 | Customers can sign up and fund wallets; staff can review deposits safely |
-| 2. Selling | F08–F16 | Customers buy and receive top-ups automatically |
+| 1. Money core | F01–F07, F26, F27 | Test customers can sign up and fund wallets; staff can review deposits safely; registration stays closed |
+| 2. Selling | F08–F16 | Test customers buy and receive top-ups automatically; registration still closed |
 | 3. Operations | F17–F25 | Staff run the store from the panel; nightly reconciliation; PWA |
-| Pilot | Open quiet launch with low limits | Real orders, real suppliers, limits raised as confidence grows |
+| Pilot | Registration opened (F26), quiet launch with low limits | Real orders, real suppliers, limits raised as confidence grows |
 | 4. Growth | Resellers and reseller API, Telegram purchase bot, loyalty and referrals, mobile credit, Sham Cash automation, English UI | — |
 
 ## 8. V1 success metrics (two months after launch)

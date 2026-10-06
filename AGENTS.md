@@ -4,7 +4,7 @@ A game and app top-up store for Syria, with a customer site and an admin panel. 
 
 V1 goal: the most professional, clear and trustworthy top-up store in the Syrian market: money is never lost or double-spent, most orders are delivered in seconds without staff, and the customer always sees what is happening.
 
-This project is independent. Do not read or reuse other folders on this machine (including other `vertex-*` directories) unless the owner explicitly asks.
+This project is independent. Do not read or reuse other folders on this machine unless the owner explicitly asks. One standing exception (owner, 2026-10-06): `D:\vertex-hub` may be **read, never edited**, to copy and adapt its design system (`packages/ui`, `brand/`) and its proven setup files (scripts, configs, CI, deploy) during Phase 0 and when a later task names it. Copied code is adapted to this project's rules; nothing is imported across repositories.
 
 ## Source of truth
 
@@ -82,8 +82,21 @@ Keep this table true: the PR that adds or changes a command updates it.
 ## Git
 
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`).
-- One branch per change, named by its type (`feat/<feature>`, `fix/<topic>`, `refactor/<topic>`, `chore/<topic>`, `docs/<topic>`), merged to `main` through a PR after CI passes.
-- Right after opening a PR, enable auto-merge with a merge commit: `gh pr merge <number> --auto --merge`. Never squash or rebase-merge: the owner's cleanup uses `git branch -d`, which refuses branches merged that way.
+- One branch per change, named by its type (`feat/<feature>`, `fix/<topic>`, `refactor/<topic>`, `chore/<topic>`, `docs/<topic>`), merged to `main` through a PR after CI passes. Never commit to or push `main` directly.
+- Never squash or rebase-merge: the owner's cleanup uses `git branch -d`, which refuses branches merged that way.
+
+## Finishing a task: open the PR at once
+
+When a task's work is done (a spec approved, a `/feature-slice` PR accepted, a supplier adapter reviewed, a fix, a docs change), finish it in the same turn, without waiting to be asked. There is no separate shipping command. Stop and report at the first step that fails.
+
+1. **Branch:** not `main`; if on `main`, create the branch named by type. `TASKS.md` has no open items for this PR.
+2. **Docs:** update `docs/ROADMAP.md` when a feature or roadmap item is done, and every doc the change made stale (`docs/architecture.md`, a folder `CLAUDE.md`, `docs/open-questions.md`, the commands table above).
+3. **Secrets:** `git status` and `git diff --stat` show no `.env`, key, receipt image, customer data or real supplier response; fixtures are sanitized.
+4. **Checks:** lint, typecheck, test and build, plus `e2e` when `apps/store`, `apps/admin` or `packages/ui` changed and `drift` when `packages/db` changed. Run `node scripts/check-record.mjs status <checks…>` first: documentation-only changes run no local checks (CI runs them all); otherwise run only the checks marked `needed`, through the `checker` subagent (a check marked `recorded` already passed on this exact tree). Before the scaffold exists there are no checks; say so. Everything must pass; fix root causes.
+5. **Review:** for feature and supplier work, the `reviewer` subagent has run and its blocking findings are fixed.
+6. **Commit:** stage the intended files only; Conventional Commit subject, a body with what and why, ending with the session's attribution line.
+7. **Pull request:** `git push -u origin <branch>`, `gh pr create --base main` with `## Summary` (what and why, in bullets) and `## Test plan` (the checks as ticked boxes, each marked run now or reused from the record; for docs only, "documentation only, CI runs the checks"), ending with the session's attribution line; then immediately `gh pr merge <number> --auto --merge`.
+8. **Report** in the format below, with the PR link under Changed and the cleanup line at the end of "Needs from you".
 
 ## Reporting
 

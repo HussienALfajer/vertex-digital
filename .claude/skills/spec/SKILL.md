@@ -27,4 +27,4 @@ Write the spec for **$ARGUMENTS**.
 - Mark the feature `[~]` in `docs/ROADMAP.md`.
 
 ## 4. Hand over
-Summarize the spec for the owner in Arabic, in a few lines: what V1 of the feature does, the main rules and money flows, what stays open. Revise it until the owner approves, then set `Status: Approved`. The spec ships on its own through `/ship` (branch `docs/<id>-spec`), and the next session starts `/feature-slice <id>`.
+Summarize the spec for the owner in Arabic, in a few lines: what V1 of the feature does, the main rules and money flows, what stays open. Revise it until the owner approves, then set `Status: Approved` and, in the same turn, open the spec's PR with auto-merge on branch `docs/<id>-spec`, following "Finishing a task" in `AGENTS.md`. The next session starts `/feature-slice <id>`.

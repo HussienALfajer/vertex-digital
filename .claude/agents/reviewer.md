@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Fresh-context review of the current branch against its feature spec, the ADRs and the folder rules (CLAUDE.md in each app and package), with extra focus on money, security and fraud. Reports blocking issues only (bugs, money or security holes, abuse paths, spec gaps, broken project rules), never style. Use at the review step of every feature, before /ship. Pass the spec path if there is one.
+description: Fresh-context review of the current branch against its feature spec, the ADRs and the folder rules (CLAUDE.md in each app and package), with extra focus on money, security and fraud. Reports blocking issues only (bugs, money or security holes, abuse paths, spec gaps, broken project rules), never style. Use at the review step of every feature, before the PR is opened. Pass the spec path if there is one.
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high

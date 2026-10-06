@@ -31,6 +31,10 @@ Exact endpoints, payloads and limits are written in `docs/suppliers/<code>.md` w
 - At fulfilment the router builds candidates: enabled mapping, supplier healthy (not `down`), offer in stock, cost known and **cost < price − minimum margin** (margin guard, F10). Order: lowest cost, then health score, then measured delivery time, then priority.
 - On a definitive failure the next candidate is tried (A04); a route already tried for the order is skipped. When none is left, the order is refunded.
 - A player validated by `shop2topup` may be fulfilled by `wdgzone`: validation is about the player, not the route.
+
+### Input fields and player validation
+- Each game's input fields (player ID, zone ID, server, region, phone…) are defined in the catalog (F08) and mapped per supplier offer to the supplier's own field names; SHOP2TOPUP's per-category requirements endpoint is used to build and check the mapping. An order is never sent with a field the route needs missing.
+- Validation is a scarce, abusable resource (SHOP2TOPUP has a daily quota). The API validates only for signed-in, email-verified customers, after the field is complete (debounced or on blur, never per keystroke), with per-customer and per-IP limits, and caches results per game and account fields for a set time (valid and invalid alike). Quota use is tracked; near the quota the store falls back to "confirm the ID yourself" instead of failing purchases. Staff see quota use on the supplier page.
 - **Health:** a rolling window per supplier of success rate, unknown-outcome rate and latency sets `healthy`, `degraded` (used only when no healthy route exists) or `down` (excluded; a half-open probe after a cool-down). Supplier balance below the cost of the order excludes it too (A07 alerts).
 - **Price sync** (A06) refreshes costs on a schedule; a change beyond the configured threshold goes to the price change review queue, and the margin guard pauses products without a profitable route.
 

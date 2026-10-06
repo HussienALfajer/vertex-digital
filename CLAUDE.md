@@ -17,10 +17,10 @@
 ## Skills
 
 - `/spec <feature>`: interview the owner, then write `docs/specs/<feature>.md`.
-- `/feature-slice <feature>`: implement an approved spec layer by layer (contracts → db → api/worker → bridge → admin/store → E2E) with a check gate per layer, the reviewer and the owner's acceptance steps; stops before `/ship`.
+- `/feature-slice <feature>`: implement an approved spec layer by layer (contracts → db → api/worker → bridge → admin/store → E2E) with a check gate per layer, the reviewer and the owner's acceptance steps, then opens the PR with auto-merge ("Finishing a task" in `AGENTS.md`).
 - `/db-migration`: change the schema, generate and review the migration, test it.
 - `/supplier-adapter <supplier>`: add or change a supplier adapter in `packages/suppliers` with recorded fixtures, error mapping and webhook verification.
-- `/ship`: final checks, commit, PR with auto-merge, final report.
+- There is no shipping skill: every task ends by opening its PR with auto-merge right away, following "Finishing a task" in `AGENTS.md`.
 
 ## Context hygiene
 
@@ -30,7 +30,7 @@
 
 ## Feature workflow
 
-`/spec` (own session, `high`) → `/feature-slice` (one session per PR: plan, implement, `reviewer`, owner acceptance) → `/ship` (updates `docs/ROADMAP.md`). Production deploys happen once per phase, in their own session. Sessions, effort and first messages: `docs/workflow.md`.
+`/spec` (own session, `high`, ends with the spec PR) → `/feature-slice` (one session per PR: plan, implement, `reviewer`, owner acceptance, then the PR with auto-merge and `docs/ROADMAP.md` updated). Production deploys happen once per phase, in their own session. Sessions, effort and first messages: `docs/workflow.md`.
 
 ## Compaction
 

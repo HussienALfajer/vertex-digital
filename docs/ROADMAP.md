@@ -3,7 +3,7 @@
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs refer to `docs/product/v1-scope.md`. Production is deployed once at the end of each phase (`docs/workflow.md`).
 
 ## Phase 0 — Foundation
-- [~] Product scope, decisions and working method documented; Claude Code setup (settings, `checker` and `reviewer` subagents, skills `spec`, `feature-slice`, `db-migration`, `supplier-adapter`, `ship`, Biome hook, spec template)
+- [~] Product scope, decisions and working method documented; Claude Code setup (settings, `checker` and `reviewer` subagents, skills `spec`, `feature-slice`, `db-migration`, `supplier-adapter` (no shipping skill: every task opens its PR with auto-merge at once), Biome hook, spec template)
 - [ ] Monorepo scaffold (pnpm, Turborepo, TypeScript, Biome, shared config), folder `CLAUDE.md` files, cloud session scripts, `pnpm db:setup-local`
 - [ ] `packages/db` with Drizzle, first migration, conventions test; ledger tables with append-only grants and trigger, and the posting function with concurrency tests (ADR 0003)
 - [ ] `packages/contracts`: money math (`CURRENCY_SCALE`, rounding, SYP conversion), order transition table, error codes, permission map skeleton
@@ -25,8 +25,10 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] F05 Sham Cash deposits
 - [ ] F06 USDT deposits
 - [ ] F07 Telegram admin bot
-- [ ] Automations A01, A09, A10, A12, A13
-- [ ] Production deploy of Phase 1
+- [ ] F26 Store switches and emergency stop (registration closed by default)
+- [ ] F27 Customer notifications (email and notification center; deposit events)
+- [ ] Automations A01, A09, A10, A12, A13, A16, A17
+- [ ] Production deploy of Phase 1 (registration closed: test customers only)
 
 ## Phase 2 — Selling
 - [ ] F08 Catalog
@@ -38,8 +40,8 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] F14 Saved player IDs and one-tap recharge
 - [ ] F15 Smart search
 - [ ] F16 Cart, gift top-up and shareable receipt
-- [ ] Automations A02–A08, A14, A15
-- [ ] Production deploy of Phase 2
+- [ ] Automations A02–A08, A14, A15 (order notifications through F27)
+- [ ] Production deploy of Phase 2 (registration still closed)
 
 ## Phase 3 — Operations
 - [ ] F17 Live orders room
@@ -55,7 +57,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 
 ## Pilot — open quiet launch
 - [ ] Launch checklist done (below)
-- [ ] Registration open without promotion, low deposit and purchase limits
+- [ ] Registration opened with the F26 switch, without promotion; low deposit and purchase limits
 - [ ] Limits raised step by step as reconciliation stays clean
 
 ## Phase 4 — Growth (after V1)

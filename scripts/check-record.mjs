@@ -1,5 +1,5 @@
-// Records which whole-repo checks passed on which exact working tree, so /ship does not run them
-// again on code that has not changed since (.claude/skills/ship/SKILL.md).
+// Records which whole-repo checks passed on which exact working tree, so the finishing steps do not run them
+// again on code that has not changed since ("Finishing a task" in AGENTS.md).
 //
 //   node scripts/check-record.mjs fingerprint              print the working tree's fingerprint
 //   node scripts/check-record.mjs record <tree> <check>…   record checks that passed on <tree>

@@ -16,7 +16,7 @@ Customers pay in Syrian pounds (Sham Cash) or USDT and buy goods that suppliers 
 
 ### Exchange rate
 - An admin-set **USD→SYP rate** (SYP per 1 USD, exact `numeric`), with history. Every transaction that involves SYP stores the rate value and the rate record it used.
-- SYP display prices are USD × rate, rounded **up** to a configured clean step (e.g. 500 SYP). The step and the rate are owner/manager settings (F04).
+- SYP display prices are USD × rate, rounded **up** to a configured clean step. The step is in **new** Syrian pounds (two zeros removed from the old pound) and must stay small relative to the cheapest product: e.g. a step of 5 SYP when 1 USD is about 110–130 SYP. A step that would add more than a set share of the price (default 2%) to the cheapest active product is refused when saved. The step and the rate are owner/manager settings (F04); the current market rate and the step are confirmed with the owner in the F04 spec.
 - A SYP deposit quote locks the rate for **15 minutes**. After that, a new quote at the current rate is needed (A12).
 - Reports convert with stored rates, never today's rate.
 

@@ -37,4 +37,4 @@ A live call costs money and uses real keys, so it never runs from tests or CI. W
 
 ## 5. Close
 - Update `docs/architecture.md` if capabilities changed and the "Patterns to copy" table in `.claude/skills/feature-slice/wiring.md` for the first adapter.
-- `reviewer` subagent, then `/ship`.
+- `reviewer` subagent, fix its blocking findings, then open the PR with auto-merge at once, following "Finishing a task" in `AGENTS.md`.

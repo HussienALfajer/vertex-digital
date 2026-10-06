@@ -9,7 +9,7 @@ The system is built by the owner working with Claude Code (Opus 5.5) in the desk
 - **`AGENTS.md`** holds all shared project instructions (read directly by Codex).
 - **`CLAUDE.md`** imports it with `@AGENTS.md` and adds Claude-specific guidance only. An import is used instead of a symlink because symlinks are unreliable on Windows and in git.
 - Project knowledge lives in files (`docs/`), not in chat history.
-- Deterministic rules are enforced with hooks, tests and CI; `AGENTS.md`/`CLAUDE.md` hold guidance; repeatable workflows are skills (`spec`, `feature-slice`, `db-migration`, `supplier-adapter`, `ship`); checks and reviews run in subagents (`checker`, `reviewer`).
+- Deterministic rules are enforced with hooks, tests and CI; `AGENTS.md`/`CLAUDE.md` hold guidance; repeatable workflows are skills (`spec`, `feature-slice`, `db-migration`, `supplier-adapter`); every task ends by opening its PR with auto-merge at once ("Finishing a task" in `AGENTS.md`), with no separate shipping step (owner, 2026-10-06); checks and reviews run in subagents (`checker`, `reviewer`).
 - The `reviewer` has an explicit money, security and fraud checklist (ledger invariants, idempotency, state transitions, margin guard, authorization, abuse limits).
 - Work follows the feature cycle in `docs/workflow.md`.
 - Agents never see real secrets or customer data: `.env` reads are denied in `.claude/settings.json`, supplier fixtures are sanitized, and live supplier or blockchain calls with real money need the owner's approval.

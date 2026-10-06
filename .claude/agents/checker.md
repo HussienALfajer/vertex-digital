@@ -29,7 +29,7 @@ Run independent checks one after another and keep going after a failure, so the 
 
 ## Check record
 
-Whole-repo checks that pass are recorded against the exact working tree, so `/ship` does not run them again on unchanged code (`scripts/check-record.mjs`). Record names: `lint`, `typecheck`, `test`, `build`, `e2e`, `drift`.
+Whole-repo checks that pass are recorded against the exact working tree, so the finishing steps ("Finishing a task" in AGENTS.md) do not run them again on unchanged code (`scripts/check-record.mjs`). Record names: `lint`, `typecheck`, `test`, `build`, `e2e`, `drift`.
 
 1. Before the first check: `node scripts/check-record.mjs fingerprint` and keep the printed tree.
 2. After the last check, run `fingerprint` again. If it printed the same tree, record every **whole-repo** check that passed: `node scripts/check-record.mjs record <tree> <names…>`. One-package checks are never recorded. If the tree changed while checks ran, record nothing and say so.

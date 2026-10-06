@@ -63,24 +63,25 @@ Planned; each spec confirms its module's tables and exports.
 | `wallet` | Ledger accounts, journals, postings (through `packages/db/src/ledger`); balances and timelines | F03 |
 | `rates` | Exchange rates and their history, SYP rounding settings, rate locks | F04 |
 | `deposits` | Deposits, Sham Cash receipts and review, USDT intents and verifications, fraud flags | F05, F06 |
-| `catalog` | Games, products, categories, ID guides, availability | F08 |
+| `catalog` | Games, products (direct top-up or code), input field definitions, categories, ID guides, availability | F08 |
 | `suppliers` | Supplier connections (encrypted keys), offers, product mappings, price snapshots, price change queue, health, webhook events | F09 |
 | `pricing` | Margin rules, computed prices, margin guard | F10 |
-| `orders` | Orders, order events, fulfilment attempts (through `packages/db/src/orders`), carts, gifts, receipts | F11, F13, F16 |
-| `players` | Saved player IDs, validation cache | F13, F14 |
+| `orders` | Orders, order events, fulfilment attempts and delivered units (through `packages/db/src/orders`), encrypted product codes and their reveal log, carts, gifts, receipts | F11, F13, F16 |
+| `players` | Saved player IDs, validation cache and quota counters | F13, F14 |
 | `search` | Search index over catalog names and aliases | F15 |
 | `customers` | Limits, freezes, staff notes (staff view of customers) | F19 |
 | `reconciliation` | Nightly runs and their findings | F20 |
 | `content` | FAQ, policies, banners, announcements | F21 |
 | `reports` | No business data; reports on read from module report services, Excel export | F22 |
 | `support` | Tickets, messages, attachments | F23 |
-| `notifications` | Email outbox, web push subscriptions, customer notification preferences | F01, F24 |
+| `notifications` | Email outbox, in-site customer notifications, web push subscriptions, notification preferences | F01, F24, F27 |
+| `settings` | Store switches (registration, emergency stop, per-method and per-supplier switches) with history | F26 |
 | `activity` | Anonymized live activity feed built from delivered orders | F25 |
 | `files` | Stored uploads (receipts, attachments) behind a storage interface | F05, F23 |
 
 Rules (anatomy and the tests that enforce them: ADR 0011):
 - A module owns its tables. Other modules call its exported services; they never query its tables.
-- `audit`, `files` and `notifications` sit below the domain modules and never import them.
+- `audit`, `files`, `notifications` and `settings` sit below the domain modules and never import them.
 - `packages/db/src/ledger` is the only way to write the ledger; `packages/db/src/orders` is the only way to change an order's state. Both are used by the API and the worker.
 - Slow, scheduled or external work goes through pg-boss; the worker never serves HTTP.
 
