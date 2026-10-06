@@ -5,16 +5,16 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 ## Phase 0 — Foundation
 - [x] Product scope, decisions and working method documented; Claude Code setup (settings, `checker` and `reviewer` subagents, skills `spec`, `feature-slice`, `db-migration`, `supplier-adapter` (no shipping skill: every task opens its PR with auto-merge at once), Biome hook, spec template)
 - [x] Monorepo scaffold (pnpm, Turborepo, TypeScript, Biome, shared config in `packages/config`), cloud session scripts, `pnpm db:setup-local`; each later folder brings its own `CLAUDE.md`
-- [ ] `packages/db` with Drizzle, first migration, conventions test; ledger tables with append-only grants and trigger, and the posting function with concurrency tests (ADR 0003)
-- [ ] `packages/contracts`: money math (`CURRENCY_SCALE`, rounding, SYP conversion), order transition table, error codes, permission map skeleton
+- [x] `packages/db` with Drizzle, first migration, conventions test; ledger tables with append-only grants and trigger, and the posting function with concurrency tests (ADR 0003)
+- [x] `packages/contracts`: money math (`CURRENCY_SCALE`, rounding, SYP conversion), order transition table (ADR 0004, 0013), error codes, 100% coverage gate
 - [ ] `packages/suppliers`: `SupplierAdapter` interface, HMAC helpers, the `fake` adapter
 - [ ] `apps/api` skeleton: NestJS 12, Standard Schema validation, OpenAPI, pino, Sentry, `/api/health`, access decorators and architecture test, rate limits, ALTCHA verification
 - [ ] `apps/worker` skeleton: pg-boss wiring, heartbeat job, Sentry, Telegram alert channel
 - [ ] `apps/store` skeleton: Next.js 16, Cache Components, Arabic RTL shell, dark default, performance budget, Playwright smoke and screenshots
 - [ ] `apps/admin` skeleton: Vite, TanStack Router/Query, RTL shell, Playwright smoke
 - [ ] Design system: tokens from `brand/identity.md`, Vertex Hub components copied and adapted, VERTEX DIGITAL wordmark (fonts: Madani pending its license; fallback until then)
-- [ ] Auth skeletons: customer and staff Better Auth instances, sign-in pages, staff TOTP enforcement, first-owner CLI
-- [~] CI: typecheck, lint, test, build and gitleaks in place; migration drift, OpenAPI drift and E2E arrive with their packages
+- [ ] Auth skeletons: customer and staff Better Auth instances, sign-in pages, staff TOTP enforcement, first-owner CLI, permission map skeleton in `packages/contracts`
+- [~] CI: typecheck, lint, test, build, gitleaks and migration drift (PostgreSQL 17 service, non-superuser app role) in place; OpenAPI drift and E2E arrive with their packages
 - [ ] Deployment skeleton on the VPS: both hosts, TLS, nginx limits and headers, Brotli, fail2ban jails, PM2 (store, api, worker), atomic releases, health checks, daily backups, `docs/deployment.md`
 
 ## Phase 1 — Money core

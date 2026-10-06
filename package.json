@@ -12,7 +12,9 @@
     "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --write .",
     "test": "turbo run test",
-    "db:setup-local": "node scripts/setup-local-db.mjs"
+    "db:setup-local": "node scripts/setup-local-db.mjs",
+    "db:generate": "pnpm --filter @vertex-digital/db db:generate",
+    "db:migrate": "pnpm --filter @vertex-digital/db db:migrate"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",

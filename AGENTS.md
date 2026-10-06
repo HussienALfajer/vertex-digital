@@ -40,12 +40,12 @@ Run from the repository root (Node 24, pnpm via Corepack: `corepack enable`). Ro
 | Task | Command |
 |---|---|
 | Install | `pnpm install` |
-| Local databases: `.env` with a random password, role, dev and test databases (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
+| Local databases: `.env` with random passwords, the owner and app roles (ADR 0014), dev and test databases (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
 | Dev (api, worker, store, admin) *(later)* | `pnpm dev` |
 | Typecheck · lint · lint fix | `pnpm typecheck` · `pnpm lint` · `pnpm lint:fix` |
-| Unit + integration tests (need `TEST_DATABASE_URL`) | `pnpm test` |
+| Unit + integration tests (need the test database URLs in `.env`) | `pnpm test` |
 | E2E (Playwright) *(later)* | `pnpm test:e2e` |
-| Migration after a schema change · apply to the dev database *(later)* | `pnpm db:generate` · `pnpm db:migrate` |
+| Migration after a schema change · apply to the dev database | `pnpm db:generate` · `pnpm db:migrate` |
 | Build | `pnpm build` |
 | One package only | `pnpm --filter @vertex-digital/<name> <script>` |
 

@@ -137,7 +137,7 @@ PM2 (system user of the site)
   ├── store   Next.js     127.0.0.1:<port>
   ├── api     NestJS      127.0.0.1:<port>
   └── worker  NestJS      no port
-PostgreSQL 17 — database and role vertex_digital
+PostgreSQL 17 — database vertex_digital; owner role vertex_digital_owner (migrations), app role vertex_digital (ADR 0014)
 ```
 
 Ports are chosen at provisioning from the server's map (`/root/SERVER.md`) and recorded in `docs/deployment.md` (ADR 0009).

@@ -14,14 +14,28 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Third-party actions are pinned to full commit SHAs (the tag in the comment); Dependabot
-# proposes updates (.github/dependabot.yml). Jobs and steps arrive with their first subject: the
-# PostgreSQL service and migration drift with packages/db, OpenAPI drift with apps/api, E2E with
-# the front ends.
+# proposes updates (.github/dependabot.yml). Jobs and steps arrive with their first subject: OpenAPI
+# drift with apps/api, E2E with the front ends.
 jobs:
   checks:
     name: Typecheck, lint, test, build
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # The superuser only creates the app role and databases (scripts/setup-local-db.mjs); the tests
+    # run as the app role, which is not a superuser, as locally and in production: a superuser
+    # would bypass the ledger privileges under test.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
@@ -30,12 +44,21 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: .env, app role, dev and test databases
+        run: node scripts/setup-local-db.mjs
+        env:
+          PGPASSWORD: postgres
       - name: No known high-severity advisory in production dependencies
         run: pnpm audit --prod --audit-level=high
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Migrations match the schema
+        run: |
+          pnpm db:generate
+          git diff --exit-code -- packages/db/migrations
+          test -z "$(git status --porcelain -- packages/db/migrations)"
 
   gitleaks:
     name: Secret scan

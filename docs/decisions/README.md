@@ -16,6 +16,8 @@ Short records of decisions that shape the system. Each has a status: **Accepted*
 | [0010](0010-ai-assisted-development.md) | Claude Code (Opus 5.5) as the primary developer; AGENTS.md shared with Codex | Accepted |
 | [0011](0011-engineering-conventions.md) | Engineering conventions: layout, module anatomy, data, errors, tests | Accepted |
 | [0012](0012-brand.md) | Brand: Vertex colors, dark store, per-game accent, Madani Arabic, Arabic-only UI in V1 | Accepted |
+| [0013](0013-refund-paid-order-without-route.md) | A paid order with no profitable route left is refunded (`paid → refunded`, amends 0004) | Accepted |
+| [0014](0014-database-owner-and-app-roles.md) | Database roles: an owner role runs migrations, a restricted app role serves the apps (amends 0009) | Accepted |
 
 Template:
 
