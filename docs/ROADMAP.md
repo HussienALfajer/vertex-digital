@@ -3,7 +3,7 @@
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs refer to `docs/product/v1-scope.md`. Production is deployed once at the end of each phase (`docs/workflow.md`).
 
 ## Phase 0 — Foundation
-- [~] Product scope, decisions and working method documented; Claude Code setup (settings, `checker` and `reviewer` subagents, skills `spec`, `feature-slice`, `db-migration`, `supplier-adapter` (no shipping skill: every task opens its PR with auto-merge at once), Biome hook, spec template)
+- [x] Product scope, decisions and working method documented; Claude Code setup (settings, `checker` and `reviewer` subagents, skills `spec`, `feature-slice`, `db-migration`, `supplier-adapter` (no shipping skill: every task opens its PR with auto-merge at once), Biome hook, spec template)
 - [ ] Monorepo scaffold (pnpm, Turborepo, TypeScript, Biome, shared config), folder `CLAUDE.md` files, cloud session scripts, `pnpm db:setup-local`
 - [ ] `packages/db` with Drizzle, first migration, conventions test; ledger tables with append-only grants and trigger, and the posting function with concurrency tests (ADR 0003)
 - [ ] `packages/contracts`: money math (`CURRENCY_SCALE`, rounding, SYP conversion), order transition table, error codes, permission map skeleton

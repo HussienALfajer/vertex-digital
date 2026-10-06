@@ -1,6 +1,6 @@
 # Vertex Digital — V1 Scope
 
-Status: drafted from the owner's brief on 2026-10-06 and revised after the owner's review (code products, partial delivery, validation guard, store switches, customer notifications); awaiting the owner's final approval. Changes to this file need the owner's approval.
+Status: Approved by the owner on 2026-10-06 (drafted from the brief, revised after the owner's review: code products, partial delivery, validation guard, store switches, customer notifications). Changes to this file need the owner's approval.
 
 ## 1. Business context
 
