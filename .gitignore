@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+out/
+.turbo/
+.tanstack/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Licensed fonts (commercial; must never be published)
+brand/fonts/private/
+
+# Tests
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# Local uploads, receipts and storage
+storage/
+uploads/
+.data/
+
+# Logs
+*.log
+logs/
+
+# Local agent files
+CLAUDE.local.md
+TASKS.local.md
+.claude/settings.local.json
+.claude/worktrees/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/

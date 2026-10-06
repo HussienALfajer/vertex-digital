@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "model": "opus",
+  "effortLevel": "medium",
+  "enabledPlugins": {
+    "ui-ux-pro-max@ui-ux-pro-max-skill": false
+  },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install)",
+      "Bash(pnpm install --frozen-lockfile)",
+      "Bash(pnpm lint*)",
+      "Bash(pnpm typecheck*)",
+      "Bash(pnpm test*)",
+      "Bash(pnpm build*)",
+      "Bash(pnpm dev*)",
+      "Bash(pnpm db:generate*)",
+      "Bash(pnpm why *)",
+      "Bash(pnpm list *)",
+      "Bash(pnpm turbo run typecheck*)",
+      "Bash(pnpm turbo run test*)",
+      "Bash(pnpm turbo run build*)",
+      "Bash(pnpm exec biome *)",
+      "Bash(pnpm exec tsc *)",
+      "Bash(pnpm exec vitest *)",
+      "Bash(pnpm exec playwright test*)",
+      "Bash(pnpm --filter * typecheck)",
+      "Bash(pnpm --filter * test)",
+      "Bash(pnpm --filter * build)",
+      "Bash(pnpm --filter * test:e2e)",
+      "Bash(pnpm --filter * exec vitest run*)",
+      "Bash(bash -n *)",
+      "Bash(node scripts/check-record.mjs *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git switch *)",
+      "Bash(git fetch*)",
+      "Bash(git pull --ff-only*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push -u origin feat/*)",
+      "Bash(git push -u origin fix/*)",
+      "Bash(git push -u origin refactor/*)",
+      "Bash(git push -u origin chore/*)",
+      "Bash(git push -u origin docs/*)",
+      "Bash(git push origin feat/*)",
+      "Bash(git push origin fix/*)",
+      "Bash(git push origin refactor/*)",
+      "Bash(git push origin chore/*)",
+      "Bash(git push origin docs/*)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr merge * --auto --merge)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh run list*)",
+      "Bash(gh run view*)"
+    ],
+    "ask": [
+      "Bash(git push origin main*)",
+      "Bash(git push -u origin main*)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm remove *)",
+      "Bash(pnpm db:migrate*)",
+      "Bash(pnpm db:setup-local*)",
+      "Bash(*supplier:smoke*)",
+      "Bash(gh repo create*)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(rsync *)"
+    ],
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.*.local)",
+      "Read(**/.env.development)",
+      "Read(**/.env.production)",
+      "Read(**/.env.test)",
+      "Edit(**/.env)",
+      "Read(./brand/fonts/private/**)",
+      "Read(./.data/**)",
+      "Read(./pnpm-lock.yaml)",
+      "Read(**/migrations/meta/**)",
+      "Edit(**/migrations/meta/**)",
+      "Read(**/routeTree.gen.ts)",
+      "Edit(**/routeTree.gen.ts)",
+      "Read(**/.next/**)",
+      "Read(**/dist/**)",
+      "Read(**/.turbo/**)",
+      "Bash(git push --force*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(gh pr merge * --squash*)",
+      "Bash(gh pr merge * --rebase*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(rm -rf *)",
+      "Bash(*drizzle-kit push*)",
+      "Bash(*drizzle-kit drop*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/biome-format.mjs\"",
+            "timeout": 30,
+            "statusMessage": "Biome"
+          }
+        ]
+      }
+    ]
+  }
+}
