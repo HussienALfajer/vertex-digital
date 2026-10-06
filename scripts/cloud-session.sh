@@ -69,6 +69,8 @@ run() {
 run "packages installed" pnpm install --frozen-lockfile
 # Creates .env from .env.example with a random password, then the role and both databases.
 run "dev and test databases" env PGPASSWORD=postgres node scripts/setup-local-db.mjs
+# The dev database of a cloud session is disposable; tests migrate the test database themselves.
+run "dev database migrated" pnpm db:migrate
 
 summary=$(printf '%s, ' "${status[@]}")
 echo "Cloud session ready: ${summary%, }."

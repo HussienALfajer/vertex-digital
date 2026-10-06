@@ -7,4 +7,5 @@ minimumReleaseAge: 1440
 
 # Dependencies allowed to run install scripts. Everything else is blocked; a package that needs one
 # is added here with a reason.
-allowBuilds: {}
+allowBuilds:
+  esbuild: false # drizzle-kit's loader; its native binary arrives as an optional dependency

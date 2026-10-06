@@ -30,9 +30,10 @@ Requirements: Node 24, pnpm (via Corepack), PostgreSQL 17.
 corepack enable
 pnpm install
 pnpm db:setup-local
+pnpm db:migrate
 ```
 
-`db:setup-local` creates a git-ignored `.env` from `.env.example` with a random database password, then the role and the dev and test databases (it asks for the PostgreSQL superuser password). All commands are listed in [AGENTS.md](AGENTS.md#commands).
+`db:setup-local` creates a git-ignored `.env` from `.env.example` with random database passwords (or adds the keys an existing one lacks), then the owner and app roles (ADR 0014) and the dev and test databases (it asks for the PostgreSQL superuser password); `db:migrate` brings the dev database up to date. The tests migrate the test database themselves. All commands are listed in [AGENTS.md](AGENTS.md#commands).
 
 ## Security
 

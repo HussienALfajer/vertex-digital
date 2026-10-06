@@ -2,7 +2,13 @@
   "$schema": "https://turborepo.com/schema.json",
   "ui": "stream",
   "globalDependencies": [".node-version"],
-  "globalPassThroughEnv": ["DATABASE_URL", "TEST_DATABASE_URL", "CI"],
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "TEST_DATABASE_URL",
+    "DATABASE_OWNER_URL",
+    "TEST_DATABASE_OWNER_URL",
+    "CI"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
