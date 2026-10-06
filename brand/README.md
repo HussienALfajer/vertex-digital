@@ -14,7 +14,7 @@ Visual identity rules: [identity.md](identity.md).
 | `logo/png/vertex-mark-{green,gold,white}.png` | 512 px, transparent | Email clients and tools without SVG |
 | `logo/png/icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | Sand mark on Vertex Green | PWA manifest and home-screen icons |
 
-The mark files were copied from Vertex Hub (traced from the Vertex Media logo). The VERTEX DIGITAL wordmark is added in Phase 0 (open question Q16).
+The mark files were copied from Vertex Hub (traced from the Vertex Media logo). The word MEDIA cut into the mark's left stroke was replaced with DIGITAL (owner, 2026-10-06): D, I and A keep the traced outlines, G, T and L are Montserrat Medium at the same cap height, and the letters span the same length as MEDIA with even spacing; the PNGs were re-rendered from the SVGs. The VERTEX DIGITAL wordmark is added in Phase 0 (open question Q16).
 
 ## Fonts
 
