@@ -40,12 +40,14 @@ Run from the repository root (Node 24, pnpm via Corepack: `corepack enable`). Ro
 | Task | Command |
 |---|---|
 | Install | `pnpm install` |
-| Local databases: `.env` with random passwords, the owner and app roles (ADR 0014), dev and test databases (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
-| Dev (api, worker, store, admin) *(later)* | `pnpm dev` |
+| Local databases: `.env` with random passwords, the owner and app roles (ADR 0014), dev and test databases with the `pgboss` schema (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
+| Dev: api and worker in watch mode (store and admin join in PR 4) | `pnpm dev` |
 | Typecheck · lint · lint fix | `pnpm typecheck` · `pnpm lint` · `pnpm lint:fix` |
 | Unit + integration tests (need the test database URLs in `.env`) | `pnpm test` |
 | E2E (Playwright) *(later)* | `pnpm test:e2e` |
-| Migration after a schema change · apply to the dev database | `pnpm db:generate` · `pnpm db:migrate` |
+| Migration after a schema change · apply to the dev database (Drizzle migrations, then pg-boss, as the owner role) | `pnpm db:generate` · `pnpm db:migrate` |
+| OpenAPI document after an API change (after `pnpm build`; commit `apps/api/openapi.json`) | `pnpm --filter @vertex-digital/api openapi:export` |
+| First owner of the panel (prints a generated password once) · reset a staff member's TOTP | `pnpm --filter @vertex-digital/api staff:create-owner --email <email> --name <name>` · `pnpm --filter @vertex-digital/api staff:reset-two-factor --email <email>` |
 | Build | `pnpm build` |
 | One package only | `pnpm --filter @vertex-digital/<name> <script>` |
 

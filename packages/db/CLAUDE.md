@@ -3,11 +3,13 @@
 Drizzle schema, migrations, the database client and the shared money write paths (ADR 0002, 0003, 0011, 0014). Schema changes follow the `db-migration` skill.
 
 ## Layout
-- `src/schema/<module>.ts`: tables of one owning API module (`wallet.ts`: the ledger), re-exported from `src/schema/index.ts`.
+- `src/schema/<module>.ts`: tables of one owning API module (`wallet.ts`: the ledger; `auth.ts`: customer Better Auth tables; `staff.ts`: staff Better Auth tables and roles; `system.ts`: worker heartbeats), re-exported from `src/schema/index.ts`. Better Auth tables keep the property names Better Auth expects.
 - `src/schema/columns.ts`: `id()`, `timestamps()`, `archivedAt()`, `amountUnits()`, `currencyEnum`. Enums reuse the `as const` lists of `@vertex-digital/contracts`.
 - `src/ledger/`: `postJournal` (the only way to write journals and postings) and `accountBalance`. `src/orders/` (F11) will hold the order transition write path.
-- `migrations/`: `0000_ledger.sql` is generated; `0001_ledger_guards.sql` is hand-written (triggers, privileges). `migrations/meta/` is drizzle-kit state: never read or edit it.
-- `src/cli/migrate.ts`: what deploys run (`node packages/db/dist/cli/migrate.js`), as the owner role, under an advisory lock.
+- `migrations/`: `0000_ledger.sql` and `0002_harsh_boom_boom.sql` (auth and staff tables, heartbeats) are generated; `0001_ledger_guards.sql` is hand-written (triggers, privileges). `migrations/meta/` is drizzle-kit state: never read or edit it.
+- `src/migrate.ts` (`runMigrations`) and `src/cli/migrate.ts`: the Drizzle migrations, then pg-boss's tables (`installPgBoss`), as the owner role under an advisory lock. `pnpm db:migrate`, deploys (`node packages/db/dist/cli/migrate.js`) and the tests' global setup all run it.
+- `src/jobs.ts`: `PG_BOSS_SCHEMA` and `createPgBoss` (app role: no schema changes, no index rebuilds). The `pgboss` schema itself is created, owned by the owner role with default privileges for the app role, by `scripts/setup-local-db.mjs` and the production provisioning.
+- `src/testing.ts` (`@vertex-digital/db/testing`): test database URLs and the Vitest global setup the apps reuse.
 
 ## Roles (ADR 0014)
 - The owner role (`DATABASE_OWNER_URL`) owns every table and runs the migrations (`pnpm db:migrate`, the migrate CLI, the tests' global setup). No app process uses it.
@@ -17,6 +19,7 @@ Drizzle schema, migrations, the database client and the shared money write paths
 - `src/conventions.test.ts`: a business table is `{ id: id(), ...fields, ...timestamps(), archivedAt: archivedAt() }`; UUIDv7 `id` keys; every foreign key indexed; `timestamptz` only; no floating-point column; `*_units` columns are `bigint`; `idempotency_key` columns unique. An exception goes in `NOT_BUSINESS_RECORDS` or `NATURAL_KEYS`, with a reason; an append-only table also goes in `APPEND_ONLY_TABLES`.
 - `src/ledger/guards.test.ts`: the app role is no superuser, owns no table and has no `UPDATE`, `DELETE` or `TRUNCATE` on journals and postings (no `DELETE`/`TRUNCATE` on accounts); it cannot disable the trigger or grant itself the privileges; the `append_only_guard` trigger refuses the owner role too; the app role cannot create temporary tables; journals have exactly their declared postings (none added later, a temporary table cannot fool the check) and balance per currency at commit; the database stamps `created_at`; a posting's currency is its account's; an account's id, code, kind and currency never change.
 - `src/ledger/post-journal.test.ts`: balances, idempotency, refusals, and concurrency (parallel debits never overdraw, a key posted in parallel posts once, no deadlock).
+- `src/jobs.test.ts`: pg-boss is installed in a schema the app role does not own and cannot create tables in; the app role creates queues, sends and works jobs.
 
 ## The ledger (ADR 0003)
 - Write money only with `postJournal(tx, { idempotencyKey, kind, postings })`, inside the transaction that also writes the business change, its audit entry and its job. It is atomic on its own (a savepoint): a refusal leaves the caller's transaction usable.

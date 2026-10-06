@@ -78,10 +78,13 @@ Planned; each spec confirms its module's tables and exports.
 | `settings` | Store switches (registration, emergency stop, per-method and per-supplier switches) with history | F26 |
 | `activity` | Anonymized live activity feed built from delivered orders | F25 |
 | `files` | Stored uploads (receipts, attachments) behind a storage interface | F05, F23 |
+| `health` | No tables; `GET /api/health` for nginx, PM2 and the deploy checks | Phase 0 |
 
 Rules (anatomy and the tests that enforce them: ADR 0011):
 - A module owns its tables. Other modules call its exported services; they never query its tables.
 - `audit`, `files`, `notifications` and `settings` sit below the domain modules and never import them.
+- The API core (`apps/api/src/core`) holds no business logic: config, database, access decorators and guard, errors, rate limits, ALTCHA, the origin check.
+- pg-boss runs as the app role; its tables are installed by the owner role with the migrations (ADR 0014).
 - `packages/db/src/ledger` is the only way to write the ledger; `packages/db/src/orders` is the only way to change an order's state. Both are used by the API and the worker.
 - Slow, scheduled or external work goes through pg-boss; the worker never serves HTTP.
 
@@ -94,6 +97,7 @@ Rules (anatomy and the tests that enforce them: ADR 0011):
 | Deposits | `deposits.usdt-verify` (A01), `deposits.review-reminder` (A09) |
 | Money | `reconciliation.nightly` (A11) |
 | Messaging | `email.send`, `push.send`, `telegram.*` (admin bot, alerts, daily summary) |
+| System | `system.heartbeat` (every minute: `worker_heartbeats`, read by the deploy check) |
 
 ## Request flow
 
