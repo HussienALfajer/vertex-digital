@@ -1,0 +1,148 @@
+# Architecture
+
+Decisions behind this document are in `docs/decisions/`. Library versions are pinned in the lockfile once the workspace is scaffolded (Phase 0); verify peer-dependency compatibility at install time.
+
+## Shape
+
+One repository (pnpm workspaces + Turborepo) with four apps and shared packages. The API is a modular monolith; the worker runs background work with the same contracts and write paths (ADR 0001).
+
+```
+vertex-digital/
+├── apps/
+│   ├── store/        Next.js 16 customer site (digital.vertexmedia.pro)
+│   ├── admin/        React 19 + Vite staff SPA (digital-admin.vertexmedia.pro)
+│   ├── api/          NestJS HTTP API: src/core, src/modules (one per domain), src/cli
+│   └── worker/       NestJS standalone: src/core, src/jobs, src/telegram
+├── packages/
+│   ├── contracts/    Zod schemas, money math, state tables, pricing rules, permission map, error codes
+│   ├── db/           Drizzle schema, migrations, ledger posting and order transition write paths
+│   ├── ui/           Vertex design system (shadcn/ui on Base UI, Tailwind v4 tokens, RTL)
+│   ├── suppliers/    Supplier adapters behind one interface (shop2topup, wdgzone, manual, fake)
+│   └── config/       Shared TypeScript and Biome configuration
+├── deploy/           Everything installed on the server (ADR 0009)
+├── brand/            Logo files and visual identity
+├── docs/
+├── AGENTS.md
+└── CLAUDE.md
+```
+
+## Stack by layer
+
+| Layer | Choice | ADR |
+|---|---|---|
+| Language / runtime | TypeScript strict, ESM, Node 24 | 0001, 0002 |
+| Monorepo | pnpm workspaces, Turborepo | 0001 |
+| Store | Next.js 16 App Router, Server Components, Cache Components, Motion, PWA | 0002 |
+| Admin | React 19, Vite, TanStack Router / Query / Table, React Hook Form | 0002 |
+| API | NestJS 12, native Standard Schema validation, OpenAPI | 0002 |
+| Worker | NestJS standalone, pg-boss consumer, Telegram Bot API (long polling), Nodemailer | 0002 |
+| Database | PostgreSQL 17, Drizzle ORM and drizzle-kit migrations | 0002, 0011 |
+| Auth | Better Auth: customer instance (email OTP) and staff instance (mandatory TOTP) | 0007 |
+| Jobs | pg-boss, enqueued in the same transaction as the change | 0002, 0004 |
+| Realtime | SSE from the API; worker → `pg_notify` → API `LISTEN` → streams | 0002 |
+| Money | Integer units (USD micro-dollars, SYP 2 decimals), double-entry append-only ledger | 0003 |
+| Suppliers | Adapters in `packages/suppliers`, encrypted keys, HMAC webhooks | 0005 |
+| Payments | Sham Cash (reviewed receipts), USDT TRC20/BEP20 (on-chain verification) | 0006 |
+| Bot protection | ALTCHA (self-hosted), nginx and API rate limits, fail2ban | 0008 |
+| Images | sharp (receipts re-encoded; catalog images resized) | 0008 |
+| Design system | shadcn/ui on Base UI, Tailwind CSS v4, RTL | 0012 |
+| Errors | Sentry (free) + Telegram alerts | 0002 |
+| Tests | Vitest, Playwright | 0011 |
+| Lint / format | Biome | 0011 |
+| CI | GitHub Actions: typecheck, lint, test, build, E2E, migration drift, OpenAPI drift, gitleaks | 0011 |
+
+## API modules
+
+Planned; each spec confirms its module's tables and exports.
+
+| Module | Owns | Feature |
+|---|---|---|
+| `auth` | Customer Better Auth tables, customer profiles, devices | F01 |
+| `staff` | Staff Better Auth tables, roles, Telegram links | F02, F07 |
+| `audit` | `audit_entries`; exports `recordAudit` (below every other module) | F02 |
+| `wallet` | Ledger accounts, journals, postings (through `packages/db/src/ledger`); balances and timelines | F03 |
+| `rates` | Exchange rates and their history, SYP rounding settings, rate locks | F04 |
+| `deposits` | Deposits, Sham Cash receipts and review, USDT intents and verifications, fraud flags | F05, F06 |
+| `catalog` | Games, products, categories, ID guides, availability | F08 |
+| `suppliers` | Supplier connections (encrypted keys), offers, product mappings, price snapshots, price change queue, health, webhook events | F09 |
+| `pricing` | Margin rules, computed prices, margin guard | F10 |
+| `orders` | Orders, order events, fulfilment attempts (through `packages/db/src/orders`), carts, gifts, receipts | F11, F13, F16 |
+| `players` | Saved player IDs, validation cache | F13, F14 |
+| `search` | Search index over catalog names and aliases | F15 |
+| `customers` | Limits, freezes, staff notes (staff view of customers) | F19 |
+| `reconciliation` | Nightly runs and their findings | F20 |
+| `content` | FAQ, policies, banners, announcements | F21 |
+| `reports` | No business data; reports on read from module report services, Excel export | F22 |
+| `support` | Tickets, messages, attachments | F23 |
+| `notifications` | Email outbox, web push subscriptions, customer notification preferences | F01, F24 |
+| `activity` | Anonymized live activity feed built from delivered orders | F25 |
+| `files` | Stored uploads (receipts, attachments) behind a storage interface | F05, F23 |
+
+Rules (anatomy and the tests that enforce them: ADR 0011):
+- A module owns its tables. Other modules call its exported services; they never query its tables.
+- `audit`, `files` and `notifications` sit below the domain modules and never import them.
+- `packages/db/src/ledger` is the only way to write the ledger; `packages/db/src/orders` is the only way to change an order's state. Both are used by the API and the worker.
+- Slow, scheduled or external work goes through pg-boss; the worker never serves HTTP.
+
+## Worker jobs
+
+| Area | Jobs |
+|---|---|
+| Fulfilment | `orders.fulfil` (route and send), `orders.poll` (pending and unknown outcomes), `orders.stuck` (A14), `orders.awaiting-balance` (A02, A15) |
+| Suppliers | `suppliers.webhook` (process stored events), `suppliers.sync-prices` (A06), `suppliers.balances` (A07), `suppliers.health` (A08) |
+| Deposits | `deposits.usdt-verify` (A01), `deposits.review-reminder` (A09) |
+| Money | `reconciliation.nightly` (A11) |
+| Messaging | `email.send`, `push.send`, `telegram.*` (admin bot, alerts, daily summary) |
+
+## Request flow
+
+```
+Customer browser ──HTTPS──> nginx (digital.vertexmedia.pro)
+   ├── /_next/static, images  → served from disk, immutable cache
+   ├── /api/admin/*           → 404
+   ├── /api/webhooks/*        → API (supplier HMAC, IP allowlist)
+   ├── /api/*                 → API 127.0.0.1 (SSE without buffering)
+   └── /*                     → store (Next.js) 127.0.0.1, proxy_cache for anonymous catalog pages
+                                 └── server components → API over 127.0.0.1 (cookie forwarded)
+
+Staff browser ──HTTPS──> nginx (digital-admin.vertexmedia.pro)
+   ├── /api/admin/*           → API 127.0.0.1
+   ├── /api/*                 → 404 (customer routes are not served on the admin host)
+   └── /*                     → admin SPA build (static)
+
+API ── pg-boss jobs ──> worker ── supplier APIs, TronGrid / BSC RPC, SMTP, Telegram, web push
+worker ── pg_notify ──> API ── SSE ──> live order timeline, live orders room
+```
+
+## Authentication and authorization
+
+- Customers: Better Auth at `/api/auth` (email + password, email OTP verification, ALTCHA, rate limits); phone required in E.164 (ADR 0007).
+- Staff: second Better Auth instance at `/api/admin/auth` (owner-created accounts, mandatory TOTP, re-authentication for sensitive actions); roles and permissions from `packages/contracts`.
+- The store and the API share one origin; the admin SPA and its `/api/admin` share another. No CORS is enabled.
+
+## Data conventions
+
+- Primary keys: UUIDv7 generated in the application.
+- Timestamps: `timestamptz` in UTC; displayed in `Asia/Damascus`.
+- Money: integer units with a currency; USD in micro-dollars, SYP with 2 decimals; rates as exact decimals stored on each transaction (ADR 0003).
+- Ledger, order events, supplier events and audit entries are append-only. Business records are archived, never hard-deleted.
+- External references and idempotency keys have unique indexes.
+
+## Runtime topology (production)
+
+```
+nginx (TLS, rate limits, Brotli, proxy_cache, the only public listener)
+PM2 (system user of the site)
+  ├── store   Next.js     127.0.0.1:<port>
+  ├── api     NestJS      127.0.0.1:<port>
+  └── worker  NestJS      no port
+PostgreSQL 17 — database and role vertex_digital
+```
+
+Ports are chosen at provisioning from the server's map (`/root/SERVER.md`) and recorded in `docs/deployment.md` (ADR 0009).
+
+## Environments
+
+- **Local (Windows):** PostgreSQL 17 installed natively; dev and test databases; the fake supplier and a local chain-reader stub; email written to files instead of sent.
+- **CI:** GitHub Actions with a PostgreSQL service container; no secrets needed.
+- **Production:** the owner's VPS, atomic releases with automatic rollback. No staging in V1.
