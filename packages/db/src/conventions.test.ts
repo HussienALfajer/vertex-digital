@@ -19,10 +19,20 @@ const tables = (Object.values(schema) as unknown[])
 const NOT_BUSINESS_RECORDS: Record<string, string> = {
   ledger_journals: 'Append-only ledger (ADR 0003): never updated or archived',
   ledger_postings: 'Append-only ledger (ADR 0003): never updated or archived',
+  customer_sessions: 'Better Auth sessions: deleted on sign-out and expiry, not business records',
+  customer_accounts: 'Better Auth credentials of a customer, who is the record that is archived',
+  customer_verifications: 'Better Auth short-lived codes: deleted once used or expired',
+  staff_sessions: 'Better Auth sessions: deleted on sign-out and expiry, not business records',
+  staff_accounts: 'Better Auth credentials of a staff member, who is the record that is archived',
+  staff_verifications: 'Better Auth short-lived values: deleted once used or expired',
+  staff_two_factors: 'TOTP secret of a staff member, replaced on re-enrolment by the plugin',
+  worker_heartbeats: 'One row per worker process, overwritten every minute',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
-const NATURAL_KEYS: Record<string, string> = {};
+const NATURAL_KEYS: Record<string, string> = {
+  worker_heartbeats: 'Keyed by the worker name: one row per process, upserted by the heartbeat',
+};
 
 /**
  * Append-only tables: rows are never updated, archived or deleted. The database enforces it with

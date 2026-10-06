@@ -8,4 +8,6 @@ minimumReleaseAge: 1440
 # Dependencies allowed to run install scripts. Everything else is blocked; a package that needs one
 # is added here with a reason.
 allowBuilds:
+  '@scarf/scarf': false # install telemetry from swagger-ui-dist
+  '@swc/core': false # the native binary arrives as an optional dependency
   esbuild: false # drizzle-kit's loader; its native binary arrives as an optional dependency

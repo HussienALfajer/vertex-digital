@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Third-party actions are pinned to full commit SHAs (the tag in the comment); Dependabot
-# proposes updates (.github/dependabot.yml). Jobs and steps arrive with their first subject: OpenAPI
-# drift with apps/api, E2E with the front ends.
+# proposes updates (.github/dependabot.yml). Jobs and steps arrive with their first subject: E2E
+# with the front ends.
 jobs:
   checks:
     name: Typecheck, lint, test, build
@@ -59,6 +59,38 @@ jobs:
           pnpm db:generate
           git diff --exit-code -- packages/db/migrations
           test -z "$(git status --porcelain -- packages/db/migrations)"
+      - name: OpenAPI document matches the API
+        run: |
+          pnpm --filter @vertex-digital/api openapi:export
+          git diff --exit-code -- apps/api/openapi.json
+      # The built apps against the dev database, as PM2 runs them: the API answers its health
+      # check, and the worker (app role, ADR 0014) registers its heartbeat schedule in pg-boss.
+      - name: The built API and worker start
+        run: |
+          pnpm db:migrate
+          DATABASE_URL="$(grep '^DATABASE_URL=' .env | cut -d= -f2-)"
+          node apps/api/dist/main.js > api.log 2>&1 &
+          api_pid=$!
+          node apps/worker/dist/main.js > worker.log 2>&1 &
+          worker_pid=$!
+          healthy=""
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/api/health; then healthy=yes; break; fi
+            sleep 1
+          done
+          scheduled=""
+          for _ in $(seq 1 30); do
+            if [ "$(psql "$DATABASE_URL" -tAc "select count(*) from pgboss.schedule where name = 'system.heartbeat'")" = "1" ]; then
+              scheduled=yes; break
+            fi
+            sleep 1
+          done
+          kill "$api_pid" "$worker_pid" || true
+          if [ -z "$healthy" ] || [ -z "$scheduled" ]; then
+            echo "health: ${healthy:-no}, heartbeat scheduled: ${scheduled:-no}"
+            cat api.log worker.log
+            exit 1
+          fi
 
   gitleaks:
     name: Secret scan

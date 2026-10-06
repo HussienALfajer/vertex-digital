@@ -8,6 +8,6 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/migrations/meta", "!brand", "!docs"]
+    "includes": ["**", "!**/migrations/meta", "!apps/api/openapi.json", "!brand", "!docs"]
   }
 }

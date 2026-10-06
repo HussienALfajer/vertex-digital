@@ -17,4 +17,13 @@ describe('shared tsconfig', () => {
     expect(config.extends).toBe('./base.json');
     expect(config.compilerOptions?.module).toBe('NodeNext');
   });
+
+  it('nest extends node and emits the decorator metadata Nest injects by', () => {
+    const config = readConfig('nest.json');
+    expect(config.extends).toBe('./node.json');
+    expect(config.compilerOptions).toMatchObject({
+      experimentalDecorators: true,
+      emitDecoratorMetadata: true,
+    });
+  });
 });

@@ -108,6 +108,11 @@ const sql = [
     `GRANT USAGE ON SCHEMA public TO ${ident(appRole)};`,
     `ALTER DEFAULT PRIVILEGES FOR ROLE ${ident(ownerRole)} IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${ident(appRole)};`,
     `ALTER DEFAULT PRIVILEGES FOR ROLE ${ident(ownerRole)} IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ${ident(appRole)};`,
+    // pg-boss's tables: installed by the owner with the migrations, used by the app role.
+    `CREATE SCHEMA IF NOT EXISTS pgboss AUTHORIZATION ${ident(ownerRole)};`,
+    `GRANT USAGE ON SCHEMA pgboss TO ${ident(appRole)};`,
+    `ALTER DEFAULT PRIVILEGES FOR ROLE ${ident(ownerRole)} IN SCHEMA pgboss GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${ident(appRole)};`,
+    `ALTER DEFAULT PRIVILEGES FOR ROLE ${ident(ownerRole)} IN SCHEMA pgboss GRANT USAGE, SELECT ON SEQUENCES TO ${ident(appRole)};`,
   ]),
 ].join('\n');
 
