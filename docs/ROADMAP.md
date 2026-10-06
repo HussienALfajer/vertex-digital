@@ -4,7 +4,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 
 ## Phase 0 — Foundation
 - [x] Product scope, decisions and working method documented; Claude Code setup (settings, `checker` and `reviewer` subagents, skills `spec`, `feature-slice`, `db-migration`, `supplier-adapter` (no shipping skill: every task opens its PR with auto-merge at once), Biome hook, spec template)
-- [ ] Monorepo scaffold (pnpm, Turborepo, TypeScript, Biome, shared config), folder `CLAUDE.md` files, cloud session scripts, `pnpm db:setup-local`
+- [x] Monorepo scaffold (pnpm, Turborepo, TypeScript, Biome, shared config in `packages/config`), cloud session scripts, `pnpm db:setup-local`; each later folder brings its own `CLAUDE.md`
 - [ ] `packages/db` with Drizzle, first migration, conventions test; ledger tables with append-only grants and trigger, and the posting function with concurrency tests (ADR 0003)
 - [ ] `packages/contracts`: money math (`CURRENCY_SCALE`, rounding, SYP conversion), order transition table, error codes, permission map skeleton
 - [ ] `packages/suppliers`: `SupplierAdapter` interface, HMAC helpers, the `fake` adapter
@@ -14,7 +14,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] `apps/admin` skeleton: Vite, TanStack Router/Query, RTL shell, Playwright smoke
 - [ ] Design system: tokens from `brand/identity.md`, Vertex Hub components copied and adapted, VERTEX DIGITAL wordmark (fonts: Madani pending its license; fallback until then)
 - [ ] Auth skeletons: customer and staff Better Auth instances, sign-in pages, staff TOTP enforcement, first-owner CLI
-- [ ] CI: typecheck, lint, test, build, E2E, migration drift, OpenAPI drift, gitleaks
+- [~] CI: typecheck, lint, test, build and gitleaks in place; migration drift, OpenAPI drift and E2E arrive with their packages
 - [ ] Deployment skeleton on the VPS: both hosts, TLS, nginx limits and headers, Brotli, fail2ban jails, PM2 (store, api, worker), atomic releases, health checks, daily backups, `docs/deployment.md`
 
 ## Phase 1 — Money core

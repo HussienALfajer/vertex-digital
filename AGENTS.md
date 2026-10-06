@@ -12,7 +12,7 @@ This project is independent. Do not read or reuse other folders on this machine 
 |---|---|
 | `docs/product/v1-scope.md` | What V1 includes and excludes. Anything not in it is out of scope: ask before adding. |
 | `docs/decisions/` | Architecture and business decisions (ADRs). Follow them; propose a new ADR to change one. ADR 0011 is the code shape: layout, module anatomy, naming, errors, lists, tests. |
-| `<app or package>/CLAUDE.md` | Local rules and the pattern to copy for `apps/{store,admin,api,worker}`, `packages/{contracts,db,ui,suppliers}` and `deploy`. Any agent reads it before editing in that folder (Claude Code loads it on its own). Created with the Phase 0 scaffold. |
+| `<app or package>/CLAUDE.md` | Local rules and the pattern to copy for `apps/{store,admin,api,worker}`, `packages/{config,contracts,db,ui,suppliers}` and `deploy`. Any agent reads it before editing in that folder (Claude Code loads it on its own). Each arrives with its folder in Phase 0. |
 | `docs/architecture.md` | Stack, repo layout, module map, data conventions, deployment topology. |
 | `docs/ROADMAP.md` | Phase and feature status. Update it when a feature ships. |
 | `docs/specs/<feature>.md` | Detailed spec per feature, written before implementation. |
@@ -35,16 +35,17 @@ pnpm workspaces + Turborepo · TypeScript (strict) · Node 24 · PostgreSQL 17 (
 
 ## Commands
 
-Defined with the Phase 0 scaffold; run from the repository root (Node 24, pnpm via Corepack). Until then there is nothing to build.
+Run from the repository root (Node 24, pnpm via Corepack: `corepack enable`). Rows marked *(later)* arrive with their package during Phase 0 (`TASKS.md`); the PR that adds one removes the mark.
 
 | Task | Command |
 |---|---|
 | Install | `pnpm install` |
-| Dev (api, worker, store, admin) | `pnpm dev` |
+| Local databases: `.env` with a random password, role, dev and test databases (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
+| Dev (api, worker, store, admin) *(later)* | `pnpm dev` |
 | Typecheck · lint · lint fix | `pnpm typecheck` · `pnpm lint` · `pnpm lint:fix` |
 | Unit + integration tests (need `TEST_DATABASE_URL`) | `pnpm test` |
-| E2E (Playwright) | `pnpm test:e2e` |
-| Migration after a schema change · apply to the dev database | `pnpm db:generate` · `pnpm db:migrate` |
+| E2E (Playwright) *(later)* | `pnpm test:e2e` |
+| Migration after a schema change · apply to the dev database *(later)* | `pnpm db:generate` · `pnpm db:migrate` |
 | Build | `pnpm build` |
 | One package only | `pnpm --filter @vertex-digital/<name> <script>` |
 
@@ -92,7 +93,7 @@ When a task's work is done (a spec approved, a `/feature-slice` PR accepted, a s
 1. **Branch:** not `main`; if on `main`, create the branch named by type. `TASKS.md` has no open items for this PR.
 2. **Docs:** update `docs/ROADMAP.md` when a feature or roadmap item is done, and every doc the change made stale (`docs/architecture.md`, a folder `CLAUDE.md`, `docs/open-questions.md`, the commands table above).
 3. **Secrets:** `git status` and `git diff --stat` show no `.env`, key, receipt image, customer data or real supplier response; fixtures are sanitized.
-4. **Checks:** lint, typecheck, test and build, plus `e2e` when `apps/store`, `apps/admin` or `packages/ui` changed and `drift` when `packages/db` changed. Run `node scripts/check-record.mjs status <checks…>` first: documentation-only changes run no local checks (CI runs them all); otherwise run only the checks marked `needed`, through the `checker` subagent (a check marked `recorded` already passed on this exact tree). Before the scaffold exists there are no checks; say so. Everything must pass; fix root causes.
+4. **Checks:** lint, typecheck, test and build, plus `e2e` when `apps/store`, `apps/admin` or `packages/ui` changed and `drift` when `packages/db` changed. Run `node scripts/check-record.mjs status <checks…>` first: documentation-only changes run no local checks (CI runs them all); otherwise run only the checks marked `needed`, through the `checker` subagent (a check marked `recorded` already passed on this exact tree). Everything must pass; fix root causes.
 5. **Review:** for feature and supplier work, the `reviewer` subagent has run and its blocking findings are fixed.
 6. **Commit:** stage the intended files only; Conventional Commit subject, a body with what and why, ending with the session's attribution line.
 7. **Pull request:** `git push -u origin <branch>`, `gh pr create --base main` with `## Summary` (what and why, in bullets) and `## Test plan` (the checks as ticked boxes, each marked run now or reused from the record; for docs only, "documentation only, CI runs the checks"), ending with the session's attribution line; then immediately `gh pr merge <number> --auto --merge`.
@@ -115,3 +116,14 @@ Talk to the owner in Arabic, including the report and its headings. Write everyt
 ## Production server
 
 Deploys go to the owner's existing Ubuntu VPS, shared with other sites: PM2 + nginx, one isolated system user per site, apps listen on `127.0.0.1` only, nginx is the only public gateway (ADR 0009). Never run commands on the server without explicit approval in the current conversation. Read `/root/SERVER.md` on the server before any server work.
+
+<!-- BEGIN:turborepo-agent-rules -->
+
+# This is NOT the Turborepo you know
+
+Turborepo configuration, task behavior, and CLI commands can vary between installed versions and may differ from your training data. Resolve the `turbo` package from this file's directory or relevant workspace; in monorepos, it may not be visible from the repository root. For example, run `node -p "require.resolve('turbo/package.json')"` from a workspace that depends on `turbo`.
+
+Read `docs/README.md` inside that installed package first, then read the relevant pages from its `docs/` directory before changing Turborepo configuration or commands. Heed deprecation notices. These bundled docs match the installed package version and are available without network access.
+
+This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
+<!-- END:turborepo-agent-rules -->

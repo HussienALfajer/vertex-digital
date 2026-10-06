@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Supply-chain guard: only install versions published at least 24 hours ago.
+minimumReleaseAge: 1440
+
+# Dependencies allowed to run install scripts. Everything else is blocked; a package that needs one
+# is added here with a reason.
+allowBuilds: {}

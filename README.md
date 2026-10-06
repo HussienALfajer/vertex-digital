@@ -6,7 +6,7 @@ Arabic-first (RTL) web application: store at `digital.vertexmedia.pro`, admin at
 
 ## Status
 
-Phase 0 (foundation): product scope, decisions and working method are documented; no application code yet. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Phase 0 (foundation): product scope, decisions and working method are documented, and the monorepo scaffold with CI is in place; the packages and apps follow. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Documentation
 
@@ -24,7 +24,15 @@ TypeScript monorepo (pnpm, Turborepo): Next.js store, React + Vite admin panel, 
 
 ## Getting started
 
-Requirements: Node 24, pnpm (via Corepack), PostgreSQL 17. Setup commands arrive with the Phase 0 scaffold and are listed in [AGENTS.md](AGENTS.md#commands).
+Requirements: Node 24, pnpm (via Corepack), PostgreSQL 17.
+
+```bash
+corepack enable
+pnpm install
+pnpm db:setup-local
+```
+
+`db:setup-local` creates a git-ignored `.env` from `.env.example` with a random database password, then the role and the dev and test databases (it asks for the PostgreSQL superuser password). All commands are listed in [AGENTS.md](AGENTS.md#commands).
 
 ## Security
 
