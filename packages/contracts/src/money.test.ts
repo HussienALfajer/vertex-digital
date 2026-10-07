@@ -5,12 +5,14 @@ import {
   ceilToStep,
   currencySchema,
   exchangeRateSchema,
+  formatUsd,
   isWholeCents,
   sypDisplayPrice,
   sypToUsd,
   USD_CENT,
   usdCentsSchema,
   usdToSyp,
+  walletSypValue,
 } from './money.js';
 
 describe('currencies and units', () => {
@@ -151,5 +153,47 @@ describe('SYP display price', () => {
     expect(sypDisplayPrice(10_000_000, '118.5', 500)).toBe(118_500);
     // One micro-dollar above the step still rounds up: the shown price never undercharges.
     expect(sypDisplayPrice(10_000_000 + 1, '118.5', 500)).toBe(119_000);
+  });
+});
+
+describe('walletSypValue (S02 rule W9)', () => {
+  it('rounds the balance down to the step, so it never shows more than the customer holds', () => {
+    // $12.34 × 118.5 = 1,462.29 SYP; a step of 5 SYP shows 1,460.
+    expect(walletSypValue(12_340_000, '118.5', 500)).toBe(146_000);
+    // Already on the step.
+    expect(walletSypValue(10_000_000, '118.5', 500)).toBe(118_500);
+    // One micro-dollar below the step rounds down to the step below.
+    expect(walletSypValue(10_000_000 - 1, '118.5', 500)).toBe(118_000);
+  });
+
+  it('shows zero for an empty wallet and stays exact for large balances', () => {
+    expect(walletSypValue(0, '118.5', 500)).toBe(0);
+    // $1,000,000,000 × 13,000.25 SYP, exact in BigInt.
+    expect(walletSypValue(1_000_000_000 * CURRENCY_SCALE.USD, '13000.25', 100)).toBe(
+      1_300_025_000_000_000,
+    );
+  });
+
+  it('refuses a step that is not a positive integer', () => {
+    expect(() => walletSypValue(1_000_000, '118.5', 0)).toThrow(RangeError);
+    expect(() => walletSypValue(1_000_000, '118.5', 2.5)).toThrow(RangeError);
+  });
+});
+
+describe('formatUsd', () => {
+  it('shows dollars and cents with Latin digits and grouping', () => {
+    expect(formatUsd(0)).toBe('$0.00');
+    expect(formatUsd(12_500_000)).toBe('$12.50');
+    expect(formatUsd(1_234_567_890_000)).toBe('$1,234,567.89');
+    expect(formatUsd(-250_000)).toBe('-$0.25');
+  });
+
+  it('keeps sub-cent precision when there is some', () => {
+    expect(formatUsd(125)).toBe('$0.000125');
+    expect(formatUsd(-1_234_500)).toBe('-$1.2345');
+  });
+
+  it('refuses a non-integer amount', () => {
+    expect(() => formatUsd(1.5)).toThrow(RangeError);
   });
 });

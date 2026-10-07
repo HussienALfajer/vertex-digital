@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../client.js';
 import { newId } from '../id.js';
-import { ledgerAccounts, ledgerJournals, ledgerPostings } from '../schema/index.js';
+import { customers, ledgerAccounts, ledgerJournals, ledgerPostings } from '../schema/index.js';
 import { accountBalance } from './balance.js';
 import { LedgerError } from './errors.js';
 import { type JournalInput, postJournal } from './post-journal.js';
@@ -22,7 +22,17 @@ const DOLLAR = CURRENCY_SCALE.USD;
 
 async function account(kind: LedgerAccountKind, currency: Currency = 'USD'): Promise<string> {
   const id = newId();
-  await db.insert(ledgerAccounts).values({ id, code: `test:${id}`, kind, currency });
+  // A customer wallet names its customer (S02): a new one per wallet.
+  const customerId = kind === 'customer_wallet' ? await customer() : null;
+  await db.insert(ledgerAccounts).values({ id, code: `test:${id}`, kind, currency, customerId });
+  return id;
+}
+
+async function customer(): Promise<string> {
+  const id = newId();
+  await db
+    .insert(customers)
+    .values({ id, name: 'Test', email: `${id}@test.vertex-digital.local`, phone: '+963900000000' });
   return id;
 }
 

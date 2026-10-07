@@ -49,11 +49,25 @@ async function committed(work: (client: Client) => Promise<void>): Promise<void>
   }
 }
 
-async function createAccount(kind: string, currency: 'USD' | 'SYP'): Promise<string> {
+async function createAccount(
+  kind: string,
+  currency: 'USD' | 'SYP',
+  customerId: string | null = null,
+): Promise<string> {
   const id = newId();
   await connection.pool.query(
-    'insert into ledger_accounts (id, code, kind, currency) values ($1, $2, $3, $4)',
-    [id, `test:${id}`, kind, currency],
+    'insert into ledger_accounts (id, code, kind, currency, customer_id) values ($1, $2, $3, $4, $5)',
+    [id, `test:${id}`, kind, currency, customerId],
+  );
+  return id;
+}
+
+/** A new customer row, for the wallet accounts that must name one (S02). */
+async function createCustomer(): Promise<string> {
+  const id = newId();
+  await connection.pool.query(
+    `insert into customers (id, name, email, phone) values ($1, 'Test', $2, '+963900000000')`,
+    [id, `${id}@test.vertex-digital.local`],
   );
   return id;
 }
@@ -194,6 +208,7 @@ describe('append-only trigger', () => {
       'audit_entries',
       'ledger_journals',
       'ledger_postings',
+      'wallet_adjustments',
     ]);
   });
 
@@ -220,13 +235,19 @@ describe('append-only trigger', () => {
     },
   );
 
-  it('refuses TRUNCATE to the app role and to the owner', async () => {
-    const statement = 'truncate ledger_journals, ledger_postings';
+  // One table per statement: a TRUNCATE of several tables locks them one by one and can
+  // deadlock with a read of another test file that joins them in the other order.
+  it.each([
+    ['ledger_postings', /is append-only: TRUNCATE/],
+    ['wallet_adjustments', /is append-only: TRUNCATE/],
+    // Referenced by postings and adjustments: refused before its trigger even runs.
+    ['ledger_journals', /cannot truncate a table referenced in a foreign key constraint/],
+  ])('refuses TRUNCATE %s to the app role and to the owner', async (table, refusal) => {
     await rolledBack(async (client) => {
-      await expect(client.query(statement)).rejects.toThrow(/permission denied/);
+      await expect(client.query(`truncate ${table}`)).rejects.toThrow(/permission denied/);
     });
     await rolledBack(async (client) => {
-      await expect(client.query(statement)).rejects.toThrow(/is append-only: TRUNCATE/);
+      await expect(client.query(`truncate ${table}`)).rejects.toThrow(refusal);
     }, owner.pool);
   });
 });
@@ -366,9 +387,33 @@ describe('ledger constraints', () => {
   });
 
   it('keeps every customer wallet in USD', async () => {
-    await expect(createAccount('customer_wallet', 'SYP')).rejects.toThrow(
+    await expect(createAccount('customer_wallet', 'SYP', await createCustomer())).rejects.toThrow(
       /ledger_accounts_wallet_usd_check/,
     );
+  });
+
+  it('names a customer on, and only on, a customer wallet (S02)', async () => {
+    await expect(createAccount('customer_wallet', 'USD')).rejects.toThrow(
+      /ledger_accounts_customer_check/,
+    );
+    await expect(createAccount('adjustments', 'USD', await createCustomer())).rejects.toThrow(
+      /ledger_accounts_customer_check/,
+    );
+    const customerId = await createCustomer();
+    await createAccount('customer_wallet', 'USD', customerId);
+    await expect(createAccount('customer_wallet', 'USD', customerId)).rejects.toThrow(
+      /ledger_accounts_customer_id_unique/,
+    );
+  });
+
+  it('never moves a wallet to another customer (S02)', async () => {
+    const wallet = await createAccount('customer_wallet', 'USD', await createCustomer());
+    const other = await createCustomer();
+    await rolledBack(async (client) => {
+      await expect(
+        client.query('update ledger_accounts set customer_id = $2 where id = $1', [wallet, other]),
+      ).rejects.toThrow(/never change/);
+    });
   });
 
   it.each([["kind = 'refunds'"], ["currency = 'SYP'"], ["code = 'renamed'"]])(

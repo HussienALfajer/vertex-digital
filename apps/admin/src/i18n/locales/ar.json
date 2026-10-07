@@ -133,7 +133,15 @@
       "SESSION_IDLE_EXPIRED": "انتهت الجلسة بعد 30 دقيقة دون نشاط. سجّل الدخول من جديد.",
       "UNAUTHORIZED": "انتهت الجلسة. سجّل الدخول من جديد.",
       "FORBIDDEN": "لا يمكن تنفيذ هذا الإجراء بهذه الجلسة. سجّل الدخول من جديد.",
-      "CROSS_ORIGIN_REFUSED": "رُفض الطلب. أعد تحميل الصفحة وأعد المحاولة."
+      "CROSS_ORIGIN_REFUSED": "رُفض الطلب. أعد تحميل الصفحة وأعد المحاولة.",
+      "INSUFFICIENT_BALANCE": "الرصيد لا يكفي لهذا الخصم. راجع الرصيد الحالي وأعد المحاولة.",
+      "IDEMPOTENCY_KEY_REUSED": "أُرسل هذا الطلب من قبل ببيانات مختلفة. أعد فتح النافذة وأعد المحاولة.",
+      "ADJUSTMENT_NOT_ALLOWED": "الرصيد التجريبي لعملاء الاختبار فقط.",
+      "AMOUNT_CONFIRMATION_REQUIRED": "المبلغ أكبر من 100 دولار. أعد كتابته في حقل التأكيد.",
+      "AMOUNT_CONFIRMATION_MISMATCH": "المبلغ المكتوب في حقل التأكيد لا يطابق المبلغ.",
+      "EXTERNAL_REFERENCE_TAKEN": "هذا الرقم المرجعي مسجَّل من قبل لهذه الطريقة.",
+      "ADJUSTMENT_ALREADY_REVERSED": "عُكس هذا التعديل من قبل.",
+      "ADJUSTMENT_NOT_REVERSIBLE": "لا يمكن عكس عملية عكس. أضف تعديل «تصحيح خطأ» بدلًا منها."
     }
   },
   "changePassword": {
@@ -258,7 +266,8 @@
     },
     "entityTypes": {
       "admin_user": "حساب المدير",
-      "customer": "عميل"
+      "customer": "عميل",
+      "wallet_adjustment": "تعديل رصيد"
     },
     "fields": {
       "name": "الاسم",
@@ -283,7 +292,9 @@
       "customer.password_reset": "استعادة كلمة مرور العميل",
       "customer.sessions_revoked": "تسجيل خروج جلسات العميل",
       "customer.test_created": "إنشاء عميل اختبار",
-      "customer.test_password_reset": "إعادة تعيين كلمة مرور عميل اختبار"
+      "customer.test_password_reset": "إعادة تعيين كلمة مرور عميل اختبار",
+      "wallet_adjustment.created": "تعديل رصيد عميل",
+      "wallet_adjustment.reversed": "عكس تعديل رصيد"
     }
   },
   "testCustomers": {

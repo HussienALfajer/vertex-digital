@@ -6,9 +6,11 @@ import { type EmailTemplate, QUEUES } from '@vertex-digital/contracts';
 import { type Database, emailOutbox, newId } from '@vertex-digital/db';
 import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ENV, type Env } from '../src/core/config/env.js';
 import { DATABASE } from '../src/core/database/database.module.js';
 import type { Mailer } from '../src/core/email/mailer.js';
 import { PgBossService } from '../src/core/jobs/pg-boss.service.js';
+import { renderEmail } from '../src/jobs/email/email-templates.js';
 import { PurgeCodesJob } from '../src/jobs/email/purge-codes.job.js';
 import { MAX_EMAIL_ATTEMPTS, SendEmailJob } from '../src/jobs/email/send-email.job.js';
 import { WorkerModule } from '../src/worker.module.js';
@@ -64,6 +66,34 @@ const rowOf = async (id: string) =>
 const filesOf = async (id: string) =>
   (await readdir(logDir).catch(() => [] as string[])).filter((name) => name.endsWith(`${id}.eml`));
 
+describe('the wallet adjustment email (S02)', () => {
+  const params = {
+    at: '2026-10-07T09:30:00.000Z',
+    direction: 'credit',
+    amountUnits: 25_000_000,
+    category: 'compensation',
+    reversal: false,
+  } as const;
+
+  it('says how much moved, which way and why, with a link to the wallet page', () => {
+    const email = renderEmail('customer_wallet_adjusted', params, 'https://digital.example');
+    expect(email.subject).toBe('أُضيف $25.00 إلى رصيدك');
+    expect(email.text).toContain('نوع الحركة: تعويض.');
+    expect(email.text).toContain('عرض المحفظة: https://digital.example/wallet');
+    expect(email.html).toContain('href="https://digital.example/wallet"');
+  });
+
+  it('names a debit and a reversal', () => {
+    const email = renderEmail(
+      'customer_wallet_adjusted',
+      { ...params, direction: 'debit', amountUnits: 1_234_500_000, reversal: true },
+      'http://127.0.0.1:3001',
+    );
+    expect(email.subject).toBe('خُصم $1,234.50 من رصيدك');
+    expect(email.text).toContain('نوع الحركة: عكس: تعويض.');
+  });
+});
+
 describe('email.send', () => {
   it('writes a code email to a file in Arabic, right to left, and clears the code', async () => {
     const id = await queue(
@@ -79,6 +109,20 @@ describe('email.send', () => {
     expect(message).toContain('dir=3D"rtl"');
     expect(message).toMatch(/Subject: =\?UTF-8\?/);
     expect(await rowOf(id)).toMatchObject({ status: 'sent', attempts: 1, params: null });
+  });
+
+  it('writes the wallet adjustment email with its link', async () => {
+    const id = await queue('customer_wallet_adjusted', {
+      at: new Date().toISOString(),
+      direction: 'credit',
+      amountUnits: 25_000_000,
+      category: 'test_funds',
+      reversal: false,
+    });
+    expect(await job.send(id)).toBe('sent');
+    const [file] = await filesOf(id);
+    const message = await readFile(join(logDir, file as string), 'utf8');
+    expect(message).toContain('/wallet');
   });
 
   it('sends once when run twice', async () => {
@@ -107,6 +151,7 @@ describe('email.send', () => {
         },
       } as unknown as Mailer,
       db,
+      app.get<Env>(ENV),
     );
     await expect(failing.send(id)).rejects.toThrow('SMTP connection refused');
     expect(await rowOf(id)).toMatchObject({

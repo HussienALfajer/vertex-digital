@@ -119,3 +119,27 @@ export function ceilToStep(units: number, step: number): number {
 export function sypDisplayPrice(usdUnits: number, rate: string, stepUnits: number): number {
   return ceilToStep(usdToSyp(usdUnits, rate, 'up'), stepUnits);
 }
+
+/**
+ * The SYP value shown under a wallet balance (S02 rule W9): USD × rate, rounded **down** to the
+ * display step in SYP units, so the store never shows more than the customer holds.
+ */
+export function walletSypValue(usdUnits: number, rate: string, stepUnits: number): number {
+  if (!Number.isSafeInteger(stepUnits) || stepUnits <= 0) {
+    throw new RangeError(`Expected a positive integer step, got ${stepUnits}`);
+  }
+  const step = BigInt(stepUnits);
+  return toUnits((BigInt(usdToSyp(usdUnits, rate, 'down')) / step) * step);
+}
+
+/**
+ * A USD amount for display, with Latin digits: `$1,234.50`, `-$0.25`. Two decimals, more only
+ * when the amount has sub-cent precision (system accounts: `$0.000125`). Exact, in BigInt.
+ */
+export function formatUsd(units: number): string {
+  const value = BigInt(unitsOrThrow(Math.abs(units)));
+  let fraction = (value % USD_SCALE).toString().padStart(6, '0');
+  while (fraction.length > 2 && fraction.endsWith('0')) fraction = fraction.slice(0, -1);
+  const whole = (value / USD_SCALE).toLocaleString('en-US');
+  return `${units < 0 ? '-' : ''}$${whole}.${fraction}`;
+}

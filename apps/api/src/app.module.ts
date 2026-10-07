@@ -16,6 +16,7 @@ import { AuditModule } from './modules/audit/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { HealthModule } from './modules/health/index.js';
 import { NotificationsModule } from './modules/notifications/index.js';
+import { WalletModule } from './modules/wallet/index.js';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { NotificationsModule } from './modules/notifications/index.js';
     AuthModule,
     AdminModule,
     AuditModule,
+    WalletModule,
     HealthModule,
   ],
   providers: [

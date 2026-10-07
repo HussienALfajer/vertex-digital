@@ -1,0 +1,2 @@
+ALTER TABLE "ledger_postings" ADD COLUMN "position" bigint NOT NULL GENERATED ALWAYS AS IDENTITY (sequence name "ledger_postings_position_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1);--> statement-breakpoint
+CREATE INDEX "ledger_postings_account_position_idx" ON "ledger_postings" USING btree ("account_id","position");

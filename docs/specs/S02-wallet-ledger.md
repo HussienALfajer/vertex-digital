@@ -54,7 +54,7 @@ A customer can only ever read their own wallet: the customer routes take no cust
 - `reverses_adjustment_id` uuid, nullable, foreign key to `wallet_adjustments`, **unique**: an adjustment is reversed at most once (rule R2).
 - `journal_id` uuid, required, foreign key to `ledger_journals`, unique.
 - `idempotency_key` uuid, required, unique: the request's `Idempotency-Key` (rule J9).
-- `admin_id` uuid, required, foreign key to `admin_users`.
+- `admin_id` uuid, required, indexed, **no foreign key** (as `audit_entries.actor_id`): an append-only row must not pin the single admin row, which the CLI and the tests replace (settled in implementation, 2026-10-07).
 - `created_at` timestamptz, required, default `now()`.
 - Checks: a reversal has the opposite direction and the same amount and category as the original (enforced by the service and a trigger, since a check cannot read another row); a `test_funds` row belongs to a test customer (service, rule J4).
 - Indexes: `(customer_id, created_at desc)`, the unique ones above.
@@ -73,8 +73,8 @@ An adjustment has no states: it is written once, with its journal, and never cha
 ### Wallet rules
 - W1. A customer's wallet account is created on the first posting to it, inside the posting transaction: `ensureCustomerWallet(tx, customerId)` in `packages/db/src/ledger` inserts it (`ON CONFLICT (code) DO NOTHING`) and returns its id. A customer without an account has a balance of 0 and an empty timeline; reading never creates an account.
 - W2. The balance is the sum of the wallet's postings (`accountBalance`); no stored balance (ADR 0003).
-- W3. A timeline entry is one journal that touches the wallet: its time, kind, the net signed amount on the wallet, the balance right after it, its reference, and the extras of its kind (rule W5). Newest first; ties broken by journal id (uuid v7, so creation order).
-- W4. `balanceAfterUnits` of an entry = the sum of the wallet's postings in journals up to and including it, in the order of rule W3. It is computed by the query, never stored.
+- W3. A timeline entry is one journal that touches the wallet: its time, kind, the net signed amount on the wallet, the balance right after it, its reference, and the extras of its kind (rule W5). Newest first in **write order**: `ledger_postings.position`, an identity assigned when `postJournal` inserts the postings, after it locked and checked the wallets (settled in review, 2026-10-07). The journal's `created_at` is its transaction's start, so a debit begun before the credit it spends would sort before it and show a negative running balance; write order puts every debit after everything its balance check saw.
+- W4. `balanceAfterUnits` of an entry = the sum of the wallet's postings up to and including its own, in the order of rule W3. It is computed by the query, never stored.
 - W5. Entry extras by kind. S02 fills `adjustment`; later specs fill theirs without changing the shape:
   - `adjustment`: `{ category, customerNote, reversal: boolean }` (and, admin view only, the internal `reason`, the `adminName`, `depositMethod`, `externalReference`, and whether it has been reversed).
   - `deposit` (S03, S04): method, the deposit's reference code, and for SYP deposits the SYP amount and the rate used.
@@ -137,6 +137,7 @@ An adjustment has no states: it is written once, with its journal, and never cha
 | `GET /api/admin/ledger/summary` | Admin | — | `ledgerSummarySchema` | — |
 
 - Every admin route also answers the guard's codes (S01: `UNAUTHORIZED`, `FORBIDDEN`, `SESSION_IDLE_EXPIRED`, `TWO_FACTOR_REQUIRED`, `PASSWORD_CHANGE_REQUIRED`, `CROSS_ORIGIN_REFUSED`). A missing or non-UUID `Idempotency-Key` is `VALIDATION_FAILED`.
+- Statuses (settled in implementation): `400` for `ADJUSTMENT_NOT_ALLOWED` and `AMOUNT_CONFIRMATION_*`; `409` for `INSUFFICIENT_BALANCE` (with `details.balanceUnits`, the balance the debit met), `EXTERNAL_REFERENCE_TAKEN`, `ADJUSTMENT_ALREADY_REVERSED`, `ADJUSTMENT_NOT_REVERSIBLE`, `IDEMPOTENCY_KEY_REUSED`. Adjustments of one wallet are serialized by a lock on its account row, so a parallel request with the same key or the same reversal is answered as a replay or `ADJUSTMENT_ALREADY_REVERSED`, never as a balance refusal.
 - New error codes in `packages/contracts/src/errors.ts`: `ADJUSTMENT_NOT_ALLOWED`, `AMOUNT_CONFIRMATION_REQUIRED`, `AMOUNT_CONFIRMATION_MISMATCH`, `EXTERNAL_REFERENCE_TAKEN`, `ADJUSTMENT_ALREADY_REVERSED`, `ADJUSTMENT_NOT_REVERSIBLE`.
 - After the change: `openapi:export` and the admin client regenerated (commands table in `AGENTS.md`).
 
@@ -200,8 +201,8 @@ An adjustment has no states: it is written once, with its journal, and never cha
 10. `amountConfirmationUnits` sent below the threshold: ignored if equal, `AMOUNT_CONFIRMATION_MISMATCH` if different.
 11. A `manual_deposit` external reference differing only by case or surrounding spaces from an existing one: treated as the same (`EXTERNAL_REFERENCE_TAKEN`).
 12. An unknown or non-UUID customer id or adjustment id: `NOT_FOUND`.
-13. Timeline entries with the same `created_at`: ordered by journal id (W3), so the running balance is stable across pages.
-14. A customer's timeline grows long: pages stay fast with the `(account_id, currency)` posting index and the journal id order; the running balance is computed per page as `balance − sum(newer entries)`.
+13. Timeline entries with the same `created_at` (journals of one transaction): ordered by write position (W3), so the running balance is stable across pages.
+14. A customer's timeline grows long: pages use the `(account_id, position)` posting index; the running balance is computed per page as `balance − sum(newer entries)`.
 15. A journal with two postings on the same wallet (none in S02, possible later): one timeline entry with the net amount (W3).
 16. The admin adjusts a test customer that later stops being a test customer: not possible in V1 (`is_test` never changes).
 17. No rate set yet (until S03): `walletSchema.syp` is null, the card shows USD only.

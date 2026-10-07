@@ -29,6 +29,8 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   worker_heartbeats: 'One row per worker process, overwritten every minute',
   customer_rate_limits: 'Better Auth and code-send counters: overwritten, pruned when stale',
   audit_entries: 'Append-only audit log (ADR 0011): never updated or archived; occurred_at instead',
+  wallet_adjustments:
+    'Append-only (S02): corrected by a reversal or a new adjustment, never changed',
   email_outbox: 'A delivery record: its status changes, it is never archived (S01)',
 };
 
@@ -41,7 +43,12 @@ const NATURAL_KEYS: Record<string, string> = {
  * Append-only tables: rows are never updated, archived or deleted. The database enforces it with
  * the `append_only_guard` trigger and revoked privileges (`src/ledger/guards.test.ts`).
  */
-const APPEND_ONLY_TABLES = ['ledger_journals', 'ledger_postings', 'audit_entries'];
+const APPEND_ONLY_TABLES = [
+  'ledger_journals',
+  'ledger_postings',
+  'audit_entries',
+  'wallet_adjustments',
+];
 
 /** The column of every unique index or constraint that has exactly one column. */
 function singleUniqueColumns(table: ReturnType<typeof getTableConfig>): string[] {

@@ -38,6 +38,8 @@ export const envSchema = z
      * How emails leave (S01 rule E5): `log` writes each one to a file under EMAIL_LOG_DIR and sends
      * nothing (development and tests); `smtp` sends, and is the only choice in production.
      */
+    /** The store's origin, for links in emails (S02: the wallet page). */
+    STORE_URL: z.url({ protocol: /^https?$/ }).default('http://127.0.0.1:3001'),
     EMAIL_TRANSPORT: z.enum(['log', 'smtp']).default('log'),
     EMAIL_LOG_DIR: z.string().min(1).default('./.data/emails'),
     EMAIL_FROM: z.email().default('info@vertexmedia.pro'),

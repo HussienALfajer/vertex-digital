@@ -1,9 +1,14 @@
-import type { EmailParams, EmailTemplate } from '@vertex-digital/contracts';
+import {
+  type AdjustmentCategory,
+  type EmailParams,
+  type EmailTemplate,
+  formatUsd,
+} from '@vertex-digital/contracts';
 
 /*
- * The customer emails of S01 (rule E3): Arabic, right to left, HTML with a plain-text part. A code
- * email carries its code; no email carries a password, a link with a token or text someone else
- * typed. Times are shown in Damascus time with Latin digits.
+ * The customer emails (S01 rule E3, S02): Arabic, right to left, HTML with a plain-text part. A
+ * code email carries its code; no email carries a password, a link with a token or text someone
+ * else typed. Times are shown in Damascus time with Latin digits.
  */
 
 export interface RenderedEmail {
@@ -18,6 +23,8 @@ interface Content {
   lines: string[];
   /** The code, shown large in its own block. */
   code?: string;
+  /** A button to a store page (a path under the store's URL), after the paragraphs. */
+  link?: { label: string; path: string };
 }
 
 const formatTime = (iso: string) =>
@@ -30,6 +37,15 @@ const formatTime = (iso: string) =>
 const IGNORE = 'إذا لم تطلب هذا، تجاهل هذه الرسالة؛ لن يتغير شيء في حسابك.';
 const NOT_YOU = 'إذا لم تكن أنت، غيّر كلمة المرور فورًا من صفحة الحساب أو من «نسيت كلمة المرور».';
 const CODE_LIFETIME = 'الرمز صالح لمدة 10 دقائق. لا تشاركه مع أحد، فريقنا لن يطلبه منك أبدًا.';
+
+/** The customer-facing names of the adjustment categories (S02 rule J1). */
+const CATEGORY_LABELS: Record<AdjustmentCategory, string> = {
+  compensation: 'تعويض',
+  correction: 'تصحيح خطأ',
+  cash_refund: 'استرداد نقدي',
+  manual_deposit: 'إيداع مسجَّل يدوياً',
+  test_funds: 'رصيد تجريبي',
+};
 
 const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) => Content } = {
   customer_verify_email: ({ code }) => ({
@@ -85,6 +101,21 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
       IGNORE,
     ],
   }),
+  customer_wallet_adjusted: ({ at, direction, amountUnits, category, reversal }) => {
+    const amount = formatUsd(amountUnits);
+    const label = reversal ? `عكس: ${CATEGORY_LABELS[category]}` : CATEGORY_LABELS[category];
+    return {
+      subject: direction === 'credit' ? `أُضيف ${amount} إلى رصيدك` : `خُصم ${amount} من رصيدك`,
+      lines: [
+        direction === 'credit'
+          ? `أُضيف ${amount} إلى رصيد محفظتك في Vertex Digital بتاريخ ${formatTime(at)}.`
+          : `خُصم ${amount} من رصيد محفظتك في Vertex Digital بتاريخ ${formatTime(at)}.`,
+        `نوع الحركة: ${label}.`,
+        'تجد تفاصيل الحركة ورصيدك الحالي في صفحة المحفظة. إذا كان لديك سؤال، تواصل مع الدعم.',
+      ],
+      link: { label: 'عرض المحفظة', path: '/wallet' },
+    };
+  },
 };
 
 const escapeHtml = (value: string) =>
@@ -94,11 +125,17 @@ const escapeHtml = (value: string) =>
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
 
+/** Renders a template; `storeUrl` is the store's origin, for the email's link. */
 export function renderEmail<Template extends EmailTemplate>(
   template: Template,
   params: EmailParams<Template>,
+  storeUrl: string,
 ): RenderedEmail {
   const content = CONTENT[template](params);
+  const link = content.link && {
+    label: content.link.label,
+    url: new URL(content.link.path, storeUrl).toString(),
+  };
   const paragraphs = content.lines.map(
     (line) => `<p style="margin:0 0 16px;line-height:1.7">${escapeHtml(line)}</p>`,
   );
@@ -117,6 +154,11 @@ export function renderEmail<Template extends EmailTemplate>(
     '<div style="max-width:520px;margin:0 auto;padding:24px;background:#ffffff;border-radius:12px;text-align:right">',
     '<p style="margin:0 0 24px;font-weight:700">Vertex Digital</p>',
     ...paragraphs,
+    ...(link
+      ? [
+          `<p style="margin:8px 0 0"><a href="${escapeHtml(link.url)}" style="display:inline-block;padding:10px 20px;background:#004139;color:#ffffff;border-radius:8px;text-decoration:none">${escapeHtml(link.label)}</a></p>`,
+        ]
+      : []),
     '</div>',
     '</body>',
     '</html>',
@@ -125,6 +167,7 @@ export function renderEmail<Template extends EmailTemplate>(
     ...content.lines.slice(0, 1),
     ...(content.code ? [content.code] : []),
     ...content.lines.slice(1),
+    ...(link ? [`${link.label}: ${link.url}`] : []),
     '— Vertex Digital',
   ].join('\n\n');
   return { subject: content.subject, html, text };

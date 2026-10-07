@@ -71,7 +71,7 @@ Filled after the first feature of each kind ships; until then, follow ADR 0011 a
 | Need | Copy from |
 |---|---|
 | Contract: entity, inputs, list query, page | `packages/contracts/src/audit.ts`, `customers.ts` (cursor list: `lists.ts`) |
-| Ledger posting and its concurrency tests | — (first: F03) |
+| Ledger posting and its concurrency tests | `apps/api/src/modules/wallet/wallet-adjustments.service.ts` (lock, idempotency replay, journal + audit + email in one transaction), `apps/api/test/wallet.test.ts` (parallel debits, reversals, one key in parallel), `packages/db/src/ledger/wallet.test.ts` |
 | Order transition and its tests | — (first: F11) |
 | Supplier adapter with fixtures | — (first: `/supplier-adapter shop2topup`) |
 | API module, controllers, service, integration test | `apps/api/src/modules/audit/`, `apps/api/test/audit.test.ts` |

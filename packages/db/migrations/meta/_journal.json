@@ -43,6 +43,27 @@
       "when": 1791340222384,
       "tag": "0005_audit_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791415005013,
+      "tag": "0006_s02_wallet",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791415009055,
+      "tag": "0007_s02_wallet_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791415922402,
+      "tag": "0008_s02_posting_position",
+      "breakpoints": true
     }
   ]
 }
