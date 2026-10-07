@@ -55,9 +55,9 @@ export function transactionExecutor(tx: Transaction): {
   return {
     async executeSql(text, values = []) {
       // pg-boss writes `$1`, `$2`…: bind each to its value as a Drizzle parameter.
-      const chunks = text.split(/\$(\d+)/).map((part, index) =>
-        index % 2 === 0 ? sql.raw(part) : sql`${values[Number(part) - 1]}`,
-      );
+      const chunks = text
+        .split(/\$(\d+)/)
+        .map((part, index) => (index % 2 === 0 ? sql.raw(part) : sql`${values[Number(part) - 1]}`));
       const result = await tx.execute(sql.join(chunks));
       return { rows: result.rows };
     },
