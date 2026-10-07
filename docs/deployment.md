@@ -4,7 +4,7 @@ Production runs on the owner's VPS (`ssh vertex`), shared with other sites, foll
 
 Server work needs the owner's explicit approval in the current conversation (AGENTS.md). Deploys happen once per phase, in their own session (`docs/workflow.md`).
 
-Status: the `deploy/` files are written (Phase 0, PR 4); the server has not been provisioned yet. Before the first run, confirm the items under "First-time setup".
+Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`); the health timer is on. Sentry (Q15) and the Telegram alerts (Q11) are not configured yet: add their values to `shared/.env` when decided.
 
 ## Layout
 
@@ -133,7 +133,7 @@ Backups stay on the server until an off-server destination is chosen. That is re
 
 ## First-time setup
 
-Not done yet. Before the first run, in the deploy session, with the owner:
+Done on 2026-10-07 (ports 3060 and 3061 confirmed free in `/root/SERVER.md`, both A records added at Hostinger). For a rebuilt server, in a deploy session with the owner:
 1. Read `/root/SERVER.md` on the server and confirm the ports 3060 (API) and 3061 (store) are free in its port map; if not, change them in every file listed in `deploy/CLAUDE.md`.
 2. Confirm the server address in `provision.sh` (`SERVER_IP`, the address of `ssh vertex`) and point both DNS records (`digital`, `digital-admin` under `vertexmedia.pro`) at it.
 3. Confirm the Sentry account (open question Q15); its DSN goes into `shared/.env` after provisioning (`SENTRY_DSN`), and the Telegram alert values (Q11) the same way.
