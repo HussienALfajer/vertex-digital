@@ -1,5 +1,7 @@
+export * from './audit/index.js';
 export * from './client.js';
 export * from './env.js';
+export * from './errors.js';
 export * from './id.js';
 export * from './jobs.js';
 export * from './ledger/index.js';

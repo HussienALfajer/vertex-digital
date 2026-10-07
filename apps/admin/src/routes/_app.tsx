@@ -7,7 +7,7 @@ export const Route = createFileRoute('/_app')({
   beforeLoad: async ({ context, location }) => {
     const session = await context.queryClient.ensureQueryData(sessionQuery);
     if (!session) throw redirect({ to: '/login', search: { redirect: location.href } });
-    // Staff see nothing else until TOTP is set up (ADR 0007).
+    // The admin sees nothing else until TOTP is set up (ADR 0007).
     if (needsTwoFactorSetup(session)) throw redirect({ to: '/setup-two-factor' });
     return { session };
   },

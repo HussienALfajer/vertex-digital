@@ -15,9 +15,9 @@ export const ERROR_CODES = [
   'VALIDATION_FAILED',
   /** No valid session for this route. */
   'UNAUTHORIZED',
-  /** Signed in, but the role lacks the permission. */
+  /** Signed in, but with the wrong kind of session or no right to this record. */
   'FORBIDDEN',
-  /** A staff member who has not enrolled TOTP yet (ADR 0007). */
+  /** The admin has not enrolled TOTP yet (ADR 0007, 0016). */
   'TWO_FACTOR_REQUIRED',
   /** A customer whose email is not verified yet (ADR 0007). */
   'EMAIL_NOT_VERIFIED',
@@ -33,6 +33,28 @@ export const ERROR_CODES = [
   'RATE_LIMITED',
   /** An unexpected server error; the details are only in the logs and Sentry. */
   'INTERNAL_ERROR',
+  /** Customer sign-up while registration is closed (S01 rule C16). */
+  'REGISTRATION_CLOSED',
+  /** A sensitive admin action without a re-authentication in the last 5 minutes (rule D5). */
+  'REAUTHENTICATION_REQUIRED',
+  /** The admin signed in with a CLI-issued password and must change it first (rule D1). */
+  'PASSWORD_CHANGE_REQUIRED',
+  /** The email belongs to another account (admin routes and races only: rules T3, C12). */
+  'EMAIL_TAKEN',
+  /** The new password is in the common-password list (rules C3, D6). */
+  'PASSWORD_TOO_COMMON',
+  /** The admin session ended after 30 minutes without activity (rule D4). */
+  'SESSION_IDLE_EXPIRED',
+  /** A wrong current password on a change or a re-authentication (rules C11, C12, D5, D7). */
+  'INVALID_PASSWORD',
+  /** A wrong authenticator code on a re-authentication (rule D5). */
+  'INVALID_CODE',
+  /** A wrong or unknown email code (rule C4). */
+  'INVALID_OTP',
+  /** The email code expired: request a new one (rule C4). */
+  'OTP_EXPIRED',
+  /** Five wrong tries voided the email code: request a new one (rule C4). */
+  'TOO_MANY_ATTEMPTS',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

@@ -2,7 +2,7 @@
 # Installed by deploy/provision.sh as /etc/nginx/sites-available/digital.vertexmedia.pro; edit it
 # in the repository, never on the server.
 #
-# nginx is the only public gateway: /api goes to the API on loopback (never its staff routes),
+# nginx is the only public gateway: /api goes to the API on loopback (never its admin routes),
 # the store's build assets come from disk, everything else is rendered by the store (Next.js).
 
 server {
@@ -39,7 +39,7 @@ server {
     include snippets/vertexdigital-compression.conf;
 
     # --- API -----------------------------------------------------------------------------
-    # Staff routes are served on the admin host only (ADR 0007). Case-insensitive, as the API
+    # Admin routes are served on the admin host only (ADR 0007). Case-insensitive, as the API
     # matches routes; a regex location wins over the /api/ prefix below.
     location ~* ^/api/admin(?:/|$) { return 404; }
 
@@ -53,7 +53,9 @@ server {
 
     # Password guessing: a tight limit on the sign-in endpoint on top of Better Auth's own.
     # Regex, so any letter case or a trailing slash cannot step around it.
-    location ~* ^/api/auth/sign-in/email/?$ {
+    # The same for the routes that send or check an email code or a password (S01): sign-up,
+    # codes, recovery and password changes, on top of the API's counters in PostgreSQL.
+    location ~* ^/api/auth/(?:sign-in/email|sign-up/email|email-otp/[a-z-]+|change-password)/?$ {
         limit_req zone=vdsignin burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;

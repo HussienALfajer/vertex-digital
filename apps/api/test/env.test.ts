@@ -10,7 +10,7 @@ const production = {
   STORE_URL: 'https://digital.vertexmedia.pro',
   ADMIN_URL: 'https://digital-admin.vertexmedia.pro',
   CUSTOMER_AUTH_SECRET: secret('customer'),
-  STAFF_AUTH_SECRET: secret('staff'),
+  ADMIN_AUTH_SECRET: secret('admin'),
   ALTCHA_HMAC_KEY: secret('altcha'),
 };
 
@@ -22,7 +22,7 @@ describe('API environment', () => {
       SENTRY_DSN: '',
     });
     expect(env.CUSTOMER_AUTH_SECRET).toMatch(/^[0-9a-f]{64}$/);
-    expect(env.STAFF_AUTH_SECRET).not.toBe(env.CUSTOMER_AUTH_SECRET);
+    expect(env.ADMIN_AUTH_SECRET).not.toBe(env.CUSTOMER_AUTH_SECRET);
     expect(env.SENTRY_DSN).toBeUndefined();
     expect(parseEnv({ DATABASE_URL }).CUSTOMER_AUTH_SECRET).toBe(env.CUSTOMER_AUTH_SECRET);
   });
@@ -30,11 +30,11 @@ describe('API environment', () => {
   it('accepts a complete production environment', () => {
     expect(parseEnv(production)).toMatchObject({
       STORE_URL: 'https://digital.vertexmedia.pro',
-      STAFF_AUTH_SECRET: production.STAFF_AUTH_SECRET,
+      ADMIN_AUTH_SECRET: production.ADMIN_AUTH_SECRET,
     });
   });
 
-  it.each(['CUSTOMER_AUTH_SECRET', 'STAFF_AUTH_SECRET', 'ALTCHA_HMAC_KEY'])(
+  it.each(['CUSTOMER_AUTH_SECRET', 'ADMIN_AUTH_SECRET', 'ALTCHA_HMAC_KEY'])(
     'refuses production without %s, or with its placeholder',
     (key) => {
       expect(() => parseEnv({ ...production, [key]: undefined })).toThrow(key);
@@ -49,13 +49,13 @@ describe('API environment', () => {
       parseEnv({ ...production, ADMIN_URL: 'http://digital-admin.vertexmedia.pro' }),
     ).toThrow('ADMIN_URL');
     expect(() =>
-      parseEnv({ ...production, STAFF_AUTH_SECRET: production.CUSTOMER_AUTH_SECRET }),
-    ).toThrow('STAFF_AUTH_SECRET');
+      parseEnv({ ...production, ADMIN_AUTH_SECRET: production.CUSTOMER_AUTH_SECRET }),
+    ).toThrow('ADMIN_AUTH_SECRET');
   });
 
   it('refuses a short secret', () => {
-    expect(() => parseEnv({ DATABASE_URL, STAFF_AUTH_SECRET: 'short' })).toThrow(
-      'STAFF_AUTH_SECRET',
+    expect(() => parseEnv({ DATABASE_URL, ADMIN_AUTH_SECRET: 'short' })).toThrow(
+      'ADMIN_AUTH_SECRET',
     );
   });
 });

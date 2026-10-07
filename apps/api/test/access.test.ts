@@ -1,4 +1,4 @@
-import { customers, staffUsers } from '@vertex-digital/db';
+import { adminUsers, customers } from '@vertex-digital/db';
 import type { Challenge } from 'altcha-lib';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -7,16 +7,16 @@ import {
   body,
   PASSWORD,
   removeAccounts,
+  seedAdmin,
   seedCustomer,
-  seedStaff,
   solveAltcha,
 } from './helpers.js';
 import { ProbeController } from './probe.controller.js';
 import { startApp, type TestApp } from './start-app.js';
 
 /*
- * Access (ADR 0007, 0011): customer and staff routes, each opened only by its own kind of session;
- * staff routes also need TOTP and the permission.
+ * Access (ADR 0007, 0011, 0016): customer and admin routes, each opened only by its own kind of
+ * session; admin routes also need TOTP.
  */
 
 let test: TestApp;
@@ -52,14 +52,14 @@ describe('customer routes', () => {
     });
   });
 
-  it('refuse a customer whose email is not verified', async () => {
+  it('give a customer whose email is not verified no session (S01 account states)', async () => {
     const customer = await seedCustomer(test.db, { emailVerified: false });
     seeded.push(customer.id);
-    const cookie = await client.signInCustomer(customer.email);
-    expect(await body(await client.get('/api/probe/customer', { cookie }))).toMatchObject({
-      status: 403,
-      code: 'EMAIL_NOT_VERIFIED',
+    const response = await client.post('/api/auth/sign-in/email', {
+      body: { email: customer.email, password: PASSWORD },
     });
+    expect(await body(response)).toMatchObject({ status: 403, code: 'EMAIL_NOT_VERIFIED' });
+    expect(response.headers.getSetCookie()).toEqual([]);
   });
 
   it('give an archived customer no session, and drop the session of one archived later', async () => {
@@ -79,24 +79,17 @@ describe('customer routes', () => {
     expect((await client.get('/api/probe/customer', { cookie })).status).toBe(401);
   });
 
-  it('keep sign-up closed until F01', async () => {
-    const response = await client.post('/api/auth/sign-up/email', {
-      body: { email: 'new@test.vertex-digital.local', password: PASSWORD, name: 'New' },
-    });
-    expect(response.status).not.toBe(200);
-  });
-
-  it('refuse a staff session', async () => {
-    const member = await client.staffWithTotp(test.db, 'owner');
-    seeded.push(member.id);
-    const response = await client.get('/api/probe/customer', { cookie: member.cookie });
+  it('refuse an admin session', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const response = await client.get('/api/probe/customer', { cookie: admin.cookie });
     expect(response.status).toBe(401);
   });
 });
 
-describe('staff routes', () => {
+describe('admin routes', () => {
   it('answer 401 without a session', async () => {
-    expect(await body(await client.get('/api/admin/probe/staff'))).toMatchObject({
+    expect(await body(await client.get('/api/admin/probe/admin'))).toMatchObject({
       status: 401,
       code: 'UNAUTHORIZED',
     });
@@ -106,15 +99,15 @@ describe('staff routes', () => {
     const customer = await seedCustomer(test.db);
     seeded.push(customer.id);
     const cookie = await client.signInCustomer(customer.email);
-    expect((await client.get('/api/admin/probe/staff', { cookie })).status).toBe(401);
+    expect((await client.get('/api/admin/probe/admin', { cookie })).status).toBe(401);
   });
 
-  it('ask for TOTP until the staff member enrols, then let them in', async () => {
-    const member = await seedStaff(test.db, { role: 'support' });
-    seeded.push(member.id);
-    const cookie = await client.signInStaff(member.email);
-    expect(cookie).toMatch(/^vd-staff\.session_token=/);
-    expect(await body(await client.get('/api/admin/probe/staff', { cookie }))).toMatchObject({
+  it('ask for TOTP until the admin enrols, then let the admin in', async () => {
+    const admin = await seedAdmin(test.db);
+    seeded.push(admin.id);
+    const cookie = await client.signInAdmin(admin.email);
+    expect(cookie).toMatch(/^vd-admin.session_token=/);
+    expect(await body(await client.get('/api/admin/probe/admin', { cookie }))).toMatchObject({
       status: 403,
       code: 'TWO_FACTOR_REQUIRED',
     });
@@ -122,57 +115,42 @@ describe('staff routes', () => {
     const { secret } = await client.enrolTotp(cookie);
     // Once enrolled, the password alone opens nothing: the sign-in asks for the code.
     const passwordOnly = await client.post('/api/admin/auth/sign-in/email', {
-      body: { email: member.email, password: PASSWORD },
+      body: { email: admin.email, password: PASSWORD },
     });
     expect(await passwordOnly.json()).toMatchObject({ twoFactorRedirect: true });
 
-    const signedIn = await client.signInStaff(member.email, secret);
-    expect(await body(await client.get('/api/admin/probe/staff', { cookie: signedIn }))).toEqual({
+    const signedIn = await client.signInAdmin(admin.email, secret);
+    expect(await body(await client.get('/api/admin/probe/admin', { cookie: signedIn }))).toEqual({
       status: 200,
-      id: member.id,
-      role: 'support',
+      id: admin.id,
     });
   });
 
   it('refuse "trust this device"', async () => {
-    const member = await seedStaff(test.db);
-    seeded.push(member.id);
+    const admin = await seedAdmin(test.db);
+    seeded.push(admin.id);
     const response = await client.post('/api/admin/auth/sign-in/email', {
-      body: { email: member.email, password: PASSWORD, trustDevice: true },
+      body: { email: admin.email, password: PASSWORD, trustDevice: true },
     });
     expect(response.status).toBe(400);
   });
 
-  it('check the permission map', async () => {
-    const support = await client.staffWithTotp(test.db, 'support');
-    const owner = await client.staffWithTotp(test.db, 'owner');
-    seeded.push(support.id, owner.id);
-    expect(
-      await body(await client.get('/api/admin/probe/manage', { cookie: support.cookie })),
-    ).toMatchObject({ status: 403, code: 'FORBIDDEN' });
-    expect((await client.get('/api/admin/probe/manage', { cookie: owner.cookie })).status).toBe(
-      200,
-    );
-  });
-
-  it('drop the session of a staff member archived later', async () => {
-    const member = await client.staffWithTotp(test.db, 'manager');
-    seeded.push(member.id);
+  it('drop the session of an admin archived later', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
     await test.db
-      .update(staffUsers)
+      .update(adminUsers)
       .set({ archivedAt: new Date() })
-      .where(eq(staffUsers.id, member.id));
-    expect((await client.get('/api/admin/probe/staff', { cookie: member.cookie })).status).toBe(
-      401,
-    );
+      .where(eq(adminUsers.id, admin.id));
+    expect((await client.get('/api/admin/probe/admin', { cookie: admin.cookie })).status).toBe(401);
   });
 
   it('ask for ALTCHA after repeated wrong passwords from any address, without locking out', async () => {
-    const member = await seedStaff(test.db);
-    seeded.push(member.id);
+    const admin = await seedAdmin(test.db);
+    seeded.push(admin.id);
     const signIn = (password: string, headers?: Record<string, string>) =>
       client.post('/api/admin/auth/sign-in/email', {
-        body: { email: member.email, password },
+        body: { email: admin.email, password },
         ...(headers && { headers }),
       });
     for (let attempt = 0; attempt < 10; attempt += 1) {

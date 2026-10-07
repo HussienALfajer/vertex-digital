@@ -59,7 +59,7 @@ export interface PlaceOrderRequest {
  * - `pending`: accepted, the result comes later by webhook or poll;
  * - `failed_definitive`: refused, nothing was bought; the next route may be tried;
  * - `unknown`: no trustworthy answer (timeout, lost connection, unexpected reply). Never retried
- *   elsewhere until it is resolved by polling, then by staff.
+ *   elsewhere until it is resolved by polling, then by the admin.
  */
 export type SupplierOutcome =
   | { status: 'delivered'; supplierOrderId: string; codes?: string[] }
@@ -67,7 +67,7 @@ export type SupplierOutcome =
   | {
       status: 'failed_definitive';
       supplierOrderId?: string;
-      /** The supplier's own error code, kept for staff and the error mapping. */
+      /** The supplier's own error code, kept for the admin and the error mapping. */
       supplierCode?: string;
       reason: string;
     }

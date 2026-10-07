@@ -70,6 +70,9 @@ run "packages installed" pnpm install --frozen-lockfile
 # Creates .env from .env.example with a random password, then the role and both databases.
 run "dev and test databases" env PGPASSWORD=postgres node scripts/setup-local-db.mjs
 # The dev database of a cloud session is disposable; tests migrate the test database themselves.
+# A fresh clone has no build output: packages/db compiles against the built contracts, so the
+# packages it depends on are built first (cached by Turborepo on later sessions).
+run "db dependencies built" pnpm turbo run build --filter=@vertex-digital/db^... --output-logs=errors-only
 run "dev database migrated" pnpm db:migrate
 # Chromium for the E2E tests (pnpm test:e2e), at the Playwright version in the lockfile; its
 # system libraries come from scripts/cloud-setup.sh. A no-op when it is already there.

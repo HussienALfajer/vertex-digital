@@ -8,7 +8,7 @@ export const HEARTBEAT_QUEUE = 'system.heartbeat';
 export const HEARTBEAT_CRON = '* * * * *';
 
 /**
- * Records that this worker is alive, once a minute, for the deploy health check and the staff
+ * Records that this worker is alive, once a minute, for the deploy health check and the admin
  * dashboard. The pattern for every job: a queue constant, registration on bootstrap, and an
  * idempotent handler (an upsert: running it twice leaves one row).
  */

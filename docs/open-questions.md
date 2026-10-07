@@ -9,14 +9,14 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Q3 | License for the public repository (none means all rights reserved) | Anytime | — |
 | Q4 | Sham Cash receiving account: personal or business, which currencies it accepts (SYP, USD), account number and QR | F05 | A dedicated business account used only by the store |
 | Q5 | Deposit and purchase limits: minimum and maximum per deposit, daily limits, limits for new accounts; any deposit fee per method | F05, F06 | Low limits for new accounts, raised after the first successful orders; no fees at launch |
-| Q6 | Exchange rate policy: one rate for display and deposits, or separate rates; the SYP rounding step; who may change the rate | F04 | One rate in V1; owner and manager may change it; step chosen with the owner |
+| Q6 | Exchange rate policy: one rate for display and deposits, or separate rates; the SYP rounding step; who may change the rate | F04 | One rate in V1; the admin changes it; step chosen with the owner |
 | Q7 | Pricing policy: default margin (percent and minimum fixed) per category; USD price endings | F10 | Spec interview |
 | Q8 | USDT: receiving addresses per network (owner-controlled wallets), required confirmations, minimum deposit, intent validity | F06 | Owner-held wallets; confirmations per network set in the spec |
 | Q9 | Working hours for deposit review and manual fulfilment; target review time | F05, F17 | Shown to customers as the review ETA outside hours |
 | Q10 | Terms of service, privacy and refund policies; business identity shown on the store | Launch (F21) | Drafted with the owner before the pilot |
-| Q11 | Telegram: who creates the bot (BotFather) and which staff chats or groups receive which alerts | F07 | One private staff group for alerts; personal chats for deposit cards |
+| Q11 | Telegram: who creates the bot (BotFather) and which chat receives the alerts and deposit cards | F07 | The admin's personal chat for everything (ADR 0016) |
 | Q12 | Supplier accounts: are SHOP2TOPUP and WDGZone accounts and API documentation ready? Which games and packs launch first? | F09 | Start with PUBG Mobile UC and Free Fire diamonds on both suppliers |
-| Q13 | Source of the "official price" used for savings (entered by staff per pack, or not shown when unknown) | F08 | Entered by staff; hidden when unknown |
+| Q13 | Source of the "official price" used for savings (entered by the admin per pack, or not shown when unknown) | F08 | Entered by the admin; hidden when unknown |
 | Q14 | Support channels besides tickets (WhatsApp or Telegram links on the store) | F23 | Tickets plus one Telegram support link |
 | Q15 | Sentry: account owner and organization for the three apps | Phase 0 deploy skeleton | Free plan under the owner's email |
 | Q16 | Who draws the final VERTEX DIGITAL wordmark (agent in Phase 0 from the Vertex Media style, or a designer) | Phase 0 design system | Agent draft in Phase 0 (done: `brand/logo/svg/vertex-logo.svg`, the DIGITAL mark over the Vertex Media VERTEX wordmark), designer files later replace it |

@@ -1,6 +1,6 @@
 # 0005 — Supplier adapters and smart routing
 
-Status: Accepted · Date: 2026-10-06
+Status: Accepted · Date: 2026-10-06 · Amended by [0016](0016-single-admin-account.md) (one admin account, no staff or roles)
 
 ## Context
 Goods come from wholesale suppliers with different APIs, prices, features and reliability. The primary supplier validates player IDs and returns the in-game name; the backup is cheaper on some packs but cannot validate. Suppliers fail, change prices and run out of balance. Some products are fulfilled by hand.

@@ -6,7 +6,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
-import { createPgBoss } from '@vertex-digital/db';
+import { createPgBoss, withoutQueryParameters } from '@vertex-digital/db';
 import type { PgBoss } from 'pg-boss';
 import { TelegramAlerts } from '../alerts/telegram-alerts.js';
 import { ENV, type Env } from '../config/env.js';
@@ -14,7 +14,7 @@ import { ENV, type Env } from '../config/env.js';
 /**
  * Owns the pg-boss instance (the app role: no schema changes, ADR 0014), started before the jobs
  * register and stopped gracefully on shutdown. Jobs register through `work`, which reports a
- * failure to the logs, Sentry and the staff alert channel before pg-boss retries it.
+ * failure to the logs, Sentry and the admin alert channel before pg-boss retries it.
  */
 @Injectable()
 export class PgBossService implements OnModuleInit, OnApplicationShutdown {
@@ -53,9 +53,11 @@ export class PgBossService implements OnModuleInit, OnApplicationShutdown {
       try {
         await handler(job.data);
       } catch (error) {
-        this.logger.error(error, `Job ${queue} ${job.id} failed`);
-        Sentry.captureException(error);
-        await this.alerts.send(`Job ${queue} failed: ${(error as Error).message}`);
+        // Never a query's parameters (codes, emails) in the logs, Sentry or the alert channel.
+        const reported = withoutQueryParameters(error) as Error;
+        this.logger.error(reported, `Job ${queue} ${job.id} failed`);
+        Sentry.captureException(reported);
+        await this.alerts.send(`Job ${queue} failed: ${reported.message}`);
         throw error;
       }
     });

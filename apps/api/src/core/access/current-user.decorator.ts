@@ -1,11 +1,11 @@
 import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
+import type { AdminIdentity } from '../../modules/admin/index.js';
 import type { CustomerIdentity } from '../../modules/auth/index.js';
-import type { StaffIdentity } from '../../modules/staff/index.js';
 
 /** What `AccessGuard` attaches to the request once it lets it through. */
 export interface AuthenticatedRequest {
   customer?: CustomerIdentity;
-  staff?: StaffIdentity;
+  admin?: AdminIdentity;
 }
 
 function attached<T>(key: keyof AuthenticatedRequest, context: ExecutionContext): T {
@@ -20,7 +20,7 @@ export const CurrentCustomer = createParamDecorator(
   (_: unknown, context: ExecutionContext): CustomerIdentity => attached('customer', context),
 );
 
-/** The signed-in staff member of a `@StaffRoute()`. */
-export const CurrentStaff = createParamDecorator(
-  (_: unknown, context: ExecutionContext): StaffIdentity => attached('staff', context),
+/** The signed-in admin of an `@AdminRoute()`. */
+export const CurrentAdmin = createParamDecorator(
+  (_: unknown, context: ExecutionContext): AdminIdentity => attached('admin', context),
 );

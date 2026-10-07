@@ -32,7 +32,7 @@ interface Enrollment {
 }
 
 /**
- * Sets up TOTP two-factor sign-in, mandatory for staff (ADR 0007): password, authenticator app,
+ * Sets up TOTP two-factor sign-in, mandatory for the admin (ADR 0007): password, authenticator app,
  * backup codes.
  */
 export function TwoFactorSetupPage() {

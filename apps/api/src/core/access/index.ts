@@ -1,9 +1,10 @@
 export {
   ACCESS,
+  AdminRoute,
+  AdminSetupRoute,
   CustomerRoute,
   Public,
   type RouteAccess,
-  StaffRoute,
+  Sensitive,
 } from './access.decorators.js';
-export { AccessGuard } from './access.guard.js';
-export { CurrentCustomer, CurrentStaff } from './current-user.decorator.js';
+export { CurrentAdmin, CurrentCustomer } from './current-user.decorator.js';

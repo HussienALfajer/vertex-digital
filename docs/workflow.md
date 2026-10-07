@@ -12,7 +12,7 @@ How Vertex Digital is built with Claude Code (Opus 5.5). The method is the one t
 
 ## The feature cycle
 
-A feature runs through separate sessions. Each session ends with a merged PR (or a finished deploy) and `/clear`, so the next one starts from files and git, not from a long conversation. Set the model and effort before the first message of each session.
+A feature runs through separate sessions. The unit is a spec from `docs/ROADMAP.md` (`S01`…`S15`), which may group related features; `<id>` below is that spec id. Each session ends with a merged PR (or a finished deploy) and `/clear`, so the next one starts from files and git, not from a long conversation. Set the model and effort before the first message of each session.
 
 | # | Session | Model and effort | First message | The owner | Ends with |
 |---|---|---|---|---|---|
@@ -21,18 +21,19 @@ A feature runs through separate sessions. Each session ends with a merged PR (or
 | 3 | Front-end PR | Opus 5.5, `medium` | `/feature-slice <id>` | Runs the acceptance steps in the browser (store and/or admin) | PR 2 (store/admin, E2E) opened with auto-merge; `docs/ROADMAP.md` marks the feature done |
 | 4 | Phase deploy (once per phase) | Opus 5.5, `low` | `Deploy phase <n> to production` | Approves the deploy; checks the live site | Deploy done, the phase's deploy item ticked in `docs/ROADMAP.md` |
 
+- A grouped spec usually needs more than two PRs: `/feature-slice` splits it per feature or per layer so each PR stays reviewable; the spec is done when its last PR merges.
 - A small feature (about one table and one screen) does sessions 2 and 3 in one session and one PR.
 - A new supplier or a supplier API change runs `/supplier-adapter <code>` in its own session at `high`.
 - `/feature-slice` reads `TASKS.md` and continues from the first open PR, so a session can stop between PRs and a new one picks up. `TASKS.md` is committed with each PR.
 - After each merge the owner runs the cleanup line from the report, then `/clear`.
 - **Deploys happen at the end of a phase, not after each feature.** A hotfix for a bug in production is the exception, deployed when the owner asks.
-- **Registration stays closed in production until the pilot** (F26): the Phase 1 and Phase 2 deploys run with staff-created test customers only, so nobody can deposit real money before there is something to buy.
+- **Registration stays closed in production until the pilot** (F26): the Phase 1 and Phase 2 deploys run with admin-created test customers only, so nobody can deposit real money before there is something to buy.
 - Inside session 2 or 3, use `/compact` between layers if the context grows, never in the middle of one.
 - The "Next step" of every report names the next session: whether it needs `/clear`, its model and effort from this table, and its exact first message.
 
 Steps inside a session:
 
-1. **Spec** (`/spec`): the agent interviews the owner about the feature from `v1-scope.md` and writes `docs/specs/<id>-<name>.md` from `docs/specs/_template.md`: roles, data, states, money flows, API, screens, abuse cases, edge cases, and an end-to-end acceptance check.
+1. **Spec** (`/spec`): the agent interviews the owner about the feature from `v1-scope.md` and writes `docs/specs/<id>-<name>.md` from `docs/specs/_template.md`: access, data, states, money flows, API, screens, abuse cases, edge cases, and an end-to-end acceptance check.
 2. **Plan** (`/feature-slice`, first step): the agent splits the feature into PRs and writes `TASKS.md`; the owner approves before any code.
 3. **Implement** (`/feature-slice`): one layer at a time, contracts → db → api/worker → bridge (OpenAPI) → admin/store → E2E, each followed by a check gate through the `checker` subagent. The wiring checklist is in `.claude/skills/feature-slice/wiring.md`.
 4. **Review:** the `reviewer` subagent (fresh context) checks the branch against the spec and the rules, with a money, security and fraud checklist, and reports blocking issues only.
@@ -104,7 +105,7 @@ Sessions can run on the owner's machine (**Local**) or in a Claude Code cloud en
 | Script | Runs | Does |
 |---|---|---|
 | `scripts/cloud-setup.sh` | Once per environment, as its setup script; the result is cached (rebuilt when the script or network list changes, or after about seven days) | Installs Node 24, pulls the `postgres:17` image and installs Chromium's system libraries |
-| `scripts/cloud-session.sh` | On every cloud session start and resume (SessionStart hook in `.claude/settings.json`); exits at once outside the cloud | Starts PostgreSQL 17, `pnpm install`, creates `.env` and the dev and test databases (`db:setup-local`), migrates the dev database (`db:migrate`), installs Playwright's Chromium (`PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`) |
+| `scripts/cloud-session.sh` | On every cloud session start and resume (SessionStart hook in `.claude/settings.json`); exits at once outside the cloud | Starts PostgreSQL 17, `pnpm install`, creates `.env` and the dev and test databases (`db:setup-local`), builds the packages `packages/db` depends on, migrates the dev database (`db:migrate`), installs Playwright's Chromium (`PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`) |
 
 The dev database in a cloud session is disposable. No secret is needed: `.env` gets a random password on each VM.
 

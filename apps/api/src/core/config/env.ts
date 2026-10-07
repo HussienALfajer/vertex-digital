@@ -30,8 +30,8 @@ export const envSchema = z
     ADMIN_URL: origin().default('http://127.0.0.1:5173'),
     /** Signs the customer sessions. Required in production; derived locally when unset. */
     CUSTOMER_AUTH_SECRET: secret(),
-    /** Signs the staff sessions and encrypts TOTP secrets. Different from the customer one. */
-    STAFF_AUTH_SECRET: secret(),
+    /** Signs the admin sessions and encrypts TOTP secrets. Different from the customer one. */
+    ADMIN_AUTH_SECRET: secret(),
     /** Signs ALTCHA challenges (ADR 0008). Required in production; derived locally when unset. */
     ALTCHA_HMAC_KEY: secret(),
     /**
@@ -39,6 +39,14 @@ export const envSchema = z
      * so a challenge solves in milliseconds.
      */
     ALTCHA_MAX_COUNTER: z.coerce.number().int().min(10).default(10_000),
+    /**
+     * Customer sign-up (S01 rule C16): only `true` opens it. Closed by default, so production stays
+     * closed until the pilot; S05 replaces it with the panel's switch (F26).
+     */
+    REGISTRATION_OPEN: z
+      .string()
+      .optional()
+      .transform((value) => value === 'true'),
     /** Empty disables Sentry. */
     SENTRY_DSN: z
       .string()
@@ -48,7 +56,7 @@ export const envSchema = z
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== 'production') return;
-    for (const key of ['CUSTOMER_AUTH_SECRET', 'STAFF_AUTH_SECRET', 'ALTCHA_HMAC_KEY'] as const) {
+    for (const key of ['CUSTOMER_AUTH_SECRET', 'ADMIN_AUTH_SECRET', 'ALTCHA_HMAC_KEY'] as const) {
       if (!env[key]) {
         context.addIssue({ code: 'custom', path: [key], message: `${key} is required` });
       }
@@ -60,11 +68,11 @@ export const envSchema = z
         context.addIssue({ code: 'custom', path: [key], message: `${key} must be https` });
       }
     }
-    if (env.CUSTOMER_AUTH_SECRET && env.CUSTOMER_AUTH_SECRET === env.STAFF_AUTH_SECRET) {
+    if (env.CUSTOMER_AUTH_SECRET && env.CUSTOMER_AUTH_SECRET === env.ADMIN_AUTH_SECRET) {
       context.addIssue({
         code: 'custom',
-        path: ['STAFF_AUTH_SECRET'],
-        message: 'The staff and customer secrets must differ',
+        path: ['ADMIN_AUTH_SECRET'],
+        message: 'The admin and customer secrets must differ',
       });
     }
   })
@@ -76,7 +84,7 @@ export const envSchema = z
     return {
       ...env,
       CUSTOMER_AUTH_SECRET: env.CUSTOMER_AUTH_SECRET ?? derive('customer-auth'),
-      STAFF_AUTH_SECRET: env.STAFF_AUTH_SECRET ?? derive('staff-auth'),
+      ADMIN_AUTH_SECRET: env.ADMIN_AUTH_SECRET ?? derive('admin-auth'),
       ALTCHA_HMAC_KEY: env.ALTCHA_HMAC_KEY ?? derive('altcha'),
     };
   });

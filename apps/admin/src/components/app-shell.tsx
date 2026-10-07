@@ -18,7 +18,7 @@ import {
 import { ChevronDownIcon, HouseIcon, LogOutIcon, type LucideIcon, MenuIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { authClient, leaveSession, type StaffSession, useSession } from '../lib/auth';
+import { type AdminSession, authClient, leaveSession, useSession } from '../lib/auth';
 import { ThemeToggle } from './theme-toggle';
 
 interface NavItem {
@@ -29,7 +29,7 @@ interface NavItem {
   exact?: boolean;
 }
 
-/** Each feature adds its section here, hidden from staff without its permission (cosmetic). */
+/** Each feature adds its section here. One admin, full access: no permission checks (ADR 0016). */
 const navItems: NavItem[] = [{ to: '/', label: 'nav.home', icon: HouseIcon, exact: true }];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -99,7 +99,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function TopBar({ session }: { session: StaffSession }) {
+function TopBar({ session }: { session: AdminSession }) {
   const { t } = useTranslation();
   const [navOpen, setNavOpen] = useState(false);
   return (
@@ -124,7 +124,7 @@ function TopBar({ session }: { session: StaffSession }) {
   );
 }
 
-function UserMenu({ session }: { session: StaffSession }) {
+function UserMenu({ session }: { session: AdminSession }) {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -150,7 +150,6 @@ function UserMenu({ session }: { session: StaffSession }) {
           <span dir="ltr" className="text-end text-sm text-muted-foreground">
             {user.email}
           </span>
-          <span className="mt-1 text-xs text-muted-foreground">{t(`roles.${user.role}`)}</span>
         </DropdownMenuHeader>
         <DropdownMenuItem onClick={signOut}>
           <LogOutIcon className="rtl:-scale-x-100" />

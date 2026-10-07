@@ -1,6 +1,6 @@
 # 0003 — Money, currencies and the ledger
 
-Status: Accepted · Date: 2026-10-06
+Status: Accepted · Date: 2026-10-06 · Amended by [0016](0016-single-admin-account.md) (one admin account, no staff or roles)
 
 ## Context
 Customers pay in Syrian pounds (Sham Cash) or USDT and buy goods that suppliers price in USD, sometimes with sub-cent precision (e.g. $0.889 per pack). The Syrian pound moves; customers think in SYP but the business needs a stable base. A wallet that stores a balance and updates it in place cannot explain itself, and loses money silently under races.

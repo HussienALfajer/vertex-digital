@@ -1,26 +1,29 @@
 import { createHmac, randomUUID } from 'node:crypto';
-import type { StaffRole } from '@vertex-digital/contracts';
 import {
+  adminAccounts,
+  adminUsers,
+  auditEntries,
   customerAccounts,
   customers,
   type Database,
+  emailOutbox,
   newId,
-  staffAccounts,
-  staffUsers,
 } from '@vertex-digital/db';
 import { type Challenge, solveChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
 import { hashPassword } from 'better-auth/crypto';
-import { inArray, like } from 'drizzle-orm';
+import { asc, eq, inArray, like, or } from 'drizzle-orm';
 
 /*
  * Shared helpers for API integration tests: seed accounts straight into the test database, sign
- * in over HTTP (with the TOTP step for staff), and clean up. Test data is unique per run.
+ * in over HTTP (with the TOTP step for the admin), and clean up. Test data is unique per run.
  */
 
 export const STORE_ORIGIN = 'http://127.0.0.1:3001';
 export const ADMIN_ORIGIN = 'http://127.0.0.1:5173';
 export const PASSWORD = 'correct-horse-battery-staple';
+/** A valid Syrian mobile number in E.164, as `phoneSchema` stores it. */
+export const PHONE = '+963944123456';
 
 /** The domain of every seeded email, so leftovers of an interrupted run can be found. */
 const TEST_EMAIL_DOMAIN = '@test.vertex-digital.local';
@@ -39,7 +42,7 @@ export interface Seeded {
 
 export async function seedCustomer(
   db: Database,
-  input: { emailVerified?: boolean; archived?: boolean } = {},
+  input: { emailVerified?: boolean; archived?: boolean; isTest?: boolean } = {},
 ): Promise<Seeded> {
   const id = newId();
   const email = uniqueEmail('customer');
@@ -47,7 +50,9 @@ export async function seedCustomer(
     id,
     name: 'عميل اختبار',
     email,
+    phone: PHONE,
     emailVerified: input.emailVerified ?? true,
+    isTest: input.isTest ?? false,
     archivedAt: input.archived ? new Date() : null,
   });
   await db.insert(customerAccounts).values({
@@ -59,20 +64,21 @@ export async function seedCustomer(
   return { id, email };
 }
 
-export async function seedStaff(
-  db: Database,
-  input: { role?: StaffRole; archived?: boolean } = {},
-): Promise<Seeded> {
+/**
+ * Seeds the admin account. There is at most one (ADR 0016), so any admin a previous test seeded is
+ * removed first, with its sessions: tests never keep two admins at once.
+ */
+export async function seedAdmin(db: Database, input: { archived?: boolean } = {}): Promise<Seeded> {
   const id = newId();
-  const email = uniqueEmail('staff');
-  await db.insert(staffUsers).values({
+  const email = uniqueEmail('admin');
+  await db.delete(adminUsers);
+  await db.insert(adminUsers).values({
     id,
-    name: 'موظف اختبار',
+    name: 'مدير اختبار',
     email,
-    role: input.role ?? 'support',
     archivedAt: input.archived ? new Date() : null,
   });
-  await db.insert(staffAccounts).values({
+  await db.insert(adminAccounts).values({
     userId: id,
     accountId: id,
     providerId: 'credential',
@@ -81,17 +87,33 @@ export async function seedStaff(
   return { id, email };
 }
 
-/** Removes seeded customers and staff with their sessions and accounts (cascade). */
+/**
+ * Removes seeded customers and the admin with their sessions and accounts (cascade) and their
+ * emails. Audit entries stay: the log is append-only by design.
+ */
 export async function removeAccounts(db: Database, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
+  await db.delete(emailOutbox).where(inArray(emailOutbox.customerId, ids));
   await db.delete(customers).where(inArray(customers.id, ids));
-  await db.delete(staffUsers).where(inArray(staffUsers.id, ids));
+  await db.delete(adminUsers).where(inArray(adminUsers.id, ids));
 }
 
 /** Removes accounts an interrupted earlier run left behind. */
 export async function removeLeftovers(db: Database): Promise<void> {
+  const leftovers = db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(like(customers.email, `%${TEST_EMAIL_DOMAIN}`));
+  await db
+    .delete(emailOutbox)
+    .where(
+      or(
+        inArray(emailOutbox.customerId, leftovers),
+        like(emailOutbox.toAddress, `%${TEST_EMAIL_DOMAIN}`),
+      ),
+    );
   await db.delete(customers).where(like(customers.email, `%${TEST_EMAIL_DOMAIN}`));
-  await db.delete(staffUsers).where(like(staffUsers.email, `%${TEST_EMAIL_DOMAIN}`));
+  await db.delete(adminUsers).where(like(adminUsers.email, `%${TEST_EMAIL_DOMAIN}`));
 }
 
 function base32Decode(input: string): Buffer {
@@ -127,7 +149,7 @@ export async function solveAltcha(challenge: Challenge, tamper = false): Promise
 }
 
 /** A JSON response with its HTTP status as `status`, for one-line assertions. */
-export const body = async (response: Response) => ({
+export const body = async (response: Response): Promise<Record<string, unknown>> => ({
   status: response.status,
   ...((await response.json()) as Record<string, unknown>),
 });
@@ -184,19 +206,19 @@ export function api(url: string) {
     return cookieHeader(await expectOk(response, 'Customer sign-in'));
   }
 
-  /** Signs a staff member in, with the TOTP step when they enrolled; returns the cookie. */
-  async function signInStaff(email: string, totpSecret?: string): Promise<string> {
+  /** Signs the admin in, with the TOTP step once enrolled; returns the cookie. */
+  async function signInAdmin(email: string, totpSecret?: string): Promise<string> {
     const ip = clientIp();
     const response = await expectOk(
       await request('POST', '/api/admin/auth/sign-in/email', {
         body: { email, password: PASSWORD },
         ip,
       }),
-      'Staff sign-in',
+      'Admin sign-in',
     );
     const body = (await response.clone().json()) as { twoFactorRedirect?: boolean };
     if (!body.twoFactorRedirect) return cookieHeader(response);
-    if (!totpSecret) throw new Error('Staff sign-in needs a TOTP secret');
+    if (!totpSecret) throw new Error('Admin sign-in needs a TOTP secret');
     const verified = await request('POST', '/api/admin/auth/two-factor/verify-totp', {
       cookie: cookieHeader(response),
       body: { code: totp(totpSecret) },
@@ -205,7 +227,7 @@ export function api(url: string) {
     return cookieHeader(await expectOk(verified, 'TOTP step'));
   }
 
-  /** Enrols TOTP for a signed-in staff member, the way the panel's setup page does. */
+  /** Enrols TOTP for the signed-in admin, the way the panel's setup page does. */
   async function enrolTotp(cookie: string): Promise<{ secret: string; cookie: string }> {
     const enabled = await expectOk(
       await request('POST', '/api/admin/auth/two-factor/enable', {
@@ -226,20 +248,55 @@ export function api(url: string) {
     return { secret, cookie: cookieHeader(verified) || cookie };
   }
 
-  /** Seeds a staff member, enrols TOTP and returns them signed in with it. */
-  async function staffWithTotp(db: Database, role: StaffRole) {
-    const member = await seedStaff(db, { role });
-    const { secret } = await enrolTotp(await signInStaff(member.email));
-    return { ...member, secret, cookie: await signInStaff(member.email, secret) };
+  /** Seeds the admin, enrols TOTP and returns the admin signed in with it. */
+  async function adminWithTotp(db: Database) {
+    const admin = await seedAdmin(db);
+    const { secret } = await enrolTotp(await signInAdmin(admin.email));
+    return { ...admin, secret, cookie: await signInAdmin(admin.email, secret) };
+  }
+
+  /** A solved ALTCHA challenge, as the `X-Altcha` header the widget sends. */
+  async function altcha(): Promise<Record<string, string>> {
+    const challenge = (await (await request('GET', '/api/altcha/challenge')).json()) as Challenge;
+    return { 'x-altcha': await solveAltcha(challenge) };
   }
 
   return {
     request,
     get: (path: string, options?: RequestOptions) => request('GET', path, options),
     post: (path: string, options?: RequestOptions) => request('POST', path, options),
+    patch: (path: string, options?: RequestOptions) => request('PATCH', path, options),
+    delete: (path: string, options?: RequestOptions) => request('DELETE', path, options),
+    altcha,
     signInCustomer,
-    signInStaff,
+    signInAdmin,
     enrolTotp,
-    staffWithTotp,
+    adminWithTotp,
   };
+}
+
+/** The emails queued to an address, oldest first. */
+export function emailsTo(db: Database, address: string) {
+  return db
+    .select()
+    .from(emailOutbox)
+    .where(eq(emailOutbox.toAddress, address))
+    .orderBy(asc(emailOutbox.createdAt));
+}
+
+/** The code of the last code email to an address (the worker has not cleared it in tests). */
+export async function lastCode(db: Database, address: string): Promise<string> {
+  const emails = await emailsTo(db, address);
+  const code = (emails.at(-1)?.params as { code?: string } | null)?.code;
+  if (!code) throw new Error(`No code email to ${address}`);
+  return code;
+}
+
+/** The audit entries about one entity, oldest first. */
+export function auditOf(db: Database, entityId: string) {
+  return db
+    .select()
+    .from(auditEntries)
+    .where(eq(auditEntries.entityId, entityId))
+    .orderBy(asc(auditEntries.occurredAt), asc(auditEntries.id));
 }

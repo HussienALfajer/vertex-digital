@@ -2,12 +2,12 @@
 
 ## Wiring checklist
 
-Everything a new module, permission, error, job or screen must be connected to. Tests catch the items marked **(test)**; the others fail silently, so tick each one that applies in `TASKS.md`. Paths are the ones ADR 0011 fixes; the Phase 0 scaffold creates the files named here, and the first feature that needs a missing one creates it in that place.
+Everything a new module, error, job or screen must be connected to. Tests catch the items marked **(test)**; the others fail silently, so tick each one that applies in `TASKS.md`. Paths are the ones ADR 0011 fixes; the Phase 0 scaffold creates the files named here, and the first feature that needs a missing one creates it in that place.
 
 ### contracts (`packages/contracts/src/`)
 - [ ] `<module>.ts` created and re-exported from `index.ts`.
 - [ ] Every schema the API exposes has `.meta({ id })`; list responses use the shared page schema with their own id.
-- [ ] Permissions: new staff permissions in the permission map, granted to the roles the spec's "Roles and access" table names; a test per new grant.
+- [ ] Sensitive admin routes (money moves, rates, keys, switches) marked for re-authentication as the spec's "Access" table says; a test per route that it answers `REAUTHENTICATION_REQUIRED`. There is no permission map: one admin, full access (ADR 0016).
 - [ ] New error codes added to the error code list, with their Arabic text in the store and/or admin catalog in the **same PR** (the catalogs are typed).
 - [ ] New audit actions (`<entity>.<verb>`) and entity types added to the audit lists, with their labels in the admin catalog.
 - [ ] Fixed value lists (states, kinds, networks) are `as const` arrays with a `z.enum`, reused by the db enum; a new state is added to the transition table with tests for every allowed and refused move.
@@ -21,22 +21,22 @@ Everything a new module, permission, error, job or screen must be connected to. 
 - [ ] Schema and generated migration committed together **(CI: drift)**.
 
 ### api (`apps/api/src/`)
-- [ ] `modules/<module>/` with `<module>.module.ts`, controllers (`<module>.controller.ts` for customers, `<module>.admin.controller.ts` for staff), `<module>.service.ts`, `index.ts` (the Nest module and only the services other modules call).
+- [ ] `modules/<module>/` with `<module>.module.ts`, controllers (`<module>.controller.ts` for customers, `<module>.admin.controller.ts` for the admin), `<module>.service.ts`, `index.ts` (the Nest module and only the services other modules call).
 - [ ] The module is imported in `app.module.ts` through its `index.ts`.
-- [ ] Every route declares `@CustomerRoute()`, `@StaffRoute(...)` or `@Public()`; staff routes only under `/api/admin/` **(test)**; imports from other modules go through their `index.ts` **(test)**; only the module's own tables **(test)**.
+- [ ] Every route declares `@CustomerRoute()`, `@AdminRoute()` or `@Public()`; admin routes only under `/api/admin/` **(test)**; imports from other modules go through their `index.ts` **(test)**; only the module's own tables **(test)**.
 - [ ] Customer reads and actions filter by the caller's id; a record of another customer answers 404.
 - [ ] Money and order changes go through `packages/db/src/ledger` and `packages/db/src/orders`; idempotency keys on every journal, deposit and order; `Idempotency-Key` required on money endpoints.
 - [ ] Every state change writes the audit entry in the same `db.transaction`; jobs are enqueued on the same transaction.
 - [ ] New public or money endpoints have their rate limit (API and the matching nginx zone in `deploy/`) and ALTCHA where ADR 0008 asks.
 - [ ] Archive and restore set and clear `archivedAt`; no `DELETE` of business rows.
-- [ ] `test/<module>.test.ts`: per endpoint success, 401, 403 (and customer on staff route) and other customers' records; the spec's numbered rules each have a test; money paths have concurrency and double-submit tests; seeded rows removed in `afterAll`.
+- [ ] `test/<module>.test.ts`: per endpoint success, 401, 403 (customer session on an admin route, admin session on a customer route) and other customers' records; the spec's numbered rules each have a test; money paths have concurrency and double-submit tests; seeded rows removed in `afterAll`.
 - [ ] `docs/architecture.md` ("API modules") updated if module ownership differs from the table there.
 
 ### worker (`apps/worker/src/`)
 - [ ] Queue names and schedules in `packages/contracts` (jobs list); the job in `jobs/<area>/<name>.job.ts`.
 - [ ] The job is safe to run twice (state checked in the database, unique keys), retries with backoff only on retryable errors, and reports final failures to Sentry and Telegram.
 - [ ] Supplier calls only through `packages/suppliers`; chain reads only through the chain-reader interface; tests use the fake supplier and fixtures, never live services.
-- [ ] Changes that customers or staff watch live send `pg_notify` after commit.
+- [ ] Changes that customers or the admin watch live send `pg_notify` after commit.
 
 ### bridge
 - [ ] The OpenAPI document and the admin client types regenerated and committed **(CI: OpenAPI drift)**.
@@ -44,20 +44,20 @@ Everything a new module, permission, error, job or screen must be connected to. 
 
 ### admin (`apps/admin/src/`)
 - [ ] `features/<module>/<module>.queries.ts` with keys that start with the module name; mutations invalidate every query the change affects.
-- [ ] Thin routes; `validateSearch` for URL filters; guarded routes for permissions (cosmetic; the API enforces). Regenerate the route tree before typecheck and commit it.
-- [ ] Navigation item with its permission and label.
+- [ ] Thin routes; `validateSearch` for URL filters. Regenerate the route tree before typecheck and commit it.
+- [ ] Navigation item with its label.
 - [ ] i18n keys: the module namespace, `errors.<CODE>`, audit labels.
 - [ ] Loading (`Skeleton`), empty (`EmptyState`), error states; forms show server errors by code; sensitive actions ask for re-authentication.
 
 ### store (`apps/store/src/`)
 - [ ] Routes in `app/` stay thin; the feature lives in `features/<area>/`.
 - [ ] Cached reads use `use cache` with tags from `lib/cache-tags`; the API revalidates those tags when the data changes.
-- [ ] Client components only where interaction needs them; no secrets or staff data in client bundles.
+- [ ] Client components only where interaction needs them; no secrets or admin data in client bundles.
 - [ ] Money shown through the shared price component (USD with SYP); i18n keys for every string; loading, empty and error states; phone width first.
 - [ ] Money actions send an `Idempotency-Key` per attempt and handle `PRICE_CHANGED`, `INSUFFICIENT_BALANCE` and rate-limit answers.
 
 ### e2e
-- [ ] Flow spec for the feature's main paths and role differences, using the fake supplier.
+- [ ] Flow spec for the feature's main paths, using the fake supplier.
 - [ ] Every new screen in the screenshot specs (store: phone width, dark and light; admin: light and dark).
 
 ### docs
@@ -76,6 +76,6 @@ Filled after the first feature of each kind ships; until then, follow ADR 0011 a
 | Supplier adapter with fixtures | — (first: `/supplier-adapter shop2topup`) |
 | API module, controllers, service, integration test | — (first: F01/F02) |
 | Worker job with retries and idempotency | — (first: F06) |
-| Admin list page, form, detail page | — (first: F02) |
+| Admin list page, form, detail page | — (first: S01 audit log) |
 | Store page with cached reads | — (first: F12) |
 | E2E flow and screenshots | — (first: F01) |

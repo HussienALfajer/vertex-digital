@@ -5,7 +5,7 @@ export interface TelegramAlertsConfig {
   botToken?: string;
   chatId?: string;
   apiUrl: string;
-  /** Prefixed to every message, so the staff group can tell the sender apart. */
+  /** Prefixed to every message, so the admin group can tell the sender apart. */
   source: string;
 }
 
@@ -18,7 +18,7 @@ const TIMEOUT_MS = 10_000;
 const MAX_LENGTH = 3500;
 
 /**
- * The staff alert channel (ADR 0002): errors and operational alerts to a Telegram group through
+ * The admin alert channel (ADR 0002): errors and operational alerts to a Telegram group through
  * the Bot API. Rate limited and de-duplicated so an error loop cannot flood the group or get the
  * bot blocked. Sending never throws: an alert must not break the job that raised it. Messages
  * carry no secrets or personal data (ADR 0008): pass ids and error messages, never payloads.
