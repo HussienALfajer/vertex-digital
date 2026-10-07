@@ -1,0 +1,5 @@
+@import "tailwindcss";
+@import "@vertex-digital/ui/styles.css";
+
+/* The store's own sources, for the utilities they use. */
+@source "../";

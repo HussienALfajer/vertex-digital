@@ -1,0 +1,12 @@
+/*
+ * The Vertex design system stylesheet. An app imports Tailwind first, then this file:
+ *
+ *   @import "tailwindcss";
+ *   @import "@vertex-digital/ui/styles.css";
+ */
+@import "./fonts.css";
+@import "./theme.css";
+@import "./base.css";
+
+/* Generate the utilities used by the components in this package. */
+@source "../";

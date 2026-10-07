@@ -104,7 +104,7 @@ Rules (anatomy and the tests that enforce them: ADR 0011):
 ```
 Customer browser ──HTTPS──> nginx (digital.vertexmedia.pro)
    ├── /_next/static, images  → served from disk, immutable cache
-   ├── /api/admin/*           → 404
+   ├── /api/admin/*           → 404 (any letter case)
    ├── /api/webhooks/*        → API (supplier HMAC, IP allowlist)
    ├── /api/*                 → API 127.0.0.1 (SSE without buffering)
    └── /*                     → store (Next.js) 127.0.0.1, proxy_cache for anonymous catalog pages
@@ -112,6 +112,7 @@ Customer browser ──HTTPS──> nginx (digital.vertexmedia.pro)
 
 Staff browser ──HTTPS──> nginx (digital-admin.vertexmedia.pro)
    ├── /api/admin/*           → API 127.0.0.1
+   ├── /api/altcha/challenge  → API (the staff sign-in's proof of work after repeated failures)
    ├── /api/*                 → 404 (customer routes are not served on the admin host)
    └── /*                     → admin SPA build (static)
 

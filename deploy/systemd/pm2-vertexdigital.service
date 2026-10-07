@@ -1,0 +1,31 @@
+[Unit]
+Description=PM2 process manager (digital.vertexmedia.pro)
+Documentation=https://github.com/HussienALfajer/vertex-digital/blob/main/docs/deployment.md
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=forking
+User=vertexdigital
+
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+
+# System paths only: nothing under /root, which vertexdigital cannot read.
+Environment=PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PM2_HOME=/home/vertexdigital/.pm2
+PIDFile=/home/vertexdigital/.pm2/pm2.pid
+
+# A directory the user can read: starting from /root fails with EACCES (SERVER.md rule 7).
+WorkingDirectory=/srv/digital.vertexmedia.pro
+
+Restart=on-failure
+RestartSec=10
+
+ExecStart=/usr/local/bin/pm2 resurrect
+ExecReload=/usr/local/bin/pm2 reload all
+ExecStop=/usr/local/bin/pm2 kill
+
+[Install]
+WantedBy=multi-user.target

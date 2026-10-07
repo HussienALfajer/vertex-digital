@@ -26,4 +26,14 @@ describe('shared tsconfig', () => {
       emitDecoratorMetadata: true,
     });
   });
+
+  it('react extends base, resolves modules as a bundler does and emits nothing', () => {
+    const config = readConfig('react.json');
+    expect(config.extends).toBe('./base.json');
+    expect(config.compilerOptions).toMatchObject({
+      moduleResolution: 'Bundler',
+      jsx: 'react-jsx',
+      noEmit: true,
+    });
+  });
 });

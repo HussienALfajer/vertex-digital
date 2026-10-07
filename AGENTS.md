@@ -35,18 +35,18 @@ pnpm workspaces + Turborepo · TypeScript (strict) · Node 24 · PostgreSQL 17 (
 
 ## Commands
 
-Run from the repository root (Node 24, pnpm via Corepack: `corepack enable`). Rows marked *(later)* arrive with their package during Phase 0 (`TASKS.md`); the PR that adds one removes the mark.
+Run from the repository root (Node 24, pnpm via Corepack: `corepack enable`).
 
 | Task | Command |
 |---|---|
 | Install | `pnpm install` |
 | Local databases: `.env` with random passwords, the owner and app roles (ADR 0014), dev and test databases with the `pgboss` schema (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
-| Dev: api and worker in watch mode (store and admin join in PR 4) | `pnpm dev` |
+| Dev: api, worker, store (http://127.0.0.1:3001) and admin (http://127.0.0.1:5173) in watch mode | `pnpm dev` |
 | Typecheck · lint · lint fix | `pnpm typecheck` · `pnpm lint` · `pnpm lint:fix` |
 | Unit + integration tests (need the test database URLs in `.env`) | `pnpm test` |
-| E2E (Playwright) *(later)* | `pnpm test:e2e` |
+| E2E (Playwright: builds, then store and admin against a mocked API; first time: `pnpm --filter @vertex-digital/store exec playwright install chromium`) | `pnpm test:e2e` |
 | Migration after a schema change · apply to the dev database (Drizzle migrations, then pg-boss, as the owner role) | `pnpm db:generate` · `pnpm db:migrate` |
-| OpenAPI document after an API change (after `pnpm build`; commit `apps/api/openapi.json`) | `pnpm --filter @vertex-digital/api openapi:export` |
+| OpenAPI document and the admin client after an API change (after `pnpm build`; commit `apps/api/openapi.json` and `apps/admin/src/lib/api/schema.gen.ts`) | `pnpm --filter @vertex-digital/api openapi:export` · `pnpm --filter @vertex-digital/admin api:generate` |
 | First owner of the panel (prints a generated password once) · reset a staff member's TOTP | `pnpm --filter @vertex-digital/api staff:create-owner --email <email> --name <name>` · `pnpm --filter @vertex-digital/api staff:reset-two-factor --email <email>` |
 | Build | `pnpm build` |
 | One package only | `pnpm --filter @vertex-digital/<name> <script>` |

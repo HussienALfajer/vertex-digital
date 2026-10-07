@@ -1,0 +1,7 @@
+[Unit]
+Description=Health check for digital.vertexmedia.pro
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/vertexdigital-healthcheck

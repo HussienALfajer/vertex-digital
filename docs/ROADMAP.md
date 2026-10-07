@@ -10,12 +10,12 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] `packages/suppliers`: `SupplierAdapter` interface, HMAC helpers, the `fake` adapter
 - [x] `apps/api` skeleton: NestJS 12, Standard Schema validation, OpenAPI, pino, Sentry, `/api/health`, access decorators and architecture test, rate limits, ALTCHA verification
 - [x] `apps/worker` skeleton: pg-boss wiring, heartbeat job, Sentry, Telegram alert channel
-- [ ] `apps/store` skeleton: Next.js 16, Cache Components, Arabic RTL shell, dark default, performance budget, Playwright smoke and screenshots
-- [ ] `apps/admin` skeleton: Vite, TanStack Router/Query, RTL shell, Playwright smoke
-- [ ] Design system: tokens from `brand/identity.md`, Vertex Hub components copied and adapted, VERTEX DIGITAL wordmark (fonts: Madani pending its license; fallback until then)
-- [~] Auth skeletons: customer and staff Better Auth instances, staff TOTP enforcement, first-owner CLI, permission map skeleton in `packages/contracts` done; sign-in pages arrive with the front ends
-- [~] CI: typecheck, lint, test, build, gitleaks and migration drift (PostgreSQL 17 service, non-superuser app role), OpenAPI drift and a start check of the built API and worker in place; E2E arrives with the front ends
-- [ ] Deployment skeleton on the VPS: both hosts, TLS, nginx limits and headers, Brotli, fail2ban jails, PM2 (store, api, worker), atomic releases, health checks, daily backups, `docs/deployment.md`
+- [x] `apps/store` skeleton: Next.js 16, Cache Components, Arabic RTL shell, dark default, customer sign-in page, performance budget, Playwright smoke and screenshots
+- [x] `apps/admin` skeleton: Vite, TanStack Router/Query, RTL shell, staff sign-in with TOTP and enrolment, client typed from OpenAPI, Playwright smoke and screenshots
+- [x] Design system: tokens from `brand/identity.md`, Vertex Hub components copied and adapted, VERTEX DIGITAL logo draft (Q16: designer files may replace it; fonts: Madani pending its license, fallback until then)
+- [x] Auth skeletons: customer and staff Better Auth instances, staff TOTP enforcement, first-owner CLI, permission map skeleton in `packages/contracts`, sign-in pages in the store and the panel
+- [x] CI: typecheck, lint, test, build, gitleaks and migration drift (PostgreSQL 17 service, non-superuser app role), OpenAPI and admin client drift, a start check of the built API and worker, E2E (store and panel, screenshots as artifacts)
+- [~] Deployment skeleton: `deploy/` (both hosts, TLS, nginx limits and headers, Brotli when available, fail2ban jail, PM2 store/api/worker, atomic releases with rollback, health checks, daily backups) and `docs/deployment.md` written; first provisioning and deploy in the Phase 0 deploy session, with the owner
 
 ## Phase 1 — Money core
 - [ ] F01 Customer accounts

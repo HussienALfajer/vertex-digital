@@ -1,0 +1,273 @@
+/*
+ * Vertex design tokens. Every value comes from brand/identity.md; if they disagree, that file wins.
+ *
+ * Tailwind's default palette, fonts, radii and shadows are reset (`initial`), so only brand tokens
+ * generate utilities: an ad-hoc `bg-blue-500` or `shadow-lg` produces no CSS at all.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-*: initial;
+  --color-white: #ffffff;
+
+  /* Tonal scales (§2). Vertex Green = green-800, Vertex Sand = gold-400. */
+  --color-green-50: #e8fcf8;
+  --color-green-100: #dbf3ee;
+  --color-green-200: #c2e1da;
+  --color-green-300: #a0c7bf;
+  --color-green-400: #77aaa1;
+  --color-green-500: #4e8e83;
+  --color-green-600: #307369;
+  --color-green-700: #235b52;
+  --color-green-800: #004139;
+  --color-green-900: #0b2d28;
+  --color-green-950: #031b17;
+
+  --color-gold-50: #fcf7e7;
+  --color-gold-100: #f3edda;
+  --color-gold-200: #e1d9c1;
+  --color-gold-300: #c8bd9e;
+  --color-gold-400: #b9a87a;
+  --color-gold-500: #907f4f;
+  --color-gold-600: #766434;
+  --color-gold-700: #5d4e27;
+  --color-gold-800: #433819;
+  --color-gold-900: #2e260e;
+  --color-gold-950: #1b1505;
+
+  --color-neutral-50: #f4f8f7;
+  --color-neutral-100: #e7efed;
+  --color-neutral-200: #d4dbd9;
+  --color-neutral-300: #b8bfbe;
+  --color-neutral-400: #99a09f;
+  --color-neutral-500: #7b8280;
+  --color-neutral-600: #616866;
+  --color-neutral-700: #4b5150;
+  --color-neutral-800: #353b39;
+  --color-neutral-900: #222827;
+  --color-neutral-950: #121716;
+
+  /* Status scales: deliberately distinct from the brand colors. */
+  --color-success-50: #e5ffe9;
+  --color-success-100: #d4f8da;
+  --color-success-500: #3c9555;
+  --color-success-600: #167a3a;
+  --color-success-700: #09602b;
+
+  --color-warning-50: #fff5ee;
+  --color-warning-100: #fee8d8;
+  --color-warning-500: #bb6814;
+  --color-warning-600: #97520a;
+  --color-warning-700: #783f04;
+
+  --color-danger-50: #fff4f2;
+  --color-danger-100: #fee7e3;
+  --color-danger-500: #d54a43;
+  --color-danger-600: #b62926;
+  --color-danger-700: #921b1a;
+
+  --color-info-50: #f0f8ff;
+  --color-info-100: #deeffe;
+  --color-info-500: #3786c3;
+  --color-info-600: #116ba7;
+  --color-info-700: #055485;
+
+  /* Typography (§3). */
+  --font-*: initial;
+  --font-sans: "Madani Arabic", "Montserrat", "Noto Kufi Arabic", system-ui, sans-serif;
+
+  --text-*: initial;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5rem;
+  --text-md: 1rem;
+  --text-md--line-height: 1.625rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.875rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2.125rem;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.5rem;
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: 2.875rem;
+
+  /* Shape and depth (§4). Spacing keeps Tailwind's 4 px step. No pill radius for controls. */
+  --radius-*: initial;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --shadow-*: initial;
+  --shadow-float: 0 8px 24px -8px rgb(3 27 23 / 0.2), 0 2px 6px -2px rgb(3 27 23 / 0.12);
+
+  --drop-shadow-*: initial;
+  --inset-shadow-*: initial;
+  --blur-*: initial;
+
+  /* Motion (§6). */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Semantic roles (§2), switched by the `.dark` class on <html>. */
+:root {
+  --background: var(--color-neutral-50);
+  --foreground: var(--color-neutral-900);
+  --surface: var(--color-white);
+  --surface-foreground: var(--color-neutral-900);
+  --muted: var(--color-neutral-100);
+  --muted-foreground: var(--color-neutral-600);
+  --border: var(--color-neutral-200);
+  /* Form controls need 3:1 against the surface (WCAG 1.4.11), stronger than structural borders. */
+  --input: var(--color-neutral-500);
+  --primary: var(--color-green-800);
+  --primary-hover: var(--color-green-700);
+  --primary-foreground: var(--color-white);
+  --secondary: var(--color-neutral-100);
+  --secondary-hover: var(--color-neutral-200);
+  --secondary-foreground: var(--color-neutral-900);
+  --accent: var(--color-gold-400);
+  --accent-foreground: var(--color-green-950);
+  --accent-text: var(--color-gold-700);
+  --destructive: var(--color-danger-600);
+  --destructive-hover: var(--color-danger-700);
+  --destructive-foreground: var(--color-white);
+  --destructive-text: var(--color-danger-700);
+  --ring: var(--color-gold-500);
+  --overlay: rgb(3 27 23 / 0.4);
+
+  --sidebar: var(--color-green-800);
+  --sidebar-foreground: var(--color-neutral-100);
+  --sidebar-muted-foreground: var(--color-neutral-300);
+  --sidebar-hover: var(--color-green-700);
+  --sidebar-active: var(--color-green-900);
+  --sidebar-border: var(--color-green-700);
+  --sidebar-marker: var(--color-gold-400);
+  --sidebar-ring: var(--color-gold-400);
+
+  /* Status badges (§2 "Order and money status colors"). */
+  --status-neutral: var(--color-neutral-100);
+  --status-neutral-foreground: var(--color-neutral-700);
+  --status-info: var(--color-info-100);
+  --status-info-foreground: var(--color-info-700);
+  --status-gold: var(--color-gold-100);
+  --status-gold-foreground: var(--color-gold-700);
+  --status-warning: var(--color-warning-100);
+  --status-warning-foreground: var(--color-warning-700);
+  --status-danger: var(--color-danger-50);
+  --status-danger-foreground: var(--color-danger-700);
+  --status-success: var(--color-success-100);
+  --status-success-foreground: var(--color-success-700);
+  --status-brand: var(--color-green-800);
+  --status-brand-foreground: var(--color-white);
+
+  color-scheme: light;
+}
+
+/* The logo's own inverse: sand on deep green. */
+.dark {
+  --background: var(--color-green-950);
+  --foreground: var(--color-neutral-100);
+  --surface: var(--color-green-900);
+  --surface-foreground: var(--color-neutral-100);
+  --muted: var(--color-green-800);
+  /* neutral-300: muted text also sits on the muted surface (table heads, toggles). */
+  --muted-foreground: var(--color-neutral-300);
+  --border: var(--color-green-700);
+  --input: var(--color-green-500);
+  --primary: var(--color-gold-400);
+  --primary-hover: var(--color-gold-300);
+  --primary-foreground: var(--color-green-950);
+  --secondary: var(--color-green-800);
+  --secondary-hover: var(--color-green-700);
+  --secondary-foreground: var(--color-neutral-100);
+  --accent: var(--color-gold-400);
+  --accent-foreground: var(--color-green-950);
+  --accent-text: var(--color-gold-300);
+  --destructive: var(--color-danger-600);
+  --destructive-hover: var(--color-danger-700);
+  --destructive-foreground: var(--color-white);
+  --destructive-text: color-mix(in oklch, var(--color-danger-500), var(--color-danger-100));
+  --ring: var(--color-gold-400);
+  --overlay: rgb(3 27 23 / 0.6);
+
+  --sidebar: var(--color-green-950);
+  --sidebar-foreground: var(--color-neutral-100);
+  --sidebar-muted-foreground: var(--color-neutral-400);
+  --sidebar-hover: var(--color-green-900);
+  --sidebar-active: var(--color-green-800);
+  --sidebar-border: var(--color-green-800);
+
+  --status-neutral: var(--color-neutral-800);
+  --status-neutral-foreground: var(--color-neutral-100);
+  --status-info: color-mix(in oklch, var(--color-info-500) 24%, transparent);
+  --status-info-foreground: var(--color-info-100);
+  --status-gold: color-mix(in oklch, var(--color-gold-400) 20%, transparent);
+  --status-gold-foreground: var(--color-gold-300);
+  --status-warning: color-mix(in oklch, var(--color-warning-500) 24%, transparent);
+  --status-warning-foreground: var(--color-warning-100);
+  --status-danger: color-mix(in oklch, var(--color-danger-500) 20%, transparent);
+  --status-danger-foreground: var(--color-danger-100);
+  --status-success: color-mix(in oklch, var(--color-success-500) 24%, transparent);
+  --status-success-foreground: var(--color-success-100);
+  --status-brand: var(--color-green-700);
+  --status-brand-foreground: var(--color-neutral-100);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-text: var(--accent-text);
+  --color-destructive: var(--destructive);
+  --color-destructive-hover: var(--destructive-hover);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-text: var(--destructive-text);
+  --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-marker: var(--sidebar-marker);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-status-neutral: var(--status-neutral);
+  --color-status-neutral-foreground: var(--status-neutral-foreground);
+  --color-status-info: var(--status-info);
+  --color-status-info-foreground: var(--status-info-foreground);
+  --color-status-gold: var(--status-gold);
+  --color-status-gold-foreground: var(--status-gold-foreground);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-foreground: var(--status-warning-foreground);
+  --color-status-danger: var(--status-danger);
+  --color-status-danger-foreground: var(--status-danger-foreground);
+  --color-status-success: var(--status-success);
+  --color-status-success-foreground: var(--status-success-foreground);
+  --color-status-brand: var(--status-brand);
+  --color-status-brand-foreground: var(--status-brand-foreground);
+}

@@ -71,6 +71,12 @@ run "packages installed" pnpm install --frozen-lockfile
 run "dev and test databases" env PGPASSWORD=postgres node scripts/setup-local-db.mjs
 # The dev database of a cloud session is disposable; tests migrate the test database themselves.
 run "dev database migrated" pnpm db:migrate
+# Chromium for the E2E tests (pnpm test:e2e), at the Playwright version in the lockfile; its
+# system libraries come from scripts/cloud-setup.sh. A no-op when it is already there.
+export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+[ -n "${CLAUDE_ENV_FILE:-}" ] && echo "export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright" >>"$CLAUDE_ENV_FILE"
+$SUDO mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" && $SUDO chmod 777 "$PLAYWRIGHT_BROWSERS_PATH"
+run "chromium for playwright" pnpm --filter @vertex-digital/store exec playwright install chromium
 
 summary=$(printf '%s, ' "${status[@]}")
 echo "Cloud session ready: ${summary%, }."

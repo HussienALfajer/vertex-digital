@@ -1,6 +1,6 @@
 # 0008 — Security and performance without Cloudflare
 
-Status: Accepted · Date: 2026-10-06
+Status: Accepted · Date: 2026-10-06 · Amended by [0015](0015-store-csp-inline-scripts.md) (the store's CSP)
 
 ## Context
 Cloudflare (and similar CDNs) is blocked in Syria, so the usual managed shield and CDN are not available. The store holds money, attracts bots (credential stuffing, OTP abuse, card-testing-style deposit spam) and will be attacked. The server is shared with other sites, so one site must not be able to exhaust it.
