@@ -22,7 +22,7 @@ Write the spec for **$ARGUMENTS**.
 - Stop when every template section, including "Money flows" and "Abuse and fraud", can be written without guessing.
 
 ## 3. Write
-- `docs/specs/<id>-<kebab-name>.md` (for example `docs/specs/F03-wallet-ledger.md`), in English, following the template. Mark anything still undecided under "Open questions" instead of guessing.
+- `docs/specs/<id>-<kebab-name>.md` (for example `docs/specs/S02-wallet-ledger.md`; `<id>` is the spec id from `docs/ROADMAP.md`, which lists the features it covers), in English, following the template. Mark anything still undecided under "Open questions" instead of guessing.
 - Record answered open questions in `docs/open-questions.md` (move them to Resolved with the date). A business decision that shapes the system also gets an ADR.
 - Mark the feature `[~]` in `docs/ROADMAP.md`.
 
