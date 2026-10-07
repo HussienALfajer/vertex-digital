@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { otpCodeSchema } from './auth.js';
+import { adjustmentCategorySchema, adjustmentDirectionSchema } from './wallet.js';
 
 /*
  * Emails, owned by the api `notifications` module (S01 rules E1–E5): every email is a row of the
@@ -22,6 +23,8 @@ export const EMAIL_TEMPLATES = [
   'customer_new_sign_in',
   /** Someone tried to sign up, or to move an account, with this address (rules C2, C12). */
   'customer_sign_up_attempt',
+  /** The admin adjusted the wallet, or reversed an adjustment (S02); never the reason or note. */
+  'customer_wallet_adjusted',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -52,6 +55,12 @@ export const EMAIL_PARAMS = {
     ipAddress: z.string().nullable(),
   }),
   customer_sign_up_attempt: z.object({}),
+  customer_wallet_adjusted: at.extend({
+    direction: adjustmentDirectionSchema,
+    amountUnits: z.int().positive(),
+    category: adjustmentCategorySchema,
+    reversal: z.boolean(),
+  }),
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;

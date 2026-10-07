@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
+import {
+  adjustmentCategorySchema,
+  adjustmentDirectionSchema,
+  manualDepositMethodSchema,
+} from './wallet.js';
 
 /*
  * The audit log (ADR 0011, S01 rules A1–A4), owned by the api `audit` module: one append-only
@@ -19,7 +24,7 @@ export const auditChannelSchema = z.enum(AUDIT_CHANNELS).meta({ id: 'AuditChanne
 
 export type AuditChannel = z.infer<typeof auditChannelSchema>;
 
-export const AUDIT_ENTITY_TYPES = ['admin_user', 'customer'] as const;
+export const AUDIT_ENTITY_TYPES = ['admin_user', 'customer', 'wallet_adjustment'] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
 
@@ -32,6 +37,15 @@ const changed = <Shape extends z.ZodRawShape>(shape: Shape) => {
   return z.strictObject({ before: values, after: values });
 };
 const identity = z.strictObject({ name: z.string(), email: z.string(), phone: z.string() });
+const adjustment = {
+  customerId: z.uuid(),
+  direction: adjustmentDirectionSchema,
+  amountUnits: z.int().positive(),
+  category: adjustmentCategorySchema,
+  customerNote: z.string().nullable(),
+  journalId: z.uuid(),
+  balanceAfterUnits: z.int().nonnegative(),
+};
 
 /**
  * Every audit action (`<entity>.<verb>`) with the shape of its `details`: before and after of the
@@ -66,6 +80,17 @@ export const AUDIT_DETAILS = {
   'customer.test_created': identity,
   /** `count` is the sessions signed out (rule T2). */
   'customer.test_password_reset': count,
+  /** A wallet adjustment by the admin (S02); the internal reason is the entry's `reason`. */
+  'wallet_adjustment.created': z.strictObject({
+    ...adjustment,
+    depositMethod: manualDepositMethodSchema.nullable(),
+    externalReference: z.string().nullable(),
+  }),
+  /** On the reversal's row (rule R1). */
+  'wallet_adjustment.reversed': z.strictObject({
+    ...adjustment,
+    reversedAdjustmentId: z.uuid(),
+  }),
 } as const satisfies Record<string, z.ZodType>;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;

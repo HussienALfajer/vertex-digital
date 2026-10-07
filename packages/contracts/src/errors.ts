@@ -55,6 +55,18 @@ export const ERROR_CODES = [
   'OTP_EXPIRED',
   /** Five wrong tries voided the email code: request a new one (rule C4). */
   'TOO_MANY_ATTEMPTS',
+  /** Test funds for a customer who is not a test customer (S02 rule J4). */
+  'ADJUSTMENT_NOT_ALLOWED',
+  /** An adjustment above $100 without the amount typed a second time (rule J6). */
+  'AMOUNT_CONFIRMATION_REQUIRED',
+  /** The amount typed a second time differs from the amount (rule J6). */
+  'AMOUNT_CONFIRMATION_MISMATCH',
+  /** The Sham Cash transaction number or TXID is already recorded (rule J8). */
+  'EXTERNAL_REFERENCE_TAKEN',
+  /** The adjustment was already reversed (rule R2). */
+  'ADJUSTMENT_ALREADY_REVERSED',
+  /** A reversal cannot itself be reversed (rule R3). */
+  'ADJUSTMENT_NOT_REVERSIBLE',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

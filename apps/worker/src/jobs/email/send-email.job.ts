@@ -8,6 +8,7 @@ import {
 } from '@vertex-digital/contracts';
 import { type Database, emailOutbox } from '@vertex-digital/db';
 import { eq } from 'drizzle-orm';
+import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { Mailer } from '../../core/email/mailer.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -34,6 +35,7 @@ export class SendEmailJob implements OnApplicationBootstrap {
     private readonly pgBoss: PgBossService,
     private readonly mailer: Mailer,
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -66,7 +68,7 @@ export class SendEmailJob implements OnApplicationBootstrap {
         await this.mailer.send({
           id: row.id,
           to: row.toAddress,
-          ...renderEmail(row.template, params as never),
+          ...renderEmail(row.template, params as never, this.env.STORE_URL),
         });
       } catch (error) {
         const failed = attempts >= MAX_EMAIL_ATTEMPTS;
