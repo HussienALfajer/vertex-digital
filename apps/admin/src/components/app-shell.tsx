@@ -15,7 +15,16 @@ import {
   SheetTrigger,
   VertexMark,
 } from '@vertex-digital/ui';
-import { ChevronDownIcon, HouseIcon, LogOutIcon, type LucideIcon, MenuIcon } from 'lucide-react';
+import {
+  ChevronDownIcon,
+  HouseIcon,
+  LogOutIcon,
+  type LucideIcon,
+  MenuIcon,
+  ScrollTextIcon,
+  UserRoundCogIcon,
+  UsersRoundIcon,
+} from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AdminSession, authClient, leaveSession, useSession } from '../lib/auth';
@@ -23,14 +32,19 @@ import { ThemeToggle } from './theme-toggle';
 
 interface NavItem {
   to: LinkProps['to'];
-  label: 'nav.home';
+  label: 'nav.home' | 'nav.audit' | 'nav.testCustomers' | 'nav.account';
   icon: LucideIcon;
   /** Active only on this exact path; otherwise also on its sub-pages. */
   exact?: boolean;
 }
 
 /** Each feature adds its section here. One admin, full access: no permission checks (ADR 0016). */
-const navItems: NavItem[] = [{ to: '/', label: 'nav.home', icon: HouseIcon, exact: true }];
+const navItems: NavItem[] = [
+  { to: '/', label: 'nav.home', icon: HouseIcon, exact: true },
+  { to: '/audit', label: 'nav.audit', icon: ScrollTextIcon },
+  { to: '/test-customers', label: 'nav.testCustomers', icon: UsersRoundIcon },
+  { to: '/account', label: 'nav.account', icon: UserRoundCogIcon },
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
@@ -151,6 +165,10 @@ function UserMenu({ session }: { session: AdminSession }) {
             {user.email}
           </span>
         </DropdownMenuHeader>
+        <DropdownMenuItem render={<Link to="/account" />}>
+          <UserRoundCogIcon />
+          {t('user.account')}
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={signOut}>
           <LogOutIcon className="rtl:-scale-x-100" />
           {t('user.signOut')}

@@ -2,6 +2,7 @@ import { type QueryClient, queryOptions, useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router';
 import { createAuthClient } from 'better-auth/client';
 import { twoFactorClient } from 'better-auth/client/plugins';
+import { accessEventOf, reportAccess } from './session-events';
 
 /**
  * The admin Better Auth instance (ADR 0007, 0016), served by the API at /api/admin/auth on the panel's
@@ -14,6 +15,13 @@ export const authClient = createAuthClient({
     // The sign-in screen handles the two-factor step itself.
     twoFactorClient(),
   ],
+  fetchOptions: {
+    // An idle session or a pending password change ends the screen, whichever call finds it.
+    onError: ({ error }) => {
+      const event = accessEventOf((error as { code?: string }).code);
+      if (event) reportAccess(event);
+    },
+  },
 });
 
 export interface AdminSession {
@@ -22,6 +30,8 @@ export interface AdminSession {
     name: string;
     email: string;
     twoFactorEnabled: boolean;
+    /** Set by `admin:create` and `admin:reset-password` (rule D1). */
+    mustChangePassword: boolean;
   };
 }
 
@@ -31,15 +41,17 @@ async function fetchSession(): Promise<AdminSession | null> {
   if (error) throw new Error(`Loading the session failed with HTTP ${error.status}`);
   if (!data) return null;
   const { id, name, email, twoFactorEnabled } = data.user;
-  return { user: { id, name, email, twoFactorEnabled: !!twoFactorEnabled } };
+  const mustChangePassword = !!(data.user as { mustChangePassword?: boolean }).mustChangePassword;
+  return { user: { id, name, email, twoFactorEnabled: !!twoFactorEnabled, mustChangePassword } };
 }
 
 export const sessionQuery = queryOptions({
   queryKey: ['session'],
   queryFn: fetchSession,
   staleTime: 60_000,
-  // The session can end (sign-out elsewhere, a reset on the server) while the tab is open.
-  refetchOnWindowFocus: 'always',
+  // Not read again on focus: Better Auth's get-session deletes an idle session and answers "no
+  // session", so the panel would lose the reason. The next action the admin takes finds a session
+  // that ended (sign-out elsewhere, a reset on the server) or went idle, and says which (rule D4).
   retry: false,
 });
 
@@ -48,6 +60,16 @@ export function useSession(): AdminSession {
   const { session } = useRouteContext({ from: '/_app' });
   const { data } = useQuery(sessionQuery);
   return data ?? session;
+}
+
+/**
+ * Where an admin who is signed in must go before the panel: the CLI-issued password is changed
+ * first (rule D1), then TOTP is set up (ADR 0007). Null when the panel is open to them.
+ */
+export function setupStep(session: AdminSession): '/change-password' | '/setup-two-factor' | null {
+  if (session.user.mustChangePassword) return '/change-password';
+  if (needsTwoFactorSetup(session)) return '/setup-two-factor';
+  return null;
 }
 
 /** TOTP is mandatory for the admin (ADR 0007): nothing else is reachable until it is set up. */

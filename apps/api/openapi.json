@@ -15,6 +15,27 @@
         ]
       }
     },
+    "/api/auth/registration": {
+      "get": {
+        "operationId": "AuthController_registration",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Whether customers can sign up (rule C16)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Registration"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/sign-up/email": {
       "post": {
         "operationId": "AuthController_signUp",
@@ -720,6 +741,18 @@
   "servers": [],
   "components": {
     "schemas": {
+      "Registration": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "open"
+        ],
+        "additionalProperties": false
+      },
       "CustomerSignUp": {
         "type": "object",
         "properties": {

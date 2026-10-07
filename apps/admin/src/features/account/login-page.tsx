@@ -2,7 +2,15 @@ import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { backupCodeSchema, type SignIn, signInSchema } from '@vertex-digital/contracts';
-import { Button, Field, FieldError, FieldLabel, Input, PasswordInput } from '@vertex-digital/ui';
+import {
+  Button,
+  Callout,
+  Field,
+  FieldError,
+  FieldLabel,
+  Input,
+  PasswordInput,
+} from '@vertex-digital/ui';
 import { ArrowRightIcon, KeyRoundIcon, SmartphoneIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -10,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthHeading, AuthLayout } from '../../components/auth-layout';
 import { FormAlert } from '../../components/form-alert';
 import { ALTCHA_HEADER, solveAltcha } from '../../lib/altcha';
-import { authClient, needsTwoFactorSetup, sessionQuery } from '../../lib/auth';
+import { authClient, sessionQuery, setupStep } from '../../lib/auth';
 import { errorMessage } from '../../lib/errors';
 import { safeRedirect } from '../../lib/safe-redirect';
 import { TotpForm } from './totp-form';
@@ -18,18 +26,22 @@ import { TotpForm } from './totp-form';
 type Step = 'password' | 'totp' | 'backup';
 
 /** Sign-in with the password, then the authenticator or a backup code (ADR 0007). */
-export function LoginPage({ redirect }: { redirect?: string }) {
+export function LoginPage({ redirect, idle }: { redirect?: string; idle?: boolean }) {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('password');
 
-  /** Loads the new session, then goes where the user was heading (or sets up 2FA first). */
+  /**
+   * Loads the new session, then goes where the user was heading (or changes the CLI-issued
+   * password and sets up 2FA first).
+   */
   async function enter() {
     // Replace the cached "no session" answer before the guarded route reads it.
     const session = await queryClient.fetchQuery({ ...sessionQuery, staleTime: 0 });
-    if (session && needsTwoFactorSetup(session)) {
-      await router.navigate({ to: '/setup-two-factor', replace: true });
+    const step = session && setupStep(session);
+    if (step) {
+      await router.navigate({ to: step, replace: true });
       return;
     }
     await router.navigate({ href: safeRedirect(redirect), replace: true });
@@ -40,6 +52,7 @@ export function LoginPage({ redirect }: { redirect?: string }) {
       {step === 'password' && (
         <>
           <AuthHeading title={t('login.title')} subtitle={t('login.subtitle')} />
+          {idle && <Callout tone="info" title={t('login.idleNotice')} role="status" />}
           <SignInForm onSignedIn={enter} onTwoFactor={() => setStep('totp')} />
         </>
       )}

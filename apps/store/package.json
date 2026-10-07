@@ -14,6 +14,8 @@
   "dependencies": {
     "@vertex-digital/contracts": "workspace:*",
     "@vertex-digital/ui": "workspace:*",
+    "altcha-lib": "^2.6.0",
+    "libphonenumber-js": "^1.13.14",
     "lucide-react": "^1.48.0",
     "next": "~16.3.0",
     "react": "^19.3.0",

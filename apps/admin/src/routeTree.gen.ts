@@ -10,12 +10,21 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupTwoFactorRouteImport } from './routes/setup-two-factor'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppAccountRouteImport } from './routes/_app/account'
+import { Route as AppAuditRouteImport } from './routes/_app/audit'
+import { Route as AppTestCustomersRouteImport } from './routes/_app/test-customers'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChangePasswordRoute = ChangePasswordRouteImport.update({
+  id: '/change-password',
+  path: '/change-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -33,34 +42,85 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAccountRoute = AppAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAuditRoute = AppAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTestCustomersRoute = AppTestCustomersRouteImport.update({
+  id: '/test-customers',
+  path: '/test-customers',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/change-password': typeof ChangePasswordRoute
   '/login': typeof LoginRoute
   '/setup-two-factor': typeof SetupTwoFactorRoute
+  '/account': typeof AppAccountRoute
+  '/audit': typeof AppAuditRoute
+  '/test-customers': typeof AppTestCustomersRoute
 }
 export interface FileRoutesByTo {
+  '/change-password': typeof ChangePasswordRoute
   '/login': typeof LoginRoute
   '/setup-two-factor': typeof SetupTwoFactorRoute
+  '/account': typeof AppAccountRoute
+  '/audit': typeof AppAuditRoute
+  '/test-customers': typeof AppTestCustomersRoute
   '/': typeof AppIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/change-password': typeof ChangePasswordRoute
   '/login': typeof LoginRoute
   '/setup-two-factor': typeof SetupTwoFactorRoute
+  '/_app/account': typeof AppAccountRoute
+  '/_app/audit': typeof AppAuditRoute
+  '/_app/test-customers': typeof AppTestCustomersRoute
   '/_app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/setup-two-factor'
+  fullPaths:
+    | '/'
+    | '/change-password'
+    | '/login'
+    | '/setup-two-factor'
+    | '/account'
+    | '/audit'
+    | '/test-customers'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/setup-two-factor' | '/'
-  id: '__root__' | '/_app' | '/login' | '/setup-two-factor' | '/_app/'
+  to:
+    | '/change-password'
+    | '/login'
+    | '/setup-two-factor'
+    | '/account'
+    | '/audit'
+    | '/test-customers'
+    | '/'
+  id:
+    | '__root__'
+    | '/_app'
+    | '/change-password'
+    | '/login'
+    | '/setup-two-factor'
+    | '/_app/account'
+    | '/_app/audit'
+    | '/_app/test-customers'
+    | '/_app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  ChangePasswordRoute: typeof ChangePasswordRoute
   LoginRoute: typeof LoginRoute
   SetupTwoFactorRoute: typeof SetupTwoFactorRoute
 }
@@ -72,6 +132,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/change-password': {
+      id: '/change-password'
+      path: '/change-password'
+      fullPath: '/change-password'
+      preLoaderRoute: typeof ChangePasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -95,14 +162,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/account': {
+      id: '/_app/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AppAccountRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/audit': {
+      id: '/_app/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AppAuditRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/test-customers': {
+      id: '/_app/test-customers'
+      path: '/test-customers'
+      fullPath: '/test-customers'
+      preLoaderRoute: typeof AppTestCustomersRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppAccountRoute: typeof AppAccountRoute
+  AppAuditRoute: typeof AppAuditRoute
+  AppTestCustomersRoute: typeof AppTestCustomersRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAccountRoute: AppAccountRoute,
+  AppAuditRoute: AppAuditRoute,
+  AppTestCustomersRoute: AppTestCustomersRoute,
   AppIndexRoute: AppIndexRoute,
 }
 
@@ -110,6 +204,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  ChangePasswordRoute: ChangePasswordRoute,
   LoginRoute: LoginRoute,
   SetupTwoFactorRoute: SetupTwoFactorRoute,
 }

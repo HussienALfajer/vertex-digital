@@ -16,6 +16,15 @@ describe('errorMessage', () => {
     );
   });
 
+  it('translates the API codes the panel explains, from the API and from Better Auth', () => {
+    expect(errorMessage(t, new ApiError(409, 'EMAIL_TAKEN', undefined, 'x'))).toBe(
+      ar.errors.api.EMAIL_TAKEN,
+    );
+    expect(errorMessage(t, { status: 401, code: 'SESSION_IDLE_EXPIRED' })).toBe(
+      ar.errors.api.SESSION_IDLE_EXPIRED,
+    );
+  });
+
   it('tells rate limits and network failures apart', () => {
     expect(errorMessage(t, { status: 429 })).toBe(ar.errors.TOO_MANY_REQUESTS);
     expect(errorMessage(t, new ApiError(429, 'RATE_LIMITED', undefined, 'x'))).toBe(
@@ -37,5 +46,8 @@ describe('passwordFailure', () => {
   it('puts a wrong password under its field, anything else on the form', () => {
     expect(passwordFailure(t, { status: 400, code: 'INVALID_PASSWORD' }).field).toBe(true);
     expect(passwordFailure(t, { status: 429 }).field).toBe(false);
+    expect(passwordFailure(t, new ApiError(400, 'INVALID_PASSWORD', undefined, 'x')).field).toBe(
+      true,
+    );
   });
 });

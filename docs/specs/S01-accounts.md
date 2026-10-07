@@ -287,6 +287,13 @@ Settled while building PR 1 (rename, contracts, db, API, worker):
 - **Own admin sessions:** `DELETE /api/admin/me/sessions/:id` answers `204`.
 - **Emails locally:** `.eml` files under `EMAIL_LOG_DIR` (`apps/worker/.data/emails` with `pnpm dev`).
 
+Settled while building PR 2 (screens):
+- **Registration state for the store:** `GET /api/auth/registration` answers `{ open }` (public), so the header and `/sign-up` know whether sign-up is open (rule C16) without a store-side copy of `REGISTRATION_OPEN`. S05 points it at the switch.
+- **The address waiting for its code** (`/verify-email`) is kept in the tab's session storage, never in the URL; where the customer goes afterwards (`?next=` of the sign-in or sign-up page) travels with it.
+- **Admin activity (rule D4):** the panel does not refetch on window focus or reconnect (the session included), so an unattended panel makes no requests that count as activity, and the first action after 30 idle minutes meets `SESSION_IDLE_EXPIRED` and shows the notice. A reload after that finds no session and shows the plain sign-in page.
+- **Re-authentication (rule D5):** every admin mutation in the shell runs through the dialog's wrapper (the forced password change, outside the shell, runs as it is); none of the S01 routes is marked sensitive yet, so the E2E drives the dialog through a mocked `REAUTHENTICATION_REQUIRED`.
+- **Registration read failures:** when `GET /api/auth/registration` fails, `/sign-up` says so with a retry instead of showing the closed state; the header shows no sign-up link until it is known to be open.
+
 ## Open questions
 None blocking. Recorded for later:
 - SMTP credentials for `info@vertexmedia.pro` and SPF, DKIM and DMARC on `vertexmedia.pro` (ADR 0007) must be ready before the Phase 1 production deploy; S01 works locally with file output.
