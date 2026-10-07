@@ -128,8 +128,10 @@ describe('email.send', () => {
       system: 'Android',
       ipAddress: '10.0.0.1',
     });
-    await app.get(PgBossService).boss.send(QUEUES.emailSend, { outboxId: id });
-    await expect.poll(async () => (await rowOf(id))?.status, { timeout: 15_000 }).toBe('sent');
+    // Above every job the API sends (code emails are 10): in CI the API tests queue code emails
+    // into the same test database at the same time, and they would go first.
+    await app.get(PgBossService).boss.send(QUEUES.emailSend, { outboxId: id }, { priority: 100 });
+    await expect.poll(async () => (await rowOf(id))?.status, { timeout: 25_000 }).toBe('sent');
     const message = await readFile(join(logDir, (await filesOf(id))[0] as string), 'utf8');
     expect(message).toContain('Chrome');
   });
