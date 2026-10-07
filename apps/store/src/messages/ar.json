@@ -10,7 +10,8 @@
     "signUp": "إنشاء حساب",
     "signOut": "تسجيل الخروج",
     "account": "حسابي",
-    "menu": "قائمة الحساب"
+    "menu": "قائمة الحساب",
+    "balance": "رصيد المحفظة {balance}"
   },
   "theme": {
     "toLight": "التبديل إلى المظهر الفاتح",
@@ -134,6 +135,33 @@
       "confirm": "سجّل الخروج من الكل",
       "cancel": "إلغاء",
       "unknown": "غير معروف"
+    }
+  },
+  "wallet": {
+    "title": "المحفظة",
+    "subtitle": "رصيدك بالدولار وكل حركة عليه.",
+    "balance": "رصيدك",
+    "timeline": "الحركات",
+    "balanceAfter": "الرصيد بعدها",
+    "emptyTitle": "لا توجد حركات بعد",
+    "loadMore": "تحميل المزيد",
+    "loadingMore": "جارٍ التحميل…",
+    "loadFailed": "تعذّر تحميل المحفظة. أعد المحاولة.",
+    "retry": "أعد المحاولة",
+    "reversal": "عكس: {category}",
+    "kinds": {
+      "deposit": "إيداع",
+      "purchase": "شراء",
+      "refund": "أُعيد المبلغ إلى المحفظة",
+      "cost_of_goods": "تكلفة",
+      "adjustment": "تعديل الرصيد"
+    },
+    "categories": {
+      "compensation": "تعويض",
+      "correction": "تصحيح خطأ",
+      "cash_refund": "استرداد نقدي",
+      "manual_deposit": "إيداع مسجَّل يدوياً",
+      "test_funds": "رصيد تجريبي"
     }
   },
   "changeEmail": {

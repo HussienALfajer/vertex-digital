@@ -17,6 +17,8 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
 import { Route as AppTestCustomersRouteImport } from './routes/_app/test-customers'
+import { Route as AppWalletsIndexRouteImport } from './routes/_app/wallets.index'
+import { Route as AppWalletsCustomerIdRouteImport } from './routes/_app/wallets.$customerId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -57,6 +59,16 @@ const AppTestCustomersRoute = AppTestCustomersRouteImport.update({
   path: '/test-customers',
   getParentRoute: () => AppRoute,
 } as any)
+const AppWalletsIndexRoute = AppWalletsIndexRouteImport.update({
+  id: '/wallets/',
+  path: '/wallets/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWalletsCustomerIdRoute = AppWalletsCustomerIdRouteImport.update({
+  id: '/wallets/$customerId',
+  path: '/wallets/$customerId',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -66,6 +78,8 @@ export interface FileRoutesByFullPath {
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
   '/test-customers': typeof AppTestCustomersRoute
+  '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
+  '/wallets/': typeof AppWalletsIndexRoute
 }
 export interface FileRoutesByTo {
   '/change-password': typeof ChangePasswordRoute
@@ -75,6 +89,8 @@ export interface FileRoutesByTo {
   '/audit': typeof AppAuditRoute
   '/test-customers': typeof AppTestCustomersRoute
   '/': typeof AppIndexRoute
+  '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
+  '/wallets': typeof AppWalletsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,6 +102,8 @@ export interface FileRoutesById {
   '/_app/audit': typeof AppAuditRoute
   '/_app/test-customers': typeof AppTestCustomersRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/wallets/$customerId': typeof AppWalletsCustomerIdRoute
+  '/_app/wallets/': typeof AppWalletsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,6 +115,8 @@ export interface FileRouteTypes {
     | '/account'
     | '/audit'
     | '/test-customers'
+    | '/wallets/$customerId'
+    | '/wallets/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/change-password'
@@ -106,6 +126,8 @@ export interface FileRouteTypes {
     | '/audit'
     | '/test-customers'
     | '/'
+    | '/wallets/$customerId'
+    | '/wallets'
   id:
     | '__root__'
     | '/_app'
@@ -116,6 +138,8 @@ export interface FileRouteTypes {
     | '/_app/audit'
     | '/_app/test-customers'
     | '/_app/'
+    | '/_app/wallets/$customerId'
+    | '/_app/wallets/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -183,6 +207,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTestCustomersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/wallets/': {
+      id: '/_app/wallets/'
+      path: '/wallets'
+      fullPath: '/wallets/'
+      preLoaderRoute: typeof AppWalletsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/wallets/$customerId': {
+      id: '/_app/wallets/$customerId'
+      path: '/wallets/$customerId'
+      fullPath: '/wallets/$customerId'
+      preLoaderRoute: typeof AppWalletsCustomerIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -191,6 +229,8 @@ interface AppRouteChildren {
   AppAuditRoute: typeof AppAuditRoute
   AppTestCustomersRoute: typeof AppTestCustomersRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppWalletsCustomerIdRoute: typeof AppWalletsCustomerIdRoute
+  AppWalletsIndexRoute: typeof AppWalletsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -198,6 +238,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppAuditRoute: AppAuditRoute,
   AppTestCustomersRoute: AppTestCustomersRoute,
   AppIndexRoute: AppIndexRoute,
+  AppWalletsCustomerIdRoute: AppWalletsCustomerIdRoute,
+  AppWalletsIndexRoute: AppWalletsIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

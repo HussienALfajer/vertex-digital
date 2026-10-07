@@ -81,7 +81,7 @@ An adjustment has no states: it is written once, with its journal, and never cha
   - `purchase` and `refund` (S08): the order number and product name.
 - W6. Customer-facing labels come from i18n keys per kind and per adjustment category; a reversal shows "عكس: <category>". The customer never sees the internal reason, the admin's name, journal ids or account codes.
 - W7. Timeline pages are cursor lists (ADR 0011, `lists.ts`): 30 entries by default, "load more".
-- W8. The store header shows a balance chip (USD) for a signed-in customer, linking to the wallet page. It is a dynamic hole (Suspense) in otherwise cached pages; signed-out visitors see no chip.
+- W8. The store header shows a balance chip (USD) for a signed-in customer, linking to the wallet page. It is read in the browser with the session cookie (as the account link is), so every page stays cached; signed-out visitors see no chip (settled in implementation, 2026-10-07: the store's rule for customer-specific parts, `apps/store/CLAUDE.md`).
 - W9. The SYP value under the balance is `≈ <SYP>` from `walletSypValue`: USD × today's rate rounded **down** to the display step, so the store never shows more than the customer holds, with today's rate under it. S02 renders it only when a rate exists; the rate arrives with S03, so in S02 the card shows USD only and the code path is exercised by unit tests.
 - W10. Wallet responses are never cached (`Cache-Control: no-store`).
 
@@ -162,7 +162,7 @@ An adjustment has no states: it is written once, with its journal, and never cha
   - Search box (3 characters minimum): results table (name, email, phone, a "تجريبي" badge, balance), cursor "load more"; row opens the wallet. Empty: "لا نتائج". Loading: table skeleton.
 - **`/wallets/$customerId`**:
   - Header: name, email, phone, test badge, balance (and SYP with S03).
-  - Timeline table: time, kind and category, signed amount, balance after, reference, internal reason, admin; a reversed adjustment shows "معكوس" linking to its reversal; a reversal links to its original. "عكس" action on adjustments that are not reversals and not reversed.
+  - Timeline table: time, kind and category (with the customer note and, for a manual deposit, the method and reference), signed amount, balance after, internal reason (with the admin's name under it); a reversed adjustment shows "معكوس" linking to its reversal; a reversal links to its original. "عكس" action on adjustments that are not reversals and not reversed.
   - **Adjust dialog** ("تعديل الرصيد"): direction (إضافة / خصم), amount in USD (cents), category (only those allowed for the direction and the customer; `test_funds` only for test customers), method and external reference when `manual_deposit`, internal reason (required), customer note (optional, with "يظهر للعميل"), the current balance and the balance after; above $100 a second "أعد كتابة المبلغ" field (no paste). Submitting opens the re-authentication dialog when needed (S01) and retries. Errors show inline by code.
   - **Reverse dialog**: shows the original (direction, amount, category, date), the resulting balance, reason and note fields, the confirmation field above $100.
 - Audit log (S01): the new actions and the `wallet_adjustment` entity type appear in its filters.

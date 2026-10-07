@@ -53,6 +53,8 @@ export class MockApi {
     ['GET /api/auth/registration', { status: 200, body: { open: true } }],
     // A real challenge needs the API's key; the mock only checks that one is fetched and sent.
     ['GET /api/altcha/challenge', { status: 200, body: ALTCHA_CHALLENGE }],
+    // An empty wallet: the header's balance chip reads it on every page once signed in (S02 W8).
+    ['GET /api/wallet', { status: 200, body: { balanceUnits: 0, syp: null } }],
   ]);
 
   /** The last request sent to `key`. */
