@@ -229,7 +229,9 @@ test.describe('test customers', () => {
     await page.getByRole('textbox').filter({ visible: true }).nth(1).pressSequentially(TOTP_CODE);
     await page.getByRole('button', { name: ar.reauth.submit }).click();
 
-    await expect(page.getByText(ar.testCustomers.password.resetTitle)).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: ar.testCustomers.password.resetTitle, exact: true }),
+    ).toBeVisible();
     await expect(page.getByText(GENERATED_PASSWORD)).toBeVisible();
     expect(
       admin.calls.filter((call) => call.endsWith('/reset-password') && call.startsWith('POST')),
