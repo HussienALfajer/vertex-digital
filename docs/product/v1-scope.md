@@ -1,6 +1,6 @@
 # Vertex Digital — V1 Scope
 
-Status: Approved by the owner on 2026-10-06 (drafted from the brief, revised after the owner's review: code products, partial delivery, validation guard, store switches, customer notifications), and on 2026-10-07 to one admin account without staff or roles (ADR 0016). Changes to this file need the owner's approval.
+Status: Approved by the owner on 2026-10-06 (drafted from the brief, revised after the owner's review: code products, partial delivery, validation guard, store switches, customer notifications), and on 2026-10-07 to one admin account without staff or roles (ADR 0016) and to notify customers of wallet adjustments (S02). Changes to this file need the owner's approval.
 
 ## 1. Business context
 
@@ -101,7 +101,7 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 
 #### F27 — Customer notifications
 - Channels in V1: **email** (free, through the outbox, ADR 0007) and an **in-site notification center** (bell with unread count, live over SSE). Web push joins in F24.
-- Events: deposit credited, deposit rejected (with the reason), order delivered, order partly delivered, order refunded, `awaiting_balance` order completed or expired, ticket reply (F23). Phase 1 wires the deposit events; later features add theirs.
+- Events: deposit credited, deposit rejected (with the reason), wallet adjusted by the admin (amount and category, S02), order delivered, order partly delivered, order refunded, `awaiting_balance` order completed or expired, ticket reply (F23). Phase 1 wires the deposit events; later features add theirs.
 - Per-event email preferences in the account page; security emails (OTP, password change, new sign-in) cannot be turned off.
 - Messages never contain codes, full player IDs, receipts or amounts beyond what the customer needs.
 
