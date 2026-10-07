@@ -1,12 +1,14 @@
 import type { IncomingHttpHeaders } from 'node:http';
 import { Inject, Injectable } from '@nestjs/common';
+import type { CursorQuery, WalletCustomer } from '@vertex-digital/contracts';
 import { customers, type Database } from '@vertex-digital/db';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
-import { inArray } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, like, or } from 'drizzle-orm';
 // Straight from the file: `core/altcha/index.ts` reaches back here through `core/access`.
 import { AltchaService } from '../../core/altcha/altcha.service.js';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
+import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { type CustomerAuth, createCustomerAuth } from './auth.config.js';
 import { AuthAccountService } from './auth-account.service.js';
 
@@ -63,4 +65,54 @@ export class AuthService {
       .where(inArray(customers.id, [...ids]));
     return new Map(rows.map((row) => [row.id, row.name]));
   }
+
+  /** A customer as the admin wallet screens show them (S02), or null. */
+  async walletCustomer(id: string): Promise<WalletCustomer | null> {
+    const [row] = await this.db
+      .select(walletCustomerColumns)
+      .from(customers)
+      .where(eq(customers.id, id));
+    return row ?? null;
+  }
+
+  /**
+   * Customers by email or phone prefix, or part of the name, case-insensitive (S02 wallet search);
+   * newest first, a cursor to load more. `q` is matched literally: `%` and `_` are not wildcards.
+   */
+  async searchCustomers(
+    q: string,
+    query: CursorQuery,
+  ): Promise<{ items: WalletCustomer[]; nextCursor: string | null }> {
+    const literal = q.replace(/[\\%_]/g, (char) => `\\${char}`);
+    const cursor = query.cursor ? decodeCursor(query.cursor) : null;
+    const rows = await this.db
+      .select({ ...walletCustomerColumns, cursorAt: cursorTime(customers.createdAt) })
+      .from(customers)
+      .where(
+        and(
+          or(
+            ilike(customers.email, `${literal}%`),
+            like(customers.phone, `${literal}%`),
+            like(customers.phone, `+${literal}%`),
+            ilike(customers.name, `%${literal}%`),
+          ),
+          cursor ? after(customers.createdAt, customers.id, cursor) : undefined,
+        ),
+      )
+      .orderBy(desc(customers.createdAt), desc(customers.id))
+      .limit(query.limit + 1);
+    const page = pageOf(rows, query.limit, (row) => ({ at: row.cursorAt, id: row.id }));
+    return {
+      items: page.items.map(({ cursorAt: _, ...customer }) => customer),
+      nextCursor: page.nextCursor,
+    };
+  }
 }
+
+const walletCustomerColumns = {
+  id: customers.id,
+  name: customers.name,
+  email: customers.email,
+  phone: customers.phone,
+  isTest: customers.isTest,
+};

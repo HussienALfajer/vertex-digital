@@ -308,6 +308,134 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WalletController_wallet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/wallet/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WalletController_entries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/wallets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WalletAdminController_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/wallets/{customerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WalletAdminController_wallet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/wallets/{customerId}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WalletAdminController_entries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/wallets/{customerId}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WalletAdminController_adjust"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/wallet-adjustments/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WalletAdminController_reverse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/ledger/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WalletAdminController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -471,9 +599,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -501,6 +629,159 @@ export interface components {
         };
         /** @enum {string} */
         AuditChannel: "admin" | "store" | "telegram" | "worker" | "cli";
+        Wallet: {
+            balanceUnits: number;
+            syp: {
+                valueUnits: number;
+                rate: components["schemas"]["ExchangeRate"];
+            } | null;
+        };
+        ExchangeRate: string;
+        WalletEntryQuery: {
+            cursor?: string;
+            /** @default 30 */
+            limit: number;
+        };
+        WalletEntryPage: {
+            items: components["schemas"]["WalletEntry"][];
+            nextCursor: string | null;
+        };
+        WalletEntry: {
+            /** Format: date-time */
+            occurredAt: string;
+            kind: components["schemas"]["JournalKind"];
+            amountUnits: number;
+            balanceAfterUnits: number;
+            adjustment: {
+                category: components["schemas"]["AdjustmentCategory"];
+                customerNote: string | null;
+                reversal: boolean;
+            } | null;
+        };
+        /** @enum {string} */
+        JournalKind: "deposit" | "purchase" | "refund" | "cost_of_goods" | "adjustment";
+        /** @enum {string} */
+        AdjustmentCategory: "compensation" | "correction" | "cash_refund" | "manual_deposit" | "test_funds";
+        WalletSearchQuery: {
+            cursor?: string;
+            /** @default 50 */
+            limit: number;
+            q: string;
+        };
+        WalletSearchPage: {
+            items: components["schemas"]["WalletSearchResult"][];
+            nextCursor: string | null;
+        };
+        WalletSearchResult: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            email: string;
+            phone: string;
+            isTest: boolean;
+            balanceUnits: number;
+        };
+        AdminWallet: {
+            balanceUnits: number;
+            syp: {
+                valueUnits: number;
+                rate: components["schemas"]["ExchangeRate"];
+            } | null;
+            customer: components["schemas"]["WalletCustomer"];
+            adjustmentCount: number;
+        };
+        WalletCustomer: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            email: string;
+            phone: string;
+            isTest: boolean;
+        };
+        AdminWalletEntryPage: {
+            items: components["schemas"]["AdminWalletEntry"][];
+            nextCursor: string | null;
+        };
+        AdminWalletEntry: {
+            /** Format: date-time */
+            occurredAt: string;
+            kind: components["schemas"]["JournalKind"];
+            amountUnits: number;
+            balanceAfterUnits: number;
+            /** Format: uuid */
+            journalId: string;
+            adjustment: {
+                category: components["schemas"]["AdjustmentCategory"];
+                customerNote: string | null;
+                reversal: boolean;
+                /** Format: uuid */
+                id: string;
+                direction: components["schemas"]["AdjustmentDirection"];
+                reason: string;
+                adminName: string | null;
+                depositMethod: components["schemas"]["ManualDepositMethod"] | null;
+                externalReference: string | null;
+                /** Format: uuid */
+                reversesAdjustmentId: string | null;
+                /** Format: uuid */
+                reversedByAdjustmentId: string | null;
+            } | null;
+        };
+        /** @enum {string} */
+        AdjustmentDirection: "credit" | "debit";
+        /** @enum {string} */
+        ManualDepositMethod: "sham_cash" | "usdt_trc20" | "usdt_bep20";
+        CreateAdjustment: {
+            direction: components["schemas"]["AdjustmentDirection"];
+            amountUnits: number;
+            amountConfirmationUnits?: number;
+            category: components["schemas"]["AdjustmentCategory"];
+            reason: string;
+            customerNote?: string;
+            depositMethod?: components["schemas"]["ManualDepositMethod"];
+            externalReference?: string;
+        };
+        Adjustment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            customerId: string;
+            direction: components["schemas"]["AdjustmentDirection"];
+            amountUnits: number;
+            category: components["schemas"]["AdjustmentCategory"];
+            reason: string;
+            customerNote: string | null;
+            depositMethod: components["schemas"]["ManualDepositMethod"] | null;
+            externalReference: string | null;
+            /** Format: uuid */
+            reversesAdjustmentId: string | null;
+            /** Format: uuid */
+            journalId: string;
+            /** Format: date-time */
+            createdAt: string;
+            balanceAfterUnits: number;
+        };
+        ReverseAdjustment: {
+            reason: string;
+            customerNote?: string;
+            amountConfirmationUnits?: number;
+        };
+        LedgerSummary: {
+            owedToCustomersUnits: number;
+            owedToTestCustomersUnits: number;
+            walletsWithBalance: number;
+            systemAccounts: components["schemas"]["SystemAccountBalance"][];
+        };
+        SystemAccountBalance: {
+            kind: components["schemas"]["LedgerAccountKind"];
+            code: string;
+            currency: components["schemas"]["Currency"];
+            balanceUnits: number;
+        };
+        /** @enum {string} */
+        LedgerAccountKind: "customer_wallet" | "sham_cash_receipts" | "usdt_receipts" | "supplier_prepaid" | "sales_revenue" | "cost_of_goods" | "refunds" | "adjustments";
+        /** @enum {string} */
+        Currency: "USD" | "SYP";
         HealthResponse: {
             /** @enum {string} */
             status: "ok" | "error";
@@ -978,8 +1259,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset";
-                entityType?: "admin_user" | "customer";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment";
                 entityId?: string;
                 from?: string;
                 to?: string;
@@ -997,6 +1278,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+        };
+    };
+    WalletController_wallet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The balance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Wallet"];
+                };
+            };
+        };
+    };
+    WalletController_entries: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletEntryPage"];
+                };
+            };
+        };
+    };
+    WalletAdminController_search: {
+        parameters: {
+            query: {
+                cursor?: string;
+                limit?: number;
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest customers first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletSearchPage"];
+                };
+            };
+        };
+    };
+    WalletAdminController_wallet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The wallet and its customer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminWallet"];
+                };
+            };
+        };
+    };
+    WalletAdminController_entries: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminWalletEntryPage"];
+                };
+            };
+        };
+    };
+    WalletAdminController_adjust: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAdjustment"];
+            };
+        };
+        responses: {
+            /** @description Written (200: a replay) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Adjustment"];
+                };
+            };
+        };
+    };
+    WalletAdminController_reverse: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseAdjustment"];
+            };
+        };
+        responses: {
+            /** @description The reversal (200: a replay) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Adjustment"];
+                };
+            };
+        };
+    };
+    WalletAdminController_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the store owes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerSummary"];
                 };
             };
         };

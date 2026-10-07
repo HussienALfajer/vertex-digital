@@ -54,7 +54,7 @@ A customer can only ever read their own wallet: the customer routes take no cust
 - `reverses_adjustment_id` uuid, nullable, foreign key to `wallet_adjustments`, **unique**: an adjustment is reversed at most once (rule R2).
 - `journal_id` uuid, required, foreign key to `ledger_journals`, unique.
 - `idempotency_key` uuid, required, unique: the request's `Idempotency-Key` (rule J9).
-- `admin_id` uuid, required, foreign key to `admin_users`.
+- `admin_id` uuid, required, indexed, **no foreign key** (as `audit_entries.actor_id`): an append-only row must not pin the single admin row, which the CLI and the tests replace (settled in implementation, 2026-10-07).
 - `created_at` timestamptz, required, default `now()`.
 - Checks: a reversal has the opposite direction and the same amount and category as the original (enforced by the service and a trigger, since a check cannot read another row); a `test_funds` row belongs to a test customer (service, rule J4).
 - Indexes: `(customer_id, created_at desc)`, the unique ones above.
@@ -137,6 +137,7 @@ An adjustment has no states: it is written once, with its journal, and never cha
 | `GET /api/admin/ledger/summary` | Admin | — | `ledgerSummarySchema` | — |
 
 - Every admin route also answers the guard's codes (S01: `UNAUTHORIZED`, `FORBIDDEN`, `SESSION_IDLE_EXPIRED`, `TWO_FACTOR_REQUIRED`, `PASSWORD_CHANGE_REQUIRED`, `CROSS_ORIGIN_REFUSED`). A missing or non-UUID `Idempotency-Key` is `VALIDATION_FAILED`.
+- Statuses (settled in implementation): `400` for `ADJUSTMENT_NOT_ALLOWED` and `AMOUNT_CONFIRMATION_*`; `409` for `INSUFFICIENT_BALANCE` (with `details.balanceUnits`, the balance the debit met), `EXTERNAL_REFERENCE_TAKEN`, `ADJUSTMENT_ALREADY_REVERSED`, `ADJUSTMENT_NOT_REVERSIBLE`, `IDEMPOTENCY_KEY_REUSED`. Adjustments of one wallet are serialized by a lock on its account row, so a parallel request with the same key or the same reversal is answered as a replay or `ADJUSTMENT_ALREADY_REVERSED`, never as a balance refusal.
 - New error codes in `packages/contracts/src/errors.ts`: `ADJUSTMENT_NOT_ALLOWED`, `AMOUNT_CONFIRMATION_REQUIRED`, `AMOUNT_CONFIRMATION_MISMATCH`, `EXTERNAL_REFERENCE_TAKEN`, `ADJUSTMENT_ALREADY_REVERSED`, `ADJUSTMENT_NOT_REVERSIBLE`.
 - After the change: `openapi:export` and the admin client regenerated (commands table in `AGENTS.md`).
 

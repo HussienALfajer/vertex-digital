@@ -7,12 +7,13 @@ import {
   customers,
   type Database,
   emailOutbox,
+  ledgerAccounts,
   newId,
 } from '@vertex-digital/db';
 import { type Challenge, solveChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
 import { hashPassword } from 'better-auth/crypto';
-import { asc, eq, inArray, like, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, like, notExists, or } from 'drizzle-orm';
 
 /*
  * Shared helpers for API integration tests: seed accounts straight into the test database, sign
@@ -88,13 +89,25 @@ export async function seedAdmin(db: Database, input: { archived?: boolean } = {}
 }
 
 /**
- * Removes seeded customers and the admin with their sessions and accounts (cascade) and their
- * emails. Audit entries stay: the log is append-only by design.
+ * Customers without a wallet. A customer with one stays in the test database: the ledger and the
+ * adjustments reference it for good (append-only, S02), as the ledger rows themselves stay.
+ */
+const withoutWallet = (db: Database) =>
+  notExists(
+    db
+      .select({ id: ledgerAccounts.id })
+      .from(ledgerAccounts)
+      .where(eq(ledgerAccounts.customerId, customers.id)),
+  );
+
+/**
+ * Removes seeded customers (but those with a wallet) and the admin with their sessions and
+ * accounts (cascade) and their emails. Audit entries stay: the log is append-only by design.
  */
 export async function removeAccounts(db: Database, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   await db.delete(emailOutbox).where(inArray(emailOutbox.customerId, ids));
-  await db.delete(customers).where(inArray(customers.id, ids));
+  await db.delete(customers).where(and(inArray(customers.id, ids), withoutWallet(db)));
   await db.delete(adminUsers).where(inArray(adminUsers.id, ids));
 }
 
@@ -112,7 +125,9 @@ export async function removeLeftovers(db: Database): Promise<void> {
         like(emailOutbox.toAddress, `%${TEST_EMAIL_DOMAIN}`),
       ),
     );
-  await db.delete(customers).where(like(customers.email, `%${TEST_EMAIL_DOMAIN}`));
+  await db
+    .delete(customers)
+    .where(and(like(customers.email, `%${TEST_EMAIL_DOMAIN}`), withoutWallet(db)));
   await db.delete(adminUsers).where(like(adminUsers.email, `%${TEST_EMAIL_DOMAIN}`));
 }
 
