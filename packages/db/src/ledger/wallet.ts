@@ -88,9 +88,14 @@ const toUnits = (value: string): number => {
   return units;
 };
 
+/** A journal's place on a wallet's timeline: the last write position of its wallet postings. */
+const journalPosition = sql<string>`max(${ledgerPostings.position})`;
+
 /**
- * The wallet's balance right after a journal (rule W4): its postings in every journal up to and
- * including this one, in timeline order (time, then journal id).
+ * The wallet's balance right after a journal (rule W4): its postings up to and including the
+ * journal's, in write order (`ledger_postings.position`). Write order follows the wallet lock, so
+ * a debit comes after everything its balance check saw and no running balance is negative; the
+ * journal's `created_at` (its transaction's start) would not.
  */
 export async function walletBalanceAfter(
   db: Executor,
@@ -100,23 +105,21 @@ export async function walletBalanceAfter(
   const [row] = await db
     .select({ balance: sql<string>`coalesce(sum(${ledgerPostings.amountUnits}), 0)::text` })
     .from(ledgerPostings)
-    .innerJoin(ledgerJournals, eq(ledgerJournals.id, ledgerPostings.journalId))
     .where(
       and(
         eq(ledgerPostings.accountId, accountId),
-        sql`(${ledgerJournals.createdAt}, ${ledgerJournals.id}) <= (
-          select j.created_at, j.id from ${ledgerJournals} as j where j.id = ${journalId}
+        sql`${ledgerPostings.position} <= (
+          select max(p.position) from ${ledgerPostings} as p
+          where p.journal_id = ${journalId} and p.account_id = ${accountId}
         )`,
       ),
     );
   return toUnits(row?.balance ?? '0');
 }
 
-/** Where a timeline page starts: strictly after this entry, newest first. */
+/** Where a timeline page starts: strictly before this write position, newest first. */
 export interface TimelinePosition {
-  /** The journal's `created_at` as PostgreSQL writes it, with its microseconds. */
-  at: string;
-  journalId: string;
+  position: number;
 }
 
 /** An adjustment as the timeline shows it (rule W5); the API picks what each reader sees. */
@@ -146,7 +149,7 @@ export interface TimelineEntry {
 
 /**
  * One page of a wallet's timeline (rules W3–W5): one entry per journal that touches the wallet,
- * newest first, ties broken by journal id. The running balance is the balance after the page's
+ * newest first in write order (`walletBalanceAfter`). The running balance is the balance after the page's
  * newest entry, then each older entry's is the newer one's minus the newer amount (edge case 14).
  * `more` says whether entries older than the page exist.
  */
@@ -160,21 +163,15 @@ export async function walletTimeline(
       journalId: ledgerJournals.id,
       kind: ledgerJournals.kind,
       occurredAt: ledgerJournals.createdAt,
-      at: sql<string>`${ledgerJournals.createdAt}::text`,
+      position: sql<string>`${journalPosition}::text`,
       amount: sql<string>`sum(${ledgerPostings.amountUnits})::text`,
     })
     .from(ledgerPostings)
     .innerJoin(ledgerJournals, eq(ledgerJournals.id, ledgerPostings.journalId))
-    .where(
-      and(
-        eq(ledgerPostings.accountId, accountId),
-        page.after
-          ? sql`(${ledgerJournals.createdAt}, ${ledgerJournals.id}) < (${page.after.at}::timestamptz, ${page.after.journalId}::uuid)`
-          : undefined,
-      ),
-    )
+    .where(eq(ledgerPostings.accountId, accountId))
     .groupBy(ledgerJournals.id)
-    .orderBy(desc(ledgerJournals.createdAt), desc(ledgerJournals.id))
+    .having(page.after ? sql`${journalPosition} < ${page.after.position}` : undefined)
+    .orderBy(desc(journalPosition))
     .limit(page.limit + 1);
   const more = rows.length > page.limit;
   const pageRows = rows.slice(0, page.limit);
@@ -195,7 +192,7 @@ export async function walletTimeline(
       journalId: row.journalId,
       kind: row.kind,
       occurredAt: row.occurredAt,
-      position: { at: row.at, journalId: row.journalId },
+      position: { position: toUnits(row.position) },
       amountUnits,
       balanceAfterUnits: balanceAfter,
       adjustment: adjustments.get(row.journalId) ?? null,

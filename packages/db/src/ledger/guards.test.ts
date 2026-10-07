@@ -235,14 +235,19 @@ describe('append-only trigger', () => {
     },
   );
 
-  it('refuses TRUNCATE to the app role and to the owner', async () => {
-    // Every table that references the journals is named, or the foreign keys refuse first.
-    const statement = 'truncate ledger_journals, ledger_postings, wallet_adjustments';
+  // One table per statement: a TRUNCATE of several tables locks them one by one and can
+  // deadlock with a read of another test file that joins them in the other order.
+  it.each([
+    ['ledger_postings', /is append-only: TRUNCATE/],
+    ['wallet_adjustments', /is append-only: TRUNCATE/],
+    // Referenced by postings and adjustments: refused before its trigger even runs.
+    ['ledger_journals', /cannot truncate a table referenced in a foreign key constraint/],
+  ])('refuses TRUNCATE %s to the app role and to the owner', async (table, refusal) => {
     await rolledBack(async (client) => {
-      await expect(client.query(statement)).rejects.toThrow(/permission denied/);
+      await expect(client.query(`truncate ${table}`)).rejects.toThrow(/permission denied/);
     });
     await rolledBack(async (client) => {
-      await expect(client.query(statement)).rejects.toThrow(/is append-only: TRUNCATE/);
+      await expect(client.query(`truncate ${table}`)).rejects.toThrow(refusal);
     }, owner.pool);
   });
 });

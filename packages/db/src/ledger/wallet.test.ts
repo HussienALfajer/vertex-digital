@@ -1,5 +1,6 @@
 import type { AdjustmentCategory, AdjustmentDirection } from '@vertex-digital/contracts';
 import { CURRENCY_SCALE } from '@vertex-digital/contracts';
+import { sql } from 'drizzle-orm';
 import type pg from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Transaction } from '../client.js';
@@ -311,7 +312,7 @@ describe('wallet_adjustments guards', () => {
 describe('the timeline (rules W3–W5)', () => {
   it('pages newest first with a running balance stable across pages and equal times', async () => {
     const customerId = await customer();
-    // Four journals in one transaction share its time (now()): the journal id orders them.
+    // Four journals in one transaction share its time (now()): their write order orders them.
     await db.transaction(async (tx) => {
       for (const units of [10, 5, -3, 7]) {
         await adjustmentJournal(tx, customerId, 'correction', units * DOLLAR);
@@ -332,6 +333,39 @@ describe('the timeline (rules W3–W5)', () => {
     expect(all.map((entry) => entry.balanceAfterUnits / DOLLAR)).toEqual([15, 19, 12, 15, 10]);
     expect([first.more, second.more, third.more]).toEqual([true, true, false]);
     expect(await walletBalanceAfter(db, wallet, all[2]?.journalId as string)).toBe(12 * DOLLAR);
+  });
+
+  it('orders by write, so a debit begun before the credit it spends never shows below zero', async () => {
+    const customerId = await customer();
+    let started!: () => void;
+    let credited!: () => void;
+    const debitStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const creditDone = new Promise<void>((resolve) => {
+      credited = resolve;
+    });
+    // The debit's transaction begins first (its journal is stamped with that time), waits for
+    // the credit to commit, then spends it.
+    const debit = db.transaction(async (tx) => {
+      await tx.execute(sql`select 1`);
+      started();
+      await creditDone;
+      return adjustmentJournal(tx, customerId, 'correction', -10 * DOLLAR);
+    });
+    await debitStarted;
+    await db.transaction((tx) => adjustmentJournal(tx, customerId, 'correction', 10 * DOLLAR));
+    credited();
+    const debitJournal = await debit;
+
+    const wallet = (await findCustomerWallet(db, customerId)) as string;
+    const { entries } = await walletTimeline(db, wallet, { limit: 30 });
+    expect(entries.map((entry) => [entry.amountUnits / DOLLAR, entry.balanceAfterUnits])).toEqual([
+      [-10, 0],
+      [10, 10 * DOLLAR],
+    ]);
+    expect(entries[0]?.journalId).toBe(debitJournal);
+    expect(await walletBalanceAfter(db, wallet, debitJournal)).toBe(0);
   });
 
   it('shows one entry with the net amount for a journal with two postings on the wallet', async () => {

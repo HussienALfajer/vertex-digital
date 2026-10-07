@@ -21,11 +21,25 @@ import { count, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
-import { decodeCursor, encodeCursor } from '../../core/lists/cursor.js';
 import { AdminAuthService } from '../admin/index.js';
 import { AuthService } from '../auth/index.js';
 
 const isUuid = (value: string) => z.uuid().safeParse(value).success;
+
+/** A timeline cursor (rule W7): the write position of the page's last entry, opaque to clients. */
+const encodeTimelineCursor = (position: number) =>
+  Buffer.from(String(position)).toString('base64url');
+
+function decodeTimelineCursor(cursor: string): { position: number } {
+  const text = Buffer.from(cursor, 'base64url').toString('utf8');
+  const position = Number(text);
+  if (!/^\d{1,15}$/.test(text) || !Number.isSafeInteger(position)) {
+    throw new CodedException(400, 'VALIDATION_FAILED', 'Invalid cursor', [
+      { path: ['cursor'], message: 'Invalid cursor' },
+    ]);
+  }
+  return { position };
+}
 
 /**
  * Wallet reads (S02 rules W1–W10, L1): the customer's own balance and timeline, the admin's
@@ -130,13 +144,7 @@ export class WalletService {
   }
 
   private async timeline(customerId: string, query: CursorQuery) {
-    const cursor = query.cursor ? decodeCursor(query.cursor) : null;
-    if (cursor && !isUuid(cursor.id)) {
-      throw new CodedException(400, 'VALIDATION_FAILED', 'Invalid cursor', [
-        { path: ['cursor'], message: 'Invalid cursor' },
-      ]);
-    }
-    const after = cursor ? { at: cursor.at, journalId: cursor.id } : undefined;
+    const after = query.cursor ? decodeTimelineCursor(query.cursor) : undefined;
     const accountId = await findCustomerWallet(this.db, customerId);
     if (!accountId) return { entries: [], nextCursor: null };
     const { entries, more } = await walletTimeline(this.db, accountId, {
@@ -144,8 +152,7 @@ export class WalletService {
       limit: query.limit,
     });
     const last = entries.at(-1);
-    const nextCursor =
-      more && last ? encodeCursor({ at: last.position.at, id: last.position.journalId }) : null;
+    const nextCursor = more && last ? encodeTimelineCursor(last.position.position) : null;
     return { entries, nextCursor };
   }
 }

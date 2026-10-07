@@ -8,6 +8,7 @@ import {
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
+  bigint,
   check,
   foreignKey,
   index,
@@ -104,6 +105,13 @@ export const ledgerPostings = pgTable(
     accountId: uuid('account_id').notNull(),
     currency: currencyEnum('currency').notNull(),
     amountUnits: amountUnits('amount_units').notNull(),
+    /**
+     * Write order (S02 rule W3): assigned when the posting is inserted, after `postJournal` locked
+     * and checked the wallets, so a debit always comes after every posting its balance check saw.
+     * The timeline and the running balance follow it; `created_at` (the transaction's start) does
+     * not.
+     */
+    position: bigint('position', { mode: 'number' }).generatedAlwaysAsIdentity().notNull(),
   },
   (table) => [
     foreignKey({
@@ -113,6 +121,7 @@ export const ledgerPostings = pgTable(
     }),
     index('ledger_postings_journal_id_idx').on(table.journalId),
     index('ledger_postings_account_id_idx').on(table.accountId, table.currency),
+    index('ledger_postings_account_position_idx').on(table.accountId, table.position),
     check('ledger_postings_amount_check', sql`${table.amountUnits} <> 0`),
   ],
 );

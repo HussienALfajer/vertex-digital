@@ -73,8 +73,8 @@ An adjustment has no states: it is written once, with its journal, and never cha
 ### Wallet rules
 - W1. A customer's wallet account is created on the first posting to it, inside the posting transaction: `ensureCustomerWallet(tx, customerId)` in `packages/db/src/ledger` inserts it (`ON CONFLICT (code) DO NOTHING`) and returns its id. A customer without an account has a balance of 0 and an empty timeline; reading never creates an account.
 - W2. The balance is the sum of the wallet's postings (`accountBalance`); no stored balance (ADR 0003).
-- W3. A timeline entry is one journal that touches the wallet: its time, kind, the net signed amount on the wallet, the balance right after it, its reference, and the extras of its kind (rule W5). Newest first; ties broken by journal id (uuid v7, so creation order).
-- W4. `balanceAfterUnits` of an entry = the sum of the wallet's postings in journals up to and including it, in the order of rule W3. It is computed by the query, never stored.
+- W3. A timeline entry is one journal that touches the wallet: its time, kind, the net signed amount on the wallet, the balance right after it, its reference, and the extras of its kind (rule W5). Newest first in **write order**: `ledger_postings.position`, an identity assigned when `postJournal` inserts the postings, after it locked and checked the wallets (settled in review, 2026-10-07). The journal's `created_at` is its transaction's start, so a debit begun before the credit it spends would sort before it and show a negative running balance; write order puts every debit after everything its balance check saw.
+- W4. `balanceAfterUnits` of an entry = the sum of the wallet's postings up to and including its own, in the order of rule W3. It is computed by the query, never stored.
 - W5. Entry extras by kind. S02 fills `adjustment`; later specs fill theirs without changing the shape:
   - `adjustment`: `{ category, customerNote, reversal: boolean }` (and, admin view only, the internal `reason`, the `adminName`, `depositMethod`, `externalReference`, and whether it has been reversed).
   - `deposit` (S03, S04): method, the deposit's reference code, and for SYP deposits the SYP amount and the rate used.
@@ -201,8 +201,8 @@ An adjustment has no states: it is written once, with its journal, and never cha
 10. `amountConfirmationUnits` sent below the threshold: ignored if equal, `AMOUNT_CONFIRMATION_MISMATCH` if different.
 11. A `manual_deposit` external reference differing only by case or surrounding spaces from an existing one: treated as the same (`EXTERNAL_REFERENCE_TAKEN`).
 12. An unknown or non-UUID customer id or adjustment id: `NOT_FOUND`.
-13. Timeline entries with the same `created_at`: ordered by journal id (W3), so the running balance is stable across pages.
-14. A customer's timeline grows long: pages stay fast with the `(account_id, currency)` posting index and the journal id order; the running balance is computed per page as `balance − sum(newer entries)`.
+13. Timeline entries with the same `created_at` (journals of one transaction): ordered by write position (W3), so the running balance is stable across pages.
+14. A customer's timeline grows long: pages use the `(account_id, position)` posting index; the running balance is computed per page as `balance − sum(newer entries)`.
 15. A journal with two postings on the same wallet (none in S02, possible later): one timeline entry with the net amount (W3).
 16. The admin adjusts a test customer that later stops being a test customer: not possible in V1 (`is_test` never changes).
 17. No rate set yet (until S03): `walletSchema.syp` is null, the card shows USD only.
