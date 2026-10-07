@@ -1,26 +1,19 @@
-# TASKS — S01 Accounts
+# TASKS — S02 Wallet and ledger
 
-Spec: `docs/specs/S01-accounts.md` (F01 customer accounts, F02 admin account, 2FA and audit log; ADR 0016). Two PRs; each leaves `main` green. PR 2 runs in its own session.
+Spec: `docs/specs/S02-wallet-ledger.md` (F03; ADRs 0003, 0011, 0014, 0016). Two PRs; each leaves `main` green. PR 2 runs in its own session.
 
-## PR 1 — Rename, contracts, db, api, worker (`feat/s01-accounts-backend`) · Opus 5.5 `high`
-- [x] Rename staff → admin (spec "Rename"): contracts (`staff.ts` removed, `admin.ts`), db tables renamed in place (role and `staff_role` dropped), api module `admin`, `@AdminRoute()` without permissions, `ADMIN_AUTH_SECRET`, cookie `vd-admin`, CLI `admin:create` / `admin:reset-two-factor`, admin app names and client, folder `CLAUDE.md` files, `AGENTS.md`, `README.md`, `docs/deployment.md`, `.env.example`; Phase 0 tests pass under the new names; grep test (no `staff` in `apps/`, `packages/`); migration test (staff row survives as admin)
-- [x] Contracts: `auth.ts` (password, admin password, name, phone E.164 with libphonenumber-js, OTP, sign-up, profile, email change, re-authenticate), common-password list, `admin.ts`, `audit.ts` (actions, actor kinds, channels, entry, cursor list query and page), `customers.ts` (test customers), error codes (`REGISTRATION_CLOSED`, `REAUTHENTICATION_REQUIRED`, `PASSWORD_CHANGE_REQUIRED`, `EMAIL_TAKEN`, `PASSWORD_TOO_COMMON`, `SESSION_IDLE_EXPIRED`, `INVALID_PASSWORD`, `INVALID_CODE`, `INVALID_OTP`, `OTP_EXPIRED`, `TOO_MANY_ATTEMPTS`), email templates and job names; 100% unit-tested
-- [x] Db (`/db-migration`): `customers.phone`, `customers.is_test`, `customer_rate_limits`, `admin_users.must_change_password` + single-row index, `admin_sessions.last_active_at` / `reauthenticated_at`, `audit_entries` (append-only trigger and grants), `email_outbox`; `recordAudit` shared write path; owners in `TABLE_OWNERS`; tests (append-only as the app role, second admin refused)
-- [x] Api `auth` (customer): sign-up gated by `REGISTRATION_OPEN` with ALTCHA and enumeration-safe answers (C1, C2), email OTP plugin (C4, C5, C7), sign-in ALTCHA after 3 failures (C8), new-sign-in email (C10), change password / email (C11, C12), sessions (C14), disabled Better Auth routes, database rate-limit storage; `GET`/`PATCH /api/account`
-- [x] Api `admin`: forced password change, `must_change_password` and TOTP gates in the guard, idle 30 min / absolute 12 h (D4), `POST /api/admin/me/reauthenticate` and a sensitive-route marker (D5), own sessions, backup codes, `admin.signed_in` audit; CLI `admin:reset-password` and audit entries for every CLI run
-- [x] Api `audit`: `GET /api/admin/audit` (cursor, filters, actor names); api `customers`: test customers list, create, reset password (`no-store`)
-- [x] Api `notifications`: outbox row + `email.send` job in the change's transaction (E1)
-- [x] Api tests per module (spec "Tests": routes, guards, enumeration, limits surviving restart, concurrency, audit in the transaction, no secrets in `details`); `architecture.test.ts`
-- [x] Worker: `email.send` (lock, expiry, render Arabic HTML + text through i18n, Nodemailer or file locally, clear code params, retries with backoff, Sentry) and `email.purge-codes` every 10 minutes; tests; SMTP env in `.env.example`
-- [x] Bridge: build, OpenAPI export, admin client generated; admin app compiles against it
-- [x] Wiring checklist, docs (`docs/architecture.md` modules, folder `CLAUDE.md`, `docs/deployment.md` env renames, commands table)
-- [x] Checks (lint, typecheck, test, build, drift, e2e), reviewer (7 blocking findings fixed: code-check enumeration, decoy codes unmatchable, cursor precision, query parameters out of logs, pg-boss producer errors, CLI password kept, email-change code per customer), owner acceptance (2026-10-07), PR with auto-merge
+## PR 1 — Contracts, db, api, worker email (`claude/brave-tesla-g89w6r`, cloud session branch) · Opus 5.5 `high`
+- [ ] Contracts: `wallet.ts` (directions, categories with allowed directions J1, deposit methods, threshold J6, wallet, timeline entry customer/admin, search query/result, admin wallet, create/reverse adjustment, adjustment, ledger summary, page schemas with ids); `walletSypValue` in `money.ts`; error codes (`ADJUSTMENT_NOT_ALLOWED`, `AMOUNT_CONFIRMATION_REQUIRED`, `AMOUNT_CONFIRMATION_MISMATCH`, `EXTERNAL_REFERENCE_TAKEN`, `ADJUSTMENT_ALREADY_REVERSED`, `ADJUSTMENT_NOT_REVERSIBLE`) with their Arabic text in the store and admin catalogs; audit actions `wallet_adjustment.created` / `.reversed` and entity type `wallet_adjustment` with admin labels; email template `customer_wallet_adjusted`; 100% unit-tested
+- [ ] Db (`/db-migration`): `ledger_accounts.customer_id` (unique, kind check, identity trigger extended); `wallet_adjustments` (enums, checks, unique external reference per method, unique reversal, reversal trigger, append-only trigger and grants); email template enum value; `ensureCustomerWallet`, `ensureSystemAccount`, `walletTimeline` in `packages/db/src/ledger`; tests (append-only as the app role, reversal trigger, identity, kind check, two parallel first credits, timeline running balance across pages, equal timestamps, net amount of a two-posting journal)
+- [ ] Api `wallet`: customer `GET /api/wallet`, `GET /api/wallet/entries` (`no-store`); admin search, wallet, entries, adjustments (re-authentication, `Idempotency-Key`, J1–J10), reverse (R1–R5), ledger summary; audit and email outbox in the same transaction; `TABLE_OWNERS`; `test/wallet.test.ts` (routes, 401/403, own entries only, every error code, 20 parallel debits, parallel reversals, same key in parallel, failed debit leaves no rows)
+- [ ] Worker: render the `customer_wallet_adjusted` email (Arabic HTML + text through i18n, link to `/wallet`); test
+- [ ] Bridge: build, OpenAPI export, admin client generated; admin typecheck
+- [ ] Wiring checklist, docs (`docs/architecture.md` modules, folder `CLAUDE.md`, "Patterns to copy" ledger row in `wiring.md`)
+- [ ] Checks (lint, typecheck, test, build, drift), reviewer, owner acceptance (endpoints at `/api/docs`), PR with auto-merge
 
-## PR 2 — Store and admin screens, E2E (`feat/s01-accounts-screens`) · Opus 5.5 `medium`
-- [x] Error codes of S01 in the store and admin catalogs, read by code (`errorMessage` maps API codes, not only Better Auth ones)
-- [x] Api: `GET /api/auth/registration` (`{ open }`), so the store hides sign-up while it is closed (rule C16); OpenAPI and admin client regenerated
-- [x] Store: `/sign-up`, `/verify-email`, `/sign-in` updates, `/forgot-password`, `/account`, `/account/email`, header account menu, closed-registration state; i18n, loading and error states
-- [x] Admin: `/change-password`, re-authentication dialog, idle-expiry notice, `/account` (password, backup codes, sessions), `/audit` with filters and detail sheet, `/test-customers`, navigation; i18n
-- [x] E2E: flows and RTL screenshots (store dark at phone width; admin light and dark)
-- [x] Wiring checklist, "Patterns to copy" in `wiring.md`, `docs/ROADMAP.md` (S01 done)
-- [x] Checks (lint, typecheck, test, build, e2e), reviewer (3 blocking findings fixed: idle notice lost on focus refetch, re-authentication wrapper on every admin mutation, registration read failure shown as closed), owner acceptance (2026-10-08), PR with auto-merge
+## PR 2 — Store and admin screens, E2E (`feat/s02-wallet-screens`) · Opus 5.5 `medium`
+- [ ] Store: header balance chip (Suspense hole, hidden on error), `/wallet` (card, timeline with labels per kind and category, running balance, load more, empty, error, sign-in redirect); i18n
+- [ ] Admin: `/wallets` (summary card with system accounts, search, results, load more), `/wallets/$customerId` (header, timeline table, reversed/reversal links), adjust dialog (categories per direction and customer, manual-deposit fields, balance after, confirmation field without paste above $100, re-authentication retry with the same key, new key after an edited field), reverse dialog; navigation "المحافظ"; audit filters; i18n
+- [ ] E2E: flows and RTL screenshots (store dark at phone width, empty and with entries, chip; admin light and dark: wallets, wallet page, adjust dialog with confirmation, reverse dialog)
+- [ ] Wiring checklist, `docs/ROADMAP.md` (S02 done)
+- [ ] Checks (lint, typecheck, test, build, e2e), reviewer, owner acceptance (spec "Acceptance" 1–9 in the browser), PR with auto-merge
