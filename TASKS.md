@@ -14,7 +14,7 @@ Spec: `docs/specs/S01-accounts.md` (F01 customer accounts, F02 admin account, 2F
 - [x] Worker: `email.send` (lock, expiry, render Arabic HTML + text through i18n, Nodemailer or file locally, clear code params, retries with backoff, Sentry) and `email.purge-codes` every 10 minutes; tests; SMTP env in `.env.example`
 - [x] Bridge: build, OpenAPI export, admin client generated; admin app compiles against it
 - [x] Wiring checklist, docs (`docs/architecture.md` modules, folder `CLAUDE.md`, `docs/deployment.md` env renames, commands table)
-- [ ] Checks (lint, typecheck, test, build, drift), reviewer, acceptance (endpoints at `/api/docs`), PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, drift, e2e), reviewer (7 blocking findings fixed: code-check enumeration, decoy codes unmatchable, cursor precision, query parameters out of logs, pg-boss producer errors, CLI password kept, email-change code per customer), owner acceptance (2026-10-07), PR with auto-merge
 
 ## PR 2 — Store and admin screens, E2E (`feat/s01-accounts-screens`) · Opus 5.5 `medium`
 - [ ] Error codes of S01 in the store and admin catalogs, read by code (`errorMessage` maps API codes, not only Better Auth ones)
