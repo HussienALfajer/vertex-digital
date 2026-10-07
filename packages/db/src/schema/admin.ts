@@ -1,4 +1,14 @@
-import { boolean, index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import {
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { archivedAt, id, timestamps } from './columns.js';
 
 /*
@@ -7,18 +17,26 @@ import { archivedAt, id, timestamps } from './columns.js';
  * the panel. Property names are the field names Better Auth expects; column names are snake_case.
  */
 
-export const adminUsers = pgTable('admin_users', {
-  id: id(),
-  name: text('name').notNull(),
-  /** Lowercased by Better Auth. */
-  email: text('email').notNull().unique(),
-  emailVerified: boolean('email_verified').notNull().default(false),
-  image: text('image'),
-  /** Set by the Better Auth two-factor plugin once TOTP is verified; admin routes require it. */
-  twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
-  ...timestamps(),
-  archivedAt: archivedAt(),
-});
+/** At most one row (ADR 0016): the unique index on a constant makes a second admin impossible. */
+export const adminUsers = pgTable(
+  'admin_users',
+  {
+    id: id(),
+    name: text('name').notNull(),
+    /** Lowercased by Better Auth. */
+    email: text('email').notNull().unique(),
+    emailVerified: boolean('email_verified').notNull().default(false),
+    image: text('image'),
+    /** Set by the Better Auth two-factor plugin once TOTP is verified; admin routes require it. */
+    twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
+    /** Set by the CLI with a printed password; cleared by the admin's own change (rule D1). */
+    mustChangePassword: boolean('must_change_password').notNull().default(false),
+    ...timestamps(),
+    /** Kept for the Better Auth hook; never set in V1 (ADR 0016). */
+    archivedAt: archivedAt(),
+  },
+  () => [uniqueIndex('admin_users_single_idx').using('btree', sql`(true)`)],
+);
 
 export const adminSessions = pgTable(
   'admin_sessions',
@@ -31,6 +49,10 @@ export const adminSessions = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
+    /** The last request the admin made (rule D4); updated at most once a minute. */
+    lastActiveAt: timestamp('last_active_at', { withTimezone: true }).notNull().defaultNow(),
+    /** The last re-authentication on this session (rule D5). */
+    reauthenticatedAt: timestamp('reauthenticated_at', { withTimezone: true }),
     ...timestamps(),
   },
   (table) => [index('admin_sessions_user_id_idx').on(table.userId)],

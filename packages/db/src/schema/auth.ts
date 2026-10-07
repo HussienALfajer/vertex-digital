@@ -1,24 +1,42 @@
-import { boolean, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { archivedAt, id, timestamps } from './columns.js';
 
 /*
  * Customer identity, owned by the api `auth` module: the tables of the customer Better Auth
  * instance (ADR 0007). Property names are the field names Better Auth expects; column names are
- * snake_case. Better Auth generates ids through `newId` (UUIDv7). The profile fields (phone in
- * E.164, F01) and the link to the wallet (F03) arrive with their features.
+ * snake_case. Better Auth generates ids through `newId` (UUIDv7). The link to the wallet arrives
+ * with F03 (S02).
  */
 
-export const customers = pgTable('customers', {
-  id: id(),
-  name: text('name').notNull(),
-  /** Lowercased by Better Auth. */
-  email: text('email').notNull().unique(),
-  /** Set once the email OTP is confirmed (F01); `@CustomerRoute()` requires it. */
-  emailVerified: boolean('email_verified').notNull().default(false),
-  image: text('image'),
-  ...timestamps(),
-  archivedAt: archivedAt(),
-});
+export const customers = pgTable(
+  'customers',
+  {
+    id: id(),
+    name: text('name').notNull(),
+    /** Lowercased by Better Auth. */
+    email: text('email').notNull().unique(),
+    /** Set once the email OTP is confirmed (S01 rule C7); `@CustomerRoute()` requires it. */
+    emailVerified: boolean('email_verified').notNull().default(false),
+    image: text('image'),
+    /** E.164, from `phoneSchema`. Not unique (rule C6): shared numbers are a fraud signal (F19). */
+    phone: text('phone').notNull(),
+    /** Created by the admin for testing (rule T1); reports and dashboards leave it out. */
+    isTest: boolean('is_test').notNull().default(false),
+    ...timestamps(),
+    archivedAt: archivedAt(),
+  },
+  (table) => [index('customers_phone_idx').on(table.phone)],
+);
 
 export const customerSessions = pgTable(
   'customer_sessions',
@@ -59,7 +77,10 @@ export const customerAccounts = pgTable(
   (table) => [index('customer_accounts_user_id_idx').on(table.userId)],
 );
 
-/** Short-lived values of the customer instance (email OTP codes from F01). */
+/**
+ * Short-lived values of the customer instance: email codes. One per identifier (`<purpose>-otp-<email>`),
+ * so a new code always replaces the previous one of the same purpose (rule C4).
+ */
 export const customerVerifications = pgTable(
   'customer_verifications',
   {
@@ -69,5 +90,17 @@ export const customerVerifications = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     ...timestamps(),
   },
-  (table) => [index('customer_verifications_identifier_idx').on(table.identifier)],
+  (table) => [uniqueIndex('customer_verifications_identifier_idx').on(table.identifier)],
 );
+
+/**
+ * Rate-limit counters of the customer instance (ADR 0008, rule C5), in PostgreSQL so they survive
+ * a restart: Better Auth's per-address limits, and the auth module's per-email code limits.
+ * `last_request` is a time in milliseconds since the epoch, as Better Auth stores it.
+ */
+export const customerRateLimits = pgTable('customer_rate_limits', {
+  id: id(),
+  key: text('key').notNull().unique(),
+  count: integer('count').notNull(),
+  lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
+});

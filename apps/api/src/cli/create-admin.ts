@@ -37,7 +37,7 @@ try {
   const { password } = await createAdmin(db, parsed.data);
   process.stdout.write(
     `Created the admin ${parsed.data.email}.\nPassword (shown once): ${password}\n` +
-      'Sign in to the admin panel and enrol TOTP; every admin route asks for it until then.\n',
+      'Sign in to the admin panel, change this password, then enrol TOTP.\n',
   );
 } catch (error) {
   if (!(error instanceof AdminAccountError)) throw error;

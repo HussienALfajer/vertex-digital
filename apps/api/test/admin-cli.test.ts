@@ -1,8 +1,13 @@
 import { adminSessions, adminTwoFactors, adminUsers } from '@vertex-digital/db';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AdminAccountError, createAdmin, resetAdminTwoFactor } from '../src/modules/admin/index.js';
-import { api, cookieHeader, removeAccounts, uniqueEmail } from './helpers.js';
+import {
+  AdminAccountError,
+  createAdmin,
+  resetAdminPassword,
+  resetAdminTwoFactor,
+} from '../src/modules/admin/index.js';
+import { api, auditOf, cookieHeader, removeAccounts, totp, uniqueEmail } from './helpers.js';
 import { ProbeController } from './probe.controller.js';
 import { startApp, type TestApp } from './start-app.js';
 
@@ -23,7 +28,7 @@ afterAll(async () => {
 });
 
 describe('admin:create', () => {
-  it('creates the admin once, who signs in with the printed password and must enrol TOTP', async () => {
+  it('creates the admin once, who signs in with the printed password and must change it', async () => {
     await test.db.delete(adminUsers);
 
     const email = uniqueEmail('admin');
@@ -37,7 +42,7 @@ describe('admin:create', () => {
     expect(signIn.status).toBe(200);
     const cookie = cookieHeader(signIn);
     expect(await (await client.get('/api/admin/probe/admin', { cookie })).json()).toMatchObject({
-      code: 'TWO_FACTOR_REQUIRED',
+      code: 'PASSWORD_CHANGE_REQUIRED',
     });
 
     await expect(
@@ -70,5 +75,63 @@ describe('admin:reset-two-factor', () => {
     await expect(resetAdminTwoFactor(test.db, uniqueEmail('nobody'))).rejects.toThrow(
       AdminAccountError,
     );
+  });
+});
+
+describe('admin:create run twice at once (edge case 1)', () => {
+  it('leaves exactly one admin', async () => {
+    await test.db.delete(adminUsers);
+    const results = await Promise.allSettled(
+      ['one', 'two'].map((label) =>
+        createAdmin(test.db, { email: uniqueEmail(label), name: label }),
+      ),
+    );
+    const created = results.filter((result) => result.status === 'fulfilled');
+    expect(created).toHaveLength(1);
+    expect(results.find((result) => result.status === 'rejected')).toMatchObject({
+      reason: expect.any(AdminAccountError),
+    });
+    const admins = await test.db.select().from(adminUsers);
+    expect(admins).toHaveLength(1);
+    seeded.push(...admins.map((admin) => admin.id));
+  });
+});
+
+describe('admin:reset-password (rule D2)', () => {
+  it('prints a new password to change at sign-in, signs out everywhere and keeps TOTP', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const { password } = await resetAdminPassword(test.db, admin.email);
+    expect(password).toMatch(/^[\w-]{24}$/);
+    expect((await client.get('/api/admin/probe/admin', { cookie: admin.cookie })).status).toBe(401);
+
+    const signIn = await client.post('/api/admin/auth/sign-in/email', {
+      body: { email: admin.email, password },
+    });
+    expect(await signIn.json()).toMatchObject({ twoFactorRedirect: true });
+    const verified = await client.post('/api/admin/auth/two-factor/verify-totp', {
+      cookie: cookieHeader(signIn),
+      body: { code: totp(admin.secret) },
+    });
+    const cookie = cookieHeader(verified);
+    expect(await (await client.get('/api/admin/probe/admin', { cookie })).json()).toMatchObject({
+      code: 'PASSWORD_CHANGE_REQUIRED',
+    });
+    expect((await auditOf(test.db, admin.id)).map((entry) => entry.action)).toContain(
+      'admin.password_reset',
+    );
+  });
+
+  it('writes an audit entry for every CLI run, actor "cli"', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    await resetAdminTwoFactor(test.db, admin.email);
+    expect((await auditOf(test.db, admin.id)).at(-1)).toMatchObject({
+      action: 'admin.two_factor_reset',
+      actorKind: 'cli',
+      actorId: null,
+      channel: 'cli',
+      details: { count: 2 },
+    });
   });
 });

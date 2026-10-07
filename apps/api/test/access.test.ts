@@ -52,14 +52,14 @@ describe('customer routes', () => {
     });
   });
 
-  it('refuse a customer whose email is not verified', async () => {
+  it('give a customer whose email is not verified no session (S01 account states)', async () => {
     const customer = await seedCustomer(test.db, { emailVerified: false });
     seeded.push(customer.id);
-    const cookie = await client.signInCustomer(customer.email);
-    expect(await body(await client.get('/api/probe/customer', { cookie }))).toMatchObject({
-      status: 403,
-      code: 'EMAIL_NOT_VERIFIED',
+    const response = await client.post('/api/auth/sign-in/email', {
+      body: { email: customer.email, password: PASSWORD },
     });
+    expect(await body(response)).toMatchObject({ status: 403, code: 'EMAIL_NOT_VERIFIED' });
+    expect(response.headers.getSetCookie()).toEqual([]);
   });
 
   it('give an archived customer no session, and drop the session of one archived later', async () => {
@@ -77,13 +77,6 @@ describe('customer routes', () => {
       .set({ archivedAt: new Date() })
       .where(eq(customers.id, later.id));
     expect((await client.get('/api/probe/customer', { cookie })).status).toBe(401);
-  });
-
-  it('keep sign-up closed until F01', async () => {
-    const response = await client.post('/api/auth/sign-up/email', {
-      body: { email: 'new@test.vertex-digital.local', password: PASSWORD, name: 'New' },
-    });
-    expect(response.status).not.toBe(200);
   });
 
   it('refuse an admin session', async () => {

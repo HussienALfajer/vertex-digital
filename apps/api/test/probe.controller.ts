@@ -2,10 +2,12 @@ import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { z } from 'zod';
 import {
   AdminRoute,
+  AdminSetupRoute,
   CurrentAdmin,
   CurrentCustomer,
   CustomerRoute,
   Public,
+  Sensitive,
 } from '../src/core/access/index.js';
 import { RequireAltcha } from '../src/core/altcha/index.js';
 import { RateLimit } from '../src/core/rate-limit/rate-limit.js';
@@ -35,6 +37,19 @@ export class ProbeController {
   @Get('admin/probe/admin')
   @AdminRoute()
   admin(@CurrentAdmin() admin: AdminIdentity) {
+    return { id: admin.id };
+  }
+
+  @Get('admin/probe/sensitive')
+  @AdminRoute()
+  @Sensitive()
+  sensitive(@CurrentAdmin() admin: AdminIdentity) {
+    return { id: admin.id };
+  }
+
+  @Get('admin/probe/setup')
+  @AdminSetupRoute()
+  setup(@CurrentAdmin() admin: AdminIdentity) {
     return { id: admin.id };
   }
 

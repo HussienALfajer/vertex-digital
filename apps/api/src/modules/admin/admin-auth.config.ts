@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import { ADMIN_SESSION_RULES } from '@vertex-digital/contracts';
 import {
   adminAccounts,
   adminSessions,
@@ -7,29 +8,40 @@ import {
   adminVerifications,
   type Database,
   newId,
+  recordAudit,
 } from '@vertex-digital/db';
 import { BASE_ERROR_CODES, betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { APIError, createAuthMiddleware } from 'better-auth/api';
+import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 import { twoFactor } from 'better-auth/plugins';
 import { eq } from 'drizzle-orm';
 // Straight from the file: `core/altcha/index.ts` reaches back here through `core/access`.
 import { ALTCHA_HEADER } from '../../core/altcha/altcha.guard.js';
 import type { Env } from '../../core/config/env.js';
 import { CodedException } from '../../core/errors/index.js';
-import { SignInFailures } from './sign-in-failures.js';
+import type { RequestMeta } from '../../core/http/request-meta.js';
+import { SignInFailures } from '../../core/rate-limit/sign-in-failures.js';
 
 export const ADMIN_AUTH_BASE_PATH = '/api/admin/auth';
 
 /**
- * Better Auth endpoints the panel does not use. The admin account is created on the server (CLI,
- * ADR 0016); there is no self sign-up, no emailed code and no password reset by email.
+ * Paths under `/api/admin/auth` that the admin module's Nest routes serve instead of Better
+ * Auth: the password change, audited in its transaction and allowed before the setup is done.
+ */
+export const ADMIN_AUTH_NEST_PATHS = ['/change-password'] as const;
+
+/**
+ * Better Auth endpoints the panel does not use. The admin account is created and recovered on the
+ * server (CLI, ADR 0016): no self sign-up, no emailed code, no reset by email, and TOTP cannot be
+ * turned off. Own sessions are Nest routes (`/api/admin/me/sessions`), audited.
  */
 const DISABLED_PATHS = [
   '/sign-up/email',
   '/sign-in/social',
   '/update-user',
   '/change-email',
+  '/change-password',
+  '/set-password',
   '/delete-user',
   '/delete-user/callback',
   '/request-password-reset',
@@ -37,11 +49,18 @@ const DISABLED_PATHS = [
   '/verify-email',
   '/send-verification-email',
   '/update-session',
+  '/list-sessions',
+  '/revoke-session',
+  '/revoke-sessions',
+  '/revoke-other-sessions',
   '/link-social',
   '/unlink-account',
+  '/list-accounts',
   '/refresh-token',
   '/get-access-token',
   '/account-info',
+  '/two-factor/disable',
+  '/two-factor/get-totp-uri',
   '/two-factor/send-otp',
   '/two-factor/verify-otp',
 ];
@@ -60,11 +79,11 @@ export const ADMIN_SIGN_IN_LIMITS = {
   accountWindowMs: 15 * 60 * 1000,
 } as const;
 
-/**
- * Session lifetime: 12 hours from sign-in, never extended. Provisional until the F02 spec sets
- * the idle timeout and the absolute lifetime.
- */
-const ADMIN_SESSION_SECONDS = 12 * 60 * 60;
+/** Paths that complete the TOTP step: the session they create is usable (`admin.signed_in`). */
+const TOTP_STEP_PATHS = ['/two-factor/verify-totp', '/two-factor/verify-backup-code'];
+
+/** Paths a session past its idle timeout may still reach: signing in and out. */
+const IDLE_EXEMPT_PATHS = ['/sign-in/email', '/sign-out'];
 
 /**
  * Backup codes are written down by hand: lowercase letters and digits without the look-alikes
@@ -86,6 +105,16 @@ const emailOf = (body: unknown): string => {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
 };
 
+const metaOf = (headers: Headers | undefined | null): RequestMeta => ({
+  // nginx overwrites X-Forwarded-For with the client address (ADR 0009).
+  ipAddress: headers?.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+  userAgent: headers?.get('user-agent')?.slice(0, 500) ?? null,
+});
+
+/** Whether a session saw no activity for the idle timeout (rule D4). */
+export const isIdle = (lastActiveAt: Date, now = Date.now()) =>
+  now - lastActiveAt.getTime() > ADMIN_SESSION_RULES.idleTimeoutMs;
+
 /**
  * The admin Better Auth instance (ADR 0007, 0016): its own tables and secret, mounted at
  * `/api/admin/auth` on the admin host. TOTP is enrolled through the two-factor plugin; until it
@@ -102,6 +131,25 @@ export function createAdminAuth(
     ADMIN_SIGN_IN_LIMITS.accountWindowMs,
   );
   const signInRule = { window: 60, max: ADMIN_SIGN_IN_LIMITS.perIpPerMinute };
+
+  /** Audit entries of what the Better Auth plugin changes, written right after the change. */
+  const audit = (
+    action: 'admin.signed_in' | 'admin.two_factor_enabled' | 'admin.backup_codes_regenerated',
+    adminId: string,
+    meta: RequestMeta,
+  ) =>
+    db.transaction((tx) =>
+      recordAudit(tx, {
+        action,
+        actorKind: 'admin',
+        actorId: adminId,
+        channel: 'admin',
+        entityType: 'admin_user',
+        entityId: adminId,
+        details: {},
+        ...meta,
+      }),
+    );
 
   return betterAuth({
     appName: 'Vertex Digital Admin',
@@ -121,11 +169,20 @@ export function createAdminAuth(
     }),
     user: {
       additionalFields: {
+        mustChangePassword: { type: 'boolean', required: false, input: false },
         archivedAt: { type: 'date', required: false, input: false },
       },
     },
-    emailAndPassword: { enabled: true, disableSignUp: true },
-    session: { expiresIn: ADMIN_SESSION_SECONDS, disableSessionRefresh: true },
+    emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 12 },
+    // 12 hours from sign-in, never extended (rule D4); the idle timeout is checked on each use.
+    session: {
+      expiresIn: ADMIN_SESSION_RULES.absoluteLifetimeMs / 1000,
+      disableSessionRefresh: true,
+      additionalFields: {
+        lastActiveAt: { type: 'date', required: false, input: false },
+        reauthenticatedAt: { type: 'date', required: false, input: false },
+      },
+    },
     disabledPaths: DISABLED_PATHS,
     // Memory storage is enough: the API runs as one process (ADR 0009).
     rateLimit: {
@@ -139,9 +196,7 @@ export function createAdminAuth(
         '/two-factor/verify-backup-code': signInRule,
         // These check the password again, so they are guessable like the sign-in.
         '/two-factor/enable': signInRule,
-        '/two-factor/disable': signInRule,
         '/two-factor/generate-backup-codes': signInRule,
-        '/change-password': signInRule,
       },
     },
     plugins: [
@@ -164,6 +219,22 @@ export function createAdminAuth(
               throw APIError.from('UNAUTHORIZED', BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD);
             }
           },
+          // The TOTP step completed (sign-in or enrolment): the session is usable.
+          after: async (session, ctx) => {
+            if (ctx && TOTP_STEP_PATHS.includes(ctx.path)) {
+              await audit('admin.signed_in', session.userId, metaOf(ctx.request?.headers));
+            }
+          },
+        },
+      },
+      user: {
+        update: {
+          // The plugin turns TOTP on once, when the first code of the enrolment is right.
+          after: async (user, ctx) => {
+            if (ctx?.path === '/two-factor/verify-totp' && user.twoFactorEnabled) {
+              await audit('admin.two_factor_enabled', user.id, metaOf(ctx.request?.headers));
+            }
+          },
         },
       },
     },
@@ -183,15 +254,47 @@ export function createAdminAuth(
             throw new APIError('BAD_REQUEST', { code: error.code, message: error.message });
           }
         }
+        if (IDLE_EXEMPT_PATHS.includes(ctx.path)) return;
+        // The access guard reads sessions from the server (no request) and answers idle expiry
+        // with its own code; the panel's own reads come over HTTP.
+        if (ctx.path === '/get-session' && !ctx.request) return;
+        const current = await getSessionFromCtx(ctx);
+        if (!current) return;
+        const lastActiveAt = (current.session as { lastActiveAt?: Date | null }).lastActiveAt;
+        if (lastActiveAt && isIdle(new Date(lastActiveAt))) {
+          // Rule D4: the session is deleted; reading it answers "signed out".
+          await ctx.context.internalAdapter.deleteSession(current.session.token);
+          if (ctx.path === '/get-session') return;
+          throw new APIError('UNAUTHORIZED', {
+            code: 'SESSION_IDLE_EXPIRED',
+            message: 'The session ended after 30 minutes without activity',
+          });
+        }
+        // Rule D1: the CLI-issued password is changed before TOTP is enrolled.
+        const mustChange = (current.user as { mustChangePassword?: boolean }).mustChangePassword;
+        if (ctx.path === '/two-factor/enable' && mustChange) {
+          throw new APIError('FORBIDDEN', {
+            code: 'PASSWORD_CHANGE_REQUIRED',
+            message: 'Change the password first',
+          });
+        }
       }),
       after: createAuthMiddleware(async (ctx) => {
-        if (ctx.path !== '/sign-in/email') return;
-        const email = emailOf(ctx.body);
         const returned = ctx.context.returned;
-        if (returned instanceof APIError) {
-          if (returned.statusCode === 401) failures.fail(email);
-        } else {
-          failures.clear(email);
+        if (ctx.path === '/sign-in/email') {
+          const email = emailOf(ctx.body);
+          if (returned instanceof APIError) {
+            if (returned.statusCode === 401) failures.fail(email);
+          } else {
+            failures.clear(email);
+          }
+          return;
+        }
+        if (ctx.path === '/two-factor/generate-backup-codes' && !(returned instanceof APIError)) {
+          const current = ctx.context.session;
+          if (current) {
+            await audit('admin.backup_codes_regenerated', current.user.id, metaOf(ctx.headers));
+          }
         }
       }),
     },

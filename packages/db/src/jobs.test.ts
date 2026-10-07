@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDatabase } from './client.js';
-import { createPgBoss, PG_BOSS_SCHEMA } from './jobs.js';
+import { createPgBoss, PG_BOSS_SCHEMA, transactionExecutor } from './jobs.js';
 
 /*
  * pg-boss under the role split of ADR 0014: the global setup installed its tables as the owner;
@@ -46,6 +46,33 @@ describe('pg-boss under the app role', () => {
       const id = await boss.send(queue, { hello: 'world' });
       const [job] = await boss.fetch<{ hello: string }>(queue);
       expect(job).toMatchObject({ id, data: { hello: 'world' } });
+      await boss.complete(queue, id as string);
+    } finally {
+      await boss.deleteQueue(queue);
+      await boss.stop({ graceful: false });
+    }
+  });
+
+  it('sends a job in a transaction: it exists only if the transaction commits', async () => {
+    const boss = createPgBoss(process.env.DATABASE_URL as string, {
+      supervise: false,
+      schedule: false,
+    });
+    const queue = `test.${randomUUID()}`;
+    await boss.start();
+    try {
+      await boss.createQueue(queue);
+      await expect(
+        connection.db.transaction(async (tx) => {
+          await boss.send(queue, { n: 1 }, { db: transactionExecutor(tx) });
+          throw new Error('rolled back');
+        }),
+      ).rejects.toThrow('rolled back');
+      const id = await connection.db.transaction((tx) =>
+        boss.send(queue, { n: 2 }, { db: transactionExecutor(tx), retryLimit: 3 }),
+      );
+      const jobs = await boss.fetch<{ n: number }>(queue, { batchSize: 10 });
+      expect(jobs.map((job) => ({ id: job.id, n: job.data.n }))).toEqual([{ id, n: 2 }]);
       await boss.complete(queue, id as string);
     } finally {
       await boss.deleteQueue(queue);

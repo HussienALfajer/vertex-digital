@@ -190,7 +190,11 @@ describe('append-only trigger', () => {
        join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid
        where p.proname = 'append_only_guard' order by 1`,
     );
-    expect(rows.map((row) => row.name)).toEqual(['ledger_journals', 'ledger_postings']);
+    expect(rows.map((row) => row.name)).toEqual([
+      'audit_entries',
+      'ledger_journals',
+      'ledger_postings',
+    ]);
   });
 
   it.each([

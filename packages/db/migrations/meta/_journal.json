@@ -29,6 +29,20 @@
       "when": 1791339136218,
       "tag": "0003_broad_daimon_hellstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791340213447,
+      "tag": "0004_s01_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791340222384,
+      "tag": "0005_audit_guards",
+      "breakpoints": true
     }
   ]
 }

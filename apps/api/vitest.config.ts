@@ -18,6 +18,8 @@ export default defineConfig({
       SENTRY_DSN: '',
       // Challenges solve in milliseconds in tests.
       ALTCHA_MAX_COUNTER: '20',
+      // Sign-up is open in tests; a test closes it for its own app (rule C16).
+      REGISTRATION_OPEN: 'true',
     },
     testTimeout: 30_000,
     hookTimeout: 30_000,

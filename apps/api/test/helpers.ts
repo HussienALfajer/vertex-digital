@@ -2,15 +2,17 @@ import { createHmac, randomUUID } from 'node:crypto';
 import {
   adminAccounts,
   adminUsers,
+  auditEntries,
   customerAccounts,
   customers,
   type Database,
+  emailOutbox,
   newId,
 } from '@vertex-digital/db';
 import { type Challenge, solveChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
 import { hashPassword } from 'better-auth/crypto';
-import { inArray, like } from 'drizzle-orm';
+import { asc, eq, inArray, like, or } from 'drizzle-orm';
 
 /*
  * Shared helpers for API integration tests: seed accounts straight into the test database, sign
@@ -20,6 +22,8 @@ import { inArray, like } from 'drizzle-orm';
 export const STORE_ORIGIN = 'http://127.0.0.1:3001';
 export const ADMIN_ORIGIN = 'http://127.0.0.1:5173';
 export const PASSWORD = 'correct-horse-battery-staple';
+/** A valid Syrian mobile number in E.164, as `phoneSchema` stores it. */
+export const PHONE = '+963944123456';
 
 /** The domain of every seeded email, so leftovers of an interrupted run can be found. */
 const TEST_EMAIL_DOMAIN = '@test.vertex-digital.local';
@@ -38,7 +42,7 @@ export interface Seeded {
 
 export async function seedCustomer(
   db: Database,
-  input: { emailVerified?: boolean; archived?: boolean } = {},
+  input: { emailVerified?: boolean; archived?: boolean; isTest?: boolean } = {},
 ): Promise<Seeded> {
   const id = newId();
   const email = uniqueEmail('customer');
@@ -46,7 +50,9 @@ export async function seedCustomer(
     id,
     name: 'عميل اختبار',
     email,
+    phone: PHONE,
     emailVerified: input.emailVerified ?? true,
+    isTest: input.isTest ?? false,
     archivedAt: input.archived ? new Date() : null,
   });
   await db.insert(customerAccounts).values({
@@ -81,15 +87,31 @@ export async function seedAdmin(db: Database, input: { archived?: boolean } = {}
   return { id, email };
 }
 
-/** Removes seeded customers and the admin with their sessions and accounts (cascade). */
+/**
+ * Removes seeded customers and the admin with their sessions and accounts (cascade) and their
+ * emails. Audit entries stay: the log is append-only by design.
+ */
 export async function removeAccounts(db: Database, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
+  await db.delete(emailOutbox).where(inArray(emailOutbox.customerId, ids));
   await db.delete(customers).where(inArray(customers.id, ids));
   await db.delete(adminUsers).where(inArray(adminUsers.id, ids));
 }
 
 /** Removes accounts an interrupted earlier run left behind. */
 export async function removeLeftovers(db: Database): Promise<void> {
+  const leftovers = db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(like(customers.email, `%${TEST_EMAIL_DOMAIN}`));
+  await db
+    .delete(emailOutbox)
+    .where(
+      or(
+        inArray(emailOutbox.customerId, leftovers),
+        like(emailOutbox.toAddress, `%${TEST_EMAIL_DOMAIN}`),
+      ),
+    );
   await db.delete(customers).where(like(customers.email, `%${TEST_EMAIL_DOMAIN}`));
   await db.delete(adminUsers).where(like(adminUsers.email, `%${TEST_EMAIL_DOMAIN}`));
 }
@@ -233,13 +255,48 @@ export function api(url: string) {
     return { ...admin, secret, cookie: await signInAdmin(admin.email, secret) };
   }
 
+  /** A solved ALTCHA challenge, as the `X-Altcha` header the widget sends. */
+  async function altcha(): Promise<Record<string, string>> {
+    const challenge = (await (await request('GET', '/api/altcha/challenge')).json()) as Challenge;
+    return { 'x-altcha': await solveAltcha(challenge) };
+  }
+
   return {
     request,
     get: (path: string, options?: RequestOptions) => request('GET', path, options),
     post: (path: string, options?: RequestOptions) => request('POST', path, options),
+    patch: (path: string, options?: RequestOptions) => request('PATCH', path, options),
+    delete: (path: string, options?: RequestOptions) => request('DELETE', path, options),
+    altcha,
     signInCustomer,
     signInAdmin,
     enrolTotp,
     adminWithTotp,
   };
+}
+
+/** The emails queued to an address, oldest first. */
+export function emailsTo(db: Database, address: string) {
+  return db
+    .select()
+    .from(emailOutbox)
+    .where(eq(emailOutbox.toAddress, address))
+    .orderBy(asc(emailOutbox.createdAt));
+}
+
+/** The code of the last code email to an address (the worker has not cleared it in tests). */
+export async function lastCode(db: Database, address: string): Promise<string> {
+  const emails = await emailsTo(db, address);
+  const code = (emails.at(-1)?.params as { code?: string } | null)?.code;
+  if (!code) throw new Error(`No code email to ${address}`);
+  return code;
+}
+
+/** The audit entries about one entity, oldest first. */
+export function auditOf(db: Database, entityId: string) {
+  return db
+    .select()
+    .from(auditEntries)
+    .where(eq(auditEntries.entityId, entityId))
+    .orderBy(asc(auditEntries.occurredAt), asc(auditEntries.id));
 }

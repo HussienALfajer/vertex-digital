@@ -6,8 +6,13 @@ import { SetMetadata } from '@nestjs/common';
  */
 
 export const ACCESS = Symbol('ACCESS');
+export const SENSITIVE = Symbol('SENSITIVE');
 
-export type RouteAccess = { kind: 'public' } | { kind: 'customer' } | { kind: 'admin' };
+export type RouteAccess =
+  | { kind: 'public' }
+  | { kind: 'customer' }
+  | { kind: 'admin' }
+  | { kind: 'adminSetup' };
 
 /** Anyone, signed in or not. Pair state-changing public routes with `@RateLimit`. */
 export const Public = () => SetMetadata(ACCESS, { kind: 'public' } satisfies RouteAccess);
@@ -16,7 +21,21 @@ export const Public = () => SetMetadata(ACCESS, { kind: 'public' } satisfies Rou
 export const CustomerRoute = () => SetMetadata(ACCESS, { kind: 'customer' } satisfies RouteAccess);
 
 /**
- * The signed-in admin with TOTP enrolled (ADR 0007, 0016). There are no roles or permissions: the
- * one admin account has full access. Only under `/api/admin/`.
+ * The signed-in admin, TOTP enrolled and no pending password change (ADR 0007, 0016, S01 rule
+ * D1). There are no roles or permissions: the one admin account has full access. Only under
+ * `/api/admin/`.
  */
 export const AdminRoute = () => SetMetadata(ACCESS, { kind: 'admin' } satisfies RouteAccess);
+
+/**
+ * The signed-in admin before the account is set up: the forced change of a CLI-issued password
+ * (rule D1). Idle expiry still applies. Only under `/api/admin/`.
+ */
+export const AdminSetupRoute = () =>
+  SetMetadata(ACCESS, { kind: 'adminSetup' } satisfies RouteAccess);
+
+/**
+ * An admin action that needs a re-authentication (password and TOTP) within the last 5 minutes,
+ * else `403 REAUTHENTICATION_REQUIRED` (rule D5). Each spec marks its own sensitive routes.
+ */
+export const Sensitive = () => SetMetadata(SENSITIVE, true);

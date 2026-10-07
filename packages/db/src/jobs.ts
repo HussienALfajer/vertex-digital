@@ -1,4 +1,6 @@
+import { sql } from 'drizzle-orm';
 import { PgBoss } from 'pg-boss';
+import type { Transaction } from './client.js';
 
 /*
  * pg-boss, the job queue of the API and the worker (ADR 0002), under the role split of ADR 0014:
@@ -40,4 +42,24 @@ export async function installPgBoss(ownerConnectionString: string): Promise<void
   });
   await boss.start();
   await boss.stop({ graceful: false });
+}
+
+/**
+ * Runs pg-boss's SQL on the connection of a Drizzle transaction, so a job is sent in the same
+ * transaction as the change that causes it (ADR 0011): `boss.send(queue, data, { db })`. The job
+ * exists only if the transaction commits.
+ */
+export function transactionExecutor(tx: Transaction): {
+  executeSql: (text: string, values?: unknown[]) => Promise<{ rows: unknown[] }>;
+} {
+  return {
+    async executeSql(text, values = []) {
+      // pg-boss writes `$1`, `$2`…: bind each to its value as a Drizzle parameter.
+      const chunks = text.split(/\$(\d+)/).map((part, index) =>
+        index % 2 === 0 ? sql.raw(part) : sql`${values[Number(part) - 1]}`,
+      );
+      const result = await tx.execute(sql.join(chunks));
+      return { rows: result.rows };
+    },
+  };
 }

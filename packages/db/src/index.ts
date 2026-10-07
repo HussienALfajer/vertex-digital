@@ -1,3 +1,4 @@
+export * from './audit/index.js';
 export * from './client.js';
 export * from './env.js';
 export * from './id.js';
