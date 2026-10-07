@@ -2,7 +2,7 @@ import { test as base, expect, type Page, type TestInfo } from '@playwright/test
 import openapi from '../../api/openapi.json' with { type: 'json' };
 
 /*
- * The `test` every admin spec uses: Playwright's, with a mocked API (`staff`) and failing a test
+ * The `test` every admin spec uses: Playwright's, with a mocked API (`admin`) and failing a test
  * when the page throws, React or Base UI log an error, or the page calls a route the mock does not
  * answer or the API does not declare (`apps/api/openapi.json`; Better Auth routes are outside it).
  */
@@ -21,17 +21,16 @@ const declared = Object.entries(openapi.paths as Record<string, Record<string, u
 );
 
 /**
- * The staff Better Auth instance and the API as the panel sees them, with the state a sign-in
+ * The admin Better Auth instance and the API as the panel sees them, with the state a sign-in
  * moves through: signed out, waiting for the TOTP step, signed in (with or without TOTP).
  */
-export class StaffApi {
+export class AdminApi {
   readonly unexpected: string[] = [];
   readonly calls: string[] = [];
   user = {
     id: '0199a000-0000-7000-8000-000000000001',
     name: 'ريم الخطيب',
     email: 'reem@example.com',
-    role: 'owner',
     twoFactorEnabled: true,
   };
   signedIn = false;
@@ -111,12 +110,12 @@ export class StaffApi {
   }
 }
 
-export const test = base.extend<{ staff: StaffApi }>({
-  staff: async ({ page }, use) => {
-    const staff = new StaffApi();
-    await page.route('**/api/**', (route) => staff.answer(route));
-    await use(staff);
-    expect(staff.unexpected, 'API requests without a mock').toEqual([]);
+export const test = base.extend<{ admin: AdminApi }>({
+  admin: async ({ page }, use) => {
+    const admin = new AdminApi();
+    await page.route('**/api/**', (route) => admin.answer(route));
+    await use(admin);
+    expect(admin.unexpected, 'API requests without a mock').toEqual([]);
   },
   page: async ({ page }, use) => {
     const failures: string[] = [];

@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 import { TwoFactorSetupPage } from '../features/account/two-factor-setup-page';
 import { sessionQuery } from '../lib/auth';
 
-/** Outside the shell: staff without TOTP see nothing else until they set it up (ADR 0007). */
+/** Outside the shell: the admin without TOTP sees nothing else until they set it up (ADR 0007). */
 export const Route = createFileRoute('/setup-two-factor')({
   beforeLoad: async ({ context, location, cause }) => {
     const session = await context.queryClient.fetchQuery({ ...sessionQuery, staleTime: 0 });

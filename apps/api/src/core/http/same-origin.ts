@@ -15,7 +15,7 @@ const ADMIN_PREFIX = '/api/admin';
  */
 export function sameOriginOnly(origins: { store: string; admin: string }) {
   return (request: IncomingMessage, response: ServerResponse, next: () => void): void => {
-    // Express matches routes case-insensitively, so `/API/Admin/...` reaches a staff route too.
+    // Express matches routes case-insensitively, so `/API/Admin/...` reaches an admin route too.
     const path = (request.url ?? '/').split('?')[0]?.toLowerCase() ?? '/';
     const admin = path === ADMIN_PREFIX || path.startsWith(`${ADMIN_PREFIX}/`);
     if (admin || !SAFE_METHODS.has(request.method ?? 'GET')) {

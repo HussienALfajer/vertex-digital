@@ -15,9 +15,9 @@ export const ERROR_CODES = [
   'VALIDATION_FAILED',
   /** No valid session for this route. */
   'UNAUTHORIZED',
-  /** Signed in, but the role lacks the permission. */
+  /** Signed in, but with the wrong kind of session or no right to this record. */
   'FORBIDDEN',
-  /** A staff member who has not enrolled TOTP yet (ADR 0007). */
+  /** The admin has not enrolled TOTP yet (ADR 0007, 0016). */
   'TWO_FACTOR_REQUIRED',
   /** A customer whose email is not verified yet (ADR 0007). */
   'EMAIL_NOT_VERIFIED',

@@ -3,8 +3,8 @@ import { DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swag
 import { Logger } from 'nestjs-pino';
 import { ENV, type Env } from './core/config/env.js';
 import { sameOriginOnly } from './core/http/same-origin.js';
+import { ADMIN_AUTH_BASE_PATH, AdminAuthService } from './modules/admin/index.js';
 import { AuthService, CUSTOMER_AUTH_BASE_PATH } from './modules/auth/index.js';
-import { STAFF_AUTH_BASE_PATH, StaffAuthService } from './modules/staff/index.js';
 
 export const API_PREFIX = 'api';
 
@@ -20,8 +20,8 @@ export function configureApp(app: NestExpressApplication): void {
   server.set('trust proxy', 'loopback');
   app.use(sameOriginOnly({ store: env.STORE_URL, admin: env.ADMIN_URL }));
   // Better Auth reads its own request bodies, so its handlers go before Nest's body parser, which
-  // Nest registers when the app initializes. The staff path is the more specific one: first.
-  server.all(`${STAFF_AUTH_BASE_PATH}/*splat`, app.get(StaffAuthService).handler());
+  // Nest registers when the app initializes. The admin path is the more specific one: first.
+  server.all(`${ADMIN_AUTH_BASE_PATH}/*splat`, app.get(AdminAuthService).handler());
   server.all(`${CUSTOMER_AUTH_BASE_PATH}/*splat`, app.get(AuthService).handler());
 
   if (env.NODE_ENV !== 'production') {

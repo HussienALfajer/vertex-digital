@@ -47,7 +47,7 @@ Run from the repository root (Node 24, pnpm via Corepack: `corepack enable`).
 | E2E (Playwright: builds, then store and admin against a mocked API; first time: `pnpm --filter @vertex-digital/store exec playwright install chromium`) | `pnpm test:e2e` |
 | Migration after a schema change · apply to the dev database (Drizzle migrations, then pg-boss, as the owner role) | `pnpm db:generate` · `pnpm db:migrate` |
 | OpenAPI document and the admin client after an API change (after `pnpm build`; commit `apps/api/openapi.json` and `apps/admin/src/lib/api/schema.gen.ts`) | `pnpm --filter @vertex-digital/api openapi:export` · `pnpm --filter @vertex-digital/admin api:generate` |
-| First owner of the panel (prints a generated password once) · reset a staff member's TOTP | `pnpm --filter @vertex-digital/api staff:create-owner --email <email> --name <name>` · `pnpm --filter @vertex-digital/api staff:reset-two-factor --email <email>` |
+| The admin account (prints a generated password once; there is only one, ADR 0016) · reset its password (printed once) · reset its TOTP | `pnpm --filter @vertex-digital/api admin:create --email <email> --name <name>` · `pnpm --filter @vertex-digital/api admin:reset-password --email <email>` · `pnpm --filter @vertex-digital/api admin:reset-two-factor --email <email>` |
 | Build | `pnpm build` |
 | One package only | `pnpm --filter @vertex-digital/<name> <script>` |
 

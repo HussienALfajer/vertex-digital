@@ -128,7 +128,7 @@ STORE_REVALIDATE_SECRET=$(openssl rand -hex 32)
 WORKER_NAME=production
 DATABASE_URL=postgres://$DB:$app_password@127.0.0.1:5432/$DB
 CUSTOMER_AUTH_SECRET=$(openssl rand -hex 32)
-STAFF_AUTH_SECRET=$(openssl rand -hex 32)
+ADMIN_AUTH_SECRET=$(openssl rand -hex 32)
 ALTCHA_HMAC_KEY=$(openssl rand -hex 32)
 FILES_ROOT=$SITE_DIR/shared/files
 # Empty until the owner sets them (docs/deployment.md): Sentry (Q15), Telegram alerts (Q11).

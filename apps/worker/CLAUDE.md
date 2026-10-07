@@ -13,7 +13,7 @@ NestJS standalone context for background work (ADR 0001, 0002): pg-boss queues a
 - Every job is idempotent: pg-boss retries, so running it twice leaves the same result (upsert, check-then-act inside a transaction, idempotency keys on supplier calls).
 - Payloads carry ids, not records: load fresh data inside the job.
 - pg-boss runs as the app role (ADR 0014): `createPgBoss` from `@vertex-digital/db` never creates or migrates tables and never rebuilds indexes. Queues are unpartitioned (rows only). pg-boss's tables are installed by the owner with the migrations.
-- Money moves only through `postJournal`, order states only through the order write path in `packages/db` (ADR 0003, 0004). Supplier calls go through `packages/suppliers`; a call with an unknown outcome is resolved by polling, then staff, before any other route (ADR 0005).
+- Money moves only through `postJournal`, order states only through the order write path in `packages/db` (ADR 0003, 0004). Supplier calls go through `packages/suppliers`; a call with an unknown outcome is resolved by polling, then the admin, before any other route (ADR 0005).
 - Alerts: `TelegramAlerts.send(text)` (rate limited, repeats suppressed for ten minutes, off without `TELEGRAM_BOT_TOKEN`). Never put tokens, keys, receipts or personal data in an alert; ids and error messages only.
 - Logs through the Nest logger, never `console.log`.
 

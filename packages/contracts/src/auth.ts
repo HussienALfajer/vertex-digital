@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /*
- * Sign-in forms (ADR 0007), owned by the api `auth` (customers) and `staff` modules. Better Auth
+ * Sign-in forms (ADR 0007), owned by the api `auth` (customers) and `admin` modules. Better Auth
  * checks the credentials; these schemas only shape what the forms send.
  */
 
@@ -13,11 +13,11 @@ export const signInSchema = z.object({
 
 export type SignIn = z.infer<typeof signInSchema>;
 
-/** The 6-digit code of an authenticator app (staff TOTP). */
+/** The 6-digit code of an authenticator app (admin TOTP). */
 export const totpCodeSchema = z.string().regex(/^\d{6}$/);
 
 /**
- * A staff backup code as written down: `xxxxx-xxxxx` from the API's alphabet (no look-alikes).
+ * An admin backup code as written down: `xxxxx-xxxxx` from the API's alphabet (no look-alikes).
  * Spaces around it and capital letters are forgiven, since codes are typed by hand.
  */
 export const backupCodeSchema = z

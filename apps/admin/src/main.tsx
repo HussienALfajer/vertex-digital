@@ -12,7 +12,7 @@ import './styles.css';
 import 'virtual:madani-fonts';
 
 /**
- * Reacts to access changes found by any request: a staff member who must set up TOTP goes to
+ * Reacts to access changes found by any request: an admin who must set up TOTP goes to
  * the setup page; any other 403 means the role changed, so the session is reloaded; a 401 means
  * the session ended.
  */

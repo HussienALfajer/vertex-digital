@@ -2,7 +2,7 @@
 # Installed by deploy/provision.sh as /etc/nginx/sites-available/digital.vertexmedia.pro; edit it
 # in the repository, never on the server.
 #
-# nginx is the only public gateway: /api goes to the API on loopback (never its staff routes),
+# nginx is the only public gateway: /api goes to the API on loopback (never its admin routes),
 # the store's build assets come from disk, everything else is rendered by the store (Next.js).
 
 server {
@@ -39,7 +39,7 @@ server {
     include snippets/vertexdigital-compression.conf;
 
     # --- API -----------------------------------------------------------------------------
-    # Staff routes are served on the admin host only (ADR 0007). Case-insensitive, as the API
+    # Admin routes are served on the admin host only (ADR 0007). Case-insensitive, as the API
     # matches routes; a regex location wins over the /api/ prefix below.
     location ~* ^/api/admin(?:/|$) { return 404; }
 

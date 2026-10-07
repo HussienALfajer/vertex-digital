@@ -41,7 +41,7 @@ export const CUSTOMER_SIGN_IN_PER_MINUTE = 10;
 
 /**
  * The customer Better Auth instance (ADR 0007), mounted at `/api/auth` on the store host. Its
- * cookie is `__Host-` and `Secure` in production; its name differs from the staff cookie so the
+ * cookie is `__Host-` and `Secure` in production; its name differs from the admin cookie so the
  * two never meet on one development host.
  */
 export function createCustomerAuth(db: Database, env: Env) {

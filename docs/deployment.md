@@ -1,6 +1,6 @@
 # Deployment
 
-Production runs on the owner's VPS (`ssh vertex`), shared with other sites, following the server's conventions (ADR 0009, `/root/SERVER.md` on the server): the store and its API at **https://digital.vertexmedia.pro**, the staff panel at **https://digital-admin.vertexmedia.pro**. Everything on the server comes from `deploy/` in this repository: never edit files there by hand.
+Production runs on the owner's VPS (`ssh vertex`), shared with other sites, following the server's conventions (ADR 0009, `/root/SERVER.md` on the server): the store and its API at **https://digital.vertexmedia.pro**, the admin panel at **https://digital-admin.vertexmedia.pro**. Everything on the server comes from `deploy/` in this repository: never edit files there by hand.
 
 Server work needs the owner's explicit approval in the current conversation (AGENTS.md). Deploys happen once per phase, in their own session (`docs/workflow.md`).
 
@@ -51,7 +51,7 @@ Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`)
 | admin | `/assets/*` | disk, cached a year |
 | admin | `/api/admin/auth/{sign-in/email,two-factor/verify-*}` | API, 30 a minute per address (burst 10) |
 | admin | `/api/admin/*` | API |
-| admin | `/api/altcha/challenge` | API (the staff sign-in's proof of work), same limit |
+| admin | `/api/altcha/challenge` | API (the admin sign-in's proof of work), same limit |
 | admin | other `/api/*` | 404 |
 | admin | everything else | `index.html` (SPA), never cached |
 
@@ -97,13 +97,18 @@ The restore stops the three apps, saves the current database to `shared/db-befor
 
 ## Accounts
 
-Customer sign-up stays closed until F01, and registration stays closed in production until the pilot (F26). The first owner of the panel is created on the server; the generated password is printed once, to whoever runs the command, and TOTP enrolment is asked at the first sign-in. Sign in and enrol right away: until then, anyone who learns the password could enrol their own authenticator first.
+Customer registration stays closed in production until the pilot: `REGISTRATION_OPEN` stays unset (closed) in `shared/.env` until S05 replaces it with the panel's switch (F26).
+
+There is one admin account (ADR 0016), created and recovered on the server only. Each command prints a generated password once, to whoever runs it, and writes an audit entry. A printed password must be changed at the next sign-in, then TOTP is enrolled: sign in right away, since until then anyone who learns the password could enrol their own authenticator first.
 
 ```bash
-ssh -t vertex "cd /srv/digital.vertexmedia.pro/current && sudo -u vertexdigital node apps/api/dist/cli/create-owner.js --email <email> --name '<name>'"
+ssh -t vertex "cd /srv/digital.vertexmedia.pro/current && sudo -u vertexdigital node apps/api/dist/cli/create-admin.js --email <email> --name '<name>'"
 ```
 
-A staff member who lost their authenticator and backup codes gets TOTP reset the same way, with `node apps/api/dist/cli/reset-two-factor.js --email <email>` (ADR 0007).
+A forgotten password: `node apps/api/dist/cli/reset-password.js --email <email>` the same way (a new printed password, every session signed out, TOTP kept). A lost authenticator and backup codes: `node apps/api/dist/cli/reset-two-factor.js --email <email>` (TOTP removed, every session signed out). Without server access there is no recovery, by design (ADR 0016).
+
+### Phase 1 deploy: the staff → admin rename (S01)
+The S01 migration renames the Phase 0 `staff_*` tables to `admin_*` in place, so the Phase 0 account survives with its password and TOTP. Before the first Phase 1 release starts, rename the key `STAFF_AUTH_SECRET` to `ADMIN_AUTH_SECRET` in `shared/.env` **keeping its value**: it encrypts the TOTP secret, so a new value means enrolling again. The API refuses to start in production without `ADMIN_AUTH_SECRET`. Add the SMTP values (`SMTP_*`, `EMAIL_FROM`, `EMAIL_TRANSPORT=smtp`) at the same time. Once this migration ran, a Phase 0 release cannot sign the admin in (it reads `staff_*`): go back with `restore`, not `rollback`, if it is ever needed.
 
 ## Operate
 
@@ -146,10 +151,10 @@ ssh vertex vertexdigital-deploy
 ssh vertex "systemctl enable --now vertexdigital-health.timer"
 ```
 
-`provision.sh` creates the owner and app roles with the app role's default privileges before the first migration, the `pgboss` schema owned by the owner, revokes `CONNECT` and `TEMPORARY` from `PUBLIC`, and generates the database passwords and app secrets (`CUSTOMER_AUTH_SECRET`, `STAFF_AUTH_SECRET`, `ALTCHA_HMAC_KEY`, `STORE_REVALIDATE_SECRET`) into `shared/.env`, and the owner role's URL into `/etc/vertexdigital/owner.env`, without printing them. It issues each certificate through a temporary HTTP-only site, so a missing certificate can never break nginx for the other sites. Re-running it reinstalls the configuration files from `origin/main` (pass another ref as an argument) and leaves the database and secrets alone.
+`provision.sh` creates the owner and app roles with the app role's default privileges before the first migration, the `pgboss` schema owned by the owner, revokes `CONNECT` and `TEMPORARY` from `PUBLIC`, and generates the database passwords and app secrets (`CUSTOMER_AUTH_SECRET`, `ADMIN_AUTH_SECRET`, `ALTCHA_HMAC_KEY`, `STORE_REVALIDATE_SECRET`) into `shared/.env`, and the owner role's URL into `/etc/vertexdigital/owner.env`, without printing them. It issues each certificate through a temporary HTTP-only site, so a missing certificate can never break nginx for the other sites. Re-running it reinstalls the configuration files from `origin/main` (pass another ref as an argument) and leaves the database and secrets alone.
 
 ## Changing configuration
 
 - nginx, fail2ban, systemd, logrotate or scripts: change `deploy/`, merge, then re-run `provision.sh`.
 - The inline theme script in `apps/admin/index.html`: its hash is in the CSP in `deploy/nginx/vertexdigital-admin-csp.conf`, and `apps/admin/src/csp.test.ts` fails until both match; re-run `provision.sh` after the merge.
-- Secrets: edit `shared/.env` on the server as `vertexdigital`, then `pm2 reload all --update-env`. Rotating `CUSTOMER_AUTH_SECRET` or `STAFF_AUTH_SECRET` signs everyone out (the staff secret also encrypts TOTP secrets: rotating it means every staff member enrols again).
+- Secrets: edit `shared/.env` on the server as `vertexdigital`, then `pm2 reload all --update-env`. Rotating `CUSTOMER_AUTH_SECRET` or `ADMIN_AUTH_SECRET` signs everyone out (the admin secret also encrypts the TOTP secret: rotating it means the admin enrols again).

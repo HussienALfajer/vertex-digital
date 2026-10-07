@@ -1,17 +1,13 @@
 import { SetMetadata } from '@nestjs/common';
-import type { Permission } from '@vertex-digital/contracts';
 
 /*
- * Who may call a route (ADR 0011). Every route carries exactly one of these; the architecture
- * test fails on a route without. They are metadata only: `AccessGuard` enforces them.
+ * Who may call a route (ADR 0011, 0016). Every route carries exactly one of these; the
+ * architecture test fails on a route without. They are metadata only: `AccessGuard` enforces them.
  */
 
 export const ACCESS = Symbol('ACCESS');
 
-export type RouteAccess =
-  | { kind: 'public' }
-  | { kind: 'customer' }
-  | { kind: 'staff'; permissions: Permission[] };
+export type RouteAccess = { kind: 'public' } | { kind: 'customer' } | { kind: 'admin' };
 
 /** Anyone, signed in or not. Pair state-changing public routes with `@RateLimit`. */
 export const Public = () => SetMetadata(ACCESS, { kind: 'public' } satisfies RouteAccess);
@@ -20,8 +16,7 @@ export const Public = () => SetMetadata(ACCESS, { kind: 'public' } satisfies Rou
 export const CustomerRoute = () => SetMetadata(ACCESS, { kind: 'customer' } satisfies RouteAccess);
 
 /**
- * A signed-in staff member with TOTP enrolled who holds every listed permission (ADR 0007); with
- * none listed, any staff member. Only under `/api/admin/`.
+ * The signed-in admin with TOTP enrolled (ADR 0007, 0016). There are no roles or permissions: the
+ * one admin account has full access. Only under `/api/admin/`.
  */
-export const StaffRoute = (...permissions: Permission[]) =>
-  SetMetadata(ACCESS, { kind: 'staff', permissions } satisfies RouteAccess);
+export const AdminRoute = () => SetMetadata(ACCESS, { kind: 'admin' } satisfies RouteAccess);

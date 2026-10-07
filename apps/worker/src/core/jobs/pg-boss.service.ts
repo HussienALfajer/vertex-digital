@@ -14,7 +14,7 @@ import { ENV, type Env } from '../config/env.js';
 /**
  * Owns the pg-boss instance (the app role: no schema changes, ADR 0014), started before the jobs
  * register and stopped gracefully on shutdown. Jobs register through `work`, which reports a
- * failure to the logs, Sentry and the staff alert channel before pg-boss retries it.
+ * failure to the logs, Sentry and the admin alert channel before pg-boss retries it.
  */
 @Injectable()
 export class PgBossService implements OnModuleInit, OnApplicationShutdown {

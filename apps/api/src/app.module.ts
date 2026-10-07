@@ -9,9 +9,9 @@ import { ENV, type Env } from './core/config/env.js';
 import { DatabaseModule } from './core/database/database.module.js';
 import { createValidationPipe, ErrorFilter } from './core/errors/index.js';
 import { throttlerOptions } from './core/rate-limit/rate-limit.js';
+import { AdminModule } from './modules/admin/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { HealthModule } from './modules/health/index.js';
-import { StaffModule } from './modules/staff/index.js';
 
 @Module({
   imports: [
@@ -35,7 +35,7 @@ import { StaffModule } from './modules/staff/index.js';
     ThrottlerModule.forRoot(throttlerOptions),
     AltchaModule,
     AuthModule,
-    StaffModule,
+    AdminModule,
     HealthModule,
   ],
   providers: [

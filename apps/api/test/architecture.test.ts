@@ -66,13 +66,13 @@ describe('every route declares who may call it', () => {
     );
   });
 
-  it('marks each route with @Public, @CustomerRoute or @StaffRoute', () => {
+  it('marks each route with @Public, @CustomerRoute or @AdminRoute', () => {
     expect(routes.filter((route) => !route.access).map((route) => route.name)).toEqual([]);
   });
 
-  it('puts staff routes, and only staff routes, under /api/admin/', () => {
+  it('puts admin routes, and only admin routes, under /api/admin/', () => {
     const offenders = routes
-      .filter((route) => (route.access?.kind === 'staff') !== /^admin(\/|$)/.test(route.path))
+      .filter((route) => (route.access?.kind === 'admin') !== /^admin(\/|$)/.test(route.path))
       .map((route) => `${route.name} (${route.access?.kind} at /api/${route.path})`);
     expect(offenders).toEqual([]);
   });
@@ -169,7 +169,7 @@ const imports = sourceFiles(srcDir).flatMap((file) => importsOf(file));
 
 describe('module boundaries', () => {
   it('finds the modules it checks', () => {
-    expect(moduleNames).toEqual(expect.arrayContaining(['auth', 'staff', 'health']));
+    expect(moduleNames).toEqual(expect.arrayContaining(['auth', 'admin', 'health']));
   });
 
   it('gives every module a public index.ts', () => {
@@ -198,8 +198,8 @@ describe('module boundaries', () => {
    * ownership decision (docs/architecture.md, API modules).
    */
   const TABLE_OWNERS: Record<string, string | null> = {
+    admin: 'admin',
     auth: 'auth',
-    staff: 'staff',
     system: null,
     wallet: 'wallet',
   };
@@ -242,6 +242,35 @@ describe('module boundaries', () => {
     const offenders = imports
       .filter(({ specifier, namespace }) => specifier === '@vertex-digital/db' && namespace)
       .map(({ file }) => display(file));
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('one admin, no staff (ADR 0016)', () => {
+  const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
+  /** Code, tests and front ends; migrations keep their history and are left out. */
+  const roots = ['apps', 'packages'].map((dir) => join(repoRoot, dir));
+  const skipped = new Set(['node_modules', 'dist', 'coverage', '.next', '.turbo', 'migrations']);
+  /** Files that must name the old tables: the test that the rename keeps the Phase 0 row. */
+  const allowed = new Set(['packages/db/src/admin-rename.test.ts']);
+
+  function codeFiles(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      if (skipped.has(entry.name) || entry.name.startsWith('test-results')) return [];
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return codeFiles(path);
+      return /\.(ts|tsx|mts|mjs|json|css|html)$/.test(entry.name) ? [path] : [];
+    });
+  }
+
+  it('leaves no staff identifier, table, permission or role in apps/ and packages/', () => {
+    const self = fileURLToPath(import.meta.url);
+    const offenders = roots
+      .flatMap(codeFiles)
+      .filter((file) => file !== self)
+      .filter((file) => /staff|ROLE_PERMISSIONS|hasPermission/i.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(repoRoot, file).split(sep).join('/'))
+      .filter((file) => !allowed.has(file));
     expect(offenders).toEqual([]);
   });
 });

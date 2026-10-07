@@ -1,5 +1,5 @@
 /**
- * Failed staff sign-ins per email in a sliding window, so password guessing spread over many
+ * Failed admin sign-ins per email in a sliding window, so password guessing spread over many
  * addresses is slowed too (ADR 0007). Memory is enough for one API process.
  */
 export class SignInFailures {

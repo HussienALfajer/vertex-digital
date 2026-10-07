@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { scrubBreadcrumb } from '../src/core/alerts/scrub-breadcrumb.js';
 import { TelegramAlerts } from '../src/core/alerts/telegram-alerts.js';
 
-/* The staff alert channel against a local fake Bot API: nothing calls Telegram in tests. */
+/* The admin alert channel against a local fake Bot API: nothing calls Telegram in tests. */
 
 interface Received {
   path: string;

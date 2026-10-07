@@ -1,13 +1,13 @@
 /**
- * Creates the first owner with a generated password, printed once (ADR 0007). Refuses when an
- * active owner exists; later staff are added in the panel (F02). TOTP is enrolled at first sign-in.
+ * Creates the one admin account with a generated password, printed once (ADR 0016). Refuses when
+ * an admin exists. TOTP is enrolled at the first sign-in.
  *
- *   pnpm --filter @vertex-digital/api staff:create-owner --email owner@example.com --name "Name"
+ *   pnpm --filter @vertex-digital/api admin:create --email admin@example.com --name "Name"
  */
 import { parseArgs } from 'node:util';
 import { createDatabase, loadRootEnv } from '@vertex-digital/db';
 import { z } from 'zod';
-import { createFirstOwner, StaffAccountError } from '../modules/staff/index.js';
+import { AdminAccountError, createAdmin } from '../modules/admin/index.js';
 
 const argsSchema = z.object({
   email: z.email(),
@@ -21,7 +21,7 @@ const { values } = parseArgs({
 });
 const parsed = argsSchema.safeParse(values);
 if (!parsed.success) {
-  console.error(`Usage: staff:create-owner --email <email> --name <name>\n
+  console.error(`Usage: admin:create --email <email> --name <name>\n
 ${z.prettifyError(parsed.error)}`);
   process.exit(1);
 }
@@ -34,13 +34,13 @@ if (!databaseUrl) {
 
 const { db, close } = createDatabase(databaseUrl);
 try {
-  const { password } = await createFirstOwner(db, parsed.data);
+  const { password } = await createAdmin(db, parsed.data);
   process.stdout.write(
-    `Created the owner ${parsed.data.email}.\nPassword (shown once): ${password}\n` +
-      'Sign in to the admin panel and enrol TOTP; every staff route asks for it until then.\n',
+    `Created the admin ${parsed.data.email}.\nPassword (shown once): ${password}\n` +
+      'Sign in to the admin panel and enrol TOTP; every admin route asks for it until then.\n',
   );
 } catch (error) {
-  if (!(error instanceof StaffAccountError)) throw error;
+  if (!(error instanceof AdminAccountError)) throw error;
   console.error(error.message);
   process.exitCode = 1;
 } finally {

@@ -1,12 +1,12 @@
 import { randomInt } from 'node:crypto';
 import {
+  adminAccounts,
+  adminSessions,
+  adminTwoFactors,
+  adminUsers,
+  adminVerifications,
   type Database,
   newId,
-  staffAccounts,
-  staffSessions,
-  staffTwoFactors,
-  staffUsers,
-  staffVerifications,
 } from '@vertex-digital/db';
 import { BASE_ERROR_CODES, betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -19,11 +19,11 @@ import type { Env } from '../../core/config/env.js';
 import { CodedException } from '../../core/errors/index.js';
 import { SignInFailures } from './sign-in-failures.js';
 
-export const STAFF_AUTH_BASE_PATH = '/api/admin/auth';
+export const ADMIN_AUTH_BASE_PATH = '/api/admin/auth';
 
 /**
- * Better Auth endpoints the panel does not use. Staff are created by the owner (CLI, then F02);
- * there is no self sign-up, no emailed code and no password reset by email: the owner resets.
+ * Better Auth endpoints the panel does not use. The admin account is created on the server (CLI,
+ * ADR 0016); there is no self sign-up, no emailed code and no password reset by email.
  */
 const DISABLED_PATHS = [
   '/sign-up/email',
@@ -50,11 +50,11 @@ const DISABLED_PATHS = [
 const DISABLED_ROUTES = ['/callback/:id', '/reset-password/:token'];
 
 /**
- * Staff sign-in limits (ADR 0007): per client IP; per account whatever the address, after which
- * the sign-in asks for a solved ALTCHA. Not a lockout: anyone who knows a staff email could
- * otherwise keep that member out of the panel.
+ * Admin sign-in limits (ADR 0007): per client IP; per account whatever the address, after which
+ * the sign-in asks for a solved ALTCHA. Not a lockout: anyone who knows the admin email could
+ * otherwise keep the admin out of the panel.
  */
-export const STAFF_SIGN_IN_LIMITS = {
+export const ADMIN_SIGN_IN_LIMITS = {
   perIpPerMinute: 10,
   failuresBeforeAltcha: 10,
   accountWindowMs: 15 * 60 * 1000,
@@ -64,7 +64,7 @@ export const STAFF_SIGN_IN_LIMITS = {
  * Session lifetime: 12 hours from sign-in, never extended. Provisional until the F02 spec sets
  * the idle timeout and the absolute lifetime.
  */
-const STAFF_SESSION_SECONDS = 12 * 60 * 60;
+const ADMIN_SESSION_SECONDS = 12 * 60 * 60;
 
 /**
  * Backup codes are written down by hand: lowercase letters and digits without the look-alikes
@@ -87,46 +87,45 @@ const emailOf = (body: unknown): string => {
 };
 
 /**
- * The staff Better Auth instance (ADR 0007): its own tables and secret, mounted at
+ * The admin Better Auth instance (ADR 0007, 0016): its own tables and secret, mounted at
  * `/api/admin/auth` on the admin host. TOTP is enrolled through the two-factor plugin; until it
- * is, every staff route answers `TWO_FACTOR_REQUIRED` (the access guard).
+ * is, every admin route answers `TWO_FACTOR_REQUIRED` (the access guard).
  */
-export function createStaffAuth(
+export function createAdminAuth(
   db: Database,
   env: Env,
   verifyAltcha: (header: string | undefined) => Promise<void>,
 ) {
   const production = env.NODE_ENV === 'production';
   const failures = new SignInFailures(
-    STAFF_SIGN_IN_LIMITS.failuresBeforeAltcha,
-    STAFF_SIGN_IN_LIMITS.accountWindowMs,
+    ADMIN_SIGN_IN_LIMITS.failuresBeforeAltcha,
+    ADMIN_SIGN_IN_LIMITS.accountWindowMs,
   );
-  const signInRule = { window: 60, max: STAFF_SIGN_IN_LIMITS.perIpPerMinute };
+  const signInRule = { window: 60, max: ADMIN_SIGN_IN_LIMITS.perIpPerMinute };
 
   return betterAuth({
     appName: 'Vertex Digital Admin',
     baseURL: env.ADMIN_URL,
-    basePath: STAFF_AUTH_BASE_PATH,
-    secret: env.STAFF_AUTH_SECRET,
+    basePath: ADMIN_AUTH_BASE_PATH,
+    secret: env.ADMIN_AUTH_SECRET,
     trustedOrigins: [env.ADMIN_URL],
     database: drizzleAdapter(db, {
       provider: 'pg',
       schema: {
-        user: staffUsers,
-        session: staffSessions,
-        account: staffAccounts,
-        verification: staffVerifications,
-        twoFactor: staffTwoFactors,
+        user: adminUsers,
+        session: adminSessions,
+        account: adminAccounts,
+        verification: adminVerifications,
+        twoFactor: adminTwoFactors,
       },
     }),
     user: {
       additionalFields: {
-        role: { type: 'string', required: true, input: false },
         archivedAt: { type: 'date', required: false, input: false },
       },
     },
     emailAndPassword: { enabled: true, disableSignUp: true },
-    session: { expiresIn: STAFF_SESSION_SECONDS, disableSessionRefresh: true },
+    session: { expiresIn: ADMIN_SESSION_SECONDS, disableSessionRefresh: true },
     disabledPaths: DISABLED_PATHS,
     // Memory storage is enough: the API runs as one process (ADR 0009).
     rateLimit: {
@@ -155,13 +154,13 @@ export function createStaffAuth(
     databaseHooks: {
       session: {
         create: {
-          // Covers every way to get a session, the TOTP step included: archived staff get none.
+          // Covers every way to get a session, the TOTP step included: an archived admin gets none.
           before: async (session) => {
-            const [member] = await db
-              .select({ archivedAt: staffUsers.archivedAt })
-              .from(staffUsers)
-              .where(eq(staffUsers.id, session.userId));
-            if (!member || member.archivedAt) {
+            const [admin] = await db
+              .select({ archivedAt: adminUsers.archivedAt })
+              .from(adminUsers)
+              .where(eq(adminUsers.id, session.userId));
+            if (!admin || admin.archivedAt) {
               throw APIError.from('UNAUTHORIZED', BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD);
             }
           },
@@ -197,7 +196,7 @@ export function createStaffAuth(
       }),
     },
     advanced: {
-      cookiePrefix: production ? '__Host-vd-staff' : 'vd-staff',
+      cookiePrefix: production ? '__Host-vd-admin' : 'vd-admin',
       // `__Host-` instead of Better Auth's `__Secure-`: host-only, path `/`, `Secure`.
       useSecureCookies: false,
       defaultCookieAttributes: { secure: production, sameSite: 'lax', path: '/' },
@@ -208,4 +207,4 @@ export function createStaffAuth(
   });
 }
 
-export type StaffAuth = ReturnType<typeof createStaffAuth>;
+export type AdminAuth = ReturnType<typeof createAdminAuth>;

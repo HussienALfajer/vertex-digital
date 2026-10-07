@@ -1,9 +1,8 @@
 import type { IncomingHttpHeaders } from 'node:http';
 import { type CanActivate, type ExecutionContext, Injectable, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { hasPermission } from '@vertex-digital/contracts';
+import { AdminAuthService } from '../../modules/admin/index.js';
 import { AuthService } from '../../modules/auth/index.js';
-import { StaffAuthService } from '../../modules/staff/index.js';
 import { CodedException } from '../errors/index.js';
 import { ACCESS, type RouteAccess } from './access.decorators.js';
 import type { AuthenticatedRequest } from './current-user.decorator.js';
@@ -11,8 +10,8 @@ import type { AuthenticatedRequest } from './current-user.decorator.js';
 type GuardedRequest = AuthenticatedRequest & { headers: IncomingHttpHeaders };
 
 /**
- * Enforces `@Public()`, `@CustomerRoute()` and `@StaffRoute()` on every route (ADR 0007, 0011).
- * Customer routes read only the customer session cookie and staff routes only the staff one, so a
+ * Enforces `@Public()`, `@CustomerRoute()` and `@AdminRoute()` on every route (ADR 0007, 0011).
+ * Customer routes read only the customer session cookie and admin routes only the admin one, so a
  * session of one kind never opens a route of the other. A route without a declaration is refused.
  */
 @Injectable()
@@ -22,7 +21,7 @@ export class AccessGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly customers: AuthService,
-    private readonly staff: StaffAuthService,
+    private readonly admins: AdminAuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -46,18 +45,15 @@ export class AccessGuard implements CanActivate {
         request.customer = customer;
         return true;
       }
-      case 'staff': {
-        const member = await this.staff.staffOf(request.headers);
-        if (!member || member.archived) {
+      case 'admin': {
+        const admin = await this.admins.adminOf(request.headers);
+        if (!admin || admin.archived) {
           throw new CodedException(401, 'UNAUTHORIZED', 'Sign in first');
         }
-        if (!member.twoFactorEnabled) {
+        if (!admin.twoFactorEnabled) {
           throw new CodedException(403, 'TWO_FACTOR_REQUIRED', 'Set up two-factor sign-in first');
         }
-        if (!access.permissions.every((permission) => hasPermission(member.role, permission))) {
-          throw new CodedException(403, 'FORBIDDEN', 'Your role does not allow this');
-        }
-        request.staff = member;
+        request.admin = admin;
         return true;
       }
       default:

@@ -3,7 +3,7 @@
 The single source of shapes and pure rules shared by api, worker, store and admin: Zod schemas and their types, money math, state transition tables, error codes (ADR 0003, 0004, 0011).
 
 ## Layout
-- `src/<module>.ts` per owning API module (`wallet.ts`, `orders.ts`, `staff.ts`: roles and the permission map), re-exported from `src/index.ts`. Shared rules: `money.ts` (units, rates, conversion, rounding), `errors.ts` (error codes and the error response), `system.ts` (health).
+- `src/<module>.ts` per owning API module (`wallet.ts`, `orders.ts`, `admin.ts`), re-exported from `src/index.ts`. Shared rules: `money.ts` (units, rates, conversion, rounding), `errors.ts` (error codes and the error response), `system.ts` (health).
 - Tests next to the code (`*.test.ts`).
 
 ## Rules
@@ -17,9 +17,6 @@ The single source of shapes and pure rules shared by api, worker, store and admi
 - Amounts are integer units: USD in micro-dollars (`CURRENCY_SCALE.USD`), SYP in hundredths. Customer-facing USD (prices, deposit credits) is whole cents: validate with `usdCentsSchema`.
 - Rates are exact decimal strings (`exchangeRateSchema`, SYP per 1 USD). Convert only with `usdToSyp` / `sypToUsd`, which compute in BigInt and round in the direction the caller names. Never `*`, `/` or `Math.round` an amount anywhere else, and never a float.
 - A new rounding rule (deposit credits, price endings) is a named function here with its spec reference and tests, not inline arithmetic in a service.
-
-## Permissions (ADR 0007)
-- `PERMISSIONS` are `<area>.<action>`; `ROLE_PERMISSIONS` grants them to roles (the owner holds all). A feature adds its permissions and grants here, with a test of who may and who may not; the API checks them with `@StaffRoute(...)`.
 
 ## Orders (ADR 0004, 0013)
 - `ORDER_TRANSITIONS` is the only list of allowed status changes. Changing it needs an ADR and the table in `orders.test.ts` updated to match.

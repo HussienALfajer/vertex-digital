@@ -3,10 +3,10 @@
 Drizzle schema, migrations, the database client and the shared money write paths (ADR 0002, 0003, 0011, 0014). Schema changes follow the `db-migration` skill.
 
 ## Layout
-- `src/schema/<module>.ts`: tables of one owning API module (`wallet.ts`: the ledger; `auth.ts`: customer Better Auth tables; `staff.ts`: staff Better Auth tables and roles; `system.ts`: worker heartbeats), re-exported from `src/schema/index.ts`. Better Auth tables keep the property names Better Auth expects.
+- `src/schema/<module>.ts`: tables of one owning API module (`wallet.ts`: the ledger; `auth.ts`: customer Better Auth tables; `admin.ts`: admin Better Auth tables; `system.ts`: worker heartbeats), re-exported from `src/schema/index.ts`. Better Auth tables keep the property names Better Auth expects.
 - `src/schema/columns.ts`: `id()`, `timestamps()`, `archivedAt()`, `amountUnits()`, `currencyEnum`. Enums reuse the `as const` lists of `@vertex-digital/contracts`.
 - `src/ledger/`: `postJournal` (the only way to write journals and postings) and `accountBalance`. `src/orders/` (F11) will hold the order transition write path.
-- `migrations/`: `0000_ledger.sql` and `0002_harsh_boom_boom.sql` (auth and staff tables, heartbeats) are generated; `0001_ledger_guards.sql` is hand-written (triggers, privileges). `migrations/meta/` is drizzle-kit state: never read or edit it.
+- `migrations/`: `0000_ledger.sql` and `0002_harsh_boom_boom.sql` (auth and staff tables, heartbeats) and `0003_broad_daimon_hellstrom.sql` (staff tables renamed to admin, ADR 0016) are generated; `0001_ledger_guards.sql` is hand-written (triggers, privileges). `migrations/meta/` is drizzle-kit state: never read or edit it.
 - `src/migrate.ts` (`runMigrations`) and `src/cli/migrate.ts`: the Drizzle migrations, then pg-boss's tables (`installPgBoss`), as the owner role under an advisory lock. `pnpm db:migrate`, deploys (`node packages/db/dist/cli/migrate.js`) and the tests' global setup all run it.
 - `src/jobs.ts`: `PG_BOSS_SCHEMA` and `createPgBoss` (app role: no schema changes, no index rebuilds). The `pgboss` schema itself is created, owned by the owner role with default privileges for the app role, by `scripts/setup-local-db.mjs` and the production provisioning.
 - `src/testing.ts` (`@vertex-digital/db/testing`): test database URLs and the Vitest global setup the apps reuse.

@@ -1,16 +1,16 @@
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  AdminRoute,
+  CurrentAdmin,
   CurrentCustomer,
-  CurrentStaff,
   CustomerRoute,
   Public,
-  StaffRoute,
 } from '../src/core/access/index.js';
 import { RequireAltcha } from '../src/core/altcha/index.js';
 import { RateLimit } from '../src/core/rate-limit/rate-limit.js';
+import type { AdminIdentity } from '../src/modules/admin/index.js';
 import type { CustomerIdentity } from '../src/modules/auth/index.js';
-import type { StaffIdentity } from '../src/modules/staff/index.js';
 
 const echoSchema = z.object({ name: z.string().min(1), age: z.int().positive() });
 
@@ -32,16 +32,10 @@ export class ProbeController {
     return { id: customer.id };
   }
 
-  @Get('admin/probe/staff')
-  @StaffRoute()
-  staff(@CurrentStaff() member: StaffIdentity) {
-    return { id: member.id, role: member.role };
-  }
-
-  @Get('admin/probe/manage')
-  @StaffRoute('staff.manage')
-  manage(@CurrentStaff() member: StaffIdentity) {
-    return { id: member.id };
+  @Get('admin/probe/admin')
+  @AdminRoute()
+  admin(@CurrentAdmin() admin: AdminIdentity) {
+    return { id: admin.id };
   }
 
   @Get('probe/undeclared')

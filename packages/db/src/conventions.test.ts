@@ -22,10 +22,10 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   customer_sessions: 'Better Auth sessions: deleted on sign-out and expiry, not business records',
   customer_accounts: 'Better Auth credentials of a customer, who is the record that is archived',
   customer_verifications: 'Better Auth short-lived codes: deleted once used or expired',
-  staff_sessions: 'Better Auth sessions: deleted on sign-out and expiry, not business records',
-  staff_accounts: 'Better Auth credentials of a staff member, who is the record that is archived',
-  staff_verifications: 'Better Auth short-lived values: deleted once used or expired',
-  staff_two_factors: 'TOTP secret of a staff member, replaced on re-enrolment by the plugin',
+  admin_sessions: 'Better Auth sessions: deleted on sign-out and expiry, not business records',
+  admin_accounts: 'Better Auth credentials of the admin, who is the record that is archived',
+  admin_verifications: 'Better Auth short-lived values: deleted once used or expired',
+  admin_two_factors: 'TOTP secret of the admin, replaced on re-enrolment by the plugin',
   worker_heartbeats: 'One row per worker process, overwritten every minute',
 };
 

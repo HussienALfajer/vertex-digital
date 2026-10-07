@@ -19,7 +19,7 @@ export const envSchema = z
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
     /** Empty disables Sentry. */
     SENTRY_DSN: optional().pipe(z.url().optional()),
-    /** The staff alert channel (ADR 0002): off unless both are set (Q11). */
+    /** The admin alert channel (ADR 0002): off unless both are set (Q11). */
     TELEGRAM_BOT_TOKEN: optional().pipe(
       z
         .string()

@@ -1,12 +1,11 @@
 import { createHmac, randomUUID } from 'node:crypto';
-import type { StaffRole } from '@vertex-digital/contracts';
 import {
+  adminAccounts,
+  adminUsers,
   customerAccounts,
   customers,
   type Database,
   newId,
-  staffAccounts,
-  staffUsers,
 } from '@vertex-digital/db';
 import { type Challenge, solveChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
@@ -15,7 +14,7 @@ import { inArray, like } from 'drizzle-orm';
 
 /*
  * Shared helpers for API integration tests: seed accounts straight into the test database, sign
- * in over HTTP (with the TOTP step for staff), and clean up. Test data is unique per run.
+ * in over HTTP (with the TOTP step for the admin), and clean up. Test data is unique per run.
  */
 
 export const STORE_ORIGIN = 'http://127.0.0.1:3001';
@@ -59,20 +58,21 @@ export async function seedCustomer(
   return { id, email };
 }
 
-export async function seedStaff(
-  db: Database,
-  input: { role?: StaffRole; archived?: boolean } = {},
-): Promise<Seeded> {
+/**
+ * Seeds the admin account. There is at most one (ADR 0016), so any admin a previous test seeded is
+ * removed first, with its sessions: tests never keep two admins at once.
+ */
+export async function seedAdmin(db: Database, input: { archived?: boolean } = {}): Promise<Seeded> {
   const id = newId();
-  const email = uniqueEmail('staff');
-  await db.insert(staffUsers).values({
+  const email = uniqueEmail('admin');
+  await db.delete(adminUsers);
+  await db.insert(adminUsers).values({
     id,
-    name: 'موظف اختبار',
+    name: 'مدير اختبار',
     email,
-    role: input.role ?? 'support',
     archivedAt: input.archived ? new Date() : null,
   });
-  await db.insert(staffAccounts).values({
+  await db.insert(adminAccounts).values({
     userId: id,
     accountId: id,
     providerId: 'credential',
@@ -81,17 +81,17 @@ export async function seedStaff(
   return { id, email };
 }
 
-/** Removes seeded customers and staff with their sessions and accounts (cascade). */
+/** Removes seeded customers and the admin with their sessions and accounts (cascade). */
 export async function removeAccounts(db: Database, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   await db.delete(customers).where(inArray(customers.id, ids));
-  await db.delete(staffUsers).where(inArray(staffUsers.id, ids));
+  await db.delete(adminUsers).where(inArray(adminUsers.id, ids));
 }
 
 /** Removes accounts an interrupted earlier run left behind. */
 export async function removeLeftovers(db: Database): Promise<void> {
   await db.delete(customers).where(like(customers.email, `%${TEST_EMAIL_DOMAIN}`));
-  await db.delete(staffUsers).where(like(staffUsers.email, `%${TEST_EMAIL_DOMAIN}`));
+  await db.delete(adminUsers).where(like(adminUsers.email, `%${TEST_EMAIL_DOMAIN}`));
 }
 
 function base32Decode(input: string): Buffer {
@@ -184,19 +184,19 @@ export function api(url: string) {
     return cookieHeader(await expectOk(response, 'Customer sign-in'));
   }
 
-  /** Signs a staff member in, with the TOTP step when they enrolled; returns the cookie. */
-  async function signInStaff(email: string, totpSecret?: string): Promise<string> {
+  /** Signs the admin in, with the TOTP step once enrolled; returns the cookie. */
+  async function signInAdmin(email: string, totpSecret?: string): Promise<string> {
     const ip = clientIp();
     const response = await expectOk(
       await request('POST', '/api/admin/auth/sign-in/email', {
         body: { email, password: PASSWORD },
         ip,
       }),
-      'Staff sign-in',
+      'Admin sign-in',
     );
     const body = (await response.clone().json()) as { twoFactorRedirect?: boolean };
     if (!body.twoFactorRedirect) return cookieHeader(response);
-    if (!totpSecret) throw new Error('Staff sign-in needs a TOTP secret');
+    if (!totpSecret) throw new Error('Admin sign-in needs a TOTP secret');
     const verified = await request('POST', '/api/admin/auth/two-factor/verify-totp', {
       cookie: cookieHeader(response),
       body: { code: totp(totpSecret) },
@@ -205,7 +205,7 @@ export function api(url: string) {
     return cookieHeader(await expectOk(verified, 'TOTP step'));
   }
 
-  /** Enrols TOTP for a signed-in staff member, the way the panel's setup page does. */
+  /** Enrols TOTP for the signed-in admin, the way the panel's setup page does. */
   async function enrolTotp(cookie: string): Promise<{ secret: string; cookie: string }> {
     const enabled = await expectOk(
       await request('POST', '/api/admin/auth/two-factor/enable', {
@@ -226,11 +226,11 @@ export function api(url: string) {
     return { secret, cookie: cookieHeader(verified) || cookie };
   }
 
-  /** Seeds a staff member, enrols TOTP and returns them signed in with it. */
-  async function staffWithTotp(db: Database, role: StaffRole) {
-    const member = await seedStaff(db, { role });
-    const { secret } = await enrolTotp(await signInStaff(member.email));
-    return { ...member, secret, cookie: await signInStaff(member.email, secret) };
+  /** Seeds the admin, enrols TOTP and returns the admin signed in with it. */
+  async function adminWithTotp(db: Database) {
+    const admin = await seedAdmin(db);
+    const { secret } = await enrolTotp(await signInAdmin(admin.email));
+    return { ...admin, secret, cookie: await signInAdmin(admin.email, secret) };
   }
 
   return {
@@ -238,8 +238,8 @@ export function api(url: string) {
     get: (path: string, options?: RequestOptions) => request('GET', path, options),
     post: (path: string, options?: RequestOptions) => request('POST', path, options),
     signInCustomer,
-    signInStaff,
+    signInAdmin,
     enrolTotp,
-    staffWithTotp,
+    adminWithTotp,
   };
 }
