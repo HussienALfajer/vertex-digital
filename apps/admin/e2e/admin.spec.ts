@@ -77,6 +77,8 @@ test('the admin without TOTP enrols before reaching the panel', async ({ page, a
   await page.goto('/login');
   await signInWithPassword(page);
   await expect(page).toHaveURL(/\/setup-two-factor$/);
+  // The sign-in page has a password field with the same label: fill only once it is gone.
+  await expect(page.getByRole('heading', { name: ar.twoFactorSetup.title })).toBeVisible();
 
   await page.getByLabel(ar.twoFactorSetup.password, { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: ar.twoFactorSetup.start }).click();
