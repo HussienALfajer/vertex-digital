@@ -17,9 +17,10 @@ Spec: `docs/specs/S01-accounts.md` (F01 customer accounts, F02 admin account, 2F
 - [x] Checks (lint, typecheck, test, build, drift, e2e), reviewer (7 blocking findings fixed: code-check enumeration, decoy codes unmatchable, cursor precision, query parameters out of logs, pg-boss producer errors, CLI password kept, email-change code per customer), owner acceptance (2026-10-07), PR with auto-merge
 
 ## PR 2 — Store and admin screens, E2E (`feat/s01-accounts-screens`) · Opus 5.5 `medium`
-- [ ] Error codes of S01 in the store and admin catalogs, read by code (`errorMessage` maps API codes, not only Better Auth ones)
-- [ ] Store: `/sign-up`, `/verify-email`, `/sign-in` updates, `/forgot-password`, `/account`, `/account/email`, header account menu, closed-registration state; i18n, loading and error states
-- [ ] Admin: `/change-password`, re-authentication dialog, idle-expiry notice, `/account` (password, backup codes, sessions), `/audit` with filters and detail sheet, `/test-customers`, navigation; i18n
-- [ ] E2E: flows and RTL screenshots (store dark at phone width; admin light and dark)
-- [ ] Wiring checklist, "Patterns to copy" in `wiring.md`, `docs/ROADMAP.md` (S01 done)
-- [ ] Checks (lint, typecheck, test, build, e2e), reviewer, owner acceptance in the browser (spec "Acceptance"), PR with auto-merge
+- [x] Error codes of S01 in the store and admin catalogs, read by code (`errorMessage` maps API codes, not only Better Auth ones)
+- [x] Api: `GET /api/auth/registration` (`{ open }`), so the store hides sign-up while it is closed (rule C16); OpenAPI and admin client regenerated
+- [x] Store: `/sign-up`, `/verify-email`, `/sign-in` updates, `/forgot-password`, `/account`, `/account/email`, header account menu, closed-registration state; i18n, loading and error states
+- [x] Admin: `/change-password`, re-authentication dialog, idle-expiry notice, `/account` (password, backup codes, sessions), `/audit` with filters and detail sheet, `/test-customers`, navigation; i18n
+- [x] E2E: flows and RTL screenshots (store dark at phone width; admin light and dark)
+- [x] Wiring checklist, "Patterns to copy" in `wiring.md`, `docs/ROADMAP.md` (S01 done)
+- [x] Checks (lint, typecheck, test, build, e2e), reviewer (3 blocking findings fixed: idle notice lost on focus refetch, re-authentication wrapper on every admin mutation, registration read failure shown as closed), owner acceptance (2026-10-08), PR with auto-merge

@@ -25,9 +25,11 @@ export const CUSTOMER_AUTH_BASE_PATH = '/api/auth';
 
 /**
  * Paths under `/api/auth` that the auth module's Nest routes serve instead of Better Auth: every
- * change to an account, so the change, its audit entry and its emails share one transaction.
+ * change to an account, so the change, its audit entry and its emails share one transaction, and
+ * whether sign-up is open.
  */
 export const CUSTOMER_AUTH_NEST_PATHS = [
+  '/registration',
   '/sign-up/email',
   '/email-otp/send-verification-otp',
   '/email-otp/request-password-reset',

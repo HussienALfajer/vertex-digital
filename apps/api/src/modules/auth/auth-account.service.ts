@@ -82,6 +82,11 @@ export class AuthAccountService {
     private readonly notifications: NotificationsService,
   ) {}
 
+  /** Rule C16: whether sign-up is open, so the store shows or hides it. */
+  registrationOpen(): boolean {
+    return this.env.REGISTRATION_OPEN;
+  }
+
   /** Rule C1, C2, C16: the same answer whether or not the email has an account. */
   async signUp(
     input: { name: string; email: string; password: string; phone: string },
