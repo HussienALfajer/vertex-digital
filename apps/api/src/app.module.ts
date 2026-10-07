@@ -2,16 +2,20 @@ import { Module, StandardSchemaSerializerInterceptor } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
-import { AccessGuard } from './core/access/index.js';
+// Straight from the file: the guard reads the modules, whose controllers use `core/access`.
+import { AccessGuard } from './core/access/access.guard.js';
 import { AltchaGuard, AltchaModule } from './core/altcha/index.js';
 import { ConfigModule } from './core/config/config.module.js';
 import { ENV, type Env } from './core/config/env.js';
 import { DatabaseModule } from './core/database/database.module.js';
 import { createValidationPipe, ErrorFilter } from './core/errors/index.js';
+import { JobsModule } from './core/jobs/index.js';
 import { throttlerOptions } from './core/rate-limit/rate-limit.js';
+import { AdminModule } from './modules/admin/index.js';
+import { AuditModule } from './modules/audit/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { HealthModule } from './modules/health/index.js';
-import { StaffModule } from './modules/staff/index.js';
+import { NotificationsModule } from './modules/notifications/index.js';
 
 @Module({
   imports: [
@@ -32,10 +36,13 @@ import { StaffModule } from './modules/staff/index.js';
       }),
     }),
     DatabaseModule,
+    JobsModule,
     ThrottlerModule.forRoot(throttlerOptions),
     AltchaModule,
+    NotificationsModule,
     AuthModule,
-    StaffModule,
+    AdminModule,
+    AuditModule,
     HealthModule,
   ],
   providers: [

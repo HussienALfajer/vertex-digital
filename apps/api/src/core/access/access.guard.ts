@@ -1,19 +1,20 @@
 import type { IncomingHttpHeaders } from 'node:http';
 import { type CanActivate, type ExecutionContext, Injectable, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { hasPermission } from '@vertex-digital/contracts';
+import { ADMIN_SESSION_RULES, BACKGROUND_REQUEST_HEADER } from '@vertex-digital/contracts';
+import { AdminAuthService } from '../../modules/admin/index.js';
 import { AuthService } from '../../modules/auth/index.js';
-import { StaffAuthService } from '../../modules/staff/index.js';
 import { CodedException } from '../errors/index.js';
-import { ACCESS, type RouteAccess } from './access.decorators.js';
+import { ACCESS, type RouteAccess, SENSITIVE } from './access.decorators.js';
 import type { AuthenticatedRequest } from './current-user.decorator.js';
 
 type GuardedRequest = AuthenticatedRequest & { headers: IncomingHttpHeaders };
 
 /**
- * Enforces `@Public()`, `@CustomerRoute()` and `@StaffRoute()` on every route (ADR 0007, 0011).
- * Customer routes read only the customer session cookie and staff routes only the staff one, so a
- * session of one kind never opens a route of the other. A route without a declaration is refused.
+ * Enforces `@Public()`, `@CustomerRoute()`, `@AdminRoute()` and `@AdminSetupRoute()` on every
+ * route (ADR 0007, 0011, 0016). Customer routes read only the customer session cookie and admin
+ * routes only the admin one, so a session of one kind never opens a route of the other. A route
+ * without a declaration is refused.
  */
 @Injectable()
 export class AccessGuard implements CanActivate {
@@ -22,14 +23,12 @@ export class AccessGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly customers: AuthService,
-    private readonly staff: StaffAuthService,
+    private readonly admins: AdminAuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const access = this.reflector.getAllAndOverride<RouteAccess | undefined>(ACCESS, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const targets = [context.getHandler(), context.getClass()];
+    const access = this.reflector.getAllAndOverride<RouteAccess | undefined>(ACCESS, targets);
     const request = context.switchToHttp().getRequest<GuardedRequest>();
 
     switch (access?.kind) {
@@ -46,18 +45,35 @@ export class AccessGuard implements CanActivate {
         request.customer = customer;
         return true;
       }
-      case 'staff': {
-        const member = await this.staff.staffOf(request.headers);
-        if (!member || member.archived) {
+      case 'admin':
+      case 'adminSetup': {
+        // Requests the panel makes on its own (polling) do not count as activity (rule D4).
+        const background = request.headers[BACKGROUND_REQUEST_HEADER] === '1';
+        const admin = await this.admins.adminOf(request.headers, { activity: !background });
+        if (!admin || admin.archived) {
           throw new CodedException(401, 'UNAUTHORIZED', 'Sign in first');
         }
-        if (!member.twoFactorEnabled) {
-          throw new CodedException(403, 'TWO_FACTOR_REQUIRED', 'Set up two-factor sign-in first');
+        if (access.kind === 'admin') {
+          if (admin.mustChangePassword) {
+            throw new CodedException(403, 'PASSWORD_CHANGE_REQUIRED', 'Change the password first');
+          }
+          if (!admin.twoFactorEnabled) {
+            throw new CodedException(403, 'TWO_FACTOR_REQUIRED', 'Set up two-factor sign-in first');
+          }
+          const sensitive = this.reflector.getAllAndOverride<boolean>(SENSITIVE, targets);
+          const fresh =
+            admin.reauthenticatedAt !== null &&
+            Date.now() - admin.reauthenticatedAt.getTime() <=
+              ADMIN_SESSION_RULES.reauthenticationMs;
+          if (sensitive && !fresh) {
+            throw new CodedException(
+              403,
+              'REAUTHENTICATION_REQUIRED',
+              'Confirm your password and code first',
+            );
+          }
         }
-        if (!access.permissions.every((permission) => hasPermission(member.role, permission))) {
-          throw new CodedException(403, 'FORBIDDEN', 'Your role does not allow this');
-        }
-        request.staff = member;
+        request.admin = admin;
         return true;
       }
       default:

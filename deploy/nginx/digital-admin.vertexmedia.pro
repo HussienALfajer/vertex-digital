@@ -1,8 +1,8 @@
-# digital-admin.vertexmedia.pro: the Vertex Digital staff panel (docs/deployment.md, ADR 0007,
+# digital-admin.vertexmedia.pro: the Vertex Digital admin panel (docs/deployment.md, ADR 0007,
 # 0009). Installed by deploy/provision.sh as /etc/nginx/sites-available/digital-admin.vertexmedia.pro;
 # edit it in the repository, never on the server.
 #
-# The panel's build is served from the current release; only the staff API (/api/admin) and the
+# The panel's build is served from the current release; only the admin API (/api/admin) and the
 # ALTCHA challenge its sign-in may need are proxied. Customer routes are not served here.
 
 server {
@@ -42,21 +42,21 @@ server {
 
     # --- API -----------------------------------------------------------------------------
     # Password and TOTP guessing: a tight limit on top of Better Auth's own and its ALTCHA step.
-    # Regex locations match in order: this one must come before the general staff route.
-    location ~* ^/api/admin/auth/(?:sign-in/email|two-factor/verify-totp|two-factor/verify-backup-code)/?$ {
+    # Regex locations match in order: this one must come before the general admin route.
+    location ~* ^/api/admin/(?:auth/(?:sign-in/email|two-factor/[a-z-]+|change-password)|me/reauthenticate)/?$ {
         limit_req zone=vdsignin burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;
         include snippets/vertexdigital-proxy.conf;
     }
 
-    # Staff routes only. Case-insensitive, as the API matches routes.
+    # Admin routes only. Case-insensitive, as the API matches routes.
     location ~* ^/api/admin/ {
         proxy_pass http://127.0.0.1:3060;
         include snippets/vertexdigital-proxy.conf;
     }
 
-    # The proof of work the staff sign-in asks for after repeated failures (ADR 0008).
+    # The proof of work the admin sign-in asks for after repeated failures (ADR 0008).
     location = /api/altcha/challenge {
         limit_req zone=vdsignin burst=10 nodelay;
         limit_req_status 429;

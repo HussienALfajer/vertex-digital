@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
 import type { ErrorCode, ErrorResponse } from '@vertex-digital/contracts';
+import { withoutQueryParameters } from '@vertex-digital/db';
 import type { Response } from 'express';
 import { CodedException } from './coded-exception.js';
 
@@ -55,8 +56,10 @@ export class ErrorFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const { body, fault } = errorResponseOf(exception);
     if (fault) {
-      this.logger.error(exception);
-      Sentry.captureException(exception);
+      // Never a query's parameters (codes, emails, hashes) in the logs or Sentry.
+      const reported = withoutQueryParameters(exception);
+      this.logger.error(reported);
+      Sentry.captureException(reported);
     }
     host.switchToHttp().getResponse<Response>().status(body.statusCode).json(body);
   }

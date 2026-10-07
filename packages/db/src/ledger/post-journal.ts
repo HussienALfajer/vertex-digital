@@ -17,7 +17,7 @@ export interface PostingInput {
 }
 
 export interface JournalInput {
-  /** The money event's unique key (ADR 0003): the deposit id, `order:<id>:<step>`, the staff action id. */
+  /** The money event's unique key (ADR 0003): the deposit id, `order:<id>:<step>`, the admin action id. */
   idempotencyKey: string;
   kind: JournalKind;
   postings: readonly PostingInput[];

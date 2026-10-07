@@ -32,13 +32,6 @@
     "menu": "قائمة الحساب",
     "signOut": "تسجيل الخروج"
   },
-  "roles": {
-    "owner": "المالك",
-    "manager": "مدير",
-    "order_operator": "مشغّل الطلبات",
-    "deposit_reviewer": "مراجع الإيداعات",
-    "support": "الدعم"
-  },
   "home": {
     "title": "مرحبًا، {{name}}",
     "subtitle": "هذه لوحة إدارة Vertex Digital.",

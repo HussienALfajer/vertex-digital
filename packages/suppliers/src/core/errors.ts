@@ -3,7 +3,7 @@ import type { SupplierOutcome } from './adapter.js';
 /**
  * A failed supplier call (ADR 0005): `retryable` (timeouts, connection errors, 408, 409, 425,
  * 429, 5xx, an unexpected reply, a refusal the adapter has not mapped) or `definitive` (a refusal
- * whose code the adapter maps as definitive). The supplier's own code is kept for staff and for
+ * whose code the adapter maps as definitive). The supplier's own code is kept for the admin and for
  * each adapter's error mapping.
  */
 export class SupplierError extends Error {

@@ -121,7 +121,7 @@ function SignInForm({
       setFailure(errorMessage(t, error));
       return;
     }
-    // Staff with 2FA get a second step before the session exists.
+    // With 2FA enrolled, the admin gets a second step before the session exists.
     if (data && 'twoFactorRedirect' in data && data.twoFactorRedirect) return onTwoFactor();
     await onSignedIn();
   });

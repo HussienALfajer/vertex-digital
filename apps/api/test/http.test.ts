@@ -101,25 +101,25 @@ describe('origin checks', () => {
 
   it('refuse any browser request to /api/admin that is not from the admin origin, reads included', async () => {
     for (const origin of ['http://127.0.0.1:3001', 'https://evil.example']) {
-      expect(await body(await client.get('/api/admin/probe/staff', { origin }))).toMatchObject({
+      expect(await body(await client.get('/api/admin/probe/admin', { origin }))).toMatchObject({
         status: 403,
         code: 'CROSS_ORIGIN_REFUSED',
       });
     }
     expect(
       (
-        await client.get('/api/admin/probe/staff', {
+        await client.get('/api/admin/probe/admin', {
           origin: null,
           headers: { 'sec-fetch-site': 'same-site' },
         })
       ).status,
     ).toBe(403);
     // From the admin origin it reaches the access check.
-    expect((await client.get('/api/admin/probe/staff')).status).toBe(401);
+    expect((await client.get('/api/admin/probe/admin')).status).toBe(401);
   });
 
   it('apply the admin rule whatever the case of the path, with or without a query', async () => {
-    for (const path of ['/API/ADMIN/probe/staff', '/Api/Admin/probe/staff', '/api/admin?x=1']) {
+    for (const path of ['/API/ADMIN/probe/admin', '/Api/Admin/probe/admin', '/api/admin?x=1']) {
       expect((await client.get(path, { origin: 'http://127.0.0.1:3001' })).status, path).toBe(403);
     }
   });

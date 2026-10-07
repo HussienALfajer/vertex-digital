@@ -4,8 +4,8 @@ NestJS standalone context for background work (ADR 0001, 0002): pg-boss queues a
 
 ## Layout
 - `src/main.ts` (imports `instrument.ts` first: Sentry), `src/worker.module.ts`.
-- `src/core/`: `config` (Zod env), `database` (`DATABASE` token, app role), `jobs/pg-boss.service.ts`, `alerts/telegram-alerts.ts`, `alerts/scrub-breadcrumb.ts` (keeps the bot token out of Sentry).
-- `src/jobs/<area>/<name>.job.ts`: one queue per file. Pattern to copy: `src/jobs/system/heartbeat.job.ts`. The Telegram bot (F07) goes under `src/telegram/`.
+- `src/core/`: `config` (Zod env), `database` (`DATABASE` token, app role), `jobs/pg-boss.service.ts`, `alerts/telegram-alerts.ts`, `alerts/scrub-breadcrumb.ts` (keeps the bot token out of Sentry), `email/mailer.ts` (Nodemailer over SMTP, or `.eml` files under `EMAIL_LOG_DIR` when `EMAIL_TRANSPORT=log`, the default outside production).
+- `src/jobs/<area>/<name>.job.ts`: one queue per file. Pattern to copy: `src/jobs/system/heartbeat.job.ts` (scheduled), `src/jobs/email/send-email.job.ts` (a row locked and settled once, failures recorded and retried). `jobs/email/`: `email.send`, `email.purge-codes` and the Arabic templates (`email-templates.ts`). The Telegram bot (F07) goes under `src/telegram/`.
 
 ## Rules
 - Queue names are `<area>.<action>` (`system.heartbeat`), exported as constants next to the job; names shared with the API go in `packages/contracts`.
@@ -13,11 +13,11 @@ NestJS standalone context for background work (ADR 0001, 0002): pg-boss queues a
 - Every job is idempotent: pg-boss retries, so running it twice leaves the same result (upsert, check-then-act inside a transaction, idempotency keys on supplier calls).
 - Payloads carry ids, not records: load fresh data inside the job.
 - pg-boss runs as the app role (ADR 0014): `createPgBoss` from `@vertex-digital/db` never creates or migrates tables and never rebuilds indexes. Queues are unpartitioned (rows only). pg-boss's tables are installed by the owner with the migrations.
-- Money moves only through `postJournal`, order states only through the order write path in `packages/db` (ADR 0003, 0004). Supplier calls go through `packages/suppliers`; a call with an unknown outcome is resolved by polling, then staff, before any other route (ADR 0005).
+- Money moves only through `postJournal`, order states only through the order write path in `packages/db` (ADR 0003, 0004). Supplier calls go through `packages/suppliers`; a call with an unknown outcome is resolved by polling, then the admin, before any other route (ADR 0005).
 - Alerts: `TelegramAlerts.send(text)` (rate limited, repeats suppressed for ten minutes, off without `TELEGRAM_BOT_TOKEN`). Never put tokens, keys, receipts or personal data in an alert; ids and error messages only.
 - Logs through the Nest logger, never `console.log`.
 
 ## Tests
-`test/` against the test database with a unique `WORKER_NAME` per run; the Telegram channel against a local fake Bot API. Nothing calls Telegram, a supplier or a chain in tests. Vitest emits decorator metadata through oxc (`vitest.config.ts`).
+`test/` against the test database with a unique `WORKER_NAME` and `EMAIL_LOG_DIR` per run (emails are files, never sent); the Telegram channel against a local fake Bot API. Nothing calls Telegram, a supplier or a chain in tests. Vitest emits decorator metadata through oxc (`vitest.config.ts`).
 
 Run: `pnpm --filter @vertex-digital/worker test` · `pnpm --filter @vertex-digital/worker typecheck`.

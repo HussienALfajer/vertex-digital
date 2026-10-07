@@ -52,7 +52,7 @@ export const ledgerAccounts = pgTable(
 );
 
 /**
- * One money event. The idempotency key (the deposit id, `order:<id>:<step>`, the staff action
+ * One money event. The idempotency key (the deposit id, `order:<id>:<step>`, the admin action
  * id) is unique: the same event is never posted twice. `posting_count` is how many postings the
  * journal has; the commit check refuses any other number, so no posting can be added to a journal
  * later. `created_at` is set by the database at insert, whatever the insert says.
