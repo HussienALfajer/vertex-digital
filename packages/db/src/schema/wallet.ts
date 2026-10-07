@@ -7,6 +7,7 @@ import {
 } from '@vertex-digital/contracts';
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   check,
   foreignKey,
   index,
@@ -15,7 +16,6 @@ import {
   pgTable,
   text,
   timestamp,
-  type AnyPgColumn,
   unique,
   uniqueIndex,
   uuid,
@@ -173,10 +173,7 @@ export const walletAdjustments = pgTable(
       'wallet_adjustments_amount_check',
       sql`${table.amountUsdUnits} > 0 and ${table.amountUsdUnits} % 10000 = 0`,
     ),
-    check(
-      'wallet_adjustments_reason_check',
-      sql`char_length(${table.reason}) between 5 and 500`,
-    ),
+    check('wallet_adjustments_reason_check', sql`char_length(${table.reason}) between 5 and 500`),
     check(
       'wallet_adjustments_customer_note_check',
       sql`char_length(${table.customerNote}) between 1 and 200`,

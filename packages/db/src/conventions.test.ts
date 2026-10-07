@@ -29,7 +29,8 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   worker_heartbeats: 'One row per worker process, overwritten every minute',
   customer_rate_limits: 'Better Auth and code-send counters: overwritten, pruned when stale',
   audit_entries: 'Append-only audit log (ADR 0011): never updated or archived; occurred_at instead',
-  wallet_adjustments: 'Append-only (S02): corrected by a reversal or a new adjustment, never changed',
+  wallet_adjustments:
+    'Append-only (S02): corrected by a reversal or a new adjustment, never changed',
   email_outbox: 'A delivery record: its status changes, it is never archived (S01)',
 };
 

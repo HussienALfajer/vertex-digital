@@ -236,7 +236,8 @@ describe('append-only trigger', () => {
   );
 
   it('refuses TRUNCATE to the app role and to the owner', async () => {
-    const statement = 'truncate ledger_journals, ledger_postings';
+    // Every table that references the journals is named, or the foreign keys refuse first.
+    const statement = 'truncate ledger_journals, ledger_postings, wallet_adjustments';
     await rolledBack(async (client) => {
       await expect(client.query(statement)).rejects.toThrow(/permission denied/);
     });
@@ -400,7 +401,7 @@ describe('ledger constraints', () => {
     );
   });
 
-  it("never moves a wallet to another customer (S02)", async () => {
+  it('never moves a wallet to another customer (S02)', async () => {
     const wallet = await createAccount('customer_wallet', 'USD', await createCustomer());
     const other = await createCustomer();
     await rolledBack(async (client) => {
