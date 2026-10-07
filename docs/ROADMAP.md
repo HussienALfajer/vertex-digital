@@ -1,6 +1,6 @@
 # Roadmap
 
-Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs refer to `docs/product/v1-scope.md`. Production is deployed once at the end of each phase (`docs/workflow.md`).
+Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs (F, A) refer to `docs/product/v1-scope.md`. Work is grouped into specs (S01–S15): one spec, one `/spec` session, covering related features; the money cores (F03, F11) and the external-money integrations (F06, F09) stay alone. Production is deployed once at the end of each phase (`docs/workflow.md`).
 
 ## Phase 0 — Foundation
 - [x] Product scope, decisions and working method documented; Claude Code setup (settings, `checker` and `reviewer` subagents, skills `spec`, `feature-slice`, `db-migration`, `supplier-adapter` (no shipping skill: every task opens its PR with auto-merge at once), Biome hook, spec template)
@@ -18,41 +18,29 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] Deployment skeleton: `deploy/` (both hosts, TLS, nginx limits and headers, Brotli when available, fail2ban jail, PM2 store/api/worker, atomic releases with rollback, health checks, daily backups) and `docs/deployment.md` written; provisioned and first deployed on 2026-10-07
 
 ## Phase 1 — Money core
-- [ ] F01 Customer accounts
-- [ ] F02 Staff accounts, roles, 2FA and audit log
-- [ ] F03 Wallet and ledger
-- [ ] F04 Exchange rate and SYP display
-- [ ] F05 Sham Cash deposits
-- [ ] F06 USDT deposits
-- [ ] F07 Telegram admin bot
-- [ ] F26 Store switches and emergency stop (registration closed by default)
-- [ ] F27 Customer notifications (email and notification center; deposit events)
-- [ ] Automations A01, A09, A10, A12, A13, A16, A17
+- [ ] S01 Accounts: F01 Customer accounts · F02 Staff accounts, roles, 2FA and audit log
+- [ ] S02 Wallet and ledger: F03 alone (money core)
+- [ ] S03 Exchange rate and Sham Cash deposits: F04 Exchange rate and SYP display · F05 Sham Cash deposits
+- [ ] S04 USDT deposits: F06 alone
+- [ ] S05 Alerts and control: F07 Telegram admin bot · F27 Customer notifications (email and notification center; deposit events) · F26 Store switches and emergency stop (registration closed by default)
+- Automations A01, A09, A10, A12, A13, A16, A17: each is specified and built inside the spec it belongs to, not as a separate item
 - [ ] Production deploy of Phase 1 (registration closed: test customers only)
 
 ## Phase 2 — Selling
-- [ ] F08 Catalog
-- [ ] F09 Suppliers, product mapping and price sync (adapters: `shop2topup`, `wdgzone`, `manual`)
-- [ ] F10 Pricing engine
-- [ ] F11 Orders and fulfilment engine
-- [ ] F12 Store home and game pages
-- [ ] F13 Purchase flow and live order tracking
-- [ ] F14 Saved player IDs and one-tap recharge
-- [ ] F15 Smart search
-- [ ] F16 Cart, gift top-up and shareable receipt
-- [ ] Automations A02–A08, A14, A15 (order notifications through F27)
+- [ ] S06 Catalog and pricing: F08 Catalog · F10 Pricing engine
+- [ ] S07 Suppliers: F09 alone (product mapping and price sync; adapters `shop2topup`, `wdgzone`, `manual`)
+- [ ] S08 Orders and fulfilment: F11 alone (money core)
+- [ ] S09 Storefront and purchase: F12 Store home and game pages · F13 Purchase flow and live order tracking · F15 Smart search
+- [ ] S10 Convenience: F14 Saved player IDs and one-tap recharge · F16 Cart, gift top-up and shareable receipt
+- Automations A02–A08, A14, A15 (order notifications through F27): inside the spec they belong to
 - [ ] Production deploy of Phase 2 (registration still closed)
 
 ## Phase 3 — Operations
-- [ ] F17 Live orders room
-- [ ] F18 Admin dashboard
-- [ ] F19 Customers administration
-- [ ] F20 Daily reconciliation (A11)
-- [ ] F21 Content
-- [ ] F22 Reports
-- [ ] F23 Support tickets
-- [ ] F24 PWA and web push
-- [ ] F25 Live activity
+- [ ] S11 Live operations: F17 Live orders room · F18 Admin dashboard
+- [ ] S12 Customers and support: F19 Customers administration · F23 Support tickets
+- [ ] S13 Reconciliation and reports: F20 Daily reconciliation (A11) · F22 Reports
+- [ ] S14 Content and live activity: F21 Content · F25 Live activity
+- [ ] S15 PWA and web push: F24 alone
 - [ ] Production deploy of Phase 3
 
 ## Pilot — open quiet launch

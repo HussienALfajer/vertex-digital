@@ -12,7 +12,7 @@ How Vertex Digital is built with Claude Code (Opus 5.5). The method is the one t
 
 ## The feature cycle
 
-A feature runs through separate sessions. Each session ends with a merged PR (or a finished deploy) and `/clear`, so the next one starts from files and git, not from a long conversation. Set the model and effort before the first message of each session.
+A feature runs through separate sessions. The unit is a spec from `docs/ROADMAP.md` (`S01`…`S15`), which may group related features; `<id>` below is that spec id. Each session ends with a merged PR (or a finished deploy) and `/clear`, so the next one starts from files and git, not from a long conversation. Set the model and effort before the first message of each session.
 
 | # | Session | Model and effort | First message | The owner | Ends with |
 |---|---|---|---|---|---|
@@ -21,6 +21,7 @@ A feature runs through separate sessions. Each session ends with a merged PR (or
 | 3 | Front-end PR | Opus 5.5, `medium` | `/feature-slice <id>` | Runs the acceptance steps in the browser (store and/or admin) | PR 2 (store/admin, E2E) opened with auto-merge; `docs/ROADMAP.md` marks the feature done |
 | 4 | Phase deploy (once per phase) | Opus 5.5, `low` | `Deploy phase <n> to production` | Approves the deploy; checks the live site | Deploy done, the phase's deploy item ticked in `docs/ROADMAP.md` |
 
+- A grouped spec usually needs more than two PRs: `/feature-slice` splits it per feature or per layer so each PR stays reviewable; the spec is done when its last PR merges.
 - A small feature (about one table and one screen) does sessions 2 and 3 in one session and one PR.
 - A new supplier or a supplier API change runs `/supplier-adapter <code>` in its own session at `high`.
 - `/feature-slice` reads `TASKS.md` and continues from the first open PR, so a session can stop between PRs and a new one picks up. `TASKS.md` is committed with each PR.
