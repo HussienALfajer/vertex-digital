@@ -599,3 +599,82 @@ describe('the account (rules C11–C14)', () => {
     }
   });
 });
+
+describe('code checks tell nothing about accounts (rules C2, C12)', () => {
+  const wrongTries = async (send: () => Promise<Response>) => {
+    const codes: unknown[] = [];
+    for (let attempt = 0; attempt < 6; attempt += 1) codes.push((await body(await send())).code);
+    return codes;
+  };
+  const expected = [...Array(5).fill('INVALID_OTP'), 'TOO_MANY_ATTEMPTS'];
+
+  it('answers wrong reset codes the same for known and unknown emails', async () => {
+    const known = await seedCustomer(test.db);
+    seeded.push(known.id);
+    const unknown = uniqueEmail('ghost');
+    for (const email of [known.email, unknown]) {
+      await client.post('/api/auth/email-otp/request-password-reset', {
+        body: { email },
+        headers: await client.altcha(),
+      });
+      const tries = await wrongTries(() =>
+        client.post('/api/auth/email-otp/reset-password', {
+          body: { email, otp: '999999', password: NEW_PASSWORD },
+        }),
+      );
+      expect(tries, email).toEqual(expected);
+    }
+  });
+
+  it('answers wrong verification codes the same after a sign-up with a taken or a new email', async () => {
+    const taken = await seedCustomer(test.db);
+    seeded.push(taken.id);
+    const fresh = uniqueEmail('fresh-verify');
+    for (const email of [taken.email, fresh]) {
+      await signUp(email);
+      const tries = await wrongTries(() => verify(email, '999999'));
+      // A real code of 999999 is possible: one in a million, and the test would show it.
+      expect(tries, email).toEqual(expected);
+    }
+    await idOf(fresh);
+  });
+
+  it('answers wrong email-change codes the same for a taken and a free address', async () => {
+    const { cookie } = await signedUp('mover');
+    const owner = await seedCustomer(test.db);
+    seeded.push(owner.id);
+    for (const newEmail of [owner.email, uniqueEmail('free')]) {
+      await client.post('/api/auth/email-otp/request-email-change', {
+        cookie,
+        body: { newEmail, password: PASSWORD },
+        headers: await client.altcha(),
+      });
+      const tries = await wrongTries(() =>
+        client.post('/api/auth/email-otp/change-email', {
+          cookie,
+          body: { newEmail, otp: '999999' },
+        }),
+      );
+      expect(tries, newEmail).toEqual(expected);
+    }
+  });
+
+  it('voids the code for an earlier address when a change to another one is asked', async () => {
+    const { cookie } = await signedUp('second-thoughts');
+    const first = uniqueEmail('first-choice');
+    const second = uniqueEmail('second-choice');
+    for (const newEmail of [first, second]) {
+      await client.post('/api/auth/email-otp/request-email-change', {
+        cookie,
+        body: { newEmail, password: PASSWORD },
+        headers: await client.altcha(),
+      });
+    }
+    const confirm = (newEmail: string, otp: string) =>
+      client.post('/api/auth/email-otp/change-email', { cookie, body: { newEmail, otp } });
+    expect(await body(await confirm(first, await lastCode(test.db, first)))).toMatchObject({
+      code: 'INVALID_OTP',
+    });
+    expect((await confirm(second, await lastCode(test.db, second))).status).toBe(200);
+  });
+});

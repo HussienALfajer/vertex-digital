@@ -53,13 +53,13 @@ vertex-digital/
 
 ## API modules
 
-Planned; each spec confirms its module's tables and exports.
+Planned; each spec confirms its module's tables and exports. Built so far: `auth`, `admin`, `audit`, `notifications` (S01) and `health`.
 
 | Module | Owns | Feature |
 |---|---|---|
-| `auth` | Customer Better Auth tables, customer profiles, devices | F01 |
-| `admin` | The admin Better Auth tables (one account, ADR 0016), Telegram link | F02, F07 |
-| `audit` | `audit_entries`; exports `recordAudit` (below every other module) | F02 |
+| `auth` | Customer Better Auth tables, `customer_rate_limits` (code and sign-up counters), account changes (Nest routes in front of Better Auth under `/api/auth`, so each change is audited in its transaction), `/api/account`, test customers | F01 |
+| `admin` | The admin Better Auth tables (one account, ADR 0016), the CLI account functions, the password change, re-authentication and own sessions; Telegram link later | F02, F07 |
+| `audit` | Reads `audit_entries` for the audit log; every module writes its entries with `recordAudit` from `packages/db/src/audit`, in its own transaction | F02 |
 | `wallet` | Ledger accounts, journals, postings (through `packages/db/src/ledger`); balances and timelines | F03 |
 | `rates` | Exchange rates and their history, SYP rounding settings, rate locks | F04 |
 | `deposits` | Deposits, Sham Cash receipts and review, USDT intents and verifications, fraud flags | F05, F06 |
@@ -83,7 +83,7 @@ Planned; each spec confirms its module's tables and exports.
 Rules (anatomy and the tests that enforce them: ADR 0011):
 - A module owns its tables. Other modules call its exported services; they never query its tables.
 - `audit`, `files`, `notifications` and `settings` sit below the domain modules and never import them.
-- The API core (`apps/api/src/core`) holds no business logic: config, database, access decorators and guard, errors, rate limits, ALTCHA, the origin check.
+- The API core (`apps/api/src/core`) holds no business logic: config, database, access decorators and guard, errors, rate limits, ALTCHA, the origin check, the pg-boss producer (`core/jobs`: jobs sent in the caller's transaction), cursor lists.
 - pg-boss runs as the app role; its tables are installed by the owner role with the migrations (ADR 0014).
 - `packages/db/src/ledger` is the only way to write the ledger; `packages/db/src/orders` is the only way to change an order's state. Both are used by the API and the worker.
 - Slow, scheduled or external work goes through pg-boss; the worker never serves HTTP.
@@ -96,7 +96,7 @@ Rules (anatomy and the tests that enforce them: ADR 0011):
 | Suppliers | `suppliers.webhook` (process stored events), `suppliers.sync-prices` (A06), `suppliers.balances` (A07), `suppliers.health` (A08) |
 | Deposits | `deposits.usdt-verify` (A01), `deposits.review-reminder` (A09) |
 | Money | `reconciliation.nightly` (A11) |
-| Messaging | `email.send`, `push.send`, `telegram.*` (admin bot, alerts, daily summary) |
+| Messaging | `email.send` (one outbox row; files locally, SMTP in production), `email.purge-codes` (every 10 minutes), `push.send`, `telegram.*` (admin bot, alerts, daily summary) |
 | System | `system.heartbeat` (every minute: `worker_heartbeats`, read by the deploy check) |
 
 ## Request flow
@@ -122,8 +122,8 @@ worker ── pg_notify ──> API ── SSE ──> live order timeline, live
 
 ## Authentication and authorization
 
-- Customers: Better Auth at `/api/auth` (email + password, email OTP verification, ALTCHA, rate limits); phone required in E.164 (ADR 0007).
-- Admin: second Better Auth instance at `/api/admin/auth` with one account and full access (ADR 0016): created and recovered by CLI, mandatory TOTP, re-authentication for sensitive actions; no roles or permission map.
+- Customers: Better Auth at `/api/auth` for sign-in, sign-out and sessions; sign-up, email codes, recovery and account changes are the `auth` module's Nest routes on the same paths (ALTCHA, limits counted in PostgreSQL); phone required in E.164 (ADR 0007, S01).
+- Admin: second Better Auth instance at `/api/admin/auth` with one account and full access (ADR 0016): created and recovered by CLI, forced change of a CLI-issued password, mandatory TOTP, 30-minute idle timeout and 12-hour sessions, re-authentication for routes marked `@Sensitive()`; no roles or permission map.
 - The store and the API share one origin; the admin SPA and its `/api/admin` share another. No CORS is enabled.
 
 ## Data conventions

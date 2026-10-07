@@ -15,12 +15,12 @@ import {
   recordAudit,
 } from '@vertex-digital/db';
 import { hashPassword } from 'better-auth/crypto';
-import { and, desc, eq, lt, or } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
-import { decodeCursor, pageOf } from '../../core/lists/cursor.js';
+import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 
 /** 24 random base64url characters (rules T1, T2, D6). */
 const generatePassword = () => randomBytes(18).toString('base64url');
@@ -50,25 +50,23 @@ export class AuthTestCustomersService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   async list(query: CursorQuery): Promise<TestCustomerPage> {
-    const after = query.cursor ? decodeCursor(query.cursor) : null;
+    const cursor = query.cursor ? decodeCursor(query.cursor) : null;
     const rows = await this.db
-      .select(columns)
+      .select({ ...columns, cursorAt: cursorTime(customers.createdAt) })
       .from(customers)
       .where(
         and(
           eq(customers.isTest, true),
-          after
-            ? or(
-                lt(customers.createdAt, after.at),
-                and(eq(customers.createdAt, after.at), lt(customers.id, after.id)),
-              )
-            : undefined,
+          cursor ? after(customers.createdAt, customers.id, cursor) : undefined,
         ),
       )
       .orderBy(desc(customers.createdAt), desc(customers.id))
       .limit(query.limit + 1);
-    const page = pageOf(rows, query.limit, (row) => ({ at: row.createdAt, id: row.id }));
-    return { items: page.items.map(shape), nextCursor: page.nextCursor };
+    const page = pageOf(rows, query.limit, (row) => ({ at: row.cursorAt, id: row.id }));
+    return {
+      items: page.items.map(({ cursorAt: _, ...row }) => shape(row)),
+      nextCursor: page.nextCursor,
+    };
   }
 
   async create(

@@ -43,7 +43,7 @@ server {
     # --- API -----------------------------------------------------------------------------
     # Password and TOTP guessing: a tight limit on top of Better Auth's own and its ALTCHA step.
     # Regex locations match in order: this one must come before the general admin route.
-    location ~* ^/api/admin/auth/(?:sign-in/email|two-factor/verify-totp|two-factor/verify-backup-code)/?$ {
+    location ~* ^/api/admin/(?:auth/(?:sign-in/email|two-factor/[a-z-]+|change-password)|me/reauthenticate)/?$ {
         limit_req zone=vdsignin burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;

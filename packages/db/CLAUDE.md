@@ -10,6 +10,8 @@ Drizzle schema, migrations, the database client and the shared money write paths
 - `migrations/`: `0000_ledger.sql` and `0002_harsh_boom_boom.sql` (auth and staff tables, heartbeats) and `0003_broad_daimon_hellstrom.sql` (staff tables renamed to admin, ADR 0016) and `0004_s01_accounts.sql` are generated; `0001_ledger_guards.sql` and `0005_audit_guards.sql` (audit append-only, admin primary keys renamed) are hand-written. `migrations/meta/` is drizzle-kit state: never read or edit it.
 - `src/migrate.ts` (`runMigrations`) and `src/cli/migrate.ts`: the Drizzle migrations, then pg-boss's tables (`installPgBoss`), as the owner role under an advisory lock. `pnpm db:migrate`, deploys (`node packages/db/dist/cli/migrate.js`) and the tests' global setup all run it.
 - `src/jobs.ts`: `PG_BOSS_SCHEMA` and `createPgBoss` (app role: no schema changes, no index rebuilds). The `pgboss` schema itself is created, owned by the owner role with default privileges for the app role, by `scripts/setup-local-db.mjs` and the production provisioning.
+- `src/errors.ts`: `withoutQueryParameters(error)`: log and report a failed query by its cause, never with the parameters Drizzle puts in its message.
+- `src/jobs.ts` also exports `transactionExecutor(tx)`: `boss.send(queue, data, { db: transactionExecutor(tx) })` sends a job in the caller's transaction.
 - `src/testing.ts` (`@vertex-digital/db/testing`): test database URLs and the Vitest global setup the apps reuse.
 
 ## Roles (ADR 0014)

@@ -6,6 +6,7 @@ import {
   auditPageSchema,
 } from '@vertex-digital/contracts';
 import { AdminRoute } from '../../core/access/index.js';
+import { ApiQueryOf } from '../../core/http/api-query.js';
 import { AuditService } from './audit.service.js';
 
 /** `GET /api/admin/audit` (S01 rule A4). */
@@ -16,6 +17,7 @@ export class AuditAdminController {
 
   @Get()
   @AdminRoute()
+  @ApiQueryOf(auditListQuerySchema)
   @SerializeOptions({ schema: auditPageSchema })
   @ApiOkResponse({ description: 'Newest first', standardSchema: auditPageSchema })
   list(@Query({ schema: auditListQuerySchema }) query: AuditListQuery) {

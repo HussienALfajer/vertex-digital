@@ -4,7 +4,10 @@ import { TelegramAlerts } from './core/alerts/telegram-alerts.js';
 import { ConfigModule } from './core/config/config.module.js';
 import { ENV, type Env } from './core/config/env.js';
 import { DatabaseModule } from './core/database/database.module.js';
+import { Mailer } from './core/email/mailer.js';
 import { PgBossService } from './core/jobs/pg-boss.service.js';
+import { PurgeCodesJob } from './jobs/email/purge-codes.job.js';
+import { SendEmailJob } from './jobs/email/send-email.job.js';
 import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
 
 @Module({
@@ -34,7 +37,10 @@ import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
         }),
     },
     PgBossService,
+    Mailer,
     HeartbeatJob,
+    SendEmailJob,
+    PurgeCodesJob,
   ],
 })
 export class WorkerModule implements OnApplicationBootstrap {

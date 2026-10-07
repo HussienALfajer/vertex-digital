@@ -53,7 +53,9 @@ server {
 
     # Password guessing: a tight limit on the sign-in endpoint on top of Better Auth's own.
     # Regex, so any letter case or a trailing slash cannot step around it.
-    location ~* ^/api/auth/sign-in/email/?$ {
+    # The same for the routes that send or check an email code or a password (S01): sign-up,
+    # codes, recovery and password changes, on top of the API's counters in PostgreSQL.
+    location ~* ^/api/auth/(?:sign-in/email|sign-up/email|email-otp/[a-z-]+|change-password)/?$ {
         limit_req zone=vdsignin burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;

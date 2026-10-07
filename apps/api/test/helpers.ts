@@ -149,7 +149,7 @@ export async function solveAltcha(challenge: Challenge, tamper = false): Promise
 }
 
 /** A JSON response with its HTTP status as `status`, for one-line assertions. */
-export const body = async (response: Response) => ({
+export const body = async (response: Response): Promise<Record<string, unknown>> => ({
   status: response.status,
   ...((await response.json()) as Record<string, unknown>),
 });

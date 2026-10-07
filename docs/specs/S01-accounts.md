@@ -273,6 +273,20 @@ Every admin route also answers `UNAUTHORIZED`, `FORBIDDEN` (customer session), `
 14. Phone with spaces, leading `00`, or local `09…`: normalized to E.164 before validation; an invalid number is refused with the field error.
 15. The production database holds the Phase 0 owner row in `staff_users`: the rename migration keeps it as the admin with its password and TOTP; its `role` value is dropped.
 
+## Implementation notes
+Settled while building PR 1 (rename, contracts, db, API, worker):
+- **Who serves `/api/auth`:** Better Auth keeps sign-in, sign-out, `get-session` and `list-sessions`. Every route that changes an account (`sign-up/email`, the `email-otp/*` code routes, `change-password`, `revoke-session(s)`) is an `auth` module Nest route on the same path (`CUSTOMER_AUTH_NEST_PATHS`), so the change, its audit entry and its emails commit together (A1, E1). `email-otp/verify-email` is a small Better Auth plugin endpoint that calls the same service, so the session cookie is issued the Better Auth way. The Better Auth email OTP plugin is not used.
+- **Email codes** are stored hashed (SHA-256) in `customer_verifications`, one per purpose and subject (a unique index on `identifier`); `INVALID_OTP`, `OTP_EXPIRED` and `TOO_MANY_ATTEMPTS` are API error codes, with `INVALID_PASSWORD` and `INVALID_CODE`. Every branch that answers "code sent" without sending one (C2, C12, unknown emails) stores a decoy code nobody receives and no guess can match (the hash of a random secret), so wrong tries and expiry answer the same either way and the check routes cannot reveal an account. An email-change code is one per customer and bound to its new address: asking for another address voids the earlier code.
+- **Admin password change** also refuses the current password as the new one (`PASSWORD_UNCHANGED`), and TOTP cannot be enrolled again over an enrolled authenticator (only `admin:reset-two-factor` clears it).
+- **Logs and Sentry** never get a query's parameters: database errors are reported by their cause only (`withoutQueryParameters` in `packages/db`), Better Auth's logger included.
+- **Limits:** `customer_rate_limits` holds the auth module's own fixed-window counters (code sends per email and per address, sign-ups per address, the attempt notice once an hour). Better Auth's per-address limits (sign-in, code checks) stay in memory, as in Phase 0.
+- **Admin password change** is a Nest route at `/api/admin/auth/change-password` (`@AdminSetupRoute()`: allowed while the password change is pending). Enrolling TOTP before that change answers `PASSWORD_CHANGE_REQUIRED`. `two-factor/disable` and `get-totp-uri` are off: TOTP is mandatory.
+- **Audit of Better Auth plugin changes:** `admin.signed_in` (a session created by the TOTP or backup-code step, enrolment included), `admin.two_factor_enabled` and `admin.backup_codes_regenerated` are written from Better Auth's hooks right after the plugin's change, in their own transaction: the plugin's writes cannot join ours. Every other action is in the change's transaction.
+- **Idle timeout:** the access guard deletes a session idle for 30 minutes and answers `401 SESSION_IDLE_EXPIRED`; Better Auth's own admin routes do the same (`get-session` then answers no session). The panel marks its own polling with `X-Background-Request: 1`.
+- **Common passwords:** the 2,087 entries of 8+ characters of SecLists' 10k list (shorter ones fail the length rules anyway), in `packages/contracts/src/common-passwords.data.ts`.
+- **Own admin sessions:** `DELETE /api/admin/me/sessions/:id` answers `204`.
+- **Emails locally:** `.eml` files under `EMAIL_LOG_DIR` (`apps/worker/.data/emails` with `pnpm dev`).
+
 ## Open questions
 None blocking. Recorded for later:
 - SMTP credentials for `info@vertexmedia.pro` and SPF, DKIM and DMARC on `vertexmedia.pro` (ADR 0007) must be ready before the Phase 1 production deploy; S01 works locally with file output.

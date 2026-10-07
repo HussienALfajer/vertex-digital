@@ -311,3 +311,55 @@ describe('own sessions and backup codes (rule D7)', () => {
     ).toBe(401);
   });
 });
+
+describe('hardening (review of S01)', () => {
+  it('refuses keeping the CLI-issued password as the new one (rule D1)', async () => {
+    await test.db.delete(adminUsers);
+    const email = uniqueEmail('admin');
+    const { id, password } = await createAdmin(test.db, { email, name: 'المدير' });
+    seeded.push(id);
+    const cookie = cookieHeader(
+      await client.post('/api/admin/auth/sign-in/email', { body: { email, password } }),
+    );
+    const response = await client.post('/api/admin/auth/change-password', {
+      cookie,
+      body: { currentPassword: password, newPassword: password },
+    });
+    expect(await body(response)).toMatchObject({
+      status: 400,
+      code: 'VALIDATION_FAILED',
+      details: [{ path: ['newPassword'], message: 'PASSWORD_UNCHANGED' }],
+    });
+  });
+
+  it('keeps an enrolled authenticator: enrolling again needs a reset on the server', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const response = await client.post('/api/admin/auth/two-factor/enable', {
+      cookie: admin.cookie,
+      body: { password: PASSWORD },
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it('answers the backup codes with no-store, and no URL spelling reaches a disabled route', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const codes = await client.post('/api/admin/auth/two-factor/generate-backup-codes', {
+      cookie: admin.cookie,
+      body: { password: PASSWORD },
+    });
+    expect(codes.headers.get('cache-control')).toBe('no-store');
+    for (const path of [
+      '/api/admin/auth//two-factor/disable',
+      '/api/admin/auth/Two-Factor/disable',
+    ]) {
+      const response = await client.post(path, {
+        cookie: admin.cookie,
+        body: { password: PASSWORD },
+      });
+      expect(response.status, path).toBe(404);
+    }
+    expect((await client.get('/api/admin/probe/admin', { cookie: admin.cookie })).status).toBe(200);
+  });
+});

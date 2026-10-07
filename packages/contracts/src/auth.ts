@@ -44,6 +44,9 @@ export function isCommonPassword(password: string): boolean {
 /** The message of the issue a common password raises; the API answers `PASSWORD_TOO_COMMON`. */
 export const PASSWORD_TOO_COMMON = 'PASSWORD_TOO_COMMON';
 
+/** The message of the issue a new password equal to the current one raises. */
+export const PASSWORD_UNCHANGED = 'PASSWORD_UNCHANGED';
+
 /** The message of the issue a password equal to the account's email raises. */
 export const PASSWORD_EQUALS_EMAIL = 'PASSWORD_EQUALS_EMAIL';
 
@@ -173,6 +176,11 @@ export type ChangePassword = z.infer<typeof changePasswordSchema>;
 /** `POST /api/admin/auth/change-password` (rules D1, D7): the admin's password rules. */
 export const adminChangePasswordSchema = z
   .object({ currentPassword: z.string().min(1), newPassword: adminPasswordSchema })
+  // A CLI-issued password must really change: "changing" it to itself would keep it (rule D1).
+  .refine((value) => value.newPassword !== value.currentPassword, {
+    path: ['newPassword'],
+    message: PASSWORD_UNCHANGED,
+  })
   .meta({ id: 'AdminChangePassword' });
 
 export type AdminChangePassword = z.infer<typeof adminChangePasswordSchema>;

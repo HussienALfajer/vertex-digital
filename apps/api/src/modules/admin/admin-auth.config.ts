@@ -18,6 +18,7 @@ import { eq } from 'drizzle-orm';
 // Straight from the file: `core/altcha/index.ts` reaches back here through `core/access`.
 import { ALTCHA_HEADER } from '../../core/altcha/altcha.guard.js';
 import type { Env } from '../../core/config/env.js';
+import { betterAuthLogger } from '../../core/errors/better-auth-logger.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { SignInFailures } from '../../core/rate-limit/sign-in-failures.js';
@@ -81,6 +82,9 @@ export const ADMIN_SIGN_IN_LIMITS = {
 
 /** Paths that complete the TOTP step: the session they create is usable (`admin.signed_in`). */
 const TOTP_STEP_PATHS = ['/two-factor/verify-totp', '/two-factor/verify-backup-code'];
+
+/** Answers that carry the TOTP secret or backup codes. */
+const NO_STORE_PATHS = ['/two-factor/enable', '/two-factor/generate-backup-codes'];
 
 /** Paths a session past its idle timeout may still reach: signing in and out. */
 const IDLE_EXEMPT_PATHS = ['/sign-in/email', '/sign-out'];
@@ -156,6 +160,7 @@ export function createAdminAuth(
     baseURL: env.ADMIN_URL,
     basePath: ADMIN_AUTH_BASE_PATH,
     secret: env.ADMIN_AUTH_SECRET,
+    logger: betterAuthLogger('AdminAuth'),
     trustedOrigins: [env.ADMIN_URL],
     database: drizzleAdapter(db, {
       provider: 'pg',
@@ -240,7 +245,10 @@ export function createAdminAuth(
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
-        if (DISABLED_ROUTES.includes(ctx.path)) throw new APIError('NOT_FOUND');
+        // By the matched endpoint, so no spelling of the URL (`//two-factor/disable`) reaches one.
+        if (DISABLED_ROUTES.includes(ctx.path) || DISABLED_PATHS.includes(ctx.path)) {
+          throw new APIError('NOT_FOUND');
+        }
         // No "trust this device": the TOTP code is asked at every sign-in (ADR 0007).
         if (ctx.body?.trustDevice) {
           throw new APIError('BAD_REQUEST', { message: 'Trusted devices are not supported' });
@@ -278,9 +286,16 @@ export function createAdminAuth(
             message: 'Change the password first',
           });
         }
+        // An enrolled authenticator is replaced only after a reset on the server (rule D3): a
+        // stolen session and password must not swap it for the thief's.
+        if (ctx.path === '/two-factor/enable' && current.user.twoFactorEnabled) {
+          throw new APIError('FORBIDDEN', { message: 'Two-factor sign-in is already set up' });
+        }
       }),
       after: createAuthMiddleware(async (ctx) => {
         const returned = ctx.context.returned;
+        // The TOTP secret and the backup codes are shown once: never cached anywhere.
+        if (NO_STORE_PATHS.includes(ctx.path)) ctx.setHeader('cache-control', 'no-store');
         if (ctx.path === '/sign-in/email') {
           const email = emailOf(ctx.body);
           if (returned instanceof APIError) {

@@ -22,6 +22,7 @@ import {
 import type { Request } from 'express';
 import type { z } from 'zod';
 import { AdminRoute, CurrentAdmin } from '../../core/access/index.js';
+import { ApiQueryOf } from '../../core/http/api-query.js';
 import { requestMeta } from '../../core/http/request-meta.js';
 import type { AdminIdentity } from '../admin/index.js';
 import { AuthTestCustomersService } from './auth-test-customers.service.js';
@@ -34,6 +35,7 @@ export class AuthAdminController {
 
   @Get()
   @AdminRoute()
+  @ApiQueryOf(testCustomerListQuerySchema)
   @SerializeOptions({ schema: testCustomerPageSchema })
   @ApiOkResponse({ description: 'Newest first', standardSchema: testCustomerPageSchema })
   list(

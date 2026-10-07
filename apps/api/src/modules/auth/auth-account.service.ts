@@ -23,7 +23,7 @@ import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { NotificationsService } from '../notifications/index.js';
-import { type CodeCheck, checkCode, issueCode } from './email-codes.js';
+import { type CodeCheck, checkCode, issueCode, issueDecoyCode } from './email-codes.js';
 import { type Limit, withinLimits } from './rate-counter.js';
 
 const MINUTE = 60 * 1000;
@@ -100,6 +100,7 @@ export class AuthAccountService {
       .from(customers)
       .where(eq(customers.email, email));
     if (existing) {
+      await this.db.transaction((tx) => issueDecoyCode(tx, 'email-verification', email));
       await this.sendAttemptNotice(email, existing.id);
       return;
     }
@@ -142,6 +143,7 @@ export class AuthAccountService {
           ),
         );
       if (customer) await this.queueCode(tx, 'email-verification', email, customer.id);
+      else await issueDecoyCode(tx, 'email-verification', email);
     });
   }
 
@@ -162,9 +164,10 @@ export class AuthAccountService {
         .from(customers)
         .where(and(eq(customers.email, email), isNull(customers.archivedAt)))
         .for('update');
-      if (!customer) return { ok: false, code: 'INVALID_OTP' } as const;
+      // The code first: its answers are the same whether or not the email has an account.
       const check = await checkCode(tx, 'email-verification', email, otp);
       if (!check.ok) return check;
+      if (!customer) return { ok: false, code: 'INVALID_OTP' } as const;
       await this.markVerified(tx, customer, email, meta);
       return { ok: true, id: customer.id } as const;
     });
@@ -182,6 +185,7 @@ export class AuthAccountService {
         .from(customers)
         .where(and(eq(customers.email, email), isNull(customers.archivedAt)));
       if (customer) await this.queueCode(tx, 'forget-password', email, customer.id);
+      else await issueDecoyCode(tx, 'forget-password', email);
     });
   }
 
@@ -198,9 +202,9 @@ export class AuthAccountService {
         .from(customers)
         .where(and(eq(customers.email, email), isNull(customers.archivedAt)))
         .for('update');
-      if (!customer) return { ok: false, code: 'INVALID_OTP' } as const;
       const check = await checkCode(tx, 'forget-password', email, input.otp);
       if (!check.ok) return check;
+      if (!customer) return { ok: false, code: 'INVALID_OTP' } as const;
       await this.setPassword(tx, customer.id, passwordHash);
       await this.markVerified(tx, customer, email, meta);
       await tx.delete(customerSessions).where(eq(customerSessions.userId, customer.id));
@@ -268,11 +272,14 @@ export class AuthAccountService {
       .from(customers)
       .where(eq(customers.email, newEmail));
     if (taken) {
+      // A code nobody receives replaces any earlier one, as a real request would.
+      await this.db.transaction((tx) => issueDecoyCode(tx, 'change-email', holder.id));
       await this.sendAttemptNotice(newEmail, taken.id);
       return;
     }
     await this.db.transaction(async (tx) => {
-      const code = await issueCode(tx, 'change-email', `${holder.id}:${newEmail}`);
+      // One pending change per customer: a new request voids the code of an earlier address.
+      const code = await issueCode(tx, 'change-email', holder.id, newEmail);
       await this.notifications.queueEmail(tx, {
         to: newEmail,
         template: 'customer_change_email',
@@ -292,7 +299,7 @@ export class AuthAccountService {
     let outcome: CodeCheck;
     try {
       outcome = await this.db.transaction(async (tx) => {
-        const check = await checkCode(tx, 'change-email', `${holder.id}:${newEmail}`, input.otp);
+        const check = await checkCode(tx, 'change-email', holder.id, input.otp, newEmail);
         if (!check.ok) return check;
         await tx
           .update(customers)

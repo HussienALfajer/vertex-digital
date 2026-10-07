@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adminChangePasswordSchema,
   adminPasswordSchema,
   backupCodeSchema,
   customerSignUpSchema,
@@ -8,6 +9,7 @@ import {
   otpCodeSchema,
   PASSWORD_EQUALS_EMAIL,
   PASSWORD_TOO_COMMON,
+  PASSWORD_UNCHANGED,
   passwordEqualsEmail,
   passwordSchema,
   phoneSchema,
@@ -127,5 +129,17 @@ describe('customer forms', () => {
   it('email codes are six digits', () => {
     expect(otpCodeSchema.safeParse('012345').success).toBe(true);
     expect(otpCodeSchema.safeParse('01234').success).toBe(false);
+  });
+});
+
+describe('the admin password change (rule D1)', () => {
+  it('refuses keeping the current password', () => {
+    const same = { currentPassword: 'a7Kq-blue-moon-river', newPassword: 'a7Kq-blue-moon-river' };
+    expect(adminChangePasswordSchema.safeParse(same).error?.issues).toMatchObject([
+      { path: ['newPassword'], message: PASSWORD_UNCHANGED },
+    ]);
+    expect(
+      adminChangePasswordSchema.safeParse({ ...same, newPassword: 'b8Lr-green-sea-lake' }).success,
+    ).toBe(true);
   });
 });

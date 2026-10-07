@@ -15,6 +15,7 @@ import { z } from 'zod';
 // Straight from the file: `core/altcha/index.ts` reaches back here through `core/access`.
 import { ALTCHA_HEADER } from '../../core/altcha/altcha.guard.js';
 import type { Env } from '../../core/config/env.js';
+import { betterAuthLogger } from '../../core/errors/better-auth-logger.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { SignInFailures } from '../../core/rate-limit/sign-in-failures.js';
@@ -171,6 +172,7 @@ export function createCustomerAuth(
     baseURL: env.STORE_URL,
     basePath: CUSTOMER_AUTH_BASE_PATH,
     secret: env.CUSTOMER_AUTH_SECRET,
+    logger: betterAuthLogger('CustomerAuth'),
     trustedOrigins: [env.STORE_URL],
     database: drizzleAdapter(db, {
       provider: 'pg',
@@ -235,7 +237,10 @@ export function createCustomerAuth(
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
-        if (DISABLED_ROUTES.includes(ctx.path)) throw new APIError('NOT_FOUND');
+        // By the matched endpoint, so no spelling of the URL reaches a disabled one.
+        if (DISABLED_ROUTES.includes(ctx.path) || DISABLED_PATHS.includes(ctx.path)) {
+          throw new APIError('NOT_FOUND');
+        }
         if (ctx.path === '/sign-in/email' && failures.blocked(emailOf(ctx.body))) {
           try {
             await verifyAltcha(ctx.headers?.get(ALTCHA_HEADER) ?? undefined);

@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AuditEntry, AuditListQuery, AuditPage } from '@vertex-digital/contracts';
 import { auditEntries, type Database } from '@vertex-digital/db';
-import { and, desc, eq, gte, lt, lte, or, type SQL } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, gte, lte, type SQL } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
-import { decodeCursor, pageOf } from '../../core/lists/cursor.js';
+import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { AdminAuthService } from '../admin/index.js';
 import { AuthService } from '../auth/index.js';
 
@@ -30,21 +30,15 @@ export class AuditService {
       query.to ? lte(auditEntries.occurredAt, new Date(query.to)) : undefined,
     ];
     if (query.cursor) {
-      const after = decodeCursor(query.cursor);
-      filters.push(
-        or(
-          lt(auditEntries.occurredAt, after.at),
-          and(eq(auditEntries.occurredAt, after.at), lt(auditEntries.id, after.id)),
-        ),
-      );
+      filters.push(after(auditEntries.occurredAt, auditEntries.id, decodeCursor(query.cursor)));
     }
     const rows = await this.db
-      .select()
+      .select({ ...getTableColumns(auditEntries), cursorAt: cursorTime(auditEntries.occurredAt) })
       .from(auditEntries)
       .where(and(...filters))
       .orderBy(desc(auditEntries.occurredAt), desc(auditEntries.id))
       .limit(query.limit + 1);
-    const page = pageOf(rows, query.limit, (row) => ({ at: row.occurredAt, id: row.id }));
+    const page = pageOf(rows, query.limit, (row) => ({ at: row.cursorAt, id: row.id }));
 
     const idsOf = (kind: 'admin' | 'customer') => [
       ...new Set(

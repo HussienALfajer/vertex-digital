@@ -1,3 +1,5 @@
+import { newId } from '@vertex-digital/db';
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { api, removeAccounts, seedCustomer } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
@@ -67,6 +69,19 @@ describe('the audit log', () => {
     expect(await list(`entityId=${customer.id}&from=2999-01-01T00:00:00Z`)).toMatchObject({
       items: [],
     });
+  });
+
+  it('pages through entries a microsecond apart without skipping any', async () => {
+    const entityId = newId();
+    for (const time of ['2026-10-01 10:00:00.123900+00', '2026-10-01 10:00:00.123400+00']) {
+      await test.db.execute(sql`
+        insert into audit_entries (id, occurred_at, actor_kind, channel, action, entity_type, entity_id)
+        values (${newId()}, ${time}::timestamptz, 'system', 'worker', 'admin.signed_in', 'admin_user', ${entityId})`);
+    }
+    const first = await list(`entityId=${entityId}&limit=1`);
+    const second = await list(`entityId=${entityId}&limit=1&cursor=${first.nextCursor}`);
+    expect([...first.items, ...second.items]).toHaveLength(2);
+    expect(second.nextCursor).toBeNull();
   });
 
   it('names the admin on the admin’s own entries', async () => {
