@@ -41,15 +41,15 @@ test.describe('sign-in', () => {
   test('signs a customer in and shows the account in the header', async ({ page, api }) => {
     api.on('POST /api/auth/sign-in/email', 200, { redirect: false, token: 'x' });
     await page.goto('/sign-in');
-    await page.getByLabel(ar.signIn.email).fill('customer@example.com');
-    await page.getByLabel(ar.signIn.password, { exact: true }).fill('a-long-password');
+    await page.getByLabel(ar.fields.email).fill('customer@example.com');
+    await page.getByLabel(ar.fields.password, { exact: true }).fill('a-long-password');
     api.on('GET /api/auth/get-session', 200, {
       user: { name: 'سامي', email: 'customer@example.com' },
       session: {},
     });
     await page.getByRole('button', { name: ar.signIn.submit }).click();
     await expect(page).toHaveURL('/');
-    await expect(page.getByRole('button', { name: ar.header.signOut })).toBeVisible();
+    await expect(page.getByRole('button', { name: ar.header.menu })).toBeVisible();
     expect(api.requests.find((r) => r.key === 'POST /api/auth/sign-in/email')?.body).toEqual({
       email: 'customer@example.com',
       password: 'a-long-password',
@@ -59,8 +59,8 @@ test.describe('sign-in', () => {
   test('a wrong password says what to do', async ({ page, api }) => {
     api.on('POST /api/auth/sign-in/email', 401, { code: 'INVALID_EMAIL_OR_PASSWORD' });
     await page.goto('/sign-in');
-    await page.getByLabel(ar.signIn.email).fill('customer@example.com');
-    await page.getByLabel(ar.signIn.password, { exact: true }).fill('wrong-password');
+    await page.getByLabel(ar.fields.email).fill('customer@example.com');
+    await page.getByLabel(ar.fields.password, { exact: true }).fill('wrong-password');
     await page.getByRole('button', { name: ar.signIn.submit }).click();
     // Next.js adds its own route announcer with the same role.
     await expect(
@@ -72,9 +72,9 @@ test.describe('sign-in', () => {
   test('empty fields are refused before any request', async ({ page, api }) => {
     await page.goto('/sign-in');
     await page.getByRole('button', { name: ar.signIn.submit }).click();
-    await expect(page.getByText(ar.signIn.emailRequired)).toBeVisible();
-    await expect(page.getByText(ar.signIn.passwordRequired)).toBeVisible();
-    await expect(page.getByLabel(ar.signIn.email)).toBeFocused();
+    await expect(page.getByText(ar.validation.emailRequired)).toBeVisible();
+    await expect(page.getByText(ar.validation.passwordRequired)).toBeVisible();
+    await expect(page.getByLabel(ar.fields.email)).toBeFocused();
     expect(api.requests.some((r) => r.key.startsWith('POST'))).toBe(false);
   });
 });

@@ -70,12 +70,12 @@ Filled after the first feature of each kind ships; until then, follow ADR 0011 a
 
 | Need | Copy from |
 |---|---|
-| Contract: entity, inputs, list query, page | — (first: F01/F02) |
+| Contract: entity, inputs, list query, page | `packages/contracts/src/audit.ts`, `customers.ts` (cursor list: `lists.ts`) |
 | Ledger posting and its concurrency tests | — (first: F03) |
 | Order transition and its tests | — (first: F11) |
 | Supplier adapter with fixtures | — (first: `/supplier-adapter shop2topup`) |
-| API module, controllers, service, integration test | — (first: F01/F02) |
+| API module, controllers, service, integration test | `apps/api/src/modules/audit/`, `apps/api/test/audit.test.ts` |
 | Worker job with retries and idempotency | — (first: F06) |
-| Admin list page, form, detail page | — (first: S01 audit log) |
+| Admin list page, form, detail page | `apps/admin/src/features/audit/` (URL filters, cursor list, detail sheet), `features/customers/test-customers-page.tsx` (form dialog, one-time secret) |
 | Store page with cached reads | — (first: F12) |
-| E2E flow and screenshots | — (first: F01) |
+| E2E flow and screenshots | `apps/store/e2e/accounts.spec.ts`, `apps/admin/e2e/accounts.spec.ts` |

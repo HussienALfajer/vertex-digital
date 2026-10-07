@@ -203,6 +203,11 @@ export const revokeSessionSchema = z
 /** The answer of an action that has nothing else to say. */
 export const successSchema = z.object({ success: z.literal(true) }).meta({ id: 'Success' });
 
+/** `GET /api/auth/registration`: whether customers can sign up (rule C16). */
+export const registrationSchema = z.object({ open: z.boolean() }).meta({ id: 'Registration' });
+
+export type Registration = z.infer<typeof registrationSchema>;
+
 /** The answer of a sign-up, the same whether or not the email has an account (rule C2). */
 export const signUpResultSchema = z
   .object({ status: z.literal('code_sent') })

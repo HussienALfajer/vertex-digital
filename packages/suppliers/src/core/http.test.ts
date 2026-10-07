@@ -11,7 +11,9 @@ beforeAll(async () => {
   server = await startFakeHttpServer();
   http = new SupplierHttp({
     baseUrl: `${server.url}/api/v1/`,
-    timeoutMs: 200,
+    // Generous: a busy CI runner must not turn an ordinary reply into a timeout. The timeout test
+    // uses its own short one.
+    timeoutMs: 5_000,
     headers: { authorization: 'Bearer test-key' },
   });
 });
@@ -106,8 +108,9 @@ describe('SupplierHttp', () => {
 
   it('times out a supplier that does not answer', async () => {
     server.reply({ delayMs: 1_000, body: { balance: '1' } });
+    const impatient = new SupplierHttp({ baseUrl: `${server.url}/api/v1/`, timeoutMs: 200 });
     const timedOut = await failure(
-      http.request({ method: 'GET', path: 'x', schema: balanceSchema }),
+      impatient.request({ method: 'GET', path: 'x', schema: balanceSchema }),
     );
     expect(timedOut).toMatchObject({ kind: 'retryable', message: 'Supplier timed out' });
   });

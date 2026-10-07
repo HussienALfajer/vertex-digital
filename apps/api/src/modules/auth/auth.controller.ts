@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post, Req, SerializeOptions } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req, SerializeOptions } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
   type ChangePassword,
@@ -6,6 +6,7 @@ import {
   confirmEmailChangeSchema,
   customerSignUpSchema,
   type RequestEmailChange,
+  registrationSchema,
   requestCodeSchema,
   requestEmailChangeSchema,
   resetPasswordSchema,
@@ -33,6 +34,19 @@ const SUCCESS = { success: true } as const;
 @Controller('auth')
 export class AuthController {
   constructor(private readonly accounts: AuthAccountService) {}
+
+  @Get('registration')
+  @Public()
+  // Read by the store header on every page: room for many customers behind one carrier address.
+  @RateLimit({ limit: 300, perSeconds: 60 })
+  @SerializeOptions({ schema: registrationSchema })
+  @ApiOkResponse({
+    description: 'Whether customers can sign up (rule C16)',
+    standardSchema: registrationSchema,
+  })
+  registration() {
+    return { open: this.accounts.registrationOpen() };
+  }
 
   @Post('sign-up/email')
   @Public()

@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import ar from '../i18n/locales/ar.json';
 import { ApiError } from './api/client';
 
 /** Better Auth error codes the sign-in and 2FA screens explain. */
@@ -12,6 +13,11 @@ const AUTH_CODES = [
 
 type AuthCode = (typeof AUTH_CODES)[number];
 
+/** API error codes the panel explains (`errors.api.<code>`); others get the generic message. */
+type ApiCode = keyof typeof ar.errors.api;
+
+const isApiCode = (code: string | undefined): code is ApiCode => !!code && code in ar.errors.api;
+
 /** A Better Auth client error: `{ code, message, status }`. */
 export interface AuthClientError {
   code?: string;
@@ -21,6 +27,7 @@ export interface AuthClientError {
 /** The message to show for a failed API or Better Auth call; never the server's own text. */
 export function errorMessage(t: TFunction, error: unknown): string {
   if (error instanceof ApiError) {
+    if (isApiCode(error.knownCode)) return t(`errors.api.${error.knownCode}`);
     if (error.status === 429) return t('errors.TOO_MANY_REQUESTS');
     return t('errors.generic');
   }
@@ -31,7 +38,14 @@ export function errorMessage(t: TFunction, error: unknown): string {
   if (auth?.code && (AUTH_CODES as readonly string[]).includes(auth.code)) {
     return t(`errors.auth.${auth.code as AuthCode}`);
   }
+  if (isApiCode(auth?.code)) return t(`errors.api.${auth.code}`);
   return t('errors.generic');
+}
+
+/** The code of a failed API or Better Auth call. */
+export function errorCode(error: unknown): string | undefined {
+  if (error instanceof ApiError) return error.code;
+  return (error as Partial<AuthClientError> | null)?.code;
 }
 
 /**
@@ -45,6 +59,5 @@ export interface Failure {
 
 /** For the forms that confirm an action with the current password. */
 export function passwordFailure(t: TFunction, error: unknown): Failure {
-  const code = (error as Partial<AuthClientError> | null)?.code;
-  return { message: errorMessage(t, error), field: code === 'INVALID_PASSWORD' };
+  return { message: errorMessage(t, error), field: errorCode(error) === 'INVALID_PASSWORD' };
 }
