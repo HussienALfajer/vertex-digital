@@ -27,13 +27,13 @@ A feature runs through separate sessions. The unit is a spec from `docs/ROADMAP.
 - `/feature-slice` reads `TASKS.md` and continues from the first open PR, so a session can stop between PRs and a new one picks up. `TASKS.md` is committed with each PR.
 - After each merge the owner runs the cleanup line from the report, then `/clear`.
 - **Deploys happen at the end of a phase, not after each feature.** A hotfix for a bug in production is the exception, deployed when the owner asks.
-- **Registration stays closed in production until the pilot** (F26): the Phase 1 and Phase 2 deploys run with staff-created test customers only, so nobody can deposit real money before there is something to buy.
+- **Registration stays closed in production until the pilot** (F26): the Phase 1 and Phase 2 deploys run with admin-created test customers only, so nobody can deposit real money before there is something to buy.
 - Inside session 2 or 3, use `/compact` between layers if the context grows, never in the middle of one.
 - The "Next step" of every report names the next session: whether it needs `/clear`, its model and effort from this table, and its exact first message.
 
 Steps inside a session:
 
-1. **Spec** (`/spec`): the agent interviews the owner about the feature from `v1-scope.md` and writes `docs/specs/<id>-<name>.md` from `docs/specs/_template.md`: roles, data, states, money flows, API, screens, abuse cases, edge cases, and an end-to-end acceptance check.
+1. **Spec** (`/spec`): the agent interviews the owner about the feature from `v1-scope.md` and writes `docs/specs/<id>-<name>.md` from `docs/specs/_template.md`: access, data, states, money flows, API, screens, abuse cases, edge cases, and an end-to-end acceptance check.
 2. **Plan** (`/feature-slice`, first step): the agent splits the feature into PRs and writes `TASKS.md`; the owner approves before any code.
 3. **Implement** (`/feature-slice`): one layer at a time, contracts → db → api/worker → bridge (OpenAPI) → admin/store → E2E, each followed by a check gate through the `checker` subagent. The wiring checklist is in `.claude/skills/feature-slice/wiring.md`.
 4. **Review:** the `reviewer` subagent (fresh context) checks the branch against the spec and the rules, with a money, security and fraud checklist, and reports blocking issues only.

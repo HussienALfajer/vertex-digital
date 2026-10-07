@@ -10,11 +10,11 @@ One repository (pnpm workspaces + Turborepo) with four apps and shared packages.
 vertex-digital/
 ├── apps/
 │   ├── store/        Next.js 16 customer site (digital.vertexmedia.pro)
-│   ├── admin/        React 19 + Vite staff SPA (digital-admin.vertexmedia.pro)
+│   ├── admin/        React 19 + Vite admin SPA (digital-admin.vertexmedia.pro)
 │   ├── api/          NestJS HTTP API: src/core, src/modules (one per domain), src/cli
 │   └── worker/       NestJS standalone: src/core, src/jobs, src/telegram
 ├── packages/
-│   ├── contracts/    Zod schemas, money math, state tables, pricing rules, permission map, error codes
+│   ├── contracts/    Zod schemas, money math, state tables, pricing rules, error codes
 │   ├── db/           Drizzle schema, migrations, ledger posting and order transition write paths
 │   ├── ui/           Vertex design system (shadcn/ui on Base UI, Tailwind v4 tokens, RTL)
 │   ├── suppliers/    Supplier adapters behind one interface (shop2topup, wdgzone, manual, fake)
@@ -37,7 +37,7 @@ vertex-digital/
 | API | NestJS 12, native Standard Schema validation, OpenAPI | 0002 |
 | Worker | NestJS standalone, pg-boss consumer, Telegram Bot API (long polling), Nodemailer | 0002 |
 | Database | PostgreSQL 17, Drizzle ORM and drizzle-kit migrations | 0002, 0011 |
-| Auth | Better Auth: customer instance (email OTP) and staff instance (mandatory TOTP) | 0007 |
+| Auth | Better Auth: customer instance (email OTP) and admin instance (one account, mandatory TOTP) | 0007, 0016 |
 | Jobs | pg-boss, enqueued in the same transaction as the change | 0002, 0004 |
 | Realtime | SSE from the API; worker → `pg_notify` → API `LISTEN` → streams | 0002 |
 | Money | Integer units (USD micro-dollars, SYP 2 decimals), double-entry append-only ledger | 0003 |
@@ -58,7 +58,7 @@ Planned; each spec confirms its module's tables and exports.
 | Module | Owns | Feature |
 |---|---|---|
 | `auth` | Customer Better Auth tables, customer profiles, devices | F01 |
-| `staff` | Staff Better Auth tables, roles, Telegram links | F02, F07 |
+| `admin` | The admin Better Auth tables (one account, ADR 0016), Telegram link | F02, F07 |
 | `audit` | `audit_entries`; exports `recordAudit` (below every other module) | F02 |
 | `wallet` | Ledger accounts, journals, postings (through `packages/db/src/ledger`); balances and timelines | F03 |
 | `rates` | Exchange rates and their history, SYP rounding settings, rate locks | F04 |
@@ -69,7 +69,7 @@ Planned; each spec confirms its module's tables and exports.
 | `orders` | Orders, order events, fulfilment attempts and delivered units (through `packages/db/src/orders`), encrypted product codes and their reveal log, carts, gifts, receipts | F11, F13, F16 |
 | `players` | Saved player IDs, validation cache and quota counters | F13, F14 |
 | `search` | Search index over catalog names and aliases | F15 |
-| `customers` | Limits, freezes, staff notes (staff view of customers) | F19 |
+| `customers` | Limits, freezes, admin notes (the admin view of customers) | F19 |
 | `reconciliation` | Nightly runs and their findings | F20 |
 | `content` | FAQ, policies, banners, announcements | F21 |
 | `reports` | No business data; reports on read from module report services, Excel export | F22 |
@@ -110,9 +110,9 @@ Customer browser ──HTTPS──> nginx (digital.vertexmedia.pro)
    └── /*                     → store (Next.js) 127.0.0.1, proxy_cache for anonymous catalog pages
                                  └── server components → API over 127.0.0.1 (cookie forwarded)
 
-Staff browser ──HTTPS──> nginx (digital-admin.vertexmedia.pro)
+Admin browser ──HTTPS──> nginx (digital-admin.vertexmedia.pro)
    ├── /api/admin/*           → API 127.0.0.1
-   ├── /api/altcha/challenge  → API (the staff sign-in's proof of work after repeated failures)
+   ├── /api/altcha/challenge  → API (the admin sign-in's proof of work after repeated failures)
    ├── /api/*                 → 404 (customer routes are not served on the admin host)
    └── /*                     → admin SPA build (static)
 
@@ -123,7 +123,7 @@ worker ── pg_notify ──> API ── SSE ──> live order timeline, live
 ## Authentication and authorization
 
 - Customers: Better Auth at `/api/auth` (email + password, email OTP verification, ALTCHA, rate limits); phone required in E.164 (ADR 0007).
-- Staff: second Better Auth instance at `/api/admin/auth` (owner-created accounts, mandatory TOTP, re-authentication for sensitive actions); roles and permissions from `packages/contracts`.
+- Admin: second Better Auth instance at `/api/admin/auth` with one account and full access (ADR 0016): created and recovered by CLI, mandatory TOTP, re-authentication for sensitive actions; no roles or permission map.
 - The store and the API share one origin; the admin SPA and its `/api/admin` share another. No CORS is enabled.
 
 ## Data conventions

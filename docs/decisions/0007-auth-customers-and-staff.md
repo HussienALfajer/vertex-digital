@@ -1,6 +1,6 @@
 # 0007 — Authentication: customers and staff are separate
 
-Status: Accepted · Date: 2026-10-06
+Status: Accepted · Date: 2026-10-06 · Amended by [0016](0016-single-admin-account.md) (one admin account, no staff or roles)
 
 ## Context
 Customers sign up themselves and need a low-friction, free verification. Staff can move money and see personal data, so a stolen staff password must not be enough. SMS OTP costs money per message in Syria; email is free. The admin panel lives on its own host.

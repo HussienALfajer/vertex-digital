@@ -18,7 +18,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] Deployment skeleton: `deploy/` (both hosts, TLS, nginx limits and headers, Brotli when available, fail2ban jail, PM2 store/api/worker, atomic releases with rollback, health checks, daily backups) and `docs/deployment.md` written; provisioned and first deployed on 2026-10-07
 
 ## Phase 1 — Money core
-- [ ] S01 Accounts: F01 Customer accounts · F02 Staff accounts, roles, 2FA and audit log
+- [~] S01 Accounts: F01 Customer accounts · F02 Admin account, 2FA and audit log (one admin, no staff: ADR 0016)
 - [ ] S02 Wallet and ledger: F03 alone (money core)
 - [ ] S03 Exchange rate and Sham Cash deposits: F04 Exchange rate and SYP display · F05 Sham Cash deposits
 - [ ] S04 USDT deposits: F06 alone
@@ -64,4 +64,4 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] VPS IP registered in supplier allowlists; one small live order per supplier approved by the owner
 - [ ] Madani Arabic web license and files in place
 - [ ] Terms, privacy and refund policies published
-- [ ] Owner and staff accounts with 2FA; Telegram bot linked
+- [ ] Admin account with 2FA; Telegram bot linked

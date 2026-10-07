@@ -11,7 +11,7 @@ Write the spec for **$ARGUMENTS**.
 ## 1. Read (only this)
 - The feature's section of `docs/product/v1-scope.md`: find its heading with a search, then read that section and every automation (A01–A15) that mentions it.
 - `docs/open-questions.md`, and the ADRs the feature touches (`docs/decisions/README.md` lists them; money features always read 0003, 0004 or 0006).
-- Specs it depends on in `docs/specs/`, and the relevant tables in `packages/db/src/schema/` and `packages/contracts/src/` (permissions, error codes, money).
+- Specs it depends on in `docs/specs/`, and the relevant tables in `packages/db/src/schema/` and `packages/contracts/src/` (error codes, audit actions, money).
 - The template: `docs/specs/_template.md`.
 
 ## 2. Interview the owner

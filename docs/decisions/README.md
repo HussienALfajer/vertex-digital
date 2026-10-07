@@ -10,7 +10,7 @@ Short records of decisions that shape the system. Each has a status: **Accepted*
 | [0004](0004-orders-and-fulfilment-state-machine.md) | Order state machine, idempotent attempts, never retry elsewhere on an unknown outcome | Accepted |
 | [0005](0005-supplier-adapters-and-routing.md) | One supplier interface; routing to the cheapest healthy profitable supplier with fallback | Accepted |
 | [0006](0006-payments-and-deposits.md) | Sham Cash by reviewed receipt with fraud checks; USDT TRC20/BEP20 verified on chain | Accepted |
-| [0007](0007-auth-customers-and-staff.md) | Customers by email OTP with required phone; staff separate with mandatory TOTP | Accepted |
+| [0007](0007-auth-customers-and-staff.md) | Customers by email OTP with required phone; the admin separate with mandatory TOTP (amended by 0016) | Accepted |
 | [0008](0008-security-without-cloudflare.md) | Security and speed without Cloudflare: nginx, ALTCHA, rate limits, fail2ban, Brotli, caching | Accepted |
 | [0009](0009-deployment-existing-vps.md) | Deploy to the existing VPS with PM2 and nginx | Accepted |
 | [0010](0010-ai-assisted-development.md) | Claude Code (Opus 5.5) as the primary developer; AGENTS.md shared with Codex | Accepted |
@@ -19,6 +19,7 @@ Short records of decisions that shape the system. Each has a status: **Accepted*
 | [0013](0013-refund-paid-order-without-route.md) | A paid order with no profitable route left is refunded (`paid → refunded`, amends 0004) | Accepted |
 | [0014](0014-database-owner-and-app-roles.md) | Database roles: an owner role runs migrations, a restricted app role serves the apps (amends 0009) | Accepted |
 | [0015](0015-store-csp-inline-scripts.md) | The store's CSP allows inline scripts instead of nonces, so pages stay cached (amends 0008) | Accepted |
+| [0016](0016-single-admin-account.md) | One admin account with full access; no staff, roles or permission map (amends 0003–0007, 0011) | Accepted |
 
 Template:
 
