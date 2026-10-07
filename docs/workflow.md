@@ -105,7 +105,7 @@ Sessions can run on the owner's machine (**Local**) or in a Claude Code cloud en
 | Script | Runs | Does |
 |---|---|---|
 | `scripts/cloud-setup.sh` | Once per environment, as its setup script; the result is cached (rebuilt when the script or network list changes, or after about seven days) | Installs Node 24, pulls the `postgres:17` image and installs Chromium's system libraries |
-| `scripts/cloud-session.sh` | On every cloud session start and resume (SessionStart hook in `.claude/settings.json`); exits at once outside the cloud | Starts PostgreSQL 17, `pnpm install`, creates `.env` and the dev and test databases (`db:setup-local`), migrates the dev database (`db:migrate`), installs Playwright's Chromium (`PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`) |
+| `scripts/cloud-session.sh` | On every cloud session start and resume (SessionStart hook in `.claude/settings.json`); exits at once outside the cloud | Starts PostgreSQL 17, `pnpm install`, creates `.env` and the dev and test databases (`db:setup-local`), builds the packages `packages/db` depends on, migrates the dev database (`db:migrate`), installs Playwright's Chromium (`PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`) |
 
 The dev database in a cloud session is disposable. No secret is needed: `.env` gets a random password on each VM.
 
