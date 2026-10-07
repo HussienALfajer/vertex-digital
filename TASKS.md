@@ -9,7 +9,7 @@ Spec: `docs/specs/S02-wallet-ledger.md` (F03; ADRs 0003, 0011, 0014, 0016). Two 
 - [x] Worker: render the `customer_wallet_adjusted` email (Arabic HTML + text through i18n, link to `/wallet`); test
 - [x] Bridge: build, OpenAPI export, admin client generated; admin typecheck
 - [x] Wiring checklist, docs (`docs/architecture.md` modules, folder `CLAUDE.md`, "Patterns to copy" ledger row in `wiring.md`, spec: `admin_id` without foreign key, error statuses)
-- [ ] Checks (lint, typecheck, test, build, drift), reviewer, owner acceptance (endpoints at `/api/docs`), PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, drift, e2e), reviewer (1 blocking finding fixed: timeline ordered by transaction start, now by posting write position), owner acceptance (2026-10-07), PR with auto-merge
 
 ## PR 2 — Store and admin screens, E2E (`feat/s02-wallet-screens`) · Opus 5.5 `medium`
 - [ ] Store: header balance chip (Suspense hole, hidden on error), `/wallet` (card, timeline with labels per kind and category, running balance, load more, empty, error, sign-in redirect); i18n
