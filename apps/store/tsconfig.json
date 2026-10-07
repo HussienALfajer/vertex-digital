@@ -1,0 +1,18 @@
+{
+  "extends": "@vertex-digital/config/tsconfig/react.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "allowJs": false,
+    "types": ["node"],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", ".next/types/**/*.ts", "src", "e2e", "*.ts", "*.mjs"],
+  "exclude": ["node_modules"]
+}

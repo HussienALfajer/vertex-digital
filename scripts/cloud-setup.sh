@@ -4,8 +4,9 @@
 # Ubuntu 24.04 before Claude Code starts, and its result is cached as a filesystem snapshot when it
 # finishes within about five minutes, so later sessions skip it.
 #
-# It installs what the image lacks: Node 24 (the image ships 20-22) and the PostgreSQL 17 image (the
-# image ships 16; CI and production use 17). Per-session work (start the database, install
+# It installs what the image lacks: Node 24 (the image ships 20-22), the PostgreSQL 17 image (the
+# image ships 16; CI and production use 17) and the system libraries of Playwright's Chromium (the
+# browser itself is downloaded per session at the version in the lockfile). Per-session work (start the database, install
 # packages, create the databases) is scripts/cloud-session.sh, run by a SessionStart hook.
 set -uo pipefail
 
@@ -30,6 +31,13 @@ pull_postgres() {
   docker pull -q postgres:17
 }
 
+# Chromium's system libraries need root, so they come here; the version-matched browser is
+# installed by scripts/cloud-session.sh into PLAYWRIGHT_BROWSERS_PATH.
+install_chromium_deps() {
+  PATH="$NODE_DIR/bin:$PATH" npx -y playwright@1 install-deps chromium
+}
+
 install_node || echo "cloud-setup: Node 24 install failed" >&2
+install_chromium_deps || echo "cloud-setup: Chromium libraries install failed" >&2
 pull_postgres || echo "cloud-setup: PostgreSQL 17 image pull failed" >&2
 exit 0

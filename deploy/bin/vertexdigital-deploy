@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Entry point for deploys (root): ssh vertex "vertexdigital-deploy [<ref>|rollback|restore <release>]"
+# Fetches the repository as `vertexdigital` and runs the latest deploy/deploy.sh from origin/main
+# as that user, so changes to the deploy script apply on the same deploy. The owner role's URL
+# (ADR 0014) is root's alone: it reaches the script as an open file on descriptor 3, never in an
+# argument, the environment or a file the apps can read.
+set -euo pipefail
+
+SITE_DIR=/srv/digital.vertexmedia.pro
+OWNER_ENV=/etc/vertexdigital/owner.env
+[ "$(id -u)" -eq 0 ] || { echo "run as root" >&2; exit 1; }
+[ -f "$OWNER_ENV" ] || { echo "$OWNER_ENV is missing: run deploy/provision.sh" >&2; exit 1; }
+
+runuser -u vertexdigital -- git -C "$SITE_DIR/repo.git" fetch --quiet --prune origin \
+  '+refs/heads/*:refs/remotes/origin/*'
+script=$(mktemp)
+trap 'rm -f "$script"' EXIT
+runuser -u vertexdigital -- git -C "$SITE_DIR/repo.git" show origin/main:deploy/deploy.sh >"$script"
+chmod 755 "$script"
+
+cd "$SITE_DIR"
+runuser -u vertexdigital -- env -i HOME=/home/vertexdigital USER=vertexdigital LOGNAME=vertexdigital \
+  PATH=/usr/local/bin:/usr/bin:/bin PM2_HOME=/home/vertexdigital/.pm2 LANG=C.UTF-8 \
+  bash "$script" "$@" 3<"$OWNER_ENV"

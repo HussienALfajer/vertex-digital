@@ -1,0 +1,11 @@
+[Unit]
+Description=Health check for digital.vertexmedia.pro every 2 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=2min
+AccuracySec=15s
+Unit=vertexdigital-health.service
+
+[Install]
+WantedBy=timers.target

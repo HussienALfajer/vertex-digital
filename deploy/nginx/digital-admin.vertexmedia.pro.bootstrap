@@ -1,0 +1,12 @@
+# Temporary site used only until the first certificate of digital-admin.vertexmedia.pro exists: serves the ACME
+# challenge on port 80 and nothing else. It references no certificate, so it can never break
+# nginx for the other sites (SERVER.md rule 1). deploy/provision.sh replaces it with digital-admin.vertexmedia.pro.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name digital-admin.vertexmedia.pro;
+    access_log /var/log/nginx/digital-admin.vertexmedia.pro.access.log;
+    error_log /var/log/nginx/digital-admin.vertexmedia.pro.error.log warn;
+    location ^~ /.well-known/acme-challenge/ { root /var/www/vertexdigital-acme; }
+    location / { return 444; }
+}

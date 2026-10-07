@@ -1,0 +1,8 @@
+[Unit]
+Description=Local backup of digital.vertexmedia.pro
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vertexdigital-backup
+UMask=0077

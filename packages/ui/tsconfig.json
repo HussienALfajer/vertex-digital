@@ -1,0 +1,7 @@
+{
+  "extends": "@vertex-digital/config/tsconfig/react.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Daily local backup of digital.vertexmedia.pro (vertexdigital-backup.timer), kept 14 days in
+# /var/backups/digital.vertexmedia.pro (700, root). An off-server copy is required before launch
+# (ADR 0009, docs/open-questions.md).
+#
+# Restore (as the owner role, ADR 0014; docs/deployment.md):
+#   runuser -u postgres -- pg_restore --clean --if-exists --no-owner --role=vertex_digital_owner \
+#     -d vertex_digital database.dump
+# Files: rsync -a <backup>/files/ /srv/digital.vertexmedia.pro/shared/files/
+set -euo pipefail
+umask 077
+
+SITE=digital.vertexmedia.pro
+DB=vertex_digital
+DEST=/var/backups/$SITE
+KEEP_DAYS=14
+
+previous=$(find "$DEST" -mindepth 1 -maxdepth 1 -type d -name '20*' | sort | tail -n 1)
+target="$DEST/$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$target"
+
+# pg_dump runs as postgres, which cannot write here: it writes to stdout and root redirects.
+runuser -u postgres -- pg_dump --format=custom "$DB" >"$target/database.dump"
+pg_restore --list "$target/database.dump" >"$target/database-contents.txt"
+cp "/srv/$SITE/shared/.env" "$target/environment"
+cp "/etc/nginx/sites-available/$SITE" "$target/nginx-store.conf"
+cp "/etc/nginx/sites-available/digital-admin.vertexmedia.pro" "$target/nginx-admin.conf"
+# Receipts and attachments as a hard-linked snapshot of the previous backup: stored files never
+# change, so an unchanged file takes no extra space.
+if [ -d "/srv/$SITE/shared/files" ]; then
+  link_dest=()
+  [ -n "$previous" ] && [ -d "$previous/files" ] && link_dest=(--link-dest="$previous/files")
+  rsync -a --delete "${link_dest[@]}" "/srv/$SITE/shared/files/" "$target/files/"
+fi
+readlink -f "/srv/$SITE/current" >"$target/release.txt" 2>/dev/null || true
+cat "/srv/$SITE/current/REVISION" >>"$target/release.txt" 2>/dev/null || true
+
+find "$DEST" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +
+logger -t vertexdigital-backup "backup completed: $target ($(du -sh "$target" | cut -f1))"

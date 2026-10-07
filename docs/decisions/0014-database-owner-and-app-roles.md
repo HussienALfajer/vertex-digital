@@ -20,4 +20,4 @@ ADR 0003 requires that the role the apps use cannot update or delete ledger rows
 ## Consequences
 - ADR 0003's guarantee holds against the apps themselves: a bug or an attacker inside the API or the worker cannot alter the ledger, its triggers or its privileges.
 - Libraries that create their own tables at runtime (pg-boss, PR 3) cannot do so as the app role: their schema is created by the owner (a migration or a setup step) before the app starts.
-- One more secret per environment (the owner password). In production it lives in the server's `shared/.env` for the deploy script only; the PM2 processes do not read it.
+- One more secret per environment (the owner password). In production it lives in a root-only file outside the site (`/etc/vertexdigital/owner.env`, `deploy/provision.sh`), handed to the deploy script for the migrate, snapshot and restore steps only; it is never in `shared/.env`, which the apps load, so the PM2 processes cannot read it.

@@ -1,0 +1,85 @@
+#!/bin/bash
+# Periodic health check for digital.vertexmedia.pro (vertexdigital-health.timer, every 2 minutes).
+# Heals, not only logs, with a cooldown so it never loops on restarts. Read with:
+#   journalctl -t vertexdigital-health -n 50
+set -u
+
+STORE_DOMAIN=digital.vertexmedia.pro
+ADMIN_DOMAIN=digital-admin.vertexmedia.pro
+APP_USER=vertexdigital
+UNIT=pm2-vertexdigital.service
+API_PORT=3060
+STORE_PORT=3061
+APPS="vertexdigital-api vertexdigital-worker vertexdigital-store"
+STATE_DIR=/var/lib/vertexdigital-health
+COOLDOWN=600
+mkdir -p "$STATE_DIR"
+
+log() { logger -t vertexdigital-health "$*"; }
+
+cooled_down() {
+  local f="$STATE_DIR/$1.last" now last
+  now=$(date +%s); last=$(cat "$f" 2>/dev/null || echo 0)
+  if [ $((now - last)) -ge "$COOLDOWN" ]; then echo "$now" >"$f"; return 0; fi
+  return 1
+}
+
+pm2_as_app() { sudo -u "$APP_USER" -H env PM2_HOME="/home/$APP_USER/.pm2" pm2 "$@"; }
+
+restart_app() {
+  cooled_down "$1" || return 0
+  pm2_as_app restart "$1" >/dev/null 2>&1 && log "$1 restarted"
+}
+
+# 1. The PM2 unit: if it is down, nothing else is worth checking.
+if ! systemctl is-active --quiet "$UNIT"; then
+  log "$UNIT is not active"
+  cooled_down unit && systemctl start "$UNIT" && log "$UNIT started"
+  exit 0
+fi
+
+# 2. The API answers on loopback, database included (/api/health checks it).
+code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "http://127.0.0.1:$API_PORT/api/health")
+if [ "$code" != 200 ]; then
+  log "API answers $code on port $API_PORT"
+  [ "$code" = 503 ] && log "the API is up but reports a dependency down (database?)" || restart_app vertexdigital-api
+fi
+
+# 3. The store renders its home page.
+code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "http://127.0.0.1:$STORE_PORT/")
+[ "$code" = 200 ] || { log "store answers $code on port $STORE_PORT"; restart_app vertexdigital-store; }
+
+# 4. The worker wrote its heartbeat in the last 3 minutes (it beats every minute).
+fresh=$(runuser -u postgres -- psql -tAq -d vertex_digital \
+  -c "select count(*) from worker_heartbeats where worker = 'production' and beat_at > now() - interval '3 minutes'" 2>/dev/null)
+[ "$fresh" = 1 ] || { log "no recent worker heartbeat"; restart_app vertexdigital-worker; }
+
+# 5. PM2 state and restart counts of each process.
+jlist=$(pm2_as_app jlist 2>/dev/null || echo '[]')
+for app in $APPS; do
+  read -r state restarts < <(printf '%s' "$jlist" | python3 -c "
+import json, sys
+apps = {p['name']: p['pm2_env'] for p in json.load(sys.stdin)}
+env = apps.get('$app')
+print(env['status'], env['restart_time']) if env else print('missing', 0)
+" 2>/dev/null || echo "unknown 0")
+  [ "$state" = online ] || { log "$app is $state"; restart_app "$app"; }
+  [ "${restarts:-0}" -gt 20 ] && log "warning: $app restarted $restarts times; check pm2 logs $app --err"
+done
+
+# 6. Public paths and certificates.
+for domain in "$STORE_DOMAIN" "$ADMIN_DOMAIN"; do
+  cert="/etc/letsencrypt/live/$domain/fullchain.pem"
+  [ -f "$cert" ] || continue
+  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://$domain/")
+  [ "$code" = 200 ] || log "public https://$domain/ answers $code"
+  end=$(openssl x509 -enddate -noout -in "$cert" | cut -d= -f2)
+  days=$(( ($(date -d "$end" +%s) - $(date +%s)) / 86400 ))
+  [ "$days" -lt 15 ] && log "warning: certificate for $domain expires in $days days"
+done
+
+# 7. Disk.
+use=$(df --output=pcent / | tail -1 | tr -dc '0-9')
+[ "$use" -ge 85 ] && log "warning: disk is ${use}% full"
+
+exit 0

@@ -103,14 +103,14 @@ Sessions can run on the owner's machine (**Local**) or in a Claude Code cloud en
 
 | Script | Runs | Does |
 |---|---|---|
-| `scripts/cloud-setup.sh` | Once per environment, as its setup script; the result is cached (rebuilt when the script or network list changes, or after about seven days) | Installs Node 24 and pulls the `postgres:17` image |
-| `scripts/cloud-session.sh` | On every cloud session start and resume (SessionStart hook in `.claude/settings.json`); exits at once outside the cloud | Starts PostgreSQL 17, `pnpm install`, creates `.env` and the dev and test databases (`db:setup-local`), migrates the dev database (`db:migrate`) |
+| `scripts/cloud-setup.sh` | Once per environment, as its setup script; the result is cached (rebuilt when the script or network list changes, or after about seven days) | Installs Node 24, pulls the `postgres:17` image and installs Chromium's system libraries |
+| `scripts/cloud-session.sh` | On every cloud session start and resume (SessionStart hook in `.claude/settings.json`); exits at once outside the cloud | Starts PostgreSQL 17, `pnpm install`, creates `.env` and the dev and test databases (`db:setup-local`), migrates the dev database (`db:migrate`), installs Playwright's Chromium (`PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`) |
 
-Later Phase 0 PRs extend both: Chromium for Playwright with the front ends (and the Playwright download domains in the network list below). The dev database in a cloud session is disposable. No secret is needed: `.env` gets a random password on each VM.
+The dev database in a cloud session is disposable. No secret is needed: `.env` gets a random password on each VM.
 
 ### One-time setup (the owner, at claude.ai/code)
 1. Create a cloud environment named `vertex-digital`.
-2. **Network access:** Custom, with the default (Trusted) domains included.
+2. **Network access:** Custom, with the default (Trusted) domains included, plus Playwright's browser downloads: `cdn.playwright.dev`, `playwright.download.prss.microsoft.com`, `playwright.azureedge.net`.
 3. **Setup script:** paste the whole of `scripts/cloud-setup.sh`. Paste it again whenever that file changes.
 4. **Environment variables:** none.
 5. The Claude GitHub App is installed on the repository (needed to clone and push).
