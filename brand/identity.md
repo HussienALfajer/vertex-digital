@@ -94,7 +94,7 @@ About 60% deep surfaces, 30% green structure, 10% sand. Sand is precious: if eve
 | Awaiting balance | warning |
 | Paid, sent to supplier (in progress) | info |
 | Delivered | success |
-| Needs review | warning (staff only; customers see "in progress") |
+| Needs review | warning (admin only; customers see "in progress") |
 | Refunded | neutral, with the refund amount in success |
 | Cancelled | neutral |
 | Deposit pending review | info · credited: success · rejected: danger |
@@ -176,7 +176,7 @@ Neon gaming templates · purple/blue gradients · glassmorphism · pill-shaped b
 
 Modern Standard Arabic, clear and short; friendly, never slangy. Verbs on buttons ("اشحن الآن", "أودِع", "انسخ"). No exclamation marks in system messages. Every error says what to do next.
 
-- **Gender-neutral** phrasing: address the customer with neutral constructions; describe staff actions with the passive or a noun.
+- **Gender-neutral** phrasing: address the customer with neutral constructions; describe admin actions with the passive or a noun.
 - **Dates** with month names as read in Damascus (أيلول، تشرين الأول), Latin digits: "6 تشرين الأول 2026، 9:40 م".
 - **Counts** agree with their number (`_one`, `_two`, `_few`, `_many`, `_other`).
 - **Tanween** after the alif: "أولًا".

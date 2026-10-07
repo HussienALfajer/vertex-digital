@@ -2,7 +2,7 @@
 
 A game and app top-up store for Syria, with a customer site and an admin panel. Customers top up a USD wallet (Sham Cash, USDT), then buy game top-ups (PUBG UC, Free Fire diamonds, chat apps, gift cards) that are fulfilled automatically through supplier APIs. Arabic-first RTL.
 
-V1 goal: the most professional, clear and trustworthy top-up store in the Syrian market: money is never lost or double-spent, most orders are delivered in seconds without staff, and the customer always sees what is happening.
+V1 goal: the most professional, clear and trustworthy top-up store in the Syrian market: money is never lost or double-spent, most orders are delivered in seconds without admin action, and the customer always sees what is happening.
 
 This project is independent. Do not read or reuse other folders on this machine unless the owner explicitly asks. One standing exception (owner, 2026-10-06): `D:\vertex-hub` may be **read, never edited**, to copy and adapt its design system (`packages/ui`, `brand/`) and its proven setup files (scripts, configs, CI, deploy) during Phase 0 and when a later task names it. Copied code is adapted to this project's rules; nothing is imported across repositories.
 
@@ -27,10 +27,10 @@ Read these on demand. For a feature, read its spec, the ADRs it touches, and its
 pnpm workspaces + Turborepo · TypeScript (strict) · Node 24 · PostgreSQL 17 (ADR 0001, 0002)
 
 - `apps/store` — Next.js 16 (App Router, Cache Components): the customer site at `digital.vertexmedia.pro`
-- `apps/admin` — React 19 + Vite SPA, TanStack Router / Query / Table: the staff panel at `digital-admin.vertexmedia.pro`
+- `apps/admin` — React 19 + Vite SPA, TanStack Router / Query / Table: the admin panel at `digital-admin.vertexmedia.pro`
 - `apps/api` — NestJS 12, Drizzle, Zod contracts (native Standard Schema), OpenAPI, Better Auth, pg-boss producer, SSE
 - `apps/worker` — NestJS standalone: fulfilment, supplier sync and polling, webhook processing, USDT verification, Telegram admin bot, email
-- `packages/contracts` (Zod schemas, money and state rules, permission map) · `packages/db` (Drizzle schema, migrations, ledger and order write paths) · `packages/ui` (design system) · `packages/suppliers` (one adapter per supplier behind one interface)
+- `packages/contracts` (Zod schemas, money and state rules, error codes) · `packages/db` (Drizzle schema, migrations, ledger and order write paths) · `packages/ui` (design system) · `packages/suppliers` (one adapter per supplier behind one interface)
 - Tests: Vitest, Playwright (E2E, RTL screenshots) · Lint/format: Biome · CI: GitHub Actions + gitleaks · Errors: Sentry + Telegram alerts
 
 ## Commands
@@ -56,10 +56,10 @@ Keep this table true: the PR that adds or changes a command updates it.
 ## Non-negotiable conventions
 
 - **Money (ADR 0003):** integer units, never floats. USD is the base currency, stored in micro-dollars; SYP amounts carry the exchange rate used. The wallet is an append-only double-entry ledger: a balance is a sum of entries, never a stored number updated in place. Corrections are new reversing entries.
-- **Never lose or duplicate money or goods (ADR 0004, 0005):** every deposit, order and supplier call carries an idempotency key. The wallet debit and the fulfilment job are written in the same transaction. A supplier call with an unknown outcome is resolved (poll, then staff) before any retry elsewhere. Never sell below cost.
+- **Never lose or duplicate money or goods (ADR 0004, 0005):** every deposit, order and supplier call carries an idempotency key. The wallet debit and the fulfilment job are written in the same transaction. A supplier call with an unknown outcome is resolved (poll, then the admin) before any retry elsewhere. Never sell below cost.
 - **One validation source:** Zod schemas live in `packages/contracts` and are reused by api, worker, store and admin.
-- **Authorization is server-side:** every API endpoint declares its access. Customers and staff are separate accounts; staff routes live under `/api/admin/` and require TOTP (ADR 0007). UI checks are cosmetic.
-- **Audit:** every money action and every staff action writes an audit entry in the same transaction.
+- **Authorization is server-side:** every API endpoint declares its access. Customers and the single admin account are separate (ADR 0007, 0016); admin routes live under `/api/admin/` and require TOTP. UI checks are cosmetic.
+- **Audit:** every money action and every admin action writes an audit entry in the same transaction.
 - **Archive, don't delete:** business records are archived; ledger rows and audit rows are never updated or deleted.
 - **Arabic-first RTL UI.** Logical CSS only (`ms-*`, `ps-*`, `start-*`), all text through i18n, Latin digits. Design-system components and tokens only (`brand/identity.md`).
 - **No secrets in the repo** (it is public). Git-ignored `.env` files, `.env.example` with fake values, supplier keys encrypted in the database. Never paste a key, token, customer receipt or personal data into code, tests, fixtures, logs or chat.

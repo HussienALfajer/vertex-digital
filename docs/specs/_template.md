@@ -3,17 +3,17 @@
 Status: Draft | Approved · Date: YYYY-MM-DD · Scope: `docs/product/v1-scope.md` §<ID> · ADRs: <list>
 
 ## Summary
-Two or three sentences: the problem this solves for customers or staff and what V1 of the feature does.
+Two or three sentences: the problem this solves for customers or the admin and what V1 of the feature does.
 
 ## In scope / out of scope
 - In: …
 - Out (later or never): …
 
-## Roles and access
+## Access
 | Action | Route kind | Who |
 |---|---|---|
 | Create a deposit | Customer | Verified customer, not frozen |
-| Approve a deposit | Staff `deposits.review` | Owner, manager, deposit reviewer |
+| Approve a deposit | Admin, re-authentication | The admin |
 
 ## Data
 For each entity: table, fields (name, type, required, constraints), relations, indexes, unique keys (idempotency keys and external references), and whether it is archived or append-only. Money fields name their currency and unit (ADR 0003).

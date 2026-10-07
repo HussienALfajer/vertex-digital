@@ -20,21 +20,21 @@ You review a branch of Vertex Digital, a top-up store that holds customer money 
 - **Ledger:** every money movement goes through the `packages/db` posting function; journals balance; nothing updates or deletes ledger rows; corrections are reversing journals; balances are sums, never stored and updated.
 - **Units:** integer units only, right scale per currency (USD micro-dollars, SYP 2 decimals); customer-facing USD in whole cents; no floats, no `Number` math on amounts that can overflow, rounding direction explicit and in the business's documented direction; stored rate on every SYP-related record.
 - **Idempotency:** each journal, deposit, order, supplier attempt and webhook event has a unique key enforced by the database; a retried request or job returns the first result and never posts twice.
-- **Races:** debits lock the wallet row and check the balance in the same transaction; state transitions use `WHERE status = <from>`; webhook vs poll vs staff action on the same order cannot both win; jobs are safe to run twice.
+- **Races:** debits lock the wallet row and check the balance in the same transaction; state transitions use `WHERE status = <from>`; webhook vs poll vs admin action on the same order cannot both win; jobs are safe to run twice.
 - **Atomicity:** debit, state change, audit entry and job enqueue are in one transaction; nothing that must happen after commit happens before it.
 - **Fulfilment:** no retry on another supplier after an `unknown` outcome; margin guard holds on every route including fallbacks; refunds happen at most once and for the exact amount; price changes between view and pay are refused (`PRICE_CHANGED`).
 - **Deposits:** Sham Cash transaction numbers and receipt hashes unique; amounts credited are what was received at the locked or current rate as the ADR says; USDT checks recipient, official contract, exact intent amount, confirmations and TXID reuse per network; Telegram approval limits and flags respected.
 
 ## Check — security and fraud
 
-- **Authorization:** every route declares its access; staff routes only under `/api/admin/` with the right permission and TOTP; customer routes return only the caller's records (no IDOR: try another customer's id in your head for every read and action); re-authentication on sensitive staff actions.
+- **Authorization:** every route declares its access; admin routes only under `/api/admin/`, refusing customer sessions, with TOTP; customer routes return only the caller's records (no IDOR: try another customer's id in your head for every read and action); re-authentication on sensitive admin actions (ADR 0016: one admin, no roles).
 - **Abuse:** new public or money endpoints have rate limits, ALTCHA where the ADR asks, limits and frozen-account checks; enumeration (emails, receipt or order ids) is not possible; ids exposed publicly (receipts, gifts) are non-guessable.
 - **Input and output:** Zod validation on every input; no raw SQL from input; uploads checked, re-encoded and served only after authorization; no open redirects; webhook HMAC with timing-safe compare, timestamp tolerance and replay protection.
 - **Secrets and data:** no secret, key, token, OTP, receipt or phone number in code, fixtures, logs, Sentry events or error messages; supplier keys encrypted and masked.
 
 ## Check — product and code
 
-- **Spec coverage:** every rule, state, permission, field, money flow, abuse case and edge case in the spec is implemented and tested; nothing out of scope was added.
+- **Spec coverage:** every rule, state, access rule, field, money flow, abuse case and edge case in the spec is implemented and tested; nothing out of scope was added.
 - **Data:** archive instead of delete; indexes for new foreign keys and list filters; migrations backward compatible (expand, then contract).
 - **Contracts:** shapes come from `@vertex-digital/contracts`, not duplicated.
 - **Front ends:** text through i18n; logical CSS; design-system components only; loading, empty and error states; errors shown by `code`; money shown through the shared formatter (USD with SYP).

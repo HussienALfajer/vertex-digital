@@ -25,7 +25,7 @@ Finish a layer, run its gate through the `checker` subagent, fix root causes, ti
 
 | # | Layer | Build | Gate |
 |---|---|---|---|
-| 1 | contracts | Schemas and types, list query and page schemas, permissions, error codes, audit actions; pure rules (money math, transitions, pricing) with unit tests | `contracts` test, root `typecheck` |
+| 1 | contracts | Schemas and types, list query and page schemas, error codes, audit actions; pure rules (money math, transitions, pricing) with unit tests | `contracts` test, root `typecheck` |
 | 2 | db | Run `/db-migration`: schema, generated migration, SQL review; shared write paths in `packages/db/src/ledger` or `orders` when the feature needs them, with concurrency tests | `db` test, migration drift |
 | 3 | api | Module, controllers (customer and `/api/admin/`), service: ownership filters, audit and jobs in the change's transaction, idempotency, rate limits, archive instead of delete, coded errors; `test/<module>.test.ts` | `api` test file of the module, `test/architecture.test.ts`, `api` typecheck |
 | 4 | worker | Jobs (`jobs/<area>/<name>.job.ts`): safe to run twice, retries with backoff, classified errors, supplier calls only through `packages/suppliers`; tests with the fake supplier and fixtures | `worker` test, `worker` typecheck |
