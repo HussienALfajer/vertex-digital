@@ -238,6 +238,16 @@ export class TelegramBotService {
     const facts = await this.deposits.telegramFacts(prompt.depositId);
     if (!facts) throw new Error(`Prompt ${prompt.id} names no deposit`);
     if (prompt.kind === 'approve_number') {
+      // Edge case 4: resubmitted since "اعتماد" was pressed; the new card is the one to use.
+      if (facts.submittedAt?.getTime() !== prompt.depositSubmittedAt?.getTime()) {
+        await this.closePrompt(tx, prompt.id);
+        await this.reply(tx, link.chatId, {
+          reply: 'decision_refused',
+          referenceCode: facts.referenceCode,
+          refusal: 'changed',
+        });
+        return;
+      }
       const number = telegramTransactionNumberSchema.safeParse(text);
       if (!number.success) {
         await this.reply(tx, link.chatId, {

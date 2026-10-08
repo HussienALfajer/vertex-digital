@@ -146,6 +146,13 @@ describe('the deposit card (rules TC1, TC2, TC6)', () => {
       env,
     );
     await isolated(async (tx) => {
+      // The settings in force, whatever other test files saved: the $100 default limit.
+      await tx.insert(depositSettings).values({
+        ...DEPOSIT_SETTINGS_DEFAULTS,
+        shamCashAccountName: 'Vertex',
+        shamCashAccountNumber: '0933000000',
+        adminId: newId(),
+      });
       const id = await submitted(tx, 20);
       // No live link: nothing is sent, and nothing is replayed later (edge case 2).
       expect(await job.sync(id, tx)).toBe('skipped');
@@ -271,7 +278,8 @@ describe('the review reminder (rules RM1–RM4)', () => {
         adminId: newId(),
       });
       await tx.insert(telegramBotState).values({ id: 1 }).onConflictDoNothing();
-      await tx.update(telegramBotState).set({ lastReminderAt: null });
+      // Not null: deposits other test files leave waiting are overdue and were "listed" before.
+      await tx.update(telegramBotState).set({ lastReminderAt: at('07:00') });
       // 23:00 the evening before, in Damascus.
       const id = await submitted(tx, 5, new Date('2029-12-31T20:00:00Z'));
       await tx.insert(telegramDepositCards).values({

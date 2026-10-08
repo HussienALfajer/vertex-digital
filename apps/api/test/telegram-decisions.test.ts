@@ -371,6 +371,25 @@ describe('approval from Telegram (rule TC4)', () => {
     expect((await depositRow(id))?.status).toBe('submitted');
   });
 
+  it('refuses a resubmission made before the transaction number was sent (edge case 4)', async () => {
+    const { id, customer: by } = await submitted(6);
+    expect(await tap(`ap:${id}`)).toBeUndefined();
+    const requested = await client.post(`/api/admin/deposits/${id}/request-receipt`, {
+      cookie: admin.cookie,
+      body: { internalNote: 'The image is blurred' },
+    });
+    expect(requested.status).toBe(200);
+    const again = await client.post(`/api/deposits/${id}/receipt`, {
+      cookie: by.cookie,
+      form: form(await image()),
+    });
+    expect(again.status).toBe(200);
+    await sendText(transactionNumber());
+    expect(await lastReply()).toMatchObject({ reply: 'decision_refused', refusal: 'changed' });
+    expect(await openPromptId()).toBeUndefined();
+    expect((await depositRow(id))?.status).toBe('submitted');
+  });
+
   it('answers a transaction number already recorded', async () => {
     const first = await submitted(5);
     const second = await submitted(6);
