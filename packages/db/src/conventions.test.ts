@@ -42,6 +42,7 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   usdt_deposits: 'Part of its deposit (S04): never archived, keyed by the deposit',
   usdt_transfers: 'Append-only (S04): what the chain showed, never changed',
   usdt_scan_cursors: "A scanner's position (S04): overwritten each run, safe to move back",
+  store_switch_changes: 'Append-only (S05): a change is a new row, the newest is the value',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -67,6 +68,7 @@ const APPEND_ONLY_TABLES = [
   'deposit_flags',
   'stored_files',
   'usdt_transfers',
+  'store_switch_changes',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

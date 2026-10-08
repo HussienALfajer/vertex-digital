@@ -689,6 +689,30 @@ export type StoredFileRef = z.infer<typeof storedFileRefSchema>;
 
 /* Customer routes ------------------------------------------------------------------------ */
 
+/**
+ * A deposit method's state for new deposits (S05 rule SW6): `stopped` by the emergency stop,
+ * `paused` by its own switch, `unavailable` when not configured or not ready (S03 SC1, S04 U1).
+ * The store shows paused and stopped methods disabled with the stop text.
+ */
+export const DEPOSIT_METHOD_STATES = ['available', 'paused', 'stopped', 'unavailable'] as const;
+
+export const depositMethodStateSchema = z
+  .enum(DEPOSIT_METHOD_STATES)
+  .meta({ id: 'DepositMethodState' });
+
+export type DepositMethodState = z.infer<typeof depositMethodStateSchema>;
+
+/** The emergency stop wins over the method's pause, which wins over its configuration. */
+export function depositMethodState(input: {
+  stopped: boolean;
+  paused: boolean;
+  ready: boolean;
+}): DepositMethodState {
+  if (input.stopped) return 'stopped';
+  if (input.paused) return 'paused';
+  return input.ready ? 'available' : 'unavailable';
+}
+
 /** Why a currency cannot be deposited now (rules SC1, FX8). */
 export const DEPOSIT_UNAVAILABLE_REASONS = ['not_configured', 'disabled', 'no_rate'] as const;
 
@@ -700,6 +724,8 @@ const currencyOption = z.object({
 /** `GET /api/deposits/sham-cash/options` (rules SC1, SC3, SC13). */
 export const shamCashOptionsSchema = z
   .object({
+    /** The method's state (S05 rule SW6); `available` when a currency is. */
+    state: depositMethodStateSchema,
     currencies: z.object({ SYP: currencyOption, USD: currencyOption }),
     /** The store's Sham Cash account; null before the settings exist. */
     account: z.object({ name: z.string(), number: z.string() }).nullable(),
@@ -764,6 +790,8 @@ export const usdtOptionsSchema = z
     networks: z.array(
       z.object({
         method: usdtMethodSchema,
+        /** The network's state (S05 rule SW6); `available` only when `available` is true. */
+        state: depositMethodStateSchema,
         available: z.boolean(),
         unavailableReason: z.enum(USDT_UNAVAILABLE_REASONS).nullable(),
         /** Null while the network is not available. */

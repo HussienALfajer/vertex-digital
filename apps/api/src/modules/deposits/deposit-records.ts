@@ -3,9 +3,11 @@ import {
   DEPOSIT_CREATIONS_PER_HOUR,
   type Deposit,
   type DepositLimitSettings,
+  type DepositMethod,
   type DepositStatus,
   type DepositUsdt,
   depositLimits,
+  depositStopReason,
   MAX_DEPOSITS_IN_REVIEW,
   REFERENCE_CODE_ALPHABET,
   REFERENCE_CODE_LENGTH,
@@ -19,6 +21,7 @@ import type { PgInsertValue } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
+import type { SettingsService } from '../settings/index.js';
 import type { CurrentSettings } from './deposit-settings.service.js';
 
 /*
@@ -141,6 +144,21 @@ const REFERENCE_CODE_ATTEMPTS = 5;
 /** Serializes a customer's creations, so the one-pending, in-review and limit checks see each other. */
 export const lockCustomerCreations = (tx: Transaction, customerId: string) =>
   tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`deposits:${customerId}`}))`);
+
+/**
+ * S05 rules SW4, SW5: the switches read under their shared lock, inside the creation's
+ * transaction, so a creation either commits before a stop or sees it. Only creation is refused.
+ */
+export async function checkNotStopped(
+  switches: SettingsService,
+  tx: Transaction,
+  method: DepositMethod,
+): Promise<void> {
+  const reason = depositStopReason(await switches.valuesForDepositCreation(tx), method);
+  if (reason) {
+    throw new CodedException(409, 'DEPOSITS_STOPPED', 'New deposits are stopped', { reason });
+  }
+}
 
 /** Rules SC4, SC5, SC6: one pending, at most 3 in review, 10 creations an hour. */
 export async function checkCreation(tx: Transaction, customerId: string): Promise<void> {

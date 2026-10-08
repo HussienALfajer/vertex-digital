@@ -57,6 +57,14 @@ export class MockApi {
     ['GET /api/auth/get-session', { status: 200, body: null }],
     // Registration open, as locally and in E2E (rule C16).
     ['GET /api/auth/registration', { status: 200, body: { open: true } }],
+    // Nothing stopped: the stop banner reads it on every page (S05 rule SW9).
+    [
+      'GET /api/store/status',
+      {
+        status: 200,
+        body: { registrationOpen: true, purchasesStopped: false, depositsStopped: false },
+      },
+    ],
     // A real challenge needs the API's key; the mock only checks that one is fetched and sent.
     ['GET /api/altcha/challenge', { status: 200, body: ALTCHA_CHALLENGE }],
     // An empty wallet: the header's balance chip reads it on every page once signed in (S02 W8).

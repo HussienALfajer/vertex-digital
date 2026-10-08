@@ -12,6 +12,7 @@ import {
   PASSWORD,
   removeAccounts,
   seedCustomer,
+  setSwitches,
   uniqueEmail,
 } from './helpers.js';
 import { ProbeController } from './probe.controller.js';
@@ -31,6 +32,7 @@ const NEW_PASSWORD = 'a7Kq-blue-moon-river';
 
 beforeAll(async () => {
   test = await startApp({ controllers: [ProbeController] });
+  await setSwitches(test.db, { registration_open: true });
   client = api(test.url);
 });
 
@@ -143,25 +145,20 @@ describe('sign-up (rules C1, C2, C16)', () => {
     expect(await emailsTo(test.db, email)).toEqual([]);
   });
 
-  it('answers REGISTRATION_CLOSED while registration is closed, and says so to the store', async () => {
+  it('answers REGISTRATION_CLOSED while the switch is closed, and says so to the store', async () => {
     expect(await (await client.get('/api/auth/registration')).json()).toEqual({ open: true });
-    process.env.REGISTRATION_OPEN = 'false';
-    const closed = await startApp();
-    process.env.REGISTRATION_OPEN = 'true';
+    await setSwitches(test.db, { registration_open: false });
     try {
-      const closedClient = api(closed.url);
-      expect(await (await closedClient.get('/api/auth/registration')).json()).toEqual({
-        open: false,
-      });
+      expect(await (await client.get('/api/auth/registration')).json()).toEqual({ open: false });
       const email = uniqueEmail('closed');
-      const response = await closedClient.post('/api/auth/sign-up/email', {
+      const response = await client.post('/api/auth/sign-up/email', {
         body: signUpBody(email),
-        headers: await closedClient.altcha(),
+        headers: await client.altcha(),
       });
       expect(await body(response)).toMatchObject({ status: 403, code: 'REGISTRATION_CLOSED' });
       expect(await emailsTo(test.db, email)).toEqual([]);
     } finally {
-      await closed.app.close();
+      await setSwitches(test.db, { registration_open: true });
     }
   });
 });

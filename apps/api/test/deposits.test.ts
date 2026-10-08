@@ -13,6 +13,7 @@ import {
   ledgerPostings,
   newId,
   storedFiles,
+  storeSwitchChanges,
 } from '@vertex-digital/db';
 import { and, eq, sql } from 'drizzle-orm';
 import sharp from 'sharp';
@@ -25,6 +26,7 @@ import {
   PASSWORD,
   removeAccounts,
   seedCustomer,
+  setSwitches,
   totp,
   uniquePhone,
 } from './helpers.js';
@@ -185,6 +187,7 @@ const actionsOf = async (depositId: string) =>
 beforeAll(async () => {
   test = await startApp();
   client = api(test.url);
+  await setSwitches(test.db);
   admin = await client.adminWithTotp(test.db);
   seeded.push(admin.id);
   plainAdmin = await client.signInAdmin(admin.email, admin.secret);
@@ -205,6 +208,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await setSwitches(test.db);
   await removeAccounts(test.db, seeded);
   await test.app.close();
 });
@@ -351,6 +355,7 @@ describe('the options (rules SC1, SC3, SC13)', () => {
       cookie: someone.cookie,
     });
     expect(await response.json()).toMatchObject({
+      state: 'available',
       currencies: {
         SYP: { available: true, reason: null },
         USD: { available: true, reason: null },
@@ -732,6 +737,101 @@ describe('receipts (rule SC8)', () => {
       details: { status: 'cancelled' },
     });
     expect(await actionsOf(deposit.id)).toEqual(['deposit.created', 'deposit.cancelled']);
+  });
+});
+
+describe('the store switches (S05 rules SW4–SW6)', () => {
+  it('shows the method paused or stopped, and refuses only new deposits', async () => {
+    const someone = await customer();
+    const existing = await created(someone.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    const options = async () =>
+      (await (
+        await client.get('/api/deposits/sham-cash/options', { cookie: someone.cookie })
+      ).json()) as { state: string; currencies: { USD: { available: boolean } } };
+    const other = await customer();
+    try {
+      await setSwitches(test.db, { sham_cash_paused: true });
+      expect(await options()).toMatchObject({
+        state: 'paused',
+        currencies: { USD: { available: true } },
+      });
+      expect(
+        await body(await create(other.cookie, { currency: 'USD', amountUnits: 5 * USD })),
+      ).toMatchObject({
+        status: 409,
+        code: 'DEPOSITS_STOPPED',
+        details: { reason: 'method_paused' },
+      });
+
+      await setSwitches(test.db, { sham_cash_paused: true, deposits_stopped: true });
+      expect((await options()).state).toBe('stopped');
+      expect(
+        await body(await create(other.cookie, { currency: 'USD', amountUnits: 5 * USD })),
+      ).toMatchObject({ status: 409, code: 'DEPOSITS_STOPPED', details: { reason: 'emergency' } });
+
+      // A deposit that already exists goes on: its receipt, then the admin's approval (SW4).
+      const receipt = await submit(someone.cookie, existing.id);
+      expect(receipt.status, await receipt.clone().text()).toBe(200);
+      const approved = await approve(existing.id, {
+        transactionNumber: transactionNumber(),
+        receivedCurrency: 'USD',
+        receivedAmountUnits: 5 * USD,
+      });
+      expect(approved.status, await approved.clone().text()).toBe(200);
+    } finally {
+      await setSwitches(test.db);
+    }
+    expect((await options()).state).toBe('available');
+    const after = await create(other.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    expect(after.status).toBe(201);
+  });
+
+  it('replays a creation made before the stop', async () => {
+    const someone = await customer();
+    const key = randomUUID();
+    const input = { currency: 'USD' as const, amountUnits: 5 * USD };
+    expect((await create(someone.cookie, input, key)).status).toBe(201);
+    try {
+      await setSwitches(test.db, { deposits_stopped: true });
+      expect((await create(someone.cookie, input, key)).status).toBe(200);
+    } finally {
+      await setSwitches(test.db);
+    }
+  });
+
+  it('makes a creation wait for a stop being written, then sees it (rule SW5)', async () => {
+    const someone = await customer();
+    let answer: Promise<Response> | undefined;
+    await test.db.transaction(async (tx) => {
+      // What `SettingsService.change` does, held open while the customer creates a deposit.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('settings'))`);
+      await tx.insert(storeSwitchChanges).values({
+        id: newId(),
+        switch: 'deposits_stopped',
+        value: true,
+        adminId: newId(),
+        channel: 'admin',
+      });
+      answer = create(someone.cookie, { currency: 'USD', amountUnits: 5 * USD });
+      const settled = await Promise.race([
+        answer.then(() => 'answered'),
+        new Promise((resolve) => setTimeout(() => resolve('waiting'), 500)),
+      ]);
+      expect(settled).toBe('waiting');
+    });
+    try {
+      expect(await body(await (answer as Promise<Response>))).toMatchObject({
+        status: 409,
+        code: 'DEPOSITS_STOPPED',
+      });
+      const [pending] = await test.db
+        .select({ id: deposits.id })
+        .from(deposits)
+        .where(eq(deposits.customerId, someone.id));
+      expect(pending).toBeUndefined();
+    } finally {
+      await setSwitches(test.db);
+    }
   });
 });
 

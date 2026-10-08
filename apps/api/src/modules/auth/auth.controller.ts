@@ -44,8 +44,8 @@ export class AuthController {
     description: 'Whether customers can sign up (rule C16)',
     standardSchema: registrationSchema,
   })
-  registration() {
-    return { open: this.accounts.registrationOpen() };
+  async registration() {
+    return { open: await this.accounts.registrationOpen() };
   }
 
   @Post('sign-up/email')

@@ -2,10 +2,12 @@ import { randomInt } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   type CreateUsdtDeposit,
+  DEPOSIT_PAUSE_SWITCHES,
   DEPOSIT_PENDING_HOURS,
   type Deposit,
   depositLimitBreach,
   depositLimitSettingsFor,
+  depositMethodState,
   MAX_TXID_SUBMISSIONS,
   normalizeTxid,
   QUEUES,
@@ -36,9 +38,11 @@ import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { withinLimits } from '../auth/index.js';
+import { SettingsService } from '../settings/index.js';
 import {
   AlreadyCreated,
   checkCreation,
+  checkNotStopped,
   customerEntry,
   insertDeposit,
   isOpen,
@@ -83,13 +87,15 @@ export class UsdtDepositsService {
     private readonly settings: DepositSettingsService,
     private readonly deposits: DepositsService,
     private readonly jobs: JobsService,
+    private readonly switches: SettingsService,
   ) {}
 
   /** `GET /api/deposits/usdt/options` (rules U1, U5). */
   async options(customerId: string): Promise<UsdtOptions> {
     const settings = await this.settings.current();
-    const [networks, [pending]] = await Promise.all([
+    const [networks, switches, [pending]] = await Promise.all([
       this.settings.usdtNetworks(settings),
+      this.switches.values(),
       this.db
         .select({ id: deposits.id })
         .from(deposits)
@@ -98,6 +104,11 @@ export class UsdtDepositsService {
     return {
       networks: networks.map((network) => ({
         method: network.method,
+        state: depositMethodState({
+          stopped: switches.deposits_stopped,
+          paused: switches[DEPOSIT_PAUSE_SWITCHES[network.method]],
+          ready: network.unavailableReason === null,
+        }),
         available: network.unavailableReason === null,
         unavailableReason: network.unavailableReason,
         address: network.unavailableReason === null ? network.address : null,
@@ -139,6 +150,7 @@ export class UsdtDepositsService {
           .from(deposits)
           .where(eq(deposits.idempotencyKey, idempotencyKey));
         if (written) throw new AlreadyCreated();
+        await checkNotStopped(this.switches, tx, input.method);
         await checkCreation(tx, customerId);
         const limits = await limitsOf(
           tx,

@@ -99,7 +99,7 @@ The restore stops the three apps, saves the current database to `shared/db-befor
 
 ## Accounts
 
-Customer registration stays closed in production until the pilot: `REGISTRATION_OPEN` stays unset (closed) in `shared/.env` until S05 replaces it with the panel's switch (F26).
+Customer registration stays closed in production until the pilot. It is the panel's `registration_open` switch (S05, F26: `/settings/switches`, closed by default); no migration or seed opens it. The former `REGISTRATION_OPEN` variable is ignored: remove it from `shared/.env`.
 
 There is one admin account (ADR 0016), created and recovered on the server only. Each command prints a generated password once, to whoever runs it, and writes an audit entry. A printed password must be changed at the next sign-in, then TOTP is enrolled: sign in right away, since until then anyone who learns the password could enrol their own authenticator first.
 

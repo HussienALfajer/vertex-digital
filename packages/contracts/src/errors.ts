@@ -97,6 +97,8 @@ export const ERROR_CODES = [
   'TXID_ATTEMPTS_EXCEEDED',
   /** Every tail of this amount is reserved on this network: try a cent more or less (rule U3). */
   'DEPOSIT_AMOUNT_BUSY',
+  /** New deposits of this method are stopped; `details.reason`: `emergency` or `method_paused` (S05 rule SW4). */
+  'DEPOSITS_STOPPED',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

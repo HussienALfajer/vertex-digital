@@ -22,6 +22,7 @@ import {
   PASSWORD,
   removeAccounts,
   seedCustomer,
+  setSwitches,
   totp,
   uniquePhone,
 } from './helpers.js';
@@ -246,6 +247,7 @@ beforeAll(async () => {
   delete process.env.USDT_BEP20_ADDRESS;
   test = await startApp();
   client = api(test.url);
+  await setSwitches(test.db);
   admin = await client.adminWithTotp(test.db);
   seeded.push(admin.id);
   plainAdmin = await client.signInAdmin(admin.email, admin.secret);
@@ -256,6 +258,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.USDT_TRC20_ADDRESS;
+  await setSwitches(test.db);
   await removeAccounts(test.db, seeded);
   await test.app.close();
 });
@@ -337,6 +340,7 @@ describe('the USDT options (rules U1, U5)', () => {
       networks: [
         {
           method: 'usdt_trc20',
+          state: 'available',
           available: true,
           unavailableReason: null,
           address: TRON_ADDRESS,
@@ -344,6 +348,7 @@ describe('the USDT options (rules U1, U5)', () => {
         },
         {
           method: 'usdt_bep20',
+          state: 'unavailable',
           available: false,
           unavailableReason: 'not_configured',
           address: null,
@@ -358,6 +363,42 @@ describe('the USDT options (rules U1, U5)', () => {
       await client.get('/api/deposits/usdt/options', { cookie: someone.cookie })
     ).json()) as { pendingDepositId: string };
     expect(again.pendingDepositId).toBe(deposit.id);
+  });
+
+  it('shows a network paused or stopped, and refuses its new deposits (S05 rules SW4, SW6)', async () => {
+    const someone = await customer();
+    const states = async () =>
+      (
+        (await (
+          await client.get('/api/deposits/usdt/options', { cookie: someone.cookie })
+        ).json()) as { networks: { method: string; state: string; available: boolean }[] }
+      ).networks.map((network) => [network.method, network.state, network.available]);
+    try {
+      await setSwitches(test.db, { usdt_trc20_paused: true });
+      expect(await states()).toEqual([
+        ['usdt_trc20', 'paused', true],
+        ['usdt_bep20', 'unavailable', false],
+      ]);
+      expect(await body(await create(someone.cookie, { amountUnits: amount() }))).toMatchObject({
+        status: 409,
+        code: 'DEPOSITS_STOPPED',
+        details: { reason: 'method_paused' },
+      });
+      await setSwitches(test.db, { deposits_stopped: true });
+      expect(await states()).toEqual([
+        ['usdt_trc20', 'stopped', true],
+        ['usdt_bep20', 'stopped', false],
+      ]);
+      expect(await body(await create(someone.cookie, { amountUnits: amount() }))).toMatchObject({
+        status: 409,
+        code: 'DEPOSITS_STOPPED',
+        details: { reason: 'emergency' },
+      });
+      await setSwitches(test.db, { sham_cash_paused: true, usdt_bep20_paused: true });
+      expect((await create(someone.cookie, { amountUnits: amount() })).status).toBe(201);
+    } finally {
+      await setSwitches(test.db);
+    }
   });
 
   it('marks a network delayed when its scanner is late, and refuses new deposits (rule U12)', async () => {

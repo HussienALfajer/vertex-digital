@@ -7,6 +7,10 @@ import {
   floorToWholeCents,
   rateChangePercent,
   rateConfirmationError,
+  STORE_SWITCH_DEFAULTS,
+  STORE_SWITCHES,
+  type StoreSwitch,
+  type SwitchChange,
 } from '@vertex-digital/contracts';
 import openapi from '../../api/openapi.json' with { type: 'json' };
 
@@ -244,6 +248,8 @@ export class AdminApi {
       createdAt: hoursAgo(1),
     },
   ];
+  /** The store switch changes, newest first (S05 rule SW1): none, so every switch has its default. */
+  switchChanges: SwitchChange[] = [];
   /** The deposit settings: the defaults until the first save (rule SC1). */
   depositSettings: Record<string, unknown> = {
     ...DEPOSIT_SETTINGS_DEFAULTS,
@@ -341,6 +347,68 @@ export class AdminApi {
       },
       deposit: null,
     }));
+  }
+
+  /** Every switch with its newest change, as `GET /api/admin/switches` answers. */
+  switches() {
+    return {
+      switches: STORE_SWITCHES.map((name) => {
+        const change = this.switchChanges.find((item) => item.switch === name);
+        return {
+          switch: name,
+          value: change?.value ?? STORE_SWITCH_DEFAULTS[name],
+          default: STORE_SWITCH_DEFAULTS[name],
+          since: change?.createdAt ?? null,
+          channel: change?.channel ?? null,
+        };
+      }),
+    };
+  }
+
+  /** The switch routes of S05, or false when `path` is not one of them. */
+  private async answerSwitches(
+    route: Route,
+    method: string,
+    url: URL,
+    body: Record<string, unknown> | null,
+  ): Promise<boolean> {
+    const json = async (status: number, value: unknown) => {
+      await route.fulfill({ status, json: value });
+      return true;
+    };
+    if (url.pathname === '/api/admin/switches' && method === 'GET') {
+      return json(200, this.switches());
+    }
+    if (url.pathname === '/api/admin/switches' && method === 'POST') {
+      if (this.reauthenticationRequired) {
+        return json(403, {
+          statusCode: 403,
+          code: 'REAUTHENTICATION_REQUIRED',
+          message: 'REAUTHENTICATION_REQUIRED',
+        });
+      }
+      const input = body as { switch: StoreSwitch; value: boolean };
+      const current = this.switches().switches.find((item) => item.switch === input.switch);
+      if (current && current.value !== input.value) {
+        this.switchChanges = [
+          {
+            id: `0199a000-0000-7000-8000-0000000005${this.switchChanges.length.toString().padStart(2, '0')}`,
+            switch: input.switch,
+            value: input.value,
+            channel: 'admin',
+            createdAt: new Date().toISOString(),
+          },
+          ...this.switchChanges,
+        ];
+      }
+      return json(200, this.switches());
+    }
+    if (url.pathname === '/api/admin/switches/history' && method === 'GET') {
+      const filter = url.searchParams.get('switch');
+      const items = this.switchChanges.filter((item) => !filter || item.switch === filter);
+      return json(200, { items, nextCursor: null });
+    }
+    return false;
   }
 
   /** The deposit and rate routes of S03, or false when `path` is not one of them. */
@@ -705,6 +773,10 @@ export class AdminApi {
         .filter((transfer) => state === 'all' || transfer.state === 'unmatched')
         .filter((transfer) => !byMethod || transfer.method === byMethod);
       return json(200, { items, nextCursor: null });
+    }
+    if (path.startsWith('/api/admin/switches')) {
+      const answered = await this.answerSwitches(route, request.method(), url, body);
+      if (answered) return;
     }
     if (path.startsWith('/api/admin/deposit') || path === '/api/admin/rates') {
       const answered = await this.answerDeposits(route, request.method(), url, body);

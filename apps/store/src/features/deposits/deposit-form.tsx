@@ -47,19 +47,22 @@ const CURRENCY_ORDER: Currency[] = ['SYP', 'USD'];
 /** The method picker's order (S04 screens). */
 const METHODS: DepositMethod[] = ['sham_cash', ...USDT_METHODS];
 
-/** Why a method cannot take a deposit now, or null when it can. */
+/**
+ * Why a method cannot take a deposit now, or null when it can: `stopped` for the emergency stop
+ * or the method's pause (S05 rule SW6), shown alike to customers.
+ */
 function unavailableReason(
   method: DepositMethod,
   shamCash: ShamCashOptions,
   usdt: UsdtOptions,
-): 'unavailable' | 'delayed' | null {
+): 'stopped' | 'unavailable' | 'delayed' | null {
   if (method === 'sham_cash') {
-    return CURRENCY_ORDER.some((currency) => shamCash.currencies[currency].available)
-      ? null
-      : 'unavailable';
+    if (shamCash.state === 'stopped' || shamCash.state === 'paused') return 'stopped';
+    return shamCash.state === 'available' ? null : 'unavailable';
   }
   const network = usdt.networks.find((item) => item.method === method);
-  if (network?.available) return null;
+  if (network?.state === 'stopped' || network?.state === 'paused') return 'stopped';
+  if (network?.state === 'available') return null;
   return network?.unavailableReason === 'delayed' ? 'delayed' : 'unavailable';
 }
 
@@ -116,12 +119,14 @@ export function DepositFormPage() {
     );
   }
   const { shamCash, usdt } = state;
-  if (METHODS.every((method) => unavailableReason(method, shamCash, usdt))) {
+  const reasons = METHODS.map((method) => unavailableReason(method, shamCash, usdt));
+  if (reasons.every((reason) => reason)) {
+    const stopped = reasons.includes('stopped');
     return (
       <EmptyState
         icon={<WalletIcon />}
-        title={t('deposits.form.unavailableTitle')}
-        description={t('deposits.form.unavailableBody')}
+        title={t(stopped ? 'deposits.form.stoppedTitle' : 'deposits.form.unavailableTitle')}
+        description={t(stopped ? 'deposits.form.stoppedBody' : 'deposits.form.unavailableBody')}
         action={
           <Button variant="outline" size="xl" render={<Link href="/wallet" />}>
             {t('deposits.backToWallet')}
