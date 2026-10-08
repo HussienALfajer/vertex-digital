@@ -21,4 +21,4 @@ Spec: `docs/specs/S06-catalog-and-pricing.md` (F08, F10; ADRs 0003, 0005, 0008, 
 - [x] Navigation "الكتالوج" and "التسعير"; i18n (namespaces, errors, audit labels)
 - [x] E2E: catalog and pricing flows and RTL screenshots (light and dark), re-authentication dialog
 - [x] Wiring checklist, docs (`docs/ROADMAP.md` S06 done, `wiring.md` patterns)
-- [ ] Checks, reviewer, owner acceptance (spec steps 1–10), PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e: all passed and recorded), reviewer (one blocking finding, fixed), owner acceptance (2026-10-08), PR with auto-merge
