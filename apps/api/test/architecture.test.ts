@@ -210,6 +210,7 @@ describe('module boundaries', () => {
     files: 'files',
     notifications: 'notifications',
     rates: 'rates',
+    settings: 'settings',
     system: null,
     wallet: 'wallet',
   };

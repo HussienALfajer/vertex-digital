@@ -215,6 +215,7 @@ describe('append-only trigger', () => {
       'ledger_journals',
       'ledger_postings',
       'payment_references',
+      'store_switch_changes',
       'stored_files',
       // Its TRUNCATE trigger: rows are guarded by `usdt_deposits_guard` (deposits.test.ts).
       'usdt_deposits',
@@ -253,6 +254,7 @@ describe('append-only trigger', () => {
     ['payment_references', /is append-only: TRUNCATE/],
     ['deposit_settings', /is append-only: TRUNCATE/],
     ['deposit_flags', /is append-only: TRUNCATE/],
+    ['store_switch_changes', /is append-only: TRUNCATE/],
     // Referenced by flags, receipts, settings, deposits and payment references.
     ['exchange_rates', /cannot truncate a table referenced in a foreign key constraint/],
     ['deposits', /cannot truncate a table referenced in a foreign key constraint/],

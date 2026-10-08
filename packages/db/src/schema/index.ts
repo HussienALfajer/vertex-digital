@@ -6,5 +6,6 @@ export * from './deposits.js';
 export * from './files.js';
 export * from './notifications.js';
 export * from './rates.js';
+export * from './settings.js';
 export * from './system.js';
 export * from './wallet.js';
