@@ -257,7 +257,6 @@ async function adjustmentsOf(
   return new Map(rows.map(({ journalId, ...adjustment }) => [journalId, adjustment]));
 }
 
-
 async function depositsOf(
   db: Executor,
   journalIds: string[],

@@ -11,8 +11,8 @@ import {
   isSameRate,
   isWholeCents,
   parseUsd,
-  rateFromNumeric,
   rateChangePercent,
+  rateFromNumeric,
   sypDepositUsd,
   sypDisplayPrice,
   sypToUsd,
@@ -273,7 +273,7 @@ describe('deposit credits (S03 rules FX6, M3)', () => {
 });
 
 describe('rateFromNumeric', () => {
-  it('drops the trailing zeros PostgreSQL writes, never a whole number\'s', () => {
+  it("drops the trailing zeros PostgreSQL writes, never a whole number's", () => {
     expect(rateFromNumeric('118.5000')).toBe('118.5');
     expect(rateFromNumeric('120.0000')).toBe('120');
     expect(rateFromNumeric('100.0500')).toBe('100.05');
