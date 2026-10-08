@@ -12,7 +12,7 @@ Why three and not the spec's two: PR 1 of the spec (contracts, db, readers, jobs
 - [x] Bridge: build, OpenAPI export, admin client; admin typecheck; store/admin fixtures and E2E mocks adapted to changed shapes (the settings form keeps the USDT values until PR 3)
 - [x] Wiring checklist, docs (`docs/architecture.md`, `docs/deployment.md` variables and address-change note, folder `CLAUDE.md`, spec details settled; queue policies `stately` in `QUEUE_POLICIES`)
 - [x] Checks (lint, typecheck, test, build, drift, e2e: all passed and recorded), reviewer (no blocking findings; three PR 2 notes below)
-- [ ] Owner acceptance, PR with auto-merge
+- [x] Owner acceptance (2026-10-08), PR with auto-merge
 
 ## PR 2 — Chain readers and worker jobs · Opus 5.5 `high`
 - [ ] `ChainReader` interface and `ChainReaderError`; `fake` reader (test-database table only, refused in production); TronGrid reader and BSC JSON-RPC reader with recorded, sanitized public fixtures (endpoints, limits and the BSC provider named)
@@ -22,7 +22,7 @@ Why three and not the spec's two: PR 1 of the spec (contracts, db, readers, jobs
 - [ ] CLI `usdt:fake-transfer`; commands table in `AGENTS.md`
 - [ ] Tests: exact match, each bounce, each review reason, reader error never "not found", 30-minute window, TRON solidified, BSC finalized + 15, summing, 18-decimal remainder, cursor overlap and duplicates, dust, stale alert once, scanner vs verifier in parallel → one journal/audit/email
 - [ ] From the PR 1 review: two customers may hold the same TXID while `searching` (no lock on submission; credit stays single through the unique transfer, binding and claim): the verifier treats "transfer bound to another deposit" as a final outcome, never a retry loop
-- [ ] From the PR 1 review: a TXID whose transfer is under $1 cannot be recorded (`usdt_transfers` keeps $1 and up, rule U14) yet rule U11 binds it for review: decide its outcome with the owner (bounce, or review without a row) before the verifier is written
+- [ ] From the PR 1 review: a TXID whose transfer is under $1 cannot be recorded (`usdt_transfers` keeps $1 and up, rule U14) yet rule U11 binds it for review: owner (2026-10-08): bounce it back to `pending` with a clear reason (the first of the two options offered); confirm the reason code when PR 2 adds it
 - [ ] The worker checks `USDT_TRC20_ADDRESS` / `USDT_BEP20_ADDRESS` at boot too (edge case 17), with `CHAIN_READER` (`fake` refused in production) and the reader variables; `.env.example` `CHAIN_READER=fake`
 - [ ] Docs (`docs/architecture.md` jobs and readers), checks, reviewer, owner acceptance, PR with auto-merge
 

@@ -468,3 +468,4 @@ Tests:
   - `approve-usdt` is a `@Sensitive()` route; `reject` refuses a USDT deposit not in review.
   - The all-zero addresses an older `.env.example` shipped count as unset. `CHAIN_READER` and the reader variables arrive with PR 2, in the worker.
   - The TRON contract was checked on Tronscan's contract page (2026-10-08); Tether's own page could not be reached from the build environment, so the BSC contract rests on BscScan and its EIP-55 checksum until the owner's live check.
+  - A TXID whose official-USDT transfer to the store is under $1 (rule U14 keeps it out of `usdt_transfers`) bounces the deposit back to `pending` with a clear reason instead of going to review (owner, 2026-10-08); PR 2 adds the reason.
