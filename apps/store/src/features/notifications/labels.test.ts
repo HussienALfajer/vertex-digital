@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { ltr } from '@/lib/format';
 import { badgeText, notificationHref, notificationText } from './labels';
 
+/** The code as the sentence holds it: whole, with a word joiner after the hyphen. */
+const code = ltr('VD-\u2060ABC23');
+
 const base = { id: 'n1', readAt: null, createdAt: '2026-10-08T10:00:00.000Z' };
 const depositId = '01920000-0000-7000-8000-000000000001';
 
@@ -13,23 +16,21 @@ describe('notification labels', () => {
       event: 'deposit_credited',
       params: { depositId, referenceCode: 'VD-ABC23', creditedUsdUnits: 20_000_000 },
     };
-    expect(notificationText(credited)).toBe(
-      `أُضيف ${ltr('$20.00')} إلى رصيدك (${ltr('VD-ABC23')}).`,
-    );
+    expect(notificationText(credited)).toBe(`أُضيف ${ltr('$20.00')} إلى رصيدك (${code}).`);
     expect(
       notificationText({
         ...base,
         event: 'deposit_rejected',
         params: { depositId, referenceCode: 'VD-ABC23', reason: 'not_received' },
       }),
-    ).toBe(`رُفض الإيداع ${ltr('VD-ABC23')}: لم يصل التحويل إلى حسابنا.`);
+    ).toBe(`رُفض الإيداع ${code}: لم يصل التحويل إلى حسابنا.`);
     expect(
       notificationText({
         ...base,
         event: 'deposit_receipt_requested',
         params: { depositId, referenceCode: 'VD-ABC23' },
       }),
-    ).toContain(ltr('VD-ABC23'));
+    ).toContain(code);
     expect(
       notificationText({
         ...base,

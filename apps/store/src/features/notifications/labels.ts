@@ -2,22 +2,25 @@ import { type CustomerNotification, formatUsd } from '@vertex-digital/contracts'
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
 
+/** A reference code kept whole: left to right, and no line break after its hyphen (U+2060). */
+const reference = (code: string) => ltr(code.replace('-', '-\u2060'));
+
 /** The notification's sentence (rule NT3): rendered here from its params, never by the API. */
 export function notificationText(notification: CustomerNotification): string {
   switch (notification.event) {
     case 'deposit_credited':
       return t('notifications.events.deposit_credited', {
         amount: ltr(formatUsd(notification.params.creditedUsdUnits)),
-        reference: ltr(notification.params.referenceCode),
+        reference: reference(notification.params.referenceCode),
       });
     case 'deposit_rejected':
       return t('notifications.events.deposit_rejected', {
-        reference: ltr(notification.params.referenceCode),
+        reference: reference(notification.params.referenceCode),
         reason: t(`deposits.rejectReasons.${notification.params.reason}`),
       });
     case 'deposit_receipt_requested':
       return t('notifications.events.deposit_receipt_requested', {
-        reference: ltr(notification.params.referenceCode),
+        reference: reference(notification.params.referenceCode),
       });
     case 'wallet_adjusted': {
       const { params } = notification;
