@@ -20,6 +20,7 @@ import { Route as AppRatesRouteImport } from './routes/_app/rates'
 import { Route as AppTestCustomersRouteImport } from './routes/_app/test-customers'
 import { Route as AppDepositsIndexRouteImport } from './routes/_app/deposits.index'
 import { Route as AppDepositsIdRouteImport } from './routes/_app/deposits.$id'
+import { Route as AppDepositsTransfersRouteImport } from './routes/_app/deposits.transfers'
 import { Route as AppSettingsDepositsRouteImport } from './routes/_app/settings.deposits'
 import { Route as AppWalletsIndexRouteImport } from './routes/_app/wallets.index'
 import { Route as AppWalletsCustomerIdRouteImport } from './routes/_app/wallets.$customerId'
@@ -78,6 +79,11 @@ const AppDepositsIdRoute = AppDepositsIdRouteImport.update({
   path: '/deposits/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDepositsTransfersRoute = AppDepositsTransfersRouteImport.update({
+  id: '/deposits/transfers',
+  path: '/deposits/transfers',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsDepositsRoute = AppSettingsDepositsRouteImport.update({
   id: '/settings/deposits',
   path: '/settings/deposits',
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/rates': typeof AppRatesRoute
   '/test-customers': typeof AppTestCustomersRoute
   '/deposits/$id': typeof AppDepositsIdRoute
+  '/deposits/transfers': typeof AppDepositsTransfersRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/deposits/': typeof AppDepositsIndexRoute
@@ -119,6 +126,7 @@ export interface FileRoutesByTo {
   '/test-customers': typeof AppTestCustomersRoute
   '/': typeof AppIndexRoute
   '/deposits/$id': typeof AppDepositsIdRoute
+  '/deposits/transfers': typeof AppDepositsTransfersRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/deposits': typeof AppDepositsIndexRoute
@@ -136,6 +144,7 @@ export interface FileRoutesById {
   '/_app/test-customers': typeof AppTestCustomersRoute
   '/_app/': typeof AppIndexRoute
   '/_app/deposits/$id': typeof AppDepositsIdRoute
+  '/_app/deposits/transfers': typeof AppDepositsTransfersRoute
   '/_app/settings/deposits': typeof AppSettingsDepositsRoute
   '/_app/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/_app/deposits/': typeof AppDepositsIndexRoute
@@ -153,6 +162,7 @@ export interface FileRouteTypes {
     | '/rates'
     | '/test-customers'
     | '/deposits/$id'
+    | '/deposits/transfers'
     | '/settings/deposits'
     | '/wallets/$customerId'
     | '/deposits/'
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/test-customers'
     | '/'
     | '/deposits/$id'
+    | '/deposits/transfers'
     | '/settings/deposits'
     | '/wallets/$customerId'
     | '/deposits'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/_app/test-customers'
     | '/_app/'
     | '/_app/deposits/$id'
+    | '/_app/deposits/transfers'
     | '/_app/settings/deposits'
     | '/_app/wallets/$customerId'
     | '/_app/deposits/'
@@ -276,6 +288,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDepositsIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/deposits/transfers': {
+      id: '/_app/deposits/transfers'
+      path: '/deposits/transfers'
+      fullPath: '/deposits/transfers'
+      preLoaderRoute: typeof AppDepositsTransfersRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings/deposits': {
       id: '/_app/settings/deposits'
       path: '/settings/deposits'
@@ -307,6 +326,7 @@ interface AppRouteChildren {
   AppTestCustomersRoute: typeof AppTestCustomersRoute
   AppIndexRoute: typeof AppIndexRoute
   AppDepositsIdRoute: typeof AppDepositsIdRoute
+  AppDepositsTransfersRoute: typeof AppDepositsTransfersRoute
   AppSettingsDepositsRoute: typeof AppSettingsDepositsRoute
   AppWalletsCustomerIdRoute: typeof AppWalletsCustomerIdRoute
   AppDepositsIndexRoute: typeof AppDepositsIndexRoute
@@ -320,6 +340,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppTestCustomersRoute: AppTestCustomersRoute,
   AppIndexRoute: AppIndexRoute,
   AppDepositsIdRoute: AppDepositsIdRoute,
+  AppDepositsTransfersRoute: AppDepositsTransfersRoute,
   AppSettingsDepositsRoute: AppSettingsDepositsRoute,
   AppWalletsCustomerIdRoute: AppWalletsCustomerIdRoute,
   AppDepositsIndexRoute: AppDepositsIndexRoute,

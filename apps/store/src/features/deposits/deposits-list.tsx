@@ -14,7 +14,7 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { amountText, STATUS_TONES } from './amounts';
+import { amountText, STATUS_TONES, statusText } from './amounts';
 import { listDeposits } from './requests';
 
 type State =
@@ -117,12 +117,11 @@ export function DepositsList() {
                   {amountText(deposit.currency, deposit.declaredAmountUnits)}
                 </p>
                 <p className="text-sm text-muted-foreground">
+                  {t(`deposits.methods.${deposit.method}`)} ·{' '}
                   <bdi dir="ltr">{deposit.referenceCode}</bdi> · {formatDateTime(deposit.createdAt)}
                 </p>
               </div>
-              <Badge tone={STATUS_TONES[deposit.status]}>
-                {t(`deposits.statuses.${deposit.status}`)}
-              </Badge>
+              <Badge tone={STATUS_TONES[deposit.status]}>{statusText(deposit)}</Badge>
               <ChevronRightIcon
                 className="size-5 text-muted-foreground rtl:-scale-x-100"
                 aria-hidden="true"

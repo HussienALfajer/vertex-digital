@@ -3,9 +3,7 @@
 import { type Deposit, formatRate, formatSyp, formatUsd } from '@vertex-digital/contracts';
 import { Badge } from '@vertex-digital/ui/components/badge';
 import { Button } from '@vertex-digital/ui/components/button';
-import { Card } from '@vertex-digital/ui/components/card';
 import { EmptyState } from '@vertex-digital/ui/components/empty-state';
-import { IconTile } from '@vertex-digital/ui/components/icon-tile';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import {
   CircleAlertIcon,
@@ -13,19 +11,23 @@ import {
   CircleXIcon,
   ClockIcon,
   HourglassIcon,
-  type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { amountText, STATUS_TONES } from './amounts';
+import { amountText, STATUS_TONES, statusText } from './amounts';
+import { Line, Panel } from './panel';
 import { PendingDeposit } from './pending-deposit';
 import { getDeposit } from './requests';
+import { UsdtAwaiting, UsdtChecking, UsdtCreditedLines } from './usdt-deposit';
 
 /** While in review the page reads the deposit again this often, when visible (S03 screens). */
 const REFRESH_MS = 30_000;
+
+/** An open USDT deposit is read this often while visible, and every 30 s when hidden (S04). */
+const USDT_REFRESH_MS = 10_000;
 
 type State =
   | { status: 'loading' }
@@ -58,14 +60,25 @@ export function DepositPage() {
     void load();
   }, [load]);
 
-  const inReview = state.status === 'ready' && state.deposit.status === 'submitted';
+  const open =
+    state.status === 'ready' &&
+    (state.deposit.status === 'submitted' ||
+      (state.deposit.status === 'pending' && state.deposit.usdt !== null));
+  const usdt = state.status === 'ready' && state.deposit.usdt !== null;
   useEffect(() => {
-    if (!inReview) return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void load();
-    }, REFRESH_MS);
+    if (!open) return;
+    let last = Date.now();
+    const timer = setInterval(
+      () => {
+        const visible = document.visibilityState === 'visible';
+        if (!visible && (!usdt || Date.now() - last < REFRESH_MS)) return;
+        last = Date.now();
+        void load();
+      },
+      usdt ? USDT_REFRESH_MS : REFRESH_MS,
+    );
     return () => clearInterval(timer);
-  }, [inReview, load]);
+  }, [open, usdt, load]);
 
   if (state.status === 'missing') notFound();
   if (state.status === 'loading') return <DepositSkeleton />;
@@ -103,11 +116,21 @@ export function DepositPage() {
             </bdi>
           </p>
         )}
-        <Badge tone={STATUS_TONES[deposit.status]}>
-          {t(`deposits.statuses.${deposit.status}`)}
-        </Badge>
+        <Badge tone={STATUS_TONES[deposit.status]}>{statusText(deposit)}</Badge>
       </div>
-      {deposit.status === 'pending' ? (
+      {deposit.usdt && deposit.status === 'pending' ? (
+        <UsdtAwaiting
+          key={deposit.id}
+          deposit={deposit}
+          usdt={deposit.usdt}
+          onChange={(next) => {
+            if (next) setState({ status: 'ready', deposit: next });
+            else void load();
+          }}
+        />
+      ) : deposit.usdt && deposit.status === 'submitted' ? (
+        <UsdtChecking deposit={deposit} usdt={deposit.usdt} />
+      ) : deposit.status === 'pending' ? (
         <PendingDeposit
           key={deposit.id}
           deposit={deposit}
@@ -156,6 +179,7 @@ function Outcome({ deposit }: { deposit: Deposit }) {
             </p>
           )}
           <dl className="flex flex-col gap-2">
+            {deposit.usdt && <UsdtCreditedLines deposit={deposit} usdt={deposit.usdt} />}
             {credited?.receivedCurrency === 'SYP' && credited.rate && (
               <Line label={t('deposits.detail.received')}>
                 {t('deposits.sypAtRate', {
@@ -203,11 +227,13 @@ function Outcome({ deposit }: { deposit: Deposit }) {
           )}
         >
           <p className="text-base text-muted-foreground">
-            {t(
-              deposit.status === 'expired'
-                ? 'deposits.detail.expiredBody'
-                : 'deposits.detail.cancelledBody',
-            )}
+            {deposit.usdt
+              ? t('deposits.usdt.lateTransfer')
+              : t(
+                  deposit.status === 'expired'
+                    ? 'deposits.detail.expiredBody'
+                    : 'deposits.detail.cancelledBody',
+                )}
           </p>
           <NewDepositButton />
         </Panel>
@@ -220,39 +246,6 @@ function NewDepositButton() {
     <Button size="xl" render={<Link href="/wallet/deposit" />}>
       {t('deposits.newDeposit')}
     </Button>
-  );
-}
-
-function Panel({
-  icon: Icon,
-  tone,
-  title,
-  children,
-}: {
-  icon: LucideIcon;
-  tone: 'muted' | 'success';
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <Card className="gap-4">
-      <div className="flex items-center gap-3">
-        <IconTile tone={tone}>
-          <Icon />
-        </IconTile>
-        <h2 className="text-xl font-bold">{title}</h2>
-      </div>
-      {children}
-    </Card>
-  );
-}
-
-function Line({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="font-medium tabular-nums">{children}</dd>
-    </div>
   );
 }
 

@@ -4,6 +4,7 @@ import {
   approvalNeedsReauthentication,
   DEPOSIT_SETTINGS_DEFAULTS,
   depositCreditUsdUnits,
+  floorToWholeCents,
   rateChangePercent,
   rateConfirmationError,
 } from '@vertex-digital/contracts';
@@ -116,7 +117,8 @@ const REVERSE_PATH = /^\/api\/admin\/wallet-adjustments\/([^/]+)\/reverse$/;
 const RESET_PASSWORD_PATH = /^\/api\/admin\/test-customers\/[^/]+\/reset-password$/;
 const OWN_SESSION_PATH = /^\/api\/admin\/me\/sessions\/([^/]+)$/;
 const DEPOSIT_PATH = /^\/api\/admin\/deposits\/([^/]+)$/;
-const DEPOSIT_ACTION_PATH = /^\/api\/admin\/deposits\/([^/]+)\/(approve|reject|request-receipt)$/;
+const DEPOSIT_ACTION_PATH =
+  /^\/api\/admin\/deposits\/([^/]+)\/(approve|approve-usdt|reject|request-receipt|recheck)$/;
 const RECEIPT_PATH = /^\/api\/admin\/deposits\/[^/]+\/receipts\/[^/]+$/;
 const QR_PATH = /^\/api\/admin\/deposit-settings\/qr\/[^/]+$/;
 
@@ -255,6 +257,8 @@ export class AdminApi {
   };
   /** The deposits the queue and the review pages read (S03). */
   deposits: MockDeposit[] = [];
+  /** S04: the recorded USDT transfers, newest first, with their holder and candidates. */
+  usdtTransfers: (Record<string, unknown> & { id: string; txid: string; method: string })[] = [];
   /** The transaction numbers already claimed (rule SC14). */
   readonly claimedReferences = new Set<string>();
   private readonly decisionKeys = new Map<string, string>();
@@ -399,15 +403,21 @@ export class AdminApi {
         submitted: submitted.length,
         submittedFlagged: submitted.filter((deposit) => deposit.flags.length > 0).length,
         pending: this.deposits.filter((deposit) => deposit.status === 'pending').length,
-        usdtReview: 0,
-        unmatchedTransfers: 0,
+        usdtReview: submitted.filter(
+          (deposit) => (deposit.usdt as { checkStatus?: string } | null)?.checkStatus === 'review',
+        ).length,
+        unmatchedTransfers: this.transfersWithState().filter(
+          (transfer) => transfer.state === 'unmatched',
+        ).length,
       });
     }
     if (path === '/api/admin/deposits' && method === 'GET') {
       const status = url.searchParams.get('status') ?? 'submitted';
       const q = (url.searchParams.get('q') ?? '').toUpperCase();
+      const byMethod = url.searchParams.get('method');
       const items = this.deposits
         .filter((deposit) => status === 'all' || deposit.status === status)
+        .filter((deposit) => !byMethod || deposit.method === byMethod)
         .filter((deposit) => !q || String(deposit.referenceCode).includes(q))
         // Rule RV10: flagged first, then the oldest submission.
         .sort((a, b) => Number(b.flags.length > 0) - Number(a.flags.length > 0))
@@ -442,6 +452,41 @@ export class AdminApi {
       decidedBy: 'admin',
       adminName: this.user.name,
     };
+    if (action[2] === 'recheck') {
+      if (!deposit.usdt) return apiError(409, 'DEPOSIT_STATE_CONFLICT', { status: deposit.status });
+      return json(202, deposit);
+    }
+    if (action[2] === 'approve-usdt') {
+      // Rule U15: re-authentication always; the credit is the received amount, floored.
+      if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
+      const usdt = deposit.usdt as {
+        txid: string;
+        transfer: { amountUnits: number; method: string };
+      };
+      const expected = [...new Set(deposit.flags.map((flag) => flag.code))];
+      const acknowledged = (body?.acknowledgedFlags as string[] | undefined) ?? [];
+      if (expected.some((code) => !acknowledged.includes(code))) {
+        return apiError(409, 'FLAGS_NOT_ACKNOWLEDGED', { expected });
+      }
+      const credit = floorToWholeCents(usdt.transfer.amountUnits);
+      Object.assign(deposit, decided, {
+        status: 'credited',
+        eta: null,
+        usdt: { ...usdt, checkStatus: 'done' },
+        credit: {
+          transactionNumber: usdt.txid,
+          receivedCurrency: 'USD',
+          receivedAmountUnits: usdt.transfer.amountUnits,
+          creditedUsdUnits: credit,
+          creditRateId: null,
+          creditRate: null,
+          referenceCheck: null,
+          journalId: '0199a000-0000-7000-9000-0000000000c2',
+        },
+      });
+      if (key) this.decisionKeys.set(key, JSON.stringify(body));
+      return json(200, deposit);
+    }
     if (action[2] === 'approve') {
       const input = body as {
         transactionNumber: string;
@@ -513,6 +558,40 @@ export class AdminApi {
     }
     if (key) this.decisionKeys.set(key, JSON.stringify(body));
     return json(200, deposit);
+  }
+
+  /**
+   * The transfers with their state derived as the API does (rule U13): credited when an
+   * adjustment or a credited deposit holds the TXID, bound when a deposit holds it, else unmatched.
+   */
+  transfersWithState() {
+    return this.usdtTransfers.map((transfer) => {
+      const adjustment = this.adjustments.find(
+        (item) =>
+          item.depositMethod === transfer.method &&
+          item.externalReference?.toLowerCase() === transfer.txid,
+      );
+      const deposit = this.deposits.find(
+        (item) => (item.usdt as { txid?: string } | null)?.txid === transfer.txid,
+      );
+      const customer = (deposit?.customer ?? WALLET_CUSTOMER) as typeof WALLET_CUSTOMER;
+      const holder = adjustment
+        ? { kind: 'adjustment', id: adjustment.id, customer: WALLET_CUSTOMER }
+        : deposit
+          ? { kind: 'deposit', id: deposit.id, customer }
+          : null;
+      const state =
+        adjustment || deposit?.status === 'credited' ? 'credited' : deposit ? 'bound' : 'unmatched';
+      return {
+        ...transfer,
+        state,
+        holder: holder && {
+          ...holder,
+          customer: { id: customer.id, name: customer.name, email: customer.email },
+        },
+        candidates: state === 'unmatched' ? transfer.candidates : [],
+      };
+    });
   }
 
   /** The body of the last request to `key`. */
@@ -618,6 +697,14 @@ export class AdminApi {
         customerId: CUSTOMER_ID,
         journalId: result.adjustment.id,
       });
+    }
+    if (key === 'GET /api/admin/usdt-transfers') {
+      const state = url.searchParams.get('state') ?? 'unmatched';
+      const byMethod = url.searchParams.get('method');
+      const items = this.transfersWithState()
+        .filter((transfer) => state === 'all' || transfer.state === 'unmatched')
+        .filter((transfer) => !byMethod || transfer.method === byMethod);
+      return json(200, { items, nextCursor: null });
     }
     if (path.startsWith('/api/admin/deposit') || path === '/api/admin/rates') {
       const answered = await this.answerDeposits(route, request.method(), url, body);

@@ -1,6 +1,5 @@
 import {
   type AdminDeposit,
-  DEPOSIT_REJECT_REASONS,
   type DepositRejectReason,
   type RejectDeposit,
   type RequestReceipt,
@@ -35,6 +34,20 @@ import { useRejectDeposit, useRequestReceipt } from './deposits.queries';
 
 type NoteField = 'reason' | 'customerNote' | 'internalNote';
 
+/** The reasons that fit a method: a receipt for Sham Cash (rule RV6), a transfer for USDT (U16). */
+export function rejectReasonsFor(method: AdminDeposit['method']): DepositRejectReason[] {
+  return method === 'sham_cash'
+    ? [
+        'not_received',
+        'receipt_invalid',
+        'receipt_used',
+        'reference_other_customer',
+        'wrong_account',
+        'other',
+      ]
+    : ['not_received', 'wrong_network', 'transfer_other_customer', 'other'];
+}
+
 /** The fields of a refused body, by the contract's issue paths. */
 function fieldErrors(
   t: TFunction,
@@ -60,6 +73,7 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
   const reject = useRejectDeposit(deposit.id);
   const keyFor = useIdempotencyKey();
   const [reason, setReason] = useState<DepositRejectReason | null>(null);
+  const reasons = rejectReasonsFor(deposit.method);
   const [errors, setErrors] = useState<Partial<Record<NoteField, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -96,7 +110,7 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
         <Field invalid={!!errors.reason}>
           <FieldLabel>{t('deposits.reject.reason')}</FieldLabel>
           <Select
-            items={DEPOSIT_REJECT_REASONS.map((item) => ({
+            items={reasons.map((item) => ({
               value: item,
               label: t(`deposits.rejectReasons.${item}`),
             }))}
@@ -107,7 +121,7 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
               <SelectValue placeholder={t('deposits.reject.chooseReason')} />
             </SelectTrigger>
             <SelectContent>
-              {DEPOSIT_REJECT_REASONS.map((item) => (
+              {reasons.map((item) => (
                 <SelectItem key={item} value={item}>
                   {t(`deposits.rejectReasons.${item}`)}
                 </SelectItem>

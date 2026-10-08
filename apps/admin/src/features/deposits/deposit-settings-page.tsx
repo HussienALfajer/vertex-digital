@@ -6,8 +6,10 @@ import {
   depositSettingsInputSchema,
   formatAmountInput,
   parseUsd,
+  type UsdtMethod,
 } from '@vertex-digital/contracts';
 import {
+  Badge,
   Button,
   Callout,
   Card,
@@ -27,6 +29,7 @@ import { type FormEvent, type ReactNode, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
+import { formatDateTime } from '../../lib/format';
 import {
   depositCountsQuery,
   depositSettingsQuery,
@@ -43,6 +46,7 @@ const USD_FIELDS = [
   'establishedPerDepositUsdUnits',
   'establishedDailyUsdUnits',
   'flagNewAccountUsdUnits',
+  'usdtMinDepositUsdUnits',
 ] as const;
 
 type UsdField = (typeof USD_FIELDS)[number];
@@ -76,8 +80,9 @@ function textsOf(settings: DepositSettings): Texts {
 const whole = (text: string) => (/^\d{1,4}$/.test(text.trim()) ? Number(text) : Number.NaN);
 
 /**
- * "إعدادات الإيداع" (S03): the Sham Cash account, the currencies with their QR images, the limits
- * (rule SC3), the review hours and target (SC13) and the flag thresholds (FL3, FL4). Saved as a new
+ * "إعدادات الإيداع" (S03, S04): the Sham Cash account, the currencies with their QR images, the
+ * USDT networks and minimum (rules U1, U5), the limits (rule SC3), the review hours and target
+ * (SC13) and the flag thresholds (FL3, FL4). Saved as a new
  * version with re-authentication; before the first save Sham Cash deposits are unavailable (SC1).
  */
 export function DepositSettingsPage() {
@@ -113,6 +118,10 @@ function SettingsForm({ settings }: { settings: DepositSettings }) {
   const [texts, setTexts] = useState(() => textsOf(settings));
   const [enabled, setEnabled] = useState({ SYP: settings.sypEnabled, USD: settings.usdEnabled });
   const [qr, setQr] = useState({ SYP: settings.sypQrFileId, USD: settings.usdQrFileId });
+  const [usdtEnabled, setUsdtEnabled] = useState<Record<UsdtMethod, boolean>>({
+    usdt_trc20: settings.usdtTrc20Enabled,
+    usdt_bep20: settings.usdtBep20Enabled,
+  });
   const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -142,10 +151,9 @@ function SettingsForm({ settings }: { settings: DepositSettings }) {
       newAccountDailyUsdUnits: parseUsd(texts.newAccountDailyUsdUnits) ?? Number.NaN,
       establishedPerDepositUsdUnits: parseUsd(texts.establishedPerDepositUsdUnits) ?? Number.NaN,
       establishedDailyUsdUnits: parseUsd(texts.establishedDailyUsdUnits) ?? Number.NaN,
-      // The USDT section arrives with S04 PR 3: a save keeps the USDT values in force.
-      usdtTrc20Enabled: settings.usdtTrc20Enabled,
-      usdtBep20Enabled: settings.usdtBep20Enabled,
-      usdtMinDepositUsdUnits: settings.usdtMinDepositUsdUnits,
+      usdtTrc20Enabled: usdtEnabled.usdt_trc20,
+      usdtBep20Enabled: usdtEnabled.usdt_bep20,
+      usdtMinDepositUsdUnits: parseUsd(texts.usdtMinDepositUsdUnits) ?? Number.NaN,
       reviewHoursStart: texts.reviewHoursStart,
       reviewHoursEnd: texts.reviewHoursEnd,
       reviewTargetMinutes: whole(texts.reviewTargetMinutes),
@@ -228,10 +236,43 @@ function SettingsForm({ settings }: { settings: DepositSettings }) {
         </div>
       </Card>
       <Card className="gap-4">
+        <CardTitle>{t('depositSettings.usdt.title')}</CardTitle>
+        <CardDescription>{t('depositSettings.usdt.description')}</CardDescription>
+        <div className="grid gap-4 md:grid-cols-2">
+          {settings.usdt.map((network) => (
+            <UsdtNetworkCard
+              key={network.method}
+              network={network}
+              enabled={usdtEnabled[network.method]}
+              onEnabled={(value) => {
+                setUsdtEnabled((previous) => ({ ...previous, [network.method]: value }));
+                setSaved(false);
+              }}
+            />
+          ))}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <TextField
+            label={t('depositSettings.fields.usdtMinDepositUsdUnits')}
+            error={errors.usdtMinDepositUsdUnits}
+            hint={t('depositSettings.usdt.minimumHint')}
+          >
+            <Input
+              dir="ltr"
+              inputMode="decimal"
+              autoComplete="off"
+              {...text('usdtMinDepositUsdUnits')}
+            />
+          </TextField>
+        </div>
+      </Card>
+      <Card className="gap-4">
         <CardTitle>{t('depositSettings.limits.title')}</CardTitle>
         <CardDescription>{t('depositSettings.limits.description')}</CardDescription>
         <div className="grid gap-4 md:grid-cols-2">
-          {USD_FIELDS.filter((field) => field !== 'flagNewAccountUsdUnits').map((field) => (
+          {USD_FIELDS.filter(
+            (field) => field !== 'flagNewAccountUsdUnits' && field !== 'usdtMinDepositUsdUnits',
+          ).map((field) => (
             <TextField
               key={field}
               label={t(`depositSettings.fields.${field}`)}
@@ -419,6 +460,62 @@ function CurrencyCard({
           {failure ?? error}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * A USDT network (S04 rule U1): the address from the server environment, read-only; the switch,
+ * which needs that address; the last successful scan and whether verification is delayed.
+ */
+function UsdtNetworkCard({
+  network,
+  enabled,
+  onEnabled,
+}: {
+  network: DepositSettings['usdt'][number];
+  enabled: boolean;
+  onEnabled: (enabled: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const switchId = useId();
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
+      <div className="flex items-center justify-between gap-3">
+        <label htmlFor={switchId} className="text-base font-medium">
+          {t(`wallets.methods.${network.method}`)}
+        </label>
+        <Switch
+          id={switchId}
+          checked={enabled}
+          disabled={!network.address && !enabled}
+          onCheckedChange={onEnabled}
+        />
+      </div>
+      <div className="flex flex-col gap-1 text-sm">
+        <span className="text-muted-foreground">{t('depositSettings.usdt.address')}</span>
+        {network.address ? (
+          <code dir="ltr" className="text-end break-all">
+            {network.address}
+          </code>
+        ) : (
+          <span className="font-medium text-status-warning-foreground">
+            {t('depositSettings.usdt.noAddress')}
+          </span>
+        )}
+        <span className="text-xs text-muted-foreground">
+          {t('depositSettings.usdt.serverOnly')}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted-foreground">{t('depositSettings.usdt.lastScan')}</span>
+        <span className="font-medium">
+          {network.lastScanAt
+            ? formatDateTime(network.lastScanAt)
+            : t('depositSettings.usdt.never')}
+        </span>
+        {network.delayed && <Badge tone="warning">{t('depositSettings.usdt.delayed')}</Badge>}
+      </div>
     </div>
   );
 }

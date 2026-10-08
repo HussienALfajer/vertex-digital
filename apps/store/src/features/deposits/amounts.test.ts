@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import ar from '@/messages/ar.json';
-import { amountText, limitText, parseDepositAmount, presetUnits, previewUsd } from './amounts';
+import {
+  addressGroups,
+  amountText,
+  limitText,
+  parseDepositAmount,
+  presetUnits,
+  previewUsd,
+  splitPayAmount,
+} from './amounts';
 
 const USD = 1_000_000;
 const rate = { sypPerUsd: '118', displayStepSypUnits: 500 };
@@ -46,5 +54,11 @@ describe('the deposit amounts', () => {
     );
     expect(limitText({ ...details, limit: 'other' })).toBeNull();
     expect(limitText(undefined)).toBeNull();
+  });
+
+  it('splits the exact USDT amount and the address for the eye', () => {
+    expect(splitPayAmount('25.0037')).toEqual({ head: '25.00', tail: '37' });
+    expect(addressGroups('TXYZabcd1234ef')).toEqual(['TXYZ', 'abcd', '1234', 'ef']);
+    expect(addressGroups('')).toEqual([]);
   });
 });
