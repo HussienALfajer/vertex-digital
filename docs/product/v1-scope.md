@@ -1,6 +1,6 @@
 # Vertex Digital — V1 Scope
 
-Status: Approved by the owner on 2026-10-06 (drafted from the brief, revised after the owner's review: code products, partial delivery, validation guard, store switches, customer notifications), and on 2026-10-07 to one admin account without staff or roles (ADR 0016) and to notify customers of wallet adjustments (S02). Changes to this file need the owner's approval.
+Status: Approved by the owner on 2026-10-06 (drafted from the brief, revised after the owner's review: code products, partial delivery, validation guard, store switches, customer notifications), and on 2026-10-07 to one admin account without staff or roles (ADR 0016) and to notify customers of wallet adjustments (S02), and on 2026-10-08 to detect USDT transfers automatically besides the TXID (S04, ADR 0018). Changes to this file need the owner's approval.
 
 ## 1. Business context
 
@@ -84,9 +84,9 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - Approval credits the wallet in one transaction with the audit entry, then resumes waiting orders (A02).
 
 #### F06 — USDT deposits (automatic)
-- Networks: TRC20 (TRON) and BEP20 (BNB Smart Chain). The customer creates a deposit intent, sends the exact amount shown to the store address (QR and copy), and submits the TXID (or pastes the explorer link).
+- Networks: TRC20 (TRON) and BEP20 (BNB Smart Chain). The customer creates a deposit intent, sends the exact amount shown to the store address (QR and copy). The worker detects the transfer on its own; the customer may also submit the TXID (or paste the explorer link) to start verification at once (owner, 2026-10-08).
 - The worker verifies on chain: recipient, official USDT contract, exact amount, confirmations, TXID never used before; then credits the wallet 1 USDT = 1 USD (ADR 0006).
-- Clear states: waiting for confirmations, credited, rejected with the reason.
+- Clear states: waiting for the transfer, waiting for confirmations, in review (amount or network mismatch), credited, rejected with the reason.
 
 #### F07 — Telegram admin bot
 - Linked to the admin account (one-time link code from the admin panel after 2FA).
@@ -193,7 +193,7 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 
 | ID | Trigger | Automatic result |
 |---|---|---|
-| A01 | USDT deposit TXID submitted | Verify on chain until confirmed or rejected; credit the wallet once (F06) |
+| A01 | USDT transfer to a store address detected, or a TXID submitted | Verify on chain until final; credit the wallet once on an exact match, otherwise send to review (F06) |
 | A02 | Deposit credited | Pay and fulfil the customer's `awaiting_balance` orders, oldest first, while the balance allows (F13) |
 | A03 | Order paid | Route to the cheapest healthy profitable supplier and send, in the worker (F11) |
 | A04 | Supplier attempt failed definitively (whole order or some units) | Retry the undelivered units on the next profitable route; when none is left, refund them to the wallet and notify (F11, F27) |
