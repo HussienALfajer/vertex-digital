@@ -143,7 +143,8 @@ export const envSchema = z
   .transform((env) => ({
     ...env,
     TELEGRAM_TRANSPORT:
-      env.TELEGRAM_TRANSPORT ?? (env.NODE_ENV === 'production' ? ('api' as const) : ('log' as const)),
+      env.TELEGRAM_TRANSPORT ??
+      (env.NODE_ENV === 'production' ? ('api' as const) : ('log' as const)),
   }));
 
 export type Env = z.infer<typeof envSchema>;

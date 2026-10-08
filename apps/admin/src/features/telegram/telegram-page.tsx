@@ -80,13 +80,13 @@ function NotConfigured() {
       <ul className="flex flex-col gap-1 self-start text-sm" dir="ltr">
         {SERVER_VARIABLES.map((name) => (
           <li key={name}>
-            <code className="font-mono">{name}</code>
+            <code>{name}</code>
           </li>
         ))}
       </ul>
       <div className="flex flex-col gap-1 text-sm text-muted-foreground">
         <p>{t('telegram.notConfigured.where')}</p>
-        <code dir="ltr" className="self-start font-mono">
+        <code dir="ltr" className="self-start">
           {t('telegram.notConfigured.whereRef')}
         </code>
       </div>
@@ -177,7 +177,7 @@ function LinkCode({
             target="_blank"
             rel="noreferrer"
             dir="ltr"
-            className="min-w-0 truncate font-mono text-sm text-primary underline-offset-4 hover:underline"
+            className="min-w-0 truncate text-sm text-primary underline-offset-4 hover:underline"
           >
             {code.deepLink}
           </a>
@@ -245,10 +245,7 @@ function Linked({
           <p className="text-sm text-muted-foreground">
             {link.username ? (
               <>
-                {t('telegram.linked.account')}{' '}
-                <span dir="ltr" className="font-mono">
-                  @{link.username}
-                </span>
+                {t('telegram.linked.account')} <span dir="ltr">@{link.username}</span>
               </>
             ) : (
               t('telegram.linked.noUsername')
