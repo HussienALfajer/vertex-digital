@@ -18,7 +18,7 @@ Spec: `docs/specs/S03-exchange-rate-sham-cash-deposits.md` (F04, F05; ADRs 0003,
 - [x] Worker: `jobs/deposits/expire.job.ts` (cron every 5 minutes, singleton, batches of 100 with `SKIP LOCKED`, audit per deposit, safe twice); render the three emails (Arabic HTML + text, no free text); tests
 - [x] Bridge: build, OpenAPI export, admin client generated; admin typecheck (store and admin fixtures and E2E mocks adapted to the wallet entries' `deposit` field and the `currency_exchange` account label)
 - [x] Wiring checklist, docs (`docs/architecture.md` modules `deposits`, `files` and job `deposits.expire`; `deploy/` nginx internal location and upload body limits; folder `CLAUDE.md`)
-- [ ] Checks (lint, typecheck, test, build, drift, e2e: front-end fixtures changed), reviewer, owner acceptance (endpoints at `/api/docs`), PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, drift, e2e: front-end fixtures changed), reviewer (1 blocking finding fixed: a refused receipt was written to disk before its refusal and not counted; now checked first, every attempt counted), owner acceptance (2026-10-08), PR with auto-merge
 
 ## PR 3 — Admin and store screens, E2E
 - [ ] Admin: `/rates` (current, change form with typed confirmation above 5%, re-authentication, history), stale-rate banner; `/settings/deposits` (account, currency toggles with QR upload and preview, limits, hours, thresholds, open-count note); `/deposits` (tabs, search, columns, flag chips) and navigation badge every 30 s; `/deposits/$id` (receipt viewer, facts, flags with links, customer panel, approve form with live credit and flag ticks, reject and clearer-receipt dialogs, decided view); wallet header SYP and deposit entry links; audit filters and detail labels; i18n
