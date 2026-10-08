@@ -227,6 +227,29 @@ describe('repriceProducts (rule P2)', () => {
     expect((await state(p.id))?.availability).toBe('out_of_stock');
   });
 
+  it('reviews a large cost change met when the route comes back, not a manual cost (edge case 7)', async () => {
+    const p = await product();
+    const fakeOffer = await offer('fake', usd(1));
+    const fakeRoute = await route(p.id, 'fake', fakeOffer);
+    await reprice([p.id], 'route_change');
+    // Disabled, then a sync drops the cost 90%: no basis, nothing happens.
+    await pool.query('update product_routes set enabled = false where id = $1', [fakeRoute]);
+    await setCost(fakeOffer, usd(0.1));
+    expect(await reprice([p.id], 'cost_sync')).toEqual({ repriced: 0, reviewsOpened: 0 });
+    // Enabled again: the same route's cost moved beyond 10% since the price, so it waits.
+    await pool.query('update product_routes set enabled = true where id = $1', [fakeRoute]);
+    expect(await reprice([p.id], 'route_change')).toEqual({ repriced: 0, reviewsOpened: 1 });
+    expect((await openReview(p.id))?.costAfterUsdUnits).toBe(usd(0.1));
+
+    // A manual route's cost set by the admin applies at once (rule RT7).
+    const q = await product();
+    const manualOffer = await offer('manual', usd(1));
+    await route(q.id, 'manual', manualOffer);
+    await reprice([q.id], 'route_change');
+    await setCost(manualOffer, usd(2));
+    expect(await reprice([q.id], 'route_change')).toEqual({ repriced: 1, reviewsOpened: 0 });
+  });
+
   it('makes a route with a field the game no longer has unusable (rule RT3)', async () => {
     const p = await product();
     await route(p.id, 'fake', await offer('fake', usd(1)));

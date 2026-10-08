@@ -50,9 +50,15 @@ export function decryptCredentials(
   return JSON.parse(body.toString('utf8')) as Record<string, string>;
 }
 
-/** Per field, its last 4 characters, for the masked display ("…a1b2"). */
+/** A value this short gives no hint: its last 4 characters would be most of it. */
+const HINT_MIN_LENGTH = 13;
+
+/** Per field, its last 4 characters, for the masked display ("…a1b2"); empty for short values. */
 export function credentialHints(values: Record<string, string>): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(values).map(([field, value]) => [field, value.slice(-4)]),
+    Object.entries(values).map(([field, value]) => [
+      field,
+      value.length >= HINT_MIN_LENGTH ? value.slice(-4) : '',
+    ]),
   );
 }

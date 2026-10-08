@@ -19,7 +19,7 @@ import {
   recordAudit,
   type Transaction,
 } from '@vertex-digital/db';
-import { and, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { violatedConstraint } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -236,7 +236,11 @@ export function nextSortOrder(
 /** A `LIKE` pattern that finds `text` anywhere, its wildcards taken literally. */
 export const containing = (text: string) => `%${text.replace(/[\\%_]/g, '\\$&')}%`;
 
-/** Rewrites `sort_order` as 1…n in the order of `ids` (rule CT5). */
+/**
+ * Rewrites `sort_order` as 1…n in the order of `ids` (rule CT5). The rows are locked in id order
+ * first, the order the repricing path (S07) locks games and products in, so the two never wait
+ * on each other in opposite orders.
+ */
 export async function rewriteOrder(
   tx: Transaction,
   table:
@@ -246,6 +250,12 @@ export async function rewriteOrder(
     | typeof catalogProducts,
   ids: readonly string[],
 ): Promise<void> {
+  await tx
+    .select({ id: table.id })
+    .from(table)
+    .where(inArray(table.id, [...ids]))
+    .orderBy(asc(table.id))
+    .for('update');
   await tx
     .update(table)
     .set({

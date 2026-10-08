@@ -92,7 +92,9 @@ describe('display step against the cheapest product (S07 rule P9)', () => {
     expect(maxDisplayStepSypUnits('1000', 100_000)).toBe(200);
     // $0.10 at 1,249: 124.9 SYP; 2% is 2.498 SYP, rounded down to 2 pounds.
     expect(maxDisplayStepSypUnits('1249', 100_000)).toBe(200);
-    // Below one pound: no step is allowed.
-    expect(maxDisplayStepSypUnits('10', 100_000)).toBe(0);
+    // Below one pound: FX3's minimum step stays allowed, so a rate can always be changed.
+    expect(maxDisplayStepSypUnits('10', 100_000)).toBe(100);
+    // $0.30 at 118: 35.4 SYP, 2% is 0.7 pounds.
+    expect(maxDisplayStepSypUnits('118', 300_000)).toBe(100);
   });
 });

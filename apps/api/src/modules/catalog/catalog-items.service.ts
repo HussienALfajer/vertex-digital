@@ -18,10 +18,13 @@ import {
   catalogProducts,
   type Database,
   newId,
+  repriceProducts,
   type Transaction,
 } from '@vertex-digital/db';
 import { and, asc, count, eq, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
+import { ENV, type Env } from '../../core/config/env.js';
+import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import { CatalogService } from './catalog.service.js';
@@ -77,6 +80,7 @@ const gameEntity = (id: string) => ({ type: 'catalog_game' as const, id });
 export class CatalogItemsService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(ENV) private readonly env: Env,
     private readonly catalog: CatalogService,
   ) {}
 
@@ -189,6 +193,7 @@ export class CatalogItemsService {
         gameId: game.id,
         identifier: row.key,
       });
+      await this.repriceGame(tx, game.id);
       return toInputField(archived as FieldRow);
     });
   }
@@ -215,6 +220,7 @@ export class CatalogItemsService {
         gameId: game.id,
         identifier: row.key,
       });
+      await this.repriceGame(tx, game.id);
       return toInputField(restored as FieldRow);
     });
   }
@@ -441,6 +447,22 @@ export class CatalogItemsService {
   }
 
   // Helpers ---------------------------------------------------------------------------------------
+
+  /**
+   * S07 rule RT3: a route mapping an archived field is unusable, so a field's archive or restore
+   * reprices the game's products in its transaction (P2, under the game lock already held).
+   */
+  private async repriceGame(tx: Transaction, gameId: string): Promise<void> {
+    const products = await tx
+      .select({ id: catalogProducts.id })
+      .from(catalogProducts)
+      .where(and(eq(catalogProducts.gameId, gameId), isNull(catalogProducts.archivedAt)));
+    await repriceProducts(tx, {
+      productIds: products.map((product) => product.id),
+      cause: 'route_change',
+      context: routingContext(this.env),
+    });
+  }
 
   private async product(tx: Transaction, row: ProductRow): Promise<Product> {
     const [product] = await this.catalog.products(tx, [row]);

@@ -46,7 +46,8 @@ describe('supplier credentials', () => {
     expect(() => supplierKey(randomBytes(16).toString('base64'))).toThrow(/32 bytes/);
   });
 
-  it('hint the last 4 characters of each field', () => {
-    expect(credentialHints(values)).toEqual({ apiKey: 'a1b2', webhookSecret: 'c3d4' });
+  it('hint the last 4 characters of each field, and nothing of a short one', () => {
+    expect(credentialHints(values)).toEqual({ apiKey: 'a1b2', webhookSecret: '' });
+    expect(credentialHints({ apiKey: 'abcdefghi-a1b2' })).toEqual({ apiKey: 'a1b2' });
   });
 });

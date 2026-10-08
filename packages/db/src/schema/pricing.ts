@@ -5,6 +5,7 @@ import {
 } from '@vertex-digital/contracts';
 import { isNull, sql } from 'drizzle-orm';
 import {
+  bigint,
   check,
   index,
   integer,
@@ -84,7 +85,8 @@ export const priceReviews = pgTable(
     /** The cost the current price was built on. */
     costBeforeUsdUnits: amountUnits('cost_before_usd_units').notNull(),
     costAfterUsdUnits: amountUnits('cost_after_usd_units').notNull(),
-    changeBp: integer('change_bp').notNull(),
+    /** Signed basis points of the cost before; a cost can grow 10⁶ times (1 unit to $10,000). */
+    changeBp: bigint('change_bp', { mode: 'number' }).notNull(),
     priceBeforeUsdUnits: amountUnits('price_before_usd_units').notNull(),
     proposedPriceUsdUnits: amountUnits('proposed_price_usd_units').notNull(),
     status: priceReviewStatusEnum('status').notNull().default('open'),

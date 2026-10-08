@@ -406,6 +406,9 @@ export class SuppliersService {
     input: z.output<typeof importOffersSchema>,
   ): Promise<ImportResult> {
     const state = await this.state(code);
+    if (state.code === 'manual') {
+      throw refusals.invalid('Manual offers are created by a manual route, never imported');
+    }
     const ids = input.rows.map((row) => row.offerId);
     const game = await this.catalog.game(input.gameId);
     const liveKeys = new Set(

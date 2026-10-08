@@ -119,7 +119,7 @@ export class RoutesService {
     return toRouting(state);
   }
 
-  /** Rules RT1–RT3: a route to an offer of an automatic supplier, enabled. */
+  /** Rules RT1–RT3: a route to an offer of an automatic supplier, enabled; never a manual one. */
   async create(
     actor: Actor,
     productId: string,
@@ -133,6 +133,11 @@ export class RoutesService {
         .where(eq(supplierOffers.id, input.offerId));
       if (!found) throw refusals.notFound('offer');
       const { offer, supplierCode } = found;
+      // A manual offer carries a cost the admin set for its own product (rule RT7): it is added
+      // only by a manual route (re-authenticated) and comes back only with its route's restore.
+      if (supplierCode === 'manual') {
+        throw refusals.invalid('A manual offer serves only the product it was created for');
+      }
       if (offer.missingSince) throw refusals.offerMissing();
       if (offer.kind && offer.kind !== product.kind) throw refusals.kindMismatch();
       await this.checkFields(tx, product.gameId, offer.requiredFields, input.fieldMap, true);

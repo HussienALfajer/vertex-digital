@@ -28,6 +28,17 @@ import {
  * locks, so parallel repricings of one product serialize and each sees the other's result.
  */
 
+/**
+ * Causes whose cost change on the price's own route is reviewed (rule P3, edge case 7): a sync,
+ * and a route coming back usable or a rule change that meets a cost a sync moved while the route
+ * was unusable. Decisions on a review are not; neither is an admin's manual cost (rule RT7).
+ */
+const REVIEWED_CAUSES: ReadonlySet<PriceChangeCause> = new Set([
+  'cost_sync',
+  'route_change',
+  'rule_change',
+]);
+
 export interface RepriceResult {
   /** Products that got a new `product_prices` row. */
   repriced: number;
@@ -100,7 +111,8 @@ export async function appendProductPrice(
  * - no usable route: nothing (the last price stays; the product is unavailable, P6);
  * - an open review: the price stays, the review's figures follow the target (P2, P5);
  * - the target is the current price on the same basis route: nothing;
- * - a sync moved the basis route's cost beyond the threshold (P3): a review opens, the price stays;
+ * - the basis route's own cost moved beyond the threshold since the price (P3, edge case 7), not
+ *   by the admin's manual cost (RT7): a review opens, the price stays;
  * - otherwise a price row is appended. A cost change seen through another basis route is a
  *   `route_change` (ADR 0021: route changes reprice at once).
  */
@@ -144,7 +156,8 @@ export async function repriceProducts(
     if (
       current &&
       sameRoute &&
-      input.cause === 'cost_sync' &&
+      REVIEWED_CAUSES.has(input.cause) &&
+      basis.supplierCode !== 'manual' &&
       needsReview(current.costUsdUnits, cost, policy.priceReviewThresholdBp)
     ) {
       await tx.insert(priceReviews).values({

@@ -876,6 +876,60 @@ describe('routes and prices (rules RT1–RT7, P1, P2)', () => {
     expect(refused.code).toBe('OFFER_ALREADY_MAPPED');
   });
 
+  it('follows the backup route when a mapped field is archived, and back (rules RT3, P2)', async () => {
+    const field = (
+      await json<{ fields: { id: string; key: string }[] }>(
+        await get(`/api/admin/catalog/games/${ids.gameId}`),
+        200,
+      )
+    ).fields.find((item) => item.key === 'player_id')?.id as string;
+    // The game needs a required field while active: add a second one first.
+    const spare = await json<{ id: string }>(
+      await post(`/api/admin/catalog/games/${ids.gameId}/fields`, {
+        key: `spare_${run}`,
+        labelAr: 'احتياطي',
+        type: 'text',
+        required: true,
+      }),
+      201,
+    );
+    await json(await post(`/api/admin/catalog/fields/${field}/archive`), 200);
+    const archived = await routing(productId);
+    expect(archived.currentPrice?.routeId).toBe(manualRouteId);
+    expect(archived.routes.find((route) => route.id === fakeRouteId)?.unusableReason).toBe(
+      'fields_incomplete',
+    );
+    await json(await post(`/api/admin/catalog/fields/${field}/restore`), 200);
+    expect((await routing(productId)).currentPrice?.routeId).toBe(fakeRouteId);
+    await json(await post(`/api/admin/catalog/fields/${spare.id}/archive`), 200);
+  });
+
+  it('never attaches a manual offer to another product (rule RT7)', async () => {
+    const other = await product(`يدوي آخر ${run}`);
+    const manualOffer = (
+      await test.db
+        .select({ id: supplierOffers.id })
+        .from(supplierOffers)
+        .where(eq(supplierOffers.supplierId, ids.manual))
+        .orderBy(desc(supplierOffers.createdAt))
+        .limit(1)
+    )[0]?.id as string;
+    expect(
+      await body(
+        await post(`/api/admin/catalog/products/${other}/routes`, { offerId: manualOffer }),
+      ),
+    ).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
+    expect(
+      await body(
+        await post('/api/admin/suppliers/manual/import', {
+          gameId: ids.gameId,
+          kind: 'direct',
+          rows: [{ offerId: manualOffer, nameAr: `يدوي مستورد ${run}` }],
+        }),
+      ),
+    ).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
+  });
+
   it('lists the stored prices newest first', async () => {
     const prices = await json<{ items: { cause: string; supplierCode: string }[]; total: number }>(
       await get(`/api/admin/catalog/products/${productId}/prices`),

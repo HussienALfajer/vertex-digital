@@ -205,6 +205,8 @@ describe('needsReview (S07 rule P3)', () => {
     expect(costChangeBasisPoints(3, 4)).toBe(3333);
     expect(costChangeBasisPoints(3, 2)).toBe(-3333);
     expect(() => costChangeBasisPoints(0, 1)).toThrow(RangeError);
+    // A cent to $10,000: far beyond a 32-bit integer, hence a bigint column.
+    expect(costChangeBasisPoints(usd(0.01), usd(10_000))).toBe(9_999_990_000);
   });
 });
 
