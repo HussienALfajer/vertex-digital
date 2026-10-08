@@ -1,6 +1,6 @@
 # 0019 — Telegram admin bot, store switches and customer notifications
 
-Status: Proposed · Date: 2026-10-08 · Amends [0002](0002-stack-per-app.md), [0006](0006-payments-and-deposits.md)
+Status: Accepted · Date: 2026-10-08 · Amends [0002](0002-stack-per-app.md), [0006](0006-payments-and-deposits.md)
 
 ## Context
 The S05 spec (F07, F26, F27) settled with the owner how the admin bot, the store switches and the customer notifications work (Q11 and the S05 interview). Several answers shape the system beyond one module:

@@ -1,6 +1,6 @@
 # S05 — Alerts and control (F07, F26, F27)
 
-Status: Draft · Date: 2026-10-08 · Scope: `docs/product/v1-scope.md` §F07, §F26, §F27 (A09, A16, A17; A10 and A13 hooks) · ADRs: 0002, 0003, 0004, 0006, 0008, 0011, 0014, 0016, 0017, 0018, 0019
+Status: Approved · Date: 2026-10-08 · Scope: `docs/product/v1-scope.md` §F07, §F26, §F27 (A09, A16, A17; A10 and A13 hooks) · ADRs: 0002, 0003, 0004, 0006, 0008, 0011, 0014, 0016, 0017, 0018, 0019
 
 ## Summary
 The owner runs the store alone and needs three things before any real money arrives: a way to stop the store at once (F26), deposit cards and alerts on the phone so a Sham Cash receipt is not left waiting (F07), and customers who learn what happened to their money without asking (F27). S05 adds the store switches with their history (registration closed by default, emergency stop, a pause per deposit method), a Telegram admin bot linked to the admin account (deposit cards with Approve / Reject, the review reminder, alerts, a daily summary, an emergency stop button), and the customer notification center with live updates over SSE and per-event email preferences.
