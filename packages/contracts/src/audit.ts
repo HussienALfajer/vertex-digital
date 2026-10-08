@@ -20,6 +20,7 @@ import { notificationEventSchema } from './notifications.js';
 import { marginRuleValuesSchema, marginScopeSchema } from './pricing.js';
 import { displayStepSchema } from './rates.js';
 import { storeSwitchSchema } from './settings.js';
+import { supplierCodeSchema, supplierPolicySchema } from './suppliers.js';
 import {
   adjustmentCategorySchema,
   adjustmentDirectionSchema,
@@ -58,6 +59,11 @@ export const AUDIT_ENTITY_TYPES = [
   'catalog_input_field',
   'catalog_product',
   'margin_rule',
+  'supplier',
+  'supplier_policy',
+  'supplier_offer',
+  'product_route',
+  'price_review',
 ] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
@@ -158,6 +164,18 @@ const named = <Shape extends z.ZodRawShape>(parent: Shape) =>
   z.strictObject({ ...parent, nameAr: z.string() });
 const marginTarget = { scope: marginScopeSchema, targetId: z.uuid().nullable() };
 const marginValues = marginRuleValuesSchema.strict();
+/** Supplier values in audit details (S07): never a credential, only field names and hints. */
+const supplier = { supplier: supplierCodeSchema };
+const routeValues = {
+  priority: z.int(),
+  enabled: z.boolean(),
+  fieldMap: z.record(z.string(), z.string()),
+};
+const reviewDecision = z.strictObject({
+  productId: z.uuid(),
+  priceBeforeUsdUnits: z.int(),
+  priceAfterUsdUnits: z.int(),
+});
 
 /**
  * Every audit action (`<entity>.<verb>`) with the shape of its `details`: before and after of the
@@ -337,6 +355,46 @@ export const AUDIT_DETAILS = {
     after: marginValues,
   }),
   'margin_rule.archived': z.strictObject({ ...marginTarget, values: marginValues }),
+  /** S07 rule SP2: the field names and their last 4 characters, never the values. */
+  'supplier.credentials_set': z.strictObject({
+    ...supplier,
+    fields: z.array(z.string()),
+    hints: z.record(z.string(), z.string()),
+  }),
+  'supplier.updated': z.strictObject({
+    ...supplier,
+    ...changed({ lowBalanceUsdUnits: z.int() }).shape,
+  }),
+  'supplier.sync_requested': z.strictObject({ ...supplier, runId: z.uuid() }),
+  /** Rule RT8: with a `catalog_product.created` and a `product_route.created` per row. */
+  'supplier.import': z.strictObject({ ...supplier, gameId: z.uuid(), count: z.int().positive() }),
+  /** `before` is the policy in force, the seed included. */
+  'supplier_policy.set': z.strictObject({
+    before: supplierPolicySchema.strict(),
+    after: supplierPolicySchema.strict(),
+  }),
+  /** Rule RT7: `before` is null for a new manual offer. */
+  'supplier_offer.manual_cost_set': z.strictObject({
+    productId: z.uuid(),
+    beforeUsdUnits: z.int().nullable(),
+    afterUsdUnits: z.int(),
+  }),
+  'product_route.created': z.strictObject({
+    ...supplier,
+    productId: z.uuid(),
+    offerId: z.uuid(),
+    ...routeValues,
+  }),
+  'product_route.updated': z.strictObject({
+    productId: z.uuid(),
+    ...changed(routeValues).shape,
+  }),
+  'product_route.archived': z.strictObject({ ...supplier, productId: z.uuid() }),
+  'product_route.restored': z.strictObject({ ...supplier, productId: z.uuid() }),
+  /** Rule P4, with `catalog_product.updated` for a pause and `margin_rule.set` for a margin. */
+  'price_review.accepted': reviewDecision,
+  'price_review.paused': reviewDecision,
+  'price_review.margin_adjusted': reviewDecision,
 } as const satisfies Record<string, z.ZodType>;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;

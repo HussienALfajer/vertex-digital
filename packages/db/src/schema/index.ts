@@ -9,6 +9,7 @@ export * from './notifications.js';
 export * from './pricing.js';
 export * from './rates.js';
 export * from './settings.js';
+export * from './suppliers.js';
 export * from './system.js';
 export * from './telegram.js';
 export * from './wallet.js';

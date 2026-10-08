@@ -5,6 +5,7 @@ import {
   DISPLAY_STEP_MIN_SYP_UNITS,
   displayStepSchema,
   isRateStale,
+  maxDisplayStepSypUnits,
   rateConfirmationError,
 } from './rates.js';
 
@@ -80,5 +81,18 @@ describe('stale rate (rule FX7)', () => {
   it('is stale only after 48 hours', () => {
     expect(isRateStale(new Date('2026-10-06T12:00:00Z'), now)).toBe(false);
     expect(isRateStale(new Date('2026-10-06T11:59:59Z'), now)).toBe(true);
+  });
+});
+
+describe('display step against the cheapest product (S07 rule P9)', () => {
+  it('allows at most 2% of the cheapest SYP value, in whole pounds', () => {
+    // $0.60 at 13,000 SYP: 7,800 SYP; 2% is 156 SYP, so at most 156 pounds (beyond FX3's 50).
+    expect(maxDisplayStepSypUnits('13000', 600_000)).toBe(15_600);
+    // $0.10 at 1,000: 100 SYP; 2% is 2 SYP.
+    expect(maxDisplayStepSypUnits('1000', 100_000)).toBe(200);
+    // $0.10 at 1,249: 124.9 SYP; 2% is 2.498 SYP, rounded down to 2 pounds.
+    expect(maxDisplayStepSypUnits('1249', 100_000)).toBe(200);
+    // Below one pound: no step is allowed.
+    expect(maxDisplayStepSypUnits('10', 100_000)).toBe(0);
   });
 });

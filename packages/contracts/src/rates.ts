@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { cursorPageSchema } from './lists.js';
-import { CURRENCY_SCALE, exchangeRateSchema, isSameRate, rateChangePercent } from './money.js';
+import {
+  CURRENCY_SCALE,
+  exchangeRateSchema,
+  isSameRate,
+  rateChangePercent,
+  usdToSyp,
+} from './money.js';
 
 /*
  * The admin's USD→SYP exchange rate (S03, F04; ADR 0003, 0017), owned by the api `rates`
@@ -90,4 +96,18 @@ export type RatesOverview = z.infer<typeof ratesOverviewSchema>;
 export function isRateStale(createdAt: Date | null, now: Date): boolean {
   if (createdAt === null) return true;
   return now.getTime() - createdAt.getTime() > RATE_STALE_AFTER_HOURS * 60 * 60 * 1000;
+}
+
+/** The display step may add at most this share of the cheapest price, in percent (ADR 0003). */
+export const DISPLAY_STEP_MAX_PERCENT = 2;
+
+/**
+ * The largest display step, in whole pounds, that adds at most 2% to the SYP value of the
+ * cheapest available product (S07 rule P9, S03 rule FX3): `usdToSyp(price, rate, 'down')` × 2%,
+ * rounded down to whole pounds.
+ */
+export function maxDisplayStepSypUnits(rate: string, cheapestPriceUsdUnits: number): number {
+  const percentOfSyp = usdToSyp(cheapestPriceUsdUnits, rate, 'down') * DISPLAY_STEP_MAX_PERCENT;
+  const wholePoundsTimes100 = percentOfSyp - (percentOfSyp % (100 * CURRENCY_SCALE.SYP));
+  return wholePoundsTimes100 / 100;
 }

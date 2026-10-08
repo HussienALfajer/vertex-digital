@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { supplierCodeSchema, syncRunTriggerSchema } from './suppliers.js';
 import { usdtMethodSchema } from './usdt.js';
 
 /*
@@ -25,6 +26,8 @@ export const QUEUES = {
   telegramReviewReminder: 'telegram.review-reminder',
   /** The day's summary at 22:30 `Asia/Damascus` (S05 rule AL3). */
   telegramDailySummary: 'telegram.daily-summary',
+  /** Reads one supplier's offers and costs (S07 rules SY1–SY4). */
+  suppliersSync: 'suppliers.sync',
 } as const;
 
 /**
@@ -66,3 +69,17 @@ export type TelegramSendPayload = z.infer<typeof telegramSendPayloadSchema>;
 export const telegramDepositCardPayloadSchema = z.object({ depositId: z.uuid() });
 
 export type TelegramDepositCardPayload = z.infer<typeof telegramDepositCardPayloadSchema>;
+
+/**
+ * A plain queue: one run at a time per supplier is the partial unique index on running runs, so a
+ * job that finds another run running ends at once (rule SY1). The panel's "sync now" creates its
+ * run first and names it, so the panel can follow it; a job without a run creates its own.
+ */
+export const suppliersSyncPayloadSchema = z.object({
+  supplierId: z.uuid(),
+  supplierCode: supplierCodeSchema,
+  trigger: syncRunTriggerSchema,
+  runId: z.uuid().optional(),
+});
+
+export type SuppliersSyncPayload = z.infer<typeof suppliersSyncPayloadSchema>;

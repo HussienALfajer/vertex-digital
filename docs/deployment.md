@@ -155,7 +155,7 @@ ssh vertex vertexdigital-deploy
 ssh vertex "systemctl enable --now vertexdigital-health.timer"
 ```
 
-`provision.sh` creates the owner and app roles with the app role's default privileges before the first migration, the `pgboss` schema owned by the owner, revokes `CONNECT` and `TEMPORARY` from `PUBLIC`, and generates the database passwords and app secrets (`CUSTOMER_AUTH_SECRET`, `ADMIN_AUTH_SECRET`, `ALTCHA_HMAC_KEY`, `STORE_REVALIDATE_SECRET`) into `shared/.env`, and the owner role's URL into `/etc/vertexdigital/owner.env`, without printing them. It issues each certificate through a temporary HTTP-only site, so a missing certificate can never break nginx for the other sites. Re-running it reinstalls the configuration files from `origin/main` (pass another ref as an argument) and leaves the database and secrets alone.
+`provision.sh` creates the owner and app roles with the app role's default privileges before the first migration, the `pgboss` schema owned by the owner, revokes `CONNECT` and `TEMPORARY` from `PUBLIC`, and generates the database passwords and app secrets (`CUSTOMER_AUTH_SECRET`, `ADMIN_AUTH_SECRET`, `ALTCHA_HMAC_KEY`, `SUPPLIER_KEYS_SECRET`, `STORE_REVALIDATE_SECRET`) into `shared/.env`, and the owner role's URL into `/etc/vertexdigital/owner.env`, without printing them. It issues each certificate through a temporary HTTP-only site, so a missing certificate can never break nginx for the other sites. Re-running it reinstalls the configuration files from `origin/main` (pass another ref as an argument) and leaves the database and secrets alone.
 
 ## Changing configuration
 
@@ -164,6 +164,11 @@ ssh vertex "systemctl enable --now vertexdigital-health.timer"
 - Secrets: edit `shared/.env` on the server as `vertexdigital`, then `pm2 reload all --update-env`. Rotating `CUSTOMER_AUTH_SECRET` or `ADMIN_AUTH_SECRET` signs everyone out (the admin secret also encrypts the TOTP secret: rotating it means the admin enrols again).
 - USDT receiving addresses (S04, ADR 0018): `USDT_TRC20_ADDRESS` and `USDT_BEP20_ADDRESS` in `shared/.env`, the owner's own wallets (never a private key). Empty leaves that network unavailable; a value that fails its checksum stops the API from starting, so check the log after the reload. Change an address only when no USDT deposit is open (the panel's queue and pending count are empty): open deposits keep the address they showed, and a transfer to an old address is then caught only by its TXID. The panel shows the addresses read-only and cannot change them. The worker checks the same addresses at boot and refuses a bad one too.
 - Chain readers (S04 PR 2), in the worker's environment: `CHAIN_READER=live` (production refuses `fake`), `TRONGRID_API_KEY` (required when the TRC20 address is set; `TRONGRID_API_URL` defaults to `https://api.trongrid.io`) and `BSC_RPC_URL` (an HTTPS JSON-RPC endpoint of a BSC provider, required when the BEP20 address is set; a provider's key is part of the URL, so treat it as a secret). The provider must allow `eth_getLogs` over 1,000 blocks and the `finalized` block tag. After the reload, the panel's deposit settings show each network's last scan: a network stays `delayed` (new USDT deposits wait) until its scanner has caught up.
+
+### Supplier keys (S07, ADR 0005)
+1. Before the first deploy that contains S07, add `SUPPLIER_KEYS_SECRET=$(openssl rand -base64 32)` to `shared/.env` (read by the API and the worker; the API refuses to start in production without it). `provision.sh` generates it on a new server; an existing `shared/.env` needs it added by hand.
+2. Never change it once a supplier's keys are set: it decrypts them. Rotating it means setting every supplier's keys again in the panel (`/suppliers/<code>`, "تعيين المفاتيح"). Back it up with the database backups' credentials, never in the repository.
+3. `SUPPLIER_FAKE_ENABLED` stays unset in production: the API refuses to start with it.
 
 ### Telegram admin bot (S05, ADR 0019)
 1. The owner creates the bot with BotFather (`/newbot`) and keeps its token private.

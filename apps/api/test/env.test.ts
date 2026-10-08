@@ -12,6 +12,7 @@ const production = {
   CUSTOMER_AUTH_SECRET: secret('customer'),
   ADMIN_AUTH_SECRET: secret('admin'),
   ALTCHA_HMAC_KEY: secret('altcha'),
+  SUPPLIER_KEYS_SECRET: Buffer.alloc(32, 7).toString('base64'),
 };
 
 describe('API environment', () => {
@@ -56,7 +57,22 @@ describe('API environment', () => {
     });
   });
 
-  it.each(['CUSTOMER_AUTH_SECRET', 'ADMIN_AUTH_SECRET', 'ALTCHA_HMAC_KEY'])(
+  it('derives a 32-byte supplier key locally and refuses the fake supplier in production (S07)', () => {
+    const local = parseEnv({ DATABASE_URL });
+    expect(Buffer.from(local.SUPPLIER_KEYS_SECRET as string, 'base64')).toHaveLength(32);
+    expect(local.SUPPLIER_FAKE_ENABLED).toBe(false);
+    expect(parseEnv({ DATABASE_URL, SUPPLIER_FAKE_ENABLED: 'true' }).SUPPLIER_FAKE_ENABLED).toBe(
+      true,
+    );
+    expect(() => parseEnv({ DATABASE_URL, SUPPLIER_KEYS_SECRET: 'c2hvcnQ=' })).toThrow(
+      'SUPPLIER_KEYS_SECRET',
+    );
+    expect(() => parseEnv({ ...production, SUPPLIER_FAKE_ENABLED: 'true' })).toThrow(
+      'SUPPLIER_FAKE_ENABLED',
+    );
+  });
+
+  it.each(['CUSTOMER_AUTH_SECRET', 'ADMIN_AUTH_SECRET', 'ALTCHA_HMAC_KEY', 'SUPPLIER_KEYS_SECRET'])(
     'refuses production without %s, or with its placeholder',
     (key) => {
       expect(() => parseEnv({ ...production, [key]: undefined })).toThrow(key);

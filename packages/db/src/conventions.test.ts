@@ -52,6 +52,17 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   telegram_prompts: 'The bot question of the moment (S05 TG7): closed, never archived',
   telegram_deposit_cards: 'A sent Telegram message (S05 TC1): edited, never archived',
   telegram_bot_state: 'One row of bot state (S05 RM3), upserted by the reminder',
+  suppliers: 'Four seeded rows (S07): never archived, only their threshold changes',
+  supplier_credentials: 'Append-only (S07 SP2): a new row replaces the keys, the newest in force',
+  supplier_offers: "A mirror of a supplier's catalog (S07 SY4): missing_since, never archived",
+  supplier_cost_changes: 'Append-only (S07 SY4): the history of each offer cost',
+  supplier_sync_runs: 'A run record (S07 SY1): updated once from running to its end',
+  supplier_calls: 'Append-only (S07 H1): every adapter call, which health is computed from',
+  supplier_health_changes: 'Append-only (S07 H4): the newest row is the state',
+  supplier_balance_reads: 'Append-only (S07 H5): balances as each supplier reported them',
+  supplier_policy: 'Append-only (S07): a save is a new version, the newest is in force',
+  product_prices: 'Append-only (S07 P2): the newest row per product is its price',
+  price_reviews: 'A decision record (S07 P4): closed by its decision, never archived',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -81,6 +92,13 @@ const APPEND_ONLY_TABLES = [
   'stored_files',
   'usdt_transfers',
   'store_switch_changes',
+  'supplier_credentials',
+  'supplier_cost_changes',
+  'supplier_calls',
+  'supplier_health_changes',
+  'supplier_balance_reads',
+  'supplier_policy',
+  'product_prices',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

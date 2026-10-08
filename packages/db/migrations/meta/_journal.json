@@ -183,6 +183,20 @@
       "when": 1791484309870,
       "tag": "0025_s06_catalog_seeds",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791491860624,
+      "tag": "0026_futuristic_zaran",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1791491870074,
+      "tag": "0027_s07_suppliers_guards",
+      "breakpoints": true
     }
   ]
 }

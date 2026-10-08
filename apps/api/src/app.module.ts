@@ -23,6 +23,7 @@ import { NotificationsModule } from './modules/notifications/index.js';
 import { PricingModule } from './modules/pricing/index.js';
 import { RatesModule } from './modules/rates/index.js';
 import { SettingsModule } from './modules/settings/index.js';
+import { SuppliersModule } from './modules/suppliers/index.js';
 import { TelegramModule } from './modules/telegram/index.js';
 import { WalletModule } from './modules/wallet/index.js';
 
@@ -54,6 +55,7 @@ import { WalletModule } from './modules/wallet/index.js';
     DepositsModule,
     CatalogModule,
     PricingModule,
+    SuppliersModule,
     TelegramModule,
     HealthModule,
   ],

@@ -5,6 +5,7 @@ import {
   depositStopReason,
   STORE_SWITCH_DEFAULTS,
   STORE_SWITCHES,
+  SUPPLIER_PAUSE_SWITCHES,
   storeStatus,
   switchHistoryQuerySchema,
 } from './settings.js';
@@ -61,5 +62,13 @@ describe('store switches (S05 F26)', () => {
       limit: 50,
     });
     expect(switchHistoryQuerySchema.safeParse({ switch: 'other' }).success).toBe(false);
+  });
+});
+
+describe('supplier switches (S07 rule SP3)', () => {
+  it('give each supplier its own pause switch', () => {
+    const switches = Object.values(SUPPLIER_PAUSE_SWITCHES);
+    expect(new Set(switches).size).toBe(switches.length);
+    for (const value of switches) expect(STORE_SWITCHES).toContain(value);
   });
 });

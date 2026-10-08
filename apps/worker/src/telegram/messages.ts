@@ -38,6 +38,10 @@ const SWITCH_NOTICES: Record<StoreSwitch, { on: string; off: string }> = {
   sham_cash_paused: { on: '⏸ أُوقف إيداع شام كاش مؤقتاً', off: '▶️ أُعيد فتح إيداع شام كاش' },
   usdt_trc20_paused: { on: '⏸ أُوقف إيداع USDT TRC20 مؤقتاً', off: '▶️ أُعيد فتح إيداع USDT TRC20' },
   usdt_bep20_paused: { on: '⏸ أُوقف إيداع USDT BEP20 مؤقتاً', off: '▶️ أُعيد فتح إيداع USDT BEP20' },
+  shop2topup_paused: { on: '⏸ أُوقف المورد SHOP2TOPUP مؤقتاً', off: '▶️ استُؤنف المورد SHOP2TOPUP' },
+  wdgzone_paused: { on: '⏸ أُوقف المورد WDGZone مؤقتاً', off: '▶️ استُؤنف المورد WDGZone' },
+  manual_paused: { on: '⏸ أُوقف المورد اليدوي مؤقتاً', off: '▶️ استُؤنف المورد اليدوي' },
+  fake_paused: { on: '⏸ أُوقف المورد التجريبي مؤقتاً', off: '▶️ استُؤنف المورد التجريبي' },
 };
 
 const SCOPES: Record<StopScope, string> = {
@@ -231,6 +235,10 @@ const SWITCH_NAMES: Record<StoreSwitch, string> = {
   sham_cash_paused: 'شام كاش متوقف مؤقتاً',
   usdt_trc20_paused: 'USDT TRC20 متوقف مؤقتاً',
   usdt_bep20_paused: 'USDT BEP20 متوقف مؤقتاً',
+  shop2topup_paused: 'SHOP2TOPUP متوقف مؤقتاً',
+  wdgzone_paused: 'WDGZone متوقف مؤقتاً',
+  manual_paused: 'المورد اليدوي متوقف مؤقتاً',
+  fake_paused: 'المورد التجريبي متوقف مؤقتاً',
 };
 
 const damascusTime = new Intl.DateTimeFormat('en-GB', {

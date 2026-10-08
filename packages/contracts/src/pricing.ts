@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { productAvailabilitySchema } from './catalog.js';
+import { pagedListSchema, pageQuerySchema } from './lists.js';
 import {
   CURRENCY_SCALE,
   ceilToStep,
@@ -6,6 +8,7 @@ import {
   USD_CENT,
   usdCentsSchema,
 } from './money.js';
+import { supplierCodeSchema } from './suppliers.js';
 
 /*
  * The pricing engine (S06, F10; ADR 0020), owned by the api `pricing` module: margin rules per
@@ -213,3 +216,159 @@ export function savings(
   );
   return { amountUsdUnits, percent: percent >= 1 ? percent : null };
 }
+
+// Stored prices and reviews (S07, with F09; ADR 0021) -------------------------------------------
+
+/** Why a `product_prices` row was written (rule P2). */
+export const PRICE_CHANGE_CAUSES = [
+  'cost_sync',
+  'route_change',
+  'rule_change',
+  'review_accepted',
+  'margin_adjusted',
+] as const;
+
+export const priceChangeCauseSchema = z.enum(PRICE_CHANGE_CAUSES).meta({ id: 'PriceChangeCause' });
+
+export type PriceChangeCause = z.infer<typeof priceChangeCauseSchema>;
+
+export const PRICE_REVIEW_STATUSES = [
+  'open',
+  'accepted',
+  'margin_adjusted',
+  'paused',
+  'superseded',
+] as const;
+
+export const priceReviewStatusSchema = z
+  .enum(PRICE_REVIEW_STATUSES)
+  .meta({ id: 'PriceReviewStatus' });
+
+export type PriceReviewStatus = z.infer<typeof priceReviewStatusSchema>;
+
+/** A cost change in basis points of the cost before, signed, rounded toward zero. */
+export function costChangeBasisPoints(
+  costBeforeUsdUnits: number,
+  costAfterUsdUnits: number,
+): number {
+  const before = positiveUnits(costBeforeUsdUnits, 'cost before');
+  const change = BigInt(costAfterUsdUnits) - before;
+  return Number((change * BigInt(BASIS_POINTS)) / before);
+}
+
+/**
+ * Rule P3 (ADR 0021): a synced cost change needs review when it moves the cost by more than the
+ * threshold, either way, from the cost the current price was built on. Exactly the threshold
+ * applies at once.
+ */
+export function needsReview(
+  basisCostThenUsdUnits: number,
+  costNowUsdUnits: number,
+  thresholdBp: number,
+): boolean {
+  const then = positiveUnits(basisCostThenUsdUnits, 'cost then');
+  const now = BigInt(costNowUsdUnits);
+  const change = now > then ? now - then : then - now;
+  return change * BigInt(BASIS_POINTS) > BigInt(thresholdBp) * then;
+}
+
+/** One stored price (`GET /api/admin/catalog/products/:id/prices`). */
+export const productPriceSchema = marginRuleValuesSchema
+  .extend({
+    id: z.uuid(),
+    priceUsdUnits: z.int().positive(),
+    costUsdUnits: z.int().positive(),
+    routeId: z.uuid(),
+    supplierCode: supplierCodeSchema,
+    ruleId: z.uuid(),
+    cause: priceChangeCauseSchema,
+    reviewId: z.uuid().nullable(),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: 'ProductPrice' });
+
+export type ProductPrice = z.infer<typeof productPriceSchema>;
+
+export const productPricePageSchema = pagedListSchema(productPriceSchema, 'ProductPricePage');
+
+export type ProductPricePage = z.infer<typeof productPricePageSchema>;
+
+/** A review as `/pricing/reviews` lists it. */
+export const priceReviewSchema = z
+  .object({
+    id: z.uuid(),
+    productId: z.uuid(),
+    productNameAr: z.string(),
+    gameId: z.uuid(),
+    gameNameAr: z.string(),
+    supplierCode: supplierCodeSchema,
+    supplierNameAr: z.string(),
+    routeId: z.uuid(),
+    costBeforeUsdUnits: z.int().positive(),
+    costAfterUsdUnits: z.int().positive(),
+    changeBp: z.int(),
+    priceBeforeUsdUnits: z.int().positive(),
+    proposedPriceUsdUnits: z.int().positive(),
+    /** The held price's margin over the cost now; negative when it sells below cost. */
+    heldMarginUsdUnits: z.int(),
+    proposedMarginUsdUnits: z.int(),
+    status: priceReviewStatusSchema,
+    availability: productAvailabilitySchema,
+    decidedAt: z.iso.datetime().nullable(),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: 'PriceReview' });
+
+export type PriceReview = z.infer<typeof priceReviewSchema>;
+
+export const priceReviewListQuerySchema = pageQuerySchema
+  .extend({
+    status: priceReviewStatusSchema.default('open'),
+    supplier: supplierCodeSchema.optional(),
+  })
+  .meta({ id: 'PriceReviewListQuery' });
+
+export type PriceReviewListQuery = z.infer<typeof priceReviewListQuerySchema>;
+
+export const priceReviewPageSchema = pagedListSchema(priceReviewSchema, 'PriceReviewPage');
+
+export type PriceReviewPage = z.infer<typeof priceReviewPageSchema>;
+
+/** `POST /api/admin/pricing/reviews/decide` (rule P4): each review decided on its own. */
+export const decideReviewsSchema = z
+  .object({
+    decisions: z
+      .array(
+        z.object({
+          reviewId: z.uuid(),
+          action: z.enum(['accept', 'pause']),
+          /** The proposed price the admin saw; an accept is refused when it changed. */
+          expectedPriceUsdUnits: z.int().positive().optional(),
+        }),
+      )
+      .min(1)
+      .max(100)
+      .refine(
+        (decisions) => new Set(decisions.map((item) => item.reviewId)).size === decisions.length,
+        'Expected each review once',
+      ),
+  })
+  .meta({ id: 'DecideReviews' });
+
+export type DecideReviews = z.infer<typeof decideReviewsSchema>;
+
+export const decideReviewsResultSchema = z
+  .object({
+    results: z.array(
+      z.object({
+        reviewId: z.uuid(),
+        result: z.enum(['accepted', 'paused', 'refused']),
+        errorCode: z.enum(['NOT_FOUND', 'REVIEW_CLOSED', 'REVIEW_STALE']).optional(),
+        /** With `REVIEW_STALE`: the price an accept would give now; null with no usable route. */
+        proposedPriceUsdUnits: z.int().positive().nullable().optional(),
+      }),
+    ),
+  })
+  .meta({ id: 'DecideReviewsResult' });
+
+export type DecideReviewsResult = z.infer<typeof decideReviewsResultSchema>;

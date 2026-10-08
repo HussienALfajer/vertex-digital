@@ -2,11 +2,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   type createInputFieldSchema,
   type createProductSchema,
+  DEFAULT_MAX_QUANTITY,
+  type ImportRowError,
   type InputField,
   inputFieldShapeSchema,
   MAX_INPUT_FIELDS_PER_GAME,
   MAX_PRODUCTS_PER_GAME,
   type Product,
+  type ProductKind,
   type UpdateInputField,
   type UpdateProduct,
 } from '@vertex-digital/contracts';
@@ -20,6 +23,7 @@ import {
 import { and, asc, count, eq, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 import { DATABASE } from '../../core/database/database.module.js';
+import { CodedException } from '../../core/errors/index.js';
 import { CatalogService } from './catalog.service.js';
 import {
   type Actor,
@@ -36,7 +40,6 @@ import {
   refusals,
   rewriteOrder,
   toInputField,
-  toProduct,
 } from './catalog-records.js';
 
 const fieldValues = (row: FieldRow) => ({
@@ -253,7 +256,7 @@ export class CatalogItemsService {
           gameId: game.id,
           ...productValues(product),
         });
-        return toProduct(product, await this.catalog.gameFacts(tx, game));
+        return this.product(tx, product);
       }),
     );
   }
@@ -262,7 +265,7 @@ export class CatalogItemsService {
   updateProduct(actor: Actor, id: string, input: UpdateProduct): Promise<Product> {
     return mapTaken(() =>
       this.db.transaction(async (tx) => {
-        const { game, row: before } = await this.lockProduct(tx, id);
+        const { row: before } = await this.lockProduct(tx, id);
         const codeOnly = [input.regionAr, input.redemptionAr].some(
           (value) => value !== undefined && value !== null,
         );
@@ -281,7 +284,7 @@ export class CatalogItemsService {
           row = updated as ProductRow;
           await auditCatalog(tx, actor, 'catalog_product.updated', productEntity(id), changed);
         }
-        return toProduct(row, await this.catalog.gameFacts(tx, game));
+        return this.product(tx, row);
       }),
     );
   }
@@ -299,8 +302,7 @@ export class CatalogItemsService {
         .from(catalogProducts)
         .where(and(eq(catalogProducts.gameId, game.id), isNull(catalogProducts.archivedAt)))
         .orderBy(asc(catalogProducts.sortOrder));
-      const facts = await this.catalog.gameFacts(tx, game);
-      return rows.map((row) => toProduct(row, facts));
+      return this.catalog.products(tx, rows);
     });
   }
 
@@ -320,7 +322,7 @@ export class CatalogItemsService {
           nameAr: row.nameAr,
         });
       }
-      return toProduct(result, await this.catalog.gameFacts(tx, game));
+      return this.product(tx, result);
     });
   }
 
@@ -352,12 +354,98 @@ export class CatalogItemsService {
             nameAr: row.nameAr,
           });
         }
-        return toProduct(result, await this.catalog.gameFacts(tx, game));
+        return this.product(tx, result);
       }),
     );
   }
 
+  // For the `pricing` and `suppliers` modules (S07) -----------------------------------------------
+
+  /**
+   * The product and its game, the game locked first (S06 lock order): a pricing decision or a
+   * route change holds it before the repricing write path locks the product.
+   */
+  async lockProduct(tx: Transaction, id: string): Promise<{ game: GameRow; row: ProductRow }> {
+    const gameId = await this.parentOf(tx, catalogProducts, id, 'product');
+    const game = await this.catalog.lockGame(tx, gameId);
+    const [row] = await tx.select().from(catalogProducts).where(eq(catalogProducts.id, id));
+    return { game, row: row as ProductRow };
+  }
+
+  /** A review's pause (S07 rule P4, CT4) in the caller's transaction, with its audit entry. */
+  async pauseProductIn(tx: Transaction, actor: Actor, id: string): Promise<void> {
+    const { row } = await this.lockProduct(tx, id);
+    if (row.status === 'paused') return;
+    await tx.update(catalogProducts).set({ status: 'paused' }).where(eq(catalogProducts.id, id));
+    await auditCatalog(tx, actor, 'catalog_product.updated', productEntity(id), {
+      before: { status: row.status },
+      after: { status: 'paused' },
+    });
+  }
+
+  /**
+   * An import's products (S07 rule RT8) in the caller's transaction: created `paused` with the
+   * defaults of S06, last in the game, each with its audit entry. All or nothing: every refused
+   * row is listed in `details.rows` (`NAME_TAKEN`, `CATALOG_LIMIT_REACHED`); an archived game is
+   * `PARENT_ARCHIVED`.
+   */
+  async importProductsIn(
+    tx: Transaction,
+    actor: Actor,
+    gameId: string,
+    rows: readonly { nameAr: string; kind: ProductKind }[],
+  ): Promise<ProductRow[]> {
+    const game = await this.liveGame(tx, gameId);
+    const live = await tx
+      .select({ nameAr: catalogProducts.nameAr })
+      .from(catalogProducts)
+      .where(and(eq(catalogProducts.gameId, game.id), isNull(catalogProducts.archivedAt)));
+    const taken = new Set(live.map((row) => row.nameAr));
+    const errors: (ImportRowError & { code: 'NAME_TAKEN' | 'CATALOG_LIMIT_REACHED' })[] = [];
+    rows.forEach((row, index) => {
+      if (taken.has(row.nameAr)) errors.push({ index, code: 'NAME_TAKEN' });
+      else if (live.length + index >= MAX_PRODUCTS_PER_GAME) {
+        errors.push({ index, code: 'CATALOG_LIMIT_REACHED' });
+      }
+      taken.add(row.nameAr);
+    });
+    const [first] = errors;
+    if (first) {
+      throw new CodedException(409, first.code, 'Some rows cannot be imported', {
+        rows: errors,
+      });
+    }
+    let sortOrder = await nextSortOrder(tx, catalogProducts, eq(catalogProducts.gameId, game.id));
+    const created = await tx
+      .insert(catalogProducts)
+      .values(
+        rows.map((row) => ({
+          id: newId(),
+          gameId: game.id,
+          kind: row.kind,
+          nameAr: row.nameAr,
+          maxQuantity: DEFAULT_MAX_QUANTITY[row.kind],
+          status: 'paused' as const,
+          sortOrder: sortOrder++,
+        })),
+      )
+      .returning();
+    await assertComplete(tx, game);
+    for (const product of created) {
+      await auditCatalog(tx, actor, 'catalog_product.created', productEntity(product.id), {
+        gameId: game.id,
+        ...productValues(product),
+      });
+    }
+    return created;
+  }
+
   // Helpers ---------------------------------------------------------------------------------------
+
+  private async product(tx: Transaction, row: ProductRow): Promise<Product> {
+    const [product] = await this.catalog.products(tx, [row]);
+    return product as Product;
+  }
 
   /** A game that can take a new field or product: it exists and is not archived. */
   private async liveGame(tx: Transaction, gameId: string): Promise<GameRow> {
@@ -372,13 +460,6 @@ export class CatalogItemsService {
     const game = await this.catalog.lockGame(tx, gameId);
     const [row] = await tx.select().from(catalogInputFields).where(eq(catalogInputFields.id, id));
     return { game, row: row as FieldRow };
-  }
-
-  private async lockProduct(tx: Transaction, id: string) {
-    const gameId = await this.parentOf(tx, catalogProducts, id, 'product');
-    const game = await this.catalog.lockGame(tx, gameId);
-    const [row] = await tx.select().from(catalogProducts).where(eq(catalogProducts.id, id));
-    return { game, row: row as ProductRow };
   }
 
   private async parentOf(

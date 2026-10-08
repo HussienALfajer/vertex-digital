@@ -13,6 +13,8 @@ import {
   type GameListQuery,
   type GamePage,
   type MarginScope,
+  type Product,
+  sypDisplayPrice,
   type UpdateCategory,
   type UpdateGame,
 } from '@vertex-digital/contracts';
@@ -23,6 +25,8 @@ import {
   catalogProducts,
   type Database,
   newId,
+  type ProductRoutingState,
+  productRoutingStates,
   type Transaction,
 } from '@vertex-digital/db';
 import {
@@ -39,9 +43,12 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
+import { ENV, type Env } from '../../core/config/env.js';
+import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import { FilesService, type ServedFile } from '../files/index.js';
+import { RatesService } from '../rates/index.js';
 import {
   type Actor,
   assertComplete,
@@ -54,6 +61,7 @@ import {
   isUuid,
   mapTaken,
   nextSortOrder,
+  type ProductRow,
   refusals,
   rewriteOrder,
   toCategory,
@@ -117,7 +125,9 @@ export interface PricingTarget {
 export class CatalogService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(ENV) private readonly env: Env,
     private readonly files: FilesService,
+    private readonly rates: RatesService,
   ) {}
 
   // Images (rule CT10) ----------------------------------------------------------------------------
@@ -330,16 +340,11 @@ export class CatalogService {
         .orderBy(sql`${catalogProducts.archivedAt} is not null`, asc(catalogProducts.sortOrder)),
       this.images([row]),
     ]);
-    const facts = {
-      categoryArchived: found.categoryArchivedAt !== null,
-      gameArchived: row.archivedAt !== null,
-      gameStatus: row.status,
-    };
     return {
       ...toGame(row, images, products.filter((product) => !product.archivedAt).length),
-      categoryArchived: facts.categoryArchived,
+      categoryArchived: found.categoryArchivedAt !== null,
       fields: fields.map(toInputField),
-      products: products.map((product) => toProduct(product, facts)),
+      products: await this.products(executor, products),
     };
   }
 
@@ -508,17 +513,33 @@ export class CatalogService {
     return row;
   }
 
-  /** The facts a product's availability needs (rule CT9), under the game lock. */
-  async gameFacts(tx: Transaction, game: GameRow) {
-    const [category] = await tx
-      .select({ archivedAt: catalogCategories.archivedAt })
-      .from(catalogCategories)
-      .where(eq(catalogCategories.id, game.categoryId));
-    return {
-      categoryArchived: Boolean(category?.archivedAt),
-      gameArchived: game.archivedAt !== null,
-      gameStatus: game.status,
-    };
+  /**
+   * Products as responses, with their price and availability (rule CT9; S07 rules P1, P6) read
+   * from the routing state; inside a change, pass its transaction so the change is seen.
+   */
+  async products(executor: Database | Transaction, rows: ProductRow[]): Promise<Product[]> {
+    const [states, rate] = await Promise.all([
+      productRoutingStates(
+        executor,
+        rows.map((row) => row.id),
+        routingContext(this.env),
+      ),
+      this.rates.current(),
+    ]);
+    return rows.map((row) => {
+      const state = states.get(row.id) as ProductRoutingState;
+      const price = state.current?.priceUsdUnits ?? null;
+      return toProduct(row, {
+        availability: state.availability,
+        priceUsdUnits: price,
+        priceSypUnits:
+          price !== null && rate
+            ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
+            : null,
+        basisSupplierNameAr: state.basis?.supplier.nameAr ?? null,
+        reviewOpen: state.openReview !== null,
+      });
+    });
   }
 
   // For the `pricing` module ---------------------------------------------------------------------
@@ -624,6 +645,35 @@ export class CatalogService {
         { nameAr: row.nameAr, archived: row.archivedAt !== null },
       ]),
     );
+  }
+
+  // For the `suppliers` module (S07) -------------------------------------------------------------
+
+  /** Products with their game's name, keyed by id (offers' mapped products). */
+  async productNames(
+    ids: readonly string[],
+  ): Promise<Map<string, { nameAr: string; gameId: string; gameNameAr: string }>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.db
+      .select({
+        id: catalogProducts.id,
+        nameAr: catalogProducts.nameAr,
+        gameId: catalogGames.id,
+        gameNameAr: catalogGames.nameAr,
+      })
+      .from(catalogProducts)
+      .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
+      .where(inArray(catalogProducts.id, [...ids]));
+    return new Map(rows.map(({ id, ...names }) => [id, names]));
+  }
+
+  /** The unarchived input field keys of a game (S07 rule RT3: what a field map may name). */
+  async liveFieldKeys(executor: Database | Transaction, gameId: string): Promise<string[]> {
+    const rows = await executor
+      .select({ key: catalogInputFields.key })
+      .from(catalogInputFields)
+      .where(and(eq(catalogInputFields.gameId, gameId), isNull(catalogInputFields.archivedAt)));
+    return rows.map((row) => row.key);
   }
 
   /** The path of every product a customer can see (product, game and category unarchived). */

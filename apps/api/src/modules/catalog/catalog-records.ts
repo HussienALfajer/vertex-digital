@@ -9,7 +9,7 @@ import {
   type InputField,
   missingForActivation,
   type Product,
-  productAvailability,
+  type ProductAvailability,
 } from '@vertex-digital/contracts';
 import {
   catalogCategories,
@@ -80,14 +80,16 @@ export function toInputField(row: FieldRow): InputField {
   };
 }
 
-/** Where a product's game sits, for its availability (rule CT9). */
-export interface GameFacts {
-  categoryArchived: boolean;
-  gameArchived: boolean;
-  gameStatus: GameRow['status'];
+/** A product's price and availability (rule CT9; S07 rules P1, P6), from `CatalogService`. */
+export interface ProductPricing {
+  availability: ProductAvailability;
+  priceUsdUnits: number | null;
+  priceSypUnits: number | null;
+  basisSupplierNameAr: string | null;
+  reviewOpen: boolean;
 }
 
-export function toProduct(row: ProductRow, game: GameFacts): Product {
+export function toProduct(row: ProductRow, pricing: ProductPricing): Product {
   return {
     ...record(row),
     gameId: row.gameId,
@@ -99,11 +101,7 @@ export function toProduct(row: ProductRow, game: GameFacts): Product {
     regionAr: row.regionAr,
     redemptionAr: row.redemptionAr,
     status: row.status,
-    availability: productAvailability({
-      ...game,
-      productArchived: row.archivedAt !== null,
-      productStatus: row.status,
-    }),
+    ...pricing,
   };
 }
 

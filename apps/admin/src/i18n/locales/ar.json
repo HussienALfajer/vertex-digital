@@ -181,7 +181,17 @@
       "ACCENT_CONTRAST_TOO_LOW": "تباين اللون مع الخلفية الداكنة أقل من 3:1. اختر لونًا أفتح.",
       "IMAGE_INVALID": "الملف ليس صورة صالحة. ارفع صورة PNG أو JPEG أو WebP حتى 5 ميغابايت و25 ميغابكسل.",
       "CATALOG_LIMIT_REACHED": "وصلت اللعبة إلى الحد: 10 حقول إدخال و100 باقة.",
-      "GLOBAL_RULE_REQUIRED": "لا يمكن أرشفة القاعدة العامة، ويمكن تعديلها فقط."
+      "GLOBAL_RULE_REQUIRED": "لا يمكن أرشفة القاعدة العامة، ويمكن تعديلها فقط.",
+      "SUPPLIER_NOT_CONFIGURED": "لم تُعيَّن مفاتيح هذا المورد بعد. عيّنها من تبويب «الاتصال».",
+      "SUPPLIER_UNAVAILABLE": "محوّل هذا المورد غير جاهز في هذه النسخة، فلا تمكن مزامنته.",
+      "OFFER_ALREADY_MAPPED": "هذا العرض مربوط بباقة أخرى. أرشف مسارها أولًا.",
+      "ROUTE_EXISTS": "للباقة مسار غير مؤرشف إلى هذا المورد من قبل.",
+      "ROUTE_KIND_MISMATCH": "نوع العرض لا يطابق نوع الباقة.",
+      "ROUTE_FIELDS_UNMAPPED": "حقول يطلبها المورد غير مربوطة بحقول اللعبة.",
+      "OFFER_MISSING": "لم يعد المورد يعرض هذا العرض.",
+      "REVIEW_CLOSED": "قُرِّر في هذه المراجعة من قبل.",
+      "REVIEW_STALE": "تغيّر السعر المقترح منذ عرضه. راجع الرقم الجديد ثم أعد المحاولة.",
+      "DISPLAY_STEP_TOO_LARGE": "خطوة العرض تزيد أرخص باقة متوفرة بأكثر من 2%. اختر خطوة أصغر."
     }
   },
   "changePassword": {
@@ -317,7 +327,12 @@
       "catalog_game": "لعبة",
       "catalog_input_field": "حقل إدخال",
       "catalog_product": "باقة",
-      "margin_rule": "قاعدة هامش"
+      "margin_rule": "قاعدة هامش",
+      "supplier": "مورد",
+      "supplier_policy": "سياسة الموردين",
+      "supplier_offer": "عرض مورد",
+      "product_route": "مسار باقة",
+      "price_review": "مراجعة سعر"
     },
     "fields": {
       "name": "الاسم",
@@ -388,7 +403,30 @@
       "values": "القيم",
       "percentBp": "النسبة",
       "fixedUsdUnits": "المبلغ الثابت",
-      "minMarginUsdUnits": "الحد الأدنى للهامش"
+      "minMarginUsdUnits": "الحد الأدنى للهامش",
+      "supplier": "المورد",
+      "fields": "الحقول",
+      "hints": "آخر 4 أحرف",
+      "lowBalanceUsdUnits": "حد الرصيد المنخفض",
+      "runId": "المزامنة",
+      "productId": "الباقة",
+      "offerId": "العرض",
+      "priority": "الأولوية",
+      "enabled": "مفعّل",
+      "fieldMap": "ربط الحقول",
+      "beforeUsdUnits": "التكلفة قبل",
+      "afterUsdUnits": "التكلفة بعد",
+      "priceBeforeUsdUnits": "السعر قبل",
+      "priceAfterUsdUnits": "السعر بعد",
+      "priceReviewThresholdBp": "عتبة مراجعة السعر",
+      "costStaleMinutes": "قِدم التكلفة (دقائق)",
+      "healthWindowMinutes": "نافذة الصحة (دقائق)",
+      "healthMinCalls": "أقل عدد اتصالات",
+      "degradedSuccessBp": "نجاح أدنى من (متراجع)",
+      "degradedP90Ms": "زمن p90 أعلى من (متراجع)",
+      "downSuccessBp": "نجاح أدنى من (متوقف)",
+      "downConsecutiveErrors": "أخطاء متتالية (متوقف)",
+      "probeAfterMinutes": "الفحص بعد (دقائق)"
     },
     "actions": {
       "admin.created": "إنشاء حساب المدير",
@@ -450,7 +488,20 @@
       "catalog_product.restored": "استعادة باقة",
       "catalog_product.reordered": "ترتيب الباقات",
       "margin_rule.set": "تعيين قاعدة هامش",
-      "margin_rule.archived": "أرشفة قاعدة هامش"
+      "margin_rule.archived": "أرشفة قاعدة هامش",
+      "supplier.credentials_set": "تعيين مفاتيح مورد",
+      "supplier.updated": "تعديل مورد",
+      "supplier.sync_requested": "طلب مزامنة مورد",
+      "supplier.import": "استيراد عروض مورد",
+      "supplier_policy.set": "تعديل سياسة الموردين",
+      "supplier_offer.manual_cost_set": "تعيين تكلفة يدوية",
+      "product_route.created": "إضافة مسار",
+      "product_route.updated": "تعديل مسار",
+      "product_route.archived": "أرشفة مسار",
+      "product_route.restored": "استعادة مسار",
+      "price_review.accepted": "قبول سعر",
+      "price_review.paused": "إيقاف باقة من المراجعة",
+      "price_review.margin_adjusted": "تعديل الهامش من المراجعة"
     }
   },
   "testCustomers": {
@@ -651,7 +702,11 @@
       "deposits_stopped": "إيقاف الإيداع",
       "sham_cash_paused": "شام كاش",
       "usdt_trc20_paused": "USDT TRC20",
-      "usdt_bep20_paused": "USDT BEP20"
+      "usdt_bep20_paused": "USDT BEP20",
+      "shop2topup_paused": "SHOP2TOPUP",
+      "wdgzone_paused": "WDGZone",
+      "manual_paused": "المورد اليدوي",
+      "fake_paused": "المورد التجريبي"
     },
     "state": {
       "registration_open": {
@@ -675,6 +730,22 @@
         "false": "يعمل"
       },
       "usdt_bep20_paused": {
+        "true": "موقوف مؤقتاً",
+        "false": "يعمل"
+      },
+      "shop2topup_paused": {
+        "true": "موقوف مؤقتاً",
+        "false": "يعمل"
+      },
+      "wdgzone_paused": {
+        "true": "موقوف مؤقتاً",
+        "false": "يعمل"
+      },
+      "manual_paused": {
+        "true": "موقوف مؤقتاً",
+        "false": "يعمل"
+      },
+      "fake_paused": {
         "true": "موقوف مؤقتاً",
         "false": "يعمل"
       }
@@ -756,6 +827,54 @@
           "title": "إعادة تشغيل الإيداع بـUSDT BEP20؟",
           "body": "يستطيع العملاء إنشاء إيداعات جديدة بـUSDT BEP20 من جديد.",
           "action": "إعادة التشغيل"
+        }
+      },
+      "shop2topup_paused": {
+        "true": {
+          "title": "إيقاف المورد SHOP2TOPUP مؤقتاً؟",
+          "body": "تصبح مسارات هذا المورد غير صالحة فوراً، وتتبع الأسعار المسار التالي أو تصبح الباقات غير متوفرة. المزامنة وقراءة الرصيد تستمران.",
+          "action": "إيقاف مؤقت"
+        },
+        "false": {
+          "title": "استئناف المورد SHOP2TOPUP؟",
+          "body": "تعود مسارات هذا المورد صالحة إن توفرت شروطها، وتتبعها الأسعار فوراً.",
+          "action": "استئناف"
+        }
+      },
+      "wdgzone_paused": {
+        "true": {
+          "title": "إيقاف المورد WDGZone مؤقتاً؟",
+          "body": "تصبح مسارات هذا المورد غير صالحة فوراً، وتتبع الأسعار المسار التالي أو تصبح الباقات غير متوفرة. المزامنة وقراءة الرصيد تستمران.",
+          "action": "إيقاف مؤقت"
+        },
+        "false": {
+          "title": "استئناف المورد WDGZone؟",
+          "body": "تعود مسارات هذا المورد صالحة إن توفرت شروطها، وتتبعها الأسعار فوراً.",
+          "action": "استئناف"
+        }
+      },
+      "manual_paused": {
+        "true": {
+          "title": "إيقاف المورد المورد اليدوي مؤقتاً؟",
+          "body": "تصبح مسارات هذا المورد غير صالحة فوراً، وتتبع الأسعار المسار التالي أو تصبح الباقات غير متوفرة. المزامنة وقراءة الرصيد تستمران.",
+          "action": "إيقاف مؤقت"
+        },
+        "false": {
+          "title": "استئناف المورد المورد اليدوي؟",
+          "body": "تعود مسارات هذا المورد صالحة إن توفرت شروطها، وتتبعها الأسعار فوراً.",
+          "action": "استئناف"
+        }
+      },
+      "fake_paused": {
+        "true": {
+          "title": "إيقاف المورد المورد التجريبي مؤقتاً؟",
+          "body": "تصبح مسارات هذا المورد غير صالحة فوراً، وتتبع الأسعار المسار التالي أو تصبح الباقات غير متوفرة. المزامنة وقراءة الرصيد تستمران.",
+          "action": "إيقاف مؤقت"
+        },
+        "false": {
+          "title": "استئناف المورد المورد التجريبي؟",
+          "body": "تعود مسارات هذا المورد صالحة إن توفرت شروطها، وتتبعها الأسعار فوراً.",
+          "action": "استئناف"
         }
       },
       "registrationWarning": "أي شخص يستطيع إنشاء حساب وإيداع مال حقيقي."

@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  costChangeBasisPoints,
+  decideReviewsSchema,
   isProfitable,
   type MarginRuleValues,
   marginBasisPoints,
+  needsReview,
   priceFromCost,
+  priceReviewListQuerySchema,
   pricingPreviewRequestSchema,
   resolveMarginRule,
   savings,
@@ -179,5 +183,42 @@ describe('rule schemas (rule PR1)', () => {
     expect(
       pricingPreviewRequestSchema.safeParse({ ...request, target: { scope: 'product' } }).success,
     ).toBe(false);
+  });
+});
+
+describe('needsReview (S07 rule P3)', () => {
+  it('holds a change above 10% either way and applies exactly 10% at once', () => {
+    expect(needsReview(usd(1), usd(1.1), 1000)).toBe(false);
+    expect(needsReview(usd(1), usd(1.1) + 1, 1000)).toBe(true);
+    expect(needsReview(usd(1), usd(0.9), 1000)).toBe(false);
+    expect(needsReview(usd(1), usd(0.9) - 1, 1000)).toBe(true);
+    expect(needsReview(usd(0.88), usd(0.92), 1000)).toBe(false);
+    // The acceptance's $0.88 → $1.10 (+25%).
+    expect(needsReview(usd(0.88), usd(1.1), 1000)).toBe(true);
+    expect(needsReview(usd(1), usd(1), 100)).toBe(false);
+  });
+
+  it('measures the change in signed basis points of the cost before', () => {
+    expect(costChangeBasisPoints(usd(0.88), usd(1.1))).toBe(2500);
+    expect(costChangeBasisPoints(usd(1), usd(0.9))).toBe(-1000);
+    // Rounded toward zero.
+    expect(costChangeBasisPoints(3, 4)).toBe(3333);
+    expect(costChangeBasisPoints(3, 2)).toBe(-3333);
+    expect(() => costChangeBasisPoints(0, 1)).toThrow(RangeError);
+  });
+});
+
+describe('review schemas (rule P4)', () => {
+  const id = '0199a000-0000-7000-8000-000000000001';
+
+  it('lists open reviews by default', () => {
+    expect(priceReviewListQuerySchema.parse({})).toEqual({ page: 1, pageSize: 50, status: 'open' });
+  });
+
+  it('decides 1–100 reviews, each once', () => {
+    const decision = { reviewId: id, action: 'accept' as const, expectedPriceUsdUnits: 990_000 };
+    expect(decideReviewsSchema.safeParse({ decisions: [decision] }).success).toBe(true);
+    expect(decideReviewsSchema.safeParse({ decisions: [] }).success).toBe(false);
+    expect(decideReviewsSchema.safeParse({ decisions: [decision, decision] }).success).toBe(false);
   });
 });

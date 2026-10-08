@@ -35,7 +35,17 @@ export type Answer =
   | { status: 200; image: true }
   | { status: 204 };
 
-type Row<T> = Omit<T, 'gameCount' | 'productCount' | 'availability'>;
+/** What the API derives rather than stores (S06 counts; S07 a product's price and availability). */
+type Row<T> = Omit<
+  T,
+  | 'gameCount'
+  | 'productCount'
+  | 'availability'
+  | 'priceUsdUnits'
+  | 'priceSypUnits'
+  | 'basisSupplierNameAr'
+  | 'reviewOpen'
+>;
 
 type StoredGame = Omit<Row<Game>, 'cover' | 'idGuide'> & {
   coverFileId: string | null;
@@ -210,7 +220,14 @@ export class CatalogMock {
         productArchived: !!row.archivedAt,
         gameStatus: game.status,
         productStatus: row.status,
+        // No supplier routes in this mock (S07): no price, so out of stock once active.
+        price: null,
+        usableRouteCostsUsdUnits: [],
       }),
+      priceUsdUnits: null,
+      priceSypUnits: null,
+      basisSupplierNameAr: null,
+      reviewOpen: false,
     };
   }
 
