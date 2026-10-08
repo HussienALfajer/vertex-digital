@@ -20,6 +20,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/store/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SettingsController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/switches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SettingsAdminController_list"];
+        put?: never;
+        post: operations["SettingsAdminController_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/switches/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SettingsAdminController_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/auth/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdminAccountController_changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/me/reauthenticate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdminAccountController_reauthenticate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminAccountController_sessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/me/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["AdminAccountController_revokeSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/registration": {
         parameters: {
             query?: never;
@@ -223,70 +335,6 @@ export interface paths {
         put?: never;
         post: operations["AuthAdminController_resetPassword"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/auth/change-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AdminAccountController_changePassword"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/me/reauthenticate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AdminAccountController_reauthenticate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/me/sessions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["AdminAccountController_sessions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/me/sessions/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["AdminAccountController_revokeSession"];
         options?: never;
         head?: never;
         patch?: never;
@@ -856,6 +904,78 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        StoreStatus: {
+            registrationOpen: boolean;
+            purchasesStopped: boolean;
+            depositsStopped: boolean;
+        };
+        AdminSwitches: {
+            switches: {
+                switch: components["schemas"]["StoreSwitch"];
+                value: boolean;
+                default: boolean;
+                /** Format: date-time */
+                since: string | null;
+                channel: components["schemas"]["SwitchChannel"] | null;
+            }[];
+        };
+        /** @enum {string} */
+        StoreSwitch: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused";
+        /** @enum {string} */
+        SwitchChannel: "admin" | "telegram";
+        ChangeSwitch: {
+            switch: components["schemas"]["StoreSwitch"];
+            value: boolean;
+        };
+        SwitchHistoryQuery: {
+            cursor?: string;
+            /** @default 50 */
+            limit: number;
+            switch?: components["schemas"]["StoreSwitch"];
+        };
+        SwitchHistoryPage: {
+            items: components["schemas"]["SwitchChange"][];
+            nextCursor: string | null;
+        };
+        SwitchChange: {
+            /** Format: uuid */
+            id: string;
+            switch: components["schemas"]["StoreSwitch"];
+            value: boolean;
+            channel: components["schemas"]["SwitchChannel"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AdminChangePassword: {
+            currentPassword: string;
+            newPassword: string;
+        };
+        Success: {
+            /** @enum {boolean} */
+            success: true;
+        };
+        Reauthenticate: {
+            password: string;
+            totpCode: string;
+        };
+        Reauthentication: {
+            /** Format: date-time */
+            reauthenticatedUntil: string;
+        };
+        AdminSessionList: components["schemas"]["AdminSession"][];
+        AdminSession: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastActiveAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            ipAddress: string | null;
+            userAgent: string | null;
+            current: boolean;
+        };
         Registration: {
             open: boolean;
         };
@@ -873,10 +993,6 @@ export interface components {
         RequestCode: {
             /** Format: email */
             email: string;
-        };
-        Success: {
-            /** @enum {boolean} */
-            success: true;
         };
         ResetPassword: {
             /** Format: email */
@@ -954,32 +1070,6 @@ export interface components {
         GeneratedPassword: {
             password: string;
         };
-        AdminChangePassword: {
-            currentPassword: string;
-            newPassword: string;
-        };
-        Reauthenticate: {
-            password: string;
-            totpCode: string;
-        };
-        Reauthentication: {
-            /** Format: date-time */
-            reauthenticatedUntil: string;
-        };
-        AdminSessionList: components["schemas"]["AdminSession"][];
-        AdminSession: {
-            /** Format: uuid */
-            id: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            lastActiveAt: string;
-            /** Format: date-time */
-            expiresAt: string;
-            ipAddress: string | null;
-            userAgent: string | null;
-            current: boolean;
-        };
         AuditListQuery: {
             cursor?: string;
             /** @default 50 */
@@ -999,9 +1089,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -1228,6 +1318,7 @@ export interface components {
         /** @enum {string} */
         Currency: "USD" | "SYP";
         ShamCashOptions: {
+            state: components["schemas"]["DepositMethodState"];
             currencies: {
                 SYP: {
                     available: boolean;
@@ -1259,6 +1350,8 @@ export interface components {
             /** Format: uuid */
             pendingDepositId: string | null;
         };
+        /** @enum {string} */
+        DepositMethodState: "available" | "paused" | "stopped" | "unavailable";
         DepositLimits: {
             established: boolean;
             minUnits: number;
@@ -1358,6 +1451,7 @@ export interface components {
         UsdtOptions: {
             networks: {
                 method: components["schemas"]["UsdtMethod"];
+                state: components["schemas"]["DepositMethodState"];
                 available: boolean;
                 /** @enum {string|null} */
                 unavailableReason: "not_configured" | "disabled" | "delayed" | null;
@@ -1763,6 +1857,182 @@ export interface operations {
             };
         };
     };
+    SettingsController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registration and the emergency stop */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreStatus"];
+                };
+            };
+        };
+    };
+    SettingsAdminController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every switch with its default */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSwitches"];
+                };
+            };
+        };
+    };
+    SettingsAdminController_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeSwitch"];
+            };
+        };
+        responses: {
+            /** @description The switches after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSwitches"];
+                };
+            };
+        };
+    };
+    SettingsAdminController_history: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                switch?: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchHistoryPage"];
+                };
+            };
+        };
+    };
+    AdminAccountController_changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminChangePassword"];
+            };
+        };
+        responses: {
+            /** @description Changed; other sessions end */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success"];
+                };
+            };
+        };
+    };
+    AdminAccountController_reauthenticate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reauthenticate"];
+            };
+        };
+        responses: {
+            /** @description Sensitive routes are open until then */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reauthentication"];
+                };
+            };
+        };
+    };
+    AdminAccountController_sessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The admin’s sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSessionList"];
+                };
+            };
+        };
+    };
+    AdminAccountController_revokeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session is signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AuthController_registration: {
         parameters: {
             query?: never;
@@ -2108,94 +2378,6 @@ export interface operations {
             };
         };
     };
-    AdminAccountController_changePassword: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AdminChangePassword"];
-            };
-        };
-        responses: {
-            /** @description Changed; other sessions end */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Success"];
-                };
-            };
-        };
-    };
-    AdminAccountController_reauthenticate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Reauthenticate"];
-            };
-        };
-        responses: {
-            /** @description Sensitive routes are open until then */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Reauthentication"];
-                };
-            };
-        };
-    };
-    AdminAccountController_sessions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The admin’s sessions */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdminSessionList"];
-                };
-            };
-        };
-    };
-    AdminAccountController_revokeSession: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The session is signed out */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     AuditAdminController_list: {
         parameters: {
             query?: {
@@ -2203,8 +2385,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked";
-                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch";
                 entityId?: string;
                 from?: string;
                 to?: string;

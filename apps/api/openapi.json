@@ -15,6 +15,242 @@
         ]
       }
     },
+    "/api/store/status": {
+      "get": {
+        "operationId": "SettingsController_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Registration and the emergency stop",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreStatus"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/admin/switches": {
+      "get": {
+        "operationId": "SettingsAdminController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Every switch with its default",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSwitches"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ]
+      },
+      "post": {
+        "operationId": "SettingsAdminController_change",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSwitch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The switches after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSwitches"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/admin/switches/history": {
+      "get": {
+        "operationId": "SettingsAdminController_history",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "switch",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "registration_open",
+                "purchases_stopped",
+                "deposits_stopped",
+                "sham_cash_paused",
+                "usdt_trc20_paused",
+                "usdt_bep20_paused"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchHistoryPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/admin/auth/change-password": {
+      "post": {
+        "operationId": "AdminAccountController_changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminChangePassword"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Changed; other sessions end",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin-account"
+        ]
+      }
+    },
+    "/api/admin/me/reauthenticate": {
+      "post": {
+        "operationId": "AdminAccountController_reauthenticate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reauthenticate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sensitive routes are open until then",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reauthentication"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin-account"
+        ]
+      }
+    },
+    "/api/admin/me/sessions": {
+      "get": {
+        "operationId": "AdminAccountController_sessions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The admin’s sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSessionList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin-account"
+        ]
+      }
+    },
+    "/api/admin/me/sessions/{id}": {
+      "delete": {
+        "operationId": "AdminAccountController_revokeSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The session is signed out"
+          }
+        },
+        "tags": [
+          "admin-account"
+        ]
+      }
+    },
     "/api/auth/registration": {
       "get": {
         "operationId": "AuthController_registration",
@@ -457,112 +693,6 @@
         ]
       }
     },
-    "/api/admin/auth/change-password": {
-      "post": {
-        "operationId": "AdminAccountController_changePassword",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AdminChangePassword"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Changed; other sessions end",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Success"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "admin-account"
-        ]
-      }
-    },
-    "/api/admin/me/reauthenticate": {
-      "post": {
-        "operationId": "AdminAccountController_reauthenticate",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Reauthenticate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Sensitive routes are open until then",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Reauthentication"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "admin-account"
-        ]
-      }
-    },
-    "/api/admin/me/sessions": {
-      "get": {
-        "operationId": "AdminAccountController_sessions",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The admin’s sessions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminSessionList"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "admin-account"
-        ]
-      }
-    },
-    "/api/admin/me/sessions/{id}": {
-      "delete": {
-        "operationId": "AdminAccountController_revokeSession",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "The session is signed out"
-          }
-        },
-        "tags": [
-          "admin-account"
-        ]
-      }
-    },
     "/api/admin/audit": {
       "get": {
         "operationId": "AuditAdminController_list",
@@ -651,7 +781,8 @@
                 "deposit.txid_submitted",
                 "deposit.transfer_bound",
                 "deposit.txid_bounced",
-                "deposit.rechecked"
+                "deposit.rechecked",
+                "store_switch.changed"
               ]
             }
           },
@@ -667,7 +798,8 @@
                 "wallet_adjustment",
                 "exchange_rate",
                 "deposit_settings",
-                "deposit"
+                "deposit",
+                "store_switch"
               ]
             }
           },
@@ -2093,6 +2225,298 @@
   "servers": [],
   "components": {
     "schemas": {
+      "StoreStatus": {
+        "type": "object",
+        "properties": {
+          "registrationOpen": {
+            "type": "boolean"
+          },
+          "purchasesStopped": {
+            "type": "boolean"
+          },
+          "depositsStopped": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "registrationOpen",
+          "purchasesStopped",
+          "depositsStopped"
+        ],
+        "additionalProperties": false
+      },
+      "AdminSwitches": {
+        "type": "object",
+        "properties": {
+          "switches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "switch": {
+                  "$ref": "#/components/schemas/StoreSwitch"
+                },
+                "value": {
+                  "type": "boolean"
+                },
+                "default": {
+                  "type": "boolean"
+                },
+                "since": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "channel": {
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SwitchChannel"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "switch",
+                "value",
+                "default",
+                "since",
+                "channel"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "switches"
+        ],
+        "additionalProperties": false
+      },
+      "StoreSwitch": {
+        "type": "string",
+        "enum": [
+          "registration_open",
+          "purchases_stopped",
+          "deposits_stopped",
+          "sham_cash_paused",
+          "usdt_trc20_paused",
+          "usdt_bep20_paused"
+        ]
+      },
+      "SwitchChannel": {
+        "type": "string",
+        "enum": [
+          "admin",
+          "telegram"
+        ]
+      },
+      "ChangeSwitch": {
+        "type": "object",
+        "properties": {
+          "switch": {
+            "$ref": "#/components/schemas/StoreSwitch"
+          },
+          "value": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "switch",
+          "value"
+        ]
+      },
+      "SwitchHistoryQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "switch": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StoreSwitch"
+              }
+            ]
+          }
+        }
+      },
+      "SwitchHistoryPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SwitchChange"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "SwitchChange": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "switch": {
+            "$ref": "#/components/schemas/StoreSwitch"
+          },
+          "value": {
+            "type": "boolean"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/SwitchChannel"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "switch",
+          "value",
+          "channel",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "AdminChangePassword": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "minLength": 1
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ]
+      },
+      "Success": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "additionalProperties": false
+      },
+      "Reauthenticate": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 1
+          },
+          "totpCode": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          }
+        },
+        "required": [
+          "password",
+          "totpCode"
+        ]
+      },
+      "Reauthentication": {
+        "type": "object",
+        "properties": {
+          "reauthenticatedUntil": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "reauthenticatedUntil"
+        ],
+        "additionalProperties": false
+      },
+      "AdminSessionList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminSession"
+        }
+      },
+      "AdminSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "lastActiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "ipAddress": {
+            "nullable": true,
+            "type": "string"
+          },
+          "userAgent": {
+            "nullable": true,
+            "type": "string"
+          },
+          "current": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "lastActiveAt",
+          "expiresAt",
+          "ipAddress",
+          "userAgent",
+          "current"
+        ],
+        "additionalProperties": false
+      },
       "Registration": {
         "type": "object",
         "properties": {
@@ -2165,21 +2589,6 @@
         "required": [
           "email"
         ]
-      },
-      "Success": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "enum": [
-              true
-            ]
-          }
-        },
-        "required": [
-          "success"
-        ],
-        "additionalProperties": false
       },
       "ResetPassword": {
         "type": "object",
@@ -2469,107 +2878,6 @@
         ],
         "additionalProperties": false
       },
-      "AdminChangePassword": {
-        "type": "object",
-        "properties": {
-          "currentPassword": {
-            "type": "string",
-            "minLength": 1
-          },
-          "newPassword": {
-            "type": "string",
-            "minLength": 12,
-            "maxLength": 128
-          }
-        },
-        "required": [
-          "currentPassword",
-          "newPassword"
-        ]
-      },
-      "Reauthenticate": {
-        "type": "object",
-        "properties": {
-          "password": {
-            "type": "string",
-            "minLength": 1
-          },
-          "totpCode": {
-            "type": "string",
-            "pattern": "^\\d{6}$"
-          }
-        },
-        "required": [
-          "password",
-          "totpCode"
-        ]
-      },
-      "Reauthentication": {
-        "type": "object",
-        "properties": {
-          "reauthenticatedUntil": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          }
-        },
-        "required": [
-          "reauthenticatedUntil"
-        ],
-        "additionalProperties": false
-      },
-      "AdminSessionList": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/AdminSession"
-        }
-      },
-      "AdminSession": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          },
-          "lastActiveAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          },
-          "ipAddress": {
-            "nullable": true,
-            "type": "string"
-          },
-          "userAgent": {
-            "nullable": true,
-            "type": "string"
-          },
-          "current": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "createdAt",
-          "lastActiveAt",
-          "expiresAt",
-          "ipAddress",
-          "userAgent",
-          "current"
-        ],
-        "additionalProperties": false
-      },
       "AuditListQuery": {
         "type": "object",
         "properties": {
@@ -2671,7 +2979,8 @@
           "deposit.txid_submitted",
           "deposit.transfer_bound",
           "deposit.txid_bounced",
-          "deposit.rechecked"
+          "deposit.rechecked",
+          "store_switch.changed"
         ]
       },
       "AuditEntityType": {
@@ -2682,7 +2991,8 @@
           "wallet_adjustment",
           "exchange_rate",
           "deposit_settings",
-          "deposit"
+          "deposit",
+          "store_switch"
         ]
       },
       "AuditPage": {
@@ -3669,6 +3979,9 @@
       "ShamCashOptions": {
         "type": "object",
         "properties": {
+          "state": {
+            "$ref": "#/components/schemas/DepositMethodState"
+          },
           "currencies": {
             "type": "object",
             "properties": {
@@ -3806,6 +4119,7 @@
           }
         },
         "required": [
+          "state",
           "currencies",
           "account",
           "limits",
@@ -3815,6 +4129,15 @@
           "pendingDepositId"
         ],
         "additionalProperties": false
+      },
+      "DepositMethodState": {
+        "type": "string",
+        "enum": [
+          "available",
+          "paused",
+          "stopped",
+          "unavailable"
+        ]
       },
       "DepositLimits": {
         "type": "object",
@@ -4290,6 +4613,9 @@
                 "method": {
                   "$ref": "#/components/schemas/UsdtMethod"
                 },
+                "state": {
+                  "$ref": "#/components/schemas/DepositMethodState"
+                },
                 "available": {
                   "type": "boolean"
                 },
@@ -4315,6 +4641,7 @@
               },
               "required": [
                 "method",
+                "state",
                 "available",
                 "unavailableReason",
                 "address",
