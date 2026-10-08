@@ -121,6 +121,26 @@ export const ERROR_CODES = [
   'CATALOG_LIMIT_REACHED',
   /** The global margin rule cannot be archived (S06 rule PR2). */
   'GLOBAL_RULE_REQUIRED',
+  /** The supplier needs credentials first (S07 rule SP1). */
+  'SUPPLIER_NOT_CONFIGURED',
+  /** This build has no adapter for the supplier, or it lists no offers (S07 rule SP1). */
+  'SUPPLIER_UNAVAILABLE',
+  /** The offer already serves another product; `details.productId`, `details.productNameAr` (rule RT1). */
+  'OFFER_ALREADY_MAPPED',
+  /** The product already has an unarchived route to this supplier (rule RT1). */
+  'ROUTE_EXISTS',
+  /** The offer's kind is not the product's (rule RT2). */
+  'ROUTE_KIND_MISMATCH',
+  /** The supplier fields left unmapped; `details.fields` (rule RT3). */
+  'ROUTE_FIELDS_UNMAPPED',
+  /** The offer is no longer listed by its supplier (S07 edge case 5). */
+  'OFFER_MISSING',
+  /** The review was already decided (rule P4). */
+  'REVIEW_CLOSED',
+  /** The proposed price changed since it was shown; `details.proposedPriceUsdUnits` (rule P4). */
+  'REVIEW_STALE',
+  /** The display step adds more than 2% to the cheapest product; `details.maxStepSypUnits` (rule P9). */
+  'DISPLAY_STEP_TOO_LARGE',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

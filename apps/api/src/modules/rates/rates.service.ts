@@ -4,13 +4,22 @@ import {
   type CursorQuery,
   type ExchangeRateRecord,
   isRateStale,
+  maxDisplayStepSypUnits,
   type RatesOverview,
   rateChangePercent,
   rateConfirmationError,
   rateFromNumeric,
 } from '@vertex-digital/contracts';
-import { type Database, exchangeRates, newId, recordAudit } from '@vertex-digital/db';
+import {
+  cheapestAvailablePrice,
+  type Database,
+  exchangeRates,
+  newId,
+  recordAudit,
+} from '@vertex-digital/db';
 import { desc, sql } from 'drizzle-orm';
+import { ENV, type Env } from '../../core/config/env.js';
+import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
@@ -43,6 +52,7 @@ const RATE_CHANGE_LOCK = sql`select pg_advisory_xact_lock(hashtext('exchange_rat
 export class RatesService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(ENV) private readonly env: Env,
     private readonly admins: AdminAuthService,
   ) {}
 
@@ -95,6 +105,17 @@ export class RatesService {
         throw new CodedException(400, refusal, 'The typed rate confirmation does not hold', {
           changePercent: before && rateChangePercent(before.sypPerUsd, input.sypPerUsd),
         });
+      }
+      // S07 rule P9: the step may add at most 2% to the cheapest available product.
+      const cheapest = await cheapestAvailablePrice(tx, routingContext(this.env));
+      const maxStep = cheapest === null ? null : maxDisplayStepSypUnits(input.sypPerUsd, cheapest);
+      if (maxStep !== null && input.displayStepSypUnits > maxStep) {
+        throw new CodedException(
+          400,
+          'DISPLAY_STEP_TOO_LARGE',
+          'The display step adds more than 2% to the cheapest available product',
+          { maxStepSypUnits: maxStep },
+        );
       }
       const [row] = await tx
         .insert(exchangeRates)

@@ -247,6 +247,8 @@ describe('products (rule CT8)', () => {
       productArchived: false,
       gameStatus: 'active' as const,
       productStatus: 'active' as const,
+      price: null,
+      usableRouteCostsUsdUnits: [],
     };
     expect(productAvailability(facts)).toBe('out_of_stock');
     expect(productAvailability({ ...facts, productStatus: 'paused' })).toBe('paused');
@@ -256,5 +258,30 @@ describe('products (rule CT8)', () => {
     );
     expect(productAvailability({ ...facts, gameArchived: true })).toBe('hidden');
     expect(productAvailability({ ...facts, categoryArchived: true })).toBe('hidden');
+  });
+
+  it('follow the price and the usable routes (S07 rule P6)', () => {
+    const facts = {
+      categoryArchived: false,
+      gameArchived: false,
+      productArchived: false,
+      gameStatus: 'active' as const,
+      productStatus: 'active' as const,
+      price: { priceUsdUnits: 990_000, minMarginUsdUnits: 100_000 },
+      usableRouteCostsUsdUnits: [890_000],
+    };
+    // Exactly the minimum margin is profitable (rule PR5).
+    expect(productAvailability(facts)).toBe('available');
+    expect(productAvailability({ ...facts, usableRouteCostsUsdUnits: [] })).toBe('out_of_stock');
+    expect(productAvailability({ ...facts, price: null })).toBe('out_of_stock');
+    // A held price below cost plus the minimum: the guard pauses the product.
+    expect(productAvailability({ ...facts, usableRouteCostsUsdUnits: [890_001] })).toBe(
+      'paused_by_margin_guard',
+    );
+    // One profitable route among several is enough.
+    expect(productAvailability({ ...facts, usableRouteCostsUsdUnits: [950_000, 880_000] })).toBe(
+      'available',
+    );
+    expect(productAvailability({ ...facts, productStatus: 'paused' })).toBe('paused');
   });
 });

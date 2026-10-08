@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { DepositMethod } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
+import type { SupplierCode } from './suppliers.js';
 
 /*
  * The store switches (S05 F26, rules SW1–SW10), owned by the api `settings` module. Each switch
@@ -14,6 +15,10 @@ export const STORE_SWITCHES = [
   'sham_cash_paused',
   'usdt_trc20_paused',
   'usdt_bep20_paused',
+  'shop2topup_paused',
+  'wdgzone_paused',
+  'manual_paused',
+  'fake_paused',
 ] as const;
 
 export const storeSwitchSchema = z.enum(STORE_SWITCHES).meta({ id: 'StoreSwitch' });
@@ -34,6 +39,10 @@ export const STORE_SWITCH_DEFAULTS: StoreSwitchValues = {
   sham_cash_paused: false,
   usdt_trc20_paused: false,
   usdt_bep20_paused: false,
+  shop2topup_paused: false,
+  wdgzone_paused: false,
+  manual_paused: false,
+  fake_paused: false,
 };
 
 /** Where a change was made: the panel, or the Telegram bot (stops only, rule SW3). */
@@ -48,6 +57,14 @@ export const DEPOSIT_PAUSE_SWITCHES: Record<DepositMethod, StoreSwitch> = {
   sham_cash: 'sham_cash_paused',
   usdt_trc20: 'usdt_trc20_paused',
   usdt_bep20: 'usdt_bep20_paused',
+};
+
+/** The switch that pauses each supplier's routes (S07 rule SP3). */
+export const SUPPLIER_PAUSE_SWITCHES: Record<SupplierCode, StoreSwitch> = {
+  shop2topup: 'shop2topup_paused',
+  wdgzone: 'wdgzone_paused',
+  manual: 'manual_paused',
+  fake: 'fake_paused',
 };
 
 /** Why a new deposit of a method is refused with `DEPOSITS_STOPPED` (rule SW4), or null. */

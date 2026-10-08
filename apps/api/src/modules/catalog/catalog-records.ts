@@ -9,7 +9,7 @@ import {
   type InputField,
   missingForActivation,
   type Product,
-  productAvailability,
+  type ProductAvailability,
 } from '@vertex-digital/contracts';
 import {
   catalogCategories,
@@ -19,7 +19,7 @@ import {
   recordAudit,
   type Transaction,
 } from '@vertex-digital/db';
-import { and, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { violatedConstraint } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -80,14 +80,16 @@ export function toInputField(row: FieldRow): InputField {
   };
 }
 
-/** Where a product's game sits, for its availability (rule CT9). */
-export interface GameFacts {
-  categoryArchived: boolean;
-  gameArchived: boolean;
-  gameStatus: GameRow['status'];
+/** A product's price and availability (rule CT9; S07 rules P1, P6), from `CatalogService`. */
+export interface ProductPricing {
+  availability: ProductAvailability;
+  priceUsdUnits: number | null;
+  priceSypUnits: number | null;
+  basisSupplierNameAr: string | null;
+  reviewOpen: boolean;
 }
 
-export function toProduct(row: ProductRow, game: GameFacts): Product {
+export function toProduct(row: ProductRow, pricing: ProductPricing): Product {
   return {
     ...record(row),
     gameId: row.gameId,
@@ -99,11 +101,7 @@ export function toProduct(row: ProductRow, game: GameFacts): Product {
     regionAr: row.regionAr,
     redemptionAr: row.redemptionAr,
     status: row.status,
-    availability: productAvailability({
-      ...game,
-      productArchived: row.archivedAt !== null,
-      productStatus: row.status,
-    }),
+    ...pricing,
   };
 }
 
@@ -238,7 +236,11 @@ export function nextSortOrder(
 /** A `LIKE` pattern that finds `text` anywhere, its wildcards taken literally. */
 export const containing = (text: string) => `%${text.replace(/[\\%_]/g, '\\$&')}%`;
 
-/** Rewrites `sort_order` as 1…n in the order of `ids` (rule CT5). */
+/**
+ * Rewrites `sort_order` as 1…n in the order of `ids` (rule CT5). The rows are locked in id order
+ * first, the order the repricing path (S07) locks games and products in, so the two never wait
+ * on each other in opposite orders.
+ */
 export async function rewriteOrder(
   tx: Transaction,
   table:
@@ -248,6 +250,12 @@ export async function rewriteOrder(
     | typeof catalogProducts,
   ids: readonly string[],
 ): Promise<void> {
+  await tx
+    .select({ id: table.id })
+    .from(table)
+    .where(inArray(table.id, [...ids]))
+    .orderBy(asc(table.id))
+    .for('update');
   await tx
     .update(table)
     .set({

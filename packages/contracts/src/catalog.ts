@@ -321,6 +321,13 @@ export const productSchema = z
     redemptionAr: z.string().nullable(),
     status: catalogStatusSchema,
     availability: productAvailabilitySchema,
+    /** The current stored price (S07 rule P2) and its SYP display price; null: none yet. */
+    priceUsdUnits: z.int().nullable(),
+    priceSypUnits: z.int().nullable(),
+    /** The supplier of the route the price follows now (rule P1); null with no usable route. */
+    basisSupplierNameAr: z.string().nullable(),
+    /** A price review holds the price (rule P2). */
+    reviewOpen: z.boolean(),
   })
   .meta({ id: 'Product' });
 
@@ -367,23 +374,33 @@ export const updateProductSchema = z
 
 export type UpdateProduct = z.input<typeof updateProductSchema>;
 
-/** Where a product sits, for its availability (rule CT9). */
+/** What a product's availability reads (rule CT9; S07 rule P6). */
 export interface AvailabilityFacts {
   categoryArchived: boolean;
   gameArchived: boolean;
   productArchived: boolean;
   gameStatus: CatalogStatus;
   productStatus: CatalogStatus;
+  /** The current stored price and the minimum margin of the rule that governs it; null: none. */
+  price: { priceUsdUnits: number; minMarginUsdUnits: number } | null;
+  /** The costs of the product's usable routes (rule RT4). */
+  usableRouteCostsUsdUnits: readonly number[];
 }
 
 /**
- * A product's availability (rule CT9): `hidden`, then `paused`; until S07 maps supplier offers
- * (the margin guard and stock), every other product is `out_of_stock`.
+ * A product's availability (rule CT9, ADR 0020; S07 rule P6), in order: `hidden`; `paused`;
+ * `out_of_stock` with no current price or no usable route; `paused_by_margin_guard` when no usable
+ * route is profitable for the current price (a review holds it); otherwise `available`.
  */
 export function productAvailability(facts: AvailabilityFacts): ProductAvailability {
   if (facts.categoryArchived || facts.gameArchived || facts.productArchived) return 'hidden';
   if (facts.gameStatus === 'paused' || facts.productStatus === 'paused') return 'paused';
-  return 'out_of_stock';
+  const { price } = facts;
+  if (price === null || facts.usableRouteCostsUsdUnits.length === 0) return 'out_of_stock';
+  const profitable = facts.usableRouteCostsUsdUnits.some(
+    (cost) => price.priceUsdUnits - cost >= price.minMarginUsdUnits,
+  );
+  return profitable ? 'available' : 'paused_by_margin_guard';
 }
 
 // Games -----------------------------------------------------------------------------------------

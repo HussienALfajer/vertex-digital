@@ -107,6 +107,28 @@ export const envSchema = z
         .regex(/^[\w-]{32,256}$/)
         .optional(),
     ),
+    /**
+     * The `fake` supplier (S07 rule SP1): development and E2E only; the start is refused with it
+     * in production.
+     */
+    SUPPLIER_FAKE_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    /**
+     * The AES-256-GCM key of supplier credentials (S07 rule SP2): 32 bytes in base64, the same in
+     * the worker. Required in production; derived locally.
+     */
+    SUPPLIER_KEYS_SECRET: z
+      .string()
+      .optional()
+      .transform((value) => (value && !isPlaceholder(value) ? value : undefined))
+      .pipe(
+        z
+          .string()
+          .refine((value) => Buffer.from(value, 'base64').length === 32, 'Expected 32 bytes')
+          .optional(),
+      ),
     /** Empty disables Sentry. */
     SENTRY_DSN: z
       .string()
@@ -116,7 +138,19 @@ export const envSchema = z
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== 'production') return;
-    for (const key of ['CUSTOMER_AUTH_SECRET', 'ADMIN_AUTH_SECRET', 'ALTCHA_HMAC_KEY'] as const) {
+    if (env.SUPPLIER_FAKE_ENABLED) {
+      context.addIssue({
+        code: 'custom',
+        path: ['SUPPLIER_FAKE_ENABLED'],
+        message: 'The fake supplier is never enabled in production',
+      });
+    }
+    for (const key of [
+      'CUSTOMER_AUTH_SECRET',
+      'ADMIN_AUTH_SECRET',
+      'ALTCHA_HMAC_KEY',
+      'SUPPLIER_KEYS_SECRET',
+    ] as const) {
       if (!env[key]) {
         context.addIssue({ code: 'custom', path: [key], message: `${key} is required` });
       }
@@ -153,6 +187,8 @@ export const envSchema = z
       CUSTOMER_AUTH_SECRET: env.CUSTOMER_AUTH_SECRET ?? derive('customer-auth'),
       ADMIN_AUTH_SECRET: env.ADMIN_AUTH_SECRET ?? derive('admin-auth'),
       ALTCHA_HMAC_KEY: env.ALTCHA_HMAC_KEY ?? derive('altcha'),
+      SUPPLIER_KEYS_SECRET:
+        env.SUPPLIER_KEYS_SECRET ?? Buffer.from(derive('supplier-keys'), 'hex').toString('base64'),
       TELEGRAM_WEBHOOK_SECRET:
         env.TELEGRAM_WEBHOOK_SECRET ??
         (env.NODE_ENV === 'production' ? undefined : derive('telegram-webhook')),

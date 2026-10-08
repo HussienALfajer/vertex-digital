@@ -7,6 +7,8 @@ import {
   type StoreStatus,
   type StoreSwitch,
   type StoreSwitchValues,
+  SUPPLIER_PAUSE_SWITCHES,
+  type SupplierCode,
   type SwitchChannel,
   type SwitchHistoryPage,
   type SwitchHistoryQuery,
@@ -17,10 +19,14 @@ import {
   newId,
   queueTelegramMessage,
   recordAudit,
+  repriceProducts,
+  routedProductIds,
   storeSwitchChanges,
   type Transaction,
 } from '@vertex-digital/db';
 import { and, desc, eq, sql } from 'drizzle-orm';
+import { ENV, type Env } from '../../core/config/env.js';
+import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
@@ -32,6 +38,11 @@ import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor
  * the app role cannot lock rows of an append-only table.
  */
 const SWITCHES_KEY = sql`hashtext('settings')`;
+
+/** The supplier each pause switch stops (S07 rule SP3). */
+const PAUSED_SUPPLIER = new Map(
+  Object.entries(SUPPLIER_PAUSE_SWITCHES).map(([code, name]) => [name, code as SupplierCode]),
+);
 
 type Executor = Database | Transaction;
 
@@ -50,6 +61,7 @@ interface SwitchState {
 export class SettingsService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(ENV) private readonly env: Env,
     private readonly jobs: JobsService,
   ) {}
 
@@ -88,8 +100,9 @@ export class SettingsService {
 
   /**
    * Rule SW2: under the switches lock, a change to a new value writes its row, its audit entry and
-   * its Telegram notice (rule AL2) in one transaction; a change to the current value writes
-   * nothing. Re-authentication and the channel's limits (rule SW3) are the caller's.
+   * its Telegram notice (rule AL2) in one transaction, and a supplier's pause reprices its routed
+   * products (S07 rule SP3); a change to the current value writes nothing. Re-authentication and
+   * the channel's limits (rule SW3) are the caller's.
    */
   async change(
     adminId: string,
@@ -139,6 +152,15 @@ export class SettingsService {
       params: { switch: input.switch, value: input.value, channel },
       dedupeKey: `switch:${id}`,
     });
+    // A paused supplier's routes are unusable at once, and usable again on resume (rule SP3).
+    const supplier = PAUSED_SUPPLIER.get(input.switch);
+    if (supplier) {
+      await repriceProducts(tx, {
+        productIds: await routedProductIds(tx, [supplier]),
+        cause: 'route_change',
+        context: routingContext(this.env),
+      });
+    }
     return true;
   }
 

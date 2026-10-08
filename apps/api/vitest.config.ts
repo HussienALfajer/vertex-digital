@@ -23,6 +23,8 @@ export default defineConfig({
       // The Telegram bot is configured; a test turns it off to see the refusal.
       TELEGRAM_BOT_USERNAME: 'vertex_test_bot',
       TELEGRAM_WEBHOOK_SECRET: 'test-webhook-secret-0123456789abcdef',
+      // S07: suppliers are tested with the fake supplier.
+      SUPPLIER_FAKE_ENABLED: 'true',
     },
     testTimeout: 30_000,
     hookTimeout: 30_000,

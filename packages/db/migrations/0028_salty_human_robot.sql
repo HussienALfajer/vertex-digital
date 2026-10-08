@@ -1,0 +1,1 @@
+ALTER TABLE "price_reviews" ALTER COLUMN "change_bp" SET DATA TYPE bigint;

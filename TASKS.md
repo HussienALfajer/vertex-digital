@@ -1,24 +1,39 @@
-# TASKS — S06 Catalog and pricing
+# TASKS — S07 Suppliers, mapping and price sync
 
-Spec: `docs/specs/S06-catalog-and-pricing.md` (F08, F10; ADRs 0003, 0005, 0008, 0011, 0012, 0016, 0020). Two PRs, as the spec's implementation notes suggest; each leaves `main` green and runs in its own session.
+Spec: `docs/specs/S07-suppliers.md` (F09 with F10, CT9; ADRs 0003, 0004, 0005, 0008, 0011, 0016, 0019, 0020, 0021). Three PRs, as the spec's implementation notes suggest; each leaves `main` green and runs in its own session. The `shop2topup` and `wdgzone` adapters follow later through `/supplier-adapter` (Q12).
 
-## PR 1 — Contracts, db, `catalog` and `pricing` API modules, bridge · Opus 5.5 `high`
-- [x] Contracts `catalog.ts`: `CATALOG_STATUSES`, `PRODUCT_KINDS`, `INPUT_FIELD_TYPES`, `PRODUCT_AVAILABILITIES` (CT9), `slugSchema`, `accentColorSchema`, category / game / input field / product schemas (entity, create, update, list query, page, detail), `reorderSchema`, `catalogImageSchema`, `contrastRatio`, `ACCENT_MIN_CONTRAST`; unit tests (100%)
-- [x] Contracts `pricing.ts`: `MARGIN_SCOPES`, rule values / rule / set / preview schemas; pure `priceFromCost`, `isProfitable`, `resolveMarginRule`, `savings` (PR1–PR8); unit tests (100%, every boundary of the spec)
-- [x] Contracts: error codes `SLUG_TAKEN`, `NAME_TAKEN`, `FIELD_KEY_TAKEN`, `CATALOG_INCOMPLETE`, `CATALOG_NOT_EMPTY`, `PARENT_ARCHIVED`, `ACCENT_CONTRAST_TOO_LOW`, `IMAGE_INVALID`, `CATALOG_LIMIT_REACHED`, `GLOBAL_RULE_REQUIRED` with their Arabic admin text; audit entity types and actions with admin labels
-- [x] Db (`/db-migration`): `catalog_categories`, `catalog_games`, `catalog_input_fields`, `catalog_products`, `margin_rules` (enums, checks, partial unique indexes, sort indexes); `stored_file_kind` gains `catalog_image`; seeds (three categories, the global rule); `TABLE_OWNERS`; tests (indexes, checks, seeds, file kind)
-- [x] Api `files`: `catalog_image` preparation (PNG/JPEG/WebP, 5 MB, 25 MP, fit 1600, WebP, metadata stripped)
-- [x] Api `catalog` module: image upload and the public image route; categories, games, fields, products (CRUD, reorder, archive/restore, CT1–CT10); audit in each transaction; `no-store`; rate limit on upload; `test/catalog.test.ts` (every route, 401/403, every error code, concurrency: same name, parallel reorders)
-- [x] Api `pricing` module: rules list, set (re-authentication, upsert under lock), archive (global refused), preview (rule or draft, SYP via `RatesService.current()`, savings); `test/pricing.test.ts` (every route, re-authentication, parallel sets leave one live rule)
-- [x] nginx: image route (immutable cache) and upload size, if the existing zones do not cover them
-- [x] Bridge: build, OpenAPI export, admin client
-- [x] Wiring checklist, docs (`docs/architecture.md` `catalog`, `pricing`, `files` rows and "built so far", folder `CLAUDE.md`, `docs/deployment.md`, spec details settled, `wiring.md` patterns)
-- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (no blocking findings), owner acceptance (2026-10-08), PR with auto-merge
+## PR 1 — Contracts, db, repricing write path, `suppliers` API module, `pricing` additions, bridge · Opus 5.5 `high`
+- [x] Contracts `suppliers.ts`: codes, health states, call operations and results, credential fields, sync triggers and statuses, policy schema; schemas for every request and response; pure `routeUnusableReason` (RT4), `routeTier`, `orderRoutes`, `priceBasis` (RT5–RT6, P1); unit tests (100%)
+- [x] Contracts `pricing.ts`: price change causes, review statuses, price / review / decide schemas; pure `needsReview` (P3), `costChangeBasisPoints`; `rates.ts`: `maxDisplayStepSypUnits` (P9); `catalog.ts`: `productAvailability` with routes and held price (P6), product price fields; `settings.ts`: four supplier switches; unit tests (100%)
+- [x] Contracts: error codes with Arabic admin text; audit entity types and actions with admin labels; queue `suppliers.sync`
+- [x] Db (`/db-migration`): 12 tables, enums, checks, partial unique indexes, append-only triggers and grants, run and review guards, seeds (0026 generated, 0027 hand-written); `TABLE_OWNERS`; tests
+- [x] Db: credential encryption (AES-256-GCM, supplier id as associated data, key version); tests
+- [x] Db: repricing write path and routing state `packages/db/src/pricing` (P1–P6, P9 read); tests on real PostgreSQL
+- [x] Api `suppliers` module (suppliers, credentials, threshold, sync request, runs, offers, cost history, import, routes, policy) and catalog products with price and availability; `test/suppliers.test.ts` (incl. 100-row import, parallel mapping, parallel decisions)
+- [x] Api `pricing` additions: reviews, decide, adjust margin, price history; rule changes reprice (P5); rates refuse `DISPLAY_STEP_TOO_LARGE` (P9); a supplier's pause reprices (SP3)
+- [x] Env: `SUPPLIER_KEYS_SECRET` (required in production, derived locally), `SUPPLIER_FAKE_ENABLED` (refused in production); `.env.example`, `provision.sh`, `docs/deployment.md`; no nginx change (admin routes, "sync now" limited in the API)
+- [x] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow the new product shape
+- [x] Docs: `docs/architecture.md`, folder `CLAUDE.md` files, `docs/deployment.md`, spec "Settled in implementation"
+- [x] Wiring checklist, `wiring.md` patterns
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (five blocking findings, fixed with tests), owner acceptance (2026-10-08, P9's 1-pound minimum confirmed), PR with auto-merge
 
-## PR 2 — Admin screens and E2E · Opus 5.5 `high`
-- [x] Admin `features/catalog/`: `/catalog` (category tabs, game cards, filters, search, move up/down, empty, loading, error), categories dialog, `/catalog/games/new` and `/catalog/games/$id` (tabs: data with uploads and live contrast, input fields, products with archived filter, pricing)
-- [x] Admin `features/pricing/`: `/pricing` (global, category, overrides, rule form with live preview, calculator, re-authentication)
-- [x] Navigation "الكتالوج" and "التسعير"; i18n (namespaces, errors, audit labels)
-- [x] E2E: catalog and pricing flows and RTL screenshots (light and dark), re-authentication dialog
-- [x] Wiring checklist, docs (`docs/ROADMAP.md` S06 done, `wiring.md` patterns)
-- [x] Checks (lint, typecheck, test, build, e2e: all passed and recorded), reviewer (one blocking finding, fixed), owner acceptance (2026-10-08), PR with auto-merge
+## PR 2 — Worker: registry, sync, balances, health, messages, fake scripting · Opus 5.5 `high`
+- [ ] Suppliers: `SupplierOffer` gains optional `group`, `kind`, `requiredFields`; fake catalog (~10 offers, groups, kinds, fields) with scripted overrides from `FAKE_SUPPLIER_STATE_FILE`
+- [ ] Contracts: `supplierHealth` (H1–H5) and the probe rule with unit tests; queues `suppliers.sync-schedule`, `suppliers.balances`, `suppliers.health`; Telegram kinds (db enum migration)
+- [ ] Worker env: `SUPPLIER_KEYS_SECRET` derived exactly as the API's, `SUPPLIER_FAKE_ENABLED` refused in production
+- [ ] Worker registry (`SupplierRegistry.get`), decryption per call, every call in `supplier_calls`
+- [ ] Jobs `suppliers.sync` (SY1–SY4), `suppliers.sync-schedule`, `suppliers.balances` (H5), `suppliers.health` (H1–H4, SY5 stale repricing)
+- [ ] Telegram kinds `supplier_sync_summary`, `supplier_health`, `supplier_balance_low`, `supplier_sync_failing`; daily summary lines
+- [ ] Dev CLI `supplier:fake`; commands table in `AGENTS.md`
+- [ ] Tests (sync, suspicious list, failure, stale, missing, concurrent run; balances; health and probe; dedupe keys; credentials never logged)
+- [ ] Wiring checklist, docs
+- [ ] Checks, reviewer, acceptance, PR with auto-merge
+
+## PR 3 — Admin screens and E2E · Opus 5.5 `high`
+- [ ] Admin `features/suppliers/`: `/suppliers`, `/suppliers/$code` (connection, offers with import dialog, sync, health), `/suppliers/policy`
+- [ ] Admin catalog game page: price, basis, availability; routes drawer (tiers, usability, add route, manual route, priority, enable, archive/restore, price history)
+- [ ] Admin `/pricing/reviews` (bulk accept, adjust margin, pause, `REVIEW_STALE`); `/settings/rates` step error
+- [ ] Navigation "الموردون" and "مراجعة الأسعار" with count; i18n
+- [ ] E2E flows and RTL screenshots (light and dark)
+- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S07 done, `wiring.md` patterns)
+- [ ] Checks, reviewer, acceptance, PR with auto-merge
