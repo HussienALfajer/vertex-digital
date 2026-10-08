@@ -4,9 +4,12 @@ import { describe, expect, it } from 'vitest';
 import {
   cancelDeposit,
   createShamCashDeposit,
+  createUsdtDeposit,
   getDeposit,
+  getUsdtOptions,
   listDeposits,
   submitReceipt,
+  submitTxid,
 } from './requests';
 
 type Call = { url: string; init?: RequestInit };
@@ -60,6 +63,46 @@ describe('createShamCashDeposit', () => {
     const result = await createShamCashDeposit({ currency: 'USD', amountUnits: 1 }, 'k', fetch);
     expect(result).toEqual({ ok: false, reason: 'ALTCHA_INVALID' });
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe('USDT deposits', () => {
+  it('creates with the solved challenge and the attempt’s key', async () => {
+    const challenge = await createChallenge({
+      algorithm: 'PBKDF2/SHA-256',
+      cost: 10,
+      counter: 1,
+      deriveKey,
+      hmacSignatureSecret: 'test-only-hmac-key',
+    });
+    const { fetch, calls } = fetcher([200, challenge], [409, { code: 'DEPOSIT_AMOUNT_BUSY' }]);
+    const result = await createUsdtDeposit(
+      { method: 'usdt_trc20', amountUnits: 25_000_000 },
+      'key-2',
+      fetch,
+    );
+    expect(result).toEqual({ ok: false, reason: 'DEPOSIT_AMOUNT_BUSY' });
+    expect(calls[1]?.url).toBe('/api/deposits/usdt');
+    expect(header(calls[1], 'idempotency-key')).toBe('key-2');
+    expect(header(calls[1], 'x-altcha')).toBeTruthy();
+    expect(JSON.parse(String(calls[1]?.init?.body))).toEqual({
+      method: 'usdt_trc20',
+      amountUnits: 25_000_000,
+    });
+  });
+
+  it('reads the options and sends the pasted TXID as it is', async () => {
+    const { fetch, calls } = fetcher([200, { networks: [] }], [400, { code: 'TXID_INVALID' }]);
+    await getUsdtOptions(fetch);
+    const result = await submitTxid(DEPOSIT_ID, ' https://tronscan.org/#/transaction/ab ', fetch);
+    expect(result).toEqual({ ok: false, reason: 'TXID_INVALID' });
+    expect(calls.map((call) => `${call.init?.method ?? 'GET'} ${call.url}`)).toEqual([
+      'GET /api/deposits/usdt/options',
+      `POST /api/deposits/${DEPOSIT_ID}/txid`,
+    ]);
+    expect(JSON.parse(String(calls[1]?.init?.body))).toEqual({
+      txid: ' https://tronscan.org/#/transaction/ab ',
+    });
   });
 });
 

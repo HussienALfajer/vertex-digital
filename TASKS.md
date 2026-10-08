@@ -30,9 +30,9 @@ Why three and not the spec's two: PR 1 of the spec (contracts, db, readers, jobs
 - [x] Reviewer: three blocking findings fixed (scanner skips claimed TXIDs; bounce with another pending deposit rejects instead, owner 2026-10-08; BSC lists only 15-confirmation blocks, a not-final listing waits quietly), with tests
 - [x] Checks on the final tree (all recorded), owner acceptance (2026-10-08), PR with auto-merge
 
-## PR 3 — Store and admin screens, E2E · Opus 5.5 `high`
-- [ ] Store: method picker with three methods and reasons; USDT form (network note, presets, limits, `DEPOSIT_AMOUNT_BUSY` ±$0.01); `/wallet/deposits/[id]` USDT states (exact amount with highlighted tail, QR from text, address in groups, warnings, TXID field, searching, confirming progress, review reason, final states; 10 s / 30 s refresh); method labels in lists and timeline; i18n
-- [ ] Admin: queue method filter and chips; USDT deposit page (facts, TXID, transfer, flags, candidates, approve with live amount and re-authentication, reject, re-check, decider); `/deposits/transfers` with badge and prefilled S02 form; settings USDT section; audit filters; i18n
-- [ ] E2E flows and RTL screenshots (store dark phone width; admin light and dark)
-- [ ] Wiring checklist, `wiring.md` patterns, `docs/ROADMAP.md` S04 done
+## PR 3 — Store and admin screens, E2E (`ccr-2fbe5259-ginzxd`, cloud session branch) · Opus 5.5 `high`
+- [x] Store: method picker with three methods and reasons; USDT form (network note, presets, limits, `DEPOSIT_AMOUNT_BUSY` ±$0.01); `/wallet/deposits/[id]` USDT states (exact amount with highlighted tail, QR from text, address in groups, warnings, TXID field, searching, confirming progress, review reason, final states; 10 s / 30 s refresh); method labels in lists and timeline; i18n
+- [x] Admin: queue method filter and chips; USDT deposit page (facts, TXID, transfer, flags, candidates, approve with live amount and re-authentication, reject, re-check, decider); `/deposits/transfers` with badge and prefilled S02 form; settings USDT section; audit filters; i18n
+- [x] E2E flows and RTL screenshots (store dark phone width; admin light and dark)
+- [x] Wiring checklist, `wiring.md` patterns, `docs/ROADMAP.md` S04 done
 - [ ] Checks (lint, typecheck, test, build, e2e), reviewer, owner acceptance, PR with auto-merge

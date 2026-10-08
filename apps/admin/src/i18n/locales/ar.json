@@ -41,7 +41,9 @@
     "rates": "سعر الصرف",
     "depositSettings": "إعدادات الإيداع",
     "depositsBadge": "قيد المراجعة: {{submitted}}",
-    "depositsBadgeFlagged": "قيد المراجعة: {{submitted}}، بينها ما عليه تنبيهات"
+    "depositsBadgeFlagged": "قيد المراجعة: {{submitted}}، بينها ما عليه تنبيهات",
+    "usdtTransfers": "تحويلات USDT",
+    "usdtTransfersBadge": "تحويلات غير مطابقة: {{unmatched}}"
   },
   "user": {
     "menu": "قائمة الحساب",
@@ -599,10 +601,10 @@
   },
   "deposits": {
     "title": "الإيداعات",
-    "subtitle": "إيداعات شام كاش: راجع الإيصال وتحقّق من التحويل في حساب المتجر نفسه قبل الاعتماد.",
+    "subtitle": "شام كاش: راجع الإيصال وتحقّق من التحويل في حساب المتجر قبل الاعتماد. USDT: يُضاف التحويل المطابق تلقائيًا، ويصل هنا ما يحتاج مراجعة.",
     "tabs": {
       "submitted": "قيد المراجعة",
-      "pending": "بانتظار الإيصال",
+      "pending": "بانتظار الدفع",
       "all": "الكل"
     },
     "search": {
@@ -613,7 +615,7 @@
     },
     "empty": {
       "submitted": "لا إيداعات بانتظار المراجعة",
-      "pending": "لا إيداعات بانتظار الإيصال",
+      "pending": "لا إيداعات بانتظار الدفع",
       "all": "لا إيداعات بعد",
       "search": "لا إيداعات تطابق البحث"
     },
@@ -686,7 +688,9 @@
       "newAccountLine": "المبلغ {{declared}}، وحد التنبيه {{threshold}}",
       "velocityLine": "{{submissions}} إيصالات خلال 24 ساعة، والحد {{threshold}}",
       "sharedPhoneLine": "عدد الحسابات الأخرى: {{customers}}",
-      "mismatchLine": "المعلن {{declared}}، والمستلم {{received}}"
+      "mismatchLine": "المعلن {{declared}}، والمستلم {{received}}",
+      "wrongNetworkLine": "الإيداع على {{deposit}}، والتحويل على {{transfer}}",
+      "sentBeforeLine": "وقت التحويل {{block}}، وأُنشئ الإيداع {{created}}"
     },
     "referenceChecks": {
       "matches": "يطابق",
@@ -758,7 +762,9 @@
       "decidedBy": "بواسطة",
       "decidedAt": "وقت القرار",
       "audit": "سجل الإيداع",
-      "noAudit": "لا سجلات."
+      "noAudit": "لا سجلات.",
+      "subtitleMethod": "إيداع {{method}} بمبلغ {{amount}}",
+      "decidedBySystem": "تلقائي"
     },
     "approve": {
       "title": "اعتماد الإيداع",
@@ -821,11 +827,97 @@
         "customerNote": "اكتب ملاحظة للعميل من حرف إلى 300 حرف.",
         "internalNote": "اكتب ملاحظة داخلية من 5 إلى 500 حرف."
       }
+    },
+    "methodFilter": {
+      "label": "طريقة الإيداع",
+      "all": "كل الطرق"
+    },
+    "usdt": {
+      "network": "الشبكة",
+      "checkStatus": "حالة التحقق",
+      "checkStatuses": {
+        "awaiting_transfer": "بانتظار التحويل",
+        "searching": "يبحث عن العملية",
+        "confirming": "ينتظر تأكيد الشبكة",
+        "review": "قيد المراجعة",
+        "done": "منتهٍ"
+      },
+      "payAmount": "المبلغ المطلوب",
+      "tail": "الكسر المميِّز",
+      "address": "العنوان المعروض للعميل",
+      "txid": "رقم العملية (TXID)",
+      "txidSources": {
+        "customer": "أرسله العميل",
+        "scan": "اكتشاف تلقائي"
+      },
+      "submissions": "مرات إرسال الرقم",
+      "lastChecked": "آخر فحص",
+      "checkError": "آخر خطأ",
+      "checkErrors": {
+        "not_found": "لم توجد العملية",
+        "tx_failed": "عملية فاشلة",
+        "not_to_store": "ليست إلى عنوان المتجر",
+        "wrong_token": "عملة غير USDT الرسمية",
+        "amount_too_small": "أقل من دولار واحد",
+        "txid_used": "الرقم مستخدم في إيداع آخر"
+      },
+      "confirmations": "التأكيدات",
+      "scanner": "مراقبة الشبكة",
+      "delayed": "متأخرة",
+      "transfer": "التحويل على الشبكة",
+      "noTransfer": "لا تحويل مرتبط بهذا الإيداع بعد.",
+      "received": "المستلم",
+      "exact": "مطابق تمامًا",
+      "less": "أقل بـ {{amount}}",
+      "more": "أكثر بـ {{amount}}",
+      "transferNetwork": "شبكة التحويل",
+      "from": "من العنوان",
+      "to": "إلى العنوان",
+      "block": "الكتلة",
+      "blockTime": "وقت الكتلة",
+      "explorer": "افتح في مستكشف الشبكة",
+      "candidates": "الإيداعات المرشحة",
+      "noCandidates": "لا إيداعات مرشحة.",
+      "approveVerify": "المبلغ المضاف هو المستلم على الشبكة مقرّبًا إلى السنت الأدنى، ولا يُكتب يدويًا. لمبلغ آخر ارفض الإيداع وسجّل تعديلًا يدويًا.",
+      "creditHint": "المستلم على الشبكة مقرّبًا إلى السنت الأدنى.",
+      "reauthentication": "يُطلب تأكيد الهوية دائمًا قبل اعتماد إيداع USDT.",
+      "recheck": "إعادة التحقق",
+      "rechecked": "أُرسل التحقق"
+    },
+    "transfers": {
+      "title": "تحويلات USDT",
+      "subtitle": "كل تحويل USDT رسمي وصل إلى عناوين المتجر، الأحدث أولًا. غير المطابق منها يُسجَّل إيداعًا يدويًا.",
+      "stateFilter": "حالة التحويلات",
+      "unmatchedOnly": "غير المطابقة",
+      "all": "الكل",
+      "network": "الشبكة",
+      "allNetworks": "كل الشبكات",
+      "emptyUnmatched": "لا تحويلات غير مطابقة",
+      "emptyAll": "لا تحويلات بعد",
+      "columns": {
+        "time": "الوقت",
+        "network": "الشبكة",
+        "from": "من",
+        "amount": "المبلغ",
+        "txid": "رقم العملية",
+        "state": "الحالة"
+      },
+      "states": {
+        "credited": "مُضاف",
+        "bound": "قيد المراجعة",
+        "unmatched": "غير مطابق"
+      },
+      "candidates": "قد يخص هذا التحويل:",
+      "record": "تسجيل إيداع يدوي",
+      "pickCustomer": "اختر العميل الذي يُسجَّل له التحويل ({{amount}}).",
+      "candidateCustomers": "عملاء الإيداعات المرشحة",
+      "searchCustomer": "ابحث عن عميل بالاسم أو البريد أو الهاتف",
+      "noCustomers": "لا عملاء مطابقون."
     }
   },
   "depositSettings": {
     "title": "إعدادات الإيداع",
-    "subtitle": "حساب شام كاش وصور QR والحدود وساعات المراجعة. كل حفظ يُنشئ إصدارًا جديدًا.",
+    "subtitle": "حساب شام كاش وصور QR وشبكات USDT والحدود وساعات المراجعة. كل حفظ يُنشئ إصدارًا جديدًا.",
     "fresh": {
       "title": "إيداعات شام كاش غير متاحة بعد",
       "body": "القيم أدناه افتراضية. أدخل بيانات الحساب وفعّل عملة واحدة على الأقل، ثم احفظ."
@@ -870,7 +962,8 @@
       "reviewHoursEnd": "تنتهي المراجعة",
       "reviewTargetMinutes": "الوقت المستهدف للمراجعة بالدقائق",
       "flagNewAccountUsdUnits": "مبلغ التنبيه لحساب جديد",
-      "flagVelocityCount": "عدد الإيصالات خلال 24 ساعة"
+      "flagVelocityCount": "عدد الإيصالات خلال 24 ساعة",
+      "usdtMinDepositUsdUnits": "أقل مبلغ لإيداع USDT"
     },
     "errors": {
       "shamCashAccountName": "أدخل اسم الحساب، حتى 100 حرف.",
@@ -886,10 +979,22 @@
       "reviewHoursEnd": "أدخل وقتًا بعد بداية المراجعة.",
       "reviewTargetMinutes": "أدخل عدد دقائق بين 1 و1440.",
       "flagNewAccountUsdUnits": "أدخل مبلغًا بالدولار أكبر من صفر.",
-      "flagVelocityCount": "أدخل عددًا بين 1 و50."
+      "flagVelocityCount": "أدخل عددًا بين 1 و50.",
+      "usdtMinDepositUsdUnits": "أدخل مبلغًا أكبر من صفر لا يتجاوز أقصى مبلغ للإيداع."
     },
     "save": "حفظ الإعدادات",
     "saving": "جارٍ الحفظ…",
-    "saved": "حُفظت الإعدادات، وتُطبَّق على الإيداعات الجديدة."
+    "saved": "حُفظت الإعدادات، وتُطبَّق على الإيداعات الجديدة.",
+    "usdt": {
+      "title": "USDT",
+      "description": "مفتاح لكل شبكة. الحفظ الأول يحتاج بيانات حساب شام كاش أيضًا، حتى لتفعيل USDT وحده.",
+      "address": "عنوان الاستلام",
+      "noAddress": "غير مضبوط على الخادم، فالشبكة غير متاحة.",
+      "serverOnly": "يُغيَّر من إعدادات الخادم فقط",
+      "lastScan": "آخر قراءة ناجحة:",
+      "never": "لم تُقرأ بعد",
+      "delayed": "التحقق متأخر",
+      "minimumHint": "أقل مبلغ لإيداع USDT، ولا يتجاوز أقصى مبلغ للإيداع."
+    }
   }
 }

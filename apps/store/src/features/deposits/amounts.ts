@@ -1,6 +1,7 @@
 import {
   CURRENCY_SCALE,
   type Currency,
+  type Deposit,
   type DepositLimitBreach,
   type DepositStatus,
   formatSyp,
@@ -82,4 +83,32 @@ export function limitText(details: unknown): string | null {
     default:
       return null;
   }
+}
+
+/** The USDT presets, in USD (S04 screens: $10, $25, $50, $100, within the limits). */
+export const USDT_PRESETS_USD = [10, 25, 50, 100].map((dollars) => dollars * CURRENCY_SCALE.USD);
+
+/** One cent in USD units: `DEPOSIT_AMOUNT_BUSY` offers the amount one cent up or down (U3). */
+export const ONE_CENT_UNITS = CURRENCY_SCALE.USD / 100;
+
+/**
+ * The exact amount to send split for display (rule U3): the dollars and cents the customer asked
+ * for, and the two tail digits that make it unique (`25.00` and `37` of `25.0037`).
+ */
+export function splitPayAmount(payAmount: string): { head: string; tail: string } {
+  return { head: payAmount.slice(0, -2), tail: payAmount.slice(-2) };
+}
+
+/** An address in groups of 4 characters, so the customer can check it by eye. */
+export function addressGroups(address: string): string[] {
+  return address.match(/.{1,4}/g) ?? [];
+}
+
+/** A deposit's status in words; a USDT one waits for a transfer, not a receipt (S04 screens). */
+export function statusText(deposit: Pick<Deposit, 'status' | 'usdt'>): string {
+  if (deposit.usdt && deposit.status === 'pending') return t('deposits.usdt.statuses.pending');
+  if (deposit.usdt && deposit.status === 'submitted' && deposit.usdt.checkStatus !== 'review') {
+    return t('deposits.usdt.statuses.checking');
+  }
+  return t(`deposits.statuses.${deposit.status}`);
 }

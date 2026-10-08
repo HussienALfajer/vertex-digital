@@ -1,6 +1,11 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type AdminDepositListItem, formatUsd } from '@vertex-digital/contracts';
+import {
+  type AdminDepositListItem,
+  DEPOSIT_METHODS,
+  type DepositMethod,
+  formatUsd,
+} from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
@@ -10,6 +15,11 @@ import {
   FieldLabel,
   Input,
   PageHeader,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Skeleton,
   Table,
   TableBody,
@@ -33,6 +43,7 @@ import {
   type DepositSearch,
   type DepositTab,
   tabOf,
+  withMethod,
   withTab,
 } from './deposit-search';
 import { depositListQuery } from './deposits.queries';
@@ -66,6 +77,7 @@ export function DepositsPage({
             ))}
           </TabsList>
         </Tabs>
+        <MethodFilter search={search} onSearch={onSearch} />
         {/* A new key resets the field when the URL changes (clear, back). */}
         <SearchForm key={search.q ?? ''} search={search} onSearch={onSearch} />
       </div>
@@ -102,6 +114,41 @@ export function DepositsPage({
         </Button>
       )}
     </>
+  );
+}
+
+/** S04: one payment method, or all of them. */
+function MethodFilter({
+  search,
+  onSearch,
+}: {
+  search: DepositSearch;
+  onSearch: (search: DepositSearch) => void;
+}) {
+  const { t } = useTranslation();
+  const items = [
+    { value: 'all', label: t('deposits.methodFilter.all') },
+    ...DEPOSIT_METHODS.map((item) => ({ value: item, label: t(`wallets.methods.${item}`) })),
+  ];
+  return (
+    <Select
+      items={items}
+      value={search.method ?? 'all'}
+      onValueChange={(value) =>
+        onSearch(withMethod(search, value === 'all' ? null : (value as DepositMethod)))
+      }
+    >
+      <SelectTrigger aria-label={t('deposits.methodFilter.label')} className="w-44">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -180,6 +227,9 @@ function DepositTable({ deposits, tab }: { deposits: AdminDepositListItem[]; tab
               >
                 <bdi dir="ltr">{deposit.referenceCode}</bdi>
               </Link>
+              <Badge tone="neutral" className="ms-2">
+                {t(`wallets.methods.${deposit.method}`)}
+              </Badge>
             </TableCell>
             <TableCell className="min-w-44 whitespace-normal">
               <span className="flex flex-col gap-1">

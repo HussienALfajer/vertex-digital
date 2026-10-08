@@ -2,11 +2,14 @@
 
 import {
   type Currency,
+  type DepositMethod,
   depositLimitBreach,
   formatAmountInput,
   formatRate,
   QUOTE_LOCK_MINUTES,
   type ShamCashOptions,
+  USDT_METHODS,
+  type UsdtOptions,
 } from '@vertex-digital/contracts';
 import { Button } from '@vertex-digital/ui/components/button';
 import { Card } from '@vertex-digital/ui/components/card';
@@ -31,35 +34,60 @@ import {
   previewUsd,
   usdText,
 } from './amounts';
-import { createShamCashDeposit, getShamCashOptions } from './requests';
+import { createShamCashDeposit, getShamCashOptions, getUsdtOptions } from './requests';
+import { UsdtForm } from './usdt-form';
 
 type State =
   | { status: 'loading' }
   | { status: 'failed' }
-  | { status: 'ready'; options: ShamCashOptions };
+  | { status: 'ready'; shamCash: ShamCashOptions; usdt: UsdtOptions };
 
 const CURRENCY_ORDER: Currency[] = ['SYP', 'USD'];
 
+/** The method picker's order (S04 screens). */
+const METHODS: DepositMethod[] = ['sham_cash', ...USDT_METHODS];
+
+/** Why a method cannot take a deposit now, or null when it can. */
+function unavailableReason(
+  method: DepositMethod,
+  shamCash: ShamCashOptions,
+  usdt: UsdtOptions,
+): 'unavailable' | 'delayed' | null {
+  if (method === 'sham_cash') {
+    return CURRENCY_ORDER.some((currency) => shamCash.currencies[currency].available)
+      ? null
+      : 'unavailable';
+  }
+  const network = usdt.networks.find((item) => item.method === method);
+  if (network?.available) return null;
+  return network?.unavailableReason === 'delayed' ? 'delayed' : 'unavailable';
+}
+
 /**
- * "إيداع" (S03 screens): Sham Cash only until S04, so the form opens directly. A deposit already
- * waiting for its receipt opens instead (rule SC4). Read in the browser, never cached.
+ * "إيداع" (S03, S04 screens): the method picker (Sham Cash, USDT on TRC20 or BEP20), then the
+ * method's form. A deposit already waiting for payment opens instead (rule SC4). Read in the
+ * browser, never cached.
  */
 export function DepositFormPage() {
   const router = useRouter();
   const [state, setState] = useState<State>({ status: 'loading' });
 
   const load = useCallback(async () => {
-    const options = await getShamCashOptions();
-    if (!options.ok && options.reason === 'UNAUTHORIZED') {
+    const [shamCash, usdt] = await Promise.all([getShamCashOptions(), getUsdtOptions()]);
+    if (
+      (!shamCash.ok && shamCash.reason === 'UNAUTHORIZED') ||
+      (!usdt.ok && usdt.reason === 'UNAUTHORIZED')
+    ) {
       router.replace('/sign-in?next=%2Fwallet%2Fdeposit');
       return;
     }
-    if (!options.ok) return setState({ status: 'failed' });
-    if (options.data.pendingDepositId) {
-      router.replace(`/wallet/deposits/${options.data.pendingDepositId}`);
+    if (!shamCash.ok || !usdt.ok) return setState({ status: 'failed' });
+    const pendingId = shamCash.data.pendingDepositId ?? usdt.data.pendingDepositId;
+    if (pendingId) {
+      router.replace(`/wallet/deposits/${pendingId}`);
       return;
     }
-    setState({ status: 'ready', options: options.data });
+    setState({ status: 'ready', shamCash: shamCash.data, usdt: usdt.data });
   }, [router]);
 
   useEffect(() => {
@@ -87,10 +115,8 @@ export function DepositFormPage() {
       />
     );
   }
-  const { options } = state;
-  const available = CURRENCY_ORDER.filter((currency) => options.currencies[currency].available);
-  const [first] = available;
-  if (!first) {
+  const { shamCash, usdt } = state;
+  if (METHODS.every((method) => unavailableReason(method, shamCash, usdt))) {
     return (
       <EmptyState
         icon={<WalletIcon />}
@@ -104,7 +130,51 @@ export function DepositFormPage() {
       />
     );
   }
-  return <ShamCashForm options={options} initialCurrency={first} />;
+  return <MethodPicker shamCash={shamCash} usdt={usdt} />;
+}
+
+function MethodPicker({ shamCash, usdt }: { shamCash: ShamCashOptions; usdt: UsdtOptions }) {
+  const [method, setMethod] = useState<DepositMethod>(
+    () => METHODS.find((item) => !unavailableReason(item, shamCash, usdt)) ?? 'sham_cash',
+  );
+  const firstCurrency = CURRENCY_ORDER.find((currency) => shamCash.currencies[currency].available);
+  return (
+    <div className="flex flex-col gap-6">
+      <Field>
+        <FieldLabel>{t('deposits.form.method')}</FieldLabel>
+        <ToggleGroup<DepositMethod>
+          aria-label={t('deposits.form.method')}
+          className="grid w-full grid-cols-1 sm:grid-cols-3"
+          value={[method]}
+          onValueChange={(value) => value[0] && setMethod(value[0])}
+        >
+          {METHODS.map((item) => {
+            const reason = unavailableReason(item, shamCash, usdt);
+            return (
+              <ToggleGroupItem
+                key={item}
+                value={item}
+                disabled={!!reason}
+                className="h-auto min-h-11 flex-col gap-0.5 px-4 py-2 text-md whitespace-normal"
+              >
+                <span>{t(`deposits.methods.${item}`)}</span>
+                {reason && (
+                  <span className="text-xs font-normal">
+                    {t(`deposits.form.methodUnavailable.${reason}`)}
+                  </span>
+                )}
+              </ToggleGroupItem>
+            );
+          })}
+        </ToggleGroup>
+      </Field>
+      {method === 'sham_cash' ? (
+        firstCurrency && <ShamCashForm options={shamCash} initialCurrency={firstCurrency} />
+      ) : (
+        <UsdtForm key={method} options={usdt} method={method} />
+      )}
+    </div>
+  );
 }
 
 function ShamCashForm({

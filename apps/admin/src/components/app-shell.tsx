@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, type LinkProps, useRouter } from '@tanstack/react-router';
+import { Link, type LinkProps, useRouter, useRouterState } from '@tanstack/react-router';
 import {
   Avatar,
   Badge,
@@ -20,6 +20,7 @@ import {
   ArrowDownToLineIcon,
   ArrowLeftRightIcon,
   ChevronDownIcon,
+  CoinsIcon,
   HouseIcon,
   LogOutIcon,
   type LucideIcon,
@@ -42,6 +43,7 @@ interface NavItem {
   label:
     | 'nav.home'
     | 'nav.deposits'
+    | 'nav.usdtTransfers'
     | 'nav.wallets'
     | 'nav.rates'
     | 'nav.depositSettings'
@@ -51,12 +53,20 @@ interface NavItem {
   icon: LucideIcon;
   /** Active only on this exact path; otherwise also on its sub-pages. */
   exact?: boolean;
+  /** A sub-page with its own navigation item, where this one is not active. */
+  except?: string;
 }
 
 /** Each feature adds its section here. One admin, full access: no permission checks (ADR 0016). */
 const navItems: NavItem[] = [
   { to: '/', label: 'nav.home', icon: HouseIcon, exact: true },
-  { to: '/deposits', label: 'nav.deposits', icon: ArrowDownToLineIcon },
+  {
+    to: '/deposits',
+    label: 'nav.deposits',
+    icon: ArrowDownToLineIcon,
+    except: '/deposits/transfers',
+  },
+  { to: '/deposits/transfers', label: 'nav.usdtTransfers', icon: CoinsIcon },
   { to: '/wallets', label: 'nav.wallets', icon: WalletIcon },
   { to: '/rates', label: 'nav.rates', icon: ArrowLeftRightIcon },
   { to: '/settings/deposits', label: 'nav.depositSettings', icon: SettingsIcon },
@@ -103,6 +113,7 @@ const navLink = cn(
 /** Vertex Green navigation with the sand mark and a sand marker on the active item (§2). */
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
     <div className="flex h-full w-full flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground [--ring:var(--sidebar-ring)]">
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border px-5">
@@ -118,17 +129,18 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         aria-label={t('nav.label')}
         className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3"
       >
-        {navItems.map(({ to, label, icon: Icon, exact }) => (
+        {navItems.map(({ to, label, icon: Icon, exact, except }) => (
           <Link
             key={to}
             to={to}
             onClick={onNavigate}
-            activeOptions={{ exact: exact ?? false }}
+            activeOptions={{ exact: exact ?? (except ? pathname.startsWith(except) : false) }}
             className={navLink}
           >
             <Icon className="size-5" />
             {t(label)}
             {to === '/deposits' && <DepositsBadge />}
+            {to === '/deposits/transfers' && <TransfersBadge />}
           </Link>
         ))}
       </nav>
@@ -157,6 +169,23 @@ function DepositsBadge() {
       }
     >
       {submitted}
+    </Badge>
+  );
+}
+
+/** S04 rule U13: the unmatched USDT transfers of the last 30 days, from the same counts. */
+function TransfersBadge() {
+  const { t } = useTranslation();
+  const counts = useQuery(depositCountsQuery);
+  const unmatched = counts.data?.unmatchedTransfers ?? 0;
+  if (unmatched === 0) return null;
+  return (
+    <Badge
+      tone="gold"
+      className="ms-auto tabular-nums"
+      aria-label={t('nav.usdtTransfersBadge', { unmatched })}
+    >
+      {unmatched}
     </Badge>
   );
 }

@@ -1,14 +1,16 @@
 import type {
   CreateShamCashDeposit,
+  CreateUsdtDeposit,
   Deposit,
   DepositPage,
   ShamCashOptions,
+  UsdtOptions,
 } from '@vertex-digital/contracts';
 import { apiRequest, type Result } from '@/lib/api';
 import { withAltcha } from '../auth/requests';
 
 /*
- * The customer's Sham Cash deposits (S03, F05). The routes take no customer id: the session
+ * The customer's deposits: Sham Cash (S03, F05) and USDT (S04, F06). The routes take no customer id: the session
  * cookie says whose deposits they are, and another customer's deposit answers `NOT_FOUND`.
  * Never cached (rule SC15).
  */
@@ -40,6 +42,42 @@ export function createShamCashDeposit(
       }),
     fetcher,
   );
+}
+
+/** Per network: available or why not, the address, the limits with the USDT minimum (U1, U5). */
+export function getUsdtOptions(fetcher: Fetcher = fetch) {
+  return apiRequest<UsdtOptions>('/api/deposits/usdt/options', { fetcher });
+}
+
+/**
+ * Creates a USDT deposit with its exact amount (rules U2, U3): the same key and ALTCHA rules as
+ * Sham Cash. `DEPOSIT_AMOUNT_BUSY` means every tail of that amount is taken: the form offers the
+ * amount one cent up or down.
+ */
+export function createUsdtDeposit(
+  body: CreateUsdtDeposit,
+  key: string,
+  fetcher: Fetcher = fetch,
+): Promise<Result<Deposit>> {
+  return withAltcha(
+    (headers) =>
+      apiRequest<Deposit>('/api/deposits/usdt', {
+        method: 'POST',
+        body,
+        headers: { ...headers, 'idempotency-key': key },
+        fetcher,
+      }),
+    fetcher,
+  );
+}
+
+/** Rule U8: the TXID or explorer link as pasted; the API normalizes it. */
+export function submitTxid(id: string, txid: string, fetcher: Fetcher = fetch) {
+  return apiRequest<Deposit>(`/api/deposits/${encodeURIComponent(id)}/txid`, {
+    method: 'POST',
+    body: { txid },
+    fetcher,
+  });
 }
 
 /** The customer's deposits, newest first; `cursor` from the previous page. */

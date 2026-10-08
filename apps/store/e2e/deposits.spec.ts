@@ -18,10 +18,12 @@ const minutesFromNow = (minutes: number) => new Date(Date.now() + minutes * 60_0
 
 /** A signed-in customer. */
 function signedIn(api: MockApi): MockApi {
-  return api.on('GET /api/auth/get-session', 200, {
-    user: { name: 'سارة الأحمد', email: 'sara@example.com' },
-    session: { token: 'this-device' },
-  });
+  return api
+    .on('GET /api/auth/get-session', 200, {
+      user: { name: 'سارة الأحمد', email: 'sara@example.com' },
+      session: { token: 'this-device' },
+    })
+    .on('GET /api/deposits/usdt/options', 200, USDT_OFF);
 }
 
 const OPTIONS = {
@@ -37,6 +39,19 @@ const OPTIONS = {
   rate: { id: RATE_ID, sypPerUsd: '118', displayStepSypUnits: 500 },
   reviewHours: { start: '10:00', end: '22:00' },
   eta: { state: 'open', minutes: 15 },
+  pendingDepositId: null,
+};
+
+/** USDT is not set up in these tests: the picker opens on Sham Cash. */
+const USDT_OFF = {
+  networks: ['usdt_trc20', 'usdt_bep20'].map((method) => ({
+    method,
+    available: false,
+    unavailableReason: 'not_configured',
+    address: null,
+    confirmations: method === 'usdt_trc20' ? 19 : 15,
+  })),
+  limits: null,
   pendingDepositId: null,
 };
 

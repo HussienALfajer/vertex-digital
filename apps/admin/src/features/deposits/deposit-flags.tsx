@@ -8,7 +8,7 @@ import {
 import { Badge } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { ltr } from '../../lib/format';
+import { formatDateTime, ltr } from '../../lib/format';
 import { depositAmount } from './deposit-labels';
 import { receiptUrl } from './deposits.queries';
 
@@ -118,6 +118,22 @@ export function detailLine(t: TFunction, code: DepositFlagCode, details: unknown
       return t('deposits.flags.mismatchLine', {
         declared: depositAmount(t, declaredCurrency, declaredAmountUnits),
         received: depositAmount(t, receivedCurrency, receivedAmountUnits),
+      });
+    }
+    case 'wrong_network': {
+      const parsed = DEPOSIT_FLAG_DETAILS.wrong_network.safeParse(details);
+      if (!parsed.success) return null;
+      return t('deposits.flags.wrongNetworkLine', {
+        deposit: t(`wallets.methods.${parsed.data.depositMethod}`),
+        transfer: t(`wallets.methods.${parsed.data.transferMethod}`),
+      });
+    }
+    case 'sent_before_deposit': {
+      const parsed = DEPOSIT_FLAG_DETAILS.sent_before_deposit.safeParse(details);
+      if (!parsed.success) return null;
+      return t('deposits.flags.sentBeforeLine', {
+        block: formatDateTime(parsed.data.blockTime),
+        created: formatDateTime(parsed.data.depositCreatedAt),
       });
     }
     default:

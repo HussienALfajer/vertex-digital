@@ -5,7 +5,9 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type {
+  AdminUsdtTransferQuery,
   ApproveDeposit,
+  ApproveUsdtDeposit,
   DepositSettingsInput,
   RejectDeposit,
   RequestReceipt,
@@ -16,8 +18,9 @@ import { useReauthentication } from '../account/reauthentication';
 import { type DepositSearch, tabOf } from './deposit-search';
 
 /*
- * Sham Cash deposits as the admin works them (S03, F05): the queue and its badge, one deposit,
- * the decisions (rules RV1–RV10) and the deposit settings. Keys start with `deposits`.
+ * Deposits as the admin works them (S03, S04): the queue and its badges, one deposit, the
+ * decisions (rules RV1–RV10, U15–U17), the incoming USDT transfers and the deposit settings.
+ * Keys start with `deposits`.
  */
 
 /** How often the navigation badge reads the counts (the spec: every 30 seconds). */
@@ -37,7 +40,9 @@ export const depositListQuery = (search: DepositSearch) =>
     queryFn: ({ pageParam }) =>
       call(
         api.GET('/api/admin/deposits', {
-          params: { query: { status: tabOf(search), q: search.q, cursor: pageParam } },
+          params: {
+            query: { status: tabOf(search), method: search.method, q: search.q, cursor: pageParam },
+          },
         }),
       ),
     initialPageParam: undefined as string | undefined,
@@ -48,6 +53,20 @@ export const depositQuery = (id: string) =>
   queryOptions({
     queryKey: ['deposits', 'deposit', id],
     queryFn: () => call(api.GET('/api/admin/deposits/{id}', { params: { path: { id } } })),
+  });
+
+/** Rule U13: the incoming USDT transfers, unmatched by default; the filters are in the URL. */
+export const usdtTransferListQuery = (query: Pick<AdminUsdtTransferQuery, 'method' | 'state'>) =>
+  infiniteQueryOptions({
+    queryKey: ['deposits', 'transfers', query],
+    queryFn: ({ pageParam }) =>
+      call(
+        api.GET('/api/admin/usdt-transfers', {
+          params: { query: { ...query, cursor: pageParam } },
+        }),
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
 
 /** The receipt image: served to the admin only, never cached (rule SC15). */
@@ -90,6 +109,37 @@ export function useApproveDeposit(id: string) {
           }),
         ),
       ),
+    onSettled: invalidate,
+  });
+}
+
+/**
+ * Rule U15: the credit is the received amount, never typed; re-authentication always, retried
+ * with the same `Idempotency-Key`.
+ */
+export function useApproveUsdtDeposit(id: string) {
+  const invalidate = useInvalidateDecision();
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: ({ body, key }: { body: ApproveUsdtDeposit; key: string }) =>
+      withReauthentication(() =>
+        call(
+          api.POST('/api/admin/deposits/{id}/approve-usdt', {
+            params: { path: { id }, header: { 'Idempotency-Key': key } },
+            body,
+          }),
+        ),
+      ),
+    onSettled: invalidate,
+  });
+}
+
+/** Rule U17: sends the verification again; changes nothing by itself. */
+export function useRecheckDeposit(id: string) {
+  const invalidate = useInvalidateDecision();
+  return useMutation({
+    mutationFn: () =>
+      call(api.POST('/api/admin/deposits/{id}/recheck', { params: { path: { id } } })),
     onSettled: invalidate,
   });
 }

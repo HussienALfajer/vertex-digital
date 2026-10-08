@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@vertex-digital/ui';
-import { ArrowRightIcon, ImageUpIcon, XCircleIcon } from 'lucide-react';
+import { ArrowRightIcon, ImageUpIcon, RefreshCwIcon, XCircleIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
@@ -29,14 +29,16 @@ import { CustomerPanel } from './customer-panel';
 import { RejectDialog, RequestReceiptDialog } from './decision-dialogs';
 import { DepositFlags } from './deposit-flags';
 import { depositAmount, STATUS_TONES } from './deposit-labels';
-import { depositQuery } from './deposits.queries';
+import { depositQuery, useRecheckDeposit } from './deposits.queries';
 import { Fact } from './fact';
 import { ReceiptViewer } from './receipt-viewer';
+import { CandidateList, UsdtApproveForm, UsdtFacts, UsdtTransferCard } from './usdt-panels';
 
 /**
- * One deposit (S03 screens): the receipt, the facts, the flags and the customer, and while it is
- * in review the approval, the rejection and the clearer-receipt request (rules RV1–RV9). A
- * decided deposit shows its decision and audit trail, read-only.
+ * One deposit (S03, S04 screens): the receipt or the USDT transfer, the facts, the flags and the
+ * customer, and while it is in review the approval, the rejection and the clearer-receipt request
+ * (rules RV1–RV9) or, for USDT, the re-check (U15–U17). A decided deposit shows its decision and
+ * audit trail, read-only.
  */
 export function DepositPage({ id }: { id: string }) {
   const { t } = useTranslation();
@@ -79,7 +81,8 @@ export function DepositPage({ id }: { id: string }) {
   }
 
   const data = deposit.data;
-  const inReview = data.status === 'submitted';
+  const usdt = data.usdt;
+  const inReview = data.status === 'submitted' && (!usdt || usdt.checkStatus === 'review');
   return (
     <>
       {back}
@@ -90,38 +93,62 @@ export function DepositPage({ id }: { id: string }) {
             <Badge tone={STATUS_TONES[data.status]}>{t(`deposits.statuses.${data.status}`)}</Badge>
           </span>
         }
-        description={t('deposits.detail.subtitle', {
+        description={t('deposits.detail.subtitleMethod', {
+          method: t(`wallets.methods.${data.method}`),
           amount: depositAmount(t, data.currency, data.declaredAmountUnits),
         })}
         actions={
-          inReview && (
+          (inReview || (usdt && data.status === 'submitted')) && (
             <>
-              {data.receiptRequestCount === 0 && (
+              {usdt && <RecheckButton id={data.id} />}
+              {!usdt && data.receiptRequestCount === 0 && (
                 <Button variant="outline" onClick={() => setDialog('request')}>
                   <ImageUpIcon />
                   {t('deposits.requestReceipt.open')}
                 </Button>
               )}
-              <Button variant="outline" onClick={() => setDialog('reject')}>
-                <XCircleIcon />
-                {t('deposits.reject.open')}
-              </Button>
+              {inReview && (
+                <Button variant="outline" onClick={() => setDialog('reject')}>
+                  <XCircleIcon />
+                  {t('deposits.reject.open')}
+                </Button>
+              )}
             </>
           )
         }
       />
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-6">
-          <ReceiptViewer deposit={data} />
-          <Facts deposit={data} />
+          {usdt ? (
+            <>
+              <UsdtFacts deposit={data} usdt={usdt} />
+              <UsdtTransferCard usdt={usdt} />
+            </>
+          ) : (
+            <>
+              <ReceiptViewer deposit={data} />
+              <Facts deposit={data} />
+            </>
+          )}
         </div>
         <div className="flex flex-col gap-6">
           <Card className="gap-3">
             <CardTitle>{t('deposits.detail.flags')}</CardTitle>
             <DepositFlags flags={data.flags} />
           </Card>
+          {usdt && (
+            <Card className="gap-3">
+              <CardTitle>{t('deposits.usdt.candidates')}</CardTitle>
+              <CandidateList candidates={usdt.candidates} />
+            </Card>
+          )}
           <CustomerPanel deposit={data} />
-          {inReview && <ApproveForm key={data.id} deposit={data} onDone={() => undefined} />}
+          {inReview &&
+            (usdt ? (
+              <UsdtApproveForm key={data.id} deposit={data} usdt={usdt} />
+            ) : (
+              <ApproveForm key={data.id} deposit={data} onDone={() => undefined} />
+            ))}
           {(data.credit || data.rejection) && <Decision deposit={data} />}
         </div>
       </div>
@@ -212,7 +239,9 @@ function Decision({ deposit }: { deposit: AdminDeposit }) {
               <Fact label={t('deposits.detail.creditRate')}>{formatRate(credit.creditRate)}</Fact>
             )}
             <Fact label={t('deposits.detail.transaction')}>
-              <code dir="ltr">{credit.transactionNumber}</code>
+              <code dir="ltr" className="break-all">
+                {credit.transactionNumber}
+              </code>
             </Fact>
             {credit.referenceCheck && (
               <Fact label={t('deposits.detail.referenceCheck')}>
@@ -235,13 +264,34 @@ function Decision({ deposit }: { deposit: AdminDeposit }) {
           </>
         )}
         <Fact label={t('deposits.detail.decidedBy')}>
-          {deposit.adminName ?? t('common.unknown')}
+          {deposit.decidedBy === 'system'
+            ? t('deposits.detail.decidedBySystem')
+            : (deposit.adminName ?? t('common.unknown'))}
         </Fact>
         <Fact label={t('deposits.detail.decidedAt')}>
           {deposit.decidedAt ? formatDateTime(deposit.decidedAt) : '—'}
         </Fact>
       </dl>
     </Card>
+  );
+}
+
+/** Rule U17: sends the verification again, for example after a reader outage. */
+function RecheckButton({ id }: { id: string }) {
+  const { t } = useTranslation();
+  const recheck = useRecheckDeposit(id);
+  return (
+    <span className="flex flex-col items-end gap-1">
+      <Button variant="outline" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
+        <RefreshCwIcon />
+        {recheck.isSuccess ? t('deposits.usdt.rechecked') : t('deposits.usdt.recheck')}
+      </Button>
+      {recheck.isError && (
+        <span role="alert" className="text-sm text-destructive-text">
+          {errorMessage(t, recheck.error)}
+        </span>
+      )}
+    </span>
   );
 }
 

@@ -63,20 +63,37 @@ const FIELDS: Record<string, AdjustmentField> = {
   customerNote: 'note',
 };
 
+/** S04 rule U13: an unmatched USDT transfer recorded as a manual deposit, its values filled in. */
+export interface ManualDepositPrefill {
+  method: ManualDepositMethod;
+  reference: string;
+  amountText: string;
+}
+
 /**
  * "تعديل الرصيد" (rules J1–J10): direction, amount, category, the manual deposit's method and
  * reference, the internal reason and the customer's note, with the balance after; above $100 the
  * amount typed twice. Validated with the API's own schema; re-authentication and retries keep the
  * request's `Idempotency-Key` (edge cases 4–6).
  */
-export function AdjustDialog({ wallet, onDone }: { wallet: AdminWallet; onDone: () => void }) {
+export function AdjustDialog({
+  wallet,
+  prefill,
+  onDone,
+}: {
+  wallet: AdminWallet;
+  prefill?: ManualDepositPrefill;
+  onDone: () => void;
+}) {
   const { t } = useTranslation();
   const adjust = useCreateAdjustment(wallet.customer.id);
   const keyFor = useIdempotencyKey();
   const [direction, setDirection] = useState<AdjustmentDirection>('credit');
-  const [category, setCategory] = useState<AdjustmentCategory | null>(null);
-  const [method, setMethod] = useState<ManualDepositMethod | null>(null);
-  const [amountText, setAmountText] = useState('');
+  const [category, setCategory] = useState<AdjustmentCategory | null>(
+    prefill ? 'manual_deposit' : null,
+  );
+  const [method, setMethod] = useState<ManualDepositMethod | null>(prefill?.method ?? null);
+  const [amountText, setAmountText] = useState(prefill?.amountText ?? '');
   const [confirmText, setConfirmText] = useState('');
   const [errors, setErrors] = useState<AdjustmentFieldErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
@@ -227,6 +244,7 @@ export function AdjustDialog({ wallet, onDone }: { wallet: AdminWallet; onDone: 
               <FieldLabel>{t('wallets.adjust.reference')}</FieldLabel>
               <Input
                 name="externalReference"
+                defaultValue={prefill?.reference}
                 dir="ltr"
                 autoComplete="off"
                 spellCheck={false}
