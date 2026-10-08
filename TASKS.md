@@ -12,10 +12,10 @@ Spec: `docs/specs/S07-suppliers.md` (F09 with F10, CT9; ADRs 0003, 0004, 0005, 0
 - [x] Api `suppliers` module (suppliers, credentials, threshold, sync request, runs, offers, cost history, import, routes, policy) and catalog products with price and availability; `test/suppliers.test.ts` (incl. 100-row import, parallel mapping, parallel decisions)
 - [x] Api `pricing` additions: reviews, decide, adjust margin, price history; rule changes reprice (P5); rates refuse `DISPLAY_STEP_TOO_LARGE` (P9); a supplier's pause reprices (SP3)
 - [x] Env: `SUPPLIER_KEYS_SECRET` (required in production, derived locally), `SUPPLIER_FAKE_ENABLED` (refused in production); `.env.example`, `provision.sh`, `docs/deployment.md`; no nginx change (admin routes, "sync now" limited in the API)
-- [ ] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow the new product shape
+- [x] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow the new product shape
 - [x] Docs: `docs/architecture.md`, folder `CLAUDE.md` files, `docs/deployment.md`, spec "Settled in implementation"
-- [ ] Wiring checklist, `wiring.md` patterns
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+- [x] Wiring checklist, `wiring.md` patterns
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (five blocking findings, fixed with tests), owner acceptance (2026-10-08, P9's 1-pound minimum confirmed), PR with auto-merge
 
 ## PR 2 — Worker: registry, sync, balances, health, messages, fake scripting · Opus 5.5 `high`
 - [ ] Suppliers: `SupplierOffer` gains optional `group`, `kind`, `requiredFields`; fake catalog (~10 offers, groups, kinds, fields) with scripted overrides from `FAKE_SUPPLIER_STATE_FILE`
