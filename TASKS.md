@@ -23,11 +23,12 @@ Why four and not the spec's three: the spec's Telegram PR is too large for one r
 - [x] NT2 call sites moved to `notifyCustomer`: S03 approval, rejection and receipt request, S04 credits and rejections (api and worker), S02 adjustments and reversals
 - [x] Api: `GET /api/notifications`, `POST /api/notifications/read`, `GET /api/notifications/stream` (LISTEN fan-out, heartbeat, 3 streams, 30 per minute, session re-check, `resync`), preference routes; `no-store`; tests (other customer, stream routing, 4th stream, revoked session)
 - [x] nginx: stream location (buffering off, long timeout)
-- [ ] Bridge
-- [ ] Store: header bell with live count (`EventSource`, `visibilitychange` refetch), `/notifications` (list, load more, mark read, empty, loading, error), `/account` email preferences, live refresh of `/wallet` and `/wallet/deposits/<id>` (NT7); i18n
-- [ ] E2E: bell with badge, `/notifications` list and empty, preferences (phone width, dark and light)
-- [ ] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md`, `wiring.md` SSE pattern)
-- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
+- [x] Bridge
+- [x] Store: header bell with live count (`EventSource`, `visibilitychange` refetch), `/notifications` (list, load more, mark read, empty, loading, error), `/account` email preferences, live refresh of `/wallet` and `/wallet/deposits/<id>` (NT7); i18n
+- [x] E2E: bell with badge, `/notifications` list and empty, preferences (phone width, dark and light)
+- [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md`, `wiring.md` SSE pattern)
+- [x] Reviewer: two blocking findings fixed (nginx duplicate `proxy_read_timeout`; the store stream reopens after a non-200 answer), plus the stream's early-close and `LISTEN` failure cleanup and the first-preference race (test)
+- [ ] Checks (full run on the final tree), owner acceptance, PR with auto-merge
 
 ## PR 3 — F07 Telegram bot foundation and its admin page · Opus 5.5 `high`
 - [ ] Contracts: `telegram.ts` (message kinds and params, link status and code schemas, `TELEGRAM_CALLBACKS` parsing within 64 bytes), error `TELEGRAM_NOT_CONFIGURED`, audit actions `telegram.*`, queue `telegram.send`; unit tests

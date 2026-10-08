@@ -54,8 +54,14 @@ export class NotificationStreamService implements OnApplicationShutdown {
     response: Response,
   ): Promise<void> {
     this.countConnect(customerId);
+    let gone = false;
+    request.once('close', () => {
+      gone = true;
+    });
     await this.listen();
     const unreadCount = await this.notifications.unreadCount(customerId);
+    // The client left while the stream was being prepared: nothing to keep open.
+    if (gone) return;
 
     response.status(200);
     response.setHeader('content-type', 'text/event-stream; charset=utf-8');
@@ -140,8 +146,13 @@ export class NotificationStreamService implements OnApplicationShutdown {
     });
     client.on('error', (error) => this.lost(client, error));
     client.on('end', () => this.lost(client, new Error('Connection ended')));
-    await client.connect();
-    await client.query(`LISTEN ${CUSTOMER_NOTIFICATIONS_CHANNEL}`);
+    try {
+      await client.connect();
+      await client.query(`LISTEN ${CUSTOMER_NOTIFICATIONS_CHANNEL}`);
+    } catch (error) {
+      await client.end().catch(() => {});
+      throw error;
+    }
     this.listener = client;
     this.reconnectDelay = 1_000;
   }

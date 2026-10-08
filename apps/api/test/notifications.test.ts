@@ -324,6 +324,25 @@ describe('email preferences (rule NT8)', () => {
     ).toMatchObject({ email: { deposit_rejected: true } });
   });
 
+  it('serialize two first changes of one choice: one audit entry', async () => {
+    const customer = await signedIn();
+    const answers = await Promise.all([
+      set(customer.cookie, { event: 'wallet_adjusted', email: false }),
+      set(customer.cookie, { event: 'wallet_adjusted', email: false }),
+    ]);
+    expect(answers.map((answer) => answer.status)).toEqual([200, 200]);
+    const audits = await test.db
+      .select()
+      .from(auditEntries)
+      .where(
+        and(
+          eq(auditEntries.entityId, customer.id),
+          eq(auditEntries.action, 'customer.notification_preference_changed'),
+        ),
+      );
+    expect(audits).toHaveLength(1);
+  });
+
   it('refuse an event that is not a notification', async () => {
     const customer = await signedIn();
     expect(

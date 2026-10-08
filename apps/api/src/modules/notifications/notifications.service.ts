@@ -166,7 +166,11 @@ export class NotificationsService {
     meta: RequestMeta,
   ): Promise<NotificationPreferences> {
     return this.db.transaction(async (tx) => {
-      // The row lock (or the insert) serializes two changes of one choice.
+      // The default as a row first, so the row lock serializes two first changes of one choice.
+      await tx
+        .insert(notificationPreferences)
+        .values({ customerId, event: input.event, email: true })
+        .onConflictDoNothing();
       const [current] = await tx
         .select({ email: notificationPreferences.email })
         .from(notificationPreferences)
@@ -177,14 +181,16 @@ export class NotificationsService {
           ),
         )
         .for('update');
-      if ((current?.email ?? true) !== input.email) {
+      if (current?.email !== input.email) {
         await tx
-          .insert(notificationPreferences)
-          .values({ customerId, event: input.event, email: input.email })
-          .onConflictDoUpdate({
-            target: [notificationPreferences.customerId, notificationPreferences.event],
-            set: { email: input.email, updatedAt: sql`now()` },
-          });
+          .update(notificationPreferences)
+          .set({ email: input.email })
+          .where(
+            and(
+              eq(notificationPreferences.customerId, customerId),
+              eq(notificationPreferences.event, input.event),
+            ),
+          );
         await recordAudit(tx, {
           action: 'customer.notification_preference_changed',
           actorKind: 'customer',
