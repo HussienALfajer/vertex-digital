@@ -53,14 +53,22 @@ function withEntries(api: MockApi): MockApi {
 }
 
 test.describe('wallet', () => {
-  test('the header shows the balance and opens the wallet', async ({ page, api }) => {
+  test('the header shows the balance, opens the wallet and reads it again', async ({
+    page,
+    api,
+  }) => {
     withEntries(api);
     await page.goto('/');
     const chip = page.getByRole('link', { name: ar.header.balance.replace('{balance}', '$25.00') });
     await expect(chip).toBeVisible();
+    // The header stays mounted across client navigations: the chip reads the balance again.
+    api.on('GET /api/wallet', 200, { balanceUnits: 40 * USD, syp: null });
     await chip.click();
     await expect(page).toHaveURL('/wallet');
     await expect(page.getByRole('heading', { level: 1, name: ar.wallet.title })).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: ar.header.balance.replace('{balance}', '$40.00') }),
+    ).toBeVisible();
   });
 
   test('a failed balance read hides the chip; the page still works', async ({ page, api }) => {
