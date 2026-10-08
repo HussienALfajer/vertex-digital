@@ -86,10 +86,10 @@ async function ensureAccount(
   tx: Transaction,
   account: { code: string; kind: LedgerAccountKind; currency: Currency; customerId?: string },
 ): Promise<string> {
-  await tx
-    .insert(ledgerAccounts)
-    .values(account)
-    .onConflictDoNothing({ target: ledgerAccounts.code });
+  // Any unique index, not only `code`: two first writes can both pass the conflict pre-check, and
+  // the second may then meet the wallet's `customer_id` index first. Both name the same account
+  // (a wallet's code is made from its customer), which the select below reads.
+  await tx.insert(ledgerAccounts).values(account).onConflictDoNothing();
   const [row] = await tx
     .select({ id: ledgerAccounts.id, kind: ledgerAccounts.kind, currency: ledgerAccounts.currency })
     .from(ledgerAccounts)

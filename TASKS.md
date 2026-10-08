@@ -28,6 +28,7 @@ Why four and not the spec's three: the spec's Telegram PR is too large for one r
 - [x] E2E: bell with badge, `/notifications` list and empty, preferences (phone width, dark and light)
 - [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md`, `wiring.md` SSE pattern)
 - [x] Reviewer: two blocking findings fixed (nginx duplicate `proxy_read_timeout`; the store stream reopens after a non-200 answer), plus the stream's early-close and `LISTEN` failure cleanup and the first-preference race (test)
+- [x] Found by the full run: a new customer's wallet created by two writes at once could meet the `customer_id` unique index outside `ON CONFLICT (code)` and answer 500 (S02 `ensureAccount`); fixed with a test that reproduces it
 - [ ] Checks (full run on the final tree), owner acceptance, PR with auto-merge
 
 ## PR 3 — F07 Telegram bot foundation and its admin page · Opus 5.5 `high`

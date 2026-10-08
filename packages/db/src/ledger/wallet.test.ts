@@ -149,6 +149,20 @@ describe('customer wallets (rule W1)', () => {
     expect((await customerWalletBalances(db, [customerId])).get(customerId)).toBe(2 * DOLLAR);
   });
 
+  it('are created once when many first writes race, whichever unique index meets them', async () => {
+    // Both inserts can pass the conflict pre-check at once; the second then meets the
+    // `customer_id` index as well as the `code` index, and must still do nothing.
+    const customerIds = await Promise.all(Array.from({ length: 20 }, () => customer()));
+    const wallets = await Promise.all(
+      customerIds.flatMap((customerId) =>
+        Array.from({ length: 6 }, () =>
+          db.transaction((tx) => ensureCustomerWallet(tx, customerId)),
+        ),
+      ),
+    );
+    expect(new Set(wallets).size).toBe(customerIds.length);
+  });
+
   it('refuse a system account code taken by another kind', async () => {
     const code = `test:${newId()}`;
     await db.transaction((tx) =>
