@@ -247,6 +247,11 @@ export class AdminApi {
     ...DEPOSIT_SETTINGS_DEFAULTS,
     saved: false,
     savedAt: null,
+    // S04: the server's USDT addresses, read-only in the panel.
+    usdt: [
+      { method: 'usdt_trc20', address: null, lastScanAt: null, delayed: true },
+      { method: 'usdt_bep20', address: null, lastScanAt: null, delayed: true },
+    ],
   };
   /** The deposits the queue and the review pages read (S03). */
   deposits: MockDeposit[] = [];
@@ -380,7 +385,7 @@ export class AdminApi {
     if (path === '/api/admin/deposit-settings' && method === 'PUT') {
       if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
       const savedAt = new Date().toISOString();
-      this.depositSettings = { ...body, saved: true, savedAt };
+      this.depositSettings = { ...body, usdt: this.depositSettings.usdt, saved: true, savedAt };
       return json(200, this.depositSettings);
     }
     if (path === '/api/admin/deposit-settings/qr' && method === 'POST') {
@@ -394,6 +399,8 @@ export class AdminApi {
         submitted: submitted.length,
         submittedFlagged: submitted.filter((deposit) => deposit.flags.length > 0).length,
         pending: this.deposits.filter((deposit) => deposit.status === 'pending').length,
+        usdtReview: 0,
+        unmatchedTransfers: 0,
       });
     }
     if (path === '/api/admin/deposits' && method === 'GET') {
@@ -430,7 +437,11 @@ export class AdminApi {
     if (deposit.status !== 'submitted') {
       return apiError(409, 'DEPOSIT_STATE_CONFLICT', { status: deposit.status });
     }
-    const decided = { decidedAt: new Date().toISOString(), adminName: this.user.name };
+    const decided = {
+      decidedAt: new Date().toISOString(),
+      decidedBy: 'admin',
+      adminName: this.user.name,
+    };
     if (action[2] === 'approve') {
       const input = body as {
         transactionNumber: string;

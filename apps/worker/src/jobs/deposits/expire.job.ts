@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { QUEUES } from '@vertex-digital/contracts';
-import { type Database, deposits, recordAudit } from '@vertex-digital/db';
+import { type Database, deposits, recordAudit, usdtDeposits } from '@vertex-digital/db';
 import { and, eq, inArray, lte, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -50,6 +50,11 @@ export class ExpireDepositsJob implements OnApplicationBootstrap {
         if (due.length === 0) return 0;
         const ids = due.map((row) => row.id);
         await tx.update(deposits).set({ status: 'expired' }).where(inArray(deposits.id, ids));
+        // A USDT deposit's check ends with it; its amount stays reserved 7 days (S04 rule U4).
+        await tx
+          .update(usdtDeposits)
+          .set({ checkStatus: 'done', checkError: null })
+          .where(inArray(usdtDeposits.depositId, ids));
         for (const id of ids) {
           await recordAudit(tx, {
             action: 'deposit.expired',

@@ -14,9 +14,11 @@ import {
   ledgerAccounts,
   ledgerPostings,
   storedFiles,
+  usdtDeposits,
+  usdtTransfers,
 } from '../schema/index.js';
 import { accountBalance } from './balance.js';
-import { postDepositCredit } from './deposits.js';
+import { postDepositCredit, postUsdtDepositCredit } from './deposits.js';
 import { LedgerError } from './errors.js';
 import { claimPaymentReference, paymentReferenceOwner } from './payment-references.js';
 import { findCustomerWallet, walletTimeline } from './wallet.js';
@@ -246,6 +248,7 @@ describe('the deposit checks', () => {
         ...submitted,
         status: 'rejected',
         decidedAt: sql`now()`,
+        decidedBy: 'admin',
         adminId: newId(),
         decisionIdempotencyKey: newId(),
       },
@@ -258,6 +261,7 @@ describe('the deposit checks', () => {
         status: 'rejected',
         rejectReason: 'other',
         decidedAt: sql`now()`,
+        decidedBy: 'admin',
         adminId: newId(),
         decisionIdempotencyKey: newId(),
       },
@@ -480,6 +484,7 @@ describe('the deposit credit (money flows M1–M3)', () => {
         method: 'sham_cash',
         referenceCode: row?.referenceCode,
         syp: { amountUnits: 190_000, rate: '118.5' },
+        txid: null,
       },
     ]);
   });
@@ -518,5 +523,441 @@ describe('payment references of deposits (rule SC14)', () => {
         ),
       ).toMatch(/owner_check/);
     }
+  });
+});
+
+/* S04: USDT deposits ------------------------------------------------------------------------ */
+
+const TRON_ADDRESS = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+const txid = () => randomBytes(32).toString('hex');
+/** A free amount per test: random whole dollars, so open-amount checks never collide. */
+const freshDollars = () => (100 + (randomBytes(3).readUIntBE(0, 3) % 900_000)) * USD;
+
+/** A pending USDT deposit of `declared` and its USDT row with `tail`. */
+async function usdtDeposit(
+  options: {
+    customerId?: string;
+    declared?: number;
+    tail?: number;
+    method?: 'usdt_trc20' | 'usdt_bep20';
+  } = {},
+) {
+  const declared = options.declared ?? freshDollars();
+  const tail = options.tail ?? 3_700;
+  const method = options.method ?? 'usdt_trc20';
+  const depositId = await deposit({
+    customerId: options.customerId ?? (await customer()),
+    method,
+    declaredAmountUnits: declared,
+    declaredUsdUnits: declared,
+  });
+  await db.insert(usdtDeposits).values({
+    depositId,
+    method,
+    receivingAddress: TRON_ADDRESS,
+    tailUnits: tail,
+    payAmountUnits: declared + tail,
+  });
+  return { depositId, payAmountUnits: declared + tail, declared, tail, method };
+}
+
+async function transfer(values: Partial<typeof usdtTransfers.$inferInsert> = {}): Promise<string> {
+  const id = newId();
+  await db.insert(usdtTransfers).values({
+    id,
+    method: 'usdt_trc20',
+    txid: txid(),
+    fromAddress: 'TXfromAddressxxxxxxxxxxxxxxxxxxxxx',
+    toAddress: TRON_ADDRESS,
+    rawAmount: '25003700',
+    amountUnits: 25_003_700,
+    blockNumber: 1,
+    blockTime: new Date(),
+    source: 'scan',
+    ...values,
+  });
+  return id;
+}
+
+const usdtRow = async (depositId: string) =>
+  (await db.select().from(usdtDeposits).where(eq(usdtDeposits.depositId, depositId)))[0];
+
+describe('deposit decisions (S04)', () => {
+  const credited = (journalId: string, values: Partial<DepositRow> = {}) =>
+    ({
+      status: 'credited',
+      decidedAt: sql`now()`,
+      decidedBy: 'system',
+      transactionNumber: txid(),
+      receivedCurrency: 'USD',
+      receivedAmountUnits: 10 * USD,
+      creditedUsdUnits: 10 * USD,
+      journalId,
+      ...values,
+    }) as const;
+
+  async function journalFor(customerId: string, depositId: string) {
+    const posted = await db.transaction((tx) =>
+      postUsdtDepositCredit(tx, {
+        depositId,
+        customerId,
+        transferMethod: 'usdt_trc20',
+        receivedUnits: 10 * USD,
+        creditedUsdUnits: 10 * USD,
+      }),
+    );
+    return posted.journalId;
+  }
+
+  it('lets the system credit a USDT deposit without an admin or a reference check', async () => {
+    const customerId = await customer();
+    const { depositId } = await usdtDeposit({ customerId });
+    await db.update(deposits).set(submitted).where(eq(deposits.id, depositId));
+    const journalId = await journalFor(customerId, depositId);
+    await db.update(deposits).set(credited(journalId)).where(eq(deposits.id, depositId));
+    const [row] = await db.select().from(deposits).where(eq(deposits.id, depositId));
+    expect(row).toMatchObject({ status: 'credited', decidedBy: 'system', adminId: null });
+    expect((await usdtRow(depositId))?.depositOpen).toBe(false);
+  });
+
+  it.each([
+    ['a system decision with an admin', { adminId: newId() }, /decided_check/],
+    [
+      'an admin decision without its key',
+      { decidedBy: 'admin', adminId: newId() },
+      /decided_check/,
+    ],
+    ['a reference check on USDT', { referenceCheck: 'matches' }, /credit_check/],
+  ] as const)('refuses %s', async (_, values, constraint) => {
+    const customerId = await customer();
+    const { depositId } = await usdtDeposit({ customerId });
+    await db.update(deposits).set(submitted).where(eq(deposits.id, depositId));
+    const journalId = await journalFor(customerId, depositId);
+    expect(
+      await refusal(
+        db
+          .update(deposits)
+          .set(credited(journalId, values as Partial<DepositRow>))
+          .where(eq(deposits.id, depositId)),
+      ),
+    ).toMatch(constraint);
+  });
+
+  it('refuses a Sham Cash credit without its reference check, and a USDT deposit in pounds', async () => {
+    expect(
+      await refusal(
+        deposit({
+          customerId: await customer(),
+          ...submitted,
+          status: 'credited',
+          decidedAt: new Date(),
+          decidedBy: 'admin',
+          adminId: newId(),
+          decisionIdempotencyKey: newId(),
+          transactionNumber: 'T-1',
+          receivedCurrency: 'USD',
+          receivedAmountUnits: 10 * USD,
+          creditedUsdUnits: 10 * USD,
+          journalId: newId(),
+        }),
+      ),
+    ).toMatch(/credit_check/);
+    expect(
+      await refusal(
+        deposit({ customerId: await customer(), method: 'usdt_bep20', currency: 'SYP' }),
+      ),
+    ).toMatch(/method_check/);
+  });
+
+  it("records a decision of the S03 release, which does not know `decided_by`, as the admin's", async () => {
+    const id = await deposit({ customerId: await customer(), ...submitted });
+    await db
+      .update(deposits)
+      .set({
+        status: 'rejected',
+        rejectReason: 'not_received',
+        decidedAt: sql`now()`,
+        adminId: newId(),
+        decisionIdempotencyKey: newId(),
+      })
+      .where(eq(deposits.id, id));
+    const [row] = await db.select().from(deposits).where(eq(deposits.id, id));
+    expect(row?.decidedBy).toBe('admin');
+  });
+});
+
+describe('the deposit guard for USDT (S04)', () => {
+  it('returns a submitted USDT deposit to pending only with its TXID failure (rule U10)', async () => {
+    const { depositId } = await usdtDeposit();
+    await db.update(deposits).set(submitted).where(eq(deposits.id, depositId));
+    expect(
+      await refusal(
+        db.update(deposits).set({ status: 'pending' }).where(eq(deposits.id, depositId)),
+      ),
+    ).toMatch(/only with its TXID failure/);
+    await db.transaction(async (tx) => {
+      await tx
+        .update(usdtDeposits)
+        .set({ checkError: 'not_found' })
+        .where(eq(usdtDeposits.depositId, depositId));
+      await tx.update(deposits).set({ status: 'pending' }).where(eq(deposits.id, depositId));
+    });
+    expect((await usdtRow(depositId))?.depositOpen).toBe(true);
+  });
+
+  it('returns a submitted Sham Cash deposit to pending only by a receipt request', async () => {
+    const id = await deposit({ customerId: await customer(), ...submitted });
+    expect(
+      await refusal(db.update(deposits).set({ status: 'pending' }).where(eq(deposits.id, id))),
+    ).toMatch(/only by a receipt request/);
+  });
+
+  it("never changes a USDT deposit's declared dollars, even while pending", async () => {
+    const { depositId } = await usdtDeposit();
+    expect(
+      await refusal(
+        db
+          .update(deposits)
+          .set({ declaredUsdUnits: 1 * USD })
+          .where(eq(deposits.id, depositId)),
+      ),
+    ).toMatch(/cannot change its quote/);
+  });
+});
+
+describe('USDT deposit rows (S04)', () => {
+  it("takes its deposit's method and the declared amount plus the tail", async () => {
+    const declared = freshDollars();
+    const depositId = await deposit({
+      customerId: await customer(),
+      method: 'usdt_trc20',
+      declaredAmountUnits: declared,
+      declaredUsdUnits: declared,
+    });
+    const row = {
+      depositId,
+      method: 'usdt_trc20',
+      receivingAddress: TRON_ADDRESS,
+      tailUnits: 3_700,
+      payAmountUnits: declared + 3_700,
+    } as const;
+    expect(await refusal(db.insert(usdtDeposits).values({ ...row, method: 'usdt_bep20' }))).toMatch(
+      /must match its deposit/,
+    );
+    expect(
+      await refusal(
+        db.insert(usdtDeposits).values({ ...row, payAmountUnits: declared + USD + 3_700 }),
+      ),
+    ).toMatch(/must match its deposit/);
+    expect(
+      await refusal(
+        db.insert(usdtDeposits).values({ ...row, tailUnits: 150, payAmountUnits: declared + 150 }),
+      ),
+    ).toMatch(/amount_check/);
+    expect(await refusal(db.insert(usdtDeposits).values({ ...row, depositOpen: false }))).toMatch(
+      /must mirror/,
+    );
+    await db.insert(usdtDeposits).values(row);
+  });
+
+  it('never changes what was shown, nor its transfer once bound', async () => {
+    const { depositId } = await usdtDeposit();
+    for (const change of [
+      { receivingAddress: 'TOther' },
+      { tailUnits: 3_800 },
+      { payAmountUnits: 1 },
+      { depositOpen: false },
+    ]) {
+      expect(
+        await refusal(
+          db.update(usdtDeposits).set(change).where(eq(usdtDeposits.depositId, depositId)),
+        ),
+      ).toMatch(/cannot change what was shown|must mirror/);
+    }
+    await db.update(deposits).set(submitted).where(eq(deposits.id, depositId));
+    const bind = (transferId: string) =>
+      db
+        .update(usdtDeposits)
+        .set({ transferId, checkStatus: 'confirming', txid: txid(), txidSource: 'scan' })
+        .where(eq(usdtDeposits.depositId, depositId));
+    await bind(await transfer());
+    expect(await refusal(bind(await transfer()))).toMatch(/is bound to its transfer/);
+  });
+
+  it('keeps open amounts unique per network, and frees one when its deposit closes (rule U3)', async () => {
+    const first = await usdtDeposit();
+    expect(await refusal(usdtDeposit({ declared: first.declared, tail: first.tail }))).toMatch(
+      /usdt_deposits_open_amount_unique/,
+    );
+    // The other network, or another tail, is free.
+    await usdtDeposit({ declared: first.declared, tail: first.tail, method: 'usdt_bep20' });
+    await usdtDeposit({ declared: first.declared, tail: first.tail + 100 });
+    await db.update(deposits).set({ status: 'expired' }).where(eq(deposits.id, first.depositId));
+    expect((await usdtRow(first.depositId))?.depositOpen).toBe(false);
+    await usdtDeposit({ declared: first.declared, tail: first.tail });
+  });
+
+  it('refuses DELETE and TRUNCATE: the app role lacks the privilege, the owner meets the trigger', async () => {
+    const { depositId } = await usdtDeposit();
+    expect(
+      await refusal(db.delete(usdtDeposits).where(eq(usdtDeposits.depositId, depositId))),
+    ).toMatch(/permission denied/);
+    expect(
+      await refusal(owner.db.delete(usdtDeposits).where(eq(usdtDeposits.depositId, depositId))),
+    ).toMatch(/never deleted/);
+    expect(await refusal(owner.db.execute(sql`truncate usdt_deposits cascade`))).toMatch(
+      /append-only/,
+    );
+  });
+});
+
+describe('USDT transfers (S04 rule U13)', () => {
+  it('records a transaction once per network', async () => {
+    const hash = txid();
+    await transfer({ txid: hash });
+    expect(await refusal(transfer({ txid: hash }))).toMatch(/usdt_transfers_txid_unique/);
+    await transfer({ txid: hash, method: 'usdt_bep20' });
+  });
+
+  it.each([
+    ['dust under $1 (rule U14)', { amountUnits: 999_999 }, /amount_check/],
+    ['a TXID with 0x', { txid: `0x${txid().slice(2)}` }, /txid_check/],
+    ['Sham Cash', { method: 'sham_cash' }, /method_check/],
+  ] as const)('refuses %s', async (_, values, constraint) => {
+    expect(await refusal(transfer(values))).toMatch(constraint);
+  });
+
+  it('is append-only for the app role and the owner', async () => {
+    const id = await transfer();
+    expect(
+      await refusal(
+        db.update(usdtTransfers).set({ blockNumber: 2 }).where(eq(usdtTransfers.id, id)),
+      ),
+    ).toMatch(/permission denied/);
+    for (const work of [
+      owner.db.update(usdtTransfers).set({ blockNumber: 2 }).where(eq(usdtTransfers.id, id)),
+      owner.db.delete(usdtTransfers).where(eq(usdtTransfers.id, id)),
+    ]) {
+      expect(await refusal(work)).toMatch(/usdt_transfers is append-only/);
+    }
+  });
+});
+
+describe('USDT settings (S04)', () => {
+  it('reads older versions as disabled with the $5 minimum', async () => {
+    const id = newId();
+    const { usdtTrc20Enabled, usdtBep20Enabled, usdtMinDepositUsdUnits, ...older } =
+      DEPOSIT_SETTINGS_DEFAULTS;
+    await db.insert(depositSettings).values({
+      ...older,
+      id,
+      shamCashAccountName: 'Vertex',
+      shamCashAccountNumber: '0933000000',
+      adminId: newId(),
+    });
+    const [row] = await db.select().from(depositSettings).where(eq(depositSettings.id, id));
+    expect(row).toMatchObject({
+      usdtTrc20Enabled: false,
+      usdtBep20Enabled: false,
+      usdtMinDepositUsdUnits: 5 * USD,
+    });
+    expect(
+      await refusal(
+        db.insert(depositSettings).values({
+          ...DEPOSIT_SETTINGS_DEFAULTS,
+          shamCashAccountName: 'Vertex',
+          shamCashAccountNumber: '0933000000',
+          adminId: newId(),
+          usdtMinDepositUsdUnits: 5 * USD + 1,
+        }),
+      ),
+    ).toMatch(/usdt_min_check/);
+  });
+});
+
+describe('the USDT credit (S04 money flows M1, M2)', () => {
+  const postings = async (journalId: string) =>
+    db
+      .select({ code: ledgerAccounts.code, amountUnits: ledgerPostings.amountUnits })
+      .from(ledgerPostings)
+      .innerJoin(ledgerAccounts, eq(ledgerAccounts.id, ledgerPostings.accountId))
+      .where(eq(ledgerPostings.journalId, journalId))
+      .orderBy(ledgerPostings.position);
+
+  it('credits the declared cents and keeps the tail in deposit_rounding', async () => {
+    const customerId = await customer();
+    const { depositId, declared, payAmountUnits } = await usdtDeposit({ customerId });
+    const credit = await db.transaction((tx) =>
+      postUsdtDepositCredit(tx, {
+        depositId,
+        customerId,
+        transferMethod: 'usdt_trc20',
+        receivedUnits: payAmountUnits,
+        creditedUsdUnits: declared,
+      }),
+    );
+    expect(credit.balanceAfterUnits).toBe(declared);
+    expect(await postings(credit.journalId)).toEqual([
+      { code: 'usdt_receipts:usdt_trc20', amountUnits: -payAmountUnits },
+      { code: `customer_wallet:${customerId}`, amountUnits: declared },
+      { code: 'deposit_rounding:USD', amountUnits: 3_700 },
+    ]);
+  });
+
+  it('posts two postings when nothing is left over, from the network the money came on', async () => {
+    const customerId = await customer();
+    const { depositId } = await usdtDeposit({ customerId });
+    const credit = {
+      depositId,
+      customerId,
+      transferMethod: 'usdt_bep20',
+      receivedUnits: 24 * USD,
+      creditedUsdUnits: 24 * USD,
+    } as const;
+    const first = await db.transaction((tx) => postUsdtDepositCredit(tx, credit));
+    expect(await postings(first.journalId)).toEqual([
+      { code: 'usdt_receipts:usdt_bep20', amountUnits: -24 * USD },
+      { code: `customer_wallet:${customerId}`, amountUnits: 24 * USD },
+    ]);
+    const again = await db.transaction((tx) => postUsdtDepositCredit(tx, credit));
+    expect(again.journalId).toBe(first.journalId);
+  });
+
+  it('never credits more than was received', async () => {
+    const customerId = await customer();
+    const { depositId } = await usdtDeposit({ customerId });
+    await expect(
+      db.transaction((tx) =>
+        postUsdtDepositCredit(tx, {
+          depositId,
+          customerId,
+          transferMethod: 'usdt_trc20',
+          receivedUnits: 9_990_000,
+          creditedUsdUnits: 10 * USD,
+        }),
+      ),
+    ).rejects.toThrow(RangeError);
+  });
+});
+
+describe('TXID claims (S04)', () => {
+  it('finds and refuses a TXID an S02 manual deposit stored with 0x', async () => {
+    const hash = txid();
+    const depositId = await deposit({ customerId: await customer() });
+    // A development row from before S04: the reference as typed, with 0x.
+    await owner.db.execute(
+      sql`insert into payment_references (id, method, reference, deposit_id)
+        values (${newId()}, 'usdt_trc20', ${`0X${hash.toUpperCase()}`}, ${depositId})`,
+    );
+    expect(await paymentReferenceOwner(db, 'usdt_trc20', hash)).toEqual({
+      kind: 'deposit',
+      id: depositId,
+    });
+    expect(await paymentReferenceOwner(db, 'usdt_bep20', hash)).toBeNull();
+    const other = await deposit({ customerId: await customer() });
+    const refused = await db
+      .transaction((tx) => claimPaymentReference(tx, 'usdt_trc20', hash, { depositId: other }))
+      .catch((error: unknown) => error);
+    expect((refused as LedgerError).details).toEqual({ kind: 'deposit', id: depositId });
   });
 });

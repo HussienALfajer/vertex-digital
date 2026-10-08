@@ -25,6 +25,7 @@ import {
   SelectValue,
   Textarea,
 } from '@vertex-digital/ui';
+import type { TFunction } from 'i18next';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
@@ -36,7 +37,7 @@ type NoteField = 'reason' | 'customerNote' | 'internalNote';
 
 /** The fields of a refused body, by the contract's issue paths. */
 function fieldErrors(
-  t: ReturnType<typeof useTranslation>['t'],
+  t: TFunction,
   issues: readonly { path: readonly PropertyKey[] }[],
 ): Partial<Record<NoteField, string>> {
   const found: Partial<Record<NoteField, string>> = {};

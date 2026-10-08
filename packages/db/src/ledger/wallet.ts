@@ -162,6 +162,8 @@ export interface TimelineDeposit {
   referenceCode: string;
   /** The pounds received and the rate they were converted at; null when USD was received. */
   syp: { amountUnits: number; rate: string } | null;
+  /** A USDT deposit's TXID (S04), for the admin; null for Sham Cash. */
+  txid: string | null;
 }
 
 export interface TimelineEntry {
@@ -267,6 +269,7 @@ async function depositsOf(
       id: deposits.id,
       method: deposits.method,
       referenceCode: deposits.referenceCode,
+      transactionNumber: deposits.transactionNumber,
       receivedCurrency: deposits.receivedCurrency,
       receivedAmountUnits: deposits.receivedAmountUnits,
       creditRate: deposits.creditRate,
@@ -284,6 +287,7 @@ async function depositsOf(
           row.receivedCurrency === 'SYP' && row.receivedAmountUnits && row.creditRate
             ? { amountUnits: row.receivedAmountUnits, rate: rateFromNumeric(row.creditRate) }
             : null,
+        txid: row.method === 'sham_cash' ? null : row.transactionNumber,
       },
     ]),
   );

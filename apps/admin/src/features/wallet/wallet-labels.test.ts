@@ -51,6 +51,7 @@ describe('entryLabel', () => {
       method: 'sham_cash' as const,
       referenceCode: 'VD-7KQ2M',
       syp: null,
+      txid: null,
     };
     expect(entryLabel(t, entry({ kind: 'deposit', adjustment: null, deposit }))).toBe(
       ar.wallets.depositMethods.sham_cash,

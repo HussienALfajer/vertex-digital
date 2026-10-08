@@ -18,6 +18,7 @@ import {
   rateFromNumeric,
   referenceCodeSchema,
   sameFlags,
+  type UsdtMethod,
 } from '@vertex-digital/contracts';
 import {
   claimPaymentReference,
@@ -32,6 +33,8 @@ import {
   postDepositCredit,
   recordAudit,
   type Transaction,
+  usdtDeposits,
+  usdtTransfers,
 } from '@vertex-digital/db';
 import { and, asc, count, desc, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
 import { isRecentlyReauthenticated } from '../../core/access/index.js';
@@ -54,7 +57,8 @@ import {
   notFound,
   stateConflict,
 } from './deposit-records.js';
-import { DepositSettingsService } from './deposit-settings.service.js';
+import { type CurrentSettings, DepositSettingsService } from './deposit-settings.service.js';
+import { adminUsdt, transferState, usdtCandidates, usdtRecords } from './usdt-records.js';
 
 /** Thrown inside a decision's transaction when its key decided first: answered as a replay. */
 class AlreadyDecided extends Error {}
@@ -121,6 +125,7 @@ export class DepositReviewService {
   async queue(query: AdminDepositQuery): Promise<AdminDepositPage> {
     const filters: (SQL | undefined)[] = [
       query.status === 'all' ? undefined : eq(deposits.status, query.status),
+      query.method ? eq(deposits.method, query.method) : undefined,
       query.flagged === 'true'
         ? flagged
         : query.flagged === 'false'
@@ -175,10 +180,28 @@ export class DepositReviewService {
       })
       .from(deposits)
       .where(inArray(deposits.status, ['submitted', 'pending']));
+    const [[review], [unmatched]] = await Promise.all([
+      this.db
+        .select({ count: count() })
+        .from(usdtDeposits)
+        .innerJoin(deposits, eq(deposits.id, usdtDeposits.depositId))
+        .where(and(eq(deposits.status, 'submitted'), eq(usdtDeposits.checkStatus, 'review'))),
+      this.db
+        .select({ count: count() })
+        .from(usdtTransfers)
+        .where(
+          and(
+            sql`${usdtTransfers.createdAt} > now() - interval '30 days'`,
+            eq(transferState, 'unmatched'),
+          ),
+        ),
+    ]);
     return {
       submitted: row?.submitted ?? 0,
       submittedFlagged: row?.submittedFlagged ?? 0,
       pending: row?.pending ?? 0,
+      usdtReview: review?.count ?? 0,
+      unmatchedTransfers: unmatched?.count ?? 0,
     };
   }
 
@@ -223,6 +246,8 @@ export class DepositReviewService {
       : [];
     if (!current) throw notFound();
     if (current.status !== 'submitted') throw stateConflict(current.status);
+    // A USDT deposit is approved from its transfer, never with typed amounts (S04 rule U15).
+    if (current.method !== 'sham_cash') throw stateConflict(current.status);
     // Rule RV4, before anything is written: the credit and every flag the approval would carry.
     const plan = await this.planApproval(this.db, current, input);
     if (
@@ -283,6 +308,7 @@ export class DepositReviewService {
             creditRate: approval.rate?.value ?? null,
             referenceCheck: input.referenceCheck,
             journalId: credit.journalId,
+            decidedBy: 'admin',
             decisionIdempotencyKey: idempotencyKey,
             adminId: admin.id,
           })
@@ -324,6 +350,7 @@ export class DepositReviewService {
             creditRateId: approval.rate?.id ?? null,
             referenceCheck: input.referenceCheck,
             acknowledgedFlags: approval.expectedFlags,
+            decidedBy: 'admin',
             journalId: credit.journalId,
             balanceAfterUnits: credit.balanceAfterUnits,
           },
@@ -365,11 +392,17 @@ export class DepositReviewService {
         const deposit = await lockDeposit(tx, id);
         if (deposit.decisionIdempotencyKey === idempotencyKey) throw new AlreadyDecided();
         if (deposit.status !== 'submitted') throw stateConflict(deposit.status);
+        // A USDT deposit is rejected only from review: one still searching or confirming is
+        // the worker's to settle (S04 rule U16).
+        if (deposit.method !== 'sham_cash' && !(await this.inReview(tx, deposit.id))) {
+          throw stateConflict(deposit.status);
+        }
         const [updated] = await tx
           .update(deposits)
           .set({
             status: 'rejected',
             decidedAt: sql`now()`,
+            decidedBy: 'admin',
             rejectReason: input.reason,
             customerNote,
             decisionIdempotencyKey: idempotencyKey,
@@ -378,6 +411,11 @@ export class DepositReviewService {
           .where(eq(deposits.id, deposit.id))
           .returning();
         if (!updated) throw new Error(`Deposit ${deposit.id} was not rejected`);
+        // The TXID stays unclaimed: the transfer can still be credited to its owner (U16).
+        await tx
+          .update(usdtDeposits)
+          .set({ checkStatus: 'done' })
+          .where(eq(usdtDeposits.depositId, deposit.id));
         await recordAudit(tx, {
           ...adminEntry(adminId, deposit.id, meta),
           action: 'deposit.rejected',
@@ -418,7 +456,9 @@ export class DepositReviewService {
     try {
       const row = await this.db.transaction(async (tx) => {
         const deposit = await lockDeposit(tx, id);
-        if (deposit.status !== 'submitted') throw stateConflict(deposit.status);
+        if (deposit.status !== 'submitted' || deposit.method !== 'sham_cash') {
+          throw stateConflict(deposit.status);
+        }
         if (deposit.receiptRequestCount >= 1) {
           throw new CodedException(
             409,
@@ -552,7 +592,7 @@ export class DepositReviewService {
   }
 
   /** The decision's email to the deposit's customer, in the decision's transaction. */
-  private async queueEmail<Template extends EmailTemplate>(
+  async queueEmail<Template extends EmailTemplate>(
     tx: Transaction,
     deposit: DepositRow,
     template: Template,
@@ -632,8 +672,39 @@ export class DepositReviewService {
     return { items: page.items.map(({ row }) => row), nextCursor: page.nextCursor };
   }
 
+  /** True when the USDT deposit's check is in review (S04 rule U11). */
+  private async inReview(tx: Transaction, depositId: string): Promise<boolean> {
+    const [row] = await tx
+      .select({ checkStatus: usdtDeposits.checkStatus })
+      .from(usdtDeposits)
+      .where(eq(usdtDeposits.depositId, depositId));
+    return row?.checkStatus === 'review';
+  }
+
+  /** The USDT block of the review page (S04): the payment, the transfer and its candidates. */
+  private async usdtView(row: DepositRow, settings: CurrentSettings | null) {
+    if (row.method === 'sham_cash') return null;
+    const [records, networks] = await Promise.all([
+      usdtRecords(this.db, [row.id]),
+      this.settings.usdtNetworks(settings),
+    ]);
+    const record = records.get(row.id);
+    if (!record) throw new Error(`Deposit ${row.id} has no USDT row`);
+    const candidates = record.transfer
+      ? await usdtCandidates(
+          this.db,
+          record.transfer.method as UsdtMethod,
+          record.transfer.amountUnits,
+          (ids) => this.customers.depositCustomers(ids),
+          row.id,
+        )
+      : [];
+    const delayed = networks.find((network) => network.method === row.method)?.delayed ?? false;
+    return adminUsdt(record, delayed, candidates);
+  }
+
   /** Everything the review page shows of a deposit. */
-  private async view(row: DepositRow): Promise<AdminDeposit> {
+  async view(row: DepositRow): Promise<AdminDeposit> {
     const [customers, receipts, flags, history, balanceUnits, rate, settings, names] =
       await Promise.all([
         this.customers.depositCustomers([row.customerId]),
@@ -665,6 +736,7 @@ export class DepositReviewService {
         row.rateId && row.rate
           ? { rateId: row.rateId, rate: rateFromNumeric(row.rate) }
           : rate && { rateId: rate.id, rate: rate.sypPerUsd },
+      decidedBy: row.decidedBy,
       adminName: (row.adminId && names.get(row.adminId)) ?? null,
       credit:
         row.status === 'credited' &&
@@ -672,7 +744,6 @@ export class DepositReviewService {
         row.receivedCurrency &&
         row.receivedAmountUnits &&
         row.creditedUsdUnits &&
-        row.referenceCheck &&
         row.journalId
           ? {
               transactionNumber: row.transactionNumber,
@@ -711,6 +782,7 @@ export class DepositReviewService {
         recentDeposits: history.recent,
       },
       eta: row.status === 'submitted' ? await this.settings.eta(settings) : null,
+      usdt: await this.usdtView(row, settings),
     };
   }
 

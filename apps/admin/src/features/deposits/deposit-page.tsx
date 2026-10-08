@@ -214,9 +214,11 @@ function Decision({ deposit }: { deposit: AdminDeposit }) {
             <Fact label={t('deposits.detail.transaction')}>
               <code dir="ltr">{credit.transactionNumber}</code>
             </Fact>
-            <Fact label={t('deposits.detail.referenceCheck')}>
-              {t(`deposits.referenceChecks.${credit.referenceCheck}`)}
-            </Fact>
+            {credit.referenceCheck && (
+              <Fact label={t('deposits.detail.referenceCheck')}>
+                {t(`deposits.referenceChecks.${credit.referenceCheck}`)}
+              </Fact>
+            )}
             <Fact label={t('deposits.detail.journal')}>
               <code dir="ltr" title={credit.journalId}>
                 {credit.journalId.slice(0, 8)}

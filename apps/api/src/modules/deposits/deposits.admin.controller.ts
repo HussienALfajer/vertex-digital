@@ -15,14 +15,25 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBody, ApiConsumes, ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger';
+import {
+  ApiAcceptedResponse,
+  ApiBody,
+  ApiConsumes,
+  ApiOkResponse,
+  ApiProduces,
+  ApiTags,
+} from '@nestjs/swagger';
 import {
   type AdminDepositQuery,
+  type AdminUsdtTransferQuery,
   adminDepositCountsSchema,
   adminDepositPageSchema,
   adminDepositQuerySchema,
   adminDepositSchema,
+  adminUsdtTransferPageSchema,
+  adminUsdtTransferQuerySchema,
   approveDepositSchema,
+  approveUsdtDepositSchema,
   depositSettingsInputSchema,
   depositSettingsSchema,
   rejectDepositSchema,
@@ -43,15 +54,17 @@ import { isUuid } from './deposit-records.js';
 import { DepositReviewService } from './deposit-review.service.js';
 import { DepositSettingsService } from './deposit-settings.service.js';
 import { sendImage, uploadBody } from './served-file.js';
+import { UsdtReviewService } from './usdt-review.service.js';
 
 const qrUpload = FileInterceptor('file', {
   limits: { fileSize: UPLOAD_MAX_BYTES, files: 1, fields: 0 },
 });
 
 /**
- * The admin's side of Sham Cash deposits (S03): the settings, the review queue and the decisions.
- * Saving settings and uploading a QR need a re-authentication; an approval needs one above $100
- * or with any flag (rule RV4), checked by the service. Decisions carry an `Idempotency-Key`.
+ * The admin's side of deposits (S03, S04): the settings, the review queue, the decisions and the
+ * USDT transfers. Saving settings, uploading a QR and approving a USDT deposit need a
+ * re-authentication; a Sham Cash approval needs one above $100 or with any flag (rule RV4),
+ * checked by the service. Decisions carry an `Idempotency-Key`.
  */
 @ApiTags('deposits')
 @Controller('admin')
@@ -60,6 +73,7 @@ export class DepositsAdminController {
     private readonly review: DepositReviewService,
     private readonly settings: DepositSettingsService,
     private readonly files: FilesService,
+    private readonly usdt: UsdtReviewService,
   ) {}
 
   @Get('deposit-settings')
@@ -214,5 +228,53 @@ export class DepositsAdminController {
     @Req() request: Request,
   ) {
     return this.review.requestReceipt(admin.id, id, body, requestMeta(request));
+  }
+
+  @Post('deposits/:id/approve-usdt')
+  @AdminRoute()
+  @Sensitive()
+  @ApiIdempotencyKey()
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: adminDepositSchema })
+  @ApiOkResponse({ description: 'Credited (or its replay)', standardSchema: adminDepositSchema })
+  async approveUsdt(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id') id: string,
+    @IdempotencyKey() idempotencyKey: string,
+    @Body({ schema: approveUsdtDepositSchema }) body: z.output<typeof approveUsdtDepositSchema>,
+    @Req() request: Request,
+  ) {
+    const { deposit } = await this.usdt.approve(
+      admin,
+      id,
+      idempotencyKey,
+      body,
+      requestMeta(request),
+    );
+    return deposit;
+  }
+
+  @Post('deposits/:id/recheck')
+  @AdminRoute()
+  @HttpCode(202)
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: adminDepositSchema })
+  @ApiAcceptedResponse({
+    description: 'Verification sent again',
+    standardSchema: adminDepositSchema,
+  })
+  recheck(@CurrentAdmin() admin: AdminIdentity, @Param('id') id: string, @Req() request: Request) {
+    return this.usdt.recheck(admin.id, id, requestMeta(request));
+  }
+
+  @Get('usdt-transfers')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @ApiQueryOf(adminUsdtTransferQuerySchema)
+  @SerializeOptions({ schema: adminUsdtTransferPageSchema })
+  @ApiOkResponse({ description: 'Newest first', standardSchema: adminUsdtTransferPageSchema })
+  transfers(@Query({ schema: adminUsdtTransferQuerySchema }) query: AdminUsdtTransferQuery) {
+    return this.usdt.transfers(query);
   }
 }

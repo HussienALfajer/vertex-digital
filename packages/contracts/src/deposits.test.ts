@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adminUsdtTransferQuerySchema,
   approvalFlags,
   approvalNeedsReauthentication,
   approveDepositSchema,
+  approveUsdtDepositSchema,
   canTransitionDeposit,
   createShamCashDepositSchema,
+  createUsdtDepositSchema,
   DEPOSIT_FLAG_CODES,
   DEPOSIT_FLAG_DETAILS,
   DEPOSIT_SETTINGS_DEFAULTS,
@@ -12,6 +15,7 @@ import {
   type DepositStatus,
   depositCreditUsdUnits,
   depositLimitBreach,
+  depositLimitSettingsFor,
   depositLimits,
   depositSettingsInputSchema,
   dHash,
@@ -25,6 +29,7 @@ import {
   reviewEta,
   reviewEtaMinutes,
   sameFlags,
+  submitTxidSchema,
 } from './deposits.js';
 
 const USD = 1_000_000;
@@ -342,5 +347,76 @@ describe('deposit settings', () => {
     expect(issues({ ...valid, reviewHoursStart: '24:00' })).toContain('reviewHoursStart');
     expect(issues({ ...valid, flagNewAccountUsdUnits: 0 })).toEqual(['flagNewAccountUsdUnits']);
     expect(issues({ ...valid, minDepositUsdUnits: 2 * USD + 1 })).toEqual(['minDepositUsdUnits']);
+  });
+
+  it('defaults the USDT switches off and keeps the USDT minimum within both tiers (S04)', () => {
+    expect(DEPOSIT_SETTINGS_DEFAULTS.usdtTrc20Enabled).toBe(false);
+    expect(DEPOSIT_SETTINGS_DEFAULTS.usdtMinDepositUsdUnits).toBe(5 * USD);
+    expect(issues({ ...valid, usdtMinDepositUsdUnits: 50 * USD })).toEqual([]);
+    expect(issues({ ...valid, usdtMinDepositUsdUnits: 51 * USD })).toEqual([
+      'usdtMinDepositUsdUnits',
+    ]);
+    expect(issues({ ...valid, usdtMinDepositUsdUnits: 0 })).toEqual(['usdtMinDepositUsdUnits']);
+  });
+});
+
+describe('USDT deposits (S04)', () => {
+  const HASH = 'ab'.repeat(32);
+
+  it('take the USDT minimum in their limits (rule U5)', () => {
+    const settings = { ...DEPOSIT_SETTINGS_DEFAULTS };
+    expect(depositLimitSettingsFor('sham_cash', settings).minDepositUsdUnits).toBe(2 * USD);
+    const usdt = depositLimitSettingsFor('usdt_trc20', settings);
+    expect(usdt.minDepositUsdUnits).toBe(5 * USD);
+    const limits = depositLimits(usdt, false, 0);
+    expect(depositLimitBreach(limits, 4 * USD)).toMatchObject({ limit: 'minimum' });
+    expect(depositLimitBreach(limits, 5 * USD)).toBeNull();
+  });
+
+  it('are created for a USDT method and whole cents above zero (rule U2)', () => {
+    const ok = createUsdtDepositSchema.safeParse({ method: 'usdt_bep20', amountUnits: 25 * USD });
+    expect(ok.success).toBe(true);
+    for (const input of [
+      { method: 'sham_cash', amountUnits: 25 * USD },
+      { method: 'usdt_trc20', amountUnits: 0 },
+      { method: 'usdt_trc20', amountUnits: 25 * USD + 100 },
+    ]) {
+      expect(createUsdtDepositSchema.safeParse(input).success).toBe(false);
+    }
+  });
+
+  it('take a pasted TXID as text, for the API to normalize (rule U8)', () => {
+    expect(submitTxidSchema.parse({ txid: ` 0x${HASH} ` })).toEqual({ txid: `0x${HASH}` });
+    expect(submitTxidSchema.safeParse({ txid: ' ' }).success).toBe(false);
+  });
+
+  it('approve with flags acknowledged and no amount (rule U15)', () => {
+    expect(approveUsdtDepositSchema.parse({ acknowledgedFlags: ['wrong_network'] })).toEqual({
+      acknowledgedFlags: ['wrong_network'],
+    });
+    expect(
+      approveUsdtDepositSchema.safeParse({ acknowledgedFlags: [], receivedAmountUnits: 1 }).success,
+    ).toBe(true);
+    expect(approveUsdtDepositSchema.safeParse({ acknowledgedFlags: ['nope'] }).success).toBe(false);
+  });
+
+  it('list unmatched transfers by default (rule U13)', () => {
+    expect(adminUsdtTransferQuerySchema.parse({})).toEqual({ limit: 50, state: 'unmatched' });
+    expect(adminUsdtTransferQuerySchema.safeParse({ state: 'bound' }).success).toBe(false);
+  });
+
+  it('describe their review flags', () => {
+    expect(
+      DEPOSIT_FLAG_DETAILS.wrong_network.safeParse({
+        depositMethod: 'usdt_trc20',
+        transferMethod: 'usdt_bep20',
+      }).success,
+    ).toBe(true);
+    expect(
+      DEPOSIT_FLAG_DETAILS.sent_before_deposit.safeParse({
+        depositCreatedAt: '2026-10-08T10:00:00.000Z',
+        blockTime: '2026-10-08T09:59:00.000Z',
+      }).success,
+    ).toBe(true);
   });
 });

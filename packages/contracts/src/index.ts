@@ -11,5 +11,6 @@ export * from './notifications.js';
 export * from './orders.js';
 export * from './rates.js';
 export * from './system.js';
+export * from './usdt.js';
 export * from './user-agent.js';
 export * from './wallet.js';

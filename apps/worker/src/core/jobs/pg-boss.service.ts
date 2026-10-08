@@ -6,6 +6,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
+import { QUEUE_POLICIES } from '@vertex-digital/contracts';
 import { createPgBoss, withoutQueryParameters } from '@vertex-digital/db';
 import type { PgBoss } from 'pg-boss';
 import { TelegramAlerts } from '../alerts/telegram-alerts.js';
@@ -47,7 +48,7 @@ export class PgBossService implements OnModuleInit, OnApplicationShutdown {
    * idempotent: pg-boss retries a job that throws.
    */
   async work<T extends object>(queue: string, handler: (data: T) => Promise<void>): Promise<void> {
-    await this.boss.createQueue(queue);
+    await this.boss.createQueue(queue, { policy: QUEUE_POLICIES[queue] ?? 'standard' });
     await this.boss.work<T>(queue, async ([job]) => {
       if (!job) return;
       try {

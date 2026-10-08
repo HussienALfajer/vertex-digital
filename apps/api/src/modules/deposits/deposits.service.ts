@@ -1,10 +1,8 @@
-import { randomInt } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   type CreateShamCashDeposit,
   type Currency,
   type CursorQuery,
-  DEPOSIT_CREATIONS_PER_HOUR,
   DEPOSIT_FLAG_DETAILS,
   DEPOSIT_PENDING_HOURS,
   type Deposit,
@@ -12,15 +10,10 @@ import {
   type DepositPage,
   depositCreditUsdUnits,
   depositLimitBreach,
-  depositLimits,
-  MAX_DEPOSITS_IN_REVIEW,
   QUOTE_LOCK_MINUTES,
   type QuoteOffer,
   RECEIPT_SIMILAR_MAX_DISTANCE,
   RECEIPT_UPLOADS_PER_HOUR,
-  REFERENCE_CODE_ALPHABET,
-  REFERENCE_CODE_LENGTH,
-  REFERENCE_CODE_PREFIX,
   rateFromNumeric,
   type ShamCashOptions,
 } from '@vertex-digital/contracts';
@@ -32,9 +25,9 @@ import {
   newId,
   recordAudit,
   type Transaction,
+  usdtDeposits,
 } from '@vertex-digital/db';
-import { and, count, desc, eq, ne, type SQL, sql } from 'drizzle-orm';
-import type { PgInsertValue } from 'drizzle-orm/pg-core';
+import { and, count, desc, eq, ne, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -44,33 +37,26 @@ import { AuthService, withinLimits } from '../auth/index.js';
 import { FilesService, type ServedFile } from '../files/index.js';
 import { type CurrentRate, RatesService } from '../rates/index.js';
 import {
+  AlreadyCreated,
+  checkCreation,
   customerDeposit,
+  customerEntry,
   type DepositRow,
+  insertDeposit,
+  isOpen,
+  isTrue,
   isUuid,
+  limitsOf,
+  lockCustomerCreations,
   lockDeposit,
   notFound,
+  rateLimited,
   stateConflict,
 } from './deposit-records.js';
 import { type CurrentSettings, DepositSettingsService } from './deposit-settings.service.js';
-
-/** Thrown inside the create transaction when its key committed first: answered as a replay. */
-class AlreadyCreated extends Error {}
+import { customerUsdt, usdtRecords } from './usdt-records.js';
 
 const HOUR_MS = 60 * 60 * 1000;
-
-const rateLimited = () =>
-  new CodedException(429, 'RATE_LIMITED', 'Too many deposit requests; retry later');
-
-/** A new reference code from a CSPRNG (`randomInt` is uniform over the alphabet). */
-const newReferenceCode = () =>
-  REFERENCE_CODE_PREFIX +
-  Array.from(
-    { length: REFERENCE_CODE_LENGTH },
-    () => REFERENCE_CODE_ALPHABET[randomInt(REFERENCE_CODE_ALPHABET.length)],
-  ).join('');
-
-/** Attempts at a free reference code: 31⁵ codes make a second attempt already rare. */
-const REFERENCE_CODE_ATTEMPTS = 5;
 
 /**
  * The customer's Sham Cash deposits (S03 rules SC1–SC14, FL1–FL5): options, creation, requote,
@@ -107,7 +93,7 @@ export class DepositsService {
         name: settings.shamCashAccountName,
         number: settings.shamCashAccountNumber,
       },
-      limits: settings && (await this.limitsOf(this.db, customerId, settings)),
+      limits: settings && (await limitsOf(this.db, customerId, settings)),
       rate: rate && {
         id: rate.id,
         sypPerUsd: rate.sypPerUsd,
@@ -163,19 +149,19 @@ export class DepositsService {
       const row = await this.db.transaction(async (tx) => {
         // A customer's creations queue here, so the one-pending, in-review and daily-limit checks
         // see each other's deposits.
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`deposits:${customerId}`}))`);
+        await lockCustomerCreations(tx, customerId);
         const [written] = await tx
           .select({ id: deposits.id })
           .from(deposits)
           .where(eq(deposits.idempotencyKey, idempotencyKey));
         if (written) throw new AlreadyCreated();
-        await this.checkCreation(tx, customerId);
-        const limits = await this.limitsOf(tx, customerId, settings);
+        await checkCreation(tx, customerId);
+        const limits = await limitsOf(tx, customerId, settings);
         const breach = depositLimitBreach(limits, declaredUsdUnits);
         if (breach) {
           throw new CodedException(422, 'DEPOSIT_LIMIT_EXCEEDED', 'Outside the limits', breach);
         }
-        const created = await this.insertDeposit(tx, {
+        const created = await insertDeposit(tx, {
           customerId,
           method: 'sham_cash',
           currency: input.currency,
@@ -228,11 +214,8 @@ export class DepositsService {
       .orderBy(desc(deposits.createdAt), desc(deposits.id))
       .limit(query.limit + 1);
     const page = pageOf(rows, query.limit, ({ row, at }) => ({ at, id: row.id }));
-    const settings = await this.settings.current();
-    const submitted = page.items.some(({ row }) => row.status === 'submitted');
-    const eta = submitted ? await this.settings.eta(settings) : null;
     return {
-      items: page.items.map(({ row }) => customerDeposit(row, { settings, eta })),
+      items: await this.views(page.items.map(({ row }) => row)),
       nextCursor: page.nextCursor,
     };
   }
@@ -381,6 +364,11 @@ export class DepositsService {
         .where(eq(deposits.id, deposit.id))
         .returning();
       if (!updated) throw new Error(`Deposit ${deposit.id} was not cancelled`);
+      // A USDT deposit's check ends with it (S04); its amount stays reserved 7 days (rule U4).
+      await tx
+        .update(usdtDeposits)
+        .set({ checkStatus: 'done', checkError: null })
+        .where(eq(usdtDeposits.depositId, deposit.id));
       await recordAudit(tx, {
         ...customerEntry(customerId, deposit.id, meta),
         action: 'deposit.cancelled',
@@ -393,9 +381,30 @@ export class DepositsService {
 
   /** The customer's view, with the current settings and ETA where its status shows them. */
   private async view(row: DepositRow, known?: CurrentSettings | null): Promise<Deposit> {
+    const [view] = await this.views([row], known);
+    if (!view) throw new Error(`Deposit ${row.id} has no view`);
+    return view;
+  }
+
+  /** The customer's views of `rows`, with their USDT payments and checks (S04). */
+  async views(rows: DepositRow[], known?: CurrentSettings | null): Promise<Deposit[]> {
     const settings = known === undefined ? await this.settings.current() : known;
-    const eta = row.status === 'submitted' ? await this.settings.eta(settings) : null;
-    return customerDeposit(row, { settings, eta });
+    const submitted = rows.some((row) => row.status === 'submitted');
+    const usdtIds = rows.filter((row) => row.method !== 'sham_cash').map((row) => row.id);
+    const [eta, records, networks] = await Promise.all([
+      submitted ? this.settings.eta(settings) : null,
+      usdtRecords(this.db, usdtIds),
+      usdtIds.length > 0 ? this.settings.usdtNetworks(settings) : [],
+    ]);
+    return rows.map((row) => {
+      const record = records.get(row.id);
+      const delayed = networks.find((network) => network.method === row.method)?.delayed ?? false;
+      return customerDeposit(row, {
+        settings,
+        eta,
+        usdt: record ? customerUsdt(record, delayed) : null,
+      });
+    });
   }
 
   /** The first deposit of an earlier request with this key, or null; another body is refused. */
@@ -423,74 +432,6 @@ export class DepositsService {
     return this.view(row);
   }
 
-  /** Rules SC4, SC5, SC6: one pending, at most 3 in review, 10 creations an hour. */
-  private async checkCreation(tx: Transaction, customerId: string): Promise<void> {
-    const rows = await tx
-      .select({
-        pendingId: sql<
-          string | null
-        >`(array_agg(${deposits.id}) filter (where ${deposits.status} = 'pending'))[1]`,
-        submitted: sql<number>`(count(*) filter (where ${deposits.status} = 'submitted'))::int`,
-        lastHour: sql<number>`(count(*) filter (where ${deposits.createdAt} > now() - interval '1 hour'))::int`,
-      })
-      .from(deposits)
-      .where(eq(deposits.customerId, customerId));
-    const [state] = rows;
-    if (state?.pendingId) {
-      throw new CodedException(409, 'DEPOSIT_ALREADY_PENDING', 'A deposit awaits its receipt', {
-        depositId: state.pendingId,
-      });
-    }
-    if ((state?.submitted ?? 0) >= MAX_DEPOSITS_IN_REVIEW) {
-      throw new CodedException(409, 'TOO_MANY_DEPOSITS_IN_REVIEW', 'Too many deposits in review');
-    }
-    if ((state?.lastHour ?? 0) >= DEPOSIT_CREATIONS_PER_HOUR) throw rateLimited();
-  }
-
-  /** Rule SC3: new or established, and what the last 24 hours used. */
-  private async limitsOf(
-    db: Database | Transaction,
-    customerId: string,
-    settings: CurrentSettings,
-  ) {
-    const [row] = await db
-      .select({
-        established: sql<boolean>`bool_or(${deposits.status} = 'credited')`,
-        used: sql<string>`coalesce(sum(case
-          when ${deposits.status} in ('pending', 'submitted') then ${deposits.declaredUsdUnits}
-          when ${deposits.status} = 'credited' then ${deposits.creditedUsdUnits}
-          else 0 end) filter (where ${deposits.createdAt} > now() - interval '24 hours'), 0)::text`,
-      })
-      .from(deposits)
-      .where(eq(deposits.customerId, customerId));
-    return depositLimits(settings, row?.established ?? false, Number(row?.used ?? 0));
-  }
-
-  /** Inserts the deposit, drawing another reference code on the rare collision. */
-  private async insertDeposit(
-    tx: Transaction,
-    values: Omit<PgInsertValue<typeof deposits>, 'id' | 'referenceCode'>,
-  ): Promise<DepositRow> {
-    for (let attempt = 1; ; attempt += 1) {
-      try {
-        // A savepoint: a collision leaves the transaction usable for the next attempt.
-        const [row] = await tx.transaction((step) =>
-          step
-            .insert(deposits)
-            .values({ ...values, id: newId(), referenceCode: newReferenceCode() })
-            .returning(),
-        );
-        if (!row) throw new Error('The deposit was not written');
-        return row;
-      } catch (error) {
-        const constraint = (error as { cause?: { constraint?: string } }).cause?.constraint;
-        if (constraint !== 'deposits_reference_code_unique' || attempt >= REFERENCE_CODE_ATTEMPTS) {
-          throw error;
-        }
-      }
-    }
-  }
-
   private async currentRateOrRefuse(): Promise<CurrentRate> {
     const rate = await this.rates.current();
     if (!rate) throw new CodedException(409, 'RATE_UNAVAILABLE', 'No exchange rate yet');
@@ -506,6 +447,8 @@ export class DepositsService {
     deposit: DepositRow,
     rateId: string | undefined,
   ): Promise<boolean> {
+    // A USDT deposit is paid on chain, never with a receipt (S04).
+    if (deposit.method !== 'sham_cash') throw stateConflict(deposit.status);
     if (!(await isOpen(db, deposit))) throw stateConflict(openStatus(deposit));
     const fixing = deposit.currency === 'SYP' && deposit.rateFixedAt === null;
     if (fixing) {
@@ -569,7 +512,7 @@ export class DepositsService {
       .limit(20);
     if (similar.length > 0) flags.push({ code: 'receipt_similar', details: { matches: similar } });
     if (settings) {
-      const limits = await this.limitsOf(tx, deposit.customerId, settings);
+      const limits = await limitsOf(tx, deposit.customerId, settings);
       if (!limits.established && deposit.declaredUsdUnits >= settings.flagNewAccountUsdUnits) {
         flags.push({
           code: 'new_account_large',
@@ -619,30 +562,9 @@ function unavailableReason(
   return null;
 }
 
-/**
- * A `pending` deposit not past `expires_at`: the worker may not have expired it yet (edge case
- * 19), so the database's clock decides.
- */
-async function isOpen(tx: Database | Transaction, deposit: DepositRow): Promise<boolean> {
-  return deposit.status === 'pending' && isTrue(tx, deposit.id, sql`${deposits.expiresAt} > now()`);
-}
-
 /** The status a refusal names: a `pending` deposit refused as not open is past its expiry. */
 const openStatus = (deposit: DepositRow) =>
   deposit.status === 'pending' ? 'expired' : deposit.status;
-
-/** A condition on the deposit's row, by the database's clock (time rules compare with `now()`). */
-async function isTrue(
-  tx: Database | Transaction,
-  depositId: string,
-  condition: SQL,
-): Promise<boolean> {
-  const [row] = await tx
-    .select({ holds: sql<boolean>`coalesce(${condition}, false)` })
-    .from(deposits)
-    .where(eq(deposits.id, depositId));
-  return row?.holds ?? false;
-}
 
 function quoteOf(row: DepositRow) {
   if (!row.rateId || !row.rate) throw new Error(`Deposit ${row.id} has no quote`);
@@ -651,17 +573,4 @@ function quoteOf(row: DepositRow) {
     rate: rateFromNumeric(row.rate),
     declaredUsdUnits: row.declaredUsdUnits,
   };
-}
-
-function customerEntry(customerId: string, depositId: string, meta: RequestMeta) {
-  return {
-    actorKind: 'customer',
-    actorId: customerId,
-    channel: 'store',
-    entityType: 'deposit',
-    entityId: depositId,
-    reason: null,
-    ipAddress: meta.ipAddress,
-    userAgent: meta.userAgent,
-  } as const;
 }

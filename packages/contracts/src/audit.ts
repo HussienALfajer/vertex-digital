@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import {
+  depositDeciderSchema,
   depositFlagCodeSchema,
   depositMethodSchema,
   depositReferenceCheckSchema,
   depositRejectReasonSchema,
+  usdtCheckErrorSchema,
+  usdtTxidSourceSchema,
 } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
@@ -85,6 +88,9 @@ const depositSettingsValues = z
     reviewTargetMinutes: z.int(),
     flagNewAccountUsdUnits: z.int(),
     flagVelocityCount: z.int(),
+    usdtTrc20Enabled: z.boolean(),
+    usdtBep20Enabled: z.boolean(),
+    usdtMinDepositUsdUnits: z.int(),
   })
   .partial();
 const depositQuote = z.strictObject({
@@ -159,6 +165,8 @@ export const AUDIT_DETAILS = {
     declaredAmountUnits: z.int().positive(),
     declaredUsdUnits: z.int().nonnegative(),
     rateId: z.uuid().nullable(),
+    /** USDT only: the exact amount to send, tail included (S04 rule U3). */
+    payAmountUnits: z.int().positive().optional(),
   }),
   /** A new quote for a SYP deposit (rule SC10). */
   'deposit.requoted': z.strictObject({
@@ -184,8 +192,11 @@ export const AUDIT_DETAILS = {
     receivedAmountUnits: z.int().positive(),
     creditedUsdUnits: z.int().positive(),
     creditRateId: z.uuid().nullable(),
-    referenceCheck: depositReferenceCheckSchema,
-    acknowledgedFlags: flagCodes,
+    /** Sham Cash only. */
+    referenceCheck: depositReferenceCheckSchema.nullable(),
+    /** Null on an exact USDT match, which carries no flags (S04 rule U7). */
+    acknowledgedFlags: flagCodes.nullable(),
+    decidedBy: depositDeciderSchema,
     journalId: z.uuid(),
     balanceAfterUnits: z.int().nonnegative(),
   }),
@@ -199,6 +210,26 @@ export const AUDIT_DETAILS = {
     depositId: z.uuid(),
     customerNote: z.string().nullable(),
   }),
+  /** S04 rule U8. */
+  'deposit.txid_submitted': z.strictObject({ depositId: z.uuid(), txid: z.string() }),
+  /** By the worker: a transfer bound to the deposit, to credit or to review (rules U9, U11, U12). */
+  'deposit.transfer_bound': z.strictObject({
+    depositId: z.uuid(),
+    transferId: z.uuid(),
+    txid: z.string(),
+    source: usdtTxidSourceSchema,
+    receivedUnits: z.int().nonnegative(),
+    match: z.enum(['exact', 'review']),
+    flags: flagCodes,
+  }),
+  /** By the worker: the TXID failed and the deposit is back to `pending` (rule U10). */
+  'deposit.txid_bounced': z.strictObject({
+    depositId: z.uuid(),
+    txid: z.string(),
+    error: usdtCheckErrorSchema,
+  }),
+  /** The admin re-sent the verification (rule U17). */
+  'deposit.rechecked': deposit,
 } as const satisfies Record<string, z.ZodType>;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;

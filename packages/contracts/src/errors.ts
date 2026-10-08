@@ -91,6 +91,12 @@ export const ERROR_CODES = [
   'FLAGS_NOT_ACKNOWLEDGED',
   /** A clearer receipt was already asked for once on this deposit (rule RV8). */
   'RECEIPT_ALREADY_REQUESTED',
+  /** Not a TXID, a `0x` hash or a Tronscan / BscScan transaction link (S04 rule U8). */
+  'TXID_INVALID',
+  /** Five TXIDs were already submitted for this deposit (S04 rule U8). */
+  'TXID_ATTEMPTS_EXCEEDED',
+  /** Every tail of this amount is reserved on this network: try a cent more or less (rule U3). */
+  'DEPOSIT_AMOUNT_BUSY',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

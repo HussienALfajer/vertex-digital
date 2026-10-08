@@ -11,18 +11,21 @@ import {
   formatSignedUsd,
   formatSyp,
   formatUsd,
+  formatUsdtAmount,
   isSameRate,
   isWholeCents,
   parseUsd,
   parseWholeSyp,
   rateChangePercent,
   rateFromNumeric,
+  rawToUsdUnits,
   sypDepositUsd,
   sypDisplayPrice,
   sypToUsd,
   USD_CENT,
   usdCentsSchema,
   usdToSyp,
+  usdtRawForUnits,
   walletSypValue,
 } from './money.js';
 
@@ -323,5 +326,38 @@ describe('formatAmountInput (S03)', () => {
     expect(() => formatAmountInput('SYP', 200_050)).toThrow(RangeError);
     expect(() => formatAmountInput('USD', 25_000_001)).toThrow(RangeError);
     expect(() => formatAmountInput('USD', -1)).toThrow(RangeError);
+  });
+});
+
+describe('USDT amounts (S04 rules U3, U7, M2)', () => {
+  it('formats with at least 4 decimals, more only for finer amounts', () => {
+    expect(formatUsdtAmount(25_003_700)).toBe('25.0037');
+    expect(formatUsdtAmount(10_000_000)).toBe('10.0000');
+    expect(formatUsdtAmount(24_003_712)).toBe('24.003712');
+    expect(formatUsdtAmount(1_234_567_890_000)).toBe('1234567.8900');
+    expect(() => formatUsdtAmount(-1)).toThrow(RangeError);
+  });
+
+  it('converts raw amounts at 6 decimals exactly', () => {
+    expect(rawToUsdUnits(25_003_700n, 6)).toBe(25_003_700);
+    expect(usdtRawForUnits(25_003_700, 6)).toBe(25_003_700n);
+  });
+
+  it('converts raw amounts at 18 decimals, flooring a remainder below a micro-unit', () => {
+    const raw = usdtRawForUnits(25_003_700, 18);
+    expect(raw).toBe(25_003_700_000_000_000_000n);
+    expect(rawToUsdUnits(raw, 18)).toBe(25_003_700);
+    expect(rawToUsdUnits(raw + 999_999_999_999n, 18)).toBe(25_003_700);
+    expect(rawToUsdUnits(raw - 1n, 18)).toBe(25_003_699);
+    expect(usdtRawForUnits(rawToUsdUnits(raw + 1n, 18), 18)).not.toBe(raw + 1n);
+  });
+
+  it('refuses negative amounts, unsafe results and unsupported decimals', () => {
+    expect(() => rawToUsdUnits(-1n, 6)).toThrow(RangeError);
+    expect(() => rawToUsdUnits(10n ** 30n, 6)).toThrow(RangeError);
+    expect(() => rawToUsdUnits(1n, 5)).toThrow(RangeError);
+    expect(() => rawToUsdUnits(1n, 37)).toThrow(RangeError);
+    expect(() => usdtRawForUnits(1, 6.5)).toThrow(RangeError);
+    expect(() => usdtRawForUnits(-1, 6)).toThrow(RangeError);
   });
 });

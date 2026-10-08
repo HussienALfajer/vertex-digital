@@ -46,6 +46,8 @@ Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`)
 | store | `/_next/static/*` | disk, cached a year |
 | store | `/api/admin/*` (any case), `/api/docs` | 404 |
 | store | `/api/auth/sign-in/email` | API, 30 a minute per address (burst 10) |
+| store | `/api/deposits/{sham-cash,usdt}`, `/api/deposits/:id/txid` | API, 10 a minute per address (burst 5) |
+| store | `/api/deposits/:id/receipt` | API, bodies up to 6 MB, the upload limit |
 | store | `/api/*` | API |
 | store | everything else | store (Next.js) |
 | admin | `/assets/*` | disk, cached a year |
@@ -158,3 +160,4 @@ ssh vertex "systemctl enable --now vertexdigital-health.timer"
 - nginx, fail2ban, systemd, logrotate or scripts: change `deploy/`, merge, then re-run `provision.sh`.
 - The inline theme script in `apps/admin/index.html`: its hash is in the CSP in `deploy/nginx/vertexdigital-admin-csp.conf`, and `apps/admin/src/csp.test.ts` fails until both match; re-run `provision.sh` after the merge.
 - Secrets: edit `shared/.env` on the server as `vertexdigital`, then `pm2 reload all --update-env`. Rotating `CUSTOMER_AUTH_SECRET` or `ADMIN_AUTH_SECRET` signs everyone out (the admin secret also encrypts the TOTP secret: rotating it means the admin enrols again).
+- USDT receiving addresses (S04, ADR 0018): `USDT_TRC20_ADDRESS` and `USDT_BEP20_ADDRESS` in `shared/.env`, the owner's own wallets (never a private key). Empty leaves that network unavailable; a value that fails its checksum stops the API from starting, so check the log after the reload. Change an address only when no USDT deposit is open (the panel's queue and pending count are empty): open deposits keep the address they showed, and a transfer to an old address is then caught only by its TXID. The panel shows the addresses read-only and cannot change them. The worker's chain readers (`CHAIN_READER=live`, `TRONGRID_API_KEY`, `BSC_RPC_URL`) arrive with S04 PR 2.

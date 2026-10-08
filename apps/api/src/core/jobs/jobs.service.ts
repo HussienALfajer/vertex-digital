@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
+import { QUEUE_POLICIES } from '@vertex-digital/contracts';
 import {
   createPgBoss,
   type Transaction,
@@ -53,7 +54,7 @@ export class JobsService implements OnApplicationShutdown {
     if (!created) {
       // The worker may not have started yet: creating an existing queue changes nothing.
       created = started
-        .then(() => this.boss.createQueue(queue))
+        .then(() => this.boss.createQueue(queue, { policy: QUEUE_POLICIES[queue] ?? 'standard' }))
         .catch((error: unknown) => {
           this.queues.delete(queue);
           throw error;

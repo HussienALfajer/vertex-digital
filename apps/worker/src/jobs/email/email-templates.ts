@@ -55,6 +55,8 @@ const REJECT_REASON_LABELS: Record<DepositRejectReason, string> = {
   receipt_used: 'الإيصال مستخدم في إيداع سابق',
   reference_other_customer: 'رمز المرجع يخص حساباً آخر',
   wrong_account: 'التحويل إلى حساب غير حساب المتجر',
+  wrong_network: 'التحويل على شبكة غير الشبكة المختارة',
+  transfer_other_customer: 'التحويل يخص طلب إيداع آخر',
   other: 'سبب آخر، موضَّح في صفحة الإيداع',
 };
 
