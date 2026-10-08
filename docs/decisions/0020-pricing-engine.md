@@ -1,6 +1,6 @@
 # 0020 — Pricing engine: margin rules, price basis and the margin guard
 
-Status: Accepted · Date: 2026-10-08 · Amends [0005](0005-supplier-adapters-and-routing.md) (the margin guard's boundary)
+Status: Accepted · Date: 2026-10-08 · Amends [0005](0005-supplier-adapters-and-routing.md) (the margin guard's boundary) · Amended by [0021](0021-supplier-sync-price-review-and-health.md) (when a price follows a cost change)
 
 ## Context
 F10 prices every product from a supplier cost and a margin. The owner had to settle the default margin and price endings (Q7), where the official price for savings comes from (Q13), which route's cost a price follows when a product has several suppliers, and what customers see when a product cannot be sold. ADR 0005 wrote the guard as `cost < price − minimum margin`, which makes a price set exactly at the minimum margin unprofitable. The catalog and pricing spec (S06) comes before supplier mapping (S07), so the costs prices need do not exist yet when the rules are built.

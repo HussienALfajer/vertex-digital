@@ -28,7 +28,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 
 ## Phase 2 — Selling
 - [x] S06 Catalog and pricing: F08 Catalog · F10 Pricing engine; spec `docs/specs/S06-catalog-and-pricing.md` (two PRs: contracts, db and the `catalog` and `pricing` API modules, then the admin `/catalog`, game and `/pricing` screens with E2E)
-- [ ] S07 Suppliers: F09 alone (product mapping and price sync; adapters `shop2topup`, `wdgzone`, `manual`)
+- [~] S07 Suppliers: F09 alone (product mapping and price sync; adapters `shop2topup`, `wdgzone`, `manual`); spec `docs/specs/S07-suppliers.md` (three PRs: contracts, db and api; worker jobs; admin screens; then one PR per real adapter once its documentation arrives, Q12)
 - [ ] S08 Orders and fulfilment: F11 alone (money core)
 - [ ] S09 Storefront and purchase: F12 Store home and game pages · F13 Purchase flow and live order tracking · F15 Smart search
 - [ ] S10 Convenience: F14 Saved player IDs and one-tap recharge · F16 Cart, gift top-up and shareable receipt
