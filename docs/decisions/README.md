@@ -23,6 +23,7 @@ Short records of decisions that shape the system. Each has a status: **Accepted*
 | [0017](0017-sham-cash-deposits-and-exchange-rate.md) | One SYP rate; Sham Cash in SYP and USD; SYP held in the books; lock covers the submission; deposit states and approval re-authentication (amends 0003, 0006) | Accepted |
 | [0018](0018-usdt-deposits.md) | USDT: automatic detection by exact amount with a sub-cent tail, addresses in the server environment, shared limits with a $5 minimum, bounces for failed or fake-token transfers, system decisions (amends 0006, 0017) | Accepted |
 | [0019](0019-telegram-bot-switches-notifications.md) | Telegram bot by webhook to the API in the admin's private chat, approval only unflagged Sham Cash up to $100, emergency stop on-only from Telegram; store switches as a pause layer that blocks creation only; one notification write path with SSE (amends 0002, 0006) | Accepted |
+| [0020](0020-pricing-engine.md) | Pricing: margin rules per category, game and product over a 10% / $0.10 default, prices rounded up to whole cents on the cheapest healthy route, the guard at `price − cost ≥ minimum margin`, admin-entered official prices (amends 0005) | Accepted |
 
 Template:
 
