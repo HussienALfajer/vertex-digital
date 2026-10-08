@@ -14,6 +14,8 @@ import { throttlerOptions } from './core/rate-limit/rate-limit.js';
 import { AdminModule } from './modules/admin/index.js';
 import { AuditModule } from './modules/audit/index.js';
 import { AuthModule } from './modules/auth/index.js';
+import { DepositsModule } from './modules/deposits/index.js';
+import { FilesModule } from './modules/files/index.js';
 import { HealthModule } from './modules/health/index.js';
 import { NotificationsModule } from './modules/notifications/index.js';
 import { RatesModule } from './modules/rates/index.js';
@@ -47,6 +49,8 @@ import { WalletModule } from './modules/wallet/index.js';
     AuditModule,
     RatesModule,
     WalletModule,
+    FilesModule,
+    DepositsModule,
     HealthModule,
   ],
   providers: [

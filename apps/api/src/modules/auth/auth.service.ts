@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { CursorQuery, WalletCustomer } from '@vertex-digital/contracts';
 import { customers, type Database } from '@vertex-digital/db';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
-import { and, desc, eq, ilike, inArray, like, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNull, like, ne, or } from 'drizzle-orm';
 // Straight from the file: `core/altcha/index.ts` reaches back here through `core/access`.
 import { AltchaService } from '../../core/altcha/altcha.service.js';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -20,6 +20,17 @@ export interface CustomerIdentity {
   emailVerified: boolean;
   archived: boolean;
   sessionId: string;
+}
+
+/** A customer as the deposit screens show them (S03). */
+export interface DepositCustomer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  isTest: boolean;
+  createdAt: Date;
+  archived: boolean;
 }
 
 /** Owns the customer Better Auth instance: its HTTP handler and session lookups. */
@@ -73,6 +84,55 @@ export class AuthService {
       .from(customers)
       .where(eq(customers.id, id));
     return row ?? null;
+  }
+
+  /** Customers by id for the deposit screens (S03). */
+  async depositCustomers(ids: readonly string[]): Promise<Map<string, DepositCustomer>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.db
+      .select({
+        ...walletCustomerColumns,
+        createdAt: customers.createdAt,
+        archivedAt: customers.archivedAt,
+      })
+      .from(customers)
+      .where(inArray(customers.id, [...ids]));
+    return new Map(
+      rows.map(({ archivedAt, ...row }) => [row.id, { ...row, archived: archivedAt !== null }]),
+    );
+  }
+
+  /** Other customers, not archived, with the customer's phone (S03 rule FL5). */
+  async sharingPhone(customerId: string): Promise<string[]> {
+    const [customer] = await this.db
+      .select({ phone: customers.phone })
+      .from(customers)
+      .where(eq(customers.id, customerId));
+    if (!customer) return [];
+    const rows = await this.db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.phone, customer.phone),
+          ne(customers.id, customerId),
+          isNull(customers.archivedAt),
+        ),
+      )
+      .orderBy(customers.createdAt)
+      .limit(50);
+    return rows.map((row) => row.id);
+  }
+
+  /** Ids of customers whose email starts with `prefix`, case-insensitive (S03 deposit queue). */
+  async idsByEmailPrefix(prefix: string): Promise<string[]> {
+    const literal = prefix.replace(/[\\%_]/g, (char) => `\\${char}`);
+    const rows = await this.db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(ilike(customers.email, `${literal}%`))
+      .limit(100);
+    return rows.map((row) => row.id);
   }
 
   /**

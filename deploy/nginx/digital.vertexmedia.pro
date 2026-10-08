@@ -27,7 +27,7 @@ server {
     access_log /var/log/nginx/digital.vertexmedia.pro.access.log;
     error_log /var/log/nginx/digital.vertexmedia.pro.error.log warn;
 
-    # Receipt uploads (F05) raise this for their own route only.
+    # Receipt uploads (S03) raise this for their own route only.
     client_max_body_size 1m;
     client_body_timeout 20s;
     server_tokens off;
@@ -60,6 +60,32 @@ server {
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;
         include snippets/vertexdigital-proxy.conf;
+    }
+
+    # Deposit creation (S03): a tight limit on top of the API's per-customer counters.
+    location ~* ^/api/deposits/sham-cash/?$ {
+        limit_req zone=vddeposit burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # Receipt uploads (S03 rule SC8): images up to 5 MB, the only large bodies the store takes.
+    location ~* ^/api/deposits/[0-9a-f-]{36}/receipt/?$ {
+        client_max_body_size 6m;
+        client_body_timeout 60s;
+        limit_req zone=vdupload burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # The Sham Cash QR images, sent by nginx when the API answers with X-Accel-Redirect
+    # (FILES_ACCEL_PREFIX). Internal: never reachable by a URL; QR images only on this host.
+    location ^~ /internal-files/sham_cash_qr/ {
+        internal;
+        alias /srv/digital.vertexmedia.pro/shared/files/sham_cash_qr/;
+        include snippets/vertexdigital-store-headers.conf;
     }
 
     # --- Store -----------------------------------------------------------------------------

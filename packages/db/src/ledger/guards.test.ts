@@ -206,10 +206,16 @@ describe('append-only trigger', () => {
     );
     expect(rows.map((row) => row.name)).toEqual([
       'audit_entries',
+      'deposit_flags',
+      'deposit_receipts',
+      'deposit_settings',
+      // Its TRUNCATE trigger: rows are guarded by `deposits_guard` (deposits.test.ts).
+      'deposits',
       'exchange_rates',
       'ledger_journals',
       'ledger_postings',
       'payment_references',
+      'stored_files',
       'wallet_adjustments',
     ]);
   });
@@ -241,8 +247,14 @@ describe('append-only trigger', () => {
   // deadlock with a read of another test file that joins them in the other order.
   it.each([
     ['ledger_postings', /is append-only: TRUNCATE/],
-    ['exchange_rates', /is append-only: TRUNCATE/],
     ['payment_references', /is append-only: TRUNCATE/],
+    ['deposit_settings', /is append-only: TRUNCATE/],
+    ['deposit_flags', /is append-only: TRUNCATE/],
+    // Referenced by flags, receipts, settings, deposits and payment references.
+    ['exchange_rates', /cannot truncate a table referenced in a foreign key constraint/],
+    ['deposits', /cannot truncate a table referenced in a foreign key constraint/],
+    ['deposit_receipts', /cannot truncate a table referenced in a foreign key constraint/],
+    ['stored_files', /cannot truncate a table referenced in a foreign key constraint/],
     // Referenced by postings, adjustments and payment references: refused before their trigger
     // even runs.
     ['wallet_adjustments', /cannot truncate a table referenced in a foreign key constraint/],

@@ -268,6 +268,7 @@ export class AdminApi {
         reversedByAdjustmentId:
           this.adjustments.find((other) => other.reversesAdjustmentId === item.id)?.id ?? null,
       },
+      deposit: null,
     }));
   }
 

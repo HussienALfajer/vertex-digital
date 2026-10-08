@@ -24,6 +24,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { customers } from './auth.js';
 import { amountUnits, archivedAt, currencyEnum, id, timestamps } from './columns.js';
+import { deposits } from './deposits.js';
 
 /*
  * The double-entry ledger (ADR 0003) and the admin's wallet adjustments (S02), owned by the api
@@ -208,8 +209,8 @@ export const paymentMethodEnum = pgEnum('payment_method', PAYMENT_METHODS);
 /**
  * Claims each real-world payment once across every record that can credit it (S03 rule SC14):
  * one table, because unique constraints across two tables are racy. `reference` is trimmed and
- * upper-cased. Written only by `claimPaymentReference` (`src/ledger`); S03's deposits add their
- * owner column next to the adjustment's. Append-only (migration 0010).
+ * upper-cased. Written only by `claimPaymentReference` (`src/ledger`); its owner is a deposit or
+ * an adjustment, exactly one. Append-only (migration 0010).
  */
 export const paymentReferences = pgTable(
   'payment_references',
@@ -220,6 +221,9 @@ export const paymentReferences = pgTable(
     walletAdjustmentId: uuid('wallet_adjustment_id')
       .unique()
       .references(() => walletAdjustments.id),
+    depositId: uuid('deposit_id')
+      .unique()
+      .references((): AnyPgColumn => deposits.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -228,6 +232,9 @@ export const paymentReferences = pgTable(
       'payment_references_reference_check',
       sql`char_length(${table.reference}) between 1 and 100 and ${table.reference} = upper(btrim(${table.reference}))`,
     ),
-    check('payment_references_owner_check', sql`num_nonnulls(${table.walletAdjustmentId}) = 1`),
+    check(
+      'payment_references_owner_check',
+      sql`num_nonnulls(${table.walletAdjustmentId}, ${table.depositId}) = 1`,
+    ),
   ],
 );

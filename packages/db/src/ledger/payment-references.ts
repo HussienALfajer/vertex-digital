@@ -11,7 +11,7 @@ import { LedgerError } from './errors.js';
 
 /** The record that claimed a reference: shown to the admin in the refusal's `details`. */
 export interface PaymentReferenceOwner {
-  kind: 'adjustment';
+  kind: 'adjustment' | 'deposit';
   id: string;
 }
 
@@ -28,7 +28,10 @@ export async function paymentReferenceOwner(
   reference: string,
 ): Promise<PaymentReferenceOwner | null> {
   const [row] = await db
-    .select({ walletAdjustmentId: paymentReferences.walletAdjustmentId })
+    .select({
+      walletAdjustmentId: paymentReferences.walletAdjustmentId,
+      depositId: paymentReferences.depositId,
+    })
     .from(paymentReferences)
     .where(
       and(
@@ -37,6 +40,7 @@ export async function paymentReferenceOwner(
       ),
     );
   if (!row) return null;
+  if (row.depositId) return { kind: 'deposit', id: row.depositId };
   if (!row.walletAdjustmentId) throw new Error('A payment reference has no owner');
   return { kind: 'adjustment', id: row.walletAdjustmentId };
 }
@@ -51,14 +55,14 @@ export async function claimPaymentReference(
   tx: Transaction,
   method: PaymentMethod,
   reference: string,
-  owner: { walletAdjustmentId: string },
+  owner: { walletAdjustmentId: string } | { depositId: string },
 ): Promise<void> {
   const claimed = await tx
     .insert(paymentReferences)
     .values({
       method,
       reference: normalized(reference),
-      walletAdjustmentId: owner.walletAdjustmentId,
+      ...owner,
     })
     .onConflictDoNothing({ target: [paymentReferences.method, paymentReferences.reference] })
     .returning({ id: paymentReferences.id });

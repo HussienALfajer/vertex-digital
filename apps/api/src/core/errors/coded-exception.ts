@@ -7,7 +7,7 @@ import type { ErrorCode, ErrorResponse } from '@vertex-digital/contracts';
  */
 export class CodedException extends HttpException {
   constructor(
-    status: 400 | 401 | 403 | 404 | 409 | 413 | 429,
+    status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429,
     readonly code: ErrorCode,
     message: string,
     details?: unknown,

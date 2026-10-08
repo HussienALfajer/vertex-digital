@@ -16,5 +16,6 @@ import { WalletAdjustmentsService } from './wallet-adjustments.service.js';
   imports: [AuthModule, AdminModule, NotificationsModule, RatesModule],
   controllers: [WalletController, WalletAdminController],
   providers: [WalletService, WalletAdjustmentsService],
+  exports: [WalletService],
 })
 export class WalletModule {}

@@ -452,6 +452,294 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/deposits/sham-cash/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsController_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deposits/sham-cash/qr/{currency}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsController_qr"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deposits/sham-cash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deposits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deposits/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsController_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deposits/{id}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsController_requote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deposits/{id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsController_submitReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deposits/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposit-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsAdminController_readSettings"];
+        put: operations["DepositsAdminController_saveSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposit-settings/qr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsAdminController_uploadQr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposit-settings/qr/{fileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsAdminController_qr"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsAdminController_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposits/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsAdminController_counts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposits/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsAdminController_deposit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposits/{id}/receipts/{receiptId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsAdminController_receipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposits/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsAdminController_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposits/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsAdminController_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposits/{id}/request-receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsAdminController_requestReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -615,9 +903,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -697,11 +985,21 @@ export interface components {
                 customerNote: string | null;
                 reversal: boolean;
             } | null;
+            deposit: {
+                method: components["schemas"]["DepositMethod"];
+                referenceCode: string;
+                syp: {
+                    amountUnits: number;
+                    rate: components["schemas"]["ExchangeRate"];
+                } | null;
+            } | null;
         };
         /** @enum {string} */
         JournalKind: "deposit" | "purchase" | "refund" | "cost_of_goods" | "adjustment";
         /** @enum {string} */
         AdjustmentCategory: "compensation" | "correction" | "cash_refund" | "manual_deposit" | "test_funds";
+        /** @enum {string} */
+        DepositMethod: "sham_cash";
         WalletSearchQuery: {
             cursor?: string;
             /** @default 50 */
@@ -766,6 +1064,16 @@ export interface components {
                 /** Format: uuid */
                 reversedByAdjustmentId: string | null;
             } | null;
+            deposit: {
+                method: components["schemas"]["DepositMethod"];
+                referenceCode: string;
+                syp: {
+                    amountUnits: number;
+                    rate: components["schemas"]["ExchangeRate"];
+                } | null;
+                /** Format: uuid */
+                id: string;
+            } | null;
         };
         /** @enum {string} */
         AdjustmentDirection: "credit" | "debit";
@@ -819,9 +1127,336 @@ export interface components {
             balanceUnits: number;
         };
         /** @enum {string} */
-        LedgerAccountKind: "customer_wallet" | "sham_cash_receipts" | "usdt_receipts" | "supplier_prepaid" | "sales_revenue" | "cost_of_goods" | "refunds" | "adjustments";
+        LedgerAccountKind: "customer_wallet" | "sham_cash_receipts" | "usdt_receipts" | "supplier_prepaid" | "sales_revenue" | "cost_of_goods" | "refunds" | "adjustments" | "currency_exchange";
         /** @enum {string} */
         Currency: "USD" | "SYP";
+        ShamCashOptions: {
+            currencies: {
+                SYP: {
+                    available: boolean;
+                    /** @enum {string|null} */
+                    reason: "not_configured" | "disabled" | "no_rate" | null;
+                };
+                USD: {
+                    available: boolean;
+                    /** @enum {string|null} */
+                    reason: "not_configured" | "disabled" | "no_rate" | null;
+                };
+            };
+            account: {
+                name: string;
+                number: string;
+            } | null;
+            limits: components["schemas"]["DepositLimits"] | null;
+            rate: {
+                /** Format: uuid */
+                id: string;
+                sypPerUsd: components["schemas"]["ExchangeRate"];
+                displayStepSypUnits: number;
+            } | null;
+            reviewHours: {
+                start: components["schemas"]["ReviewTime"];
+                end: components["schemas"]["ReviewTime"];
+            } | null;
+            eta: components["schemas"]["ReviewEta"] | null;
+            /** Format: uuid */
+            pendingDepositId: string | null;
+        };
+        DepositLimits: {
+            established: boolean;
+            minUnits: number;
+            perDepositUnits: number;
+            dailyUnits: number;
+            remainingTodayUnits: number;
+        };
+        ReviewTime: string;
+        ReviewEta: {
+            /** @enum {string} */
+            state: "open";
+            minutes: number;
+        } | {
+            /** @enum {string} */
+            state: "closed";
+            /** Format: date-time */
+            opensAt: string;
+        };
+        CreateShamCashDeposit: {
+            currency: components["schemas"]["Currency"];
+            amountUnits: number;
+        };
+        Deposit: {
+            /** Format: uuid */
+            id: string;
+            method: components["schemas"]["DepositMethod"];
+            status: components["schemas"]["DepositStatus"];
+            referenceCode: string;
+            currency: components["schemas"]["Currency"];
+            declaredAmountUnits: number;
+            declaredUsdUnits: number;
+            quote: components["schemas"]["DepositQuote"] | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            submittedAt: string | null;
+            /** Format: date-time */
+            decidedAt: string | null;
+            rateFixed: boolean;
+            receiptRequest: {
+                /** Format: date-time */
+                at: string;
+                note: string | null;
+            } | null;
+            payTo: {
+                accountName: string;
+                accountNumber: string;
+                qrUrl: string | null;
+            } | null;
+            eta: components["schemas"]["ReviewEta"] | null;
+            credited: {
+                usdUnits: number;
+                receivedCurrency: components["schemas"]["Currency"];
+                receivedAmountUnits: number;
+                rate: components["schemas"]["ExchangeRate"] | null;
+            } | null;
+            rejection: {
+                reason: components["schemas"]["DepositRejectReason"];
+                note: string | null;
+            } | null;
+        };
+        /** @enum {string} */
+        DepositStatus: "pending" | "submitted" | "credited" | "rejected" | "expired" | "cancelled";
+        DepositQuote: {
+            /** Format: uuid */
+            rateId: string;
+            rate: components["schemas"]["ExchangeRate"];
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        /** @enum {string} */
+        DepositRejectReason: "not_received" | "receipt_invalid" | "receipt_used" | "reference_other_customer" | "wrong_account" | "other";
+        DepositListQuery: {
+            cursor?: string;
+            /** @default 50 */
+            limit: number;
+        };
+        DepositPage: {
+            items: components["schemas"]["Deposit"][];
+            nextCursor: string | null;
+        };
+        SubmitReceipt: {
+            /** Format: uuid */
+            rateId?: string;
+        };
+        DepositSettings: {
+            shamCashAccountName: string;
+            shamCashAccountNumber: string;
+            sypEnabled: boolean;
+            usdEnabled: boolean;
+            /** Format: uuid */
+            sypQrFileId: string | null;
+            /** Format: uuid */
+            usdQrFileId: string | null;
+            minDepositUsdUnits: number;
+            newAccountPerDepositUsdUnits: number;
+            newAccountDailyUsdUnits: number;
+            establishedPerDepositUsdUnits: number;
+            establishedDailyUsdUnits: number;
+            reviewHoursStart: components["schemas"]["ReviewTime"];
+            reviewHoursEnd: components["schemas"]["ReviewTime"];
+            reviewTargetMinutes: number;
+            flagNewAccountUsdUnits: number;
+            flagVelocityCount: number;
+            saved: boolean;
+            /** Format: date-time */
+            savedAt: string | null;
+        };
+        DepositSettingsInput: {
+            shamCashAccountName: string;
+            shamCashAccountNumber: string;
+            sypEnabled: boolean;
+            usdEnabled: boolean;
+            /** Format: uuid */
+            sypQrFileId: string | null;
+            /** Format: uuid */
+            usdQrFileId: string | null;
+            minDepositUsdUnits: number;
+            newAccountPerDepositUsdUnits: number;
+            newAccountDailyUsdUnits: number;
+            establishedPerDepositUsdUnits: number;
+            establishedDailyUsdUnits: number;
+            reviewHoursStart: components["schemas"]["ReviewTime"];
+            reviewHoursEnd: components["schemas"]["ReviewTime"];
+            reviewTargetMinutes: number;
+            flagNewAccountUsdUnits: number;
+            flagVelocityCount: number;
+        };
+        StoredFileRef: {
+            /** Format: uuid */
+            fileId: string;
+        };
+        AdminDepositQuery: {
+            cursor?: string;
+            /** @default 50 */
+            limit: number;
+            /**
+             * @default submitted
+             * @enum {string}
+             */
+            status: "pending" | "submitted" | "credited" | "rejected" | "expired" | "cancelled" | "all";
+            /** @enum {string} */
+            flagged?: "true" | "false";
+            q?: string;
+        };
+        AdminDepositPage: {
+            items: components["schemas"]["AdminDepositListItem"][];
+            nextCursor: string | null;
+        };
+        AdminDepositListItem: {
+            /** Format: uuid */
+            id: string;
+            method: components["schemas"]["DepositMethod"];
+            status: components["schemas"]["DepositStatus"];
+            referenceCode: string;
+            currency: components["schemas"]["Currency"];
+            declaredAmountUnits: number;
+            declaredUsdUnits: number;
+            quote: components["schemas"]["DepositQuote"] | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            submittedAt: string | null;
+            /** Format: date-time */
+            decidedAt: string | null;
+            customer: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                email: string;
+                isTest: boolean;
+            };
+            flags: components["schemas"]["DepositFlagCode"][];
+        };
+        /** @enum {string} */
+        DepositFlagCode: "receipt_reused" | "receipt_similar" | "new_account_large" | "velocity" | "shared_phone" | "amount_mismatch" | "reference_missing" | "reference_different";
+        AdminDepositCounts: {
+            submitted: number;
+            submittedFlagged: number;
+            pending: number;
+        };
+        AdminDeposit: {
+            /** Format: uuid */
+            id: string;
+            method: components["schemas"]["DepositMethod"];
+            status: components["schemas"]["DepositStatus"];
+            referenceCode: string;
+            currency: components["schemas"]["Currency"];
+            declaredAmountUnits: number;
+            declaredUsdUnits: number;
+            quote: components["schemas"]["DepositQuote"] | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            submittedAt: string | null;
+            /** Format: date-time */
+            decidedAt: string | null;
+            /** Format: date-time */
+            rateFixedAt: string | null;
+            /** Format: date-time */
+            receiptRequestedAt: string | null;
+            receiptRequestCount: number;
+            receiptRequestNote: string | null;
+            approvalRate: {
+                /** Format: uuid */
+                rateId: string;
+                rate: components["schemas"]["ExchangeRate"];
+            } | null;
+            adminName: string | null;
+            credit: {
+                transactionNumber: string;
+                receivedCurrency: components["schemas"]["Currency"];
+                receivedAmountUnits: number;
+                creditedUsdUnits: number;
+                /** Format: uuid */
+                creditRateId: string | null;
+                creditRate: components["schemas"]["ExchangeRate"] | null;
+                referenceCheck: components["schemas"]["DepositReferenceCheck"];
+                /** Format: uuid */
+                journalId: string;
+            } | null;
+            rejection: {
+                reason: components["schemas"]["DepositRejectReason"];
+                customerNote: string | null;
+            } | null;
+            receipts: {
+                /** Format: uuid */
+                id: string;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+            flags: components["schemas"]["DepositFlag"][];
+            customer: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                email: string;
+                isTest: boolean;
+                phone: string;
+                /** Format: date-time */
+                createdAt: string;
+                established: boolean;
+                creditedCount: number;
+                creditedTotalUsdUnits: number;
+                balanceUnits: number;
+                recentDeposits: {
+                    /** Format: uuid */
+                    id: string;
+                    referenceCode: string;
+                    status: components["schemas"]["DepositStatus"];
+                    currency: components["schemas"]["Currency"];
+                    declaredAmountUnits: number;
+                    /** Format: date-time */
+                    createdAt: string;
+                }[];
+            };
+            eta: components["schemas"]["ReviewEta"] | null;
+        };
+        /** @enum {string} */
+        DepositReferenceCheck: "matches" | "missing" | "different";
+        DepositFlag: {
+            /** Format: uuid */
+            id: string;
+            code: components["schemas"]["DepositFlagCode"];
+            /** Format: uuid */
+            receiptId: string | null;
+            details: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ApproveDeposit: {
+            transactionNumber: string;
+            receivedCurrency: components["schemas"]["Currency"];
+            receivedAmountUnits: number;
+            referenceCheck: components["schemas"]["DepositReferenceCheck"];
+            acknowledgedFlags: components["schemas"]["DepositFlagCode"][];
+            internalNote?: string;
+        };
+        RejectDeposit: {
+            reason: components["schemas"]["DepositRejectReason"];
+            customerNote?: string;
+            internalNote: string;
+        };
+        RequestReceipt: {
+            customerNote?: string;
+            internalNote: string;
+        };
         HealthResponse: {
             /** @enum {string} */
             status: "ok" | "error";
@@ -1299,8 +1934,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed";
-                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit";
                 entityId?: string;
                 from?: string;
                 to?: string;
@@ -1557,6 +2192,452 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LedgerSummary"];
+                };
+            };
+        };
+    };
+    DepositsController_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the wizard offers now */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShamCashOptions"];
+                };
+            };
+        };
+    };
+    DepositsController_qr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                currency: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The QR image of an enabled currency */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DepositsController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShamCashDeposit"];
+            };
+        };
+        responses: {
+            /** @description Created (200: a replay) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deposit"];
+                };
+            };
+        };
+    };
+    DepositsController_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositPage"];
+                };
+            };
+        };
+    };
+    DepositsController_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The deposit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deposit"];
+                };
+            };
+        };
+    };
+    DepositsController_requote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A new 15-minute quote */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deposit"];
+                };
+            };
+        };
+    };
+    DepositsController_submitReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["SubmitReceipt"];
+            };
+        };
+        responses: {
+            /** @description Submitted for review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deposit"];
+                };
+            };
+        };
+    };
+    DepositsController_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deposit"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_readSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description In force, or the defaults */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositSettings"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_saveSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepositSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description The new version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositSettings"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_uploadQr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The re-encoded PNG */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredFileRef"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_qr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A QR image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DepositsAdminController_queue: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                status?: "pending" | "submitted" | "credited" | "rejected" | "expired" | "cancelled" | "all";
+                flagged?: "true" | "false";
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule RV10 order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDepositPage"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_counts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The navigation badge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDepositCounts"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_deposit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The deposit and its review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDeposit"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_receipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                receiptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The re-encoded receipt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DepositsAdminController_approve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveDeposit"];
+            };
+        };
+        responses: {
+            /** @description Credited (or its replay) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDeposit"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_reject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectDeposit"];
+            };
+        };
+        responses: {
+            /** @description Rejected (or its replay) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDeposit"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_requestReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestReceipt"];
+            };
+        };
+        responses: {
+            /** @description Back to pending */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDeposit"];
                 };
             };
         };

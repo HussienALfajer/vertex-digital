@@ -27,6 +27,7 @@ const entry = (changes: Partial<AdminWalletEntry>): AdminWalletEntry => ({
   balanceAfterUnits: 25_000_000,
   journalId: '0199a000-0000-7000-8000-0000000000c1',
   adjustment,
+  deposit: null,
   ...changes,
 });
 

@@ -9,6 +9,7 @@ const entry = (changes: Partial<WalletEntry>): WalletEntry => ({
   amountUnits: 25_000_000,
   balanceAfterUnits: 25_000_000,
   adjustment: null,
+  deposit: null,
   ...changes,
 });
 

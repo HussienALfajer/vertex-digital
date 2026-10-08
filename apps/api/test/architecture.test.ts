@@ -206,6 +206,8 @@ describe('module boundaries', () => {
     admin: 'admin',
     audit: 'audit',
     auth: 'auth',
+    deposits: 'deposits',
+    files: 'files',
     notifications: 'notifications',
     rates: 'rates',
     system: null,

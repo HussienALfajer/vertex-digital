@@ -50,6 +50,14 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # QR image uploads (S03): images up to 5 MB, the only large bodies the panel sends.
+    location ~* ^/api/admin/deposit-settings/qr/?$ {
+        client_max_body_size 6m;
+        client_body_timeout 60s;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Admin routes only. Case-insensitive, as the API matches routes.
     location ~* ^/api/admin/ {
         proxy_pass http://127.0.0.1:3060;
@@ -62,6 +70,14 @@ server {
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;
         include snippets/vertexdigital-proxy.conf;
+    }
+
+    # Receipts and QR images (S03), sent by nginx when the API answers with X-Accel-Redirect
+    # (FILES_ACCEL_PREFIX) after its own access check. Internal: never reachable by a URL.
+    location ^~ /internal-files/ {
+        internal;
+        alias /srv/digital.vertexmedia.pro/shared/files/;
+        include snippets/vertexdigital-admin-headers.conf;
     }
 
     # Every other API route belongs to the store's host.

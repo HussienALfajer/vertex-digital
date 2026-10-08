@@ -62,7 +62,7 @@ Planned; each spec confirms its module's tables and exports. Built so far: `auth
 | `audit` | Reads `audit_entries` for the audit log; every module writes its entries with `recordAudit` from `packages/db/src/audit`, in its own transaction | F02 |
 | `wallet` | Ledger accounts, journals, postings (through `packages/db/src/ledger`), `wallet_adjustments`, `payment_references` (each real payment's reference claimed once, through `claimPaymentReference`); balances with their SYP value and timelines (`/api/wallet`), the admin wallet screens, adjustments and reversals, the ledger summary | F03, F04 |
 | `rates` | `exchange_rates` (append-only: the rate and display step, the newest row is in force); `/api/admin/rates` (history, change with re-authentication); `RatesService.current()` for other modules. Quote locks live on the deposit (S03) | F04 |
-| `deposits` | Deposits, Sham Cash receipts and review, USDT intents and verifications, fraud flags | F05, F06 |
+| `deposits` | `deposits`, `deposit_receipts`, `deposit_flags`, `deposit_settings` (append-only versions): the Sham Cash wizard (options, quotes, receipts, cancel; `/api/deposits`), the review queue and decisions (`/api/admin/deposits`), the settings and QR images (`/api/admin/deposit-settings`); credits post through `postDepositCredit` and claim the transaction number through `claimPaymentReference` in `packages/db/src/ledger`; balances come from `WalletService`. S04 adds USDT | F05, F06 |
 | `catalog` | Games, products (direct top-up or code), input field definitions, categories, ID guides, availability | F08 |
 | `suppliers` | Supplier connections (encrypted keys), offers, product mappings, price snapshots, price change queue, health, webhook events | F09 |
 | `pricing` | Margin rules, computed prices, margin guard | F10 |
@@ -77,7 +77,7 @@ Planned; each spec confirms its module's tables and exports. Built so far: `auth
 | `notifications` | Email outbox, in-site customer notifications, web push subscriptions, notification preferences | F01, F24, F27 |
 | `settings` | Store switches (registration, emergency stop, per-method and per-supplier switches) with history | F26 |
 | `activity` | Anonymized live activity feed built from delivered orders | F25 |
-| `files` | Stored uploads (receipts, attachments) behind a storage interface | F05, F23 |
+| `files` | `stored_files` (append-only) and the files under `FILES_ROOT`: uploads decoded with a pixel limit, stripped of metadata and re-encoded (receipts WebP, QR images PNG), with SHA-256 and dHash; `FilesService` (`prepare` before a transaction, `record` inside it, `serve` with `X-Accel-Redirect` in production). No routes of its own | F05, F23 |
 | `health` | No tables; `GET /api/health` for nginx, PM2 and the deploy checks | Phase 0 |
 
 Rules (anatomy and the tests that enforce them: ADR 0011):
@@ -94,7 +94,7 @@ Rules (anatomy and the tests that enforce them: ADR 0011):
 |---|---|
 | Fulfilment | `orders.fulfil` (route and send), `orders.poll` (pending and unknown outcomes), `orders.stuck` (A14), `orders.awaiting-balance` (A02, A15) |
 | Suppliers | `suppliers.webhook` (process stored events), `suppliers.sync-prices` (A06), `suppliers.balances` (A07), `suppliers.health` (A08) |
-| Deposits | `deposits.usdt-verify` (A01), `deposits.review-reminder` (A09) |
+| Deposits | `deposits.expire` (S03 rule SC12: every 5 minutes, overdue `pending` deposits to `expired`), `deposits.usdt-verify` (A01), `deposits.review-reminder` (A09) |
 | Money | `reconciliation.nightly` (A11) |
 | Messaging | `email.send` (one outbox row; files locally, SMTP in production), `email.purge-codes` (every 10 minutes), `push.send`, `telegram.*` (admin bot, alerts, daily summary) |
 | System | `system.heartbeat` (every minute: `worker_heartbeats`, read by the deploy check) |

@@ -24,6 +24,7 @@ const ENTRIES = [
     amountUnits: -250 * USD,
     balanceAfterUnits: 25 * USD,
     adjustment: { category: 'compensation', customerNote: null, reversal: true },
+    deposit: null,
   },
   {
     occurredAt: '2026-10-08T09:30:00.000Z',
@@ -35,6 +36,7 @@ const ENTRIES = [
       customerNote: 'تعويض عن تأخير الطلب',
       reversal: false,
     },
+    deposit: null,
   },
 ];
 
@@ -44,6 +46,7 @@ const FIRST_ENTRY = {
   amountUnits: 25 * USD,
   balanceAfterUnits: 25 * USD,
   adjustment: { category: 'test_funds', customerNote: 'رصيد للتجربة', reversal: false },
+  deposit: null,
 };
 
 function withEntries(api: MockApi): MockApi {

@@ -66,6 +66,11 @@ function rateOrThrow(rate: string): bigint {
   return value;
 }
 
+/** A rate stored as `numeric(12,4)`, as PostgreSQL writes it (`118.5000`), without trailing zeros. */
+export function rateFromNumeric(value: string): string {
+  return value.includes('.') ? value.replace(/\.?0+$/, '') : value;
+}
+
 /** True when `a` and `b` are valid rates of the same value (`"130"` and `"130.00"`). */
 export function isSameRate(a: string, b: string): boolean {
   const left = parseRate(a);
@@ -181,4 +186,18 @@ export function parseUsd(text: string): number | null {
 /** A signed movement for display: `+$25.00` in, `−$25.00` out (a real minus sign, U+2212). */
 export function formatSignedUsd(units: number): string {
   return `${units < 0 ? '−' : '+'}${formatUsd(Math.abs(units))}`;
+}
+
+/** `usdUnits` rounded down to whole cents (S03 rule FX6): the store never credits a fraction. */
+export function floorToWholeCents(usdUnits: number): number {
+  const units = unitsOrThrow(usdUnits);
+  return toUnits((units / BigInt(USD_CENT)) * BigInt(USD_CENT));
+}
+
+/**
+ * The USD a customer gets for `sypUnits` at `rate` (S03 rule FX6): converted rounding down, then
+ * floored to whole cents, so a credit is never worth more than the pounds received (rule M3).
+ */
+export function sypDepositUsd(sypUnits: number, rate: string): number {
+  return floorToWholeCents(sypToUsd(sypUnits, rate, 'down'));
 }

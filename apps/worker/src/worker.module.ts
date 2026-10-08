@@ -6,6 +6,7 @@ import { ENV, type Env } from './core/config/env.js';
 import { DatabaseModule } from './core/database/database.module.js';
 import { Mailer } from './core/email/mailer.js';
 import { PgBossService } from './core/jobs/pg-boss.service.js';
+import { ExpireDepositsJob } from './jobs/deposits/expire.job.js';
 import { PurgeCodesJob } from './jobs/email/purge-codes.job.js';
 import { SendEmailJob } from './jobs/email/send-email.job.js';
 import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
@@ -41,6 +42,7 @@ import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
     HeartbeatJob,
     SendEmailJob,
     PurgeCodesJob,
+    ExpireDepositsJob,
   ],
 })
 export class WorkerModule implements OnApplicationBootstrap {

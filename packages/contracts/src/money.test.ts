@@ -5,12 +5,15 @@ import {
   ceilToStep,
   currencySchema,
   exchangeRateSchema,
+  floorToWholeCents,
   formatSignedUsd,
   formatUsd,
   isSameRate,
   isWholeCents,
   parseUsd,
+  rateFromNumeric,
   rateChangePercent,
+  sypDepositUsd,
   sypDisplayPrice,
   sypToUsd,
   USD_CENT,
@@ -244,5 +247,36 @@ describe('rate comparison (S03 rule FX2)', () => {
 
   it('refuses invalid rates', () => {
     expect(() => rateChangePercent('0', '1')).toThrow(RangeError);
+  });
+});
+
+describe('deposit credits (S03 rules FX6, M3)', () => {
+  it('floors USD units to whole cents', () => {
+    expect(floorToWholeCents(0)).toBe(0);
+    expect(floorToWholeCents(9_999)).toBe(0);
+    expect(floorToWholeCents(10_000)).toBe(10_000);
+    expect(floorToWholeCents(16_949_152)).toBe(16_940_000);
+    expect(() => floorToWholeCents(-1)).toThrow(RangeError);
+  });
+
+  it('converts pounds down, then floors to whole cents', () => {
+    // 2,000 SYP at 118 is $16.949152…: $16.94.
+    expect(sypDepositUsd(200_000, '118')).toBe(16_940_000);
+    // Exactly whole: 1,180 SYP at 118 is $10.00.
+    expect(sypDepositUsd(118_000, '118')).toBe(10_000_000);
+    // One pound short of a cent boundary stays below it.
+    expect(sypDepositUsd(117_900, '118')).toBe(9_990_000);
+    // A tiny amount is worth no whole cent (edge case 13).
+    expect(sypDepositUsd(100, '130')).toBe(0);
+    expect(sypDepositUsd(200_000, '118.5')).toBe(16_870_000);
+  });
+});
+
+describe('rateFromNumeric', () => {
+  it('drops the trailing zeros PostgreSQL writes, never a whole number\'s', () => {
+    expect(rateFromNumeric('118.5000')).toBe('118.5');
+    expect(rateFromNumeric('120.0000')).toBe('120');
+    expect(rateFromNumeric('100.0500')).toBe('100.05');
+    expect(rateFromNumeric('100')).toBe('100');
   });
 });

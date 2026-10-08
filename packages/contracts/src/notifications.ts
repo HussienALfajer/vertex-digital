@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { otpCodeSchema } from './auth.js';
+import { depositRejectReasonSchema } from './deposits.js';
 import { adjustmentCategorySchema, adjustmentDirectionSchema } from './wallet.js';
 
 /*
@@ -25,6 +26,12 @@ export const EMAIL_TEMPLATES = [
   'customer_sign_up_attempt',
   /** The admin adjusted the wallet, or reversed an adjustment (S02); never the reason or note. */
   'customer_wallet_adjusted',
+  /** A deposit was approved and credited (S03); the amount, never the transaction number. */
+  'customer_deposit_credited',
+  /** A deposit was rejected (rule RV6): the reason's words, never the admin's note. */
+  'customer_deposit_rejected',
+  /** The admin asked for a clearer receipt (rule RV8), never the note. */
+  'customer_deposit_receipt_requested',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -60,6 +67,20 @@ export const EMAIL_PARAMS = {
     amountUnits: z.int().positive(),
     category: adjustmentCategorySchema,
     reversal: z.boolean(),
+  }),
+  customer_deposit_credited: at.extend({
+    depositId: z.uuid(),
+    referenceCode: z.string(),
+    creditedUsdUnits: z.int().positive(),
+  }),
+  customer_deposit_rejected: z.object({
+    depositId: z.uuid(),
+    referenceCode: z.string(),
+    reason: depositRejectReasonSchema,
+  }),
+  customer_deposit_receipt_requested: z.object({
+    depositId: z.uuid(),
+    referenceCode: z.string(),
   }),
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 

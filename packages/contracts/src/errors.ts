@@ -71,6 +71,26 @@ export const ERROR_CODES = [
   'RATE_CONFIRMATION_REQUIRED',
   /** The rate typed a second time differs from the new rate (S03 rule FX2). */
   'RATE_CONFIRMATION_MISMATCH',
+  /** No exchange rate exists yet: SYP deposits are unavailable (S03 rule FX8). */
+  'RATE_UNAVAILABLE',
+  /** A SYP deposit's 15-minute quote expired, or the rate seen is not the quote's (rule SC9). */
+  'QUOTE_EXPIRED',
+  /** The deposit method or currency is not available now (rule SC1). */
+  'DEPOSIT_METHOD_UNAVAILABLE',
+  /** Below the minimum, above the per-deposit limit, or beyond the daily limit (rule SC3). */
+  'DEPOSIT_LIMIT_EXCEEDED',
+  /** The customer already has a deposit awaiting a receipt; `details.depositId` (rule SC4). */
+  'DEPOSIT_ALREADY_PENDING',
+  /** Three deposits are already under review (rule SC5). */
+  'TOO_MANY_DEPOSITS_IN_REVIEW',
+  /** The deposit's status does not allow this change; `details.status` (S03 "Deposit states"). */
+  'DEPOSIT_STATE_CONFLICT',
+  /** The upload is not a decodable JPEG, PNG or WebP image (rule SC8). */
+  'RECEIPT_INVALID',
+  /** The approval did not acknowledge exactly the deposit's flags (rule RV5). */
+  'FLAGS_NOT_ACKNOWLEDGED',
+  /** A clearer receipt was already asked for once on this deposit (rule RV8). */
+  'RECEIPT_ALREADY_REQUESTED',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

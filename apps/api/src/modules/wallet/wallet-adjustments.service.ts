@@ -12,11 +12,10 @@ import {
   accountBalance,
   claimPaymentReference,
   type Database,
-  ensureCustomerWallet,
   ensureSystemAccount,
   findCustomerWallet,
   LedgerError,
-  ledgerAccounts,
+  lockCustomerWallet,
   newId,
   type PaymentReferenceOwner,
   paymentReferenceOwner,
@@ -224,15 +223,10 @@ export class WalletAdjustmentsService {
     const signed = request.direction === 'credit' ? request.amountUnits : -request.amountUnits;
     try {
       return await this.db.transaction(async (tx) => {
-        const wallet = await ensureCustomerWallet(tx, request.customerId);
         // Adjustments of one wallet queue here, so a parallel request with the same key or the
         // same reversal sees the first one's row once it commits (rules J9, R2), before the
         // balance check could refuse it as a debit.
-        await tx
-          .select({ id: ledgerAccounts.id })
-          .from(ledgerAccounts)
-          .where(eq(ledgerAccounts.id, wallet))
-          .for('update');
+        const wallet = await lockCustomerWallet(tx, request.customerId);
         const [written] = await tx
           .select({ id: walletAdjustments.id })
           .from(walletAdjustments)

@@ -3,6 +3,7 @@ export {
   AdminRoute,
   AdminSetupRoute,
   CustomerRoute,
+  isRecentlyReauthenticated,
   Public,
   type RouteAccess,
   Sensitive,

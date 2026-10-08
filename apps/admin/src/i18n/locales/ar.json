@@ -144,7 +144,18 @@
       "ADJUSTMENT_ALREADY_REVERSED": "عُكس هذا التعديل من قبل.",
       "ADJUSTMENT_NOT_REVERSIBLE": "لا يمكن عكس عملية عكس. أضف تعديل «تصحيح خطأ» بدلًا منها.",
       "RATE_CONFIRMATION_REQUIRED": "السعر الجديد يختلف بأكثر من 5% عن الحالي. أعد كتابته في حقل التأكيد.",
-      "RATE_CONFIRMATION_MISMATCH": "السعر المكتوب في حقل التأكيد لا يطابق السعر الجديد."
+      "RATE_CONFIRMATION_MISMATCH": "السعر المكتوب في حقل التأكيد لا يطابق السعر الجديد.",
+      "RATE_UNAVAILABLE": "لا يوجد سعر صرف بعد. حدّد السعر من صفحة سعر الصرف أولًا.",
+      "QUOTE_EXPIRED": "انتهت مدة السعر المقفل لهذا الإيداع.",
+      "DEPOSIT_METHOD_UNAVAILABLE": "هذه الطريقة أو العملة غير متاحة للإيداع حاليًا.",
+      "DEPOSIT_LIMIT_EXCEEDED": "المبلغ خارج حدود الإيداع.",
+      "DEPOSIT_ALREADY_PENDING": "لدى العميل إيداع آخر بانتظار الإيصال، فلا يمكن إعادة هذا الإيداع إليه. ارفضه بدلًا من ذلك.",
+      "TOO_MANY_DEPOSITS_IN_REVIEW": "لدى العميل 3 إيداعات قيد المراجعة.",
+      "DEPOSIT_STATE_CONFLICT": "تغيّرت حالة الإيداع. أعد تحميل الصفحة.",
+      "RECEIPT_INVALID": "الملف ليس صورة صالحة. ارفع صورة JPEG أو PNG أو WebP.",
+      "PAYLOAD_TOO_LARGE": "الملف أكبر من 5 ميغابايت.",
+      "FLAGS_NOT_ACKNOWLEDGED": "أكّد الاطلاع على كل التنبيهات قبل الاعتماد.",
+      "RECEIPT_ALREADY_REQUESTED": "طُلب إيصال أوضح لهذا الإيداع من قبل. يمكن طلبه مرة واحدة فقط."
     }
   },
   "changePassword": {
@@ -271,7 +282,9 @@
       "admin_user": "حساب المدير",
       "customer": "عميل",
       "wallet_adjustment": "تعديل رصيد",
-      "exchange_rate": "سعر الصرف"
+      "exchange_rate": "سعر الصرف",
+      "deposit_settings": "إعدادات الإيداع",
+      "deposit": "إيداع"
     },
     "fields": {
       "name": "الاسم",
@@ -291,7 +304,26 @@
       "rateId": "السعر",
       "sypPerUsd": "ليرة لكل دولار",
       "displayStepSypUnits": "خطوة العرض",
-      "changePercent": "نسبة التغيير"
+      "changePercent": "نسبة التغيير",
+      "settingsId": "الإصدار",
+      "before": "قبل",
+      "after": "بعد",
+      "depositId": "الإيداع",
+      "method": "الطريقة",
+      "currency": "العملة",
+      "declaredAmountUnits": "المبلغ المعلن",
+      "declaredUsdUnits": "القيمة بالدولار",
+      "receiptId": "الإيصال",
+      "rateFixed": "تثبيت السعر",
+      "flags": "التنبيهات",
+      "transactionNumber": "رقم العملية",
+      "receivedCurrency": "العملة المستلمة",
+      "receivedAmountUnits": "المبلغ المستلم",
+      "creditedUsdUnits": "المبلغ المضاف",
+      "creditRateId": "سعر التحويل",
+      "referenceCheck": "مطابقة الرمز",
+      "acknowledgedFlags": "التنبيهات المؤكدة",
+      "rejectReason": "سبب الرفض"
     },
     "actions": {
       "admin.created": "إنشاء حساب المدير",
@@ -313,7 +345,16 @@
       "customer.test_password_reset": "إعادة تعيين كلمة مرور عميل اختبار",
       "wallet_adjustment.created": "تعديل رصيد عميل",
       "wallet_adjustment.reversed": "عكس تعديل رصيد",
-      "exchange_rate.changed": "تغيير سعر الصرف"
+      "exchange_rate.changed": "تغيير سعر الصرف",
+      "deposit_settings.changed": "تعديل إعدادات الإيداع",
+      "deposit.created": "إنشاء إيداع",
+      "deposit.requoted": "تحديث سعر إيداع",
+      "deposit.submitted": "إرسال إيصال إيداع",
+      "deposit.cancelled": "إلغاء إيداع",
+      "deposit.expired": "انتهاء مهلة إيداع",
+      "deposit.credited": "اعتماد إيداع",
+      "deposit.rejected": "رفض إيداع",
+      "deposit.receipt_requested": "طلب إيصال أوضح"
     }
   },
   "testCustomers": {
@@ -395,7 +436,8 @@
       "sales_revenue": "إيرادات المبيعات",
       "cost_of_goods": "تكلفة البضاعة",
       "refunds": "المبالغ المعادة",
-      "adjustments": "التعديلات"
+      "adjustments": "التعديلات",
+      "currency_exchange": "صرف العملات"
     },
     "summary": {
       "title": "ما يدين به المتجر للعملاء",

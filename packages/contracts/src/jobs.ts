@@ -10,6 +10,8 @@ export const QUEUES = {
   emailSend: 'email.send',
   /** Clears the code of code emails whose code expired (rule E4), every 10 minutes. */
   emailPurgeCodes: 'email.purge-codes',
+  /** Moves `pending` deposits past `expires_at` to `expired` (S03 rule SC12), every 5 minutes. */
+  depositsExpire: 'deposits.expire',
 } as const;
 
 export const emailSendPayloadSchema = z.object({ outboxId: z.uuid() });
