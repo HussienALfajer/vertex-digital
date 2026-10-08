@@ -1,6 +1,6 @@
 # TASKS — S03 Exchange rate and Sham Cash deposits
 
-Spec: `docs/specs/S03-exchange-rate-sham-cash-deposits.md` (F04, F05; ADRs 0003, 0006, 0008, 0011, 0014, 0016, 0017). Four PRs; each leaves `main` green. Each PR runs in its own session.
+Spec: `docs/specs/S03-exchange-rate-sham-cash-deposits.md` (F04, F05; ADRs 0003, 0006, 0008, 0011, 0014, 0016, 0017). Three PRs; each leaves `main` green. Each PR runs in its own session.
 
 ## PR 1 — Exchange rate and payment references: contracts, db, api (`claude/trusting-ride-2rbl17`, cloud session branch) · Opus 5.5 `high`
 - [ ] Contracts: `rates.ts` (record, change, page, constants FX2/FX3/FX5/FX7); `money.ts` `floorToWholeCents`, `rateChangePercent`, FX6 conversion; error codes `RATE_UNAVAILABLE`, `RATE_CONFIRMATION_REQUIRED`, `RATE_CONFIRMATION_MISMATCH` with Arabic text in both catalogs; audit entity `exchange_rate` and action `exchange_rate.changed` with admin labels; `payment_method` list; 100% unit-tested
@@ -20,14 +20,9 @@ Spec: `docs/specs/S03-exchange-rate-sham-cash-deposits.md` (F04, F05; ADRs 0003,
 - [ ] Wiring checklist, docs (`docs/architecture.md` modules `deposits`, `files` and job `deposits.expire`; `deploy/` nginx internal location and upload body limits; folder `CLAUDE.md`)
 - [ ] Checks (lint, typecheck, test, build, drift), reviewer, owner acceptance (endpoints at `/api/docs`), PR with auto-merge
 
-## PR 3 — Admin screens and E2E
+## PR 3 — Admin and store screens, E2E
 - [ ] Admin: `/rates` (current, change form with typed confirmation above 5%, re-authentication, history), stale-rate banner; `/settings/deposits` (account, currency toggles with QR upload and preview, limits, hours, thresholds, open-count note); `/deposits` (tabs, search, columns, flag chips) and navigation badge every 30 s; `/deposits/$id` (receipt viewer, facts, flags with links, customer panel, approve form with live credit and flag ticks, reject and clearer-receipt dialogs, decided view); wallet header SYP and deposit entry links; audit filters and detail labels; i18n
-- [ ] E2E: flows with a stateful mock and RTL screenshots (light and dark: queue, deposit page with approve form and flags, reject dialog, rates with confirmation, deposit settings)
-- [ ] Wiring checklist, folder `CLAUDE.md`, `wiring.md` patterns
-- [ ] Checks (lint, typecheck, test, build, e2e), reviewer, owner acceptance (steps 1, 2, 6–8, 10), PR with auto-merge
-
-## PR 4 — Store screens and E2E
 - [ ] Store: `/wallet` card SYP line, deposit button, deposit timeline entries, "إيداعاتي"; `/wallet/deposit` (redirect to a pending deposit, currency toggle, amount and presets, SYP preview, limits, hours and ETA, inline errors by code, unavailable state); `/wallet/deposits/[id]` by status (copy buttons, QR, countdown, receipt by paste/picker/camera with preview, requote sheet, clearer-receipt notice, 30 s refresh while submitted); `/wallet/deposits` list; loading, error, 404; i18n
-- [ ] E2E: flows and RTL screenshots (dark at phone width: form with SYP preview, pending page, submitted, credited, rejected, wallet card with SYP)
+- [ ] E2E: flows with stateful mocks and RTL screenshots (admin light and dark: queue, deposit page with approve form and flags, reject dialog, rates with confirmation, deposit settings; store dark at phone width: form with SYP preview, pending page, submitted, credited, rejected, wallet card with SYP)
 - [ ] Wiring checklist, `docs/ROADMAP.md` (S03 done), `wiring.md` patterns, folder `CLAUDE.md`
 - [ ] Checks (lint, typecheck, test, build, e2e), reviewer, owner acceptance (the spec's full browser check), PR with auto-merge
