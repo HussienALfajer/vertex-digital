@@ -1,11 +1,11 @@
 # Secret scanning (CI "Secret scan"): gitleaks' default rules, plus an allowlist for the made-up
-# passwords the tests use. Each entry is one exact test value, never a file or a whole rule, so a
-# real secret anywhere, test files included, is still found.
+# passwords and supplier credentials the tests use. Each entry is one exact test value, never a
+# file or a whole rule, so a real secret anywhere, test files included, is still found.
 
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Made-up passwords in tests (S01): they must look strong to pass the password rules"
+description = "Made-up passwords (S01: they must look strong to pass the password rules) and supplier credentials (S07: long enough to get a hint) in tests"
 regexTarget = "secret"
-regexes = ['''^a7Kq-blue-moon(-river)?$''', '''^b8Lr-green-sea-lake$''']
+regexes = ['''^a7Kq-blue-moon(-river)?$''', '''^b8Lr-green-sea-lake$''', '''^abcdefghi-a1b2$''']
