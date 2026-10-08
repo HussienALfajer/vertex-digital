@@ -19,16 +19,24 @@ export const QUEUES = {
   depositsUsdtVerify: 'deposits.usdt-verify',
   /** Sends one `telegram_messages` row to the linked chat (S05 F07). */
   telegramSend: 'telegram.send',
+  /** Sends or edits one deposit's card in the linked chat (S05 rules TC1–TC6). */
+  telegramDepositCard: 'telegram.deposit-card',
+  /** Reminds the admin of overdue reviews, every 5 minutes (S05 rules RM1–RM4). */
+  telegramReviewReminder: 'telegram.review-reminder',
+  /** The day's summary at 22:30 `Asia/Damascus` (S05 rule AL3). */
+  telegramDailySummary: 'telegram.daily-summary',
 } as const;
 
 /**
  * Queues that keep one job per `singletonKey` queued and one active (pg-boss `stately`): a USDT
  * deposit's verification and a network's scan run one at a time, and a running job can queue its
- * successor (S04 rules U9, U12). The API and the worker create queues with these policies.
+ * successor (S04 rules U9, U12); a deposit's card is sent or edited by one job at a time, which
+ * loads the deposit fresh (S05). The API and the worker create queues with these policies.
  */
 export const QUEUE_POLICIES: Readonly<Record<string, 'stately'>> = {
   [QUEUES.depositsUsdtScan]: 'stately',
   [QUEUES.depositsUsdtVerify]: 'stately',
+  [QUEUES.telegramDepositCard]: 'stately',
 };
 
 export const emailSendPayloadSchema = z.object({ outboxId: z.uuid() });
@@ -53,3 +61,8 @@ export type DepositsUsdtVerifyPayload = z.infer<typeof depositsUsdtVerifyPayload
 export const telegramSendPayloadSchema = z.object({ messageId: z.uuid() });
 
 export type TelegramSendPayload = z.infer<typeof telegramSendPayloadSchema>;
+
+/** `singletonKey` is the deposit id: one card job queued and one active per deposit. */
+export const telegramDepositCardPayloadSchema = z.object({ depositId: z.uuid() });
+
+export type TelegramDepositCardPayload = z.infer<typeof telegramDepositCardPayloadSchema>;

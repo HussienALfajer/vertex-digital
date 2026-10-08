@@ -14,6 +14,9 @@ import { UsdtVerifyJob } from './jobs/deposits/usdt-verify.job.js';
 import { PurgeCodesJob } from './jobs/email/purge-codes.job.js';
 import { SendEmailJob } from './jobs/email/send-email.job.js';
 import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
+import { DailySummaryJob } from './jobs/telegram/daily-summary.job.js';
+import { DepositCardJob } from './jobs/telegram/deposit-card.job.js';
+import { ReviewReminderJob } from './jobs/telegram/review-reminder.job.js';
 import { SendTelegramJob } from './jobs/telegram/send.job.js';
 import { TelegramBot } from './telegram/bot-api.js';
 import { LinkedChat } from './telegram/linked-chat.js';
@@ -63,6 +66,9 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     UsdtVerifyJob,
     UsdtScanJob,
     SendTelegramJob,
+    DepositCardJob,
+    ReviewReminderJob,
+    DailySummaryJob,
   ],
 })
 export class WorkerModule implements OnApplicationBootstrap {

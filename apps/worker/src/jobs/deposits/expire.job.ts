@@ -1,6 +1,13 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { QUEUES } from '@vertex-digital/contracts';
-import { type Database, deposits, recordAudit, usdtDeposits } from '@vertex-digital/db';
+import {
+  bossJobSender,
+  type Database,
+  deposits,
+  queueDepositCard,
+  recordAudit,
+  usdtDeposits,
+} from '@vertex-digital/db';
 import { and, eq, inArray, lte, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -41,7 +48,7 @@ export class ExpireDepositsJob implements OnApplicationBootstrap {
     for (;;) {
       const expired = await this.db.transaction(async (tx) => {
         const due = await tx
-          .select({ id: deposits.id })
+          .select({ id: deposits.id, receiptRequestCount: deposits.receiptRequestCount })
           .from(deposits)
           .where(and(eq(deposits.status, 'pending'), lte(deposits.expiresAt, sql`now()`)))
           .orderBy(deposits.expiresAt, deposits.id)
@@ -68,6 +75,10 @@ export class ExpireDepositsJob implements OnApplicationBootstrap {
             userAgent: null,
             details: { depositId: id },
           });
+        }
+        // A deposit sent back for a clearer receipt has a card to close (S05 rule TC6).
+        for (const row of due.filter((deposit) => deposit.receiptRequestCount > 0)) {
+          await queueDepositCard(tx, bossJobSender(this.pgBoss.boss), row.id);
         }
         return ids.length;
       });

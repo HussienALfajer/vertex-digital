@@ -2,25 +2,22 @@ import {
   type AdminDepositUsdt,
   type DepositUsdt,
   formatUsdtAmount,
-  USD_CENT,
   USDT_NETWORKS,
-  USDT_RESERVATION_GRACE_DAYS,
   USDT_REVIEW_FLAG_CODES,
   type UsdtCandidate,
   type UsdtMethod,
   type UsdtTransfer,
-  type UsdtTransferState,
 } from '@vertex-digital/contracts';
 import {
   type Database,
   depositFlags,
   deposits,
   type Transaction,
-  txidClaimed,
+  usdtCandidateMatch,
   usdtDeposits,
   usdtTransfers,
 } from '@vertex-digital/db';
-import { and, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { DepositCustomer } from '../auth/index.js';
 
 /*
@@ -132,29 +129,6 @@ export function adminUsdt(
   };
 }
 
-/**
- * A USDT deposit whose amount is reserved (rules U3, U4): open, or closed (expired, cancelled,
- * credited or rejected) less than 7 days ago. A closed deposit's last change is its closing, so
- * `updated_at` dates it; an expired one is never closed before `expires_at`. Keeping credited
- * amounts reserved too means a customer's second payment of the same amount is never credited
- * to someone else's new deposit (edge case 3).
- */
-export const usdtReserved = sql<boolean>`(${usdtDeposits.depositOpen}
-  or greatest(${deposits.updatedAt}, ${deposits.expiresAt})
-    > now() - make_interval(days => ${USDT_RESERVATION_GRACE_DAYS}))`;
-
-/**
- * A recorded transfer's state (rule U13), for the lists and the badge: `credited` once its TXID is
- * claimed (by a deposit or an S02 manual deposit), `bound` while an open deposit holds it, else
- * `unmatched` (a rejected deposit leaves its transfer unmatched: its owner can still be credited).
- * Written with qualified names: it is used in select lists, where Drizzle drops table names.
- */
-export const transferState = sql<UsdtTransferState>`case
-  when ${txidClaimed(sql`usdt_transfers.method`, sql`usdt_transfers.txid`)} then 'credited'
-  when exists (select 1 from usdt_deposits as bound
-    where bound.transfer_id = usdt_transfers.id and bound.deposit_open) then 'bound'
-  else 'unmatched' end`;
-
 /** At most this many candidates per transfer. */
 const CANDIDATE_LIMIT = 10;
 
@@ -165,7 +139,6 @@ export async function usdtCandidates(
   customersOf: (ids: string[]) => Promise<Map<string, DepositCustomer>>,
   exceptId?: string,
 ): Promise<UsdtCandidate[]> {
-  const tail = amountUnits % USD_CENT;
   const rows = await db
     .select({
       depositId: deposits.id,
@@ -179,12 +152,7 @@ export async function usdtCandidates(
     .innerJoin(deposits, eq(deposits.id, usdtDeposits.depositId))
     .where(
       and(
-        eq(usdtDeposits.method, method),
-        or(
-          eq(usdtDeposits.payAmountUnits, amountUnits),
-          tail > 0 ? eq(usdtDeposits.tailUnits, tail) : undefined,
-        ),
-        usdtReserved,
+        usdtCandidateMatch(method, amountUnits),
         exceptId ? ne(deposits.id, exceptId) : undefined,
       ),
     )

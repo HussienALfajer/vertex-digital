@@ -15,9 +15,11 @@ import {
   deposits,
   LedgerError,
   type PaymentReferenceOwner,
+  queueDepositCard,
   recordAudit,
   txidHolders,
   usdtDeposits,
+  usdtTransferState,
   usdtTransfers,
 } from '@vertex-digital/db';
 import { and, desc, eq, inArray } from 'drizzle-orm';
@@ -32,7 +34,7 @@ import { AuthService } from '../auth/index.js';
 import { isUuid, lockDeposit, notFound, stateConflict } from './deposit-records.js';
 import { DepositReviewService } from './deposit-review.service.js';
 import { verifyJob } from './usdt-deposits.service.js';
-import { transferState, transferView, usdtCandidates } from './usdt-records.js';
+import { transferView, usdtCandidates } from './usdt-records.js';
 
 /** Thrown inside the approval's transaction when its key decided first: answered as a replay. */
 class AlreadyDecided extends Error {}
@@ -123,6 +125,7 @@ export class UsdtReviewService {
             referenceCode: credited.deposit.referenceCode,
             creditedUsdUnits,
           });
+          await queueDepositCard(tx, this.jobs, deposit.id);
           return credited.deposit;
         } catch (error) {
           if (error instanceof LedgerError && error.code === 'EXTERNAL_REFERENCE_TAKEN') {
@@ -180,14 +183,14 @@ export class UsdtReviewService {
     const rows = await this.db
       .select({
         transfer: usdtTransfers,
-        state: transferState,
+        state: usdtTransferState,
         at: cursorTime(usdtTransfers.blockTime),
       })
       .from(usdtTransfers)
       .where(
         and(
           query.method ? eq(usdtTransfers.method, query.method) : undefined,
-          query.state === 'unmatched' ? eq(transferState, 'unmatched') : undefined,
+          query.state === 'unmatched' ? eq(usdtTransferState, 'unmatched') : undefined,
           cursor ? after(usdtTransfers.blockTime, usdtTransfers.id, cursor) : undefined,
         ),
       )

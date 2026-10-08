@@ -95,6 +95,7 @@ const depositSettingsValues = z
     usdtTrc20Enabled: z.boolean(),
     usdtBep20Enabled: z.boolean(),
     usdtMinDepositUsdUnits: z.int(),
+    telegramApprovalMaxUsdUnits: z.int(),
   })
   .partial();
 const depositQuote = z.strictObject({

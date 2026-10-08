@@ -12,12 +12,15 @@ import {
   deposits,
   notifyCustomer,
   paymentReferenceOwner,
+  queueDepositCard,
+  queueTelegramMessage,
   recordAudit,
   type Transaction,
+  usdtCandidateMatch,
   usdtDeposits,
   usdtTransfers,
 } from '@vertex-digital/db';
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, count, eq, ne, sql } from 'drizzle-orm';
 import type { PgBoss } from 'pg-boss';
 import type { TransferFacts } from './usdt-assess.js';
 
@@ -60,6 +63,35 @@ export async function recordTransfer(
     .where(and(eq(usdtTransfers.method, transfer.method), eq(usdtTransfers.txid, transfer.txid)));
   if (!existing) throw new Error(`Transfer ${transfer.txid} was neither inserted nor found`);
   return { row: existing, inserted: false };
+}
+
+/**
+ * The admin's notice of an unmatched transfer (S05 rule TC7): once per transfer (`dedupe_key`
+ * `unmatched:<transferId>`), with the sender shortened and the number of candidate deposits.
+ */
+export async function queueUnmatchedNotice(
+  tx: Transaction,
+  boss: PgBoss,
+  transfer: TransferRow,
+): Promise<void> {
+  const method = transfer.method as TransferFacts['method'];
+  const [candidates] = await tx
+    .select({ count: count() })
+    .from(usdtDeposits)
+    .innerJoin(deposits, eq(deposits.id, usdtDeposits.depositId))
+    .where(usdtCandidateMatch(method, transfer.amountUnits));
+  const sender = transfer.fromAddress;
+  await queueTelegramMessage(tx, bossJobSender(boss), {
+    kind: 'usdt_unmatched',
+    params: {
+      transferId: transfer.id,
+      method,
+      amountUnits: transfer.amountUnits,
+      sender: sender.length > 14 ? `${sender.slice(0, 6)}…${sender.slice(-6)}` : sender,
+      candidates: candidates?.count ?? 0,
+    },
+    dedupeKey: `unmatched:${transfer.id}`,
+  });
 }
 
 /**
@@ -145,6 +177,8 @@ export async function bindAndSettle(
         .values({ depositId: deposit.id, code, details: flagDetails(code, binding) })
         .onConflictDoNothing();
     }
+    // The review's card in Telegram (S05 rule TC1).
+    await queueDepositCard(tx, bossJobSender(boss), deposit.id);
     return 'review';
   }
   const credited = await creditUsdtDeposit(tx, {

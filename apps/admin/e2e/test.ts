@@ -1,5 +1,6 @@
 import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
 import {
+  type AuditEntry,
   approvalFlags,
   approvalNeedsReauthentication,
   DEPOSIT_SETTINGS_DEFAULTS,
@@ -249,6 +250,8 @@ export class AdminApi {
       createdAt: hoursAgo(1),
     },
   ];
+  /** The audit log, newest first; a test adds its own entries (S05: a decision from Telegram). */
+  auditEntries: AuditEntry[] = [...AUDIT_ENTRIES] as AuditEntry[];
   /** The store switch changes, newest first (S05 rule SW1): none, so every switch has its default. */
   switchChanges: SwitchChange[] = [];
   /** The Telegram bot (S05 F07): configured, no chat linked, nothing sent yet. */
@@ -898,7 +901,7 @@ export class AdminApi {
           const wanted = url.searchParams.get(name);
           return !wanted || wanted === value;
         };
-        const matching = AUDIT_ENTRIES.filter(
+        const matching = this.auditEntries.filter(
           (entry) =>
             filter('actorKind', entry.actorKind) &&
             filter('actorId', entry.actorId) &&

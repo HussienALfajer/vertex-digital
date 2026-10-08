@@ -1,16 +1,62 @@
-import type { DepositFlagCode, UsdtMethod } from '@vertex-digital/contracts';
-import { eq, sql } from 'drizzle-orm';
+import {
+  type DepositFlagCode,
+  USD_CENT,
+  USDT_RESERVATION_GRACE_DAYS,
+  type UsdtMethod,
+  type UsdtTransferState,
+} from '@vertex-digital/contracts';
+import { and, eq, or, type SQL, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/record-audit.js';
 import type { Transaction } from '../client.js';
 import { deposits, usdtDeposits } from '../schema/index.js';
 import { type PostedDepositCredit, postUsdtDepositCredit } from './deposits.js';
-import { claimPaymentReference } from './payment-references.js';
+import { claimPaymentReference, txidClaimed } from './payment-references.js';
 import { lockCustomerWallet } from './wallet.js';
 
 /*
  * The credit of a USDT deposit (S04 rule U7): the one write path shared by the worker's automatic
  * credit of an exact match and the admin's approval of a review (rule U15).
  */
+
+/**
+ * A USDT deposit whose amount is reserved (rules U3, U4): open, or closed (expired, cancelled,
+ * credited or rejected) less than 7 days ago. A closed deposit's last change is its closing, so
+ * `updated_at` dates it; an expired one is never closed before `expires_at`. Keeping credited
+ * amounts reserved too means a customer's second payment of the same amount is never credited
+ * to someone else's new deposit (edge case 3). Used over `usdt_deposits` joined to `deposits`.
+ */
+export const usdtReserved = sql<boolean>`(${usdtDeposits.depositOpen}
+  or greatest(${deposits.updatedAt}, ${deposits.expiresAt})
+    > now() - make_interval(days => ${USDT_RESERVATION_GRACE_DAYS}))`;
+
+/**
+ * The candidate deposits of a transfer (S04 rules U11, U13): the network's reserved deposits with
+ * that exact amount, or with the same tail (an exchange that took a whole-dollar fee). Shared by
+ * the panel's lists and the bot's unmatched notice (S05 rule TC7).
+ */
+export function usdtCandidateMatch(method: UsdtMethod, amountUnits: number): SQL | undefined {
+  const tail = amountUnits % USD_CENT;
+  return and(
+    eq(usdtDeposits.method, method),
+    or(
+      eq(usdtDeposits.payAmountUnits, amountUnits),
+      tail > 0 ? eq(usdtDeposits.tailUnits, tail) : undefined,
+    ),
+    usdtReserved,
+  );
+}
+
+/**
+ * A recorded transfer's state (rule U13), for the lists and the badge: `credited` once its TXID is
+ * claimed (by a deposit or an S02 manual deposit), `bound` while an open deposit holds it, else
+ * `unmatched` (a rejected deposit leaves its transfer unmatched: its owner can still be credited).
+ * Written with qualified names: it is used in select lists, where Drizzle drops table names.
+ */
+export const usdtTransferState = sql<UsdtTransferState>`case
+  when ${txidClaimed(sql`usdt_transfers.method`, sql`usdt_transfers.txid`)} then 'credited'
+  when exists (select 1 from usdt_deposits as bound
+    where bound.transfer_id = usdt_transfers.id and bound.deposit_open) then 'bound'
+  else 'unmatched' end`;
 
 /** The transfer bound to the deposit, as recorded in `usdt_transfers`. */
 export interface BoundUsdtTransfer {

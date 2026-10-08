@@ -47,3 +47,23 @@ export async function queueTelegramMessage<Kind extends TelegramMessageKind>(
   await jobs.send(tx, QUEUES.telegramSend, { messageId: row.id }, TELEGRAM_SEND_OPTIONS);
   return row.id;
 }
+
+/** Five retries from 10 seconds, doubling; one card job queued and one active per deposit. */
+export const TELEGRAM_DEPOSIT_CARD_OPTIONS = { retryLimit: 5, retryDelay: 10, retryBackoff: true };
+
+/**
+ * Queues the deposit's Telegram card job (S05 rules TC1, TC6) in the caller's transaction, for
+ * every change a card shows. The worker loads the deposit fresh and sends, edits or does nothing.
+ */
+export async function queueDepositCard(
+  tx: Transaction,
+  jobs: JobSender,
+  depositId: string,
+): Promise<void> {
+  await jobs.send(
+    tx,
+    QUEUES.telegramDepositCard,
+    { depositId },
+    { ...TELEGRAM_DEPOSIT_CARD_OPTIONS, singletonKey: depositId },
+  );
+}

@@ -50,6 +50,8 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   telegram_messages: 'A delivery record (S05 F07): its status changes, it is never archived',
   telegram_updates: 'Handled Telegram update ids (S05 TG5): pruned after 7 days',
   telegram_prompts: 'The bot question of the moment (S05 TG7): closed, never archived',
+  telegram_deposit_cards: 'A sent Telegram message (S05 TC1): edited, never archived',
+  telegram_bot_state: 'One row of bot state (S05 RM3), upserted by the reminder',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -58,6 +60,8 @@ const NATURAL_KEYS: Record<string, string> = {
   usdt_deposits: 'Keyed by its deposit: one row per USDT deposit (S04)',
   usdt_scan_cursors: 'Keyed by the network: one cursor per scanner (S04)',
   telegram_updates: "Keyed by Telegram's update id: one row per handled update (S05 TG5)",
+  telegram_deposit_cards: 'Keyed by deposit and submission: one card per submission (S05 TC1)',
+  telegram_bot_state: 'One row, id 1 (S05 RM3)',
 };
 
 /**

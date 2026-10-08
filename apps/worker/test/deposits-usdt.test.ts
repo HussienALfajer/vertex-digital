@@ -21,6 +21,7 @@ import {
   ledgerJournals,
   ledgerPostings,
   newId,
+  telegramMessages,
   usdtDeposits,
   usdtScanCursors,
   usdtTransfers,
@@ -565,6 +566,12 @@ describe('review (rule U11)', () => {
     expect(row.status).toBe('submitted');
     expect(usdt.checkStatus).toBe('review');
     expect(usdt.transferId).not.toBeNull();
+    // The review's Telegram card (S05 rule TC1).
+    expect(sent).toContainEqual({
+      queue: QUEUES.telegramDepositCard,
+      data: { depositId: deposit.id },
+      options: expect.objectContaining({ singletonKey: deposit.id }),
+    });
     const flags = await db
       .select()
       .from(depositFlags)
@@ -682,6 +689,36 @@ describe('the scanner (rules U12–U14)', () => {
       .where(sql`${usdtTransfers.txid} in (${dust}, ${unmatched}, ${late})`);
     expect(recorded.map((row) => row.txid).sort()).toEqual([late, unmatched].sort());
     expect(recorded.every((row) => row.source === 'scan')).toBe(true);
+    // The admin hears of each unmatched transfer once (S05 rule TC7).
+    const notices = await db
+      .select({ params: telegramMessages.params, dedupeKey: telegramMessages.dedupeKey })
+      .from(telegramMessages)
+      .innerJoin(
+        usdtTransfers,
+        sql`${telegramMessages.dedupeKey} = 'unmatched:' || ${usdtTransfers.id}`,
+      )
+      .where(sql`${usdtTransfers.txid} in (${unmatched}, ${late})`);
+    expect(notices).toHaveLength(2);
+    expect(
+      notices.find(
+        (notice) =>
+          notice.params && (notice.params as { amountUnits: number }).amountUnits === expired.pay,
+      )?.params,
+    ).toMatchObject({
+      method: 'usdt_bep20',
+      candidates: 1,
+    });
+    await scan.scan('usdt_bep20');
+    expect(
+      await db
+        .select({ id: telegramMessages.id })
+        .from(telegramMessages)
+        .innerJoin(
+          usdtTransfers,
+          sql`${telegramMessages.dedupeKey} = 'unmatched:' || ${usdtTransfers.id}`,
+        )
+        .where(sql`${usdtTransfers.txid} in (${unmatched}, ${late})`),
+    ).toHaveLength(2);
     // Past its expiry, the deposit is the transfer's candidate, never credited (edge case 5).
     expect((await state(expired.id)).deposit.status).toBe('pending');
   });

@@ -598,6 +598,11 @@ const depositSettingsFields = {
   usdtTrc20Enabled: z.boolean(),
   usdtBep20Enabled: z.boolean(),
   usdtMinDepositUsdUnits: limitSchema,
+  /**
+   * S05 rule TC4: the largest credit approved from Telegram, whole cents; 0 turns it off. Never
+   * above the re-authentication threshold of rule RV4 (ADR 0019).
+   */
+  telegramApprovalMaxUsdUnits: usdCentsSchema.max(DEPOSIT_APPROVAL_REAUTH_THRESHOLD_USD_UNITS),
 };
 
 export type DepositSettingsValues = z.infer<z.ZodObject<typeof depositSettingsFields>>;
@@ -623,6 +628,7 @@ export const DEPOSIT_SETTINGS_DEFAULTS = {
   usdtTrc20Enabled: false,
   usdtBep20Enabled: false,
   usdtMinDepositUsdUnits: 5 * CURRENCY_SCALE.USD,
+  telegramApprovalMaxUsdUnits: 100 * CURRENCY_SCALE.USD,
 } as const satisfies DepositSettingsValues;
 
 /** `PUT /api/admin/deposit-settings`: the cross-field rules of the table's checks. */
