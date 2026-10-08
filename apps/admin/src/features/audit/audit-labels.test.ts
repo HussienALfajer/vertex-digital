@@ -11,6 +11,13 @@ describe('fieldValue', () => {
     expect(fieldValue(t, 'balanceAfterUnits', 0)).toBe('$0.00');
     expect(fieldValue(t, 'creditedUsdUnits', 16_100_000)).toBe('$16.10');
     expect(fieldValue(t, 'declaredUsdUnits', 16_940_000)).toBe('$16.94');
+    expect(fieldValue(t, 'officialPriceUsdUnits', 990_000)).toBe('$0.99');
+    expect(fieldValue(t, 'minMarginUsdUnits', 100_000)).toBe('$0.10');
+  });
+
+  it('shows a margin rule percent with its sign (S06)', () => {
+    expect(fieldValue(t, 'percentBp', 1000)).toBe('10%');
+    expect(fieldValue(t, 'percentBp', 1250)).toBe('12.5%');
   });
 
   it('shows deposit codes by their labels', () => {

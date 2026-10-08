@@ -31,16 +31,28 @@ const asWritten = (value: unknown) =>
       ? value
       : JSON.stringify(value);
 
-/** Fields that always hold USD units (S02, S03). */
-const USD_FIELDS = ['amountUnits', 'balanceAfterUnits', 'declaredUsdUnits', 'creditedUsdUnits'];
+/** Fields that always hold USD units (S02, S03, S06). */
+const USD_FIELDS = [
+  'amountUnits',
+  'balanceAfterUnits',
+  'declaredUsdUnits',
+  'creditedUsdUnits',
+  'officialPriceUsdUnits',
+  'fixedUsdUnits',
+  'minMarginUsdUnits',
+];
 
 /**
- * A field's value for reading: USD amounts as dollars, wallet adjustment and deposit codes by
+ * A field's value for reading: USD amounts as dollars, a margin percent with its sign, wallet adjustment and deposit codes by
  * their labels (S02, S03), anything else as written.
  */
 export function fieldValue(t: TFunction, key: string, value: unknown): string {
   if (USD_FIELDS.includes(key) && Number.isSafeInteger(value)) {
     return formatUsd(value as number);
+  }
+  // A margin rule's percent in basis points (S06 rule PR1): 1000 is 10%.
+  if (key === 'percentBp' && Number.isSafeInteger(value)) {
+    return `${(value as number) / 100}%`;
   }
   const direction = adjustmentDirectionSchema.safeParse(value);
   if (key === 'direction' && direction.success) {

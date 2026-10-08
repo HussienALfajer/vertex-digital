@@ -15,6 +15,7 @@ import {
   type TelegramLinkStatus,
 } from '@vertex-digital/contracts';
 import openapi from '../../api/openapi.json' with { type: 'json' };
+import { CatalogMock } from './catalog-mock';
 
 /*
  * The `test` every admin spec uses: Playwright's, with a mocked API (`admin`) and failing a test
@@ -269,6 +270,11 @@ export class AdminApi {
   };
   /** The deposits the queue and the review pages read (S03). */
   deposits: MockDeposit[] = [];
+  /** S06: the catalog and the margin rules, seeded as the migration seeds them. */
+  readonly catalog = new CatalogMock(
+    () => this.rates[0] ?? null,
+    () => this.reauthenticationRequired,
+  );
   /** S04: the recorded USDT transfers, newest first, with their holder and candidates. */
   usdtTransfers: (Record<string, unknown> & { id: string; txid: string; method: string })[] = [];
   /** The transaction numbers already claimed (rule SC14). */
@@ -820,6 +826,18 @@ export class AdminApi {
         .filter((transfer) => state === 'all' || transfer.state === 'unmatched')
         .filter((transfer) => !byMethod || transfer.method === byMethod);
       return json(200, { items, nextCursor: null });
+    }
+    if (
+      path.startsWith('/api/admin/catalog') ||
+      path.startsWith('/api/admin/pricing') ||
+      path.startsWith('/api/catalog/')
+    ) {
+      const answer = this.catalog.answer(request.method(), url, body);
+      if (answer && 'image' in answer) {
+        return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+      }
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
+      if (answer) return route.fulfill({ status: answer.status });
     }
     if (path.startsWith('/api/admin/switches')) {
       const answered = await this.answerSwitches(route, request.method(), url, body);

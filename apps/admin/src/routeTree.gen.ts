@@ -16,8 +16,10 @@ import { Route as SetupTwoFactorRouteImport } from './routes/setup-two-factor'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
+import { Route as AppPricingRouteImport } from './routes/_app/pricing'
 import { Route as AppRatesRouteImport } from './routes/_app/rates'
 import { Route as AppTestCustomersRouteImport } from './routes/_app/test-customers'
+import { Route as AppCatalogIndexRouteImport } from './routes/_app/catalog.index'
 import { Route as AppDepositsIndexRouteImport } from './routes/_app/deposits.index'
 import { Route as AppDepositsIdRouteImport } from './routes/_app/deposits.$id'
 import { Route as AppDepositsTransfersRouteImport } from './routes/_app/deposits.transfers'
@@ -26,6 +28,8 @@ import { Route as AppSettingsSwitchesRouteImport } from './routes/_app/settings.
 import { Route as AppSettingsTelegramRouteImport } from './routes/_app/settings.telegram'
 import { Route as AppWalletsIndexRouteImport } from './routes/_app/wallets.index'
 import { Route as AppWalletsCustomerIdRouteImport } from './routes/_app/wallets.$customerId'
+import { Route as AppCatalogGamesIdRouteImport } from './routes/_app/catalog.games.$id'
+import { Route as AppCatalogGamesNewRouteImport } from './routes/_app/catalog.games.new'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -61,6 +65,11 @@ const AppAuditRoute = AppAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPricingRoute = AppPricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppRatesRoute = AppRatesRouteImport.update({
   id: '/rates',
   path: '/rates',
@@ -69,6 +78,11 @@ const AppRatesRoute = AppRatesRouteImport.update({
 const AppTestCustomersRoute = AppTestCustomersRouteImport.update({
   id: '/test-customers',
   path: '/test-customers',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCatalogIndexRoute = AppCatalogIndexRouteImport.update({
+  id: '/catalog/',
+  path: '/catalog/',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDepositsIndexRoute = AppDepositsIndexRouteImport.update({
@@ -111,6 +125,16 @@ const AppWalletsCustomerIdRoute = AppWalletsCustomerIdRouteImport.update({
   path: '/wallets/$customerId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCatalogGamesIdRoute = AppCatalogGamesIdRouteImport.update({
+  id: '/catalog/games/$id',
+  path: '/catalog/games/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCatalogGamesNewRoute = AppCatalogGamesNewRouteImport.update({
+  id: '/catalog/games/new',
+  path: '/catalog/games/new',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -119,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/setup-two-factor': typeof SetupTwoFactorRoute
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
+  '/pricing': typeof AppPricingRoute
   '/rates': typeof AppRatesRoute
   '/test-customers': typeof AppTestCustomersRoute
   '/deposits/$id': typeof AppDepositsIdRoute
@@ -127,8 +152,11 @@ export interface FileRoutesByFullPath {
   '/settings/switches': typeof AppSettingsSwitchesRoute
   '/settings/telegram': typeof AppSettingsTelegramRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
+  '/catalog/': typeof AppCatalogIndexRoute
   '/deposits/': typeof AppDepositsIndexRoute
   '/wallets/': typeof AppWalletsIndexRoute
+  '/catalog/games/$id': typeof AppCatalogGamesIdRoute
+  '/catalog/games/new': typeof AppCatalogGamesNewRoute
 }
 export interface FileRoutesByTo {
   '/change-password': typeof ChangePasswordRoute
@@ -136,6 +164,7 @@ export interface FileRoutesByTo {
   '/setup-two-factor': typeof SetupTwoFactorRoute
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
+  '/pricing': typeof AppPricingRoute
   '/rates': typeof AppRatesRoute
   '/test-customers': typeof AppTestCustomersRoute
   '/': typeof AppIndexRoute
@@ -145,8 +174,11 @@ export interface FileRoutesByTo {
   '/settings/switches': typeof AppSettingsSwitchesRoute
   '/settings/telegram': typeof AppSettingsTelegramRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
+  '/catalog': typeof AppCatalogIndexRoute
   '/deposits': typeof AppDepositsIndexRoute
   '/wallets': typeof AppWalletsIndexRoute
+  '/catalog/games/$id': typeof AppCatalogGamesIdRoute
+  '/catalog/games/new': typeof AppCatalogGamesNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -156,6 +188,7 @@ export interface FileRoutesById {
   '/setup-two-factor': typeof SetupTwoFactorRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/audit': typeof AppAuditRoute
+  '/_app/pricing': typeof AppPricingRoute
   '/_app/rates': typeof AppRatesRoute
   '/_app/test-customers': typeof AppTestCustomersRoute
   '/_app/': typeof AppIndexRoute
@@ -165,8 +198,11 @@ export interface FileRoutesById {
   '/_app/settings/switches': typeof AppSettingsSwitchesRoute
   '/_app/settings/telegram': typeof AppSettingsTelegramRoute
   '/_app/wallets/$customerId': typeof AppWalletsCustomerIdRoute
+  '/_app/catalog/': typeof AppCatalogIndexRoute
   '/_app/deposits/': typeof AppDepositsIndexRoute
   '/_app/wallets/': typeof AppWalletsIndexRoute
+  '/_app/catalog/games/$id': typeof AppCatalogGamesIdRoute
+  '/_app/catalog/games/new': typeof AppCatalogGamesNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -177,6 +213,7 @@ export interface FileRouteTypes {
     | '/setup-two-factor'
     | '/account'
     | '/audit'
+    | '/pricing'
     | '/rates'
     | '/test-customers'
     | '/deposits/$id'
@@ -185,8 +222,11 @@ export interface FileRouteTypes {
     | '/settings/switches'
     | '/settings/telegram'
     | '/wallets/$customerId'
+    | '/catalog/'
     | '/deposits/'
     | '/wallets/'
+    | '/catalog/games/$id'
+    | '/catalog/games/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/change-password'
@@ -194,6 +234,7 @@ export interface FileRouteTypes {
     | '/setup-two-factor'
     | '/account'
     | '/audit'
+    | '/pricing'
     | '/rates'
     | '/test-customers'
     | '/'
@@ -203,8 +244,11 @@ export interface FileRouteTypes {
     | '/settings/switches'
     | '/settings/telegram'
     | '/wallets/$customerId'
+    | '/catalog'
     | '/deposits'
     | '/wallets'
+    | '/catalog/games/$id'
+    | '/catalog/games/new'
   id:
     | '__root__'
     | '/_app'
@@ -213,6 +257,7 @@ export interface FileRouteTypes {
     | '/setup-two-factor'
     | '/_app/account'
     | '/_app/audit'
+    | '/_app/pricing'
     | '/_app/rates'
     | '/_app/test-customers'
     | '/_app/'
@@ -222,8 +267,11 @@ export interface FileRouteTypes {
     | '/_app/settings/switches'
     | '/_app/settings/telegram'
     | '/_app/wallets/$customerId'
+    | '/_app/catalog/'
     | '/_app/deposits/'
     | '/_app/wallets/'
+    | '/_app/catalog/games/$id'
+    | '/_app/catalog/games/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -284,6 +332,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAuditRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/pricing': {
+      id: '/_app/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof AppPricingRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/rates': {
       id: '/_app/rates'
       path: '/rates'
@@ -296,6 +351,13 @@ declare module '@tanstack/react-router' {
       path: '/test-customers'
       fullPath: '/test-customers'
       preLoaderRoute: typeof AppTestCustomersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/catalog/': {
+      id: '/_app/catalog/'
+      path: '/catalog'
+      fullPath: '/catalog/'
+      preLoaderRoute: typeof AppCatalogIndexRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/deposits/': {
@@ -354,12 +416,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWalletsCustomerIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/catalog/games/$id': {
+      id: '/_app/catalog/games/$id'
+      path: '/catalog/games/$id'
+      fullPath: '/catalog/games/$id'
+      preLoaderRoute: typeof AppCatalogGamesIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/catalog/games/new': {
+      id: '/_app/catalog/games/new'
+      path: '/catalog/games/new'
+      fullPath: '/catalog/games/new'
+      preLoaderRoute: typeof AppCatalogGamesNewRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
   AppAuditRoute: typeof AppAuditRoute
+  AppPricingRoute: typeof AppPricingRoute
   AppRatesRoute: typeof AppRatesRoute
   AppTestCustomersRoute: typeof AppTestCustomersRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -369,13 +446,17 @@ interface AppRouteChildren {
   AppSettingsSwitchesRoute: typeof AppSettingsSwitchesRoute
   AppSettingsTelegramRoute: typeof AppSettingsTelegramRoute
   AppWalletsCustomerIdRoute: typeof AppWalletsCustomerIdRoute
+  AppCatalogIndexRoute: typeof AppCatalogIndexRoute
   AppDepositsIndexRoute: typeof AppDepositsIndexRoute
   AppWalletsIndexRoute: typeof AppWalletsIndexRoute
+  AppCatalogGamesIdRoute: typeof AppCatalogGamesIdRoute
+  AppCatalogGamesNewRoute: typeof AppCatalogGamesNewRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
   AppAuditRoute: AppAuditRoute,
+  AppPricingRoute: AppPricingRoute,
   AppRatesRoute: AppRatesRoute,
   AppTestCustomersRoute: AppTestCustomersRoute,
   AppIndexRoute: AppIndexRoute,
@@ -385,8 +466,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsSwitchesRoute: AppSettingsSwitchesRoute,
   AppSettingsTelegramRoute: AppSettingsTelegramRoute,
   AppWalletsCustomerIdRoute: AppWalletsCustomerIdRoute,
+  AppCatalogIndexRoute: AppCatalogIndexRoute,
   AppDepositsIndexRoute: AppDepositsIndexRoute,
   AppWalletsIndexRoute: AppWalletsIndexRoute,
+  AppCatalogGamesIdRoute: AppCatalogGamesIdRoute,
+  AppCatalogGamesNewRoute: AppCatalogGamesNewRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
