@@ -20,6 +20,8 @@ export default defineConfig({
       TELEGRAM_ALERTS_CHAT_ID: '',
       // Emails are files in a directory of their own per run (rule E5).
       EMAIL_TRANSPORT: 'log',
+      // No chain is ever read in tests; the USDT tests give their own readers.
+      CHAIN_READER: 'fake',
       EMAIL_LOG_DIR: join(tmpdir(), `vertex-digital-emails-${randomUUID()}`),
     },
     testTimeout: 30_000,

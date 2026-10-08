@@ -4,6 +4,7 @@ import {
   isTronAddress,
   isUsdtMethod,
   normalizeTxid,
+  tronAddressFromHex,
   txidSchema,
   USDT_NETWORKS,
   usdtAddressSchemas,
@@ -46,6 +47,25 @@ describe('TXIDs (rule U8)', () => {
 
   it('refuses text longer than any link', () => {
     expect(txidSchema.safeParse(`${'x'.repeat(300)}${HASH}`).success).toBe(false);
+  });
+});
+
+describe('TRON addresses from hex', () => {
+  const contractHex = 'a614f803b6fd780986a42c78ec9c7f77e6ded13c';
+
+  it('encodes the 20-byte account, with or without the 41 or 0x prefix, in any case', () => {
+    const contract = USDT_NETWORKS.usdt_trc20.contract;
+    expect(tronAddressFromHex(contractHex)).toBe(contract);
+    expect(tronAddressFromHex(`41${contractHex}`)).toBe(contract);
+    expect(tronAddressFromHex(`0x${contractHex.toUpperCase()}`)).toBe(contract);
+    const zero = tronAddressFromHex('0'.repeat(40));
+    expect(zero && isTronAddress(zero)).toBe(true);
+  });
+
+  it('refuses anything that is not 20 bytes of hex', () => {
+    expect(tronAddressFromHex(contractHex.slice(2))).toBeNull();
+    expect(tronAddressFromHex(`42${contractHex}`)).toBeNull();
+    expect(tronAddressFromHex(`${contractHex.slice(1)}g`)).toBeNull();
   });
 });
 

@@ -429,6 +429,13 @@ describe('creating a USDT deposit (rules U2–U5)', () => {
       action: 'deposit.created',
       details: expect.objectContaining({ rateId: null, payAmountUnits: declared + tail }),
     });
+    // The network's scan is sent with it (rule U12), or one was already queued (one per network).
+    const scans = await test.db.execute<{ count: number }>(
+      sql`select count(*)::int as count from pgboss.job
+        where name = 'deposits.usdt-scan' and singleton_key = 'usdt_trc20'
+          and (state in ('created', 'retry', 'active') or created_on >= ${deposit.createdAt}::timestamptz)`,
+    );
+    expect(scans.rows[0]?.count).toBeGreaterThanOrEqual(1);
   });
 
   it('replays the same key and body, refuses the key with another body, and creates once in parallel', async () => {

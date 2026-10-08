@@ -1,0 +1,3797 @@
+{
+  "id": "89f6bd9a-2955-46f6-af78-d9673bedc6c1",
+  "prevId": "b6623425-fc41-418f-befa-bff4aa1546f0",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.admin_accounts": {
+      "name": "admin_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_token": {
+          "name": "id_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "access_token_expires_at": {
+          "name": "access_token_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token_expires_at": {
+          "name": "refresh_token_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "admin_accounts_user_id_idx": {
+          "name": "admin_accounts_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "admin_accounts_user_id_admin_users_id_fk": {
+          "name": "admin_accounts_user_id_admin_users_id_fk",
+          "tableFrom": "admin_accounts",
+          "tableTo": "admin_users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.admin_sessions": {
+      "name": "admin_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_active_at": {
+          "name": "last_active_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "reauthenticated_at": {
+          "name": "reauthenticated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "admin_sessions_user_id_idx": {
+          "name": "admin_sessions_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "admin_sessions_user_id_admin_users_id_fk": {
+          "name": "admin_sessions_user_id_admin_users_id_fk",
+          "tableFrom": "admin_sessions",
+          "tableTo": "admin_users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "admin_sessions_token_unique": {
+          "name": "admin_sessions_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.admin_two_factors": {
+      "name": "admin_two_factors",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "secret": {
+          "name": "secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "backup_codes": {
+          "name": "backup_codes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verified": {
+          "name": "verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "failed_verification_count": {
+          "name": "failed_verification_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "locked_until": {
+          "name": "locked_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "admin_two_factors_user_id_idx": {
+          "name": "admin_two_factors_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "admin_two_factors_user_id_admin_users_id_fk": {
+          "name": "admin_two_factors_user_id_admin_users_id_fk",
+          "tableFrom": "admin_two_factors",
+          "tableTo": "admin_users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.admin_users": {
+      "name": "admin_users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_verified": {
+          "name": "email_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "two_factor_enabled": {
+          "name": "two_factor_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "must_change_password": {
+          "name": "must_change_password",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "admin_users_single_idx": {
+          "name": "admin_users_single_idx",
+          "columns": [
+            {
+              "expression": "(true)",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "admin_users_email_unique": {
+          "name": "admin_users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.admin_verifications": {
+      "name": "admin_verifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "admin_verifications_identifier_idx": {
+          "name": "admin_verifications_identifier_idx",
+          "columns": [
+            {
+              "expression": "identifier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.audit_entries": {
+      "name": "audit_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "actor_kind": {
+          "name": "actor_kind",
+          "type": "audit_actor_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "audit_channel",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "details": {
+          "name": "details",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "audit_entries_occurred_at_idx": {
+          "name": "audit_entries_occurred_at_idx",
+          "columns": [
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_entries_actor_idx": {
+          "name": "audit_entries_actor_idx",
+          "columns": [
+            {
+              "expression": "actor_kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_entries_entity_idx": {
+          "name": "audit_entries_entity_idx",
+          "columns": [
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_entries_action_idx": {
+          "name": "audit_entries_action_idx",
+          "columns": [
+            {
+              "expression": "action",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.customer_accounts": {
+      "name": "customer_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_token": {
+          "name": "id_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "access_token_expires_at": {
+          "name": "access_token_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token_expires_at": {
+          "name": "refresh_token_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "customer_accounts_user_id_idx": {
+          "name": "customer_accounts_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "customer_accounts_user_id_customers_id_fk": {
+          "name": "customer_accounts_user_id_customers_id_fk",
+          "tableFrom": "customer_accounts",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.customer_rate_limits": {
+      "name": "customer_rate_limits",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_request": {
+          "name": "last_request",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "customer_rate_limits_key_unique": {
+          "name": "customer_rate_limits_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.customer_sessions": {
+      "name": "customer_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "customer_sessions_user_id_idx": {
+          "name": "customer_sessions_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "customer_sessions_user_id_customers_id_fk": {
+          "name": "customer_sessions_user_id_customers_id_fk",
+          "tableFrom": "customer_sessions",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "customer_sessions_token_unique": {
+          "name": "customer_sessions_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.customer_verifications": {
+      "name": "customer_verifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "customer_verifications_identifier_idx": {
+          "name": "customer_verifications_identifier_idx",
+          "columns": [
+            {
+              "expression": "identifier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.customers": {
+      "name": "customers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_verified": {
+          "name": "email_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone": {
+          "name": "phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_test": {
+          "name": "is_test",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "customers_phone_idx": {
+          "name": "customers_phone_idx",
+          "columns": [
+            {
+              "expression": "phone",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "customers_email_unique": {
+          "name": "customers_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.deposit_flags": {
+      "name": "deposit_flags",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "deposit_id": {
+          "name": "deposit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "deposit_flag_code",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "receipt_id": {
+          "name": "receipt_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "details": {
+          "name": "details",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "deposit_flags_receipt_id_idx": {
+          "name": "deposit_flags_receipt_id_idx",
+          "columns": [
+            {
+              "expression": "receipt_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "deposit_flags_deposit_id_deposits_id_fk": {
+          "name": "deposit_flags_deposit_id_deposits_id_fk",
+          "tableFrom": "deposit_flags",
+          "tableTo": "deposits",
+          "columnsFrom": [
+            "deposit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deposit_flags_receipt_id_deposit_receipts_id_fk": {
+          "name": "deposit_flags_receipt_id_deposit_receipts_id_fk",
+          "tableFrom": "deposit_flags",
+          "tableTo": "deposit_receipts",
+          "columnsFrom": [
+            "receipt_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "deposit_flags_once_unique": {
+          "name": "deposit_flags_once_unique",
+          "nullsNotDistinct": true,
+          "columns": [
+            "deposit_id",
+            "code",
+            "receipt_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.deposit_receipts": {
+      "name": "deposit_receipts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "deposit_id": {
+          "name": "deposit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_id": {
+          "name": "file_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "original_sha256": {
+          "name": "original_sha256",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "perceptual_hash": {
+          "name": "perceptual_hash",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "deposit_receipts_deposit_id_idx": {
+          "name": "deposit_receipts_deposit_id_idx",
+          "columns": [
+            {
+              "expression": "deposit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "deposit_receipts_original_sha256_idx": {
+          "name": "deposit_receipts_original_sha256_idx",
+          "columns": [
+            {
+              "expression": "original_sha256",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "deposit_receipts_deposit_id_deposits_id_fk": {
+          "name": "deposit_receipts_deposit_id_deposits_id_fk",
+          "tableFrom": "deposit_receipts",
+          "tableTo": "deposits",
+          "columnsFrom": [
+            "deposit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deposit_receipts_file_id_stored_files_id_fk": {
+          "name": "deposit_receipts_file_id_stored_files_id_fk",
+          "tableFrom": "deposit_receipts",
+          "tableTo": "stored_files",
+          "columnsFrom": [
+            "file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "deposit_receipts_file_id_unique": {
+          "name": "deposit_receipts_file_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "file_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "deposit_receipts_sha256_check": {
+          "name": "deposit_receipts_sha256_check",
+          "value": "octet_length(\"deposit_receipts\".\"original_sha256\") = 32"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.deposit_settings": {
+      "name": "deposit_settings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sham_cash_account_name": {
+          "name": "sham_cash_account_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sham_cash_account_number": {
+          "name": "sham_cash_account_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "syp_enabled": {
+          "name": "syp_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "usd_enabled": {
+          "name": "usd_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "syp_qr_file_id": {
+          "name": "syp_qr_file_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usd_qr_file_id": {
+          "name": "usd_qr_file_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "min_deposit_usd_units": {
+          "name": "min_deposit_usd_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "new_account_per_deposit_usd_units": {
+          "name": "new_account_per_deposit_usd_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "new_account_daily_usd_units": {
+          "name": "new_account_daily_usd_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "established_per_deposit_usd_units": {
+          "name": "established_per_deposit_usd_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "established_daily_usd_units": {
+          "name": "established_daily_usd_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "review_hours_start": {
+          "name": "review_hours_start",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "review_hours_end": {
+          "name": "review_hours_end",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "review_target_minutes": {
+          "name": "review_target_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flag_new_account_usd_units": {
+          "name": "flag_new_account_usd_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flag_velocity_count": {
+          "name": "flag_velocity_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "usdt_trc20_enabled": {
+          "name": "usdt_trc20_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "usdt_bep20_enabled": {
+          "name": "usdt_bep20_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "usdt_min_deposit_usd_units": {
+          "name": "usdt_min_deposit_usd_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 5000000
+        },
+        "admin_id": {
+          "name": "admin_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "deposit_settings_created_at_idx": {
+          "name": "deposit_settings_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "deposit_settings_syp_qr_file_id_idx": {
+          "name": "deposit_settings_syp_qr_file_id_idx",
+          "columns": [
+            {
+              "expression": "syp_qr_file_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "deposit_settings_usd_qr_file_id_idx": {
+          "name": "deposit_settings_usd_qr_file_id_idx",
+          "columns": [
+            {
+              "expression": "usd_qr_file_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "deposit_settings_syp_qr_file_id_stored_files_id_fk": {
+          "name": "deposit_settings_syp_qr_file_id_stored_files_id_fk",
+          "tableFrom": "deposit_settings",
+          "tableTo": "stored_files",
+          "columnsFrom": [
+            "syp_qr_file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deposit_settings_usd_qr_file_id_stored_files_id_fk": {
+          "name": "deposit_settings_usd_qr_file_id_stored_files_id_fk",
+          "tableFrom": "deposit_settings",
+          "tableTo": "stored_files",
+          "columnsFrom": [
+            "usd_qr_file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "deposit_settings_account_check": {
+          "name": "deposit_settings_account_check",
+          "value": "char_length(\"deposit_settings\".\"sham_cash_account_name\") between 1 and 100 and char_length(\"deposit_settings\".\"sham_cash_account_number\") between 1 and 64"
+        },
+        "deposit_settings_qr_check": {
+          "name": "deposit_settings_qr_check",
+          "value": "(not \"deposit_settings\".\"syp_enabled\" or \"deposit_settings\".\"syp_qr_file_id\" is not null) and (not \"deposit_settings\".\"usd_enabled\" or \"deposit_settings\".\"usd_qr_file_id\" is not null)"
+        },
+        "deposit_settings_limits_check": {
+          "name": "deposit_settings_limits_check",
+          "value": "\"deposit_settings\".\"min_deposit_usd_units\" > 0 and \"deposit_settings\".\"min_deposit_usd_units\" % 10000 = 0 and \"deposit_settings\".\"new_account_per_deposit_usd_units\" > 0 and \"deposit_settings\".\"new_account_per_deposit_usd_units\" % 10000 = 0\n        and \"deposit_settings\".\"new_account_daily_usd_units\" > 0 and \"deposit_settings\".\"new_account_daily_usd_units\" % 10000 = 0 and \"deposit_settings\".\"established_per_deposit_usd_units\" > 0 and \"deposit_settings\".\"established_per_deposit_usd_units\" % 10000 = 0\n        and \"deposit_settings\".\"established_daily_usd_units\" > 0 and \"deposit_settings\".\"established_daily_usd_units\" % 10000 = 0 and \"deposit_settings\".\"flag_new_account_usd_units\" > 0 and \"deposit_settings\".\"flag_new_account_usd_units\" % 10000 = 0\n        and \"deposit_settings\".\"min_deposit_usd_units\" <= \"deposit_settings\".\"new_account_per_deposit_usd_units\"\n        and \"deposit_settings\".\"new_account_per_deposit_usd_units\" <= \"deposit_settings\".\"new_account_daily_usd_units\"\n        and \"deposit_settings\".\"min_deposit_usd_units\" <= \"deposit_settings\".\"established_per_deposit_usd_units\"\n        and \"deposit_settings\".\"established_per_deposit_usd_units\" <= \"deposit_settings\".\"established_daily_usd_units\""
+        },
+        "deposit_settings_hours_check": {
+          "name": "deposit_settings_hours_check",
+          "value": "\"deposit_settings\".\"review_hours_start\" < \"deposit_settings\".\"review_hours_end\" and \"deposit_settings\".\"review_target_minutes\" between 1 and 1440"
+        },
+        "deposit_settings_velocity_check": {
+          "name": "deposit_settings_velocity_check",
+          "value": "\"deposit_settings\".\"flag_velocity_count\" between 1 and 50"
+        },
+        "deposit_settings_usdt_min_check": {
+          "name": "deposit_settings_usdt_min_check",
+          "value": "\"deposit_settings\".\"usdt_min_deposit_usd_units\" > 0 and \"deposit_settings\".\"usdt_min_deposit_usd_units\" % 10000 = 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.deposits": {
+      "name": "deposits",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "method": {
+          "name": "method",
+          "type": "deposit_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "deposit_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "reference_code": {
+          "name": "reference_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "currency",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "declared_amount_units": {
+          "name": "declared_amount_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "declared_usd_units": {
+          "name": "declared_usd_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rate_id": {
+          "name": "rate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rate": {
+          "name": "rate",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quote_expires_at": {
+          "name": "quote_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rate_fixed_at": {
+          "name": "rate_fixed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "receipt_requested_at": {
+          "name": "receipt_requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "receipt_request_count": {
+          "name": "receipt_request_count",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "receipt_request_note": {
+          "name": "receipt_request_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transaction_number": {
+          "name": "transaction_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "received_currency": {
+          "name": "received_currency",
+          "type": "currency",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "received_amount_units": {
+          "name": "received_amount_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credited_usd_units": {
+          "name": "credited_usd_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credit_rate_id": {
+          "name": "credit_rate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credit_rate": {
+          "name": "credit_rate",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference_check": {
+          "name": "reference_check",
+          "type": "deposit_reference_check",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "journal_id": {
+          "name": "journal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reject_reason": {
+          "name": "reject_reason",
+          "type": "deposit_reject_reason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "customer_note": {
+          "name": "customer_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision_idempotency_key": {
+          "name": "decision_idempotency_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admin_id": {
+          "name": "admin_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_by": {
+          "name": "decided_by",
+          "type": "deposit_decider",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "deposits_customer_id_idx": {
+          "name": "deposits_customer_id_idx",
+          "columns": [
+            {
+              "expression": "customer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "deposits_one_pending_unique": {
+          "name": "deposits_one_pending_unique",
+          "columns": [
+            {
+              "expression": "customer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"deposits\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "deposits_queue_idx": {
+          "name": "deposits_queue_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "submitted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "deposits_expiry_idx": {
+          "name": "deposits_expiry_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "deposits_rate_id_idx": {
+          "name": "deposits_rate_id_idx",
+          "columns": [
+            {
+              "expression": "rate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "deposits_credit_rate_id_idx": {
+          "name": "deposits_credit_rate_id_idx",
+          "columns": [
+            {
+              "expression": "credit_rate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "deposits_admin_id_idx": {
+          "name": "deposits_admin_id_idx",
+          "columns": [
+            {
+              "expression": "admin_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "deposits_customer_id_customers_id_fk": {
+          "name": "deposits_customer_id_customers_id_fk",
+          "tableFrom": "deposits",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deposits_rate_id_exchange_rates_id_fk": {
+          "name": "deposits_rate_id_exchange_rates_id_fk",
+          "tableFrom": "deposits",
+          "tableTo": "exchange_rates",
+          "columnsFrom": [
+            "rate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deposits_credit_rate_id_exchange_rates_id_fk": {
+          "name": "deposits_credit_rate_id_exchange_rates_id_fk",
+          "tableFrom": "deposits",
+          "tableTo": "exchange_rates",
+          "columnsFrom": [
+            "credit_rate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deposits_journal_id_ledger_journals_id_fk": {
+          "name": "deposits_journal_id_ledger_journals_id_fk",
+          "tableFrom": "deposits",
+          "tableTo": "ledger_journals",
+          "columnsFrom": [
+            "journal_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "deposits_reference_code_unique": {
+          "name": "deposits_reference_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "reference_code"
+          ]
+        },
+        "deposits_journal_id_unique": {
+          "name": "deposits_journal_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "journal_id"
+          ]
+        },
+        "deposits_idempotency_key_unique": {
+          "name": "deposits_idempotency_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "idempotency_key"
+          ]
+        },
+        "deposits_decision_idempotency_key_unique": {
+          "name": "deposits_decision_idempotency_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "decision_idempotency_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "deposits_reference_code_check": {
+          "name": "deposits_reference_code_check",
+          "value": "\"deposits\".\"reference_code\" ~ '^VD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{5}$'"
+        },
+        "deposits_declared_check": {
+          "name": "deposits_declared_check",
+          "value": "\"deposits\".\"declared_amount_units\" > 0\n        and \"deposits\".\"declared_amount_units\" % (case \"deposits\".\"currency\" when 'SYP' then 100 else 10000 end) = 0\n        and \"deposits\".\"declared_usd_units\" >= 0 and \"deposits\".\"declared_usd_units\" % 10000 = 0"
+        },
+        "deposits_quote_check": {
+          "name": "deposits_quote_check",
+          "value": "num_nonnulls(\"deposits\".\"rate_id\", \"deposits\".\"rate\", \"deposits\".\"quote_expires_at\") = case \"deposits\".\"currency\" when 'SYP' then 3 else 0 end\n        and (\"deposits\".\"rate\" is null or \"deposits\".\"rate\" > 0)\n        and (\"deposits\".\"rate_fixed_at\" is null or \"deposits\".\"currency\" = 'SYP')"
+        },
+        "deposits_receipt_request_check": {
+          "name": "deposits_receipt_request_check",
+          "value": "\"deposits\".\"receipt_request_count\" between 0 and 1\n        and (\"deposits\".\"receipt_requested_at\" is not null) = (\"deposits\".\"receipt_request_count\" = 1)\n        and (\"deposits\".\"receipt_request_note\" is null or (\"deposits\".\"receipt_requested_at\" is not null and char_length(\"deposits\".\"receipt_request_note\") between 1 and 300))"
+        },
+        "deposits_submitted_check": {
+          "name": "deposits_submitted_check",
+          "value": "\"deposits\".\"status\" not in ('submitted', 'credited', 'rejected') or \"deposits\".\"submitted_at\" is not null"
+        },
+        "deposits_method_check": {
+          "name": "deposits_method_check",
+          "value": "\"deposits\".\"method\" = 'sham_cash' or \"deposits\".\"currency\" = 'USD'"
+        },
+        "deposits_decided_check": {
+          "name": "deposits_decided_check",
+          "value": "(\"deposits\".\"status\" in ('credited', 'rejected')) = (\"deposits\".\"decided_at\" is not null)\n        and (\"deposits\".\"status\" in ('credited', 'rejected')) = (\"deposits\".\"decided_by\" is not null)\n        and coalesce(\"deposits\".\"decided_by\" = 'admin', false) = (\"deposits\".\"admin_id\" is not null)\n        and coalesce(\"deposits\".\"decided_by\" = 'admin', false) = (\"deposits\".\"decision_idempotency_key\" is not null)"
+        },
+        "deposits_credit_check": {
+          "name": "deposits_credit_check",
+          "value": "num_nonnulls(\"deposits\".\"transaction_number\", \"deposits\".\"received_currency\", \"deposits\".\"received_amount_units\", \"deposits\".\"credited_usd_units\", \"deposits\".\"journal_id\")\n          = case when \"deposits\".\"status\" = 'credited' then 5 else 0 end\n        and (\"deposits\".\"reference_check\" is not null) = (\"deposits\".\"status\" = 'credited' and \"deposits\".\"method\" = 'sham_cash')\n        and num_nonnulls(\"deposits\".\"credit_rate_id\", \"deposits\".\"credit_rate\")\n          = case when \"deposits\".\"status\" = 'credited' and \"deposits\".\"received_currency\" = 'SYP' then 2 else 0 end\n        and (\"deposits\".\"transaction_number\" is null or char_length(\"deposits\".\"transaction_number\") between 1 and 64)\n        and (\"deposits\".\"received_amount_units\" is null or \"deposits\".\"received_amount_units\" > 0)\n        and (\"deposits\".\"credited_usd_units\" is null or (\"deposits\".\"credited_usd_units\" > 0 and \"deposits\".\"credited_usd_units\" % 10000 = 0))"
+        },
+        "deposits_rejection_check": {
+          "name": "deposits_rejection_check",
+          "value": "(\"deposits\".\"reject_reason\" is not null) = (\"deposits\".\"status\" = 'rejected')\n        and (\"deposits\".\"customer_note\" is null or (\"deposits\".\"status\" = 'rejected' and char_length(\"deposits\".\"customer_note\") between 1 and 300))\n        and (\"deposits\".\"reject_reason\" <> 'other' or \"deposits\".\"customer_note\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.usdt_deposits": {
+      "name": "usdt_deposits",
+      "schema": "",
+      "columns": {
+        "deposit_id": {
+          "name": "deposit_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "method": {
+          "name": "method",
+          "type": "payment_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "receiving_address": {
+          "name": "receiving_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tail_units": {
+          "name": "tail_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pay_amount_units": {
+          "name": "pay_amount_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deposit_open": {
+          "name": "deposit_open",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "check_status": {
+          "name": "check_status",
+          "type": "usdt_check_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'awaiting_transfer'"
+        },
+        "check_error": {
+          "name": "check_error",
+          "type": "usdt_check_error",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "txid": {
+          "name": "txid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "txid_source": {
+          "name": "txid_source",
+          "type": "usdt_txid_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "txid_submissions": {
+          "name": "txid_submissions",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "search_started_at": {
+          "name": "search_started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirmations": {
+          "name": "confirmations",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transfer_id": {
+          "name": "transfer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_checked_at": {
+          "name": "last_checked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "usdt_deposits_open_amount_unique": {
+          "name": "usdt_deposits_open_amount_unique",
+          "columns": [
+            {
+              "expression": "method",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "pay_amount_units",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"usdt_deposits\".\"deposit_open\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "usdt_deposits_amount_idx": {
+          "name": "usdt_deposits_amount_idx",
+          "columns": [
+            {
+              "expression": "method",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "pay_amount_units",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "usdt_deposits_check_status_idx": {
+          "name": "usdt_deposits_check_status_idx",
+          "columns": [
+            {
+              "expression": "check_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "usdt_deposits_deposit_id_deposits_id_fk": {
+          "name": "usdt_deposits_deposit_id_deposits_id_fk",
+          "tableFrom": "usdt_deposits",
+          "tableTo": "deposits",
+          "columnsFrom": [
+            "deposit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "usdt_deposits_transfer_id_usdt_transfers_id_fk": {
+          "name": "usdt_deposits_transfer_id_usdt_transfers_id_fk",
+          "tableFrom": "usdt_deposits",
+          "tableTo": "usdt_transfers",
+          "columnsFrom": [
+            "transfer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "usdt_deposits_transfer_id_unique": {
+          "name": "usdt_deposits_transfer_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "transfer_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "usdt_deposits_method_check": {
+          "name": "usdt_deposits_method_check",
+          "value": "\"usdt_deposits\".\"method\" in ('usdt_trc20', 'usdt_bep20')"
+        },
+        "usdt_deposits_amount_check": {
+          "name": "usdt_deposits_amount_check",
+          "value": "\"usdt_deposits\".\"tail_units\" between 100 and 9900 and \"usdt_deposits\".\"tail_units\" % 100 = 0\n        and \"usdt_deposits\".\"pay_amount_units\" > \"usdt_deposits\".\"tail_units\"\n        and (\"usdt_deposits\".\"pay_amount_units\" - \"usdt_deposits\".\"tail_units\") % 10000 = 0"
+        },
+        "usdt_deposits_txid_check": {
+          "name": "usdt_deposits_txid_check",
+          "value": "(\"usdt_deposits\".\"txid\" is null or \"usdt_deposits\".\"txid\" ~ '^[0-9a-f]{64}$')\n        and (\"usdt_deposits\".\"txid\" is null) = (\"usdt_deposits\".\"txid_source\" is null)\n        and \"usdt_deposits\".\"txid_submissions\" between 0 and 5\n        and (\"usdt_deposits\".\"confirmations\" is null or \"usdt_deposits\".\"confirmations\" >= 0)"
+        },
+        "usdt_deposits_check_error_check": {
+          "name": "usdt_deposits_check_error_check",
+          "value": "\"usdt_deposits\".\"check_error\" is null or \"usdt_deposits\".\"check_status\" = 'awaiting_transfer'"
+        },
+        "usdt_deposits_transfer_check": {
+          "name": "usdt_deposits_transfer_check",
+          "value": "\"usdt_deposits\".\"transfer_id\" is null or \"usdt_deposits\".\"check_status\" in ('confirming', 'review', 'done')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.usdt_scan_cursors": {
+      "name": "usdt_scan_cursors",
+      "schema": "",
+      "columns": {
+        "method": {
+          "name": "method",
+          "type": "payment_method",
+          "typeSchema": "public",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "cursor": {
+          "name": "cursor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_success_at": {
+          "name": "last_success_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "usdt_scan_cursors_method_check": {
+          "name": "usdt_scan_cursors_method_check",
+          "value": "\"usdt_scan_cursors\".\"method\" in ('usdt_trc20', 'usdt_bep20')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.usdt_transfers": {
+      "name": "usdt_transfers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "method": {
+          "name": "method",
+          "type": "payment_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "txid": {
+          "name": "txid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_address": {
+          "name": "from_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_address": {
+          "name": "to_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_amount": {
+          "name": "raw_amount",
+          "type": "numeric(78, 0)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_units": {
+          "name": "amount_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_number": {
+          "name": "block_number",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_time": {
+          "name": "block_time",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "usdt_transfer_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "usdt_transfers_block_time_idx": {
+          "name": "usdt_transfers_block_time_idx",
+          "columns": [
+            {
+              "expression": "method",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_time",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "usdt_transfers_amount_idx": {
+          "name": "usdt_transfers_amount_idx",
+          "columns": [
+            {
+              "expression": "method",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "amount_units",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "usdt_transfers_txid_unique": {
+          "name": "usdt_transfers_txid_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "method",
+            "txid"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "usdt_transfers_method_check": {
+          "name": "usdt_transfers_method_check",
+          "value": "\"usdt_transfers\".\"method\" in ('usdt_trc20', 'usdt_bep20')"
+        },
+        "usdt_transfers_txid_check": {
+          "name": "usdt_transfers_txid_check",
+          "value": "\"usdt_transfers\".\"txid\" ~ '^[0-9a-f]{64}$'"
+        },
+        "usdt_transfers_amount_check": {
+          "name": "usdt_transfers_amount_check",
+          "value": "\"usdt_transfers\".\"raw_amount\" > 0 and \"usdt_transfers\".\"amount_units\" >= 1000000 and \"usdt_transfers\".\"block_number\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.stored_files": {
+      "name": "stored_files",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "stored_file_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "storage_key": {
+          "name": "storage_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "byte_size": {
+          "name": "byte_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "width": {
+          "name": "width",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "height": {
+          "name": "height",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "stored_files_storage_key_unique": {
+          "name": "stored_files_storage_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "storage_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "stored_files_storage_key_check": {
+          "name": "stored_files_storage_key_check",
+          "value": "\"stored_files\".\"storage_key\" ~ '^[a-z_]+/[0-9a-f]{2}/[0-9a-f-]{36}\\.(webp|png)$'"
+        },
+        "stored_files_content_type_check": {
+          "name": "stored_files_content_type_check",
+          "value": "\"stored_files\".\"content_type\" in ('image/webp', 'image/png')"
+        },
+        "stored_files_size_check": {
+          "name": "stored_files_size_check",
+          "value": "\"stored_files\".\"byte_size\" > 0 and \"stored_files\".\"width\" > 0 and \"stored_files\".\"height\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.email_outbox": {
+      "name": "email_outbox",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "to_address": {
+          "name": "to_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "template": {
+          "name": "template",
+          "type": "email_template",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "params": {
+          "name": "params",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "priority": {
+          "name": "priority",
+          "type": "email_priority",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "email_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "email_outbox_status_idx": {
+          "name": "email_outbox_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_outbox_customer_id_idx": {
+          "name": "email_outbox_customer_id_idx",
+          "columns": [
+            {
+              "expression": "customer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "email_outbox_customer_id_customers_id_fk": {
+          "name": "email_outbox_customer_id_customers_id_fk",
+          "tableFrom": "email_outbox",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.exchange_rates": {
+      "name": "exchange_rates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "syp_per_usd": {
+          "name": "syp_per_usd",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_step_syp_units": {
+          "name": "display_step_syp_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "admin_id": {
+          "name": "admin_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "exchange_rates_created_at_idx": {
+          "name": "exchange_rates_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "exchange_rates_rate_check": {
+          "name": "exchange_rates_rate_check",
+          "value": "\"exchange_rates\".\"syp_per_usd\" > 0"
+        },
+        "exchange_rates_display_step_check": {
+          "name": "exchange_rates_display_step_check",
+          "value": "\"exchange_rates\".\"display_step_syp_units\" between 100 and 5000 and \"exchange_rates\".\"display_step_syp_units\" % 100 = 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.worker_heartbeats": {
+      "name": "worker_heartbeats",
+      "schema": "",
+      "columns": {
+        "worker": {
+          "name": "worker",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "beat_at": {
+          "name": "beat_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ledger_accounts": {
+      "name": "ledger_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "ledger_account_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "currency",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ledger_accounts_customer_id_customers_id_fk": {
+          "name": "ledger_accounts_customer_id_customers_id_fk",
+          "tableFrom": "ledger_accounts",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ledger_accounts_code_unique": {
+          "name": "ledger_accounts_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        },
+        "ledger_accounts_customer_id_unique": {
+          "name": "ledger_accounts_customer_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "customer_id"
+          ]
+        },
+        "ledger_accounts_id_currency_unique": {
+          "name": "ledger_accounts_id_currency_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "currency"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "ledger_accounts_code_check": {
+          "name": "ledger_accounts_code_check",
+          "value": "char_length(\"ledger_accounts\".\"code\") between 1 and 200"
+        },
+        "ledger_accounts_wallet_usd_check": {
+          "name": "ledger_accounts_wallet_usd_check",
+          "value": "\"ledger_accounts\".\"kind\" <> 'customer_wallet' or \"ledger_accounts\".\"currency\" = 'USD'"
+        },
+        "ledger_accounts_customer_check": {
+          "name": "ledger_accounts_customer_check",
+          "value": "(\"ledger_accounts\".\"customer_id\" is not null) = (\"ledger_accounts\".\"kind\" = 'customer_wallet')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ledger_journals": {
+      "name": "ledger_journals",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "journal_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "posting_count": {
+          "name": "posting_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ledger_journals_idempotency_key_unique": {
+          "name": "ledger_journals_idempotency_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "idempotency_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "ledger_journals_idempotency_key_check": {
+          "name": "ledger_journals_idempotency_key_check",
+          "value": "char_length(\"ledger_journals\".\"idempotency_key\") between 1 and 200"
+        },
+        "ledger_journals_posting_count_check": {
+          "name": "ledger_journals_posting_count_check",
+          "value": "\"ledger_journals\".\"posting_count\" >= 2"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ledger_postings": {
+      "name": "ledger_postings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "journal_id": {
+          "name": "journal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "currency",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_units": {
+          "name": "amount_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "ledger_postings_position_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        }
+      },
+      "indexes": {
+        "ledger_postings_journal_id_idx": {
+          "name": "ledger_postings_journal_id_idx",
+          "columns": [
+            {
+              "expression": "journal_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ledger_postings_account_id_idx": {
+          "name": "ledger_postings_account_id_idx",
+          "columns": [
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "currency",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ledger_postings_account_position_idx": {
+          "name": "ledger_postings_account_position_idx",
+          "columns": [
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ledger_postings_journal_id_ledger_journals_id_fk": {
+          "name": "ledger_postings_journal_id_ledger_journals_id_fk",
+          "tableFrom": "ledger_postings",
+          "tableTo": "ledger_journals",
+          "columnsFrom": [
+            "journal_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ledger_postings_account_currency_fk": {
+          "name": "ledger_postings_account_currency_fk",
+          "tableFrom": "ledger_postings",
+          "tableTo": "ledger_accounts",
+          "columnsFrom": [
+            "account_id",
+            "currency"
+          ],
+          "columnsTo": [
+            "id",
+            "currency"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ledger_postings_amount_check": {
+          "name": "ledger_postings_amount_check",
+          "value": "\"ledger_postings\".\"amount_units\" <> 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payment_references": {
+      "name": "payment_references",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "method": {
+          "name": "method",
+          "type": "payment_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wallet_adjustment_id": {
+          "name": "wallet_adjustment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deposit_id": {
+          "name": "deposit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payment_references_wallet_adjustment_id_wallet_adjustments_id_fk": {
+          "name": "payment_references_wallet_adjustment_id_wallet_adjustments_id_fk",
+          "tableFrom": "payment_references",
+          "tableTo": "wallet_adjustments",
+          "columnsFrom": [
+            "wallet_adjustment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "payment_references_deposit_id_deposits_id_fk": {
+          "name": "payment_references_deposit_id_deposits_id_fk",
+          "tableFrom": "payment_references",
+          "tableTo": "deposits",
+          "columnsFrom": [
+            "deposit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payment_references_wallet_adjustment_id_unique": {
+          "name": "payment_references_wallet_adjustment_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "wallet_adjustment_id"
+          ]
+        },
+        "payment_references_deposit_id_unique": {
+          "name": "payment_references_deposit_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "deposit_id"
+          ]
+        },
+        "payment_references_method_reference_unique": {
+          "name": "payment_references_method_reference_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "method",
+            "reference"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "payment_references_reference_check": {
+          "name": "payment_references_reference_check",
+          "value": "char_length(\"payment_references\".\"reference\") between 1 and 100 and \"payment_references\".\"reference\" = upper(btrim(\"payment_references\".\"reference\"))"
+        },
+        "payment_references_owner_check": {
+          "name": "payment_references_owner_check",
+          "value": "num_nonnulls(\"payment_references\".\"wallet_adjustment_id\", \"payment_references\".\"deposit_id\") = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.wallet_adjustments": {
+      "name": "wallet_adjustments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "direction": {
+          "name": "direction",
+          "type": "adjustment_direction",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_usd_units": {
+          "name": "amount_usd_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "adjustment_category",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_note": {
+          "name": "customer_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deposit_method": {
+          "name": "deposit_method",
+          "type": "manual_deposit_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_reference": {
+          "name": "external_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reverses_adjustment_id": {
+          "name": "reverses_adjustment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "journal_id": {
+          "name": "journal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "admin_id": {
+          "name": "admin_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "wallet_adjustments_customer_id_idx": {
+          "name": "wallet_adjustments_customer_id_idx",
+          "columns": [
+            {
+              "expression": "customer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "wallet_adjustments_admin_id_idx": {
+          "name": "wallet_adjustments_admin_id_idx",
+          "columns": [
+            {
+              "expression": "admin_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "wallet_adjustments_external_reference_unique": {
+          "name": "wallet_adjustments_external_reference_unique",
+          "columns": [
+            {
+              "expression": "deposit_method",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "upper(\"external_reference\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wallet_adjustments_customer_id_customers_id_fk": {
+          "name": "wallet_adjustments_customer_id_customers_id_fk",
+          "tableFrom": "wallet_adjustments",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "wallet_adjustments_reverses_adjustment_id_wallet_adjustments_id_fk": {
+          "name": "wallet_adjustments_reverses_adjustment_id_wallet_adjustments_id_fk",
+          "tableFrom": "wallet_adjustments",
+          "tableTo": "wallet_adjustments",
+          "columnsFrom": [
+            "reverses_adjustment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "wallet_adjustments_journal_id_ledger_journals_id_fk": {
+          "name": "wallet_adjustments_journal_id_ledger_journals_id_fk",
+          "tableFrom": "wallet_adjustments",
+          "tableTo": "ledger_journals",
+          "columnsFrom": [
+            "journal_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "wallet_adjustments_reverses_adjustment_id_unique": {
+          "name": "wallet_adjustments_reverses_adjustment_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "reverses_adjustment_id"
+          ]
+        },
+        "wallet_adjustments_journal_id_unique": {
+          "name": "wallet_adjustments_journal_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "journal_id"
+          ]
+        },
+        "wallet_adjustments_idempotency_key_unique": {
+          "name": "wallet_adjustments_idempotency_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "idempotency_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "wallet_adjustments_amount_check": {
+          "name": "wallet_adjustments_amount_check",
+          "value": "\"wallet_adjustments\".\"amount_usd_units\" > 0 and \"wallet_adjustments\".\"amount_usd_units\" % 10000 = 0"
+        },
+        "wallet_adjustments_reason_check": {
+          "name": "wallet_adjustments_reason_check",
+          "value": "char_length(\"wallet_adjustments\".\"reason\") between 5 and 500"
+        },
+        "wallet_adjustments_customer_note_check": {
+          "name": "wallet_adjustments_customer_note_check",
+          "value": "char_length(\"wallet_adjustments\".\"customer_note\") between 1 and 200"
+        },
+        "wallet_adjustments_external_reference_check": {
+          "name": "wallet_adjustments_external_reference_check",
+          "value": "char_length(\"wallet_adjustments\".\"external_reference\") between 1 and 100"
+        },
+        "wallet_adjustments_deposit_method_check": {
+          "name": "wallet_adjustments_deposit_method_check",
+          "value": "(\"wallet_adjustments\".\"deposit_method\" is not null) = (\"wallet_adjustments\".\"category\" = 'manual_deposit' and \"wallet_adjustments\".\"reverses_adjustment_id\" is null)"
+        },
+        "wallet_adjustments_external_reference_method_check": {
+          "name": "wallet_adjustments_external_reference_method_check",
+          "value": "(\"wallet_adjustments\".\"external_reference\" is not null) = (\"wallet_adjustments\".\"deposit_method\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.currency": {
+      "name": "currency",
+      "schema": "public",
+      "values": [
+        "USD",
+        "SYP"
+      ]
+    },
+    "public.audit_actor_kind": {
+      "name": "audit_actor_kind",
+      "schema": "public",
+      "values": [
+        "admin",
+        "customer",
+        "system",
+        "cli"
+      ]
+    },
+    "public.audit_channel": {
+      "name": "audit_channel",
+      "schema": "public",
+      "values": [
+        "admin",
+        "store",
+        "telegram",
+        "worker",
+        "cli"
+      ]
+    },
+    "public.deposit_decider": {
+      "name": "deposit_decider",
+      "schema": "public",
+      "values": [
+        "admin",
+        "system"
+      ]
+    },
+    "public.deposit_flag_code": {
+      "name": "deposit_flag_code",
+      "schema": "public",
+      "values": [
+        "receipt_reused",
+        "receipt_similar",
+        "new_account_large",
+        "velocity",
+        "shared_phone",
+        "amount_mismatch",
+        "reference_missing",
+        "reference_different",
+        "wrong_network",
+        "sent_before_deposit"
+      ]
+    },
+    "public.deposit_method": {
+      "name": "deposit_method",
+      "schema": "public",
+      "values": [
+        "sham_cash",
+        "usdt_trc20",
+        "usdt_bep20"
+      ]
+    },
+    "public.deposit_reference_check": {
+      "name": "deposit_reference_check",
+      "schema": "public",
+      "values": [
+        "matches",
+        "missing",
+        "different"
+      ]
+    },
+    "public.deposit_reject_reason": {
+      "name": "deposit_reject_reason",
+      "schema": "public",
+      "values": [
+        "not_received",
+        "receipt_invalid",
+        "receipt_used",
+        "reference_other_customer",
+        "wrong_account",
+        "wrong_network",
+        "transfer_other_customer",
+        "other"
+      ]
+    },
+    "public.deposit_status": {
+      "name": "deposit_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "submitted",
+        "credited",
+        "rejected",
+        "expired",
+        "cancelled"
+      ]
+    },
+    "public.usdt_check_error": {
+      "name": "usdt_check_error",
+      "schema": "public",
+      "values": [
+        "not_found",
+        "tx_failed",
+        "not_to_store",
+        "wrong_token",
+        "amount_too_small"
+      ]
+    },
+    "public.usdt_check_status": {
+      "name": "usdt_check_status",
+      "schema": "public",
+      "values": [
+        "awaiting_transfer",
+        "searching",
+        "confirming",
+        "review",
+        "done"
+      ]
+    },
+    "public.usdt_transfer_source": {
+      "name": "usdt_transfer_source",
+      "schema": "public",
+      "values": [
+        "scan",
+        "txid"
+      ]
+    },
+    "public.usdt_txid_source": {
+      "name": "usdt_txid_source",
+      "schema": "public",
+      "values": [
+        "customer",
+        "scan"
+      ]
+    },
+    "public.stored_file_kind": {
+      "name": "stored_file_kind",
+      "schema": "public",
+      "values": [
+        "deposit_receipt",
+        "sham_cash_qr"
+      ]
+    },
+    "public.email_priority": {
+      "name": "email_priority",
+      "schema": "public",
+      "values": [
+        "high",
+        "normal"
+      ]
+    },
+    "public.email_status": {
+      "name": "email_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "sent",
+        "failed"
+      ]
+    },
+    "public.email_template": {
+      "name": "email_template",
+      "schema": "public",
+      "values": [
+        "customer_verify_email",
+        "customer_reset_password",
+        "customer_change_email",
+        "customer_email_changed",
+        "customer_password_changed",
+        "customer_new_sign_in",
+        "customer_sign_up_attempt",
+        "customer_wallet_adjusted",
+        "customer_deposit_credited",
+        "customer_deposit_rejected",
+        "customer_deposit_receipt_requested"
+      ]
+    },
+    "public.adjustment_category": {
+      "name": "adjustment_category",
+      "schema": "public",
+      "values": [
+        "compensation",
+        "correction",
+        "cash_refund",
+        "manual_deposit",
+        "test_funds"
+      ]
+    },
+    "public.adjustment_direction": {
+      "name": "adjustment_direction",
+      "schema": "public",
+      "values": [
+        "credit",
+        "debit"
+      ]
+    },
+    "public.journal_kind": {
+      "name": "journal_kind",
+      "schema": "public",
+      "values": [
+        "deposit",
+        "purchase",
+        "refund",
+        "cost_of_goods",
+        "adjustment"
+      ]
+    },
+    "public.ledger_account_kind": {
+      "name": "ledger_account_kind",
+      "schema": "public",
+      "values": [
+        "customer_wallet",
+        "sham_cash_receipts",
+        "usdt_receipts",
+        "supplier_prepaid",
+        "sales_revenue",
+        "cost_of_goods",
+        "refunds",
+        "adjustments",
+        "currency_exchange",
+        "deposit_rounding"
+      ]
+    },
+    "public.manual_deposit_method": {
+      "name": "manual_deposit_method",
+      "schema": "public",
+      "values": [
+        "sham_cash",
+        "usdt_trc20",
+        "usdt_bep20"
+      ]
+    },
+    "public.payment_method": {
+      "name": "payment_method",
+      "schema": "public",
+      "values": [
+        "sham_cash",
+        "usdt_trc20",
+        "usdt_bep20"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

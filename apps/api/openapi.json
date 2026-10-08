@@ -4274,7 +4274,9 @@
           "not_found",
           "tx_failed",
           "not_to_store",
-          "wrong_token"
+          "wrong_token",
+          "amount_too_small",
+          "txid_used"
         ]
       },
       "UsdtOptions": {

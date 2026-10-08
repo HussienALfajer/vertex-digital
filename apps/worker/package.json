@@ -8,7 +8,8 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "usdt:fake-transfer": "node dist/cli/usdt-fake-transfer.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",

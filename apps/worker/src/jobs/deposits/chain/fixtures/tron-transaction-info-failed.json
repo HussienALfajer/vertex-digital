@@ -1,0 +1,13 @@
+{
+  "id": "2222222222222222222222222222222222222222222222222222222222222222",
+  "fee": 1000000,
+  "blockNumber": 60000001,
+  "blockTimeStamp": 1759900003000,
+  "result": "FAILED",
+  "resMessage": "5452414e534645525f4641494c4544",
+  "receipt": {
+    "energy_usage_total": 20000,
+    "result": "REVERT"
+  },
+  "log": []
+}

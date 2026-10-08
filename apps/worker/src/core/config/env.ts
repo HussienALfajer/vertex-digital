@@ -1,4 +1,5 @@
 import { hostname } from 'node:os';
+import { type UsdtMethod, usdtAddressSchemas } from '@vertex-digital/contracts';
 import { z } from 'zod';
 
 /** Empty, or a value `.env.example` ships (never a real secret), counts as unset. */
@@ -7,6 +8,23 @@ const optional = () =>
     .string()
     .optional()
     .transform((value) => (value && !value.includes('replace-me') ? value : undefined));
+
+/** The all-zero addresses an older `.env.example` shipped count as unset. */
+const isPlaceholderAddress = (value: string) => /^(T|0x)0+$/.test(value);
+
+/**
+ * A USDT receiving address (S04 rule U1, edge case 17), checked as the API checks it: unset or a
+ * placeholder leaves the network unscanned; a value that fails its checksum stops the start.
+ */
+const usdtAddress = (method: UsdtMethod) =>
+  z
+    .string()
+    .optional()
+    .transform((value) => {
+      const address = value?.trim();
+      return address && !isPlaceholderAddress(address) ? address : undefined;
+    })
+    .pipe(usdtAddressSchemas[method].optional());
 
 export const envSchema = z
   .object({
@@ -51,6 +69,24 @@ export const envSchema = z
       .transform((value) => value === 'true'),
     SMTP_USER: optional(),
     SMTP_PASSWORD: optional(),
+    USDT_TRC20_ADDRESS: usdtAddress('usdt_trc20'),
+    USDT_BEP20_ADDRESS: usdtAddress('usdt_bep20'),
+    /**
+     * Where USDT transfers are read (S04): `live` reads TRON and BSC; `fake` reads the transfers
+     * `usdt:fake-transfer` writes to FAKE_CHAIN_FILE (development; refused in production).
+     */
+    CHAIN_READER: z
+      .preprocess(
+        // `stub` is the name an older `.env.example` used for `fake`.
+        (value) => (value === 'stub' ? 'fake' : value),
+        z.enum(['live', 'fake']),
+      )
+      .default('fake'),
+    FAKE_CHAIN_FILE: z.string().min(1).default('./.data/fake-chain.json'),
+    TRONGRID_API_URL: z.url({ protocol: /^https$/ }).default('https://api.trongrid.io'),
+    TRONGRID_API_KEY: optional(),
+    /** A BSC JSON-RPC endpoint; a provider's key goes in the URL, so it is a secret. */
+    BSC_RPC_URL: optional().pipe(z.url({ protocol: /^https$/ }).optional()),
   })
   .refine((env) => Boolean(env.TELEGRAM_BOT_TOKEN) === Boolean(env.TELEGRAM_ALERTS_CHAT_ID), {
     message: 'TELEGRAM_BOT_TOKEN and TELEGRAM_ALERTS_CHAT_ID are set together',
@@ -59,6 +95,18 @@ export const envSchema = z
   .refine((env) => env.NODE_ENV !== 'production' || env.EMAIL_TRANSPORT === 'smtp', {
     message: 'Production sends email over SMTP',
     path: ['EMAIL_TRANSPORT'],
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || env.CHAIN_READER === 'live', {
+    message: 'Production reads the chains (CHAIN_READER=live)',
+    path: ['CHAIN_READER'],
+  })
+  .refine((env) => env.CHAIN_READER !== 'live' || !env.USDT_TRC20_ADDRESS || env.TRONGRID_API_KEY, {
+    message: 'TRONGRID_API_KEY is required to read TRON',
+    path: ['TRONGRID_API_KEY'],
+  })
+  .refine((env) => env.CHAIN_READER !== 'live' || !env.USDT_BEP20_ADDRESS || env.BSC_RPC_URL, {
+    message: 'BSC_RPC_URL is required to read BSC',
+    path: ['BSC_RPC_URL'],
   })
   .refine(
     (env) =>

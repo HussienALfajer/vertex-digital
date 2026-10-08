@@ -1354,7 +1354,7 @@ export interface components {
         /** @enum {string} */
         UsdtCheckStatus: "awaiting_transfer" | "searching" | "confirming" | "review" | "done";
         /** @enum {string} */
-        UsdtCheckError: "not_found" | "tx_failed" | "not_to_store" | "wrong_token";
+        UsdtCheckError: "not_found" | "tx_failed" | "not_to_store" | "wrong_token" | "amount_too_small" | "txid_used";
         UsdtOptions: {
             networks: {
                 method: components["schemas"]["UsdtMethod"];

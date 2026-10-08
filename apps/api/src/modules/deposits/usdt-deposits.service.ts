@@ -60,6 +60,13 @@ const TAILS = Array.from(
   (_, index) => USDT_TAIL_MIN_UNITS + index * USDT_TAIL_STEP_UNITS,
 );
 
+/**
+ * A scan of a network (rule U12): one at a time per network. A new deposit sends one, so the
+ * worker starts watching at once and keeps a 20-second pace while the deposit is open.
+ */
+export const scanJob = (method: UsdtMethod) =>
+  [QUEUES.depositsUsdtScan, { method }, { singletonKey: method }] as const;
+
 /** The verification job of a deposit: one at a time per deposit (rule U9). */
 export const verifyJob = (depositId: string) =>
   [QUEUES.depositsUsdtVerify, { depositId }, { singletonKey: depositId }] as const;
@@ -173,6 +180,7 @@ export class UsdtDepositsService {
             payAmountUnits,
           },
         });
+        await this.jobs.send(tx, ...scanJob(input.method));
         return created;
       });
       return { deposit: (await this.deposits.views([row], settings))[0] as Deposit, created: true };
