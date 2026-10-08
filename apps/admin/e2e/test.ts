@@ -1,4 +1,12 @@
 import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
+import {
+  approvalFlags,
+  approvalNeedsReauthentication,
+  DEPOSIT_SETTINGS_DEFAULTS,
+  depositCreditUsdUnits,
+  rateChangePercent,
+  rateConfirmationError,
+} from '@vertex-digital/contracts';
 import openapi from '../../api/openapi.json' with { type: 'json' };
 
 /*
@@ -107,6 +115,16 @@ const ADJUSTMENTS_PATH = /^\/api\/admin\/wallets\/([^/]+)\/adjustments$/;
 const REVERSE_PATH = /^\/api\/admin\/wallet-adjustments\/([^/]+)\/reverse$/;
 const RESET_PASSWORD_PATH = /^\/api\/admin\/test-customers\/[^/]+\/reset-password$/;
 const OWN_SESSION_PATH = /^\/api\/admin\/me\/sessions\/([^/]+)$/;
+const DEPOSIT_PATH = /^\/api\/admin\/deposits\/([^/]+)$/;
+const DEPOSIT_ACTION_PATH = /^\/api\/admin\/deposits\/([^/]+)\/(approve|reject|request-receipt)$/;
+const RECEIPT_PATH = /^\/api\/admin\/deposits\/[^/]+\/receipts\/[^/]+$/;
+const QR_PATH = /^\/api\/admin\/deposit-settings\/qr\/[^/]+$/;
+
+/** A 1×1 PNG: what the receipt and QR routes answer in tests. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+);
 
 /** One USD in micro-dollars (ADR 0003). */
 export const USD = 1_000_000;
@@ -133,6 +151,28 @@ interface Adjustment {
   createdAt: string;
   balanceAfterUnits: number;
 }
+
+export interface RateRecord {
+  id: string;
+  sypPerUsd: string;
+  displayStepSypUnits: number;
+  changePercent: string | null;
+  adminName: string | null;
+  createdAt: string;
+}
+
+/** A deposit as `GET /api/admin/deposits/:id` answers it (S03). */
+export type MockDeposit = Record<string, unknown> & {
+  id: string;
+  status: string;
+  currency: 'SYP' | 'USD';
+  declaredAmountUnits: number;
+  receiptRequestCount: number;
+  approvalRate: { rateId: string; rate: string } | null;
+  flags: (Record<string, unknown> & { code: string })[];
+};
+
+const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
 
 interface TestCustomer {
   id: string;
@@ -191,6 +231,28 @@ export class AdminApi {
   adjustments: Adjustment[] = [];
   private readonly adjustmentKeys = new Map<string, Adjustment>();
   private pendingTwoFactor = false;
+  /** The exchange rates, newest first: one set an hour ago, so the stale banner stays hidden. */
+  rates: RateRecord[] = [
+    {
+      id: '0199a000-0000-7000-8000-0000000000f1',
+      sypPerUsd: '118',
+      displayStepSypUnits: 500,
+      changePercent: null,
+      adminName: 'ريم الخطيب',
+      createdAt: hoursAgo(1),
+    },
+  ];
+  /** The deposit settings: the defaults until the first save (rule SC1). */
+  depositSettings: Record<string, unknown> = {
+    ...DEPOSIT_SETTINGS_DEFAULTS,
+    saved: false,
+    savedAt: null,
+  };
+  /** The deposits the queue and the review pages read (S03). */
+  deposits: MockDeposit[] = [];
+  /** The transaction numbers already claimed (rule SC14). */
+  readonly claimedReferences = new Set<string>();
+  private readonly decisionKeys = new Map<string, string>();
 
   /** The wallet's balance: the sum of its adjustments. */
   get balanceUnits(): number {
@@ -272,6 +334,176 @@ export class AdminApi {
     }));
   }
 
+  /** The deposit and rate routes of S03, or false when `path` is not one of them. */
+  private async answerDeposits(
+    route: Route,
+    method: string,
+    url: URL,
+    body: Record<string, unknown> | null,
+  ): Promise<boolean> {
+    const path = url.pathname;
+    const json = async (status: number, value: unknown) => {
+      await route.fulfill({ status, json: value });
+      return true;
+    };
+    const apiError = (status: number, code: string, details?: unknown) =>
+      json(status, { statusCode: status, code, message: code, details });
+    const image = async () => {
+      await route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+      return true;
+    };
+    const current = this.rates[0] ?? null;
+
+    if (path === '/api/admin/rates' && method === 'GET') {
+      const stale = !current || Date.now() - Date.parse(current.createdAt) > 48 * 3_600_000;
+      return json(200, { current, stale, history: { items: this.rates, nextCursor: null } });
+    }
+    if (path === '/api/admin/rates' && method === 'POST') {
+      if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
+      const input = body as { sypPerUsd: string; rateConfirmation?: string };
+      const refusal = rateConfirmationError(current?.sypPerUsd ?? null, input);
+      if (refusal) return apiError(400, refusal);
+      const record: RateRecord = {
+        id: `0199a000-0000-7000-8000-0000000000${(0xf1 + this.rates.length).toString(16)}`,
+        sypPerUsd: input.sypPerUsd,
+        displayStepSypUnits: Number(body?.displayStepSypUnits),
+        changePercent: current ? rateChangePercent(current.sypPerUsd, input.sypPerUsd) : null,
+        adminName: this.user.name,
+        createdAt: new Date().toISOString(),
+      };
+      this.rates = [record, ...this.rates];
+      return json(201, record);
+    }
+    if (path === '/api/admin/deposit-settings' && method === 'GET') {
+      return json(200, this.depositSettings);
+    }
+    if (path === '/api/admin/deposit-settings' && method === 'PUT') {
+      if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
+      const savedAt = new Date().toISOString();
+      this.depositSettings = { ...body, saved: true, savedAt };
+      return json(200, this.depositSettings);
+    }
+    if (path === '/api/admin/deposit-settings/qr' && method === 'POST') {
+      if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
+      return json(200, { fileId: crypto.randomUUID() });
+    }
+    if (QR_PATH.test(path) || RECEIPT_PATH.test(path)) return image();
+    if (path === '/api/admin/deposits/counts') {
+      const submitted = this.deposits.filter((deposit) => deposit.status === 'submitted');
+      return json(200, {
+        submitted: submitted.length,
+        submittedFlagged: submitted.filter((deposit) => deposit.flags.length > 0).length,
+        pending: this.deposits.filter((deposit) => deposit.status === 'pending').length,
+      });
+    }
+    if (path === '/api/admin/deposits' && method === 'GET') {
+      const status = url.searchParams.get('status') ?? 'submitted';
+      const q = (url.searchParams.get('q') ?? '').toUpperCase();
+      const items = this.deposits
+        .filter((deposit) => status === 'all' || deposit.status === status)
+        .filter((deposit) => !q || String(deposit.referenceCode).includes(q))
+        // Rule RV10: flagged first, then the oldest submission.
+        .sort((a, b) => Number(b.flags.length > 0) - Number(a.flags.length > 0))
+        .map((deposit) => ({
+          ...deposit,
+          customer: {
+            id: (deposit.customer as { id: string }).id,
+            name: (deposit.customer as { name: string }).name,
+            email: (deposit.customer as { email: string }).email,
+            isTest: (deposit.customer as { isTest: boolean }).isTest,
+          },
+          flags: [...new Set(deposit.flags.map((flag) => flag.code))],
+        }));
+      return json(200, { items, nextCursor: null });
+    }
+    const one = path.match(DEPOSIT_PATH);
+    if (one && method === 'GET') {
+      const deposit = this.deposits.find((item) => item.id === one[1]);
+      return deposit ? json(200, deposit) : apiError(404, 'NOT_FOUND');
+    }
+    const action = path.match(DEPOSIT_ACTION_PATH);
+    if (!action || method !== 'POST') return false;
+    const deposit = this.deposits.find((item) => item.id === action[1]);
+    if (!deposit) return apiError(404, 'NOT_FOUND');
+    const key = route.request().headers()['idempotency-key'];
+    if (key && this.decisionKeys.get(key) === JSON.stringify(body)) return json(200, deposit);
+    if (deposit.status !== 'submitted') {
+      return apiError(409, 'DEPOSIT_STATE_CONFLICT', { status: deposit.status });
+    }
+    const decided = { decidedAt: new Date().toISOString(), adminName: this.user.name };
+    if (action[2] === 'approve') {
+      const input = body as {
+        transactionNumber: string;
+        receivedCurrency: 'SYP' | 'USD';
+        receivedAmountUnits: number;
+        referenceCheck: 'matches' | 'missing' | 'different';
+        acknowledgedFlags: string[];
+      };
+      const atApproval = approvalFlags(deposit, input);
+      const expected = [...new Set([...deposit.flags.map((flag) => flag.code), ...atApproval])];
+      const rate = input.receivedCurrency === 'SYP' ? (deposit.approvalRate?.rate ?? null) : null;
+      const credit = depositCreditUsdUnits(input.receivedCurrency, input.receivedAmountUnits, rate);
+      if (approvalNeedsReauthentication(credit, expected.length) && this.reauthenticationRequired) {
+        return apiError(403, 'REAUTHENTICATION_REQUIRED');
+      }
+      const reference = input.transactionNumber.trim().toUpperCase();
+      if (this.claimedReferences.has(reference)) {
+        return apiError(409, 'EXTERNAL_REFERENCE_TAKEN', {
+          kind: 'adjustment',
+          id: '0199a000-0000-7000-8000-0000000000b9',
+        });
+      }
+      if (
+        expected.length !== input.acknowledgedFlags.length ||
+        expected.some((code) => !input.acknowledgedFlags.includes(code))
+      ) {
+        return apiError(409, 'FLAGS_NOT_ACKNOWLEDGED', { expected });
+      }
+      this.claimedReferences.add(reference);
+      Object.assign(deposit, decided, {
+        status: 'credited',
+        eta: null,
+        flags: [
+          ...deposit.flags,
+          ...atApproval.map((code, index) => ({
+            id: `0199a000-0000-7000-8000-0000000001${String(index).padStart(2, '0')}`,
+            code,
+            receiptId: null,
+            details: {},
+            createdAt: decided.decidedAt,
+          })),
+        ],
+        credit: {
+          transactionNumber: input.transactionNumber.trim(),
+          receivedCurrency: input.receivedCurrency,
+          receivedAmountUnits: input.receivedAmountUnits,
+          creditedUsdUnits: credit,
+          creditRateId: rate ? (deposit.approvalRate?.rateId ?? null) : null,
+          creditRate: rate,
+          referenceCheck: input.referenceCheck,
+          journalId: '0199a000-0000-7000-9000-0000000000c1',
+        },
+      });
+    } else if (action[2] === 'reject') {
+      Object.assign(deposit, decided, {
+        status: 'rejected',
+        eta: null,
+        rejection: { reason: body?.reason, customerNote: body?.customerNote ?? null },
+      });
+    } else {
+      if (deposit.receiptRequestCount > 0) return apiError(409, 'RECEIPT_ALREADY_REQUESTED');
+      Object.assign(deposit, {
+        status: 'pending',
+        eta: null,
+        receiptRequestCount: 1,
+        receiptRequestedAt: new Date().toISOString(),
+        receiptRequestNote: body?.customerNote ?? null,
+      });
+    }
+    if (key) this.decisionKeys.set(key, JSON.stringify(body));
+    return json(200, deposit);
+  }
+
   /** The body of the last request to `key`. */
   lastBody(key: string): unknown {
     return this.bodies.findLast((entry) => entry.key === key)?.body;
@@ -283,7 +515,7 @@ export class AdminApi {
     const path = url.pathname;
     const key = `${request.method()} ${path}`;
     this.calls.push(key);
-    const body = request.postDataJSON() as Record<string, unknown> | null;
+    const body = jsonBody(request);
     this.bodies.push({ key, body });
     this.requests.push({ key, headers: request.headers() });
     const json = (status: number, value: unknown) => route.fulfill({ status, json: value });
@@ -375,6 +607,10 @@ export class AdminApi {
         customerId: CUSTOMER_ID,
         journalId: result.adjustment.id,
       });
+    }
+    if (path.startsWith('/api/admin/deposit') || path === '/api/admin/rates') {
+      const answered = await this.answerDeposits(route, request.method(), url, body);
+      if (answered) return;
     }
     const ownSession = path.match(OWN_SESSION_PATH);
     if (request.method() === 'DELETE' && ownSession) {
@@ -532,6 +768,15 @@ export class AdminApi {
   }
 }
 
+/** A JSON body as sent, or null (a multipart upload, a GET). */
+function jsonBody(request: ReturnType<Route['request']>): Record<string, unknown> | null {
+  try {
+    return request.postDataJSON() as Record<string, unknown> | null;
+  } catch {
+    return null;
+  }
+}
+
 export const test = base.extend<{ admin: AdminApi }>({
   admin: async ({ page }, use) => {
     const admin = new AdminApi();
@@ -554,10 +799,17 @@ export const test = base.extend<{ admin: AdminApi }>({
 });
 
 /** A screenshot attached to the report: the RTL review evidence of each run. */
-export async function screenshot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
+export async function screenshot(
+  page: Page,
+  testInfo: TestInfo,
+  name: string,
+  { fullPage = false }: { fullPage?: boolean } = {},
+): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
+  // A full page is captured from the top, so the sticky bar and navigation sit where they belong.
+  if (fullPage) await page.evaluate(() => window.scrollTo(0, 0));
   const path = testInfo.outputPath(`${name}.png`);
-  await page.screenshot({ path, animations: 'disabled' });
+  await page.screenshot({ path, fullPage, animations: 'disabled' });
   await testInfo.attach(name, { path, contentType: 'image/png' });
 }
 

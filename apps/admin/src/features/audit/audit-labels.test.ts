@@ -9,6 +9,16 @@ describe('fieldValue', () => {
   it('shows USD amounts as dollars', () => {
     expect(fieldValue(t, 'amountUnits', 25_000_000)).toBe('$25.00');
     expect(fieldValue(t, 'balanceAfterUnits', 0)).toBe('$0.00');
+    expect(fieldValue(t, 'creditedUsdUnits', 16_100_000)).toBe('$16.10');
+    expect(fieldValue(t, 'declaredUsdUnits', 16_940_000)).toBe('$16.94');
+  });
+
+  it('shows deposit codes by their labels', () => {
+    expect(fieldValue(t, 'rejectReason', 'receipt_invalid')).toBe(
+      ar.deposits.rejectReasons.receipt_invalid,
+    );
+    expect(fieldValue(t, 'referenceCheck', 'missing')).toBe(ar.deposits.referenceChecks.missing);
+    expect(fieldValue(t, 'rejectReason', 'unknown')).toBe('unknown');
   });
 
   it('shows wallet adjustment codes by their labels', () => {

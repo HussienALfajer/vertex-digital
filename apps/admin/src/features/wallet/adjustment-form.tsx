@@ -1,14 +1,13 @@
 import { formatUsd } from '@vertex-digital/contracts';
 import { Field, FieldDescription, FieldError, FieldLabel, Input } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
-import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 
 /*
- * What the adjust and reverse dialogs share: the request's `Idempotency-Key`, the typed
- * confirmation above $100 (rule J6), the balance lines, and where a refusal is shown.
+ * What the adjust and reverse dialogs share: the typed confirmation above $100 (rule J6), the
+ * balance lines, and where a refusal is shown.
  */
 
 export type AdjustmentField =
@@ -21,21 +20,6 @@ export type AdjustmentField =
   | 'note';
 
 export type AdjustmentFieldErrors = Partial<Record<AdjustmentField, string>>;
-
-/**
- * The `Idempotency-Key` for a request body (rule J9, edge cases 4–6): one per dialog opening,
- * kept while the same body is sent again (a retry after re-authentication or a lost answer gets
- * the first result), and a new one once a field changed after a refusal, so the edited request is
- * not answered `IDEMPOTENCY_KEY_REUSED`.
- */
-export function useIdempotencyKey(): (body: unknown) => string {
-  const last = useRef<{ key: string; body: string } | null>(null);
-  return (body) => {
-    const sent = JSON.stringify(body);
-    if (last.current?.body !== sent) last.current = { key: crypto.randomUUID(), body: sent };
-    return last.current.key;
-  };
-}
 
 /** Codes that belong under one field rather than above the buttons. */
 const FIELD_OF_CODE: Partial<Record<string, AdjustmentField>> = {

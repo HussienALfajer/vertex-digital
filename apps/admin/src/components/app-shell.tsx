@@ -1,7 +1,8 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, type LinkProps, useRouter } from '@tanstack/react-router';
 import {
   Avatar,
+  Badge,
   Button,
   cn,
   DropdownMenu,
@@ -16,24 +17,37 @@ import {
   VertexMark,
 } from '@vertex-digital/ui';
 import {
+  ArrowDownToLineIcon,
+  ArrowLeftRightIcon,
   ChevronDownIcon,
   HouseIcon,
   LogOutIcon,
   type LucideIcon,
   MenuIcon,
   ScrollTextIcon,
+  SettingsIcon,
   UserRoundCogIcon,
   UsersRoundIcon,
   WalletIcon,
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { depositCountsQuery } from '../features/deposits/deposits.queries';
+import { StaleRateBanner } from '../features/rates/stale-rate-banner';
 import { type AdminSession, authClient, leaveSession, useSession } from '../lib/auth';
 import { ThemeToggle } from './theme-toggle';
 
 interface NavItem {
   to: LinkProps['to'];
-  label: 'nav.home' | 'nav.wallets' | 'nav.audit' | 'nav.testCustomers' | 'nav.account';
+  label:
+    | 'nav.home'
+    | 'nav.deposits'
+    | 'nav.wallets'
+    | 'nav.rates'
+    | 'nav.depositSettings'
+    | 'nav.audit'
+    | 'nav.testCustomers'
+    | 'nav.account';
   icon: LucideIcon;
   /** Active only on this exact path; otherwise also on its sub-pages. */
   exact?: boolean;
@@ -42,7 +56,10 @@ interface NavItem {
 /** Each feature adds its section here. One admin, full access: no permission checks (ADR 0016). */
 const navItems: NavItem[] = [
   { to: '/', label: 'nav.home', icon: HouseIcon, exact: true },
+  { to: '/deposits', label: 'nav.deposits', icon: ArrowDownToLineIcon },
   { to: '/wallets', label: 'nav.wallets', icon: WalletIcon },
+  { to: '/rates', label: 'nav.rates', icon: ArrowLeftRightIcon },
+  { to: '/settings/deposits', label: 'nav.depositSettings', icon: SettingsIcon },
   { to: '/audit', label: 'nav.audit', icon: ScrollTextIcon },
   { to: '/test-customers', label: 'nav.testCustomers', icon: UsersRoundIcon },
   { to: '/account', label: 'nav.account', icon: UserRoundCogIcon },
@@ -66,7 +83,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar session={session} />
         <main id="main" tabIndex={-1} className="flex-1 outline-none">
-          <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 md:px-8">{children}</div>
+          <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 md:px-8">
+            <StaleRateBanner />
+            {children}
+          </div>
         </main>
       </div>
     </div>
@@ -108,10 +128,36 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           >
             <Icon className="size-5" />
             {t(label)}
+            {to === '/deposits' && <DepositsBadge />}
           </Link>
         ))}
       </nav>
     </div>
+  );
+}
+
+/**
+ * The deposits waiting for review, read every 30 seconds in the background; red when any of them
+ * is flagged (S03 screens). Nothing while there are none or the count could not be read.
+ */
+function DepositsBadge() {
+  const { t } = useTranslation();
+  const counts = useQuery(depositCountsQuery);
+  const submitted = counts.data?.submitted ?? 0;
+  if (submitted === 0) return null;
+  const flagged = (counts.data?.submittedFlagged ?? 0) > 0;
+  return (
+    <Badge
+      tone={flagged ? 'danger' : 'gold'}
+      className="ms-auto tabular-nums"
+      aria-label={
+        flagged
+          ? t('nav.depositsBadgeFlagged', { submitted })
+          : t('nav.depositsBadge', { submitted })
+      }
+    >
+      {submitted}
+    </Badge>
   );
 }
 

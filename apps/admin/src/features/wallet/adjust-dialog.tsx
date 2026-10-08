@@ -36,13 +36,13 @@ import {
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
+import { useIdempotencyKey } from '../../lib/idempotency';
 import {
   type AdjustmentField,
   type AdjustmentFieldErrors,
   BalanceLines,
   ConfirmAmountField,
   failureOf,
-  useIdempotencyKey,
 } from './adjustment-form';
 import { useCreateAdjustment } from './wallet.queries';
 

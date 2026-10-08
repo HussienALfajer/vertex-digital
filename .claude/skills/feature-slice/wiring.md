@@ -76,8 +76,8 @@ Filled after the first feature of each kind ships; until then, follow ADR 0011 a
 | Supplier adapter with fixtures | — (first: `/supplier-adapter shop2topup`) |
 | API module, controllers, service, integration test | `apps/api/src/modules/audit/`, `apps/api/test/audit.test.ts` |
 | Worker job with retries and idempotency | — (first: F06) |
-| Admin list page, form, detail page | `apps/admin/src/features/audit/` (URL filters, cursor list, detail sheet), `features/customers/test-customers-page.tsx` (form dialog, one-time secret), `features/wallet/` (search in the URL, detail page with a cursor table) |
+| Admin list page, form, detail page | `apps/admin/src/features/audit/` (URL filters, cursor list, detail sheet), `features/customers/test-customers-page.tsx` (form dialog, one-time secret), `features/wallet/` (search in the URL, detail page with a cursor table), `features/deposits/` (tabs and search in the URL, a review page with a decision form and dialogs, a background-polled navigation badge) |
 | Admin money dialog (re-authentication, `Idempotency-Key`, typed confirmation) | `apps/admin/src/features/wallet/adjust-dialog.tsx`, `adjustment-form.tsx` (`useIdempotencyKey`, refusals by field), `wallet.queries.ts` |
 | Store page with cached reads | — (first: F12) |
-| Store page read in the browser with the session (no cache) | `apps/store/src/features/wallet/` (`requests.ts` with its test, skeleton, error, sign-in redirect, load more), the header chip `balance-chip.tsx` |
-| E2E flow and screenshots | `apps/store/e2e/accounts.spec.ts`, `apps/admin/e2e/accounts.spec.ts`; a stateful money mock: `apps/admin/e2e/wallets.spec.ts` with the wallet state in `e2e/test.ts` |
+| Store page read in the browser with the session (no cache) | `apps/store/src/features/wallet/` (`requests.ts` with its test, skeleton, error, sign-in redirect, load more), the header chip `balance-chip.tsx`; a dynamic `[id]` route (`useParams` under `<Suspense>`, `notFound()`), multipart upload and a money form with `Idempotency-Key` and ALTCHA: `apps/store/src/features/deposits/` |
+| E2E flow and screenshots | `apps/store/e2e/accounts.spec.ts`, `apps/admin/e2e/accounts.spec.ts`; a stateful money mock: `apps/admin/e2e/wallets.spec.ts` and `deposits.spec.ts` with their state in `e2e/test.ts`; store flows with images and multipart: `apps/store/e2e/deposits.spec.ts` |

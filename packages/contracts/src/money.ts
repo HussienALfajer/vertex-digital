@@ -201,3 +201,34 @@ export function floorToWholeCents(usdUnits: number): number {
 export function sypDepositUsd(sypUnits: number, rate: string): number {
   return floorToWholeCents(sypToUsd(sypUnits, rate, 'down'));
 }
+
+/**
+ * A SYP amount for display, with Latin digits and no currency sign (the screens add "ل.س"):
+ * `2,000`, `1,250.50`. Decimals only when the amount has a fraction of a pound. Exact.
+ */
+export function formatSyp(units: number): string {
+  const value = BigInt(unitsOrThrow(units));
+  const whole = (value / SYP_SCALE).toLocaleString('en-US');
+  const fraction = value % SYP_SCALE;
+  return fraction === 0n ? whole : `${whole}.${fraction.toString().padStart(2, '0')}`;
+}
+
+/** A rate for display (`13,000`, `118.5`): the whole part grouped, its decimals as stored. */
+export function formatRate(rate: string): string {
+  rateOrThrow(rate);
+  const [whole = '', decimals] = rate.split('.');
+  const grouped = BigInt(whole).toLocaleString('en-US');
+  return decimals === undefined ? grouped : `${grouped}.${decimals}`;
+}
+
+const SYP_INPUT_PATTERN = /^\d{1,12}$/;
+
+/**
+ * Whole Syrian pounds typed by a customer or the admin (`2000`; Latin digits, no separators) in
+ * SYP units, or null for anything else: deposits are declared in whole pounds (S03 rule SC2).
+ */
+export function parseWholeSyp(text: string): number | null {
+  const value = text.trim();
+  if (!SYP_INPUT_PATTERN.test(value)) return null;
+  return toUnits(BigInt(value) * SYP_SCALE);
+}

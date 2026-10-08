@@ -2,6 +2,8 @@ import {
   type AuditEntry,
   adjustmentCategorySchema,
   adjustmentDirectionSchema,
+  depositReferenceCheckSchema,
+  depositRejectReasonSchema,
   formatUsd,
   manualDepositMethodSchema,
 } from '@vertex-digital/contracts';
@@ -29,12 +31,15 @@ const asWritten = (value: unknown) =>
       ? value
       : JSON.stringify(value);
 
+/** Fields that always hold USD units (S02, S03). */
+const USD_FIELDS = ['amountUnits', 'balanceAfterUnits', 'declaredUsdUnits', 'creditedUsdUnits'];
+
 /**
- * A field's value for reading: USD amounts as dollars, wallet adjustment codes by their labels
- * (S02), anything else as written.
+ * A field's value for reading: USD amounts as dollars, wallet adjustment and deposit codes by
+ * their labels (S02, S03), anything else as written.
  */
 export function fieldValue(t: TFunction, key: string, value: unknown): string {
-  if ((key === 'amountUnits' || key === 'balanceAfterUnits') && Number.isSafeInteger(value)) {
+  if (USD_FIELDS.includes(key) && Number.isSafeInteger(value)) {
     return formatUsd(value as number);
   }
   const direction = adjustmentDirectionSchema.safeParse(value);
@@ -45,6 +50,14 @@ export function fieldValue(t: TFunction, key: string, value: unknown): string {
   if (key === 'category' && category.success) return t(`wallets.categories.${category.data}`);
   const method = manualDepositMethodSchema.safeParse(value);
   if (key === 'depositMethod' && method.success) return t(`wallets.methods.${method.data}`);
+  const rejectReason = depositRejectReasonSchema.safeParse(value);
+  if (key === 'rejectReason' && rejectReason.success) {
+    return t(`deposits.rejectReasons.${rejectReason.data}`);
+  }
+  const referenceCheck = depositReferenceCheckSchema.safeParse(value);
+  if (key === 'referenceCheck' && referenceCheck.success) {
+    return t(`deposits.referenceChecks.${referenceCheck.data}`);
+  }
   return asWritten(value);
 }
 

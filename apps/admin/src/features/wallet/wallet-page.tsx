@@ -3,7 +3,9 @@ import { Link } from '@tanstack/react-router';
 import {
   type AdminWallet,
   type AdminWalletEntry,
+  formatRate,
   formatSignedUsd,
+  formatSyp,
   formatUsd,
 } from '@vertex-digital/contracts';
 import {
@@ -132,6 +134,14 @@ function WalletHeader({ wallet }: { wallet: AdminWallet }) {
         <p className="text-3xl font-bold tabular-nums">
           <bdi dir="ltr">{formatUsd(wallet.balanceUnits)}</bdi>
         </p>
+        {wallet.syp && (
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {t('wallets.detail.syp', {
+              amount: formatSyp(wallet.syp.valueUnits),
+              rate: formatRate(wallet.syp.rate),
+            })}
+          </p>
+        )}
       </div>
     </Card>
   );
@@ -231,6 +241,25 @@ function EntryRow({
           <span className="font-medium">{entryLabel(t, entry)}</span>
           {adjustment?.customerNote && (
             <span className="text-muted-foreground">{adjustment.customerNote}</span>
+          )}
+          {entry.deposit && (
+            <span className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+              <Link
+                to="/deposits/$id"
+                params={{ id: entry.deposit.id }}
+                className="rounded-sm underline underline-offset-4"
+              >
+                <bdi dir="ltr">{entry.deposit.referenceCode}</bdi>
+              </Link>
+              {entry.deposit.syp && (
+                <span className="tabular-nums">
+                  {t('wallets.detail.depositSyp', {
+                    amount: formatSyp(entry.deposit.syp.amountUnits),
+                    rate: formatRate(entry.deposit.syp.rate),
+                  })}
+                </span>
+              )}
+            </span>
           )}
           {adjustment?.depositMethod && adjustment.externalReference && (
             <span className="flex items-center gap-1 text-sm text-muted-foreground">
