@@ -49,11 +49,11 @@ import { ApiQueryOf } from '../../core/http/api-query.js';
 import { ApiIdempotencyKey, IdempotencyKey } from '../../core/http/idempotency-key.js';
 import { requestMeta } from '../../core/http/request-meta.js';
 import type { AdminIdentity } from '../admin/index.js';
-import { FilesService } from '../files/index.js';
+import { FilesService, sendImage, uploadBody } from '../files/index.js';
 import { isUuid } from './deposit-records.js';
 import { DepositReviewService } from './deposit-review.service.js';
 import { DepositSettingsService } from './deposit-settings.service.js';
-import { sendImage, uploadBody } from './served-file.js';
+
 import { UsdtReviewService } from './usdt-review.service.js';
 
 const qrUpload = FileInterceptor('file', {

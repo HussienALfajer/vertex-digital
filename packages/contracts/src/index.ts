@@ -1,6 +1,7 @@
 export * from './admin.js';
 export * from './audit.js';
 export * from './auth.js';
+export * from './catalog.js';
 export * from './customers.js';
 export * from './deposits.js';
 export * from './errors.js';
@@ -9,6 +10,7 @@ export * from './lists.js';
 export * from './money.js';
 export * from './notifications.js';
 export * from './orders.js';
+export * from './pricing.js';
 export * from './rates.js';
 export * from './settings.js';
 export * from './system.js';

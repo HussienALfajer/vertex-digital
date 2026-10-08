@@ -44,8 +44,9 @@ import { ApiIdempotencyKey, IdempotencyKey } from '../../core/http/idempotency-k
 import { requestMeta } from '../../core/http/request-meta.js';
 import { RateLimit } from '../../core/rate-limit/rate-limit.js';
 import type { CustomerIdentity } from '../auth/index.js';
+import { sendImage, uploadBody } from '../files/index.js';
 import { DepositsService } from './deposits.service.js';
-import { sendImage, uploadBody } from './served-file.js';
+
 import { UsdtDepositsService } from './usdt-deposits.service.js';
 
 /** One image, at most 5 MB (rule SC8); a larger one answers `413 PAYLOAD_TOO_LARGE`. */

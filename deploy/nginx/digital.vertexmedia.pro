@@ -114,6 +114,14 @@ server {
         include snippets/vertexdigital-store-headers.conf;
     }
 
+    # Catalog images (S06 rule CT10), public and immutable (the API sets `Cache-Control`), sent
+    # by nginx after the API checked the id is a catalog image. Catalog images only on this host.
+    location ^~ /internal-files/catalog_image/ {
+        internal;
+        alias /srv/digital.vertexmedia.pro/shared/files/catalog_image/;
+        include snippets/vertexdigital-store-headers.conf;
+    }
+
     # --- Store -----------------------------------------------------------------------------
     # Hashed build assets never change: served from disk, cached for a year.
     location /_next/static/ {

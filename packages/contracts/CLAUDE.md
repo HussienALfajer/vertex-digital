@@ -3,7 +3,7 @@
 The single source of shapes and pure rules shared by api, worker, store and admin: Zod schemas and their types, money math, state transition tables, error codes (ADR 0003, 0004, 0011).
 
 ## Layout
-- `src/<module>.ts` per owning API module (`wallet.ts`, `orders.ts`, `admin.ts`, `audit.ts`: actions and their details, `customers.ts`, `notifications.ts`: email templates), re-exported from `src/index.ts`. Shared rules: `money.ts` (units, rates, conversion, rounding), `errors.ts` (error codes and the error response), `system.ts` (health), `auth.ts` (passwords, names, phones, account forms; the common-password list in `common-passwords.data.ts`, generated), `lists.ts` (cursor lists), `jobs.ts` (queue names shared by the API and the worker), `user-agent.ts` (browser and system names).
+- `src/<module>.ts` per owning API module (`wallet.ts`, `orders.ts`, `admin.ts`, `audit.ts`: actions and their details, `customers.ts`, `notifications.ts`: email templates), re-exported from `src/index.ts`. Shared rules: `money.ts` (units, rates, conversion, rounding), `errors.ts` (error codes and the error response), `system.ts` (health), `auth.ts` (passwords, names, phones, account forms; the common-password list in `common-passwords.data.ts`, generated), `lists.ts` (cursor lists; paged lists `pageQuerySchema` and `pagedListSchema`, S06), `catalog.ts` (S06: catalog shapes, `contrastRatio`, `productAvailability`, `missingForActivation`), `pricing.ts` (S06, ADR 0020: margin rules and the price math `priceFromCost`, `isProfitable`, `resolveMarginRule`, `savings`), `jobs.ts` (queue names shared by the API and the worker), `user-agent.ts` (browser and system names).
 - Tests next to the code (`*.test.ts`).
 
 ## Rules

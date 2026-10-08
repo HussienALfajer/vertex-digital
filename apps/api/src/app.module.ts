@@ -15,10 +15,12 @@ import { throttlerOptions } from './core/rate-limit/rate-limit.js';
 import { AdminModule } from './modules/admin/index.js';
 import { AuditModule } from './modules/audit/index.js';
 import { AuthModule } from './modules/auth/index.js';
+import { CatalogModule } from './modules/catalog/index.js';
 import { DepositsModule } from './modules/deposits/index.js';
 import { FilesModule } from './modules/files/index.js';
 import { HealthModule } from './modules/health/index.js';
 import { NotificationsModule } from './modules/notifications/index.js';
+import { PricingModule } from './modules/pricing/index.js';
 import { RatesModule } from './modules/rates/index.js';
 import { SettingsModule } from './modules/settings/index.js';
 import { TelegramModule } from './modules/telegram/index.js';
@@ -50,6 +52,8 @@ import { WalletModule } from './modules/wallet/index.js';
     WalletModule,
     FilesModule,
     DepositsModule,
+    CatalogModule,
+    PricingModule,
     TelegramModule,
     HealthModule,
   ],

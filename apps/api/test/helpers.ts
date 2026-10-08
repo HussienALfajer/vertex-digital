@@ -312,6 +312,7 @@ export function api(url: string) {
     get: (path: string, options?: RequestOptions) => request('GET', path, options),
     post: (path: string, options?: RequestOptions) => request('POST', path, options),
     patch: (path: string, options?: RequestOptions) => request('PATCH', path, options),
+    put: (path: string, options?: RequestOptions) => request('PUT', path, options),
     delete: (path: string, options?: RequestOptions) => request('DELETE', path, options),
     altcha,
     signInCustomer,

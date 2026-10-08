@@ -217,3 +217,11 @@ Tests:
   2. Admin screens (`/catalog`, game pages, `/pricing`) with E2E and screenshots.
 - Module layering: `pricing` sits above `catalog` (it calls `CatalogService` for a product's path and target checks) and `rates`; `catalog` never imports `pricing`. S07's `suppliers` module will call `PricingService` to compute and store prices.
 - Update `docs/architecture.md` (the `catalog` and `pricing` rows, "built so far"), the admin navigation, and the `files` row (catalog images).
+- Settled in implementation (PR 1):
+  - Lists: `archived=true` lists archived rows only; the default lists unarchived ones. Games are ordered by category, then their order.
+  - `CATALOG_NOT_EMPTY` names the games left in `details.games` (`id`, `nameAr`).
+  - Reorder audit entries name the parent: the category for games, the game for fields and products, the first category of the new order for categories.
+  - A field's `key` appears in audit details as `identifier` (the audit contract refuses any detail key that looks like a secret, `key` included).
+  - The preview's margin percent is `marginBp`, the margin in basis points of the price, rounded down; `ruleScope` and `ruleId` are null for draft values.
+  - Setting a rule to the values it already has writes nothing (no audit entry).
+  - Image previews in the panel come from the admin host: nginx proxies `/api/catalog/images/<id>` there too (the panel's CSP allows its own host only).
