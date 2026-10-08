@@ -10,6 +10,7 @@ import {
 } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
+import { notificationEventSchema } from './notifications.js';
 import { displayStepSchema } from './rates.js';
 import { storeSwitchSchema } from './settings.js';
 import {
@@ -136,6 +137,11 @@ export const AUDIT_DETAILS = {
   'customer.test_created': identity,
   /** `count` is the sessions signed out (rule T2). */
   'customer.test_password_reset': count,
+  /** S05 rule NT8: one email choice changed on `/account`. */
+  'customer.notification_preference_changed': z.strictObject({
+    event: notificationEventSchema,
+    email: z.boolean(),
+  }),
   /** A wallet adjustment by the admin (S02); the internal reason is the entry's `reason`. */
   'wallet_adjustment.created': z.strictObject({
     ...adjustment,

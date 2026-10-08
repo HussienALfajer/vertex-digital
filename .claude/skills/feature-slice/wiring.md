@@ -36,7 +36,7 @@ Everything a new module, error, job or screen must be connected to. Tests catch 
 - [ ] Queue names and schedules in `packages/contracts` (jobs list); the job in `jobs/<area>/<name>.job.ts`.
 - [ ] The job is safe to run twice (state checked in the database, unique keys), retries with backoff only on retryable errors, and reports final failures to Sentry and Telegram.
 - [ ] Supplier calls only through `packages/suppliers`; chain reads only through the chain-reader interface; tests use the fake supplier and fixtures, never live services.
-- [ ] Changes that customers or the admin watch live send `pg_notify` after commit.
+- [ ] Changes that customers or the admin watch live send `pg_notify` after commit (a customer event: `notifyCustomer` does it).
 
 ### bridge
 - [ ] The OpenAPI document and the admin client types regenerated and committed **(CI: OpenAPI drift)**.
@@ -80,4 +80,6 @@ Filled after the first feature of each kind ships; until then, follow ADR 0011 a
 | Admin money dialog (re-authentication, `Idempotency-Key`, typed confirmation) | `apps/admin/src/features/wallet/adjust-dialog.tsx`, `adjustment-form.tsx` (`useIdempotencyKey`, refusals by field), `wallet.queries.ts` |
 | Store page with cached reads | — (first: F12) |
 | Store page read in the browser with the session (no cache) | `apps/store/src/features/wallet/` (`requests.ts` with its test, skeleton, error, sign-in redirect, load more), the header chip `balance-chip.tsx`; a dynamic `[id]` route (`useParams` under `<Suspense>`, `notFound()`), multipart upload and a money form with `Idempotency-Key` and ALTCHA: `apps/store/src/features/deposits/`; a page that polls while open (10 s visible, 30 s hidden) with one view per sub-state: `usdt-deposit.tsx` |
+| Customer notification and its email from a change | `notifyCustomer` in `packages/db/src/notifications` (API: `NotificationsService.notifyCustomer(tx, …)`; worker: `notifyCustomer(tx, bossJobSender(boss), …)`), tests in `notify-customer.test.ts` |
+| Live updates over SSE | `apps/api/src/modules/notifications/notification-stream.service.ts` (one `LISTEN` per process, fan-out by customer, heartbeat, session re-check, `resync`), `apps/api/test/notifications.test.ts` (an SSE reader over `fetch`); store: `apps/store/src/features/notifications/live.ts` (`useNotificationEvents`), the E2E mock `api.stream(...)` |
 | E2E flow and screenshots | `apps/store/e2e/accounts.spec.ts`, `apps/admin/e2e/accounts.spec.ts`; a stateful money mock: `apps/admin/e2e/wallets.spec.ts` and `deposits.spec.ts` with their state in `e2e/test.ts`; store flows with images and multipart: `apps/store/e2e/deposits.spec.ts` |

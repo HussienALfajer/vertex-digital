@@ -6,10 +6,11 @@ import {
   type UsdtCheckError,
 } from '@vertex-digital/contracts';
 import {
+  bossJobSender,
   creditUsdtDeposit,
-  customers,
   depositFlags,
   deposits,
+  notifyCustomer,
   paymentReferenceOwner,
   recordAudit,
   type Transaction,
@@ -18,7 +19,6 @@ import {
 } from '@vertex-digital/db';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import type { PgBoss } from 'pg-boss';
-import { queueEmail } from '../../core/email/outbox.js';
 import type { TransferFacts } from './usdt-assess.js';
 
 /*
@@ -159,18 +159,11 @@ export async function bindAndSettle(
     creditedUsdUnits: floorToWholeCents(transfer.amountUnits),
     decision: { by: 'system' },
   });
-  const [customer] = await tx
-    .select({ email: customers.email })
-    .from(customers)
-    .where(eq(customers.id, deposit.customerId));
-  if (!customer) throw new Error(`Deposit ${deposit.id} has no customer`);
-  // The amount only; never the TXID or an address (S04 "Jobs and integrations").
-  await queueEmail(tx, boss, {
-    to: customer.email,
-    template: 'customer_deposit_credited',
+  // The amount only; never the TXID or an address (S04 "Jobs and integrations", S05 rule NT3).
+  await notifyCustomer(tx, bossJobSender(boss), {
     customerId: deposit.customerId,
+    event: 'deposit_credited',
     params: {
-      at: (credited.deposit.decidedAt as Date).toISOString(),
       depositId: deposit.id,
       referenceCode: deposit.referenceCode,
       creditedUsdUnits: credited.deposit.creditedUsdUnits as number,
@@ -322,15 +315,9 @@ async function rejectBounced(
       customerNote: null,
     },
   });
-  const [customer] = await tx
-    .select({ email: customers.email })
-    .from(customers)
-    .where(eq(customers.id, deposit.customerId));
-  if (!customer) throw new Error(`Deposit ${deposit.id} has no customer`);
-  await queueEmail(tx, boss, {
-    to: customer.email,
-    template: 'customer_deposit_rejected',
+  await notifyCustomer(tx, bossJobSender(boss), {
     customerId: deposit.customerId,
+    event: 'deposit_rejected',
     params: { depositId: deposit.id, referenceCode: deposit.referenceCode, reason: 'not_received' },
   });
 }

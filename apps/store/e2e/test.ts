@@ -40,7 +40,17 @@ const ALTCHA_CHALLENGE = {
 };
 
 type Route = Parameters<Parameters<Page['route']>[1]>[0];
-type Answer = { status: number; body: unknown } | { status: 200; image: true };
+type Answer =
+  | { status: number; body: unknown }
+  | { status: 200; image: true }
+  | { status: 200; events: string };
+
+/**
+ * Server-sent events as the API writes them (S05 rule NT6). The body ends after the events, so
+ * `retry` keeps `EventSource` from reconnecting during the test.
+ */
+const eventStream = (events: { event: string; data: unknown }[]) =>
+  `retry: 600000\n\n${events.map(({ event, data }) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join('')}`;
 
 /** A 1×1 PNG: what the QR route answers in tests. */
 const PNG = Buffer.from(
@@ -69,6 +79,26 @@ export class MockApi {
     ['GET /api/altcha/challenge', { status: 200, body: ALTCHA_CHALLENGE }],
     // An empty wallet: the header's balance chip reads it on every page once signed in (S02 W8).
     ['GET /api/wallet', { status: 200, body: { balanceUnits: 0, syp: null } }],
+    // Every email on (S05 rule NT8): the account page reads the choices.
+    [
+      'GET /api/account/notification-preferences',
+      {
+        status: 200,
+        body: {
+          email: {
+            deposit_credited: true,
+            deposit_rejected: true,
+            deposit_receipt_requested: true,
+            wallet_adjusted: true,
+          },
+        },
+      },
+    ],
+    // No unread notification: the header's bell opens the stream once signed in (S05 NT6).
+    [
+      'GET /api/notifications/stream',
+      { status: 200, events: eventStream([{ event: 'unread', data: { unreadCount: 0 } }]) },
+    ],
   ]);
 
   /** The last request sent to `key`. */
@@ -78,6 +108,12 @@ export class MockApi {
 
   on(key: string, status: number, body: unknown = {}): this {
     this.answers.set(key, { status, body });
+    return this;
+  }
+
+  /** Answers `key` with server-sent events (the notification stream). */
+  stream(key: string, events: { event: string; data: unknown }[]): this {
+    this.answers.set(key, { status: 200, events: eventStream(events) });
     return this;
   }
 
@@ -99,6 +135,10 @@ export class MockApi {
     }
     if ('image' in answer) {
       await route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+      return;
+    }
+    if ('events' in answer) {
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: answer.events });
       return;
     }
     await route.fulfill({ status: answer.status, json: answer.body });

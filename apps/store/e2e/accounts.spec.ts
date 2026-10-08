@@ -370,6 +370,10 @@ for (const theme of ['dark', 'light'] as const) {
     signedIn(api);
     await page.goto('/account');
     await expect(page.getByText(ar.account.sessions.thisDevice)).toBeVisible();
+    // The email choices of S05 (rule NT8) under the devices.
+    await expect(
+      page.getByRole('switch', { name: ar.account.notifications.events.deposit_credited }),
+    ).toBeChecked();
     await screenshot(page, testInfo, `account-${theme}`);
 
     await page.goto('/account/email');

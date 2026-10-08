@@ -11,8 +11,8 @@ import {
   DEPOSIT_PENDING_HOURS,
   type DepositFlagCode,
   depositCreditUsdUnits,
-  type EmailParams,
-  type EmailTemplate,
+  type NotificationEvent,
+  type NotificationParams,
   type RejectDeposit,
   type RequestReceipt,
   rateFromNumeric,
@@ -356,8 +356,7 @@ export class DepositReviewService {
           },
         });
         // Step 9: the amount only; never the transaction number or a note (S01 email rule).
-        await this.queueEmail(tx, updated, 'customer_deposit_credited', {
-          at: (updated.decidedAt as Date).toISOString(),
+        await this.notify(tx, updated, 'deposit_credited', {
           depositId: updated.id,
           referenceCode: updated.referenceCode,
           creditedUsdUnits: approval.creditedUsdUnits,
@@ -428,7 +427,7 @@ export class DepositReviewService {
           },
         });
         // The reason's words only; the note stays on the deposit page (rule RV6).
-        await this.queueEmail(tx, updated, 'customer_deposit_rejected', {
+        await this.notify(tx, updated, 'deposit_rejected', {
           depositId: updated.id,
           referenceCode: updated.referenceCode,
           reason: input.reason,
@@ -484,7 +483,7 @@ export class DepositReviewService {
           reason: input.internalNote,
           details: { depositId: deposit.id, customerNote },
         });
-        await this.queueEmail(tx, updated, 'customer_deposit_receipt_requested', {
+        await this.notify(tx, updated, 'deposit_receipt_requested', {
           depositId: updated.id,
           referenceCode: updated.referenceCode,
         });
@@ -591,23 +590,17 @@ export class DepositReviewService {
     return row ?? null;
   }
 
-  /** The decision's email to the deposit's customer, in the decision's transaction. */
-  async queueEmail<Template extends EmailTemplate>(
+  /**
+   * The decision's notification to the deposit's customer, with its email (S05 rule NT2), in the
+   * decision's transaction.
+   */
+  async notify<Event extends NotificationEvent>(
     tx: Transaction,
     deposit: DepositRow,
-    template: Template,
-    params: EmailParams<Template>,
+    event: Event,
+    params: NotificationParams<Event>,
   ): Promise<void> {
-    const customer = (await this.customers.depositCustomers([deposit.customerId])).get(
-      deposit.customerId,
-    );
-    if (!customer) throw new Error(`Deposit ${deposit.id} has no customer`);
-    await this.notifications.queueEmail(tx, {
-      to: customer.email,
-      template,
-      params,
-      customerId: customer.id,
-    });
+    await this.notifications.notifyCustomer(tx, { customerId: deposit.customerId, event, params });
   }
 
   /** Each deposit's distinct flag codes. */

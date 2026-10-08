@@ -5,4 +5,5 @@ export * from './errors.js';
 export * from './id.js';
 export * from './jobs.js';
 export * from './ledger/index.js';
+export * from './notifications/index.js';
 export * from './schema/index.js';

@@ -51,6 +51,18 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # The notification stream (S05 rule NT6): server-sent events, passed on as they come, open
+    # for long. The API sends a comment every 25 seconds, limits each customer to 3 streams and
+    # 30 connects a minute, and re-checks the session; `limit_conn perip` caps each address.
+    # `text/event-stream` is not in the compression types, so nothing buffers it.
+    location = /api/notifications/stream {
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+    }
+
     # Password guessing: a tight limit on the sign-in endpoint on top of Better Auth's own.
     # Regex, so any letter case or a trailing slash cannot step around it.
     # The same for the routes that send or check an email code or a password (S01): sign-up,

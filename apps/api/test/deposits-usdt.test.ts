@@ -19,6 +19,7 @@ import {
   auditOf,
   body,
   emailsTo,
+  notificationsOf,
   PASSWORD,
   removeAccounts,
   seedCustomer,
@@ -831,6 +832,9 @@ describe('the review of a USDT deposit (rules U11, U15)', () => {
     );
     expect(emails).toHaveLength(1);
     expect(JSON.stringify(emails[0]?.params)).not.toContain(bound.txid);
+    expect((await notificationsOf(test.db, someone.id)).map((item) => item.event)).toEqual([
+      'deposit_credited',
+    ]);
     const audit = (await auditOf(test.db, deposit.id)).at(-1);
     expect(audit).toMatchObject({
       action: 'deposit.credited',
@@ -980,6 +984,9 @@ describe('rejecting and re-checking a USDT deposit (rules U16, U17)', () => {
     expect(claims).toEqual([]);
     expect((await emailsTo(test.db, other.email)).map((email) => email.template)).toContain(
       'customer_deposit_rejected',
+    );
+    expect((await notificationsOf(test.db, other.id)).map((item) => item.event)).toContain(
+      'deposit_rejected',
     );
     // Rejected, its transfer is unmatched again: its owner can still be credited by hand.
     const list = (await (

@@ -30,6 +30,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { useNotificationEvents } from '@/features/notifications/live';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
@@ -79,6 +80,11 @@ export function WalletPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A credit, an adjustment or any deposit decision arrives live (S05 rule NT7): read again.
+  useNotificationEvents((event) => {
+    if (event.type !== 'unread') void load();
+  });
 
   const loadMore = async (cursor: string) => {
     setMoreFailure(null);

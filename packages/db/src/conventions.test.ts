@@ -42,6 +42,8 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   usdt_deposits: 'Part of its deposit (S04): never archived, keyed by the deposit',
   usdt_transfers: 'Append-only (S04): what the chain showed, never changed',
   usdt_scan_cursors: "A scanner's position (S04): overwritten each run, safe to move back",
+  customer_notifications: 'A delivery record (S05 NT1): only read_at changes, never archived',
+  notification_preferences: "A customer's email choice (S05 NT8): overwritten, never archived",
   store_switch_changes: 'Append-only (S05): a change is a new row, the newest is the value',
 };
 

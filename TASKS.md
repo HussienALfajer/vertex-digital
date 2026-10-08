@@ -18,11 +18,11 @@ Why four and not the spec's three: the spec's Telegram PR is too large for one r
 - [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (no blocking findings), owner acceptance (2026-10-08), PR with auto-merge
 
 ## PR 2 — F27 notifications, end to end · Opus 5.5 `high`
-- [ ] Contracts: `NOTIFICATION_EVENTS`, `NOTIFICATION_PARAMS`, `customerNotificationSchema`, `notificationPageSchema`, `notificationPreferencesSchema`, `NOTIFICATION_EMAIL_TEMPLATE`; audit `customer.notification_preference_changed`; unit tests
-- [ ] Db (`/db-migration`): `customer_notifications` (indexes, `read_at`-only column grant and trigger), `notification_preferences`; `notifyCustomer` in `packages/db/src/notifications` (row, preference-aware email, `pg_notify` on commit); tests (rollback leaves nothing)
-- [ ] NT2 call sites moved to `notifyCustomer`: S03 approval, rejection and receipt request, S04 credits and rejections (api and worker), S02 adjustments and reversals
-- [ ] Api: `GET /api/notifications`, `POST /api/notifications/read`, `GET /api/notifications/stream` (LISTEN fan-out, heartbeat, 3 streams, 30 per minute, session re-check, `resync`), preference routes; `no-store`; tests (other customer, stream routing, 4th stream, revoked session)
-- [ ] nginx: stream location (buffering off, long timeout)
+- [x] Contracts: `NOTIFICATION_EVENTS`, `NOTIFICATION_PARAMS`, `customerNotificationSchema`, `notificationPageSchema`, `notificationPreferencesSchema`, `NOTIFICATION_EMAIL_TEMPLATE`; audit `customer.notification_preference_changed`; unit tests
+- [x] Db (`/db-migration`): `customer_notifications` (indexes, `read_at`-only column grant and trigger), `notification_preferences`; `notifyCustomer` in `packages/db/src/notifications` (row, preference-aware email, `pg_notify` on commit); tests (rollback leaves nothing)
+- [x] NT2 call sites moved to `notifyCustomer`: S03 approval, rejection and receipt request, S04 credits and rejections (api and worker), S02 adjustments and reversals
+- [x] Api: `GET /api/notifications`, `POST /api/notifications/read`, `GET /api/notifications/stream` (LISTEN fan-out, heartbeat, 3 streams, 30 per minute, session re-check, `resync`), preference routes; `no-store`; tests (other customer, stream routing, 4th stream, revoked session)
+- [x] nginx: stream location (buffering off, long timeout)
 - [ ] Bridge
 - [ ] Store: header bell with live count (`EventSource`, `visibilitychange` refetch), `/notifications` (list, load more, mark read, empty, loading, error), `/account` email preferences, live refresh of `/wallet` and `/wallet/deposits/<id>` (NT7); i18n
 - [ ] E2E: bell with badge, `/notifications` list and empty, preferences (phone width, dark and light)

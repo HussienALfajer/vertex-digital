@@ -206,6 +206,8 @@ describe('append-only trigger', () => {
     );
     expect(rows.map((row) => row.name)).toEqual([
       'audit_entries',
+      // Its TRUNCATE trigger: rows are guarded by `customer_notifications_guard`.
+      'customer_notifications',
       'deposit_flags',
       'deposit_receipts',
       'deposit_settings',
