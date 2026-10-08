@@ -138,9 +138,10 @@ export type TelegramCallback =
   | { action: 'stop'; scope: StopScope }
   | { action: 'confirm' | 'cancel'; promptId: string };
 
-const callbackActions = Object.fromEntries(
+/** A `Map`, so an inherited key (`constructor`) is never a prefix. */
+const callbackActions = new Map(
   Object.entries(TELEGRAM_CALLBACKS).map(([action, prefix]) => [prefix, action]),
-) as Record<string, TelegramCallback['action']>;
+) as Map<string, TelegramCallback['action']>;
 
 export function telegramCallbackData(callback: TelegramCallback): string {
   const value = callback.action === 'stop' ? callback.scope : callback.promptId;
@@ -150,7 +151,7 @@ export function telegramCallbackData(callback: TelegramCallback): string {
 /** The button pressed, or null for data this bot never sent. */
 export function parseTelegramCallback(data: string): TelegramCallback | null {
   const separator = data.indexOf(':');
-  const action = callbackActions[data.slice(0, separator)];
+  const action = callbackActions.get(data.slice(0, separator));
   const value = data.slice(separator + 1);
   if (separator < 0 || !action) return null;
   if (action === 'stop') {

@@ -32,7 +32,18 @@ describe('Telegram button data (S05 rule TG6)', () => {
   });
 
   it('refuses data this bot never sent', () => {
-    for (const data of ['', 'st', 'st:', 'st:everything', 'ok:42', 'zz:both', ':both', 'no']) {
+    for (const data of [
+      '',
+      'st',
+      'st:',
+      'st:everything',
+      'ok:42',
+      'zz:both',
+      ':both',
+      'no',
+      `constructor:${promptId}`,
+      `toString:${promptId}`,
+    ]) {
       expect(parseTelegramCallback(data)).toBeNull();
     }
   });

@@ -1,4 +1,7 @@
+import { Writable } from 'node:stream';
+import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { LOG_REDACT_PATHS } from '../src/core/http/secret-headers.js';
 import { api, body, clientIp } from './helpers.js';
 import { ProbeController } from './probe.controller.js';
 import { startApp, type TestApp } from './start-app.js';
@@ -164,5 +167,40 @@ describe('OpenAPI', () => {
     expect(response.status).toBe(200);
     const document = (await response.json()) as { paths: Record<string, unknown> };
     expect(Object.keys(document.paths)).toContain('/api/health');
+  });
+});
+
+describe('logs', () => {
+  it('never write a credential header, the Telegram webhook secret included (ADR 0008)', () => {
+    let written = '';
+    const sink = new Writable({
+      write(chunk, _encoding, done) {
+        written += chunk.toString();
+        done();
+      },
+    });
+    const logger = pino({ redact: LOG_REDACT_PATHS }, sink);
+    logger.info({
+      req: {
+        headers: {
+          cookie: 'session=cookie-value',
+          authorization: 'Bearer bearer-value',
+          'x-altcha': 'altcha-value',
+          'x-telegram-bot-api-secret-token': 'telegram-secret-value',
+          'user-agent': 'TelegramBot',
+        },
+      },
+      res: { headers: { 'set-cookie': 'session=set-value' } },
+    });
+    for (const value of [
+      'cookie-value',
+      'bearer-value',
+      'altcha-value',
+      'telegram-secret-value',
+      'set-value',
+    ]) {
+      expect(written).not.toContain(value);
+    }
+    expect(written).toContain('TelegramBot');
   });
 });

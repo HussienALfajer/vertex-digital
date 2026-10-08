@@ -41,17 +41,18 @@ Only what the foundation uses: the deposit columns of `telegram_prompts`, `teleg
 - [x] Worker: `telegram.send` (log transport to `.data/telegram/`, 429 `retry_after`, 403 no retry, skipped without a link, safe twice), `setWebhook` at start, `TelegramAlerts` to the linked chat (cached 60 s); tests
 - [x] CLI `telegram:fake-update`; commands table in `AGENTS.md`
 - [x] nginx: webhook location limited to Telegram ranges, 64 KB; `docs/deployment.md` (bot creation, webhook)
-- [ ] Bridge
-- [ ] Admin: `/settings/telegram` (not configured; not linked with deep link, QR, countdown and polling; linked with test and unlink), navigation; i18n
-- [ ] E2E: `/settings/telegram` in its three states (light and dark)
-- [ ] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md`, spec details settled)
-- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
+- [x] Bridge
+- [x] Admin: `/settings/telegram` (not configured; not linked with deep link, QR, countdown and polling; linked with test and unlink), navigation; i18n
+- [x] E2E: `/settings/telegram` in its three states (light and dark)
+- [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md`, spec details settled)
+- [x] Reviewer: one blocking finding fixed (the webhook secret header was not redacted from the API logs and Sentry: one shared list, `core/http/secret-headers.ts`, with a test); callback prefixes looked up in a `Map` (an inherited key is no prefix)
+- [ ] Checks (full set on the final tree), owner acceptance, PR with auto-merge
 
 ## PR 4 — F07 deposit cards, decisions, reminder, summary · Opus 5.5 `high`
 - [ ] Contracts: queues `telegram.deposit-card`, `telegram.review-reminder`, `telegram.daily-summary`; message kinds `usdt_unmatched`, `review_reminder`, `daily_summary`; prompt kinds `approve_number`, `approve_confirm`, `reject_note`; callbacks `ap:`, `rj:`, `rr:`; reminder due computation; settings `telegramApprovalMaxUsdUnits`; unit tests
 - [ ] Db (`/db-migration`): `telegram_deposit_cards`, `telegram_bot_state`, the deposit columns of `telegram_prompts`, the new enum values; `deposit_settings.telegram_approval_max_usd_units` with its check; tests
 - [ ] Api: deposits queue `telegram.deposit-card` on submission, review, decisions, expiry, cancellation, receipt request (TC1, TC6); approve from Telegram through the S03 service (TC4, channel `telegram`, `telegram:<promptId>`, re-checks); reject (TC5) for Sham Cash and USDT; deposit settings field; tests (Telegram confirm vs panel approval → one journal, audit, notification, email; same prompt twice → one credit; flagged, over limit, limit 0, changed submission, USDT refused)
-- [ ] Worker: `telegram.deposit-card` (send, edit, new card per submission, JPEG receipt), `usdt_unmatched` from the scanner (TC7), `telegram.review-reminder` (RM1–RM4, cleanup of updates and prompts), `telegram.daily-summary` (AL3); tests with fixed instants
+- [ ] Worker: `telegram.deposit-card` (send, edit, new card per submission, JPEG receipt), `usdt_unmatched` from the scanner (TC7), `telegram.review-reminder` (RM1–RM4, cleanup of updates older than 7 days and of expired prompts: until it ships nothing prunes `telegram_updates`), `telegram.daily-summary` (AL3); tests with fixed instants
 - [ ] Bridge
 - [ ] Admin: `/settings/deposits` Telegram limit field; "من تيليجرام" on deposit decisions; i18n; E2E (light and dark)
 - [ ] Wiring checklist, `wiring.md` patterns, docs (`docs/architecture.md`), `docs/ROADMAP.md` S05 done

@@ -1,14 +1,14 @@
 /*
  * Sentry, loaded before anything else (`main.ts` imports this first) so it can instrument the
  * modules that follow. Off when SENTRY_DSN is empty (development, tests). Events never carry
- * cookies, authorization headers, ALTCHA payloads or request bodies (ADR 0008).
+ * cookies, authorization headers, ALTCHA payloads, the Telegram webhook secret or request bodies
+ * (ADR 0008).
  */
 import * as Sentry from '@sentry/nestjs';
 import { loadRootEnv } from '@vertex-digital/db';
+import { SECRET_HEADERS } from './core/http/secret-headers.js';
 
 loadRootEnv();
-
-const SECRET_HEADERS = ['cookie', 'authorization', 'x-altcha'];
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
