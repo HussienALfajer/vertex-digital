@@ -178,9 +178,11 @@ describe('changing the rate (rules FX1–FX3)', () => {
       sypPerUsd: string;
     }[];
     // The change written second names the other as the rate it replaced: it is the one in force.
-    const replaced = async (id: string) =>
-      ((await auditOf(test.db, id))[0]?.details as { before: { sypPerUsd: string } }).before
-        .sypPerUsd;
+    const replaced = async (id: string) => {
+      const [entry] = await auditOf(test.db, id);
+      if (!entry) throw new Error(`No audit entry for rate ${id}`);
+      return (entry.details as { before: { sypPerUsd: string } }).before.sypPerUsd;
+    };
     const [first, other] = records as [(typeof records)[0], (typeof records)[0]];
     const second = (await replaced(first.id)) === other.sypPerUsd ? first : other;
     expect((await overview()).current).toMatchObject({ id: second?.id });
