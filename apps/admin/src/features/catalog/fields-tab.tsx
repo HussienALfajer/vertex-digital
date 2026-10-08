@@ -87,7 +87,7 @@ export function FieldsTab({ game }: { game: GameDetail }) {
               <TableRow key={field.id}>
                 <TableCell className="font-medium">{field.labelAr}</TableCell>
                 <TableCell>
-                  <bdi dir="ltr" className="font-mono text-sm">
+                  <bdi dir="ltr" className="text-sm">
                     {field.key}
                   </bdi>
                 </TableCell>

@@ -268,7 +268,7 @@ function AccentField({
           maxLength={7}
           autoComplete="off"
           spellCheck={false}
-          placeholder="#F2A900"
+          placeholder={t('catalog.fields.accentPlaceholder')}
           value={value}
           onChange={(event) => onChange(event.target.value)}
         />
@@ -279,7 +279,8 @@ function AccentField({
           id={pickerId}
           type="color"
           className="h-9 w-12 cursor-pointer rounded-md border border-border bg-surface"
-          value={valid ? value.trim() : '#000000'}
+          // Without a valid color the picker opens on the dark surface it is checked against.
+          value={valid ? value.trim() : ACCENT_DARK_SURFACE}
           onChange={(event) => onChange(event.target.value.toUpperCase())}
         />
         {value && (

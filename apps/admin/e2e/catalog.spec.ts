@@ -97,7 +97,7 @@ test.describe('catalog', () => {
     await page.getByRole('button', { name: ar.catalog.game.save }).click();
     await expect(page.getByText(ar.catalog.game.saved)).toBeVisible();
     expect(
-      admin.lastBody('PATCH /api/admin/catalog/games/' + admin.catalog.games[0]?.id),
+      admin.lastBody(`PATCH /api/admin/catalog/games/${admin.catalog.games[0]?.id}`),
     ).toMatchObject({
       accentColor: '#F2A900',
       coverFileId: expect.any(String),

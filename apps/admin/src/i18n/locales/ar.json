@@ -1373,7 +1373,8 @@
       "accentClear": "بلا لون",
       "accentHint": "اختياري، بصيغة #RRGGBB. دون لون يستخدم المتجر لون الرمل.",
       "regionNotes": "ملاحظات المنطقة",
-      "regionNotesHint": "مثل: يعمل على الحسابات العالمية فقط. حتى 500 حرف."
+      "regionNotesHint": "مثل: يعمل على الحسابات العالمية فقط. حتى 500 حرف.",
+      "accentPlaceholder": "#F2A900"
     },
     "image": {
       "upload": "رفع صورة",
