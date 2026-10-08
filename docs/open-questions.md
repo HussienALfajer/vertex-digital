@@ -12,6 +12,7 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Q14 | Support channels besides tickets (WhatsApp or Telegram links on the store) | F23 | Tickets plus one Telegram support link |
 | Q15 | Sentry: account owner and organization for the three apps | Phase 0 deploy skeleton | Free plan under the owner's email |
 | Q16 | Who draws the final VERTEX DIGITAL wordmark (agent in Phase 0 from the Vertex Media style, or a designer) | Phase 0 design system | Agent draft in Phase 0 (done: `brand/logo/svg/vertex-logo.svg`, the DIGITAL mark over the Vertex Media VERTEX wordmark), designer files later replace it |
+| Q17 | S07 rule P3: a large cost change seen through another basis route (a non-basis supplier drops its cost to near zero, so its route becomes the basis) reprices at once without review. Should such a basis switch also go to review when the price moves more than the threshold? | The second real adapter (`shop2topup` or `wdgzone`); it cannot happen with only `fake` and `manual` | Review it too: the spec's abuse row says a cost dropped near zero is held for review |
 
 ## Resolved
 

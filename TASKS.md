@@ -28,7 +28,7 @@ Spec: `docs/specs/S07-suppliers.md` (F09 with F10, CT9; ADRs 0003, 0004, 0005, 0
 - [x] Tests (sync, suspicious list, failure, stale, missing, concurrent run; balances; health and probe; dedupe keys; credentials never logged); worker tests ordered after the api and db tests in `turbo.json`
 - [x] Bridge: OpenAPI (message kinds) and the admin client
 - [x] Wiring checklist, docs (`docs/architecture.md`, `docs/deployment.md`, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (two blocking findings: job lock order and query parameters, fixed with tests), owner acceptance (2026-10-08), PR with auto-merge
 
 ## PR 3 — Admin screens and E2E · Opus 5.5 `high`
 - [ ] Admin `features/suppliers/`: `/suppliers`, `/suppliers/$code` (connection, offers with import dialog, sync, health), `/suppliers/policy`
