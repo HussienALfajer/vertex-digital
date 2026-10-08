@@ -58,13 +58,44 @@ export class TelegramBot {
   /** Calls a Bot API method; resolves with its `result`, throws `TelegramApiError`. */
   async call(method: string, payload: Record<string, unknown>): Promise<unknown> {
     if (this.config.transport === 'log') return this.writeFile(method, payload);
+    return this.post(method, {
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /**
+   * Calls a method that uploads a file (`sendPhoto` with a JPEG, S05 rule TC2), as multipart form
+   * data; other fields are sent as text, objects as JSON. In `log` mode the file is written next
+   * to the call's JSON file, which names it.
+   */
+  async callWithFile(
+    method: string,
+    payload: Record<string, unknown>,
+    file: { field: string; name: string; type: string; bytes: Buffer },
+  ): Promise<unknown> {
+    if (this.config.transport === 'log') {
+      const name = await this.writeBytes(file.name, file.bytes);
+      return this.writeFile(method, { ...payload, [file.field]: name });
+    }
+    const form = new FormData();
+    for (const [key, value] of Object.entries(payload)) {
+      form.set(key, typeof value === 'string' ? value : JSON.stringify(value));
+    }
+    form.set(file.field, new Blob([new Uint8Array(file.bytes)], { type: file.type }), file.name);
+    return this.post(method, { body: form });
+  }
+
+  private async post(
+    method: string,
+    init: { headers?: Record<string, string>; body: string | FormData },
+  ): Promise<unknown> {
     if (!this.config.botToken) throw new TelegramApiError(0, 'The bot token is not set');
     let response: Response;
     try {
       response = await this.fetchFn(`${this.config.apiUrl}/bot${this.config.botToken}/${method}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+        ...init,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (error) {
@@ -80,14 +111,26 @@ export class TelegramBot {
     );
   }
 
-  /** `<time>-<n>-<method>.json`; `sendMessage` answers a made-up message id, as Telegram would. */
+  /**
+   * `<time>-<n>-<method>.json`; a send answers a made-up message id, as Telegram would. The
+   * message files sort by name in the order they were written.
+   */
   private async writeFile(method: string, payload: Record<string, unknown>): Promise<unknown> {
+    await this.writeBytes(
+      `${method}.json`,
+      Buffer.from(`${JSON.stringify({ method, ...payload }, null, 2)}\n`),
+    );
+    return { message_id: Date.now() % 1_000_000_000 };
+  }
+
+  /** Writes `<time>-<n>-<suffix>` under the log directory; returns the file name. */
+  private async writeBytes(suffix: string, bytes: Buffer): Promise<string> {
     const dir = resolve(this.config.logDir);
     await mkdir(dir, { recursive: true });
     this.written += 1;
     const stamp = new Date().toISOString().replaceAll(':', '-');
-    const name = `${stamp}-${String(this.written).padStart(4, '0')}-${method}.json`;
-    await writeFile(join(dir, name), `${JSON.stringify({ method, ...payload }, null, 2)}\n`);
-    return { message_id: Date.now() % 1_000_000_000 };
+    const name = `${stamp}-${String(this.written).padStart(4, '0')}-${suffix}`;
+    await writeFile(join(dir, name), bytes);
+    return name;
   }
 }

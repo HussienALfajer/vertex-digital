@@ -73,6 +73,9 @@ beforeEach(() => {
 const apiBot = (botToken: string | null = '123:abc', url = apiUrl) =>
   new TelegramBot({ transport: 'api', botToken: botToken ?? undefined, apiUrl: url, logDir: '' });
 
+const LINKS = { admin: 'http://127.0.0.1:5173' };
+const ENV = { ADMIN_URL: LINKS.admin } as Env;
+
 const logDir = () => mkdtemp(join(tmpdir(), 'vertex-digital-telegram-test-'));
 
 describe('the Bot API client', () => {
@@ -141,30 +144,42 @@ describe('the Bot API client', () => {
 describe('the messages', () => {
   it('announce a switch change with its channel (rule AL2)', () => {
     expect(
-      renderTelegramMessage('switch_changed', {
-        switch: 'deposits_stopped',
-        value: true,
-        channel: 'admin',
-      }).text,
+      renderTelegramMessage(
+        'switch_changed',
+        {
+          switch: 'deposits_stopped',
+          value: true,
+          channel: 'admin',
+        },
+        LINKS,
+      ).text,
     ).toBe('⛔ أُوقفت الإيداعات (من اللوحة)');
     expect(
-      renderTelegramMessage('switch_changed', {
-        switch: 'purchases_stopped',
-        value: false,
-        channel: 'telegram',
-      }).text,
+      renderTelegramMessage(
+        'switch_changed',
+        {
+          switch: 'purchases_stopped',
+          value: false,
+          channel: 'telegram',
+        },
+        LINKS,
+      ).text,
     ).toBe('✅ أُعيد فتح الشراء (من تيليجرام)');
     expect(
-      renderTelegramMessage('switch_changed', {
-        switch: 'registration_open',
-        value: true,
-        channel: 'admin',
-      }).text,
+      renderTelegramMessage(
+        'switch_changed',
+        {
+          switch: 'registration_open',
+          value: true,
+          channel: 'admin',
+        },
+        LINKS,
+      ).text,
     ).toContain('التسجيل مفتوح الآن');
   });
 
   it('offer the stop buttons, then confirm and cancel (rules TG6, AL4)', () => {
-    const choose = renderTelegramMessage('bot_reply', { reply: 'stop_choose' });
+    const choose = renderTelegramMessage('bot_reply', { reply: 'stop_choose' }, LINKS);
     expect(choose.text).toContain('إعادة الفتح من اللوحة فقط');
     expect(choose.buttons).toEqual([
       [{ text: 'الشراء', data: 'st:purchases' }],
@@ -173,7 +188,11 @@ describe('the messages', () => {
     ]);
     const promptId = newId();
     expect(
-      renderTelegramMessage('bot_reply', { reply: 'stop_confirm', promptId, scope: 'deposits' }),
+      renderTelegramMessage(
+        'bot_reply',
+        { reply: 'stop_confirm', promptId, scope: 'deposits' },
+        LINKS,
+      ),
     ).toEqual({
       text: 'إيقاف الإيداعات؟ إعادة الفتح من اللوحة فقط.',
       buttons: [
@@ -186,12 +205,16 @@ describe('the messages', () => {
   });
 
   it('show the status, the help and the other replies', () => {
-    const status = renderTelegramMessage('bot_reply', {
-      reply: 'status',
-      switches: { ...STORE_SWITCH_DEFAULTS, deposits_stopped: true, usdt_bep20_paused: true },
-      waiting: 3,
-      unmatchedTransfers: 1,
-    }).text;
+    const status = renderTelegramMessage(
+      'bot_reply',
+      {
+        reply: 'status',
+        switches: { ...STORE_SWITCH_DEFAULTS, deposits_stopped: true, usdt_bep20_paused: true },
+        waiting: 3,
+        unmatchedTransfers: 1,
+      },
+      LINKS,
+    ).text;
     expect(status.split('\n')).toEqual([
       'حالة المتجر:',
       'التسجيل: مغلق',
@@ -205,16 +228,16 @@ describe('the messages', () => {
       'تحويلات USDT غير مطابقة: 1',
     ]);
     for (const kind of ['welcome', 'help'] as const) {
-      expect(renderTelegramMessage('bot_reply', { reply: kind }).text).toContain('/status');
+      expect(renderTelegramMessage('bot_reply', { reply: kind }, LINKS).text).toContain('/status');
     }
-    expect(renderTelegramMessage('bot_reply', { reply: 'invalid_code' }).text).toBe(
+    expect(renderTelegramMessage('bot_reply', { reply: 'invalid_code' }, LINKS).text).toBe(
       'الرمز غير صالح',
     );
     for (const kind of ['stop_already', 'failed'] as const) {
-      expect(renderTelegramMessage('bot_reply', { reply: kind }).buttons).toBeUndefined();
+      expect(renderTelegramMessage('bot_reply', { reply: kind }, LINKS).buttons).toBeUndefined();
     }
-    expect(renderTelegramMessage('link_changed', {}).text).toContain('ألغِ الربط');
-    expect(renderTelegramMessage('test', {}).text).toContain('اختبار');
+    expect(renderTelegramMessage('link_changed', {}, LINKS).text).toContain('ألغِ الربط');
+    expect(renderTelegramMessage('test', {}, LINKS).text).toContain('اختبار');
   });
 });
 
@@ -265,6 +288,7 @@ describe('telegram.send', () => {
       pgBoss,
       new TelegramBot({ transport: 'log', apiUrl, logDir: dir }),
       db,
+      ENV,
     );
     await isolated(async (tx) => {
       const id = await queue(tx, { chatId: 9001 });
@@ -296,7 +320,7 @@ describe('telegram.send', () => {
   });
 
   it('sends to the live link at send time, and skips with no link (edge case 2)', async () => {
-    const job = new SendTelegramJob(pgBoss, apiBot(), db);
+    const job = new SendTelegramJob(pgBoss, apiBot(), db, ENV);
     await isolated(async (tx) => {
       const unlinked = await queue(tx);
       expect(await job.send(unlinked, new Date(), tx)).toBe('skipped');
@@ -314,7 +338,7 @@ describe('telegram.send', () => {
   });
 
   it('skips while the bot is not configured', async () => {
-    const job = new SendTelegramJob(pgBoss, apiBot(null), db);
+    const job = new SendTelegramJob(pgBoss, apiBot(null), db, ENV);
     await isolated(async (tx) => {
       const id = await queue(tx, { chatId: 1 });
       expect(await job.send(id, new Date(), tx)).toBe('skipped');
@@ -322,7 +346,7 @@ describe('telegram.send', () => {
   });
 
   it('waits retry_after on a 429 with a delayed job, without throwing', async () => {
-    const job = new SendTelegramJob(pgBoss, apiBot(), db);
+    const job = new SendTelegramJob(pgBoss, apiBot(), db, ENV);
     reply = {
       status: 429,
       body: { ok: false, description: 'Too Many Requests', parameters: { retry_after: 12 } },
@@ -345,7 +369,7 @@ describe('telegram.send', () => {
   });
 
   it('fails at once without retry when the admin blocked the bot (403)', async () => {
-    const job = new SendTelegramJob(pgBoss, apiBot(), db);
+    const job = new SendTelegramJob(pgBoss, apiBot(), db, ENV);
     reply = {
       status: 403,
       body: { ok: false, description: 'Forbidden: bot was blocked by the user' },
@@ -364,7 +388,7 @@ describe('telegram.send', () => {
   });
 
   it('throws other failures for pg-boss to retry, and fails after the last attempt', async () => {
-    const job = new SendTelegramJob(pgBoss, apiBot(), db);
+    const job = new SendTelegramJob(pgBoss, apiBot(), db, ENV);
     reply = { status: 500, body: { ok: false, description: 'Internal Server Error' } };
     await isolated(async (tx) => {
       const id = await queue(tx, { chatId: 1 });

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import type { AuditEntry } from '@vertex-digital/contracts';
 import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
 import {
   type AdminApi,
@@ -349,6 +350,50 @@ test.describe('deposits', () => {
   });
 });
 
+test.describe('Telegram (S05 rules TC4, TC5)', () => {
+  test('the deposit settings hold the Telegram limit; decisions from the bot are marked', async ({
+    page,
+    admin,
+  }) => {
+    queue(admin);
+    admin.auditEntries.unshift(telegramDecision());
+    await open(page, admin, `/deposits/${SYP_DEPOSIT}`);
+    await expect(page.getByText(ar.deposits.detail.fromTelegram)).toBeVisible();
+
+    admin.reauthenticationRequired = false;
+    await page.goto('/settings/deposits');
+    const limit = field(page, ar.depositSettings.fields.telegramApprovalMaxUsdUnits);
+    await expect(limit).toHaveValue('100');
+    await limit.fill('150');
+    await page.getByRole('button', { name: ar.depositSettings.save }).click();
+    await expect(
+      page.getByText(ar.depositSettings.errors.telegramApprovalMaxUsdUnits),
+    ).toBeVisible();
+  });
+});
+
+/** A rejection of the SYP deposit made in the bot, as the audit log records it. */
+const telegramDecision = (): AuditEntry => ({
+  id: '0199a000-0000-7000-8000-0000000000ea',
+  occurredAt: minutesAgo(2),
+  actorKind: 'admin',
+  actorId: '0199a000-0000-7000-8000-000000000001',
+  actorName: 'ريم الخطيب',
+  channel: 'telegram',
+  action: 'deposit.rejected',
+  entityType: 'deposit',
+  entityId: SYP_DEPOSIT,
+  reason: 'لم يصل التحويل إلى الحساب',
+  details: {
+    depositId: SYP_DEPOSIT,
+    customerId: CUSTOMER_ID,
+    rejectReason: 'not_received',
+    customerNote: null,
+  },
+  ipAddress: null,
+  userAgent: null,
+});
+
 // RTL screenshots of the S03 screens in both themes: the design review evidence (ADR 0011).
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`${colorScheme} theme`, () => {
@@ -380,6 +425,21 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/settings/deposits');
       await expect(page.getByText(ar.depositSettings.fresh.title)).toBeVisible();
       await screenshot(page, testInfo, `deposit-settings-${colorScheme}`);
+    });
+
+    test('S05 screenshots', async ({ page, admin }, testInfo) => {
+      queue(admin);
+      admin.auditEntries.unshift(telegramDecision());
+      await open(page, admin, `/deposits/${SYP_DEPOSIT}`);
+      const trail = page.getByRole('region', { name: ar.deposits.detail.audit });
+      await expect(trail.getByText(ar.deposits.detail.fromTelegram)).toBeVisible();
+      await trail.scrollIntoViewIfNeeded();
+      await screenshot(page, testInfo, `deposit-audit-telegram-${colorScheme}`);
+
+      await page.goto('/settings/deposits');
+      const limit = page.getByRole('heading', { name: ar.depositSettings.telegram.title });
+      await limit.scrollIntoViewIfNeeded();
+      await screenshot(page, testInfo, `deposit-settings-telegram-${colorScheme}`);
     });
   });
 }

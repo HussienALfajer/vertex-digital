@@ -5407,6 +5407,11 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "telegramApprovalMaxUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
           "saved": {
             "type": "boolean"
           },
@@ -5468,6 +5473,7 @@
           "usdtTrc20Enabled",
           "usdtBep20Enabled",
           "usdtMinDepositUsdUnits",
+          "telegramApprovalMaxUsdUnits",
           "saved",
           "savedAt",
           "usdt"
@@ -5561,6 +5567,11 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "telegramApprovalMaxUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
           }
         },
         "required": [
@@ -5582,7 +5593,8 @@
           "flagVelocityCount",
           "usdtTrc20Enabled",
           "usdtBep20Enabled",
-          "usdtMinDepositUsdUnits"
+          "usdtMinDepositUsdUnits",
+          "telegramApprovalMaxUsdUnits"
         ]
       },
       "StoredFileRef": {
@@ -6871,6 +6883,9 @@
         "type": "string",
         "enum": [
           "switch_changed",
+          "usdt_unmatched",
+          "review_reminder",
+          "daily_summary",
           "bot_reply",
           "link_changed",
           "test"

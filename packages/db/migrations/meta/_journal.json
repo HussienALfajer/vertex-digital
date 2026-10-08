@@ -162,6 +162,13 @@
       "when": 1791474890038,
       "tag": "0022_graceful_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791478366510,
+      "tag": "0023_flat_skreet",
+      "breakpoints": true
     }
   ]
 }

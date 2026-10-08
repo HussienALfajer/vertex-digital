@@ -266,6 +266,7 @@ function toCurrent(row: SettingsRow): CurrentSettings {
     usdtTrc20Enabled: row.usdtTrc20Enabled,
     usdtBep20Enabled: row.usdtBep20Enabled,
     usdtMinDepositUsdUnits: row.usdtMinDepositUsdUnits,
+    telegramApprovalMaxUsdUnits: row.telegramApprovalMaxUsdUnits,
   };
 }
 

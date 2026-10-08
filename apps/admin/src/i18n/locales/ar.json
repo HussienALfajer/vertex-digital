@@ -755,6 +755,9 @@
     },
     "messageKind": {
       "switch_changed": "تغيير مفتاح",
+      "usdt_unmatched": "تحويل USDT غير مطابق",
+      "review_reminder": "تذكير بالمراجعة",
+      "daily_summary": "الملخص اليومي",
       "bot_reply": "رد البوت",
       "link_changed": "تغيير الربط",
       "test": "رسالة اختبار"
@@ -972,7 +975,8 @@
       "audit": "سجل الإيداع",
       "noAudit": "لا سجلات.",
       "subtitleMethod": "إيداع {{method}} بمبلغ {{amount}}",
-      "decidedBySystem": "تلقائي"
+      "decidedBySystem": "تلقائي",
+      "fromTelegram": "من تيليجرام"
     },
     "approve": {
       "title": "اعتماد الإيداع",
@@ -1160,6 +1164,11 @@
       "newAccountHint": "يُنبَّه على إيداع حساب جديد بهذا المبلغ أو أكثر.",
       "velocityHint": "يُنبَّه حين يتجاوز عدد إيصالات العميل خلال 24 ساعة هذا العدد."
     },
+    "telegram": {
+      "title": "الاعتماد من تيليجرام",
+      "description": "إيداعات شام كاش غير المعلَّمة حتى هذا المبلغ تُعتمد من بوت تيليجرام برقم العملية وخطوة تأكيد. الإيداعات المعلَّمة وUSDT من اللوحة دائمًا.",
+      "hint": "من 0 إلى 100 دولار. 0 يوقف الاعتماد من تيليجرام."
+    },
     "fields": {
       "minDepositUsdUnits": "أقل مبلغ للإيداع",
       "newAccountPerDepositUsdUnits": "حساب جديد: أقصى مبلغ للإيداع",
@@ -1171,7 +1180,8 @@
       "reviewTargetMinutes": "الوقت المستهدف للمراجعة بالدقائق",
       "flagNewAccountUsdUnits": "مبلغ التنبيه لحساب جديد",
       "flagVelocityCount": "عدد الإيصالات خلال 24 ساعة",
-      "usdtMinDepositUsdUnits": "أقل مبلغ لإيداع USDT"
+      "usdtMinDepositUsdUnits": "أقل مبلغ لإيداع USDT",
+      "telegramApprovalMaxUsdUnits": "حد الاعتماد من تيليجرام ($)"
     },
     "errors": {
       "shamCashAccountName": "أدخل اسم الحساب، حتى 100 حرف.",
@@ -1188,7 +1198,8 @@
       "reviewTargetMinutes": "أدخل عدد دقائق بين 1 و1440.",
       "flagNewAccountUsdUnits": "أدخل مبلغًا بالدولار أكبر من صفر.",
       "flagVelocityCount": "أدخل عددًا بين 1 و50.",
-      "usdtMinDepositUsdUnits": "أدخل مبلغًا أكبر من صفر لا يتجاوز أقصى مبلغ للإيداع."
+      "usdtMinDepositUsdUnits": "أدخل مبلغًا أكبر من صفر لا يتجاوز أقصى مبلغ للإيداع.",
+      "telegramApprovalMaxUsdUnits": "أدخل مبلغًا من 0 إلى 100 دولار، حتى سنتين."
     },
     "save": "حفظ الإعدادات",
     "saving": "جارٍ الحفظ…",

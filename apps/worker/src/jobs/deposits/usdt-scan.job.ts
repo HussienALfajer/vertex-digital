@@ -31,7 +31,7 @@ import {
   type IncomingPage,
 } from './chain/chain-reader.js';
 import { type TransferFacts, usdtTransferTo } from './usdt-assess.js';
-import { bindAndSettle, recordTransfer, txidClaimed } from './usdt-settle.js';
+import { bindAndSettle, queueUnmatchedNotice, recordTransfer, txidClaimed } from './usdt-settle.js';
 
 /** The safety-net schedule of every network (rule U12). */
 export const USDT_SCAN_CRON = '*/5 * * * *';
@@ -198,7 +198,7 @@ export class UsdtScanJob implements OnApplicationBootstrap {
     if (await txidClaimed(tx, transfer.txid)) return 'unmatched';
     const exactRaw = (units: number) =>
       usdtRawForUnits(units, USDT_NETWORKS[transfer.method].decimals) === transfer.raw;
-    if (!exactRaw(transfer.amountUnits)) return 'unmatched';
+    if (!exactRaw(transfer.amountUnits)) return this.unmatched(tx, row);
     const matching = and(
       eq(usdtDeposits.method, transfer.method),
       eq(usdtDeposits.receivingAddress, transfer.toAddress),
@@ -239,6 +239,15 @@ export class UsdtScanJob implements OnApplicationBootstrap {
     if (searching) {
       return this.bind(tx, searching.deposit.id, row, transfer, searching.payAmountUnits);
     }
+    return this.unmatched(tx, row);
+  }
+
+  /** Rule U13: the transfer stays unmatched; the admin hears of it once (S05 rule TC7). */
+  private async unmatched(
+    tx: Transaction,
+    row: typeof usdtTransfers.$inferSelect,
+  ): Promise<'unmatched'> {
+    await queueUnmatchedNotice(tx, this.pgBoss.boss, row);
     return 'unmatched';
   }
 

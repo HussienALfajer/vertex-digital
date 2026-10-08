@@ -28,6 +28,9 @@ export default defineConfig({
       // No chain is ever read in tests; the USDT tests give their own readers.
       CHAIN_READER: 'fake',
       EMAIL_LOG_DIR: join(tmpdir(), `vertex-digital-emails-${randomUUID()}`),
+      // Receipts the card tests write for themselves (S05 rule TC2).
+      FILES_ROOT: join(tmpdir(), `vertex-digital-files-${randomUUID()}`),
+      ADMIN_URL: 'http://127.0.0.1:5173',
     },
     testTimeout: 30_000,
     hookTimeout: 30_000,

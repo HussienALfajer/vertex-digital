@@ -327,7 +327,15 @@ function AuditTrail({ id }: { id: string }) {
                   {formatDateTime(entry.occurredAt)}
                 </TableCell>
                 <TableCell>{t(`audit.actions.${entry.action}`)}</TableCell>
-                <TableCell>{actorLabel(t, entry)}</TableCell>
+                <TableCell>
+                  <span className="flex flex-wrap items-center gap-2">
+                    {actorLabel(t, entry)}
+                    {/* S05: decisions made in the bot (rule TC4, ADR 0006). */}
+                    {entry.channel === 'telegram' && (
+                      <Badge tone="neutral">{t('deposits.detail.fromTelegram')}</Badge>
+                    )}
+                  </span>
+                </TableCell>
                 <TableCell className="min-w-44 whitespace-normal">{entry.reason ?? '—'}</TableCell>
               </TableRow>
             ))}

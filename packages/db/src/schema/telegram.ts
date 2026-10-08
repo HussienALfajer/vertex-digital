@@ -12,12 +12,15 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { bytea, id, timestamps } from './columns.js';
+import { deposits } from './deposits.js';
 
 /*
  * The Telegram admin bot (S05 F07, ADR 0019), owned by the api `telegram` module. Admins are
@@ -114,6 +117,9 @@ export const telegramPrompts = pgTable(
   {
     id: id(),
     kind: telegramPromptKindEnum('kind').notNull(),
+    /** The deposit of an approval or rejection prompt, and the submission it was opened on. */
+    depositId: uuid('deposit_id').references(() => deposits.id),
+    depositSubmittedAt: timestamp('deposit_submitted_at', { withTimezone: true }),
     /** Validated by `TELEGRAM_PROMPT_DATA`. */
     data: jsonb('data').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -124,5 +130,42 @@ export const telegramPrompts = pgTable(
     uniqueIndex('telegram_prompts_open_idx')
       .using('btree', sql`(true)`)
       .where(isNull(table.closedAt)),
+    index('telegram_prompts_deposit_id_idx').on(table.depositId),
+    check(
+      'telegram_prompts_deposit_check',
+      sql`(${table.depositId} is null) = (${table.depositSubmittedAt} is null)
+        and (${table.depositId} is not null) = (${table.kind} <> 'stop_confirm')`,
+    ),
   ],
+);
+
+/**
+ * A deposit's card in the linked chat (rules TC1–TC6): one per submission, so a clearer-receipt
+ * round gives a new card. Edited to the outcome by `telegram.deposit-card`.
+ */
+export const telegramDepositCards = pgTable(
+  'telegram_deposit_cards',
+  {
+    depositId: uuid('deposit_id')
+      .notNull()
+      .references(() => deposits.id),
+    /** The deposit's `submitted_at` this card shows. */
+    submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull(),
+    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+    messageId: bigint('message_id', { mode: 'number' }).notNull(),
+    /** Set when a review reminder listed the deposit (rule RM3). */
+    remindedAt: timestamp('reminded_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.depositId, table.submittedAt] })],
+);
+
+/** The bot's own state, one row (rule RM3): when the last review reminder was sent. */
+export const telegramBotState = pgTable(
+  'telegram_bot_state',
+  {
+    id: smallint('id').primaryKey(),
+    lastReminderAt: timestamp('last_reminder_at', { withTimezone: true }),
+  },
+  (table) => [check('telegram_bot_state_one_row', sql`${table.id} = 1`)],
 );

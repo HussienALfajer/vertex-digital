@@ -18,6 +18,8 @@ import {
   rateFromNumeric,
   referenceCodeSchema,
   sameFlags,
+  type TelegramApprovalRefusal,
+  telegramApprovalRefusal,
   type UsdtMethod,
 } from '@vertex-digital/contracts';
 import {
@@ -31,9 +33,11 @@ import {
   newId,
   type PaymentReferenceOwner,
   postDepositCredit,
+  queueDepositCard,
   recordAudit,
   type Transaction,
   usdtDeposits,
+  usdtTransferState,
   usdtTransfers,
 } from '@vertex-digital/db';
 import { and, asc, count, desc, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
@@ -42,6 +46,7 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
+import { JobsService } from '../../core/jobs/index.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { AdminAuthService, type AdminIdentity } from '../admin/index.js';
 import { AuthService } from '../auth/index.js';
@@ -58,10 +63,81 @@ import {
   stateConflict,
 } from './deposit-records.js';
 import { type CurrentSettings, DepositSettingsService } from './deposit-settings.service.js';
-import { adminUsdt, transferState, usdtCandidates, usdtRecords } from './usdt-records.js';
+import { adminUsdt, usdtCandidates, usdtRecords } from './usdt-records.js';
 
 /** Thrown inside a decision's transaction when its key decided first: answered as a replay. */
 class AlreadyDecided extends Error {}
+
+/** Why a decision from Telegram was refused (S05 rules TC4, TC5, edge cases 3–5). */
+export type TelegramDecisionRefusal =
+  | TelegramApprovalRefusal
+  | 'decided'
+  | 'reference_taken'
+  | 'changed';
+
+/** Thrown inside a Telegram decision's transaction: rolled back, then answered in the chat. */
+class TelegramRefused extends Error {
+  constructor(readonly refusal: TelegramDecisionRefusal) {
+    super(`Refused from Telegram: ${refusal}`);
+  }
+}
+
+/** The outcome of a decision from Telegram, told in the chat. */
+export type TelegramDecision = { referenceCode: string } & (
+  | { outcome: 'approved'; creditedUsdUnits: number }
+  | { outcome: 'rejected'; reason: RejectDeposit['reason'] }
+  | { outcome: 'refused'; refusal: TelegramDecisionRefusal }
+);
+
+/** What the bot needs of a deposit to offer or refuse a decision (S05 rules TC2–TC5). */
+export interface TelegramDepositFacts {
+  id: string;
+  referenceCode: string;
+  method: DepositRow['method'];
+  submittedAt: Date | null;
+  /** A Sham Cash deposit `submitted`, or a USDT deposit in review: a decision can be made. */
+  waiting: boolean;
+  /** The credit at the declared amount (rule TC4). */
+  creditUsdUnits: number;
+  /** Null when "اعتماد" may be offered. */
+  approvalRefusal: TelegramApprovalRefusal | null;
+}
+
+/** Who decides, and through which channel (ADR 0006: one service path, the channel recorded). */
+interface DecisionActor {
+  adminId: string;
+  channel: 'admin' | 'telegram';
+  /** The panel: a re-authentication within 5 minutes (rule RV4). */
+  reauthenticated?: boolean;
+  /** Telegram: the submission the prompt was opened on (edge case 4). */
+  submittedAt?: Date | null;
+}
+
+/** Telegram decisions carry no address or browser: the webhook's caller is Telegram. */
+const TELEGRAM_META: RequestMeta = { ipAddress: null, userAgent: null };
+
+const sameInstant = (a: Date | null | undefined, b: Date | null | undefined) =>
+  (a?.getTime() ?? null) === (b?.getTime() ?? null);
+
+/** Maps a refused Telegram decision to its answer; any other error is a fault. */
+function telegramRefusal(error: unknown): TelegramDecisionRefusal {
+  if (error instanceof TelegramRefused) return error.refusal;
+  if (error instanceof CodedException) {
+    switch (error.code) {
+      case 'DEPOSIT_STATE_CONFLICT':
+      case 'IDEMPOTENCY_KEY_REUSED':
+        return 'decided';
+      case 'EXTERNAL_REFERENCE_TAKEN':
+        return 'reference_taken';
+      case 'FLAGS_NOT_ACKNOWLEDGED':
+        return 'flagged';
+      case 'RATE_UNAVAILABLE':
+      case 'VALIDATION_FAILED':
+        return 'panel_only';
+    }
+  }
+  throw error;
+}
 
 const keyReused = () =>
   new CodedException(
@@ -119,6 +195,7 @@ export class DepositReviewService {
     private readonly wallets: WalletService,
     private readonly files: FilesService,
     private readonly notifications: NotificationsService,
+    private readonly jobs: JobsService,
   ) {}
 
   /** `GET /api/admin/deposits` (rule RV10). */
@@ -192,7 +269,7 @@ export class DepositReviewService {
         .where(
           and(
             sql`${usdtTransfers.createdAt} > now() - interval '30 days'`,
-            eq(transferState, 'unmatched'),
+            eq(usdtTransferState, 'unmatched'),
           ),
         ),
     ]);
@@ -257,6 +334,151 @@ export class DepositReviewService {
     input: ApproveDeposit,
     meta: RequestMeta,
   ): Promise<{ deposit: AdminDeposit; created: boolean }> {
+    const actor = {
+      adminId: admin.id,
+      channel: 'admin',
+      reauthenticated: isRecentlyReauthenticated(admin),
+    } as const;
+    return this.approveAs(actor, id, idempotencyKey, input, meta);
+  }
+
+  /**
+   * Rule TC4 step 3: the panel's approval with the declared amount, the reference matching, no
+   * flag and the key `telegram:<promptId>`, re-checked at this moment: the submission the prompt
+   * was opened on, no flag, within the Telegram limit.
+   */
+  async approveFromTelegram(
+    adminId: string,
+    prompt: { id: string; depositId: string; submittedAt: Date | null },
+    transactionNumber: string,
+  ): Promise<TelegramDecision> {
+    const row = await this.row(prompt.depositId);
+    const input: ApproveDeposit = {
+      transactionNumber,
+      receivedCurrency: row.currency,
+      receivedAmountUnits: row.declaredAmountUnits,
+      referenceCheck: 'matches',
+      acknowledgedFlags: [],
+    };
+    const actor = { adminId, channel: 'telegram', submittedAt: prompt.submittedAt } as const;
+    try {
+      const { deposit } = await this.approveAs(
+        actor,
+        row.id,
+        `telegram:${prompt.id}`,
+        input,
+        TELEGRAM_META,
+      );
+      return {
+        outcome: 'approved',
+        referenceCode: row.referenceCode,
+        creditedUsdUnits: deposit.credit?.creditedUsdUnits ?? 0,
+      };
+    } catch (error) {
+      return {
+        outcome: 'refused',
+        referenceCode: row.referenceCode,
+        refusal: telegramRefusal(error),
+      };
+    }
+  }
+
+  /** Rule TC5: the panel's rejection, without a customer note, with the key `telegram:<promptId>`. */
+  async rejectFromTelegram(
+    adminId: string,
+    prompt: { id: string; depositId: string; submittedAt: Date | null },
+    reason: RejectDeposit['reason'],
+    internalNote: string,
+  ): Promise<TelegramDecision> {
+    const row = await this.row(prompt.depositId);
+    const actor = { adminId, channel: 'telegram', submittedAt: prompt.submittedAt } as const;
+    try {
+      await this.rejectAs(
+        actor,
+        row.id,
+        `telegram:${prompt.id}`,
+        { reason, internalNote },
+        TELEGRAM_META,
+      );
+      return { outcome: 'rejected', referenceCode: row.referenceCode, reason };
+    } catch (error) {
+      return {
+        outcome: 'refused',
+        referenceCode: row.referenceCode,
+        refusal: telegramRefusal(error),
+      };
+    }
+  }
+
+  /** What the bot shows of a deposit before a decision (rules TC2–TC5); null when unknown. */
+  async telegramFacts(id: string): Promise<TelegramDepositFacts | null> {
+    const [row] = isUuid(id)
+      ? await this.db.select().from(deposits).where(eq(deposits.id, id))
+      : [];
+    if (!row) return null;
+    const submitted = row.status === 'submitted';
+    const facts = {
+      id: row.id,
+      referenceCode: row.referenceCode,
+      method: row.method,
+      submittedAt: row.submittedAt,
+      waiting: submitted && (row.method === 'sham_cash' || (await this.inReview(this.db, row.id))),
+      creditUsdUnits: row.declaredUsdUnits,
+    };
+    if (row.method !== 'sham_cash') return { ...facts, approvalRefusal: 'panel_only' };
+    const [plan, settings] = await Promise.all([
+      this.planApproval(this.db, row, {
+        transactionNumber: '-',
+        receivedCurrency: row.currency,
+        receivedAmountUnits: row.declaredAmountUnits,
+        referenceCheck: 'matches',
+        acknowledgedFlags: [],
+      }).catch(() => null),
+      this.settings.current(),
+    ]);
+    if (!plan) return { ...facts, approvalRefusal: 'panel_only' };
+    return {
+      ...facts,
+      creditUsdUnits: plan.creditedUsdUnits,
+      approvalRefusal: telegramApprovalRefusal({
+        method: row.method,
+        flagCount: plan.expectedFlags.length,
+        creditUsdUnits: plan.creditedUsdUnits,
+        limitUsdUnits: settings?.telegramApprovalMaxUsdUnits ?? 0,
+      }),
+    };
+  }
+
+  private async row(id: string): Promise<DepositRow> {
+    const [row] = await this.db.select().from(deposits).where(eq(deposits.id, id));
+    if (!row) throw notFound();
+    return row;
+  }
+
+  /** Rule TC4: refused when the deposit changed since the prompt, is flagged or over the limit. */
+  private async refuseForTelegram(
+    actor: DecisionActor,
+    deposit: DepositRow,
+    approval: { creditedUsdUnits: number; expectedFlags: readonly string[] },
+  ): Promise<void> {
+    if (!sameInstant(deposit.submittedAt, actor.submittedAt)) throw new TelegramRefused('changed');
+    const settings = await this.settings.current();
+    const refusal = telegramApprovalRefusal({
+      method: deposit.method,
+      flagCount: approval.expectedFlags.length,
+      creditUsdUnits: approval.creditedUsdUnits,
+      limitUsdUnits: settings?.telegramApprovalMaxUsdUnits ?? 0,
+    });
+    if (refusal) throw new TelegramRefused(refusal);
+  }
+
+  private async approveAs(
+    actor: DecisionActor,
+    id: string,
+    idempotencyKey: string,
+    input: ApproveDeposit,
+    meta: RequestMeta,
+  ): Promise<{ deposit: AdminDeposit; created: boolean }> {
     const replayed = await this.replayApproval(id, idempotencyKey, input);
     if (replayed) return { deposit: replayed, created: false };
     const [current] = isUuid(id)
@@ -268,9 +490,11 @@ export class DepositReviewService {
     if (current.method !== 'sham_cash') throw stateConflict(current.status);
     // Rule RV4, before anything is written: the credit and every flag the approval would carry.
     const plan = await this.planApproval(this.db, current, input);
-    if (
+    // From Telegram the limit (at most $100) and "no flag" take the re-authentication's place.
+    if (actor.channel === 'telegram') await this.refuseForTelegram(actor, current, plan);
+    else if (
       approvalNeedsReauthentication(plan.creditedUsdUnits, plan.expectedFlags.length) &&
-      !isRecentlyReauthenticated(admin)
+      !actor.reauthenticated
     ) {
       throw new CodedException(
         403,
@@ -285,6 +509,7 @@ export class DepositReviewService {
         if (deposit.decisionIdempotencyKey === idempotencyKey) throw new AlreadyDecided();
         if (deposit.status !== 'submitted') throw stateConflict(deposit.status);
         const approval = await this.planApproval(tx, deposit, input);
+        if (actor.channel === 'telegram') await this.refuseForTelegram(actor, deposit, approval);
         if (!sameFlags(input.acknowledgedFlags, approval.expectedFlags)) {
           throw new CodedException(409, 'FLAGS_NOT_ACKNOWLEDGED', 'Acknowledge every flag', {
             expected: approval.expectedFlags,
@@ -328,7 +553,7 @@ export class DepositReviewService {
             journalId: credit.journalId,
             decidedBy: 'admin',
             decisionIdempotencyKey: idempotencyKey,
-            adminId: admin.id,
+            adminId: actor.adminId,
           })
           .where(eq(deposits.id, deposit.id))
           .returning();
@@ -355,7 +580,7 @@ export class DepositReviewService {
         }
         // Step 8.
         await recordAudit(tx, {
-          ...adminEntry(admin.id, deposit.id, meta),
+          ...adminEntry(actor.adminId, deposit.id, meta, actor.channel),
           action: 'deposit.credited',
           reason: input.internalNote ?? null,
           details: {
@@ -379,6 +604,8 @@ export class DepositReviewService {
           referenceCode: updated.referenceCode,
           creditedUsdUnits: approval.creditedUsdUnits,
         });
+        // The card in Telegram shows the outcome (S05 rule TC6).
+        await queueDepositCard(tx, this.jobs, deposit.id);
         return updated;
       });
       // A02: paying `awaiting_balance` orders after a credit hooks in here, after the commit
@@ -401,6 +628,17 @@ export class DepositReviewService {
     input: RejectDeposit,
     meta: RequestMeta,
   ): Promise<{ deposit: AdminDeposit; created: boolean }> {
+    return this.rejectAs({ adminId, channel: 'admin' }, id, idempotencyKey, input, meta);
+  }
+
+  private async rejectAs(
+    actor: DecisionActor,
+    id: string,
+    idempotencyKey: string,
+    input: RejectDeposit,
+    meta: RequestMeta,
+  ): Promise<{ deposit: AdminDeposit; created: boolean }> {
+    const { adminId } = actor;
     const customerNote = input.customerNote ?? null;
     const replayed = await this.replayRejection(id, idempotencyKey, input.reason, customerNote);
     if (replayed) return { deposit: replayed, created: false };
@@ -413,6 +651,9 @@ export class DepositReviewService {
         // the worker's to settle (S04 rule U16).
         if (deposit.method !== 'sham_cash' && !(await this.inReview(tx, deposit.id))) {
           throw stateConflict(deposit.status);
+        }
+        if (actor.channel === 'telegram' && !sameInstant(deposit.submittedAt, actor.submittedAt)) {
+          throw new TelegramRefused('changed');
         }
         const [updated] = await tx
           .update(deposits)
@@ -434,7 +675,7 @@ export class DepositReviewService {
           .set({ checkStatus: 'done' })
           .where(eq(usdtDeposits.depositId, deposit.id));
         await recordAudit(tx, {
-          ...adminEntry(adminId, deposit.id, meta),
+          ...adminEntry(adminId, deposit.id, meta, actor.channel),
           action: 'deposit.rejected',
           reason: input.internalNote,
           details: {
@@ -450,6 +691,7 @@ export class DepositReviewService {
           referenceCode: updated.referenceCode,
           reason: input.reason,
         });
+        await queueDepositCard(tx, this.jobs, deposit.id);
         return updated;
       });
       return { deposit: await this.view(row), created: true };
@@ -505,6 +747,7 @@ export class DepositReviewService {
           depositId: updated.id,
           referenceCode: updated.referenceCode,
         });
+        await queueDepositCard(tx, this.jobs, deposit.id);
         return updated;
       });
       return this.view(row);
@@ -684,7 +927,7 @@ export class DepositReviewService {
   }
 
   /** True when the USDT deposit's check is in review (S04 rule U11). */
-  private async inReview(tx: Transaction, depositId: string): Promise<boolean> {
+  private async inReview(tx: Database | Transaction, depositId: string): Promise<boolean> {
     const [row] = await tx
       .select({ checkStatus: usdtDeposits.checkStatus })
       .from(usdtDeposits)
@@ -838,11 +1081,16 @@ const referenceTaken = (owner: PaymentReferenceOwner | null) =>
     owner ?? undefined,
   );
 
-function adminEntry(adminId: string, depositId: string, meta: RequestMeta) {
+function adminEntry(
+  adminId: string,
+  depositId: string,
+  meta: RequestMeta,
+  channel: DecisionActor['channel'] = 'admin',
+) {
   return {
     actorKind: 'admin',
     actorId: adminId,
-    channel: 'admin',
+    channel,
     entityType: 'deposit',
     entityId: depositId,
     ipAddress: meta.ipAddress,

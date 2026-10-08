@@ -358,6 +358,17 @@ describe('deposit settings', () => {
     ]);
     expect(issues({ ...valid, usdtMinDepositUsdUnits: 0 })).toEqual(['usdtMinDepositUsdUnits']);
   });
+
+  it('keeps the Telegram approval limit within $0–$100 in whole cents (S05 rule TC4)', () => {
+    expect(DEPOSIT_SETTINGS_DEFAULTS.telegramApprovalMaxUsdUnits).toBe(100 * USD);
+    expect(issues({ ...valid, telegramApprovalMaxUsdUnits: 0 })).toEqual([]);
+    expect(issues({ ...valid, telegramApprovalMaxUsdUnits: 100 * USD + 10_000 })).toEqual([
+      'telegramApprovalMaxUsdUnits',
+    ]);
+    expect(issues({ ...valid, telegramApprovalMaxUsdUnits: 1 })).toEqual([
+      'telegramApprovalMaxUsdUnits',
+    ]);
+  });
 });
 
 describe('USDT deposits (S04)', () => {

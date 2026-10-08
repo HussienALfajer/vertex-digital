@@ -140,6 +140,31 @@ describe('Telegram tables', () => {
     });
   });
 
+  it('tie a deposit prompt to its deposit and submission, a stop prompt to none', async () => {
+    const prompt = `insert into telegram_prompts (id, kind, data, expires_at, deposit_id, deposit_submitted_at)
+                    values ($1, $2, '{}', now(), $3, $4)`;
+    for (const [kind, depositId, submittedAt] of [
+      ['approve_number', null, null],
+      ['reject_note', newId(), null],
+      ['stop_confirm', newId(), new Date()],
+    ] as const) {
+      await rolledBack(async (client) => {
+        await client.query(`update telegram_prompts set closed_at = now() where closed_at is null`);
+        await expect(client.query(prompt, [newId(), kind, depositId, submittedAt])).rejects.toThrow(
+          /telegram_prompts_deposit_check/,
+        );
+      });
+    }
+  });
+
+  it('keep one bot state row (rule RM3)', async () => {
+    await rolledBack(async (client) => {
+      await expect(client.query(`insert into telegram_bot_state (id) values (2)`)).rejects.toThrow(
+        /telegram_bot_state_one_row/,
+      );
+    });
+  });
+
   it('accept an update id once (rule TG5)', async () => {
     await rolledBack(async (client) => {
       const update = `insert into telegram_updates (update_id) values ($1)`;

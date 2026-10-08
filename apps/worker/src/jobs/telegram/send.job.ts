@@ -14,6 +14,7 @@ import {
   transactionExecutor,
 } from '@vertex-digital/db';
 import { eq, isNull } from 'drizzle-orm';
+import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { TelegramApiError, TelegramBot } from '../../telegram/bot-api.js';
@@ -43,6 +44,7 @@ export class SendTelegramJob implements OnApplicationBootstrap {
     private readonly pgBoss: PgBossService,
     private readonly bot: TelegramBot,
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -79,6 +81,7 @@ export class SendTelegramJob implements OnApplicationBootstrap {
         const message = renderTelegramMessage(
           row.kind,
           TELEGRAM_MESSAGE_PARAMS[row.kind].parse(row.params) as never,
+          { admin: this.env.ADMIN_URL },
         );
         const sent = (await this.bot.call('sendMessage', {
           chat_id: chatId,

@@ -29,6 +29,7 @@ import {
   recordAudit,
   type Transaction,
   usdtDeposits,
+  usdtReserved,
   usdtTransfers,
 } from '@vertex-digital/db';
 import { and, between, eq, ne, or, sql } from 'drizzle-orm';
@@ -54,7 +55,6 @@ import {
 } from './deposit-records.js';
 import { DepositSettingsService } from './deposit-settings.service.js';
 import { DepositsService } from './deposits.service.js';
-import { usdtReserved } from './usdt-records.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 

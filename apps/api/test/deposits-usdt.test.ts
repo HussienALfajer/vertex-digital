@@ -14,11 +14,13 @@ import {
   ledgerPostings,
   newId,
   paymentReferences,
+  telegramLinks,
+  telegramMessages,
   usdtDeposits,
   usdtScanCursors,
   usdtTransfers,
 } from '@vertex-digital/db';
-import { eq, sql } from 'drizzle-orm';
+import { asc, eq, isNull, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   api,
@@ -282,6 +284,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await test.db
+    .update(telegramLinks)
+    .set({ unlinkedAt: new Date() })
+    .where(isNull(telegramLinks.unlinkedAt));
   delete process.env.USDT_TRC20_ADDRESS;
   await setSwitches(test.db);
   await removeAccounts(test.db, seeded);
@@ -1137,5 +1143,77 @@ describe('the USDT transfers (rule U13) and the badge', () => {
       await client.get('/api/admin/deposits?method=sham_cash&limit=100', { cookie: admin.cookie })
     ).json()) as { items: { id: string }[] };
     expect(sham.items.map((item) => item.id)).not.toContain(deposit.id);
+  });
+});
+
+describe('USDT reviews from Telegram (S05 rules TC3, TC4, TC5)', () => {
+  const chatId = 8_000_000_000 + randomInt(1_000_000_000);
+  const from = { id: chatId, username: `owner${chatId}` };
+  const chat = { id: chatId, type: 'private' };
+  let nextUpdateId = Date.now() * 1000 + 900_000;
+  const post = async (update: object) => {
+    nextUpdateId += 1;
+    const response = await fetch(`${test.url}/api/webhooks/telegram`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-telegram-bot-api-secret-token': 'test-webhook-secret-0123456789abcdef',
+      },
+      body: JSON.stringify({ update_id: nextUpdateId, ...update }),
+    });
+    const text = await response.text();
+    return text ? (JSON.parse(text) as { text?: string }).text : undefined;
+  };
+  const sendText = (text: string) => post({ message: { message_id: 1, from, chat, text } });
+  const tap = (data: string) =>
+    post({ callback_query: { id: 'q', from, message: { message_id: 2, chat }, data } });
+  const lastReply = async () =>
+    (
+      await test.db
+        .select({ params: telegramMessages.params })
+        .from(telegramMessages)
+        .where(eq(telegramMessages.chatId, chatId))
+        .orderBy(asc(telegramMessages.createdAt), asc(telegramMessages.id))
+    ).at(-1)?.params as Record<string, unknown> | undefined;
+
+  beforeAll(async () => {
+    await test.db
+      .update(telegramLinks)
+      .set({ unlinkedAt: new Date() })
+      .where(isNull(telegramLinks.unlinkedAt));
+    await reauthenticate();
+    const code = await client.post('/api/admin/telegram/link-code', { cookie: admin.cookie });
+    const { deepLink } = (await code.json()) as { deepLink: string };
+    await sendText(`/start ${new URL(deepLink).searchParams.get('start')}`);
+    expect(await lastReply()).toEqual({ reply: 'welcome' });
+  });
+
+  it('never approves a USDT review, and rejects it with the USDT reasons', async () => {
+    const someone = await customer();
+    const { deposit } = await inReview(someone);
+    expect(await tap(`ap:${deposit.id}`)).toMatch(/اللوحة/);
+    expect(await tap(`rj:${deposit.id}`)).toBeUndefined();
+    const reasons = await lastReply();
+    expect(reasons).toMatchObject({ reply: 'reject_reasons' });
+    expect(reasons?.reasons).toContain('transfer_other_customer');
+    await tap(`rr:${reasons?.promptId}:transfer_other_customer`);
+    await sendText('The transfer belongs to another customer');
+    expect(await lastReply()).toMatchObject({ reply: 'rejected' });
+    const [row] = await test.db.select().from(deposits).where(eq(deposits.id, deposit.id));
+    expect(row).toMatchObject({ status: 'rejected', rejectReason: 'transfer_other_customer' });
+    const [check] = await test.db
+      .select({ checkStatus: usdtDeposits.checkStatus })
+      .from(usdtDeposits)
+      .where(eq(usdtDeposits.depositId, deposit.id));
+    expect(check?.checkStatus).toBe('done');
+    expect(
+      (await auditOf(test.db, deposit.id)).find((entry) => entry.action === 'deposit.rejected'),
+    ).toMatchObject({ channel: 'telegram' });
+  });
+
+  it('refuses a USDT deposit that is not in review', async () => {
+    const someone = await customer();
+    const deposit = await created(someone.cookie);
+    expect(await tap(`rj:${deposit.id}`)).toMatch(/البت فيه/);
   });
 });

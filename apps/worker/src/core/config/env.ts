@@ -71,6 +71,13 @@ export const envSchema = z
      */
     /** The store's origin, for links in emails (S02: the wallet page). */
     STORE_URL: z.url({ protocol: /^https?$/ }).default('http://127.0.0.1:3001'),
+    /** The panel's origin, for links in Telegram messages (S05: deposit cards, reminders). */
+    ADMIN_URL: z.url({ protocol: /^https?$/ }).default('http://127.0.0.1:5173'),
+    /**
+     * The API's stored files (S03), read for the receipt of a deposit card (S05 rule TC2). A
+     * relative path is the API's: resolved from `apps/api`, as the API runs there.
+     */
+    FILES_ROOT: z.string().min(1).default('./.data/files'),
     EMAIL_TRANSPORT: z.enum(['log', 'smtp']).default('log'),
     EMAIL_LOG_DIR: z.string().min(1).default('./.data/emails'),
     EMAIL_FROM: z.email().default('info@vertexmedia.pro'),

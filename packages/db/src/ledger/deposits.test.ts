@@ -293,6 +293,9 @@ describe('the deposit checks', () => {
       [{ reviewHoursEnd: '09:00' }, /hours_check/],
       [{ flagVelocityCount: 0 }, /velocity_check/],
       [{ shamCashAccountName: '' }, /account_check/],
+      // S05 rule TC4: $0–$100 in whole cents.
+      [{ telegramApprovalMaxUsdUnits: 100 * USD + 10_000 }, /telegram_approval_check/],
+      [{ telegramApprovalMaxUsdUnits: 1 }, /telegram_approval_check/],
     ] as const) {
       expect(await refusal(db.insert(depositSettings).values({ ...valid, ...change }))).toMatch(
         constraint,
@@ -846,8 +849,13 @@ describe('USDT transfers (S04 rule U13)', () => {
 describe('USDT settings (S04)', () => {
   it('reads older versions as disabled with the $5 minimum', async () => {
     const id = newId();
-    const { usdtTrc20Enabled, usdtBep20Enabled, usdtMinDepositUsdUnits, ...older } =
-      DEPOSIT_SETTINGS_DEFAULTS;
+    const {
+      usdtTrc20Enabled,
+      usdtBep20Enabled,
+      usdtMinDepositUsdUnits,
+      telegramApprovalMaxUsdUnits,
+      ...older
+    } = DEPOSIT_SETTINGS_DEFAULTS;
     await db.insert(depositSettings).values({
       ...older,
       id,
@@ -860,6 +868,8 @@ describe('USDT settings (S04)', () => {
       usdtTrc20Enabled: false,
       usdtBep20Enabled: false,
       usdtMinDepositUsdUnits: 5 * USD,
+      // S05: older versions allow Telegram approvals up to $100.
+      telegramApprovalMaxUsdUnits: 100 * USD,
     });
     expect(
       await refusal(

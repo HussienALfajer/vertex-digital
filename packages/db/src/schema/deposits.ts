@@ -105,6 +105,10 @@ export const depositSettings = pgTable(
     usdtBep20Enabled: boolean('usdt_bep20_enabled').notNull().default(false),
     /** Kept within both per-deposit limits by the contract (`depositSettingsInputSchema`). */
     usdtMinDepositUsdUnits: amountUnits('usdt_min_deposit_usd_units').notNull().default(5_000_000),
+    /** S05 rule TC4: the largest credit approved from Telegram; 0 turns it off; at most $100. */
+    telegramApprovalMaxUsdUnits: amountUnits('telegram_approval_max_usd_units')
+      .notNull()
+      .default(100_000_000),
     /** The admin who saved it; no foreign key, as `wallet_adjustments.admin_id`. */
     adminId: uuid('admin_id').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -137,6 +141,10 @@ export const depositSettings = pgTable(
     ),
     check('deposit_settings_velocity_check', sql`${table.flagVelocityCount} between 1 and 50`),
     check('deposit_settings_usdt_min_check', isLimit(table.usdtMinDepositUsdUnits)),
+    check(
+      'deposit_settings_telegram_approval_check',
+      sql`${table.telegramApprovalMaxUsdUnits} between 0 and 100000000 and ${table.telegramApprovalMaxUsdUnits} % 10000 = 0`,
+    ),
   ],
 );
 

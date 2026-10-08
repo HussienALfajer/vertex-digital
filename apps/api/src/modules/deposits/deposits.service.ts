@@ -24,6 +24,7 @@ import {
   depositReceipts,
   deposits,
   newId,
+  queueDepositCard,
   recordAudit,
   type Transaction,
   usdtDeposits,
@@ -33,6 +34,7 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
+import { JobsService } from '../../core/jobs/index.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { AuthService, withinLimits } from '../auth/index.js';
 import { FilesService, type ServedFile } from '../files/index.js';
@@ -75,6 +77,7 @@ export class DepositsService {
     private readonly customers: AuthService,
     private readonly files: FilesService,
     private readonly switches: SettingsService,
+    private readonly jobs: JobsService,
   ) {}
 
   /** `GET /api/deposits/sham-cash/options` (rules SC1, SC3, SC13, FX8). */
@@ -360,6 +363,8 @@ export class DepositsService {
           flags: flags.map((flag) => flag.code),
         },
       });
+      // Each submission gets its own card in Telegram (S05 rule TC1).
+      await queueDepositCard(tx, this.jobs, deposit.id);
       return updated;
     });
     return this.view(row, settings);
@@ -386,6 +391,8 @@ export class DepositsService {
         action: 'deposit.cancelled',
         details: { depositId: deposit.id },
       });
+      // Only a deposit sent back for a clearer receipt has a card to close (S05 rule TC6).
+      if (deposit.receiptRequestCount > 0) await queueDepositCard(tx, this.jobs, deposit.id);
       return updated;
     });
     return this.view(row);

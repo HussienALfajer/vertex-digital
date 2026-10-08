@@ -1720,6 +1720,7 @@ export interface components {
             usdtTrc20Enabled: boolean;
             usdtBep20Enabled: boolean;
             usdtMinDepositUsdUnits: number;
+            telegramApprovalMaxUsdUnits: number;
             saved: boolean;
             /** Format: date-time */
             savedAt: string | null;
@@ -1753,6 +1754,7 @@ export interface components {
             usdtTrc20Enabled: boolean;
             usdtBep20Enabled: boolean;
             usdtMinDepositUsdUnits: number;
+            telegramApprovalMaxUsdUnits: number;
         };
         StoredFileRef: {
             /** Format: uuid */
@@ -2054,7 +2056,7 @@ export interface components {
             } | null;
         };
         /** @enum {string} */
-        TelegramMessageKind: "switch_changed" | "bot_reply" | "link_changed" | "test";
+        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test";
         /** @enum {string} */
         TelegramMessageStatus: "pending" | "sent" | "failed" | "skipped";
         TelegramLinkCode: {
