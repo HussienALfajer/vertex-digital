@@ -23,6 +23,10 @@
       "dependsOn": ["^build"],
       "cache": false
     },
+    "@vertex-digital/api#test": {
+      "dependsOn": ["^build", "@vertex-digital/db#test"],
+      "cache": false
+    },
     "@vertex-digital/worker#test": {
       "dependsOn": ["^build", "@vertex-digital/api#test", "@vertex-digital/db#test"],
       "cache": false
