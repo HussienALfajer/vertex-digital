@@ -46,7 +46,7 @@ Only what the foundation uses: the deposit columns of `telegram_prompts`, `teleg
 - [x] E2E: `/settings/telegram` in its three states (light and dark)
 - [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md`, spec details settled)
 - [x] Reviewer: one blocking finding fixed (the webhook secret header was not redacted from the API logs and Sentry: one shared list, `core/http/secret-headers.ts`, with a test); callback prefixes looked up in a `Map` (an inherited key is no prefix)
-- [ ] Checks (full set on the final tree), owner acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded on the final tree), owner acceptance (2026-10-08), PR with auto-merge
 
 ## PR 4 — F07 deposit cards, decisions, reminder, summary · Opus 5.5 `high`
 - [ ] Contracts: queues `telegram.deposit-card`, `telegram.review-reminder`, `telegram.daily-summary`; message kinds `usdt_unmatched`, `review_reminder`, `daily_summary`; prompt kinds `approve_number`, `approve_confirm`, `reject_note`; callbacks `ap:`, `rj:`, `rr:`; reminder due computation; settings `telegramApprovalMaxUsdUnits`; unit tests
