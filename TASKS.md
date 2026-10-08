@@ -35,4 +35,4 @@ Why three and not the spec's two: PR 1 of the spec (contracts, db, readers, jobs
 - [x] Admin: queue method filter and chips; USDT deposit page (facts, TXID, transfer, flags, candidates, approve with live amount and re-authentication, reject, re-check, decider); `/deposits/transfers` with badge and prefilled S02 form; settings USDT section; audit filters; i18n
 - [x] E2E flows and RTL screenshots (store dark phone width; admin light and dark)
 - [x] Wiring checklist, `wiring.md` patterns, `docs/ROADMAP.md` S04 done
-- [ ] Checks (lint, typecheck, test, build, e2e), reviewer, owner acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e: all passed and recorded), reviewer (one blocking finding fixed: the full sender address in the transfers list), owner acceptance (2026-10-08), PR with auto-merge
