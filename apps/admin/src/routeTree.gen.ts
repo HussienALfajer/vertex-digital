@@ -16,7 +16,11 @@ import { Route as SetupTwoFactorRouteImport } from './routes/setup-two-factor'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
+import { Route as AppRatesRouteImport } from './routes/_app/rates'
 import { Route as AppTestCustomersRouteImport } from './routes/_app/test-customers'
+import { Route as AppDepositsIndexRouteImport } from './routes/_app/deposits.index'
+import { Route as AppDepositsIdRouteImport } from './routes/_app/deposits.$id'
+import { Route as AppSettingsDepositsRouteImport } from './routes/_app/settings.deposits'
 import { Route as AppWalletsIndexRouteImport } from './routes/_app/wallets.index'
 import { Route as AppWalletsCustomerIdRouteImport } from './routes/_app/wallets.$customerId'
 
@@ -54,9 +58,29 @@ const AppAuditRoute = AppAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AppRoute,
 } as any)
+const AppRatesRoute = AppRatesRouteImport.update({
+  id: '/rates',
+  path: '/rates',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppTestCustomersRoute = AppTestCustomersRouteImport.update({
   id: '/test-customers',
   path: '/test-customers',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDepositsIndexRoute = AppDepositsIndexRouteImport.update({
+  id: '/deposits/',
+  path: '/deposits/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDepositsIdRoute = AppDepositsIdRouteImport.update({
+  id: '/deposits/$id',
+  path: '/deposits/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsDepositsRoute = AppSettingsDepositsRouteImport.update({
+  id: '/settings/deposits',
+  path: '/settings/deposits',
   getParentRoute: () => AppRoute,
 } as any)
 const AppWalletsIndexRoute = AppWalletsIndexRouteImport.update({
@@ -77,8 +101,12 @@ export interface FileRoutesByFullPath {
   '/setup-two-factor': typeof SetupTwoFactorRoute
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
+  '/rates': typeof AppRatesRoute
   '/test-customers': typeof AppTestCustomersRoute
+  '/deposits/$id': typeof AppDepositsIdRoute
+  '/settings/deposits': typeof AppSettingsDepositsRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
+  '/deposits/': typeof AppDepositsIndexRoute
   '/wallets/': typeof AppWalletsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -87,9 +115,13 @@ export interface FileRoutesByTo {
   '/setup-two-factor': typeof SetupTwoFactorRoute
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
+  '/rates': typeof AppRatesRoute
   '/test-customers': typeof AppTestCustomersRoute
   '/': typeof AppIndexRoute
+  '/deposits/$id': typeof AppDepositsIdRoute
+  '/settings/deposits': typeof AppSettingsDepositsRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
+  '/deposits': typeof AppDepositsIndexRoute
   '/wallets': typeof AppWalletsIndexRoute
 }
 export interface FileRoutesById {
@@ -100,9 +132,13 @@ export interface FileRoutesById {
   '/setup-two-factor': typeof SetupTwoFactorRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/audit': typeof AppAuditRoute
+  '/_app/rates': typeof AppRatesRoute
   '/_app/test-customers': typeof AppTestCustomersRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/deposits/$id': typeof AppDepositsIdRoute
+  '/_app/settings/deposits': typeof AppSettingsDepositsRoute
   '/_app/wallets/$customerId': typeof AppWalletsCustomerIdRoute
+  '/_app/deposits/': typeof AppDepositsIndexRoute
   '/_app/wallets/': typeof AppWalletsIndexRoute
 }
 export interface FileRouteTypes {
@@ -114,8 +150,12 @@ export interface FileRouteTypes {
     | '/setup-two-factor'
     | '/account'
     | '/audit'
+    | '/rates'
     | '/test-customers'
+    | '/deposits/$id'
+    | '/settings/deposits'
     | '/wallets/$customerId'
+    | '/deposits/'
     | '/wallets/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -124,9 +164,13 @@ export interface FileRouteTypes {
     | '/setup-two-factor'
     | '/account'
     | '/audit'
+    | '/rates'
     | '/test-customers'
     | '/'
+    | '/deposits/$id'
+    | '/settings/deposits'
     | '/wallets/$customerId'
+    | '/deposits'
     | '/wallets'
   id:
     | '__root__'
@@ -136,9 +180,13 @@ export interface FileRouteTypes {
     | '/setup-two-factor'
     | '/_app/account'
     | '/_app/audit'
+    | '/_app/rates'
     | '/_app/test-customers'
     | '/_app/'
+    | '/_app/deposits/$id'
+    | '/_app/settings/deposits'
     | '/_app/wallets/$customerId'
+    | '/_app/deposits/'
     | '/_app/wallets/'
   fileRoutesById: FileRoutesById
 }
@@ -200,11 +248,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAuditRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/rates': {
+      id: '/_app/rates'
+      path: '/rates'
+      fullPath: '/rates'
+      preLoaderRoute: typeof AppRatesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/test-customers': {
       id: '/_app/test-customers'
       path: '/test-customers'
       fullPath: '/test-customers'
       preLoaderRoute: typeof AppTestCustomersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/deposits/': {
+      id: '/_app/deposits/'
+      path: '/deposits'
+      fullPath: '/deposits/'
+      preLoaderRoute: typeof AppDepositsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/deposits/$id': {
+      id: '/_app/deposits/$id'
+      path: '/deposits/$id'
+      fullPath: '/deposits/$id'
+      preLoaderRoute: typeof AppDepositsIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings/deposits': {
+      id: '/_app/settings/deposits'
+      path: '/settings/deposits'
+      fullPath: '/settings/deposits'
+      preLoaderRoute: typeof AppSettingsDepositsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/wallets/': {
@@ -227,18 +303,26 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
   AppAuditRoute: typeof AppAuditRoute
+  AppRatesRoute: typeof AppRatesRoute
   AppTestCustomersRoute: typeof AppTestCustomersRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppDepositsIdRoute: typeof AppDepositsIdRoute
+  AppSettingsDepositsRoute: typeof AppSettingsDepositsRoute
   AppWalletsCustomerIdRoute: typeof AppWalletsCustomerIdRoute
+  AppDepositsIndexRoute: typeof AppDepositsIndexRoute
   AppWalletsIndexRoute: typeof AppWalletsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
   AppAuditRoute: AppAuditRoute,
+  AppRatesRoute: AppRatesRoute,
   AppTestCustomersRoute: AppTestCustomersRoute,
   AppIndexRoute: AppIndexRoute,
+  AppDepositsIdRoute: AppDepositsIdRoute,
+  AppSettingsDepositsRoute: AppSettingsDepositsRoute,
   AppWalletsCustomerIdRoute: AppWalletsCustomerIdRoute,
+  AppDepositsIndexRoute: AppDepositsIndexRoute,
   AppWalletsIndexRoute: AppWalletsIndexRoute,
 }
 

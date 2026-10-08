@@ -23,12 +23,12 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { formatDateTime } from '../../lib/format';
+import { useIdempotencyKey } from '../../lib/idempotency';
 import {
   type AdjustmentFieldErrors,
   BalanceLines,
   ConfirmAmountField,
   failureOf,
-  useIdempotencyKey,
 } from './adjustment-form';
 import { useReverseAdjustment } from './wallet.queries';
 import { entryLabel } from './wallet-labels';

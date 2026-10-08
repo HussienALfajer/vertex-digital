@@ -6,7 +6,13 @@ import { ERROR_CODES, type ErrorCode } from '@vertex-digital/contracts';
  */
 export type Failure = ErrorCode | 'INVALID_EMAIL_OR_PASSWORD' | 'NETWORK' | 'UNKNOWN';
 
-export type Result<Data> = { ok: true; data: Data } | { ok: false; reason: Failure };
+/**
+ * A call's outcome. A refusal may carry the API's `details` (a deposit's limits, the offer of a
+ * new rate): data for the screen, never text to show as it is.
+ */
+export type Result<Data> =
+  | { ok: true; data: Data }
+  | { ok: false; reason: Failure; details?: unknown };
 
 /** Codes the API and Better Auth answer that are not API error codes but the store explains. */
 const BETTER_AUTH_CODES = ['INVALID_EMAIL_OR_PASSWORD'] as const;
@@ -23,8 +29,9 @@ function failureOf(status: number, code: unknown): Failure {
 
 /**
  * A same-origin call to the API (`/api/...`; nginx in production, a rewrite in development). The
- * customer session cookie goes with it. Never throws: the result says what went wrong by code, so
- * the screen shows its translation, never the server's message.
+ * customer session cookie goes with it. A `FormData` body is sent as multipart (a receipt); any
+ * other body as JSON. Never throws: the result says what went wrong by code, so the screen shows
+ * its translation, never the server's message.
  */
 export async function apiRequest<Data = unknown>(
   path: string,
@@ -41,18 +48,23 @@ export async function apiRequest<Data = unknown>(
   } = {},
 ): Promise<Result<Data>> {
   let response: Response;
+  const json = body !== undefined && !(body instanceof FormData);
   try {
     response = await fetcher(path, {
       method,
       credentials: 'same-origin',
       cache: 'no-store',
-      headers: body === undefined ? headers : { 'content-type': 'application/json', ...headers },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: json ? { 'content-type': 'application/json', ...headers } : headers,
+      body: json ? JSON.stringify(body) : (body as FormData | undefined),
     });
   } catch {
     return { ok: false, reason: 'NETWORK' };
   }
   const data: unknown = await response.json().catch(() => null);
   if (response.ok) return { ok: true, data: data as Data };
-  return { ok: false, reason: failureOf(response.status, (data as { code?: unknown })?.code) };
+  const error = data as { code?: unknown; details?: unknown } | null;
+  const reason = failureOf(response.status, error?.code);
+  return error?.details === undefined
+    ? { ok: false, reason }
+    : { ok: false, reason, details: error.details };
 }

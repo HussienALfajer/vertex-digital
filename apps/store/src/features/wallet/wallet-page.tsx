@@ -1,7 +1,9 @@
 'use client';
 
 import {
+  formatRate,
   formatSignedUsd,
+  formatSyp,
   formatUsd,
   type JournalKind,
   type Wallet,
@@ -15,6 +17,7 @@ import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import {
   ArrowDownToLineIcon,
   CircleAlertIcon,
+  HistoryIcon,
   type LucideIcon,
   ReceiptTextIcon,
   RotateCcwIcon,
@@ -23,6 +26,7 @@ import {
   Undo2Icon,
   WalletIcon,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
@@ -118,11 +122,30 @@ export function WalletPage() {
   const { wallet, entries, nextCursor } = state;
   return (
     <div className="flex flex-col gap-6">
-      <Card className="gap-2">
-        <p className="text-base text-muted-foreground">{t('wallet.balance')}</p>
-        <p className="text-3xl font-bold tabular-nums" dir="ltr">
-          <bdi>{formatUsd(wallet.balanceUnits)}</bdi>
-        </p>
+      <Card className="gap-4">
+        <div className="flex flex-col gap-1">
+          <p className="text-base text-muted-foreground">{t('wallet.balance')}</p>
+          <p className="text-3xl font-bold tabular-nums" dir="ltr">
+            <bdi>{formatUsd(wallet.balanceUnits)}</bdi>
+          </p>
+          {wallet.syp && (
+            // Under the balance, which reads left to right.
+            <p className="self-end text-sm text-muted-foreground tabular-nums">
+              {t('wallet.syp', { amount: formatSyp(wallet.syp.valueUnits) })}{' '}
+              {t('wallet.sypRate', { rate: formatRate(wallet.syp.rate) })}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="xl" render={<Link href="/wallet/deposit" />}>
+            <ArrowDownToLineIcon />
+            {t('wallet.deposit')}
+          </Button>
+          <Button variant="outline" size="xl" render={<Link href="/wallet/deposits" />}>
+            <HistoryIcon />
+            {t('wallet.myDeposits')}
+          </Button>
+        </div>
       </Card>
       <section className="flex flex-col gap-3" aria-labelledby="wallet-timeline">
         <h2 id="wallet-timeline" className="text-lg font-bold">
@@ -167,6 +190,20 @@ function EntryRow({ entry }: { entry: WalletEntry }) {
       </IconTile>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="font-medium">{entryLabel(entry)}</p>
+        {entry.deposit && (
+          <p className="text-sm text-muted-foreground tabular-nums">
+            <bdi dir="ltr">{entry.deposit.referenceCode}</bdi>
+            {entry.deposit.syp && (
+              <>
+                {' · '}
+                {t('wallet.depositSyp', {
+                  amount: formatSyp(entry.deposit.syp.amountUnits),
+                  rate: formatRate(entry.deposit.syp.rate),
+                })}
+              </>
+            )}
+          </p>
+        )}
         {entry.adjustment?.customerNote && (
           <p className="text-sm break-words text-muted-foreground">
             {entry.adjustment.customerNote}

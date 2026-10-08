@@ -6,11 +6,15 @@ import {
   currencySchema,
   exchangeRateSchema,
   floorToWholeCents,
+  formatAmountInput,
+  formatRate,
   formatSignedUsd,
+  formatSyp,
   formatUsd,
   isSameRate,
   isWholeCents,
   parseUsd,
+  parseWholeSyp,
   rateChangePercent,
   rateFromNumeric,
   sypDepositUsd,
@@ -278,5 +282,46 @@ describe('rateFromNumeric', () => {
     expect(rateFromNumeric('120.0000')).toBe('120');
     expect(rateFromNumeric('100.0500')).toBe('100.05');
     expect(rateFromNumeric('100')).toBe('100');
+  });
+});
+
+describe('SYP and rate display (S03)', () => {
+  it('formats pounds with grouping, decimals only for a fraction', () => {
+    expect(formatSyp(200_000)).toBe('2,000');
+    expect(formatSyp(125_050)).toBe('1,250.50');
+    expect(formatSyp(5)).toBe('0.05');
+    expect(formatSyp(0)).toBe('0');
+    expect(() => formatSyp(-1)).toThrow(RangeError);
+  });
+
+  it('formats a rate with its whole part grouped', () => {
+    expect(formatRate('13000')).toBe('13,000');
+    expect(formatRate('118.5')).toBe('118.5');
+    expect(formatRate('1180.25')).toBe('1,180.25');
+    expect(() => formatRate('abc')).toThrow(RangeError);
+  });
+
+  it('reads whole pounds only', () => {
+    expect(parseWholeSyp('2000')).toBe(200_000);
+    expect(parseWholeSyp(' 15 ')).toBe(1_500);
+    for (const text of ['', '1.5', '-1', '1,000', '١٢', '1e3', '1234567890123']) {
+      expect(parseWholeSyp(text)).toBeNull();
+    }
+  });
+});
+
+describe('formatAmountInput (S03)', () => {
+  it('writes whole pounds and dollars back as typed, exactly', () => {
+    expect(formatAmountInput('SYP', 200_000)).toBe('2000');
+    expect(formatAmountInput('USD', 25_000_000)).toBe('25');
+    expect(formatAmountInput('USD', 25_500_000)).toBe('25.50');
+    expect(formatAmountInput('USD', 10_000)).toBe('0.01');
+    expect(parseUsd(formatAmountInput('USD', 1_250_050_000))).toBe(1_250_050_000);
+  });
+
+  it('refuses a fraction of a pound or a cent instead of rounding', () => {
+    expect(() => formatAmountInput('SYP', 200_050)).toThrow(RangeError);
+    expect(() => formatAmountInput('USD', 25_000_001)).toThrow(RangeError);
+    expect(() => formatAmountInput('USD', -1)).toThrow(RangeError);
   });
 });

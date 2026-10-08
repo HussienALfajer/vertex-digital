@@ -10,6 +10,12 @@ import type { paths } from './schema.gen';
  */
 export const api = createClient<paths>();
 
+/**
+ * Sent with the reads the panel makes on its own (the navigation badge, the stale-rate banner):
+ * they do not count as the admin's activity for the 30-minute idle timeout (rule D4).
+ */
+export const BACKGROUND_REQUEST = { 'X-Background-Request': '1' } as const;
+
 /** A failed API call, with the error code the UI translates (`errors.<code>`). */
 export class ApiError extends Error {
   constructor(

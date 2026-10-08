@@ -29,4 +29,11 @@ describe('entryLabel', () => {
   it('names other journals by their kind', () => {
     expect(entryLabel(entry({ kind: 'deposit' }))).toBe(ar.wallet.kinds.deposit);
   });
+
+  it('names a deposit by its method (S03)', () => {
+    const deposit = { method: 'sham_cash', referenceCode: 'VD-7KQ2M', syp: null } as const;
+    expect(entryLabel(entry({ kind: 'deposit', deposit }))).toBe(
+      ar.wallet.depositMethods.sham_cash,
+    );
+  });
 });

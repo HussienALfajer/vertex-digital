@@ -40,7 +40,13 @@ const ALTCHA_CHALLENGE = {
 };
 
 type Route = Parameters<Parameters<Page['route']>[1]>[0];
-type Answer = { status: number; body: unknown };
+type Answer = { status: number; body: unknown } | { status: 200; image: true };
+
+/** A 1×1 PNG: what the QR route answers in tests. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+);
 
 /** The API as the browser sees it: answers keyed by `METHOD /path`, everything else recorded. */
 export class MockApi {
@@ -67,17 +73,36 @@ export class MockApi {
     return this;
   }
 
+  /** Answers `key` with an image (a QR code). */
+  image(key: string): this {
+    this.answers.set(key, { status: 200, image: true });
+    return this;
+  }
+
   async answer(route: Route): Promise<void> {
     const request = route.request();
     const key = `${request.method()} ${new URL(request.url()).pathname}`;
-    this.requests.push({ key, body: request.postDataJSON(), headers: request.headers() });
+    this.requests.push({ key, body: bodyOf(request), headers: request.headers() });
     const answer = this.answers.get(key);
     if (!answer) {
       this.unexpected.push(key);
       await route.fulfill({ status: 404, json: { statusCode: 404, code: 'NOT_FOUND' } });
       return;
     }
+    if ('image' in answer) {
+      await route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+      return;
+    }
     await route.fulfill({ status: answer.status, json: answer.body });
+  }
+}
+
+/** A JSON body as sent, the raw text of a multipart one (a receipt), or null. */
+function bodyOf(request: ReturnType<Route['request']>): unknown {
+  try {
+    return request.postDataJSON();
+  } catch {
+    return request.postData();
   }
 }
 

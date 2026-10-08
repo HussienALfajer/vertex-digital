@@ -44,4 +44,16 @@ describe('entryLabel', () => {
       ar.wallets.kinds.deposit,
     );
   });
+
+  it('names a deposit by its method', () => {
+    const deposit = {
+      id: '0199a000-0000-7000-8000-0000000000d1',
+      method: 'sham_cash' as const,
+      referenceCode: 'VD-7KQ2M',
+      syp: null,
+    };
+    expect(entryLabel(t, entry({ kind: 'deposit', adjustment: null, deposit }))).toBe(
+      ar.wallets.depositMethods.sham_cash,
+    );
+  });
 });
