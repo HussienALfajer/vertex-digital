@@ -26,7 +26,9 @@ Why three and not the spec's two: PR 1 of the spec (contracts, db, readers, jobs
 - [x] The worker checks `USDT_TRC20_ADDRESS` / `USDT_BEP20_ADDRESS` at boot too (edge case 17), with `CHAIN_READER` (`fake` refused in production; `stub` read as `fake`) and the reader variables; `.env.example` `CHAIN_READER=fake`
 - [x] API: a new USDT deposit sends its network's scan job (detection within about 20 seconds)
 - [x] Bridge: migrations 0016–0017 (check errors), build, OpenAPI export, admin client
-- [ ] Docs (`docs/architecture.md` jobs and readers), checks, reviewer, owner acceptance, PR with auto-merge
+- [x] Docs (`docs/architecture.md`, `docs/deployment.md`, `AGENTS.md`, folder `CLAUDE.md`, spec settled notes)
+- [x] Reviewer: three blocking findings fixed (scanner skips claimed TXIDs; bounce with another pending deposit rejects instead, owner 2026-10-08; BSC lists only 15-confirmation blocks, a not-final listing waits quietly), with tests
+- [ ] Checks on the final tree, owner acceptance, PR with auto-merge
 
 ## PR 3 — Store and admin screens, E2E · Opus 5.5 `high`
 - [ ] Store: method picker with three methods and reasons; USDT form (network note, presets, limits, `DEPOSIT_AMOUNT_BUSY` ±$0.01); `/wallet/deposits/[id]` USDT states (exact amount with highlighted tail, QR from text, address in groups, warnings, TXID field, searching, confirming progress, review reason, final states; 10 s / 30 s refresh); method labels in lists and timeline; i18n

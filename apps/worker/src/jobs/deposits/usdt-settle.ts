@@ -76,8 +76,13 @@ export async function transferHeldElsewhere(
     .from(usdtDeposits)
     .where(and(eq(usdtDeposits.transferId, transfer.id), ne(usdtDeposits.depositId, depositId)));
   if (bound) return true;
+  return txidClaimed(tx, transfer.txid);
+}
+
+/** True when `txid` is claimed in `payment_references` under either USDT network. */
+export async function txidClaimed(tx: Transaction, txid: string): Promise<boolean> {
   for (const method of USDT_METHODS) {
-    if (await paymentReferenceOwner(tx, method, transfer.txid)) return true;
+    if (await paymentReferenceOwner(tx, method, txid)) return true;
   }
   return false;
 }
@@ -197,14 +202,35 @@ function flagDetails(code: DepositFlagCode, binding: Binding) {
 /**
  * Bounces a `submitted` deposit whose TXID failed (rule U10): back to `pending` with the error
  * for the customer, the TXID cleared, audited; past `expires_at` it then expires (S03 rule SC12).
- * No email: the deposit page shows it.
+ * No email: the deposit page shows it. When the customer has opened another `pending` deposit
+ * meanwhile (one per customer, rule SC4), it cannot go back: it is rejected `not_received` by the
+ * system, with the rejection email (owner, 2026-10-08). Under the customer's creation lock, the
+ * one the API's deposit creation takes, so a creation cannot slip in between.
  */
 export async function bounce(
   tx: Transaction,
+  boss: PgBoss,
   deposit: DepositRow,
   txid: string,
   error: UsdtCheckError,
-): Promise<'pending' | 'expired'> {
+): Promise<'pending' | 'expired' | 'rejected'> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`deposits:${deposit.customerId}`}))`,
+  );
+  const [otherPending] = await tx
+    .select({ id: deposits.id })
+    .from(deposits)
+    .where(
+      and(
+        eq(deposits.customerId, deposit.customerId),
+        eq(deposits.status, 'pending'),
+        ne(deposits.id, deposit.id),
+      ),
+    );
+  if (otherPending) {
+    await rejectBounced(tx, boss, deposit, txid, error);
+    return 'rejected';
+  }
   // The USDT row first: the deposit guard allows the move only with the TXID's failure.
   await tx
     .update(usdtDeposits)
@@ -248,4 +274,63 @@ export async function bounce(
     details: { depositId: deposit.id },
   });
   return 'expired';
+}
+
+/** The bounce that cannot return to `pending`: a system rejection, audited and emailed. */
+async function rejectBounced(
+  tx: Transaction,
+  boss: PgBoss,
+  deposit: DepositRow,
+  txid: string,
+  error: UsdtCheckError,
+): Promise<void> {
+  const system = {
+    actorKind: 'system',
+    actorId: null,
+    channel: 'worker',
+    entityType: 'deposit',
+    entityId: deposit.id,
+  } as const;
+  await recordAudit(tx, {
+    ...system,
+    action: 'deposit.txid_bounced',
+    details: { depositId: deposit.id, txid, error },
+  });
+  const [rejected] = await tx
+    .update(deposits)
+    .set({
+      status: 'rejected',
+      decidedAt: sql`now()`,
+      decidedBy: 'system',
+      rejectReason: 'not_received',
+    })
+    .where(eq(deposits.id, deposit.id))
+    .returning();
+  if (!rejected) throw new Error(`Deposit ${deposit.id} was not rejected`);
+  await tx
+    .update(usdtDeposits)
+    .set({ checkStatus: 'done', checkError: null, lastCheckedAt: sql`now()` })
+    .where(eq(usdtDeposits.depositId, deposit.id));
+  await recordAudit(tx, {
+    ...system,
+    action: 'deposit.rejected',
+    reason: `TXID failed (${error}) while another deposit was pending`,
+    details: {
+      depositId: deposit.id,
+      customerId: deposit.customerId,
+      rejectReason: 'not_received',
+      customerNote: null,
+    },
+  });
+  const [customer] = await tx
+    .select({ email: customers.email })
+    .from(customers)
+    .where(eq(customers.id, deposit.customerId));
+  if (!customer) throw new Error(`Deposit ${deposit.id} has no customer`);
+  await queueEmail(tx, boss, {
+    to: customer.email,
+    template: 'customer_deposit_rejected',
+    customerId: deposit.customerId,
+    params: { depositId: deposit.id, referenceCode: deposit.referenceCode, reason: 'not_received' },
+  });
 }

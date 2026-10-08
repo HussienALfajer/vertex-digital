@@ -39,6 +39,7 @@ export type VerifyOutcome =
   | 'review'
   | 'bounced'
   | 'expired'
+  | 'rejected'
   | 'reader_error';
 
 const OTHER: Record<UsdtMethod, UsdtMethod> = {
@@ -183,8 +184,8 @@ export class UsdtVerifyJob implements OnApplicationBootstrap {
       const { row } = await recordTransfer(tx, found, 'txid');
       // Another deposit or an S02 adjustment holds it: final for this one (PR 1 review).
       if (await transferHeldElsewhere(tx, row, deposit.id)) {
-        await bounce(tx, deposit, checked.txid, 'txid_used');
-        return 'bounced' as const;
+        const bounced = await bounce(tx, this.pgBoss.boss, deposit, checked.txid, 'txid_used');
+        return bounced === 'pending' ? ('bounced' as const) : bounced;
       }
       return bindAndSettle(tx, this.pgBoss.boss, {
         deposit,
@@ -207,9 +208,8 @@ export class UsdtVerifyJob implements OnApplicationBootstrap {
     const outcome = await this.db.transaction(async (tx) => {
       const deposit = await this.lockUnchanged(tx, checked);
       if (!deposit) return 'skipped' as const;
-      return (await bounce(tx, deposit, checked.txid, error)) === 'expired'
-        ? ('expired' as const)
-        : ('bounced' as const);
+      const bounced = await bounce(tx, this.pgBoss.boss, deposit, checked.txid, error);
+      return bounced === 'pending' ? ('bounced' as const) : bounced;
     });
     if (outcome !== 'skipped') {
       this.logger.log(`USDT deposit ${checked.deposit.id}: TXID bounced (${error})`);

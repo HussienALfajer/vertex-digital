@@ -94,7 +94,12 @@ export class BscReader implements ChainReader {
   }
 
   async listIncoming(address: string, cursor: string | null): Promise<IncomingPage> {
-    const finalized = (await this.block('finalized')).number;
+    // Final means both finalized and 15 confirmations (rule U6): list only up to that block.
+    const latest = await this.call('eth_blockNumber', [], quantity);
+    const finalized = Math.min(
+      (await this.block('finalized')).number,
+      latest - NETWORK.confirmations + 1,
+    );
     let from =
       cursor === null
         ? Math.max(0, finalized - BSC_FIRST_LOOKBACK_BLOCKS)

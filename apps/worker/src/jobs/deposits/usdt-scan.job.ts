@@ -31,7 +31,7 @@ import {
   type IncomingPage,
 } from './chain/chain-reader.js';
 import { type TransferFacts, usdtTransferTo } from './usdt-assess.js';
-import { bindAndSettle, recordTransfer } from './usdt-settle.js';
+import { bindAndSettle, recordTransfer, txidClaimed } from './usdt-settle.js';
 
 /** The safety-net schedule of every network (rule U12). */
 export const USDT_SCAN_CRON = '*/5 * * * *';
@@ -135,11 +135,16 @@ export class UsdtScanJob implements OnApplicationBootstrap {
       if (known) continue;
       // The listing finds it; the transaction itself is the record (block, sum, finality).
       const read = await reader.getTransfer(incoming.txid);
-      if (read.status !== 'succeeded' || !read.final) {
-        throw new ChainReaderError(
-          'bad_response',
-          `${method} listed ${incoming.txid} as final, but it reads ${read.status}`,
-        );
+      if (read.status === 'not_found' || !read.final) {
+        // The listing ran ahead of the transaction's finality (BSC's `finalized` tag before 15
+        // confirmations, a lagging node): not an outage. Stop here without moving the cursor;
+        // the next scan, 20 seconds on, reads it again.
+        this.logger.log(`USDT scan of ${method}: ${incoming.txid} not final yet`);
+        return { ...result, caughtUp: false };
+      }
+      if (read.status === 'failed') {
+        this.logger.warn(`USDT scan of ${method}: listed ${incoming.txid} reads failed`);
+        continue;
       }
       const found = usdtTransferTo(method, incoming.txid, read, address);
       if ('error' in found) {
@@ -188,6 +193,9 @@ export class UsdtScanJob implements OnApplicationBootstrap {
     const { row, inserted } = await recordTransfer(tx, transfer, 'scan');
     // The verifier recorded it first: it binds it (edge case 6).
     if (!inserted) return 'known';
+    // Claimed already, on either network (an S02 manual deposit during an outage): it stays
+    // unmatched, so it is never credited twice and never blocks the scan.
+    if (await txidClaimed(tx, transfer.txid)) return 'unmatched';
     const exactRaw = (units: number) =>
       usdtRawForUnits(units, USDT_NETWORKS[transfer.method].decimals) === transfer.raw;
     if (!exactRaw(transfer.amountUnits)) return 'unmatched';

@@ -10,6 +10,7 @@ import {
 } from '@vertex-digital/contracts';
 import {
   auditEntries,
+  claimPaymentReference,
   customers,
   type Database,
   depositFlags,
@@ -442,6 +443,46 @@ describe('bounces (rule U10)', () => {
     expect(await postingsOf(second.id)).toEqual([]);
   });
 
+  it('rejects instead when the customer opened another pending deposit (rule SC4, owner 2026-10-08)', async () => {
+    const deposit = await usdtDeposit();
+    const hash = txid();
+    await onChain('usdt_trc20', hash, [], { status: 'failed' });
+    await submitted(deposit, hash);
+    // The customer then opened a Sham Cash deposit, still pending.
+    await db.insert(deposits).values({
+      customerId: deposit.customerId,
+      method: 'sham_cash',
+      referenceCode: `VD-${Array.from({ length: 5 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ'[randomInt(23)]).join('')}`,
+      currency: 'USD',
+      declaredAmountUnits: 5 * USD,
+      declaredUsdUnits: 5 * USD,
+      expiresAt: sql`now() + interval '1 hour'`,
+      idempotencyKey: newId(),
+    });
+    expect(await verify.verify(deposit.id)).toBe('rejected');
+    const { deposit: row, usdt } = await state(deposit.id);
+    expect(row).toMatchObject({
+      status: 'rejected',
+      decidedBy: 'system',
+      rejectReason: 'not_received',
+      adminId: null,
+    });
+    expect(usdt).toMatchObject({ checkStatus: 'done', checkError: null, depositOpen: false });
+    expect(await actionsOf(deposit.id)).toEqual(['deposit.txid_bounced', 'deposit.rejected']);
+    const emails = await db
+      .select({ params: emailOutbox.params })
+      .from(emailOutbox)
+      .where(
+        and(
+          eq(emailOutbox.customerId, deposit.customerId),
+          eq(emailOutbox.template, 'customer_deposit_rejected'),
+        ),
+      );
+    expect(emails).toEqual([{ params: expect.objectContaining({ reason: 'not_received' }) }]);
+    // Final: a second run does nothing.
+    expect(await verify.verify(deposit.id)).toBe('skipped');
+  });
+
   it('expires a bounced deposit past its expiry instead (S03 rule SC12)', async () => {
     const deposit = await usdtDeposit('usdt_trc20', true);
     const hash = txid();
@@ -710,6 +751,73 @@ describe('the scanner (rules U12–U14)', () => {
       'USDT scanner usdt_bep20 delayed: no complete scan for 10 minutes; new deposits wait',
     );
     send.mockRestore();
+  });
+
+  it.each([
+    ['the same network', 'usdt_trc20'],
+    ['the other network', 'usdt_bep20'],
+  ] as const)(
+    'never credits a TXID an S02 manual deposit claimed under %s, and keeps scanning',
+    async (_, claimedAs) => {
+      const deposit = await usdtDeposit();
+      const holder = await usdtDeposit();
+      const hash = txid();
+      await db.transaction((tx) =>
+        claimPaymentReference(tx, claimedAs, hash, { depositId: holder.id }),
+      );
+      await onChain('usdt_trc20', hash, [{ raw: raw('usdt_trc20', deposit.pay) }]);
+      const result = await scan.scan('usdt_trc20');
+      expect(result).toMatchObject({ scanned: true, caughtUp: true });
+      expect((await state(deposit.id)).deposit.status).toBe('pending');
+      expect(await postingsOf(deposit.id)).toEqual([]);
+      expect(
+        await db.select().from(usdtTransfers).where(eq(usdtTransfers.txid, hash)),
+      ).toHaveLength(1);
+    },
+  );
+
+  it('waits quietly for a listed transfer that is not final yet, without moving the cursor', async () => {
+    const deposit = await usdtDeposit('usdt_bep20');
+    const hash = txid();
+    await onChain('usdt_bep20', hash, [{ raw: raw('usdt_bep20', deposit.pay) }], { final: false });
+    const ahead: ChainReaders = {
+      ...readers,
+      usdt_bep20: {
+        ...readers.usdt_bep20,
+        method: 'usdt_bep20',
+        getTransfer: (id) => readers.usdt_bep20.getTransfer(id),
+        // A listing that runs ahead of finality.
+        listIncoming: async (_address, cursor) => ({
+          transfers: [{ txid: hash, raw: raw('usdt_bep20', deposit.pay) }],
+          cursor: String(Number(cursor ?? 0) + 1_000),
+          caughtUp: true,
+        }),
+      },
+    };
+    const job = new UsdtScanJob(
+      pgBossStub as never,
+      alerts,
+      db,
+      { USDT_TRC20_ADDRESS: TRON, USDT_BEP20_ADDRESS: BSC } as never,
+      ahead,
+    );
+    const [before] = await db
+      .select()
+      .from(usdtScanCursors)
+      .where(eq(usdtScanCursors.method, 'usdt_bep20'));
+    const send = vi.spyOn(alerts, 'send');
+    expect(await job.scan('usdt_bep20')).toMatchObject({ scanned: true, caughtUp: false });
+    expect(send.mock.calls.filter(([text]) => text.includes('failing'))).toEqual([]);
+    send.mockRestore();
+    const [after] = await db
+      .select()
+      .from(usdtScanCursors)
+      .where(eq(usdtScanCursors.method, 'usdt_bep20'));
+    expect(after?.cursor).toBe(before?.cursor);
+    expect((await state(deposit.id)).deposit.status).toBe('pending');
+    expect(sent.filter((job) => job.queue === QUEUES.depositsUsdtScan).at(-1)).toMatchObject({
+      options: { startAfter: USDT_SCAN_ACTIVE_SECONDS },
+    });
   });
 
   it('restarts a verification whose chain of jobs was lost', async () => {

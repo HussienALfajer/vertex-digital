@@ -360,7 +360,7 @@ describe('BSC reader (JSON-RPC)', () => {
 
   it('lists USDT logs to the address up to the finalized block, summed, from the cursor less the overlap', async () => {
     const finalized = 50_000;
-    const { fetchFn, calls } = provider(finalized + 10, finalized);
+    const { fetchFn, calls } = provider(finalized + 20, finalized);
     const bsc = new BscReader({ rpcUrl: 'https://bsc.test', fetch: fetchFn });
     const page = await bsc.listIncoming(STORE_BSC.toUpperCase().replace('0X', '0x'), '49900');
     expect(page).toEqual({
@@ -386,7 +386,7 @@ describe('BSC reader (JSON-RPC)', () => {
 
   it('reads at most ten ranges a run, and starts 5,000 blocks back on the first read', async () => {
     const finalized = 1_000_000;
-    const { fetchFn, calls } = provider(finalized, finalized, (call) =>
+    const { fetchFn, calls } = provider(finalized + 14, finalized, (call) =>
       (call.body as { method: string }).method === 'eth_getLogs'
         ? { jsonrpc: '2.0', id: 1, result: [] }
         : undefined,
@@ -409,6 +409,25 @@ describe('BSC reader (JSON-RPC)', () => {
     expect(await bsc.listIncoming(STORE_BSC, String(finalized + BSC_OVERLAP_BLOCKS))).toEqual({
       transfers: [],
       cursor: String(finalized + BSC_OVERLAP_BLOCKS),
+      caughtUp: true,
+    });
+  });
+});
+
+describe('BSC listing finality', () => {
+  it('lists only up to the block with 15 confirmations when the finalized tag runs ahead', async () => {
+    const { fetchFn } = scripted((call) => {
+      const { method } = call.body as { method: string };
+      if (method === 'eth_blockNumber') return { jsonrpc: '2.0', id: 1, result: '0x3e8' };
+      if (method === 'eth_getBlockByNumber') {
+        return { jsonrpc: '2.0', id: 1, result: { number: '0x3e6', timestamp: '0x1' } };
+      }
+      return { jsonrpc: '2.0', id: 1, result: [] };
+    });
+    const bsc = new BscReader({ rpcUrl: 'https://bsc.test', fetch: fetchFn });
+    // Latest 1000, finalized 998: final means 15 confirmations, so block 986 at most.
+    expect(await bsc.listIncoming(`0x${'ab'.repeat(20)}`, '900')).toMatchObject({
+      cursor: '986',
       caughtUp: true,
     });
   });
