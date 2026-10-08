@@ -21,6 +21,7 @@ Short records of decisions that shape the system. Each has a status: **Accepted*
 | [0015](0015-store-csp-inline-scripts.md) | The store's CSP allows inline scripts instead of nonces, so pages stay cached (amends 0008) | Accepted |
 | [0016](0016-single-admin-account.md) | One admin account with full access; no staff, roles or permission map (amends 0003–0007, 0011) | Accepted |
 | [0017](0017-sham-cash-deposits-and-exchange-rate.md) | One SYP rate; Sham Cash in SYP and USD; SYP held in the books; lock covers the submission; deposit states and approval re-authentication (amends 0003, 0006) | Accepted |
+| [0018](0018-usdt-deposits.md) | USDT: automatic detection by exact amount with a sub-cent tail, addresses in the server environment, shared limits with a $5 minimum, bounces for failed or fake-token transfers, system decisions (amends 0006, 0017) | Accepted |
 
 Template:
 

@@ -7,9 +7,7 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Q1 | Off-server backup destination (shared need with Vertex Hub) | Launch | Required: the system holds customer money |
 | Q2 | Madani Arabic: does the license cover web embedding on a public store (traffic, domains)? Provide the WOFF2 files (400, 500, 700) privately | Design system (fallback works until then); required before launch | Confirm or extend the license before launch |
 | Q3 | License for the public repository (none means all rights reserved) | Anytime | — |
-| Q5 | USDT deposit limits: minimum and maximum per deposit, daily limits, limits for new accounts, and whether USDT shares the Sham Cash daily limit (Sham Cash limits resolved below) | F06 | Same tiers as Sham Cash, one shared daily limit |
 | Q7 | Pricing policy: default margin (percent and minimum fixed) per category; USD price endings | F10 | Spec interview |
-| Q8 | USDT: receiving addresses per network (owner-controlled wallets), required confirmations, minimum deposit, intent validity | F06 | Owner-held wallets; confirmations per network set in the spec |
 | Q10 | Terms of service, privacy and refund policies; business identity shown on the store | Launch (F21) | Drafted with the owner before the pilot |
 | Q11 | Telegram: who creates the bot (BotFather) and which chat receives the alerts and deposit cards | F07 | The admin's personal chat for everything (ADR 0016) |
 | Q12 | Supplier accounts: are SHOP2TOPUP and WDGZone accounts and API documentation ready? Which games and packs launch first? | F09 | Start with PUBG Mobile UC and Free Fire diamonds on both suppliers |
@@ -44,3 +42,5 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Sham Cash limits (Q5, Sham Cash part) | Minimum $2; new account $50 per deposit and $100 per 24 hours; established $300 and $1,000; no fees; one deposit awaiting a receipt and three under review per customer; editable in the panel (S03, ADR 0017) | 2026-10-08 |
 | Exchange rate policy (Q6) | One rate for display and deposits, set by the admin with re-authentication and a typed confirmation above a 5% change; display step 5 SYP; stale warning after 48 hours (S03, ADR 0017) | 2026-10-08 |
 | Deposit review hours (Q9) | Daily 10:00–22:00 `Asia/Damascus`, target 15 minutes; the customer sees the real median ETA or the next opening (S03) | 2026-10-08 |
+| USDT limits (Q5, USDT part) | The Sham Cash tiers and one 24-hour window shared across all methods; USDT minimum $5; editable in the panel (S04, ADR 0018) | 2026-10-08 |
+| USDT addresses, confirmations, minimum and validity (Q8) | Owner-held wallets, addresses in the server environment only (not editable in the panel); TRON solidified (19 blocks), BSC finalized with 15 confirmations; minimum $5; deposits valid 24 hours, amount reserved 7 more days; automatic detection of exact-amount transfers besides the TXID (S04, ADR 0018) | 2026-10-08 |

@@ -21,7 +21,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] S01 Accounts: F01 Customer accounts · F02 Admin account, 2FA and audit log (one admin, no staff: ADR 0016)
 - [x] S02 Wallet and ledger: F03 alone (money core); spec `docs/specs/S02-wallet-ledger.md`
 - [x] S03 Exchange rate and Sham Cash deposits: F04 Exchange rate and SYP display · F05 Sham Cash deposits; spec `docs/specs/S03-exchange-rate-sham-cash-deposits.md`
-- [ ] S04 USDT deposits: F06 alone
+- [~] S04 USDT deposits: F06 alone; spec `docs/specs/S04-usdt-deposits.md`
 - [ ] S05 Alerts and control: F07 Telegram admin bot · F27 Customer notifications (email and notification center; deposit events) · F26 Store switches and emergency stop (registration closed by default)
 - Automations A01, A09, A10, A12, A13, A16, A17: each is specified and built inside the spec it belongs to, not as a separate item
 - [ ] Production deploy of Phase 1 (registration closed: test customers only)
@@ -65,3 +65,4 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] Madani Arabic web license and files in place
 - [ ] Terms, privacy and refund policies published
 - [ ] Admin account with 2FA; Telegram bot linked
+- [ ] USDT receiving addresses and chain-reader keys in the server environment; one small live USDT deposit per network approved by the owner (S04)
