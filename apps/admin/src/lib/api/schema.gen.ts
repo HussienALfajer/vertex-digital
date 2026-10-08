@@ -1348,6 +1348,310 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/pricing/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PricingAdminController_reviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/pricing/reviews/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PricingAdminController_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/pricing/reviews/{id}/adjust-margin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PricingAdminController_adjustMargin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/products/{id}/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProductPricesAdminController_prices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SuppliersAdminController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SuppliersAdminController_policy"];
+        put: operations["SuppliersAdminController_setPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/offers/{id}/costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SuppliersAdminController_offerCosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SuppliersAdminController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["SuppliersAdminController_update"];
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SuppliersAdminController_setCredentials"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SuppliersAdminController_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SuppliersAdminController_runs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SuppliersAdminController_offers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SuppliersAdminController_importOffers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/products/{id}/routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["RoutesAdminController_routing"];
+        put?: never;
+        post: operations["RoutesAdminController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/products/{id}/routes/manual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RoutesAdminController_createManual"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/routes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["RoutesAdminController_update"];
+        trace?: never;
+    };
+    "/api/admin/routes/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RoutesAdminController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/routes/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RoutesAdminController_restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/routes/{id}/manual-cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["RoutesAdminController_setManualCost"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/telegram": {
         parameters: {
             query?: never;
@@ -1542,7 +1846,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        StoreSwitch: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused";
+        StoreSwitch: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused" | "shop2topup_paused" | "wdgzone_paused" | "manual_paused" | "fake_paused";
         /** @enum {string} */
         SwitchChannel: "admin" | "telegram";
         ChangeSwitch: {
@@ -1711,9 +2015,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -2601,6 +2905,10 @@ export interface components {
             redemptionAr: string | null;
             status: components["schemas"]["CatalogStatus"];
             availability: components["schemas"]["ProductAvailability"];
+            priceUsdUnits: number | null;
+            priceSypUnits: number | null;
+            basisSupplierNameAr: string | null;
+            reviewOpen: boolean;
         };
         /** @enum {string} */
         ProductKind: "direct" | "code";
@@ -2785,6 +3093,379 @@ export interface components {
             amountUsdUnits: number;
             percent: number | null;
         };
+        PriceReviewListQuery: {
+            /** @default 1 */
+            page: number;
+            /** @default 50 */
+            pageSize: number;
+            /** @default open */
+            status: components["schemas"]["PriceReviewStatus"];
+            supplier?: components["schemas"]["SupplierCode"];
+        };
+        /** @enum {string} */
+        PriceReviewStatus: "open" | "accepted" | "margin_adjusted" | "paused" | "superseded";
+        /** @enum {string} */
+        SupplierCode: "shop2topup" | "wdgzone" | "manual" | "fake";
+        PriceReviewPage: {
+            items: components["schemas"]["PriceReview"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        PriceReview: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            productId: string;
+            productNameAr: string;
+            /** Format: uuid */
+            gameId: string;
+            gameNameAr: string;
+            supplierCode: components["schemas"]["SupplierCode"];
+            supplierNameAr: string;
+            /** Format: uuid */
+            routeId: string;
+            costBeforeUsdUnits: number;
+            costAfterUsdUnits: number;
+            changeBp: number;
+            priceBeforeUsdUnits: number;
+            proposedPriceUsdUnits: number;
+            heldMarginUsdUnits: number;
+            proposedMarginUsdUnits: number;
+            status: components["schemas"]["PriceReviewStatus"];
+            availability: components["schemas"]["ProductAvailability"];
+            /** Format: date-time */
+            decidedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        DecideReviews: {
+            decisions: {
+                /** Format: uuid */
+                reviewId: string;
+                /** @enum {string} */
+                action: "accept" | "pause";
+                expectedPriceUsdUnits?: number;
+            }[];
+        };
+        DecideReviewsResult: {
+            results: {
+                /** Format: uuid */
+                reviewId: string;
+                /** @enum {string} */
+                result: "accepted" | "paused" | "refused";
+                /** @enum {string} */
+                errorCode?: "NOT_FOUND" | "REVIEW_CLOSED" | "REVIEW_STALE";
+                proposedPriceUsdUnits?: number | null;
+            }[];
+        };
+        ProductPricePage: {
+            items: components["schemas"]["ProductPrice"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ProductPrice: {
+            percentBp: number;
+            fixedUsdUnits: number;
+            minMarginUsdUnits: number;
+            /** Format: uuid */
+            id: string;
+            priceUsdUnits: number;
+            costUsdUnits: number;
+            /** Format: uuid */
+            routeId: string;
+            supplierCode: components["schemas"]["SupplierCode"];
+            /** Format: uuid */
+            ruleId: string;
+            cause: components["schemas"]["PriceChangeCause"];
+            /** Format: uuid */
+            reviewId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        PriceChangeCause: "cost_sync" | "route_change" | "rule_change" | "review_accepted" | "margin_adjusted";
+        SupplierSummary: {
+            code: components["schemas"]["SupplierCode"];
+            nameAr: string;
+            available: boolean;
+            configured: boolean;
+            paused: boolean;
+            health: components["schemas"]["SupplierHealthState"];
+            /** Format: date-time */
+            healthSince: string | null;
+            balance: components["schemas"]["SupplierBalance"] | null;
+            balanceLow: boolean;
+            lowBalanceUsdUnits: number;
+            lastRun: components["schemas"]["SyncRun"] | null;
+            offerCount: number;
+            mappedCount: number;
+        };
+        /** @enum {string} */
+        SupplierHealthState: "healthy" | "degraded" | "down";
+        SupplierBalance: {
+            /** Format: uuid */
+            id: string;
+            currency: components["schemas"]["Currency"];
+            amountUnits: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SyncRun: {
+            /** Format: uuid */
+            id: string;
+            supplierCode: components["schemas"]["SupplierCode"];
+            trigger: components["schemas"]["SyncRunTrigger"];
+            status: components["schemas"]["SyncRunStatus"];
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            finishedAt: string | null;
+            offersSeen: number;
+            offersNew: number;
+            costsChanged: number;
+            offersMissing: number;
+            reviewsOpened: number;
+            productsRepriced: number;
+            errorCode: string | null;
+            errorMessage: string | null;
+        };
+        /** @enum {string} */
+        SyncRunTrigger: "schedule" | "admin";
+        /** @enum {string} */
+        SyncRunStatus: "running" | "succeeded" | "failed";
+        SupplierPolicy: {
+            priceReviewThresholdBp: number;
+            costStaleMinutes: number;
+            healthWindowMinutes: number;
+            healthMinCalls: number;
+            degradedSuccessBp: number;
+            degradedP90Ms: number;
+            downSuccessBp: number;
+            downConsecutiveErrors: number;
+            probeAfterMinutes: number;
+        };
+        OfferCostChangePage: {
+            items: components["schemas"]["OfferCostChange"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        OfferCostChange: {
+            /** Format: uuid */
+            id: string;
+            fromUsdUnits: number | null;
+            toUsdUnits: number | null;
+            /** Format: uuid */
+            syncRunId: string | null;
+            byAdmin: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SupplierDetail: {
+            code: components["schemas"]["SupplierCode"];
+            nameAr: string;
+            available: boolean;
+            configured: boolean;
+            paused: boolean;
+            health: components["schemas"]["SupplierHealthState"];
+            /** Format: date-time */
+            healthSince: string | null;
+            balance: components["schemas"]["SupplierBalance"] | null;
+            balanceLow: boolean;
+            lowBalanceUsdUnits: number;
+            lastRun: components["schemas"]["SyncRun"] | null;
+            offerCount: number;
+            mappedCount: number;
+            credentialFields: string[];
+            credentials: {
+                hints: {
+                    [key: string]: string;
+                };
+                /** Format: date-time */
+                setAt: string;
+            } | null;
+            healthHistory: components["schemas"]["SupplierHealthChange"][];
+            balanceHistory: components["schemas"]["SupplierBalance"][];
+        };
+        SupplierHealthChange: {
+            /** Format: uuid */
+            id: string;
+            state: components["schemas"]["SupplierHealthState"];
+            reason: string;
+            calls: number | null;
+            successBp: number | null;
+            p90Ms: number | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SetSupplierCredentials: {
+            values: {
+                [key: string]: string;
+            };
+        };
+        UpdateSupplier: {
+            lowBalanceUsdUnits: number;
+        };
+        SyncRunPage: {
+            items: components["schemas"]["SyncRun"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        OfferListQuery: {
+            /** @default 1 */
+            page: number;
+            /** @default 50 */
+            pageSize: number;
+            q?: string;
+            group?: string;
+            /** @enum {string} */
+            mapped?: "true" | "false";
+            /** @enum {string} */
+            missing?: "true" | "false";
+            /** @enum {string} */
+            inStock?: "true" | "false";
+        };
+        SupplierOfferPage: {
+            items: components["schemas"]["SupplierOffer"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        SupplierOffer: {
+            /** Format: uuid */
+            id: string;
+            supplierCode: components["schemas"]["SupplierCode"];
+            offerId: string;
+            name: string;
+            groupName: string | null;
+            kind: components["schemas"]["ProductKind"] | null;
+            requiredFields: string[] | null;
+            costUsdUnits: number | null;
+            costRaw: string | null;
+            inStock: boolean;
+            /** Format: date-time */
+            costConfirmedAt: string | null;
+            costStale: boolean;
+            /** Format: date-time */
+            lastSeenAt: string;
+            /** Format: date-time */
+            missingSince: string | null;
+            mapped: {
+                /** Format: uuid */
+                routeId: string;
+                /** Format: uuid */
+                productId: string;
+                productNameAr: string;
+                /** Format: uuid */
+                gameId: string;
+                gameNameAr: string;
+            } | null;
+        };
+        ImportOffers: {
+            /** Format: uuid */
+            gameId: string;
+            kind?: components["schemas"]["ProductKind"];
+            /** @default {} */
+            fieldMap: components["schemas"]["FieldMap"];
+            rows: {
+                /** Format: uuid */
+                offerId: string;
+                nameAr: string;
+            }[];
+        };
+        FieldMap: {
+            [key: string]: string;
+        };
+        ImportResult: {
+            products: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+                /** Format: uuid */
+                routeId: string;
+                priceUsdUnits: number | null;
+            }[];
+        };
+        ProductRouting: {
+            /** Format: uuid */
+            productId: string;
+            routes: components["schemas"]["Route"][];
+            /** Format: uuid */
+            basisRouteId: string | null;
+            currentPrice: {
+                priceUsdUnits: number;
+                costUsdUnits: number;
+                /** Format: uuid */
+                routeId: string;
+                /** Format: date-time */
+                createdAt: string;
+            } | null;
+            targetPriceUsdUnits: number | null;
+            openReview: {
+                /** Format: uuid */
+                id: string;
+                costBeforeUsdUnits: number;
+                costAfterUsdUnits: number;
+                changeBp: number;
+                proposedPriceUsdUnits: number;
+            } | null;
+            availability: components["schemas"]["ProductAvailability"];
+        };
+        Route: {
+            /** Format: uuid */
+            id: string;
+            supplierCode: components["schemas"]["SupplierCode"];
+            supplierNameAr: string;
+            offer: {
+                /** Format: uuid */
+                id: string;
+                offerId: string;
+                name: string;
+                kind: components["schemas"]["ProductKind"] | null;
+                requiredFields: string[] | null;
+                costUsdUnits: number | null;
+                /** Format: date-time */
+                costConfirmedAt: string | null;
+                inStock: boolean;
+                /** Format: date-time */
+                missingSince: string | null;
+            };
+            priority: number;
+            enabled: boolean;
+            fieldMap: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            archivedAt: string | null;
+            tier: components["schemas"]["RouteTier"] | null;
+            unusableReason: components["schemas"]["RouteUnusableReason"] | null;
+            basis: boolean;
+            requirementsUnknown: boolean;
+        };
+        /** @enum {string} */
+        RouteTier: "healthy" | "degraded" | "manual";
+        /** @enum {string} */
+        RouteUnusableReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low";
+        CreateRoute: {
+            /** Format: uuid */
+            offerId: string;
+            /** @default 1 */
+            priority: number;
+            /** @default {} */
+            fieldMap: components["schemas"]["FieldMap"];
+        };
+        CreateManualRoute: {
+            costUsdUnits: number;
+        };
+        UpdateRoute: {
+            priority?: number;
+            enabled?: boolean;
+            fieldMap?: components["schemas"]["FieldMap"];
+        };
+        SetManualCost: components["schemas"]["CreateManualRoute"];
         TelegramLinkStatus: {
             configured: boolean;
             link: {
@@ -3027,7 +3708,7 @@ export interface operations {
             query?: {
                 cursor?: string;
                 limit?: number;
-                switch?: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused";
+                switch?: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused" | "shop2topup_paused" | "wdgzone_paused" | "manual_paused" | "fake_paused";
             };
             header?: never;
             path?: never;
@@ -3486,8 +4167,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived";
-                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review";
                 entityId?: string;
                 from?: string;
                 to?: string;
@@ -5028,6 +5709,542 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PricingPreview"];
+                };
+            };
+        };
+    };
+    PricingAdminController_reviews: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                status?: "open" | "accepted" | "margin_adjusted" | "paused" | "superseded";
+                supplier?: "shop2topup" | "wdgzone" | "manual" | "fake";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of reviews */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceReviewPage"];
+                };
+            };
+        };
+    };
+    PricingAdminController_decide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideReviews"];
+            };
+        };
+        responses: {
+            /** @description The result per review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecideReviewsResult"];
+                };
+            };
+        };
+    };
+    PricingAdminController_adjustMargin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarginRuleValues"];
+            };
+        };
+        responses: {
+            /** @description The decided review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceReview"];
+                };
+            };
+        };
+    };
+    ProductPricesAdminController_prices: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductPricePage"];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One per supplier */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierSummary"][];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy in force */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPolicy"];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_setPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierPolicy"];
+            };
+        };
+        responses: {
+            /** @description The policy in force */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPolicy"];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_offerCosts: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferCostChangePage"];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The supplier */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierDetail"];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSupplier"];
+            };
+        };
+        responses: {
+            /** @description The supplier */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierDetail"];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_setCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSupplierCredentials"];
+            };
+        };
+        responses: {
+            /** @description The supplier */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierDetail"];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRun"];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_runs: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRunPage"];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_offers: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                q?: string;
+                group?: string;
+                mapped?: "true" | "false";
+                missing?: "true" | "false";
+                inStock?: "true" | "false";
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of offers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierOfferPage"];
+                };
+            };
+        };
+    };
+    SuppliersAdminController_importOffers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportOffers"];
+            };
+        };
+        responses: {
+            /** @description The paused products */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+        };
+    };
+    RoutesAdminController_routing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Routes in tier order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductRouting"];
+                };
+            };
+        };
+    };
+    RoutesAdminController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRoute"];
+            };
+        };
+        responses: {
+            /** @description The routing */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductRouting"];
+                };
+            };
+        };
+    };
+    RoutesAdminController_createManual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateManualRoute"];
+            };
+        };
+        responses: {
+            /** @description The routing */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductRouting"];
+                };
+            };
+        };
+    };
+    RoutesAdminController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRoute"];
+            };
+        };
+        responses: {
+            /** @description The routing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductRouting"];
+                };
+            };
+        };
+    };
+    RoutesAdminController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The routing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductRouting"];
+                };
+            };
+        };
+    };
+    RoutesAdminController_restore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The routing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductRouting"];
+                };
+            };
+        };
+    };
+    RoutesAdminController_setManualCost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetManualCost"];
+            };
+        };
+        responses: {
+            /** @description The routing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductRouting"];
                 };
             };
         };

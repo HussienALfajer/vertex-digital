@@ -41,10 +41,9 @@ const categories: string[] = [];
 // Archived at the end: no product of these tests stays available to other tests (rule P9 reads
 // the cheapest available product).
 afterAll(async () => {
-  await pool.query(
-    'update catalog_categories set archived_at = now() where id = any($1::uuid[])',
-    [categories],
-  );
+  await pool.query('update catalog_categories set archived_at = now() where id = any($1::uuid[])', [
+    categories,
+  ]);
   await connection.close();
 });
 
