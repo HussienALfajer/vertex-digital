@@ -8,6 +8,9 @@ export default defineConfig({
   // Nest injects by the constructor parameter types: emit legacy decorators and their metadata.
   oxc: { decorator: { legacy: true, emitDecoratorMetadata: true } },
   test: {
+    // Files share one test database and some act on global rows: `deposits.expire` expires every
+    // overdue pending deposit, including the one `deposits-usdt.test.ts` keeps overdue on purpose.
+    fileParallelism: false,
     globalSetup: ['./test/global-setup.ts'],
     // Set explicitly: the root .env (loaded to find the test database) must not leak in.
     env: {
