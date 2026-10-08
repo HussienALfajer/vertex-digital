@@ -16,6 +16,7 @@ import {
   currentSupplierPolicy,
   type Database,
   newId,
+  productPrices,
   productRoutes,
   productRoutingStates,
   queueTelegramMessage,
@@ -26,9 +27,10 @@ import {
   supplierStates,
   supplierSyncRuns,
   type Transaction,
+  withoutQueryParameters,
 } from '@vertex-digital/db';
 import { SupplierError, type SupplierOffer } from '@vertex-digital/suppliers';
-import { and, asc, count, desc, eq, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -213,7 +215,8 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       if (error instanceof SuspiciousCatalog) {
         return this.fail(db, supplier, run, 'CATALOG_SUSPICIOUS', error.message);
       }
-      const message = sanitizedMessage(error, secrets);
+      // Never a query's parameters (supplier text, ids) in the run, the logs or the alerts.
+      const message = sanitizedMessage(withoutQueryParameters(error), secrets);
       await this.fail(db, supplier, run, 'INTERNAL', message);
       throw new Error(`Sync ${run.id} failed: ${message}`);
     }
@@ -312,7 +315,9 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
           .from(supplierOffers)
           .where(eq(supplierOffers.supplierId, supplier.id))
           .orderBy(asc(supplierOffers.id))
-          .for('update'),
+          // Not `FOR UPDATE`: a route inserted by the panel takes `FOR KEY SHARE` on its offer
+          // while it holds its game, which this transaction locks next (repricing).
+          .for('no key update'),
         tx
           .selectDistinct({ offerId: productRoutes.offerId })
           .from(productRoutes)
@@ -354,17 +359,40 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
         missing.push(row);
         changed.push(row.id);
       }
-      const productIds =
+      const onChanged =
         changed.length === 0
           ? []
-          : (
-              await tx
-                .selectDistinct({ productId: productRoutes.productId })
-                .from(productRoutes)
-                .where(
-                  and(inArray(productRoutes.offerId, changed), isNull(productRoutes.archivedAt)),
-                )
-            ).map((row) => row.productId);
+          : await tx
+              .selectDistinct({ productId: productRoutes.productId })
+              .from(productRoutes)
+              .where(
+                and(inArray(productRoutes.offerId, changed), isNull(productRoutes.archivedAt)),
+              );
+      // A route the panel created while the previous sync held these offers was priced on the
+      // cost before that sync: its price is caught up here.
+      const latest = tx
+        .selectDistinctOn([productPrices.productId], {
+          productId: productPrices.productId,
+          routeId: productPrices.routeId,
+          costUsdUnits: productPrices.costUsdUnits,
+        })
+        .from(productPrices)
+        .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id))
+        .as('latest');
+      const drifted = await tx
+        .select({ productId: latest.productId })
+        .from(latest)
+        .innerJoin(productRoutes, eq(productRoutes.id, latest.routeId))
+        .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
+        .where(
+          and(
+            eq(supplierOffers.supplierId, supplier.id),
+            isNull(productRoutes.archivedAt),
+            isNotNull(supplierOffers.costUsdUnits),
+            ne(supplierOffers.costUsdUnits, latest.costUsdUnits),
+          ),
+        );
+      const productIds = [...new Set([...onChanged, ...drifted].map((row) => row.productId))];
       const before = await productRoutingStates(tx, productIds, context());
 
       for (const offer of listed) {

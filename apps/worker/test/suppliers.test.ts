@@ -37,7 +37,19 @@ import {
   type SupplierMoney,
   type SupplierOffer,
 } from '@vertex-digital/suppliers';
-import { and, asc, desc, eq, gte, isNull, like, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  like,
+  notInArray,
+  notLike,
+  sql,
+} from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TelegramAlerts } from '../src/core/alerts/telegram-alerts.js';
 import { parseEnv } from '../src/core/config/env.js';
@@ -158,48 +170,69 @@ async function isolated(work: (tx: Transaction) => Promise<void>): Promise<void>
   const rollback = new Error('rollback');
   await expect(
     db.transaction(async (tx) => {
-      await tx
-        .update(productRoutes)
-        .set({ archivedAt: new Date() })
-        .where(and(eq(productRoutes.supplierId, ids.fake), isNull(productRoutes.archivedAt)));
-      await tx
-        .update(supplierOffers)
-        .set({ missingSince: new Date() })
-        .where(and(eq(supplierOffers.supplierId, ids.fake), isNull(supplierOffers.missingSince)));
-      await tx.insert(supplierCredentials).values({
-        id: newId(),
-        supplierId: ids.fake,
-        ciphertext: encryptCredentials(supplierKey(env.SUPPLIER_KEYS_SECRET), ids.fake, {
-          webhookSecret: SECRET,
-        }),
-        hints: {},
-        adminId: newId(),
-      });
-      await tx.insert(supplierPolicy).values({ id: newId(), ...SUPPLIER_POLICY_DEFAULTS });
-      // An hour old, so a test can put a newer state in the past.
-      await tx.insert(supplierHealthChanges).values({
-        id: newId(),
-        supplierId: ids.fake,
-        state: 'healthy',
-        reason: 'test start',
-        createdAt: new Date(Date.now() - 3_600_000),
-      });
-      await tx.insert(supplierBalanceReads).values({
-        id: newId(),
-        supplierId: ids.fake,
-        currency: 'USD',
-        amountUnits: usd(1_000_000),
-      });
-      await tx
-        .update(suppliers)
-        .set({ lowBalanceUsdUnits: usd(50) })
-        .where(eq(suppliers.id, ids.fake));
-      sent.length = 0;
-      current = {};
+      await prepare(tx);
       await work(tx);
       throw rollback;
     }),
   ).rejects.toBe(rollback);
+}
+
+/** The known starting point of every test, inside its transaction (offers of this run kept). */
+async function prepare(tx: Transaction): Promise<void> {
+  const mine = tx
+    .select({ id: supplierOffers.id })
+    .from(supplierOffers)
+    .where(like(supplierOffers.offerId, `w-${run}-%`));
+  await tx
+    .update(productRoutes)
+    .set({ archivedAt: new Date() })
+    .where(
+      and(
+        eq(productRoutes.supplierId, ids.fake),
+        isNull(productRoutes.archivedAt),
+        notInArray(productRoutes.offerId, mine),
+      ),
+    );
+  await tx
+    .update(supplierOffers)
+    .set({ missingSince: new Date() })
+    .where(
+      and(
+        eq(supplierOffers.supplierId, ids.fake),
+        isNull(supplierOffers.missingSince),
+        notLike(supplierOffers.offerId, `w-${run}-%`),
+      ),
+    );
+  await tx.insert(supplierCredentials).values({
+    id: newId(),
+    supplierId: ids.fake,
+    ciphertext: encryptCredentials(supplierKey(env.SUPPLIER_KEYS_SECRET), ids.fake, {
+      webhookSecret: SECRET,
+    }),
+    hints: {},
+    adminId: newId(),
+  });
+  await tx.insert(supplierPolicy).values({ id: newId(), ...SUPPLIER_POLICY_DEFAULTS });
+  // An hour old, so a test can put a newer state in the past.
+  await tx.insert(supplierHealthChanges).values({
+    id: newId(),
+    supplierId: ids.fake,
+    state: 'healthy',
+    reason: 'test start',
+    createdAt: new Date(Date.now() - 3_600_000),
+  });
+  await tx.insert(supplierBalanceReads).values({
+    id: newId(),
+    supplierId: ids.fake,
+    currency: 'USD',
+    amountUnits: usd(1_000_000),
+  });
+  await tx
+    .update(suppliers)
+    .set({ lowBalanceUsdUnits: usd(50) })
+    .where(eq(suppliers.id, ids.fake));
+  sent.length = 0;
+  current = {};
 }
 
 /** An active product in an active game with a `player_id` field and its own margin rule. */
@@ -601,6 +634,146 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
         .where(eq(supplierSyncRuns.id, lost?.id as string));
       expect(closed).toMatchObject({ status: 'failed', errorCode: 'ABANDONED' });
     }));
+
+  it('catches up a price built on a cost the sync had already changed', () =>
+    isolated(async (tx) => {
+      const p = await product(tx);
+      current = listing(offer('a', 0.88));
+      await sync.sync(payload(), tx);
+      const a = await offerRow(tx, 'a');
+      await route(tx, p, a.id);
+      // As if a sync committed $0.92 after the panel priced the route on $0.88.
+      await tx
+        .update(supplierOffers)
+        .set({ costUsdUnits: usd(0.92) })
+        .where(eq(supplierOffers.id, a.id));
+      current = listing(offer('a', 0.92));
+      expect(await sync.sync(payload(), tx)).toMatchObject({
+        costsChanged: 0,
+        productsRepriced: 1,
+      });
+      expect(await latestPrice(tx, p)).toMatchObject({
+        costUsdUnits: usd(0.92),
+        priceUsdUnits: priceFromCost(usd(0.92), RULE),
+      });
+    }));
+
+  it("never stores or throws a failed query's parameters", () =>
+    isolated(async (tx) => {
+      const marker = `marker-${run}`;
+      // PostgreSQL refuses a NUL in text: the insert of this offer fails as a query.
+      current = listing({ ...offer('nul', 1), name: `${marker}\u0000` });
+      const thrown = await sync.sync(payload(), tx).catch((error: Error) => error);
+      expect(thrown).toBeInstanceOf(Error);
+      const [internal] = await tx
+        .select()
+        .from(supplierSyncRuns)
+        .where(eq(supplierSyncRuns.supplierId, ids.fake))
+        .orderBy(desc(supplierSyncRuns.startedAt), desc(supplierSyncRuns.id))
+        .limit(1);
+      expect(internal).toMatchObject({ status: 'failed', errorCode: 'INTERNAL' });
+      for (const text of [internal?.errorMessage ?? '', (thrown as Error).message]) {
+        expect(text).not.toContain('params');
+        expect(text).not.toContain(marker);
+      }
+    }));
+
+  it('lets the panel map an offer while a sync reprices the same game (no deadlock)', async () => {
+    // Committed, so two transactions see them; archived and marked missing at the end.
+    const [p1, p2] = await db.transaction(async (tx) => [await product(tx), await product(tx)]);
+    const [x, y] = [newId(), newId()];
+    await db.insert(supplierOffers).values(
+      [x, y].map((id, index) => ({
+        id,
+        supplierId: ids.fake,
+        offerId: offerKey(`par-${index}`),
+        name: 'Parallel',
+        kind: 'direct' as const,
+        requiredFields: ['playerId'],
+        costUsdUnits: usd(1),
+        inStock: true,
+        costConfirmedAt: new Date(),
+        lastSeenAt: new Date(),
+      })),
+    );
+    const routeX = newId();
+    await db.insert(productRoutes).values({
+      id: routeX,
+      productId: p1,
+      supplierId: ids.fake,
+      offerId: x,
+      fieldMap: { playerId: 'player_id' },
+    });
+    const [{ gameId } = { gameId: '' }] = (
+      await db.execute(sql`select game_id as "gameId" from catalog_products where id = ${p1}`)
+    ).rows as { gameId: string }[];
+    const rollback = new Error('rollback');
+    try {
+      let releasePanel = () => {};
+      const panelHolds = new Promise<void>((resolve) => {
+        releasePanel = resolve;
+      });
+      let gameLocked = () => {};
+      const locked = new Promise<void>((resolve) => {
+        gameLocked = resolve;
+      });
+      // The panel: its game first, then a route insert (FOR KEY SHARE on the offer).
+      const panel = db
+        .transaction(async (tx) => {
+          await tx.execute(sql`select id from catalog_games where id = ${gameId} for update`);
+          gameLocked();
+          await panelHolds;
+          await tx.insert(productRoutes).values({
+            id: newId(),
+            productId: p2,
+            supplierId: ids.fake,
+            offerId: y,
+            fieldMap: { playerId: 'player_id' },
+          });
+          throw rollback;
+        })
+        .catch((error: unknown) => error);
+      await locked;
+      let result: Awaited<ReturnType<SupplierSyncJob['sync']>> = null;
+      const syncing = db
+        .transaction(async (tx) => {
+          await prepare(tx);
+          current = listing(
+            offer('par-0', 1.05, { name: 'Parallel' }),
+            offer('par-1', 1, { name: 'Parallel' }),
+          );
+          result = await sync.sync(payload(), tx);
+          throw rollback;
+        })
+        .catch((error: unknown) => error);
+      // The sync waits on the game the panel holds; then the panel inserts its route.
+      for (let tries = 0; tries < 100; tries += 1) {
+        const { rows } = await db.execute(
+          sql`select count(*)::int as waiting from pg_stat_activity
+            where datname = current_database() and wait_event_type = 'Lock'`,
+        );
+        if ((rows[0] as { waiting: number }).waiting > 0) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      releasePanel();
+      expect(await panel).toBe(rollback);
+      expect(await syncing).toBe(rollback);
+      expect(result).toMatchObject({ status: 'succeeded', productsRepriced: 1 });
+    } finally {
+      await db
+        .update(productRoutes)
+        .set({ archivedAt: new Date() })
+        .where(eq(productRoutes.id, routeX));
+      await db
+        .update(supplierOffers)
+        .set({ missingSince: new Date() })
+        .where(inArray(supplierOffers.id, [x, y]));
+      await db.execute(
+        sql`update catalog_categories set archived_at = now() where id in (select category_id
+          from catalog_games where id = ${gameId})`,
+      );
+    }
+  });
 
   it('fails a run of a supplier without an adapter here (edge case 14)', () =>
     isolated(async (tx) => {

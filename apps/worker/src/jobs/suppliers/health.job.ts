@@ -183,7 +183,8 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
         .select({ id: suppliers.id })
         .from(suppliers)
         .where(eq(suppliers.id, supplier.id))
-        .for('update');
+        // Not `FOR UPDATE`: a route inserted by the panel takes `FOR KEY SHARE` on its supplier.
+        .for('no key update');
       const previous = await this.standing(tx, supplier.id);
       if (previous.state === verdict.state) return;
       const [row] = await tx
