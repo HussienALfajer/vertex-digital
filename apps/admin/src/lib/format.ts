@@ -31,6 +31,6 @@ export function formatSince(iso: string, now: Date = new Date()): string {
 
 /**
  * Text that reads left to right (`$25.00`, `+5.08%`) kept whole inside an Arabic sentence: wrapped
- * in a left-to-right isolate (U+2066 … U+2069), so the bidi algorithm never splits it.
+ * in an LTR isolate (U+2066 … U+2069), so the bidi algorithm never splits it.
  */
 export const ltr = (text: string) => `⁦${text}⁩`;
