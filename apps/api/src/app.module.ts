@@ -16,6 +16,7 @@ import { AuditModule } from './modules/audit/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { HealthModule } from './modules/health/index.js';
 import { NotificationsModule } from './modules/notifications/index.js';
+import { RatesModule } from './modules/rates/index.js';
 import { WalletModule } from './modules/wallet/index.js';
 
 @Module({
@@ -44,6 +45,7 @@ import { WalletModule } from './modules/wallet/index.js';
     AuthModule,
     AdminModule,
     AuditModule,
+    RatesModule,
     WalletModule,
     HealthModule,
   ],

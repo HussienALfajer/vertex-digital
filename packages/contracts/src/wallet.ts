@@ -93,8 +93,18 @@ export function isAllowedAdjustment(
   );
 }
 
-/** How a payment recorded by hand reached the store (rule J8). */
-export const MANUAL_DEPOSIT_METHODS = ['sham_cash', 'usdt_trc20', 'usdt_bep20'] as const;
+/**
+ * How a real-world payment reached the store. Each payment's reference (a Sham Cash transaction
+ * number, a TXID) is claimed once across deposits and adjustments (S03 rule SC14).
+ */
+export const PAYMENT_METHODS = ['sham_cash', 'usdt_trc20', 'usdt_bep20'] as const;
+
+export const paymentMethodSchema = z.enum(PAYMENT_METHODS).meta({ id: 'PaymentMethod' });
+
+export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
+
+/** How a payment recorded by hand reached the store (rule J8): any payment method. */
+export const MANUAL_DEPOSIT_METHODS = PAYMENT_METHODS;
 
 export const manualDepositMethodSchema = z
   .enum(MANUAL_DEPOSIT_METHODS)

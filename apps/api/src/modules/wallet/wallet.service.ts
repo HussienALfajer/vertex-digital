@@ -1,12 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type {
-  AdminWallet,
-  AdminWalletEntryPage,
-  CursorQuery,
-  LedgerSummary,
-  Wallet,
-  WalletEntryPage,
-  WalletSearchPage,
+import {
+  type AdminWallet,
+  type AdminWalletEntryPage,
+  type CursorQuery,
+  type LedgerSummary,
+  type Wallet,
+  type WalletEntryPage,
+  type WalletSearchPage,
+  walletSypValue,
 } from '@vertex-digital/contracts';
 import {
   accountBalance,
@@ -23,6 +24,7 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import { AdminAuthService } from '../admin/index.js';
 import { AuthService } from '../auth/index.js';
+import { RatesService } from '../rates/index.js';
 
 const isUuid = (value: string) => z.uuid().safeParse(value).success;
 
@@ -51,12 +53,23 @@ export class WalletService {
     @Inject(DATABASE) private readonly db: Database,
     private readonly customers: AuthService,
     private readonly admins: AdminAuthService,
+    private readonly rates: RatesService,
   ) {}
 
-  /** Rule W9: no rate exists until S03, so the SYP value is null. */
+  /** Rule W9, S03 rules FX8 and FX9: the SYP value at the rate in force, null before any rate. */
   async wallet(customerId: string): Promise<Wallet> {
-    const accountId = await findCustomerWallet(this.db, customerId);
-    return { balanceUnits: accountId ? await accountBalance(this.db, accountId) : 0, syp: null };
+    const [accountId, rate] = await Promise.all([
+      findCustomerWallet(this.db, customerId),
+      this.rates.current(),
+    ]);
+    const balanceUnits = accountId ? await accountBalance(this.db, accountId) : 0;
+    return {
+      balanceUnits,
+      syp: rate && {
+        valueUnits: walletSypValue(balanceUnits, rate.sypPerUsd, rate.displayStepSypUnits),
+        rate: rate.sypPerUsd,
+      },
+    };
   }
 
   /** The customer's own timeline (rules W3–W6): no reason, admin, journal or account. */

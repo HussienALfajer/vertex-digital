@@ -66,6 +66,26 @@ function rateOrThrow(rate: string): bigint {
   return value;
 }
 
+/** True when `a` and `b` are valid rates of the same value (`"130"` and `"130.00"`). */
+export function isSameRate(a: string, b: string): boolean {
+  const left = parseRate(a);
+  return left !== null && left === parseRate(b);
+}
+
+/**
+ * The change from `oldRate` to `newRate` in percent of the old rate (S03 rule FX2), signed, with 2
+ * decimals rounded away from zero: `"10.17"`, `"-3.25"`. A change of exactly 5% is `"5.00"`; any
+ * change above it reads at least `"5.01"`, so comparing the result with a whole threshold is exact.
+ */
+export function rateChangePercent(oldRate: string, newRate: string): string {
+  const before = rateOrThrow(oldRate);
+  const change = rateOrThrow(newRate) - before;
+  const magnitude = change < 0n ? -change : change;
+  const hundredths = divide(magnitude * 10_000n, before, 'up');
+  const sign = change < 0n ? '-' : '';
+  return `${sign}${hundredths / 100n}.${(hundredths % 100n).toString().padStart(2, '0')}`;
+}
+
 /** Which way a conversion rounds when the exact result is not a whole number of units. */
 export type Rounding = 'up' | 'down';
 

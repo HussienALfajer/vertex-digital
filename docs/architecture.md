@@ -60,8 +60,8 @@ Planned; each spec confirms its module's tables and exports. Built so far: `auth
 | `auth` | Customer Better Auth tables, `customer_rate_limits` (code and sign-up counters), account changes (Nest routes in front of Better Auth under `/api/auth`, so each change is audited in its transaction), `/api/account`, test customers | F01 |
 | `admin` | The admin Better Auth tables (one account, ADR 0016), the CLI account functions, the password change, re-authentication and own sessions; Telegram link later | F02, F07 |
 | `audit` | Reads `audit_entries` for the audit log; every module writes its entries with `recordAudit` from `packages/db/src/audit`, in its own transaction | F02 |
-| `wallet` | Ledger accounts, journals, postings (through `packages/db/src/ledger`), `wallet_adjustments`; balances and timelines (`/api/wallet`), the admin wallet screens, adjustments and reversals, the ledger summary | F03 |
-| `rates` | Exchange rates and their history, SYP rounding settings, rate locks | F04 |
+| `wallet` | Ledger accounts, journals, postings (through `packages/db/src/ledger`), `wallet_adjustments`, `payment_references` (each real payment's reference claimed once, through `claimPaymentReference`); balances with their SYP value and timelines (`/api/wallet`), the admin wallet screens, adjustments and reversals, the ledger summary | F03, F04 |
+| `rates` | `exchange_rates` (append-only: the rate and display step, the newest row is in force); `/api/admin/rates` (history, change with re-authentication); `RatesService.current()` for other modules. Quote locks live on the deposit (S03) | F04 |
 | `deposits` | Deposits, Sham Cash receipts and review, USDT intents and verifications, fraud flags | F05, F06 |
 | `catalog` | Games, products (direct top-up or code), input field definitions, categories, ID guides, availability | F08 |
 | `suppliers` | Supplier connections (encrypted keys), offers, product mappings, price snapshots, price change queue, health, webhook events | F09 |

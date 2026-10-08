@@ -8,6 +8,7 @@ export * from './lists.js';
 export * from './money.js';
 export * from './notifications.js';
 export * from './orders.js';
+export * from './rates.js';
 export * from './system.js';
 export * from './user-agent.js';
 export * from './wallet.js';

@@ -41,11 +41,12 @@ A customer only ever reaches their own deposits. Customer routes look the deposi
 ### `exchange_rates` (new; owner: `rates`; append-only)
 - `id` uuid v7, primary key.
 - `syp_per_usd` numeric(12,4), required, `> 0`: new Syrian pounds per 1 USD (`exchangeRateSchema`).
-- `display_step_syp_units` bigint, required, between 100 and 5,000 (1–50 SYP): the clean step for SYP display (rule FX3).
+- `display_step_syp_units` bigint, required, between 100 and 5,000 (1–50 SYP) in whole pounds (`% 100 = 0`): the clean step for SYP display (rule FX3).
 - `admin_id` uuid, required, no foreign key (as S02's `wallet_adjustments.admin_id`).
 - `created_at` timestamptz, required, default `now()`.
 - The current rate is the newest row. Index `(created_at desc)`.
 - Append-only: a trigger refuses `UPDATE`, `DELETE` and `TRUNCATE`. The app role has `INSERT` and `SELECT` only.
+- Rate changes are serialized with a transaction-level advisory lock, so the 5% check (FX2) always compares with the rate the change replaces (the app role cannot lock rows of an append-only table).
 
 ### `deposit_settings` (new; owner: `deposits`; append-only versions)
 One row per saved version; the current settings are the newest row. Before the first save, Sham Cash deposits are unavailable (rule SC1).
@@ -115,10 +116,10 @@ One row per saved version; the current settings are the newest row. Before the f
 ### `payment_references` (new; owner: `wallet`; append-only)
 Claims each real-world payment once across every table that can credit it (rule SC14). Unique constraints across two tables are racy, so one table holds the claims.
 - `id`; `method` enum `payment_method` (`sham_cash`, `usdt_trc20`, `usdt_bep20`); `reference` text: trimmed and upper-cased, 1–100 characters.
-- `deposit_id` and `wallet_adjustment_id`: nullable foreign keys, exactly one set.
+- `deposit_id` and `wallet_adjustment_id`: nullable foreign keys, exactly one set (`num_nonnulls`). `wallet_adjustment_id` ships first (PR 1); `deposit_id` arrives with the `deposits` table.
 - `created_at`.
 - Unique `(method, reference)`.
-- The migration backfills the S02 `manual_deposit` adjustments. They are not reversals, so each has a reference. S02's `wallet_adjustments` unique index stays.
+- The migration backfills the S02 `manual_deposit` adjustments. They are not reversals, so each has a reference. A backfilled claim takes its adjustment's id. Two S02 references that differ only by surrounding spaces keep the first claim. S02's `wallet_adjustments` unique index stays.
 - Written only through `claimPaymentReference(tx, method, reference, owner)` in `packages/db/src/ledger`. It answers `EXTERNAL_REFERENCE_TAKEN` on conflict. The S02 adjustment service switches to it. A claim from a reversed manual deposit stays (S02 rule R5).
 - Append-only trigger and grants.
 

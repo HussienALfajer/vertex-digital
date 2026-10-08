@@ -1,6 +1,12 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { CURRENCY_SCALE } from '@vertex-digital/contracts';
-import { customers, emailOutbox, ledgerJournals, walletAdjustments } from '@vertex-digital/db';
+import {
+  customers,
+  emailOutbox,
+  ledgerJournals,
+  paymentReferences,
+  walletAdjustments,
+} from '@vertex-digital/db';
 import { count, eq, like } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -165,7 +171,8 @@ describe('the customer wallet (rules W1–W10)', () => {
     const customer = await newCustomer();
     const wallet = await client.get('/api/wallet', { cookie: customer.cookie });
     expect(wallet.headers.get('cache-control')).toBe('no-store');
-    expect(await json(wallet)).toEqual({ balanceUnits: 0, syp: null });
+    // S03 rates stay in the test database: the value in pounds follows the rate in force.
+    expect(await json(wallet)).toMatchObject({ balanceUnits: 0 });
     const entries = await client.get('/api/wallet/entries', { cookie: customer.cookie });
     expect(entries.headers.get('cache-control')).toBe('no-store');
     expect(await json(entries)).toEqual({ items: [], nextCursor: null });
@@ -437,11 +444,19 @@ describe('adjustments (rules J1–J10)', () => {
         depositMethod,
         externalReference,
       });
-    expect((await manual(reference)).status).toBe(201);
+    const first = await manual(reference);
+    expect(first.status).toBe(201);
+    // `details` names the record holding the reference (S03 rule SC14).
     expect(await body(await manual(` ${reference.toLowerCase()} `))).toMatchObject({
       status: 409,
       code: 'EXTERNAL_REFERENCE_TAKEN',
+      details: { kind: 'adjustment', id: (await json(first)).id },
     });
+    const claims = await test.db
+      .select({ method: paymentReferences.method, reference: paymentReferences.reference })
+      .from(paymentReferences)
+      .where(eq(paymentReferences.reference, reference));
+    expect(claims).toEqual([{ method: 'sham_cash', reference }]);
     expect((await manual(reference, 'usdt_trc20')).status).toBe(201);
     expect(
       await body(
