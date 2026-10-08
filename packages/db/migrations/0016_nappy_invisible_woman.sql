@@ -1,0 +1,1 @@
+ALTER TYPE "public"."usdt_check_error" ADD VALUE 'amount_too_small';

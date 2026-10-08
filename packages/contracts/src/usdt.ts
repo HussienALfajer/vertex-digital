@@ -116,6 +116,34 @@ function base58Decode(text: string): number[] {
   return bytes;
 }
 
+/** The base58check text of a TRON address's 21 bytes (prefix 0x41 and the 20-byte account). */
+function base58CheckEncode(bytes: Uint8Array): string {
+  const checksum = sha256(sha256(bytes)).subarray(0, 4);
+  let value = 0n;
+  for (const byte of [...bytes, ...checksum]) value = (value << 8n) | BigInt(byte);
+  let text = '';
+  while (value > 0n) {
+    text = (BASE58_ALPHABET[Number(value % 58n)] as string) + text;
+    value /= 58n;
+  }
+  return text;
+}
+
+/**
+ * The `T…` address of a TRON account given in hex: 40 characters (as in event logs and topics,
+ * left-padded topics trimmed to their last 40) or 42 with the `41` prefix (as in the node's
+ * transaction fields). Null for anything else.
+ */
+export function tronAddressFromHex(hex: string): string | null {
+  const account = /^(?:0x|41)?([0-9a-f]{40})$/i.exec(hex)?.[1];
+  if (account === undefined) return null;
+  const bytes = Uint8Array.from([
+    0x41,
+    ...(account.match(/../g) as string[]).map((pair) => Number.parseInt(pair, 16)),
+  ]);
+  return base58CheckEncode(bytes);
+}
+
 /** A TRON address: `T`, 34 base58 characters, prefix byte 0x41 and a valid base58check. */
 export function isTronAddress(address: string): boolean {
   if (!/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address)) return false;

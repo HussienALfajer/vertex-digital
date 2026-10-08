@@ -14,16 +14,18 @@ Why three and not the spec's two: PR 1 of the spec (contracts, db, readers, jobs
 - [x] Checks (lint, typecheck, test, build, drift, e2e: all passed and recorded), reviewer (no blocking findings; three PR 2 notes below)
 - [x] Owner acceptance (2026-10-08), PR with auto-merge
 
-## PR 2 — Chain readers and worker jobs · Opus 5.5 `high`
-- [ ] `ChainReader` interface and `ChainReaderError`; `fake` reader (test-database table only, refused in production); TronGrid reader and BSC JSON-RPC reader with recorded, sanitized public fixtures (endpoints, limits and the BSC provider named)
-- [ ] `jobs/deposits/usdt-verify.job.ts` (U6, U9–U11, retry schedule from `search_started_at`, bounce, review, credit U7; singleton per deposit; safe twice)
-- [ ] `jobs/deposits/usdt-scan.job.ts` (U12–U14: cursor with overlap, dust, bind and credit, replace a wrong customer TXID; 20 s while open, 5 min cron; stale alert on Telegram once per window)
-- [ ] Credit transaction shared with the api approval (U7, M1) and its email
-- [ ] CLI `usdt:fake-transfer`; commands table in `AGENTS.md`
-- [ ] Tests: exact match, each bounce, each review reason, reader error never "not found", 30-minute window, TRON solidified, BSC finalized + 15, summing, 18-decimal remainder, cursor overlap and duplicates, dust, stale alert once, scanner vs verifier in parallel → one journal/audit/email
-- [ ] From the PR 1 review: two customers may hold the same TXID while `searching` (no lock on submission; credit stays single through the unique transfer, binding and claim): the verifier treats "transfer bound to another deposit" as a final outcome, never a retry loop
-- [ ] From the PR 1 review: a TXID whose transfer is under $1 cannot be recorded (`usdt_transfers` keeps $1 and up, rule U14) yet rule U11 binds it for review: owner (2026-10-08): bounce it back to `pending` with a clear reason (the first of the two options offered); confirm the reason code when PR 2 adds it
-- [ ] The worker checks `USDT_TRC20_ADDRESS` / `USDT_BEP20_ADDRESS` at boot too (edge case 17), with `CHAIN_READER` (`fake` refused in production) and the reader variables; `.env.example` `CHAIN_READER=fake`
+## PR 2 — Chain readers and worker jobs (`ccr-25210d15-4vpn8q`, cloud session branch) · Opus 5.5 `high`
+- [x] `ChainReader` interface and `ChainReaderError`; `fake` reader (a git-ignored JSON file, not a table: settled in the spec; memory store in tests; refused in production); TronGrid reader and BSC JSON-RPC reader with sanitized fixtures (synthetic: the providers were unreachable from the build environment; limits named in the spec and `docs/deployment.md`)
+- [x] `jobs/deposits/usdt-verify.job.ts` (U6, U9–U11, retry schedule from `search_started_at`, bounce, review, credit U7; singleton per deposit; safe twice)
+- [x] `jobs/deposits/usdt-scan.job.ts` (U12–U14: cursor with overlap, dust, bind and credit, replace a wrong customer TXID; 20 s while open, 5 min cron; stale alert on Telegram once per window; restarts lost verifications)
+- [x] Credit transaction shared with the api approval (U7, M1: `creditUsdtDeposit`) and its email (`core/email/outbox.ts`)
+- [x] CLI `usdt:fake-transfer`; commands table in `AGENTS.md`
+- [x] Tests: exact match, each bounce, each review reason, reader error never "not found", 30-minute window, TRON solidified, BSC finalized + 15, summing, 18-decimal remainder, cursor overlap and duplicates, dust, stale alert once, scanner vs verifier in parallel → one journal/audit/email
+- [x] From the PR 1 review: two customers with the same TXID: the verifier bounces the second with `txid_used` (final, never a retry loop)
+- [x] From the PR 1 review: a TXID whose transfer is under $1 bounces back to `pending` with `amount_too_small` (owner, 2026-10-08); the code to confirm with the owner at acceptance
+- [x] The worker checks `USDT_TRC20_ADDRESS` / `USDT_BEP20_ADDRESS` at boot too (edge case 17), with `CHAIN_READER` (`fake` refused in production; `stub` read as `fake`) and the reader variables; `.env.example` `CHAIN_READER=fake`
+- [x] API: a new USDT deposit sends its network's scan job (detection within about 20 seconds)
+- [x] Bridge: migrations 0016–0017 (check errors), build, OpenAPI export, admin client
 - [ ] Docs (`docs/architecture.md` jobs and readers), checks, reviewer, owner acceptance, PR with auto-merge
 
 ## PR 3 — Store and admin screens, E2E · Opus 5.5 `high`

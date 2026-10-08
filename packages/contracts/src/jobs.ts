@@ -37,6 +37,13 @@ export const depositsUsdtScanPayloadSchema = z.object({ method: usdtMethodSchema
 
 export type DepositsUsdtScanPayload = z.infer<typeof depositsUsdtScanPayloadSchema>;
 
-export const depositsUsdtVerifyPayloadSchema = z.object({ depositId: z.uuid() });
+export const depositsUsdtVerifyPayloadSchema = z.object({
+  depositId: z.uuid(),
+  /**
+   * Successful reads that said "not found" so far for the current TXID (rule U9), carried from
+   * one run to the next; a re-check or the API's first job starts from zero.
+   */
+  notFoundReads: z.int().min(0).optional(),
+});
 
 export type DepositsUsdtVerifyPayload = z.infer<typeof depositsUsdtVerifyPayloadSchema>;

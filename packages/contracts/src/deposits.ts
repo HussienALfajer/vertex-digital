@@ -257,8 +257,20 @@ export const usdtCheckStatusSchema = z.enum(USDT_CHECK_STATUSES).meta({ id: 'Usd
 
 export type UsdtCheckStatus = z.infer<typeof usdtCheckStatusSchema>;
 
-/** Why a TXID bounced the deposit back to `pending` (rule U10); the customer sees it in words. */
-export const USDT_CHECK_ERRORS = ['not_found', 'tx_failed', 'not_to_store', 'wrong_token'] as const;
+/**
+ * Why a TXID bounced the deposit back to `pending` (rule U10); the customer sees it in words.
+ * `amount_too_small`: official USDT reached the store, but under $1, which is never recorded
+ * (rule U14), so it cannot go to review (owner, 2026-10-08). `txid_used`: the transfer is
+ * already bound to another deposit or recorded by the admin (two customers pasted one TXID).
+ */
+export const USDT_CHECK_ERRORS = [
+  'not_found',
+  'tx_failed',
+  'not_to_store',
+  'wrong_token',
+  'amount_too_small',
+  'txid_used',
+] as const;
 
 export const usdtCheckErrorSchema = z.enum(USDT_CHECK_ERRORS).meta({ id: 'UsdtCheckError' });
 
