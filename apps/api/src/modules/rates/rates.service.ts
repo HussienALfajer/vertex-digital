@@ -105,6 +105,9 @@ export class RatesService {
           sypPerUsd: input.sypPerUsd,
           displayStepSypUnits: input.displayStepSypUnits,
           adminId,
+          // The insert's own time, not the transaction's start (`now()`): a change that began
+          // before another but waited for the lock is still the newer rate.
+          createdAt: sql`clock_timestamp()`,
         })
         .returning();
       if (!row) throw new Error('The rate was not written');

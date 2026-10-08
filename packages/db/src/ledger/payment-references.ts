@@ -1,5 +1,5 @@
 import type { PaymentMethod } from '@vertex-digital/contracts';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Database, Transaction } from '../client.js';
 import { paymentReferences } from '../schema/index.js';
 import { LedgerError } from './errors.js';
@@ -15,8 +15,11 @@ export interface PaymentReferenceOwner {
   id: string;
 }
 
-/** How references compare: trimmed and upper-cased (`' test-001 '` is `TEST-001`). */
-export const normalizePaymentReference = (reference: string) => reference.trim().toUpperCase();
+/**
+ * How references compare: trimmed and upper-cased by PostgreSQL (`' test-001 '` is `TEST-001`),
+ * as the table's check, the S02 backfill and S02's unique index do, whatever the characters.
+ */
+const normalized = (reference: string) => sql<string>`upper(btrim(${reference}))`;
 
 /** The record that holds the claim on `reference`, or null when it is free. */
 export async function paymentReferenceOwner(
@@ -30,7 +33,7 @@ export async function paymentReferenceOwner(
     .where(
       and(
         eq(paymentReferences.method, method),
-        eq(paymentReferences.reference, normalizePaymentReference(reference)),
+        eq(paymentReferences.reference, normalized(reference)),
       ),
     );
   if (!row) return null;
@@ -54,7 +57,7 @@ export async function claimPaymentReference(
     .insert(paymentReferences)
     .values({
       method,
-      reference: normalizePaymentReference(reference),
+      reference: normalized(reference),
       walletAdjustmentId: owner.walletAdjustmentId,
     })
     .onConflictDoNothing({ target: [paymentReferences.method, paymentReferences.reference] })

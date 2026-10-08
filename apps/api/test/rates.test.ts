@@ -165,6 +165,26 @@ describe('changing the rate (rules FX1–FX3)', () => {
     ]);
     expect(results.map((response) => response.status).sort()).toEqual([201, 400]);
   });
+
+  it('keeps the last change in force when two parallel changes both pass', async () => {
+    await setRate('300');
+    const results = await Promise.all([
+      change({ sypPerUsd: '301', displayStepSypUnits: 500 }),
+      change({ sypPerUsd: '302', displayStepSypUnits: 500 }),
+    ]);
+    expect(results.map((response) => response.status)).toEqual([201, 201]);
+    const records = (await Promise.all(results.map((response) => response.json()))) as {
+      id: string;
+      sypPerUsd: string;
+    }[];
+    // The change written second names the other as the rate it replaced: it is the one in force.
+    const replaced = async (id: string) =>
+      ((await auditOf(test.db, id))[0]?.details as { before: { sypPerUsd: string } }).before
+        .sypPerUsd;
+    const [first, other] = records as [(typeof records)[0], (typeof records)[0]];
+    const second = (await replaced(first.id)) === other.sypPerUsd ? first : other;
+    expect((await overview()).current).toMatchObject({ id: second?.id });
+  });
 });
 
 // Staleness (rule FX7) needs the newest rate to be old, which a database of append-only rates
