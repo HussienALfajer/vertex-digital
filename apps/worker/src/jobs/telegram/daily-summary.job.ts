@@ -18,10 +18,11 @@ import {
   queueTelegramMessage,
   storeSwitchChanges,
   type Transaction,
+  telegramPrompts,
   usdtTransferState,
   usdtTransfers,
 } from '@vertex-digital/db';
-import { and, count, desc, eq, gte, like, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
 import { TelegramAlerts } from '../../core/alerts/telegram-alerts.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -124,7 +125,8 @@ export class DailySummaryJob implements OnApplicationBootstrap {
           and(
             eq(deposits.status, 'credited'),
             gte(deposits.decidedAt, dayStart),
-            like(deposits.decisionIdempotencyKey, 'telegram:%'),
+            // A decision from Telegram is keyed by its prompt's id (S05 rule TC4).
+            sql`exists (select 1 from ${telegramPrompts} where ${telegramPrompts.id} = ${deposits.decisionIdempotencyKey})`,
             realCustomer,
           ),
         ),

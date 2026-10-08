@@ -184,7 +184,7 @@ describe('the deposit card (rules TC1, TC2, TC6)', () => {
           decidedBy: 'admin',
           adminId: newId(),
           rejectReason: 'not_received',
-          decisionIdempotencyKey: `telegram:${newId()}`,
+          decisionIdempotencyKey: newId(),
         })
         .where(eq(deposits.id, id));
       expect(await job.sync(id, tx)).toBe('edited');
@@ -289,7 +289,9 @@ describe('the review reminder (rules RM1–RM4)', () => {
         messageId: 1,
       });
       const old = Number.MAX_SAFE_INTEGER - Math.floor(Math.random() * 1e9);
-      await tx.insert(telegramUpdates).values({ updateId: old, receivedAt: at('00:00') });
+      await tx
+        .insert(telegramUpdates)
+        .values({ updateId: old, receivedAt: new Date('2029-12-20T00:00:00Z') });
       await tx
         .update(telegramPrompts)
         .set({ closedAt: new Date() })
@@ -357,7 +359,7 @@ describe('the daily summary (rule AL3)', () => {
           decidedBy: 'admin',
           adminId: newId(),
           rejectReason: 'not_received',
-          decisionIdempotencyKey: `telegram:${newId()}`,
+          decisionIdempotencyKey: newId(),
         })
         .where(eq(deposits.id, id));
       expect(await job.summarize(now, tx)).toBe(true);

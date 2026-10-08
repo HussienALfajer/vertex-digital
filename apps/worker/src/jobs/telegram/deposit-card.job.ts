@@ -19,6 +19,7 @@ import {
   type Transaction,
   telegramDepositCards,
   telegramLinks,
+  telegramPrompts,
   usdtDeposits,
   usdtTransfers,
 } from '@vertex-digital/db';
@@ -224,7 +225,14 @@ export class DepositCardJob implements OnApplicationBootstrap {
             .leftJoin(usdtTransfers, eq(usdtTransfers.id, usdtDeposits.transferId))
             .where(eq(usdtDeposits.depositId, deposit.id));
     if (usdt && !usdt.transfer) return null;
-    const outcome = outcomeOf(deposit);
+    // A decision from Telegram is keyed by its prompt's id (S05 rule TC4).
+    const [fromTelegram] = deposit.decisionIdempotencyKey
+      ? await db
+          .select({ id: telegramPrompts.id })
+          .from(telegramPrompts)
+          .where(eq(telegramPrompts.id, deposit.decisionIdempotencyKey))
+      : [];
+    const outcome = outcomeOf(deposit, Boolean(fromTelegram));
     // A USDT deposit has a card only once in review (rule TC1); before that nothing to show.
     if (usdt && !outcome && (deposit.status !== 'submitted' || usdt.checkStatus !== 'review')) {
       return null;
@@ -287,18 +295,13 @@ export class DepositCardJob implements OnApplicationBootstrap {
 }
 
 /** What a decided, sent-back, expired or cancelled deposit's card says (rule TC6). */
-function outcomeOf(deposit: DepositRow): DepositCardView['outcome'] {
+function outcomeOf(deposit: DepositRow, fromTelegram: boolean): DepositCardView['outcome'] {
   switch (deposit.status) {
     case 'credited':
       return {
         kind: 'credited',
         creditedUsdUnits: deposit.creditedUsdUnits ?? 0,
-        channel:
-          deposit.decidedBy === 'system'
-            ? 'worker'
-            : deposit.decisionIdempotencyKey?.startsWith('telegram:')
-              ? 'telegram'
-              : 'admin',
+        channel: deposit.decidedBy === 'system' ? 'worker' : fromTelegram ? 'telegram' : 'admin',
       };
     case 'rejected':
       return deposit.rejectReason ? { kind: 'rejected', reason: deposit.rejectReason } : null;

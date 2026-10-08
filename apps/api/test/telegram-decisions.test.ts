@@ -233,7 +233,8 @@ describe('approval from Telegram (rule TC4)', () => {
     const { id, customer: by } = await submitted(20);
     // The submission queued its card (rule TC1).
     expect(await cardJobs(id)).toBe(1);
-    const promptId = await askToApprove(id, ' 1234567 ');
+    const number = String(randomInt(10_000_000, 99_999_999));
+    const promptId = await askToApprove(id, ` ${number} `);
     expect(await lastReply()).toMatchObject({
       referenceCode: expect.any(String),
       creditedUsdUnits: 20 * USD,
@@ -242,14 +243,14 @@ describe('approval from Telegram (rule TC4)', () => {
     expect(await lastReply()).toMatchObject({ reply: 'approved', creditedUsdUnits: 20 * USD });
     expect(await depositRow(id)).toMatchObject({
       status: 'credited',
-      transactionNumber: '1234567',
+      transactionNumber: number,
       receivedCurrency: 'USD',
       receivedAmountUnits: 20 * USD,
       creditedUsdUnits: 20 * USD,
       referenceCheck: 'matches',
       decidedBy: 'admin',
       adminId: admin.id,
-      decisionIdempotencyKey: `telegram:${promptId}`,
+      decisionIdempotencyKey: promptId,
     });
     expect(await journalsOf(id)).toHaveLength(1);
     const credited = (await auditOf(test.db, id)).find(
@@ -289,7 +290,7 @@ describe('approval from Telegram (rule TC4)', () => {
         headers: { 'idempotency-key': randomUUID() },
       }),
     ]);
-    expect([200, 201, 409]).toContain(panel.status);
+    expect([200, 409]).toContain(panel.status);
     expect(await journalsOf(id)).toHaveLength(1);
     const actions = (await auditOf(test.db, id)).map((entry) => entry.action);
     expect(actions.filter((action) => action === 'deposit.credited')).toHaveLength(1);
@@ -301,7 +302,7 @@ describe('approval from Telegram (rule TC4)', () => {
     ).toHaveLength(1);
     // Whichever lost was told: the panel by its 409, Telegram by "تم البت فيه مسبقاً".
     const reply = await lastReply();
-    if (panel.status === 201) expect(reply).toMatchObject({ refusal: 'decided' });
+    if (panel.status === 200) expect(reply).toMatchObject({ refusal: 'decided' });
     else expect(reply).toMatchObject({ reply: 'approved' });
   });
 
@@ -345,7 +346,7 @@ describe('approval from Telegram (rule TC4)', () => {
       body: { reason: 'not_received', internalNote: 'Checked the account' },
       headers: { 'idempotency-key': randomUUID() },
     });
-    expect(rejected.status).toBe(201);
+    expect(rejected.status).toBe(200);
     await tap(`ok:${promptId}`);
     expect(await lastReply()).toMatchObject({ reply: 'decision_refused', refusal: 'decided' });
     expect(await journalsOf(id)).toHaveLength(0);
@@ -444,7 +445,7 @@ describe('rejection from Telegram (rule TC5)', () => {
       status: 'rejected',
       rejectReason: 'not_received',
       customerNote: null,
-      decisionIdempotencyKey: `telegram:${promptId}`,
+      decisionIdempotencyKey: promptId,
     });
     const rejected = (await auditOf(test.db, id)).find(
       (entry) => entry.action === 'deposit.rejected',

@@ -344,7 +344,7 @@ export class DepositReviewService {
 
   /**
    * Rule TC4 step 3: the panel's approval with the declared amount, the reference matching, no
-   * flag and the key `telegram:<promptId>`, re-checked at this moment: the submission the prompt
+   * flag and the prompt's id as the decision key, re-checked at this moment: the submission the prompt
    * was opened on, no flag, within the Telegram limit.
    */
   async approveFromTelegram(
@@ -362,13 +362,7 @@ export class DepositReviewService {
     };
     const actor = { adminId, channel: 'telegram', submittedAt: prompt.submittedAt } as const;
     try {
-      const { deposit } = await this.approveAs(
-        actor,
-        row.id,
-        `telegram:${prompt.id}`,
-        input,
-        TELEGRAM_META,
-      );
+      const { deposit } = await this.approveAs(actor, row.id, prompt.id, input, TELEGRAM_META);
       return {
         outcome: 'approved',
         referenceCode: row.referenceCode,
@@ -383,7 +377,7 @@ export class DepositReviewService {
     }
   }
 
-  /** Rule TC5: the panel's rejection, without a customer note, with the key `telegram:<promptId>`. */
+  /** Rule TC5: the panel's rejection, without a customer note, with the prompt's id as the key. */
   async rejectFromTelegram(
     adminId: string,
     prompt: { id: string; depositId: string; submittedAt: Date | null },
@@ -393,13 +387,7 @@ export class DepositReviewService {
     const row = await this.row(prompt.depositId);
     const actor = { adminId, channel: 'telegram', submittedAt: prompt.submittedAt } as const;
     try {
-      await this.rejectAs(
-        actor,
-        row.id,
-        `telegram:${prompt.id}`,
-        { reason, internalNote },
-        TELEGRAM_META,
-      );
+      await this.rejectAs(actor, row.id, prompt.id, { reason, internalNote }, TELEGRAM_META);
       return { outcome: 'rejected', referenceCode: row.referenceCode, reason };
     } catch (error) {
       return {
