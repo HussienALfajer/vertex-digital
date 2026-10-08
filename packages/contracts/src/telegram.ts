@@ -11,12 +11,14 @@ import {
   type ReviewHours,
   rejectDepositSchema,
 } from './deposits.js';
+import { currencySchema } from './money.js';
 import {
   STORE_SWITCHES,
   type StoreSwitch,
   storeSwitchSchema,
   switchChannelSchema,
 } from './settings.js';
+import { supplierCodeSchema, supplierHealthStateSchema } from './suppliers.js';
 import { usdtMethodSchema } from './usdt.js';
 
 /*
@@ -69,6 +71,10 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'bot_reply',
   'link_changed',
   'test',
+  'supplier_sync_summary',
+  'supplier_health',
+  'supplier_balance_low',
+  'supplier_sync_failing',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -217,12 +223,68 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     activeSwitches: z.array(z.object({ switch: storeSwitchSchema, since: z.iso.datetime() })),
     /** Alerts the rate limit held back today, in this worker. */
     suppressedAlerts: z.int().nonnegative(),
+    /** S07: price changes waiting in the review queue. */
+    openReviews: z.int().nonnegative().default(0),
+    /** S07: products the margin guard holds (rule P6). */
+    marginGuarded: z.int().nonnegative().default(0),
+    /** S07: suppliers in use that are not `healthy`. */
+    suppliersNotHealthy: z
+      .array(z.object({ supplierNameAr: z.string(), state: supplierHealthStateSchema }))
+      .default([]),
+    /** S07: suppliers whose newest balance is below their threshold (rule H5). */
+    balancesLow: z
+      .array(
+        z.object({ supplierNameAr: z.string(), currency: currencySchema, amountUnits: z.int() }),
+      )
+      .default([]),
   }),
   bot_reply: telegramBotReplySchema,
   /** To the previous chat when another chat was linked (rule TG3). */
   link_changed: z.object({}),
   /** The panel's "إرسال رسالة اختبار". */
   test: z.object({}),
+  /** S07: a sync run that opened reviews, guarded products or lost mapped offers. */
+  supplier_sync_summary: z.object({
+    supplier: supplierCodeSchema,
+    supplierNameAr: z.string(),
+    runId: z.uuid(),
+    reviewsOpened: z.int().nonnegative(),
+    marginGuarded: z.int().nonnegative(),
+    mappedMissing: z.int().nonnegative(),
+  }),
+  /** S07 rule H4: a health change. */
+  supplier_health: z.object({
+    supplier: supplierCodeSchema,
+    supplierNameAr: z.string(),
+    state: supplierHealthStateSchema,
+    previous: supplierHealthStateSchema,
+    successBp: z.int().min(0).max(10_000).nullable(),
+  }),
+  /** S07 rule H5: a balance below its threshold (and its repeats), or back at or above it. */
+  supplier_balance_low: z.object({
+    supplier: supplierCodeSchema,
+    supplierNameAr: z.string(),
+    currency: currencySchema,
+    amountUnits: z.int(),
+    thresholdUsdUnits: z.int().nonnegative(),
+    recovered: z.boolean(),
+  }),
+  /** S07: syncs failing in a row, then once when costs go stale and products become unavailable. */
+  supplier_sync_failing: z.discriminatedUnion('reason', [
+    z.object({
+      reason: z.literal('runs_failed'),
+      supplier: supplierCodeSchema,
+      supplierNameAr: z.string(),
+      failedRuns: z.int().positive(),
+      errorCode: z.string().nullable(),
+    }),
+    z.object({
+      reason: z.literal('costs_stale'),
+      supplier: supplierCodeSchema,
+      supplierNameAr: z.string(),
+      unavailableProducts: z.int().nonnegative(),
+    }),
+  ]),
 } as const satisfies Record<TelegramMessageKind, z.ZodType>;
 
 export type TelegramMessageParams<Kind extends TelegramMessageKind> = z.infer<

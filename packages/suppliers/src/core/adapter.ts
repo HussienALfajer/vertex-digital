@@ -1,4 +1,4 @@
-import type { Currency } from '@vertex-digital/contracts';
+import type { Currency, ProductKind } from '@vertex-digital/contracts';
 
 /*
  * The one interface every supplier adapter implements (ADR 0005). Adapters are pure HTTP
@@ -31,6 +31,12 @@ export interface SupplierOffer {
   name: string;
   cost: SupplierMoney;
   inStock: boolean;
+  /** The supplier's game or category, when it gives one (for the panel's filters). */
+  group?: string;
+  /** Top-up or code, when the supplier says (S07 rule RT2). */
+  kind?: ProductKind;
+  /** The supplier's own names of the order fields, when it publishes them (rule RT3). */
+  requiredFields?: string[];
 }
 
 export interface PlayerValidation {

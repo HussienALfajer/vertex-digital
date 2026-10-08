@@ -28,6 +28,12 @@ export const QUEUES = {
   telegramDailySummary: 'telegram.daily-summary',
   /** Reads one supplier's offers and costs (S07 rules SY1–SY4). */
   suppliersSync: 'suppliers.sync',
+  /** Queues `suppliers.sync` for each eligible supplier, every 15 minutes (rule SY1). */
+  suppliersSyncSchedule: 'suppliers.sync-schedule',
+  /** Reads the suppliers' balances, every 5 minutes (rule H5). */
+  suppliersBalances: 'suppliers.balances',
+  /** The suppliers' health, its probes and stale costs, every minute (rules H1–H4, SY5). */
+  suppliersHealth: 'suppliers.health',
 } as const;
 
 /**

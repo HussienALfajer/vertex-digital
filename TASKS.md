@@ -18,15 +18,16 @@ Spec: `docs/specs/S07-suppliers.md` (F09 with F10, CT9; ADRs 0003, 0004, 0005, 0
 - [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (five blocking findings, fixed with tests), owner acceptance (2026-10-08, P9's 1-pound minimum confirmed), PR with auto-merge
 
 ## PR 2 — Worker: registry, sync, balances, health, messages, fake scripting · Opus 5.5 `high`
-- [ ] Suppliers: `SupplierOffer` gains optional `group`, `kind`, `requiredFields`; fake catalog (~10 offers, groups, kinds, fields) with scripted overrides from `FAKE_SUPPLIER_STATE_FILE`
-- [ ] Contracts: `supplierHealth` (H1–H5) and the probe rule with unit tests; queues `suppliers.sync-schedule`, `suppliers.balances`, `suppliers.health`; Telegram kinds (db enum migration)
-- [ ] Worker env: `SUPPLIER_KEYS_SECRET` derived exactly as the API's, `SUPPLIER_FAKE_ENABLED` refused in production
-- [ ] Worker registry (`SupplierRegistry.get`), decryption per call, every call in `supplier_calls`
-- [ ] Jobs `suppliers.sync` (SY1–SY4), `suppliers.sync-schedule`, `suppliers.balances` (H5), `suppliers.health` (H1–H4, SY5 stale repricing)
-- [ ] Telegram kinds `supplier_sync_summary`, `supplier_health`, `supplier_balance_low`, `supplier_sync_failing`; daily summary lines
-- [ ] Dev CLI `supplier:fake`; commands table in `AGENTS.md`
-- [ ] Tests (sync, suspicious list, failure, stale, missing, concurrent run; balances; health and probe; dedupe keys; credentials never logged)
-- [ ] Wiring checklist, docs
+- [x] Suppliers: `SupplierOffer` gains optional `group`, `kind`, `requiredFields`; fake catalog (10 offers, groups, kinds, fields) with scripted overrides from `FAKE_SUPPLIER_STATE_FILE`
+- [x] Contracts: `supplierHealth` (H1, H2), `probeOutcome` (H3), `healthWindowStart` with unit tests (100%); queues `suppliers.sync-schedule`, `suppliers.balances`, `suppliers.health`; Telegram kinds and daily summary fields (db enum migration 0029, admin labels)
+- [x] Worker env: `SUPPLIER_KEYS_SECRET` derived exactly as the API's, `SUPPLIER_FAKE_ENABLED` refused in production, `FAKE_SUPPLIER_STATE_FILE`
+- [x] Worker registry (`SupplierRegistry.get`, `connect`), decryption per call, every call in `supplier_calls` (`recordedCall`), messages sanitized
+- [x] Jobs `suppliers.sync` (SY1–SY4), `suppliers.sync-schedule`, `suppliers.balances` (H5), `suppliers.health` (H1–H4, SY5 stale repricing)
+- [x] Telegram kinds `supplier_sync_summary`, `supplier_health`, `supplier_balance_low`, `supplier_sync_failing`; daily summary lines
+- [x] Dev CLI `supplier:fake`; commands table in `AGENTS.md`; `.env.example`
+- [x] Tests (sync, suspicious list, failure, stale, missing, concurrent run; balances; health and probe; dedupe keys; credentials never logged); worker tests ordered after the api and db tests in `turbo.json`
+- [x] Bridge: OpenAPI (message kinds) and the admin client
+- [x] Wiring checklist, docs (`docs/architecture.md`, `docs/deployment.md`, folder `CLAUDE.md` files, spec "Settled in implementation")
 - [ ] Checks, reviewer, acceptance, PR with auto-merge
 
 ## PR 3 — Admin screens and E2E · Opus 5.5 `high`

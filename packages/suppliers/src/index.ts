@@ -15,4 +15,6 @@ export {
   FAKE_TIMESTAMP_HEADER,
   type FakeAdapterOptions,
   FakeSupplierAdapter,
+  type FakeSupplierState,
+  fakeSupplierStateSchema,
 } from './fake/adapter.js';

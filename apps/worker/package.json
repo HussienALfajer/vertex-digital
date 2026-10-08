@@ -9,7 +9,8 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "usdt:fake-transfer": "node dist/cli/usdt-fake-transfer.js"
+    "usdt:fake-transfer": "node dist/cli/usdt-fake-transfer.js",
+    "supplier:fake": "node dist/cli/supplier-fake.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",
@@ -17,6 +18,7 @@
     "@sentry/nestjs": "^11.4.0",
     "@vertex-digital/contracts": "workspace:*",
     "@vertex-digital/db": "workspace:*",
+    "@vertex-digital/suppliers": "workspace:*",
     "drizzle-orm": "^0.45.3",
     "nestjs-pino": "^5.3.1",
     "nodemailer": "^10.0.15",

@@ -166,9 +166,9 @@ ssh vertex "systemctl enable --now vertexdigital-health.timer"
 - Chain readers (S04 PR 2), in the worker's environment: `CHAIN_READER=live` (production refuses `fake`), `TRONGRID_API_KEY` (required when the TRC20 address is set; `TRONGRID_API_URL` defaults to `https://api.trongrid.io`) and `BSC_RPC_URL` (an HTTPS JSON-RPC endpoint of a BSC provider, required when the BEP20 address is set; a provider's key is part of the URL, so treat it as a secret). The provider must allow `eth_getLogs` over 1,000 blocks and the `finalized` block tag. After the reload, the panel's deposit settings show each network's last scan: a network stays `delayed` (new USDT deposits wait) until its scanner has caught up.
 
 ### Supplier keys (S07, ADR 0005)
-1. Before the first deploy that contains S07, add `SUPPLIER_KEYS_SECRET=$(openssl rand -base64 32)` to `shared/.env` (read by the API and the worker; the API refuses to start in production without it). `provision.sh` generates it on a new server; an existing `shared/.env` needs it added by hand.
+1. Before the first deploy that contains S07, add `SUPPLIER_KEYS_SECRET=$(openssl rand -base64 32)` to `shared/.env` (read by the API and the worker; both refuse to start in production without it). `provision.sh` generates it on a new server; an existing `shared/.env` needs it added by hand.
 2. Never change it once a supplier's keys are set: it decrypts them. Rotating it means setting every supplier's keys again in the panel (`/suppliers/<code>`, "تعيين المفاتيح"). Back it up with the database backups' credentials, never in the repository.
-3. `SUPPLIER_FAKE_ENABLED` stays unset in production: the API refuses to start with it.
+3. `SUPPLIER_FAKE_ENABLED` stays unset in production: the API and the worker refuse to start with it.
 
 ### Telegram admin bot (S05, ADR 0019)
 1. The owner creates the bot with BotFather (`/newbot`) and keeps its token private.

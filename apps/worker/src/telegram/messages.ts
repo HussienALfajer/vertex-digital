@@ -7,6 +7,7 @@ import {
   formatUsdtAmount,
   type StopScope,
   type StoreSwitch,
+  type SupplierHealthState,
   type SwitchChannel,
   type TelegramApprovalRefusal,
   type TelegramBotReply,
@@ -253,6 +254,72 @@ const damascusTime = new Intl.DateTimeFormat('en-GB', {
 /** A time in Damascus, Latin digits: "08/10 23:05". */
 export const atDamascus = (at: Date) => damascusTime.format(at).replace(',', '');
 
+const HEALTH: Record<SupplierHealthState, string> = {
+  healthy: 'سليم',
+  degraded: 'متراجع',
+  down: 'متوقف',
+};
+
+/** A supplier's balance in its own currency. */
+const balanceText = (currency: 'USD' | 'SYP', units: number) =>
+  currency === 'USD' ? formatUsd(units) : formatSyp(units);
+
+const successText = (successBp: number | null) =>
+  successBp === null ? '' : `: نجاح ${Math.floor(successBp / 100)}%`;
+
+/** S07: the supplier messages (sync summary, health, balance, failing sync). */
+function supplierText<Kind extends TelegramMessageKind>(
+  kind: Kind,
+  params: TelegramMessageParams<Kind>,
+  links: TelegramLinks,
+): string {
+  switch (kind) {
+    case 'supplier_sync_summary': {
+      const run = params as TelegramMessageParams<'supplier_sync_summary'>;
+      const parts = [
+        ...(run.reviewsOpened > 0 ? [`تغييرات أسعار للمراجعة: ${run.reviewsOpened}`] : []),
+        ...(run.marginGuarded > 0 ? [`باقات أوقفها حارس الهامش: ${run.marginGuarded}`] : []),
+        ...(run.mappedMissing > 0 ? [`عروض مربوطة اختفت: ${run.mappedMissing}`] : []),
+      ];
+      return [
+        `🔄 مزامنة ${run.supplierNameAr}: ${parts.join('، ')}`,
+        run.reviewsOpened > 0
+          ? `${links.admin}/pricing/reviews`
+          : `${links.admin}/suppliers/${run.supplier}`,
+      ].join('\n');
+    }
+    case 'supplier_health': {
+      const change = params as TelegramMessageParams<'supplier_health'>;
+      const headline =
+        change.state === 'healthy'
+          ? `✅ ${change.supplierNameAr} عاد سليماً`
+          : change.state === 'degraded'
+            ? `⚠️ ${change.supplierNameAr} متراجع${successText(change.successBp)}`
+            : `⛔ ${change.supplierNameAr} متوقف${successText(change.successBp)}`;
+      return [headline, `${links.admin}/suppliers/${change.supplier}`].join('\n');
+    }
+    case 'supplier_balance_low': {
+      const balance = params as TelegramMessageParams<'supplier_balance_low'>;
+      const amount = balanceText(balance.currency, balance.amountUnits);
+      return [
+        balance.recovered
+          ? `✅ رصيد ${balance.supplierNameAr} عاد إلى الحد أو فوقه: ${amount}`
+          : `💰 رصيد ${balance.supplierNameAr} تحت الحد: ${amount} (الحد ${formatUsd(balance.thresholdUsdUnits)})`,
+        `${links.admin}/suppliers/${balance.supplier}`,
+      ].join('\n');
+    }
+    default: {
+      const failing = params as TelegramMessageParams<'supplier_sync_failing'>;
+      return [
+        failing.reason === 'runs_failed'
+          ? `⚠️ فشلت مزامنة ${failing.supplierNameAr} ${failing.failedRuns} مرات متتالية${failing.errorCode ? ` (${failing.errorCode})` : ''}`
+          : `⛔ أسعار ${failing.supplierNameAr} قديمة: ${failing.unavailableProducts} باقة غير متوفرة`,
+        `${links.admin}/suppliers/${failing.supplier}`,
+      ].join('\n');
+    }
+  }
+}
+
 /** Rule AL3. */
 function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
   const credited =
@@ -274,6 +341,15 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
     `التسجيل: ${summary.registrationOpen ? 'مفتوح' : 'مغلق'}`,
     ...summary.activeSwitches.map(
       (active) => `⛔ ${SWITCH_NAMES[active.switch]} منذ ${atDamascus(new Date(active.since))}`,
+    ),
+    `مراجعات أسعار مفتوحة: ${summary.openReviews}`,
+    ...(summary.marginGuarded > 0 ? [`باقات أوقفها حارس الهامش: ${summary.marginGuarded}`] : []),
+    ...summary.suppliersNotHealthy.map(
+      (supplier) => `⚠️ المورد ${supplier.supplierNameAr}: ${HEALTH[supplier.state]}`,
+    ),
+    ...summary.balancesLow.map(
+      (supplier) =>
+        `💰 رصيد ${supplier.supplierNameAr} تحت الحد: ${balanceText(supplier.currency, supplier.amountUnits)}`,
     ),
     ...(summary.suppressedAlerts > 0
       ? [`تنبيهات حُجبت بحد الإرسال: ${summary.suppressedAlerts}`]
@@ -420,6 +496,11 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
     }
     case 'daily_summary':
       return { text: summaryText(params as TelegramMessageParams<'daily_summary'>) };
+    case 'supplier_sync_summary':
+    case 'supplier_health':
+    case 'supplier_balance_low':
+    case 'supplier_sync_failing':
+      return { text: supplierText(kind, params, links) };
     case 'link_changed':
       return {
         text: 'رُبط البوت بمحادثة أخرى، فلن تصل التنبيهات إلى هنا بعد الآن. إن لم تفعل ذلك بنفسك فألغِ الربط من اللوحة فوراً.',

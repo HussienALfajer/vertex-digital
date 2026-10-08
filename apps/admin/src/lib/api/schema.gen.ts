@@ -3484,7 +3484,7 @@ export interface components {
             } | null;
         };
         /** @enum {string} */
-        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test";
+        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test" | "supplier_sync_summary" | "supplier_health" | "supplier_balance_low" | "supplier_sync_failing";
         /** @enum {string} */
         TelegramMessageStatus: "pending" | "sent" | "failed" | "skipped";
         TelegramLinkCode: {

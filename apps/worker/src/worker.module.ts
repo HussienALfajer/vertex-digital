@@ -13,11 +13,16 @@ import { UsdtScanJob } from './jobs/deposits/usdt-scan.job.js';
 import { UsdtVerifyJob } from './jobs/deposits/usdt-verify.job.js';
 import { PurgeCodesJob } from './jobs/email/purge-codes.job.js';
 import { SendEmailJob } from './jobs/email/send-email.job.js';
+import { SupplierBalancesJob } from './jobs/suppliers/balances.job.js';
+import { SupplierHealthJob } from './jobs/suppliers/health.job.js';
+import { SupplierSyncJob } from './jobs/suppliers/sync.job.js';
+import { SupplierSyncScheduleJob } from './jobs/suppliers/sync-schedule.job.js';
 import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
 import { DailySummaryJob } from './jobs/telegram/daily-summary.job.js';
 import { DepositCardJob } from './jobs/telegram/deposit-card.job.js';
 import { ReviewReminderJob } from './jobs/telegram/review-reminder.job.js';
 import { SendTelegramJob } from './jobs/telegram/send.job.js';
+import { SupplierRegistry } from './suppliers/supplier-registry.js';
 import { TelegramBot } from './telegram/bot-api.js';
 import { LinkedChat } from './telegram/linked-chat.js';
 import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
@@ -69,6 +74,11 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     DepositCardJob,
     ReviewReminderJob,
     DailySummaryJob,
+    SupplierRegistry,
+    SupplierSyncJob,
+    SupplierSyncScheduleJob,
+    SupplierBalancesJob,
+    SupplierHealthJob,
   ],
 })
 export class WorkerModule implements OnApplicationBootstrap {
@@ -82,6 +92,7 @@ export class WorkerModule implements OnApplicationBootstrap {
     if (!this.alerts.enabled) {
       logger.warn('Telegram is off (TELEGRAM_BOT_TOKEN unset): messages are skipped');
     }
+    if (this.env.SUPPLIER_FAKE_ENABLED) logger.warn('The fake supplier is enabled (S07)');
     logger.log(
       `USDT: ${this.env.CHAIN_READER} readers; TRC20 ${this.env.USDT_TRC20_ADDRESS ? 'on' : 'off'}, BEP20 ${this.env.USDT_BEP20_ADDRESS ? 'on' : 'off'}`,
     );

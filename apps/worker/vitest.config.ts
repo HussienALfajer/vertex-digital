@@ -31,6 +31,10 @@ export default defineConfig({
       // Receipts the card tests write for themselves (S05 rule TC2).
       FILES_ROOT: join(tmpdir(), `vertex-digital-files-${randomUUID()}`),
       ADMIN_URL: 'http://127.0.0.1:5173',
+      // The supplier jobs run against the fake supplier (S07); its state file is this run's own.
+      SUPPLIER_FAKE_ENABLED: 'true',
+      SUPPLIER_KEYS_SECRET: '',
+      FAKE_SUPPLIER_STATE_FILE: join(tmpdir(), `vertex-digital-fake-supplier-${randomUUID()}.json`),
     },
     testTimeout: 30_000,
     hookTimeout: 30_000,

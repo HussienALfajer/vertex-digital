@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { parseEnv } from '../src/core/config/env.js';
 
@@ -76,6 +77,7 @@ describe('worker environment', () => {
       SMTP_HOST: 'smtp.example.com',
       SMTP_USER: 'mailbox@example.com',
       SMTP_PASSWORD: 'secret',
+      SUPPLIER_KEYS_SECRET: Buffer.alloc(32, 7).toString('base64'),
     };
     expect(() => parseEnv(production)).toThrow('CHAIN_READER');
     // Production sends through the Bot API unless told otherwise, and never writes files.
@@ -95,5 +97,37 @@ describe('worker environment', () => {
     expect(() => parseEnv({ ...live, BSC_RPC_URL: 'http://bsc.example.com' })).toThrow(
       'BSC_RPC_URL',
     );
+  });
+
+  it('reads the supplier key as the API does, and never the fake supplier in production', () => {
+    // Derived locally exactly as the API derives it, so both read the stored credentials.
+    const apiKey = Buffer.from(
+      createHash('sha256').update(`vertex-digital-dev-supplier-keys:${DATABASE_URL}`).digest('hex'),
+      'hex',
+    ).toString('base64');
+    expect(parseEnv({ DATABASE_URL }).SUPPLIER_KEYS_SECRET).toBe(apiKey);
+    expect(
+      parseEnv({ DATABASE_URL, SUPPLIER_KEYS_SECRET: 'replace-with-32-random-bytes-base64' })
+        .SUPPLIER_KEYS_SECRET,
+    ).toBe(apiKey);
+    expect(() => parseEnv({ DATABASE_URL, SUPPLIER_KEYS_SECRET: 'c2hvcnQ=' })).toThrow(
+      'SUPPLIER_KEYS_SECRET',
+    );
+    expect(parseEnv({ DATABASE_URL }).SUPPLIER_FAKE_ENABLED).toBe(false);
+    const production = {
+      DATABASE_URL,
+      NODE_ENV: 'production',
+      EMAIL_TRANSPORT: 'smtp',
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_USER: 'mailbox@example.com',
+      SMTP_PASSWORD: 'secret',
+      CHAIN_READER: 'live',
+    };
+    expect(() => parseEnv(production)).toThrow('SUPPLIER_KEYS_SECRET');
+    const key = Buffer.alloc(32, 9).toString('base64');
+    expect(parseEnv({ ...production, SUPPLIER_KEYS_SECRET: key }).SUPPLIER_KEYS_SECRET).toBe(key);
+    expect(() =>
+      parseEnv({ ...production, SUPPLIER_KEYS_SECRET: key, SUPPLIER_FAKE_ENABLED: 'true' }),
+    ).toThrow('SUPPLIER_FAKE_ENABLED');
   });
 });

@@ -38,6 +38,10 @@ export const SUPPLIER_CALL_OPERATIONS = [
  */
 export const SUPPLIER_CALL_RESULTS = ['ok', 'refused', 'error'] as const;
 
+export type SupplierCallOperation = (typeof SUPPLIER_CALL_OPERATIONS)[number];
+
+export type SupplierCallResult = (typeof SUPPLIER_CALL_RESULTS)[number];
+
 /**
  * The secret fields the panel asks for, per supplier (rule SP2). Provisional for `shop2topup` and
  * `wdgzone`: their adapter PRs may rename them (Q12).
@@ -126,6 +130,128 @@ export const SUPPLIER_POLICY_DEFAULTS: SupplierPolicy = {
   downConsecutiveErrors: 3,
   probeAfterMinutes: 10,
 };
+
+// Health (H1–H3) -------------------------------------------------------------------------------
+
+/** One recorded adapter call (`supplier_calls`), as health reads it. */
+export interface HealthCall {
+  operation: SupplierCallOperation;
+  result: SupplierCallResult;
+  latencyMs: number;
+  at: Date;
+}
+
+/** A supplier's state: its newest `supplier_health_changes` row (none: `healthy`). */
+export interface HealthStanding {
+  state: SupplierHealthState;
+  reason: string;
+  since: Date;
+}
+
+export interface HealthVerdict {
+  state: SupplierHealthState;
+  reason: string;
+  /** The window's figures; null when the verdict did not read them (a probe). */
+  calls: number | null;
+  successBp: number | null;
+  p90Ms: number | null;
+}
+
+/** The reason of the `degraded` state a successful probe gives (rule H3). */
+export const HEALTH_PROBE_REASON = 'probe ok';
+
+const percent = (bp: number) => `${Math.floor(bp / 100)}%`;
+
+/**
+ * The first call time health reads (rules H1, H3): the window's start, or, while a probe's
+ * `degraded` stands, the probe's time, so only the calls since it can make the supplier healthy.
+ */
+export function healthWindowStart(
+  previous: HealthStanding,
+  now: Date,
+  policy: Pick<SupplierPolicy, 'healthWindowMinutes'>,
+): Date {
+  const start = new Date(now.getTime() - policy.healthWindowMinutes * 60_000);
+  const sinceProbe = previous.state === 'degraded' && previous.reason === HEALTH_PROBE_REASON;
+  return sinceProbe && previous.since > start ? previous.since : start;
+}
+
+/**
+ * Rules H1 and H2 over the calls since `healthWindowStart`, oldest first: `down` after
+ * `downConsecutiveErrors` errors in a row or, with at least `healthMinCalls` calls, a success rate
+ * below `downSuccessBp`; `degraded` below `degradedSuccessBp` or above `degradedP90Ms` (p90 of
+ * every operation but `list_offers`); else `healthy`. With fewer calls and no run of errors, the
+ * state stays. A `down` supplier leaves that state only by a probe (`probeOutcome`, rule H3).
+ */
+export function supplierHealth(
+  calls: readonly HealthCall[],
+  policy: SupplierPolicy,
+  previous: SupplierHealthState,
+): HealthVerdict {
+  const total = calls.length;
+  const answered = calls.filter((call) => call.result !== 'error').length;
+  const successBp = total === 0 ? null : Math.floor((answered * 10_000) / total);
+  const latencies = calls
+    .filter((call) => call.operation !== 'list_offers')
+    .map((call) => call.latencyMs)
+    .sort((a, b) => a - b);
+  // Nearest rank: the smallest latency at or above 90% of the calls.
+  const p90Ms =
+    latencies.length === 0
+      ? null
+      : (latencies[Math.ceil((latencies.length * 9) / 10) - 1] as number);
+  const figures = { calls: total, successBp, p90Ms };
+  const run = calls.slice(-policy.downConsecutiveErrors);
+  if (run.length === policy.downConsecutiveErrors && run.every((call) => call.result === 'error')) {
+    return { state: 'down', reason: `${run.length} consecutive errors`, ...figures };
+  }
+  if (successBp === null || total < policy.healthMinCalls) {
+    return { state: previous, reason: `${total} calls < ${policy.healthMinCalls}`, ...figures };
+  }
+  if (successBp < policy.downSuccessBp) {
+    return {
+      state: 'down',
+      reason: `success ${percent(successBp)} < ${percent(policy.downSuccessBp)}`,
+      ...figures,
+    };
+  }
+  if (successBp < policy.degradedSuccessBp) {
+    return {
+      state: 'degraded',
+      reason: `success ${percent(successBp)} < ${percent(policy.degradedSuccessBp)}`,
+      ...figures,
+    };
+  }
+  if (p90Ms !== null && p90Ms > policy.degradedP90Ms) {
+    return {
+      state: 'degraded',
+      reason: `p90 ${p90Ms} ms > ${policy.degradedP90Ms} ms`,
+      ...figures,
+    };
+  }
+  return { state: 'healthy', reason: `success ${percent(successBp)}`, ...figures };
+}
+
+/**
+ * Rule H3 for a supplier `down` since `downSince`, over its calls since then, oldest first: the
+ * first call `probeAfterMinutes` after entering `down` (or after the last failed probe) is the
+ * probe; its success recovers the supplier (to `degraded`), its failure starts the wait again.
+ * Calls inside a wait count for nothing. `nextProbeAt` is when the job probes, if nothing has.
+ */
+export function probeOutcome(
+  downSince: Date,
+  calls: readonly Pick<HealthCall, 'result' | 'at'>[],
+  policy: Pick<SupplierPolicy, 'probeAfterMinutes'>,
+): { recoveredAt: Date | null; nextProbeAt: Date } {
+  const wait = policy.probeAfterMinutes * 60_000;
+  let nextProbeAt = new Date(downSince.getTime() + wait);
+  for (const call of calls) {
+    if (call.at < nextProbeAt) continue;
+    if (call.result !== 'error') return { recoveredAt: call.at, nextProbeAt };
+    nextProbeAt = new Date(call.at.getTime() + wait);
+  }
+  return { recoveredAt: null, nextProbeAt };
+}
 
 // Routes (RT3–RT6) ------------------------------------------------------------------------------
 
