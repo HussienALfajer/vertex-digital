@@ -99,6 +99,8 @@ export const ERROR_CODES = [
   'DEPOSIT_AMOUNT_BUSY',
   /** New deposits of this method are stopped; `details.reason`: `emergency` or `method_paused` (S05 rule SW4). */
   'DEPOSITS_STOPPED',
+  /** The bot's username or webhook secret is not set on the server (S05 rule TG1). */
+  'TELEGRAM_NOT_CONFIGURED',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

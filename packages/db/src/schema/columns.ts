@@ -1,5 +1,5 @@
 import { CURRENCIES } from '@vertex-digital/contracts';
-import { bigint, pgEnum, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, customType, pgEnum, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { newId } from '../id.js';
 
 /*
@@ -30,3 +30,6 @@ export const currencyEnum = pgEnum('currency', CURRENCIES);
  * in a name that fixes the currency (`price_usd_units`). The scale is `CURRENCY_SCALE`.
  */
 export const amountUnits = (name: `${string}_units`) => bigint(name, { mode: 'number' });
+
+/** SHA-256 digests: PostgreSQL `bytea`, a Node `Buffer`. */
+export const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });

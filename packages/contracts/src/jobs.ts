@@ -17,6 +17,8 @@ export const QUEUES = {
   depositsUsdtScan: 'deposits.usdt-scan',
   /** Verifies one USDT deposit's TXID (S04 rules U9–U11). */
   depositsUsdtVerify: 'deposits.usdt-verify',
+  /** Sends one `telegram_messages` row to the linked chat (S05 F07). */
+  telegramSend: 'telegram.send',
 } as const;
 
 /**
@@ -47,3 +49,7 @@ export const depositsUsdtVerifyPayloadSchema = z.object({
 });
 
 export type DepositsUsdtVerifyPayload = z.infer<typeof depositsUsdtVerifyPayloadSchema>;
+
+export const telegramSendPayloadSchema = z.object({ messageId: z.uuid() });
+
+export type TelegramSendPayload = z.infer<typeof telegramSendPayloadSchema>;

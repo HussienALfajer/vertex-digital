@@ -83,6 +83,30 @@ export const envSchema = z
      */
     USDT_TRC20_ADDRESS: usdtAddress('usdt_trc20'),
     USDT_BEP20_ADDRESS: usdtAddress('usdt_bep20'),
+    /**
+     * The Telegram admin bot (S05 rule TG1, ADR 0019): its username, for the link the panel shows.
+     * Unset, the bot is not configured. The API never holds the bot token.
+     */
+    TELEGRAM_BOT_USERNAME: z
+      .string()
+      .optional()
+      .transform((value) => value || undefined)
+      .pipe(
+        z
+          .string()
+          .regex(/^[A-Za-z]\w{3,31}$/)
+          .optional(),
+      ),
+    /**
+     * The `X-Telegram-Bot-Api-Secret-Token` every webhook call carries, shared with the worker,
+     * which registers it with Telegram. Required in production with the bot; derived locally.
+     */
+    TELEGRAM_WEBHOOK_SECRET: secret().pipe(
+      z
+        .string()
+        .regex(/^[\w-]{32,256}$/)
+        .optional(),
+    ),
     /** Empty disables Sentry. */
     SENTRY_DSN: z
       .string()
@@ -96,6 +120,13 @@ export const envSchema = z
       if (!env[key]) {
         context.addIssue({ code: 'custom', path: [key], message: `${key} is required` });
       }
+    }
+    if (env.TELEGRAM_BOT_USERNAME && !env.TELEGRAM_WEBHOOK_SECRET) {
+      context.addIssue({
+        code: 'custom',
+        path: ['TELEGRAM_WEBHOOK_SECRET'],
+        message: 'TELEGRAM_WEBHOOK_SECRET is required with TELEGRAM_BOT_USERNAME',
+      });
     }
     // Production is served over TLS: an http origin would issue cookies without `Secure` and
     // trust the wrong origin, so a lost or wrong value stops the start instead of weakening it.
@@ -122,6 +153,9 @@ export const envSchema = z
       CUSTOMER_AUTH_SECRET: env.CUSTOMER_AUTH_SECRET ?? derive('customer-auth'),
       ADMIN_AUTH_SECRET: env.ADMIN_AUTH_SECRET ?? derive('admin-auth'),
       ALTCHA_HMAC_KEY: env.ALTCHA_HMAC_KEY ?? derive('altcha'),
+      TELEGRAM_WEBHOOK_SECRET:
+        env.TELEGRAM_WEBHOOK_SECRET ??
+        (env.NODE_ENV === 'production' ? undefined : derive('telegram-webhook')),
     };
   });
 

@@ -14,6 +14,7 @@ import {
   CUSTOMER_AUTH_BASE_PATH,
   CUSTOMER_AUTH_NEST_PATHS,
 } from './modules/auth/index.js';
+import { TELEGRAM_WEBHOOK_PATH, telegramWebhookBodyLimit } from './modules/telegram/index.js';
 
 export const API_PREFIX = 'api';
 
@@ -28,6 +29,8 @@ export function configureApp(app: NestExpressApplication): void {
   // nginx on the same machine sets X-Forwarded-For (ADR 0009); nobody else is trusted with it.
   server.set('trust proxy', 'loopback');
   app.use(sameOriginOnly({ store: env.STORE_URL, admin: env.ADMIN_URL }));
+  // Before Nest's body parser, which Nest registers when the app initializes.
+  server.post(TELEGRAM_WEBHOOK_PATH, telegramWebhookBodyLimit);
   // Better Auth reads its own request bodies, so its handlers go before Nest's body parser, which
   // Nest registers when the app initializes. The admin path is the more specific one: first.
   server.all(

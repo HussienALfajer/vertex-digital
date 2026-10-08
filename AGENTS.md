@@ -49,6 +49,7 @@ Run from the repository root (Node 24, pnpm via Corepack: `corepack enable`).
 | OpenAPI document and the admin client after an API change (after `pnpm build`; commit `apps/api/openapi.json` and `apps/admin/src/lib/api/schema.gen.ts`) | `pnpm --filter @vertex-digital/api openapi:export` · `pnpm --filter @vertex-digital/admin api:generate` |
 | The admin account (prints a generated password once; there is only one, ADR 0016) · reset its password (printed once) · reset its TOTP | `pnpm --filter @vertex-digital/api admin:create --email <email> --name <name>` · `pnpm --filter @vertex-digital/api admin:reset-password --email <email>` · `pnpm --filter @vertex-digital/api admin:reset-two-factor --email <email>` |
 | A fake USDT transfer for local testing (S04; `CHAIN_READER=fake`, after `pnpm build`; default: official USDT to the `.env` address, final at once) | `pnpm --filter @vertex-digital/worker usdt:fake-transfer --method usdt_trc20 --amount 25.0037 [--txid <hex>] [--to <address>] [--contract <address>] [--failed]` |
+| A fake Telegram update to the local webhook (S05; `TELEGRAM_TRANSPORT=log`, after `pnpm build`): link with the panel's code or link, send a command, press a button of the newest message file | `pnpm --filter @vertex-digital/api telegram:fake-update --start <code or link> \| --text <text> \| --tap <button text>` |
 | Build | `pnpm build` |
 | One package only | `pnpm --filter @vertex-digital/<name> <script>` |
 

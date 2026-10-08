@@ -45,6 +45,7 @@ export const AUDIT_ENTITY_TYPES = [
   'deposit_settings',
   'deposit',
   'store_switch',
+  'telegram_link',
 ] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
@@ -244,6 +245,15 @@ export const AUDIT_DETAILS = {
     before: z.boolean(),
     after: z.boolean(),
   }),
+  /** S05 rule TG3: the entity is the code row; never the code itself. */
+  'telegram.link_code_created': z.strictObject({ expiresAt: z.iso.datetime() }),
+  /** By `/start <code>` (channel `telegram`): the entity is the new link. */
+  'telegram.linked': z.strictObject({
+    telegramUserId: z.int(),
+    previousLinkId: z.uuid().nullable(),
+  }),
+  /** From the panel: the entity is the link that ended. */
+  'telegram.unlinked': z.strictObject({ linkId: z.uuid() }),
 } as const satisfies Record<string, z.ZodType>;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;

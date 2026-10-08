@@ -75,6 +75,33 @@ describe('API environment', () => {
     ).toThrow('ADMIN_AUTH_SECRET');
   });
 
+  it('configures the Telegram bot with its username; the webhook secret is derived locally (S05 TG1)', () => {
+    const local = parseEnv({ DATABASE_URL, TELEGRAM_BOT_USERNAME: 'vertex_digital_bot' });
+    expect(local.TELEGRAM_BOT_USERNAME).toBe('vertex_digital_bot');
+    expect(local.TELEGRAM_WEBHOOK_SECRET).toMatch(/^[0-9a-f]{64}$/);
+    expect(parseEnv({ DATABASE_URL, TELEGRAM_BOT_USERNAME: '' }).TELEGRAM_BOT_USERNAME).toBe(
+      undefined,
+    );
+    expect(() => parseEnv({ DATABASE_URL, TELEGRAM_BOT_USERNAME: 'https://t.me/x' })).toThrow(
+      'TELEGRAM_BOT_USERNAME',
+    );
+    expect(() =>
+      parseEnv({ DATABASE_URL, TELEGRAM_WEBHOOK_SECRET: `${'x'.repeat(40)} with spaces` }),
+    ).toThrow('TELEGRAM_WEBHOOK_SECRET');
+    // Production has no derived secret: the bot needs both.
+    expect(parseEnv(production).TELEGRAM_WEBHOOK_SECRET).toBeUndefined();
+    expect(() => parseEnv({ ...production, TELEGRAM_BOT_USERNAME: 'vertex_digital_bot' })).toThrow(
+      'TELEGRAM_WEBHOOK_SECRET',
+    );
+    expect(
+      parseEnv({
+        ...production,
+        TELEGRAM_BOT_USERNAME: 'vertex_digital_bot',
+        TELEGRAM_WEBHOOK_SECRET: secret('telegram'),
+      }).TELEGRAM_WEBHOOK_SECRET,
+    ).toBe(secret('telegram'));
+  });
+
   it('refuses a short secret', () => {
     expect(() => parseEnv({ DATABASE_URL, ADMIN_AUTH_SECRET: 'short' })).toThrow(
       'ADMIN_AUTH_SECRET',

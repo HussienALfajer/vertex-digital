@@ -9,20 +9,43 @@ describe('worker environment', () => {
     const env = parseEnv({
       DATABASE_URL,
       TELEGRAM_BOT_TOKEN: '000000000:replace-me',
-      TELEGRAM_ALERTS_CHAT_ID: '',
+      TELEGRAM_WEBHOOK_SECRET: '',
       SENTRY_DSN: '',
     });
     expect(env.TELEGRAM_BOT_TOKEN).toBeUndefined();
     expect(env.SENTRY_DSN).toBeUndefined();
   });
 
-  it('needs the token and the chat together', () => {
-    expect(() => parseEnv({ DATABASE_URL, TELEGRAM_BOT_TOKEN: '123:abc' })).toThrow(
-      'TELEGRAM_ALERTS_CHAT_ID',
+  it('writes bot messages to files by default; the Bot API needs the webhook with the token', () => {
+    expect(parseEnv({ DATABASE_URL })).toMatchObject({
+      TELEGRAM_TRANSPORT: 'log',
+      TELEGRAM_LOG_DIR: './.data/telegram',
+    });
+    // `log` needs nothing else, even with a token.
+    expect(parseEnv({ DATABASE_URL, TELEGRAM_BOT_TOKEN: '123:abc' }).TELEGRAM_BOT_TOKEN).toBe(
+      '123:abc',
     );
+    // `api` without a token sends nothing: the bot is not configured.
     expect(
-      parseEnv({ DATABASE_URL, TELEGRAM_BOT_TOKEN: '123:abc', TELEGRAM_ALERTS_CHAT_ID: '-100' }),
-    ).toMatchObject({ TELEGRAM_BOT_TOKEN: '123:abc', TELEGRAM_ALERTS_CHAT_ID: '-100' });
+      parseEnv({ DATABASE_URL, TELEGRAM_TRANSPORT: 'api' }).TELEGRAM_BOT_TOKEN,
+    ).toBeUndefined();
+    const api = { DATABASE_URL, TELEGRAM_TRANSPORT: 'api', TELEGRAM_BOT_TOKEN: '123:abc' };
+    expect(() => parseEnv(api)).toThrow('TELEGRAM_WEBHOOK_URL');
+    const webhook = {
+      TELEGRAM_WEBHOOK_SECRET: 's'.repeat(40),
+      TELEGRAM_WEBHOOK_URL: 'https://digital.vertexmedia.pro/api/webhooks/telegram',
+    };
+    expect(parseEnv({ ...api, ...webhook })).toMatchObject(webhook);
+    expect(() =>
+      parseEnv({
+        ...api,
+        ...webhook,
+        TELEGRAM_WEBHOOK_URL: 'http://127.0.0.1/api/webhooks/telegram',
+      }),
+    ).toThrow('TELEGRAM_WEBHOOK_URL');
+    expect(() => parseEnv({ ...api, ...webhook, TELEGRAM_WEBHOOK_SECRET: 'short' })).toThrow(
+      'TELEGRAM_WEBHOOK_SECRET',
+    );
   });
 
   it('checks the USDT addresses at boot (S04 edge case 17), placeholders counting as unset', () => {
@@ -55,6 +78,11 @@ describe('worker environment', () => {
       SMTP_PASSWORD: 'secret',
     };
     expect(() => parseEnv(production)).toThrow('CHAIN_READER');
+    // Production sends through the Bot API unless told otherwise, and never writes files.
+    expect(parseEnv({ ...production, CHAIN_READER: 'live' }).TELEGRAM_TRANSPORT).toBe('api');
+    expect(() =>
+      parseEnv({ ...production, CHAIN_READER: 'live', TELEGRAM_TRANSPORT: 'log' }),
+    ).toThrow('TELEGRAM_TRANSPORT');
     expect(parseEnv({ ...production, CHAIN_READER: 'live' }).CHAIN_READER).toBe('live');
     expect(parseEnv({ DATABASE_URL, CHAIN_READER: 'stub' }).CHAIN_READER).toBe('fake');
     const live = { DATABASE_URL, CHAIN_READER: 'live' };

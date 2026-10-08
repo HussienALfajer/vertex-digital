@@ -921,7 +921,10 @@
                 "deposit.transfer_bound",
                 "deposit.txid_bounced",
                 "deposit.rechecked",
-                "store_switch.changed"
+                "store_switch.changed",
+                "telegram.link_code_created",
+                "telegram.linked",
+                "telegram.unlinked"
               ]
             }
           },
@@ -938,7 +941,8 @@
                 "exchange_rate",
                 "deposit_settings",
                 "deposit",
-                "store_switch"
+                "store_switch",
+                "telegram_link"
               ]
             }
           },
@@ -2322,6 +2326,83 @@
         ]
       }
     },
+    "/api/admin/telegram": {
+      "get": {
+        "operationId": "TelegramAdminController_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The bot and its link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramLinkStatus"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "telegram"
+        ]
+      }
+    },
+    "/api/admin/telegram/link-code": {
+      "post": {
+        "operationId": "TelegramAdminController_createLinkCode",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "A single-use link, valid 10 minutes, shown once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramLinkCode"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "telegram"
+        ]
+      }
+    },
+    "/api/admin/telegram/link": {
+      "delete": {
+        "operationId": "TelegramAdminController_unlink",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The status after unlinking",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramLinkStatus"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "telegram"
+        ]
+      }
+    },
+    "/api/admin/telegram/test": {
+      "post": {
+        "operationId": "TelegramAdminController_sendTest",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "A test message is queued for the linked chat"
+          }
+        },
+        "tags": [
+          "telegram"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "HealthController_check",
@@ -3500,7 +3581,10 @@
           "deposit.transfer_bound",
           "deposit.txid_bounced",
           "deposit.rechecked",
-          "store_switch.changed"
+          "store_switch.changed",
+          "telegram.link_code_created",
+          "telegram.linked",
+          "telegram.unlinked"
         ]
       },
       "AuditEntityType": {
@@ -3512,7 +3596,8 @@
           "exchange_rate",
           "deposit_settings",
           "deposit",
-          "store_switch"
+          "store_switch",
+          "telegram_link"
         ]
       },
       "AuditPage": {
@@ -6712,6 +6797,112 @@
           "bound",
           "unmatched"
         ]
+      },
+      "TelegramLinkStatus": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "link": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "username": {
+                "nullable": true,
+                "type": "string"
+              },
+              "since": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "username",
+              "since"
+            ],
+            "additionalProperties": false
+          },
+          "lastMessage": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "kind": {
+                "$ref": "#/components/schemas/TelegramMessageKind"
+              },
+              "status": {
+                "$ref": "#/components/schemas/TelegramMessageStatus"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "sentAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "error": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "status",
+              "createdAt",
+              "sentAt",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "configured",
+          "link",
+          "lastMessage"
+        ],
+        "additionalProperties": false
+      },
+      "TelegramMessageKind": {
+        "type": "string",
+        "enum": [
+          "switch_changed",
+          "bot_reply",
+          "link_changed",
+          "test"
+        ]
+      },
+      "TelegramMessageStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "sent",
+          "failed",
+          "skipped"
+        ]
+      },
+      "TelegramLinkCode": {
+        "type": "object",
+        "properties": {
+          "deepLink": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "deepLink",
+          "expiresAt"
+        ],
+        "additionalProperties": false
       },
       "HealthResponse": {
         "type": "object",

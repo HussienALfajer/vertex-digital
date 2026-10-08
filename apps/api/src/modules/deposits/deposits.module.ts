@@ -19,6 +19,7 @@ import { UsdtReviewService } from './usdt-review.service.js';
  * `deposit_settings`, and the USDT tables `usdt_deposits`, `usdt_transfers`, `usdt_scan_cursors`.
  * The customer's Sham Cash and USDT deposits and the admin's review. Credits post through the
  * ledger write paths in `packages/db`; the customer's balance comes from the wallet module.
+ * The `telegram` module reads what waits through `DepositReviewService`.
  */
 @Module({
   imports: [
@@ -38,5 +39,6 @@ import { UsdtReviewService } from './usdt-review.service.js';
     UsdtDepositsService,
     UsdtReviewService,
   ],
+  exports: [DepositReviewService],
 })
 export class DepositsModule {}

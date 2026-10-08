@@ -23,6 +23,7 @@ import { Route as AppDepositsIdRouteImport } from './routes/_app/deposits.$id'
 import { Route as AppDepositsTransfersRouteImport } from './routes/_app/deposits.transfers'
 import { Route as AppSettingsDepositsRouteImport } from './routes/_app/settings.deposits'
 import { Route as AppSettingsSwitchesRouteImport } from './routes/_app/settings.switches'
+import { Route as AppSettingsTelegramRouteImport } from './routes/_app/settings.telegram'
 import { Route as AppWalletsIndexRouteImport } from './routes/_app/wallets.index'
 import { Route as AppWalletsCustomerIdRouteImport } from './routes/_app/wallets.$customerId'
 
@@ -95,6 +96,11 @@ const AppSettingsSwitchesRoute = AppSettingsSwitchesRouteImport.update({
   path: '/settings/switches',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsTelegramRoute = AppSettingsTelegramRouteImport.update({
+  id: '/settings/telegram',
+  path: '/settings/telegram',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppWalletsIndexRoute = AppWalletsIndexRouteImport.update({
   id: '/wallets/',
   path: '/wallets/',
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/deposits/transfers': typeof AppDepositsTransfersRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
   '/settings/switches': typeof AppSettingsSwitchesRoute
+  '/settings/telegram': typeof AppSettingsTelegramRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/deposits/': typeof AppDepositsIndexRoute
   '/wallets/': typeof AppWalletsIndexRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/deposits/transfers': typeof AppDepositsTransfersRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
   '/settings/switches': typeof AppSettingsSwitchesRoute
+  '/settings/telegram': typeof AppSettingsTelegramRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/deposits': typeof AppDepositsIndexRoute
   '/wallets': typeof AppWalletsIndexRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/_app/deposits/transfers': typeof AppDepositsTransfersRoute
   '/_app/settings/deposits': typeof AppSettingsDepositsRoute
   '/_app/settings/switches': typeof AppSettingsSwitchesRoute
+  '/_app/settings/telegram': typeof AppSettingsTelegramRoute
   '/_app/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/_app/deposits/': typeof AppDepositsIndexRoute
   '/_app/wallets/': typeof AppWalletsIndexRoute
@@ -174,6 +183,7 @@ export interface FileRouteTypes {
     | '/deposits/transfers'
     | '/settings/deposits'
     | '/settings/switches'
+    | '/settings/telegram'
     | '/wallets/$customerId'
     | '/deposits/'
     | '/wallets/'
@@ -191,6 +201,7 @@ export interface FileRouteTypes {
     | '/deposits/transfers'
     | '/settings/deposits'
     | '/settings/switches'
+    | '/settings/telegram'
     | '/wallets/$customerId'
     | '/deposits'
     | '/wallets'
@@ -209,6 +220,7 @@ export interface FileRouteTypes {
     | '/_app/deposits/transfers'
     | '/_app/settings/deposits'
     | '/_app/settings/switches'
+    | '/_app/settings/telegram'
     | '/_app/wallets/$customerId'
     | '/_app/deposits/'
     | '/_app/wallets/'
@@ -321,6 +333,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsSwitchesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings/telegram': {
+      id: '/_app/settings/telegram'
+      path: '/settings/telegram'
+      fullPath: '/settings/telegram'
+      preLoaderRoute: typeof AppSettingsTelegramRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/wallets/': {
       id: '/_app/wallets/'
       path: '/wallets'
@@ -348,6 +367,7 @@ interface AppRouteChildren {
   AppDepositsTransfersRoute: typeof AppDepositsTransfersRoute
   AppSettingsDepositsRoute: typeof AppSettingsDepositsRoute
   AppSettingsSwitchesRoute: typeof AppSettingsSwitchesRoute
+  AppSettingsTelegramRoute: typeof AppSettingsTelegramRoute
   AppWalletsCustomerIdRoute: typeof AppWalletsCustomerIdRoute
   AppDepositsIndexRoute: typeof AppDepositsIndexRoute
   AppWalletsIndexRoute: typeof AppWalletsIndexRoute
@@ -363,6 +383,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDepositsTransfersRoute: AppDepositsTransfersRoute,
   AppSettingsDepositsRoute: AppSettingsDepositsRoute,
   AppSettingsSwitchesRoute: AppSettingsSwitchesRoute,
+  AppSettingsTelegramRoute: AppSettingsTelegramRoute,
   AppWalletsCustomerIdRoute: AppWalletsCustomerIdRoute,
   AppDepositsIndexRoute: AppDepositsIndexRoute,
   AppWalletsIndexRoute: AppWalletsIndexRoute,

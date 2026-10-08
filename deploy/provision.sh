@@ -135,10 +135,12 @@ ADMIN_AUTH_SECRET=$(openssl rand -hex 32)
 ALTCHA_HMAC_KEY=$(openssl rand -hex 32)
 FILES_ROOT=$SITE_DIR/shared/files
 FILES_ACCEL_PREFIX=/internal-files
-# Empty until the owner sets them (docs/deployment.md): Sentry (Q15), Telegram alerts (Q11).
+# Empty until the owner sets them (docs/deployment.md): Sentry (Q15), the Telegram bot (ADR 0019).
 SENTRY_DSN=
 TELEGRAM_BOT_TOKEN=
-TELEGRAM_ALERTS_CHAT_ID=
+TELEGRAM_BOT_USERNAME=
+TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)
+TELEGRAM_WEBHOOK_URL=https://$STORE_DOMAIN/api/webhooks/telegram
 EOF
   )
   chown "$APP_USER:$APP_USER" "$env_file"

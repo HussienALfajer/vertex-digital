@@ -11,6 +11,7 @@ import {
   STORE_SWITCHES,
   type StoreSwitch,
   type SwitchChange,
+  type TelegramLinkStatus,
 } from '@vertex-digital/contracts';
 import openapi from '../../api/openapi.json' with { type: 'json' };
 
@@ -250,6 +251,8 @@ export class AdminApi {
   ];
   /** The store switch changes, newest first (S05 rule SW1): none, so every switch has its default. */
   switchChanges: SwitchChange[] = [];
+  /** The Telegram bot (S05 F07): configured, no chat linked, nothing sent yet. */
+  telegram: TelegramLinkStatus = { configured: true, link: null, lastMessage: null };
   /** The deposit settings: the defaults until the first save (rule SC1). */
   depositSettings: Record<string, unknown> = {
     ...DEPOSIT_SETTINGS_DEFAULTS,
@@ -407,6 +410,47 @@ export class AdminApi {
       const filter = url.searchParams.get('switch');
       const items = this.switchChanges.filter((item) => !filter || item.switch === filter);
       return json(200, { items, nextCursor: null });
+    }
+    return false;
+  }
+
+  /** The Telegram routes of S05, or false when `path` is not one of them. */
+  private async answerTelegram(route: Route, method: string, url: URL): Promise<boolean> {
+    const json = async (status: number, value: unknown) => {
+      await route.fulfill({ status, json: value });
+      return true;
+    };
+    const apiError = (status: number, code: string) =>
+      json(status, { statusCode: status, code, message: code });
+    const key = `${method} ${url.pathname}`;
+    if (key === 'GET /api/admin/telegram') return json(200, this.telegram);
+    if (key === 'POST /api/admin/telegram/link-code') {
+      if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
+      if (!this.telegram.configured) return apiError(409, 'TELEGRAM_NOT_CONFIGURED');
+      return json(201, {
+        deepLink: 'https://t.me/vertex_digital_bot?start=Kq3v8ZbW1xT0aLmN5pR7sQ',
+        expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+      });
+    }
+    if (key === 'DELETE /api/admin/telegram/link') {
+      if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
+      this.telegram = { ...this.telegram, link: null };
+      return json(200, this.telegram);
+    }
+    if (key === 'POST /api/admin/telegram/test') {
+      if (!this.telegram.link) return apiError(404, 'NOT_FOUND');
+      this.telegram = {
+        ...this.telegram,
+        lastMessage: {
+          kind: 'test',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          sentAt: null,
+          error: null,
+        },
+      };
+      await route.fulfill({ status: 202 });
+      return true;
     }
     return false;
   }
@@ -776,6 +820,10 @@ export class AdminApi {
     }
     if (path.startsWith('/api/admin/switches')) {
       const answered = await this.answerSwitches(route, request.method(), url, body);
+      if (answered) return;
+    }
+    if (path.startsWith('/api/admin/telegram')) {
+      const answered = await this.answerTelegram(route, request.method(), url);
       if (answered) return;
     }
     if (path.startsWith('/api/admin/deposit') || path === '/api/admin/rates') {

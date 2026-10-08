@@ -20,7 +20,9 @@ export default defineConfig({
       DATABASE_URL: testDatabaseUrl(),
       SENTRY_DSN: '',
       TELEGRAM_BOT_TOKEN: '',
-      TELEGRAM_ALERTS_CHAT_ID: '',
+      // Bot messages are files in a directory of their own per run.
+      TELEGRAM_TRANSPORT: 'log',
+      TELEGRAM_LOG_DIR: join(tmpdir(), `vertex-digital-telegram-${randomUUID()}`),
       // Emails are files in a directory of their own per run (rule E5).
       EMAIL_TRANSPORT: 'log',
       // No chain is ever read in tests; the USDT tests give their own readers.

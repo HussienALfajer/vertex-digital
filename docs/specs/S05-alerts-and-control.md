@@ -55,8 +55,8 @@ A delivery record, not a business record: never archived, never deleted in V1.
 - A missing row means email on (owner, 2026-10-08: every event email is optional and on by default).
 
 ### `telegram_links` (new; owner: `telegram`)
-- `id` uuid v7; `admin_id` uuid FK `admin_users`; `chat_id` bigint; `telegram_user_id` bigint; `telegram_username` text nullable (shown in the panel only); `linked_at`; `unlinked_at` nullable.
-- Partial unique index on `(admin_id) where unlinked_at is null`: one live link. Rows are kept after unlinking (history).
+- `id` uuid v7; `admin_id` uuid (no foreign key, as everywhere an admin is referenced, so the single admin row stays replaceable); `chat_id` bigint; `telegram_user_id` bigint; `telegram_username` text nullable (shown in the panel only); `linked_at`; `unlinked_at` nullable.
+- Partial unique index on `((true)) where unlinked_at is null`: one live link for the store's bot (settled in PR 3: one bot, one admin, one chat). Rows are kept after unlinking (history).
 
 ### `telegram_link_codes` (new; owner: `telegram`)
 - `id` uuid v7; `admin_id` uuid FK; `code_sha256` bytea unique; `expires_at` (10 minutes); `used_at` nullable; `created_at`.
@@ -66,7 +66,7 @@ A delivery record, not a business record: never archived, never deleted in V1.
 - `id` uuid v7; `kind` enum `telegram_message_kind`; `params` jsonb (validated by `TELEGRAM_MESSAGE_PARAMS`); `dedupe_key` text unique nullable; `status` (`pending`, `sent`, `failed`, `skipped`); `attempts` int; `last_error` text (class and message, never the token or the body); `telegram_message_id` bigint nullable; `sent_at`; `created_at`.
 - `telegram_message_kind` values: `switch_changed`, `usdt_unmatched`, `review_reminder`, `daily_summary`, `bot_reply`, `link_changed`, `test`.
 - `dedupe_key` examples: `switch:<changeId>`, `unmatched:<transferId>`, `summary:2026-10-08`. A second insert with the same key is ignored.
-- The chat is not stored per message: the worker sends to the live link at send time; with no link the row becomes `skipped`.
+- The chat is not stored per message: the worker sends to the live link at send time; with no link the row becomes `skipped`. Exception (settled in PR 3): `chat_id` bigint nullable names another chat for the two messages that must not go to the live link: the answer to `/start` from a chat not linked yet (welcome or "الرمز غير صالح") and the `link_changed` notice to the previous chat.
 
 ### `telegram_deposit_cards` (new; owner: `telegram`)
 - `deposit_id` uuid FK; `submitted_at` timestamptz (the deposit's submission this card shows; a clearer-receipt round gives a new card); `chat_id` bigint; `message_id` bigint; `reminded_at` timestamptz nullable; `updated_at`. Primary key `(deposit_id, submitted_at)`.
@@ -302,7 +302,7 @@ Tests:
 - E2E with RTL screenshots: store at phone width, dark: the header bell with a badge, `/notifications` (list, empty), the account preferences, the stop banner and the disabled deposit wizard. Admin, light and dark: `/settings/switches` with history, the confirm dialog, the global banner, `/settings/telegram` in its three states.
 
 ## Implementation notes
-- Suggested PR split, each leaving `main` green:
+- PR split as shipped (owner, 2026-10-08): four PRs; the Telegram PR below became PR 3 (the bot foundation: link, commands, `/stop`, messages, alerts, the panel page) and PR 4 (deposit cards, decisions, the reminder, the daily summary; with them the deposit columns of `telegram_prompts`, `telegram_bot_state` and their enum values). Suggested split, each leaving `main` green:
   1. F26 switches: contracts, db, the `settings` module, the deposit creation lock and options states, the registration switch replacing `REGISTRATION_OPEN`, the store banner and wizard states, the admin switches page and banner (Telegram notices are inserted as `telegram_messages` rows only once PR 3 lands; until then the change has no message).
   2. F27 notifications: `notifyCustomer` in `packages/db`, the call sites of NT2, the notification routes and the SSE stream with the LISTEN fan-out, the store bell, page, preferences and live refresh.
   3. F07 Telegram: link tables and routes, the webhook and bot flows, the worker jobs, the alert channel change, the fake-update CLI, the settings pages, nginx.

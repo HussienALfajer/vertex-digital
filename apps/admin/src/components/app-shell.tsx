@@ -26,6 +26,7 @@ import {
   type LucideIcon,
   MenuIcon,
   ScrollTextIcon,
+  SendIcon,
   SettingsIcon,
   ToggleRightIcon,
   UserRoundCogIcon,
@@ -50,6 +51,7 @@ interface NavItem {
     | 'nav.rates'
     | 'nav.depositSettings'
     | 'nav.switches'
+    | 'nav.telegram'
     | 'nav.audit'
     | 'nav.testCustomers'
     | 'nav.account';
@@ -74,6 +76,7 @@ const navItems: NavItem[] = [
   { to: '/rates', label: 'nav.rates', icon: ArrowLeftRightIcon },
   { to: '/settings/deposits', label: 'nav.depositSettings', icon: SettingsIcon },
   { to: '/settings/switches', label: 'nav.switches', icon: ToggleRightIcon },
+  { to: '/settings/telegram', label: 'nav.telegram', icon: SendIcon },
   { to: '/audit', label: 'nav.audit', icon: ScrollTextIcon },
   { to: '/test-customers', label: 'nav.testCustomers', icon: UsersRoundIcon },
   { to: '/account', label: 'nav.account', icon: UserRoundCogIcon },

@@ -212,6 +212,7 @@ describe('module boundaries', () => {
     rates: 'rates',
     settings: 'settings',
     system: null,
+    telegram: 'telegram',
     wallet: 'wallet',
   };
 
