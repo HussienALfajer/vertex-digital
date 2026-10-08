@@ -11,6 +11,7 @@ import {
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
 import { displayStepSchema } from './rates.js';
+import { storeSwitchSchema } from './settings.js';
 import {
   adjustmentCategorySchema,
   adjustmentDirectionSchema,
@@ -42,6 +43,7 @@ export const AUDIT_ENTITY_TYPES = [
   'exchange_rate',
   'deposit_settings',
   'deposit',
+  'store_switch',
 ] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
@@ -230,6 +232,12 @@ export const AUDIT_DETAILS = {
   }),
   /** The admin re-sent the verification (rule U17). */
   'deposit.rechecked': deposit,
+  /** S05 rule SW2: the entity is the change row; the channel says panel or Telegram. */
+  'store_switch.changed': z.strictObject({
+    switch: storeSwitchSchema,
+    before: z.boolean(),
+    after: z.boolean(),
+  }),
 } as const satisfies Record<string, z.ZodType>;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;
