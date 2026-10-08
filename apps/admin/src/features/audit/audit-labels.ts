@@ -6,6 +6,7 @@ import {
   depositRejectReasonSchema,
   formatUsd,
   manualDepositMethodSchema,
+  marginScopeSchema,
 } from '@vertex-digital/contracts';
 import type { TFunction } from 'i18next';
 import ar from '../../i18n/locales/ar.json';
@@ -31,17 +32,31 @@ const asWritten = (value: unknown) =>
       ? value
       : JSON.stringify(value);
 
-/** Fields that always hold USD units (S02, S03). */
-const USD_FIELDS = ['amountUnits', 'balanceAfterUnits', 'declaredUsdUnits', 'creditedUsdUnits'];
+/** Fields that always hold USD units (S02, S03, S06). */
+const USD_FIELDS = [
+  'amountUnits',
+  'balanceAfterUnits',
+  'declaredUsdUnits',
+  'creditedUsdUnits',
+  'officialPriceUsdUnits',
+  'fixedUsdUnits',
+  'minMarginUsdUnits',
+];
 
 /**
- * A field's value for reading: USD amounts as dollars, wallet adjustment and deposit codes by
+ * A field's value for reading: USD amounts as dollars, a margin percent with its sign, wallet adjustment and deposit codes by
  * their labels (S02, S03), anything else as written.
  */
 export function fieldValue(t: TFunction, key: string, value: unknown): string {
   if (USD_FIELDS.includes(key) && Number.isSafeInteger(value)) {
     return formatUsd(value as number);
   }
+  // A margin rule's percent in basis points (S06 rule PR1): 1000 is 10%.
+  if (key === 'percentBp' && Number.isSafeInteger(value)) {
+    return `${(value as number) / 100}%`;
+  }
+  const scope = marginScopeSchema.safeParse(value);
+  if (key === 'scope' && scope.success) return t(`pricing.scopes.${scope.data}`);
   const direction = adjustmentDirectionSchema.safeParse(value);
   if (key === 'direction' && direction.success) {
     return t(`wallets.directions.${direction.data}`);
@@ -59,6 +74,32 @@ export function fieldValue(t: TFunction, key: string, value: unknown): string {
     return t(`deposits.referenceChecks.${referenceCheck.data}`);
   }
   return asWritten(value);
+}
+
+type Values = Record<string, unknown>;
+
+const isValues = (value: unknown): value is Values =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * Before and after values to show side by side, or null. A side may be null: a record created
+ * (S06 `margin_rule.set` of a new rule) has nothing before it.
+ */
+export function changesOf(details: Values): { before: Values; after: Values } | null {
+  const { before, after } = details;
+  if (!(isValues(before) || isValues(after))) return null;
+  if (!(isValues(before) || before === null) || !(isValues(after) || after === null)) return null;
+  return { before: isValues(before) ? before : {}, after: isValues(after) ? after : {} };
+}
+
+/**
+ * The details as one list of fields: a nested set of values (S06 `margin_rule.archived`'s
+ * `values`) is shown field by field, so each value is formatted by its own key.
+ */
+export function flatDetails(details: Values): [string, unknown][] {
+  return Object.entries(details).flatMap(([key, value]) =>
+    isValues(value) ? Object.entries(value) : [[key, value] as [string, unknown]],
+  );
 }
 
 /** The first block of a UUID, enough to tell entries apart in the table. */

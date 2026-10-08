@@ -21,10 +21,12 @@ import {
   ArrowLeftRightIcon,
   ChevronDownIcon,
   CoinsIcon,
+  Gamepad2Icon,
   HouseIcon,
   LogOutIcon,
   type LucideIcon,
   MenuIcon,
+  PercentIcon,
   ScrollTextIcon,
   SendIcon,
   SettingsIcon,
@@ -48,6 +50,8 @@ interface NavItem {
     | 'nav.deposits'
     | 'nav.usdtTransfers'
     | 'nav.wallets'
+    | 'nav.catalog'
+    | 'nav.pricing'
     | 'nav.rates'
     | 'nav.depositSettings'
     | 'nav.switches'
@@ -73,6 +77,8 @@ const navItems: NavItem[] = [
   },
   { to: '/deposits/transfers', label: 'nav.usdtTransfers', icon: CoinsIcon },
   { to: '/wallets', label: 'nav.wallets', icon: WalletIcon },
+  { to: '/catalog', label: 'nav.catalog', icon: Gamepad2Icon },
+  { to: '/pricing', label: 'nav.pricing', icon: PercentIcon },
   { to: '/rates', label: 'nav.rates', icon: ArrowLeftRightIcon },
   { to: '/settings/deposits', label: 'nav.depositSettings', icon: SettingsIcon },
   { to: '/settings/switches', label: 'nav.switches', icon: ToggleRightIcon },

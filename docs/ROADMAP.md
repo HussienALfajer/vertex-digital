@@ -27,7 +27,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] Production deploy of Phase 1 (registration closed: test customers only)
 
 ## Phase 2 — Selling
-- [~] S06 Catalog and pricing: F08 Catalog · F10 Pricing engine; spec `docs/specs/S06-catalog-and-pricing.md`
+- [x] S06 Catalog and pricing: F08 Catalog · F10 Pricing engine; spec `docs/specs/S06-catalog-and-pricing.md` (two PRs: contracts, db and the `catalog` and `pricing` API modules, then the admin `/catalog`, game and `/pricing` screens with E2E)
 - [ ] S07 Suppliers: F09 alone (product mapping and price sync; adapters `shop2topup`, `wdgzone`, `manual`)
 - [ ] S08 Orders and fulfilment: F11 alone (money core)
 - [ ] S09 Storefront and purchase: F12 Store home and game pages · F13 Purchase flow and live order tracking · F15 Smart search
