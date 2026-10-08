@@ -1,6 +1,6 @@
 # 0006 — Payments and deposits
 
-Status: Accepted · Date: 2026-10-06 · Amended by [0016](0016-single-admin-account.md) (one admin account, no staff or roles)
+Status: Accepted · Date: 2026-10-06 · Amended by [0016](0016-single-admin-account.md) (one admin account, no staff or roles), [0017](0017-sham-cash-deposits-and-exchange-rate.md) (Sham Cash deposits and the exchange rate)
 
 ## Context
 Customers fund their wallet before buying. At launch two methods exist: Sham Cash (a Syrian e-wallet with no merchant API, so transfers are checked by a person) and USDT (a public blockchain, so transfers can be checked by machine). Manual deposits attract edited screenshots and reused receipts.
