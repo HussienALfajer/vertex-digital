@@ -7,10 +7,8 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Q1 | Off-server backup destination (shared need with Vertex Hub) | Launch | Required: the system holds customer money |
 | Q2 | Madani Arabic: does the license cover web embedding on a public store (traffic, domains)? Provide the WOFF2 files (400, 500, 700) privately | Design system (fallback works until then); required before launch | Confirm or extend the license before launch |
 | Q3 | License for the public repository (none means all rights reserved) | Anytime | — |
-| Q7 | Pricing policy: default margin (percent and minimum fixed) per category; USD price endings | F10 | Spec interview |
 | Q10 | Terms of service, privacy and refund policies; business identity shown on the store | Launch (F21) | Drafted with the owner before the pilot |
 | Q12 | Supplier accounts: are SHOP2TOPUP and WDGZone accounts and API documentation ready? Which games and packs launch first? | F09 | Start with PUBG Mobile UC and Free Fire diamonds on both suppliers |
-| Q13 | Source of the "official price" used for savings (entered by the admin per pack, or not shown when unknown) | F08 | Entered by the admin; hidden when unknown |
 | Q14 | Support channels besides tickets (WhatsApp or Telegram links on the store) | F23 | Tickets plus one Telegram support link |
 | Q15 | Sentry: account owner and organization for the three apps | Phase 0 deploy skeleton | Free plan under the owner's email |
 | Q16 | Who draws the final VERTEX DIGITAL wordmark (agent in Phase 0 from the Vertex Media style, or a designer) | Phase 0 design system | Agent draft in Phase 0 (done: `brand/logo/svg/vertex-logo.svg`, the DIGITAL mark over the Vertex Media VERTEX wordmark), designer files later replace it |
@@ -44,3 +42,5 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | USDT limits (Q5, USDT part) | The Sham Cash tiers and one 24-hour window shared across all methods; USDT minimum $5; editable in the panel (S04, ADR 0018) | 2026-10-08 |
 | USDT addresses, confirmations, minimum and validity (Q8) | Owner-held wallets, addresses in the server environment only (not editable in the panel); TRON solidified (19 blocks), BSC finalized with 15 confirmations; minimum $5; deposits valid 24 hours, amount reserved 7 more days; automatic detection of exact-amount transfers besides the TXID (S04, ADR 0018) | 2026-10-08 |
 | Telegram bot and chat (Q11) | The owner creates the bot with BotFather; its token stays in the server environment; cards, alerts, reminders and the daily summary (22:30 `Asia/Damascus`) all go to the admin's private chat, linked from the panel (S05, ADR 0019) | 2026-10-08 |
+| Pricing policy (Q7) | Global margin 10% with a $0.10 minimum, editable per category, game and product; USD prices rounded up to whole cents; prices follow the cheapest healthy route (S06, ADR 0020) | 2026-10-08 |
+| Official price for savings (Q13) | Entered by the admin per product; savings hidden when unknown or not lower (S06, ADR 0020) | 2026-10-08 |
