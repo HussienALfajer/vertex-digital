@@ -1,38 +1,58 @@
-# TASKS — S04 USDT deposits
+# TASKS — S05 Alerts and control
 
-Spec: `docs/specs/S04-usdt-deposits.md` (F06; ADRs 0003, 0006, 0008, 0011, 0014, 0016, 0017, 0018). Three PRs; each leaves `main` green. Each PR runs in its own session.
+Spec: `docs/specs/S05-alerts-and-control.md` (F07, F26, F27; ADRs 0002, 0003, 0004, 0006, 0008, 0011, 0014, 0016, 0017, 0018, 0019). Six PRs; each leaves `main` green and runs in its own session.
 
-Why three and not the spec's two: PR 1 of the spec (contracts, db, readers, jobs, api) is too large for one reviewed session. Splitting the worker out keeps `main` safe: until PR 2 ships, no scanner writes `usdt_scan_cursors`, so every network reads `delayed` (rule U1) and USDT deposit creation is refused; nothing can be left `searching` without a worker.
+Why six and not the spec's three: the spec's PR 2 (notifications) and PR 3 (Telegram) are each too large for one reviewed session. Notifications split into the server side and the store screens; Telegram splits into the bot foundation, the deposit decisions and jobs, and the admin screens. Until PR 4 ships, switch changes write no Telegram message (spec, implementation notes); until PR 3 ships, notifications are recorded and emailed but not shown in the store.
 
-## PR 1 — Contracts, db, ledger, api (`claude/zen-pasteur-xvhupy`, cloud session branch) · Opus 5.5 `high`
-- [x] Contracts: `usdt.ts` (methods, networks with official contracts and their source, confirmations, explorer URLs, tail and limit constants, `txidSchema`, per-network `addressSchema` with TRON base58check and EIP-55); `money.ts` `usdtPayAmount`, `formatUsdtAmount`, `rawToUsdUnits`, `usdtRawForUnits`; `deposits.ts` (methods, flags `wrong_network` and `sent_before_deposit`, reject reasons, check statuses and errors, deciders, USDT options/create/submit-txid/approve/transfer schemas, `usdt` blocks on deposit and admin deposit, settings defaults, limit computation with the USDT minimum); `wallet.ts` `deposit_rounding`; `jobs.ts` queues `deposits.usdt-scan` and `deposits.usdt-verify` with payloads; error codes `TXID_INVALID`, `TXID_ATTEMPTS_EXCEEDED`, `DEPOSIT_AMOUNT_BUSY` with Arabic text (store and admin catalogs); audit actions `deposit.txid_submitted`, `deposit.transfer_bound`, `deposit.txid_bounced`, `deposit.rechecked` with admin labels; 100% unit-tested
-- [x] Db (`/db-migration`): `deposits.decided_by` (backfill `admin`) and the changed checks; `deposits_guard` USDT bounce; `usdt_deposits` (immutable-field trigger, partial unique open amount via `deposit_open`, indexes, grants); `usdt_transfers` (append-only, unique `(method, txid)`); `usdt_scan_cursors`; `deposit_settings` USDT columns; enums; `postUsdtDepositCredit` (M1, `usdt_receipts:<method>`, `deposit_rounding:USD`) in `packages/db/src/ledger/deposits.ts`; `paymentReferenceOwner` `0X` lookup; tests (checks, guard, triggers as app role and owner, unique open amount, settings defaults, M1 postings)
-- [x] Api: env `USDT_TRC20_ADDRESS`, `USDT_BEP20_ADDRESS`, `CHAIN_READER` (`fake` refused in production), reader variables, boot refuses a bad address; `.env.example`
-- [x] Api `deposits`: `GET /api/deposits/usdt/options`, `POST /api/deposits/usdt` (tail under advisory lock, U2–U5, idempotency, ALTCHA), `POST /api/deposits/:id/txid` (U8, per-hour counter, job in the transaction), list/read/cancel with the `usdt` block; admin queue method filter, counts, deposit with transfer and candidates, `approve-usdt` (U15, re-authentication always), reject with new reasons (review only), `recheck` (U17), `GET /api/admin/usdt-transfers`, settings USDT fields; S03 approve and request-receipt refuse USDT; wallet timeline `method`; the U7 credit steps (lock, claim, `postUsdtDepositCredit`, deposit update, audit, email) as one shared write path in `packages/db` so the api approval and the PR 2 worker credit through the same code; S02 `manual_deposit` normalizes TXIDs; `test/deposits-usdt.test.ts` (every route and error code, two customers, re-authentication, parallel creations → different tails and the 100th busy, two deposits one TXID, S02 vs deposit claim with `0x`/link/case variants, approval vs re-check, no-store)
-- [x] Bridge: build, OpenAPI export, admin client; admin typecheck; store/admin fixtures and E2E mocks adapted to changed shapes (the settings form keeps the USDT values until PR 3)
-- [x] Wiring checklist, docs (`docs/architecture.md`, `docs/deployment.md` variables and address-change note, folder `CLAUDE.md`, spec details settled; queue policies `stately` in `QUEUE_POLICIES`)
-- [x] Checks (lint, typecheck, test, build, drift, e2e: all passed and recorded), reviewer (no blocking findings; three PR 2 notes below)
-- [x] Owner acceptance (2026-10-08), PR with auto-merge
+## PR 1 — F26 store switches, end to end · Opus 5.5 `high`
+- [ ] Contracts: `switches.ts` (`STORE_SWITCHES`, `STORE_SWITCH_DEFAULTS`, `storeStatusSchema` derivation, `adminSwitchesSchema`, `changeSwitchSchema`, `switchChangeSchema` and its page, method state of SW6); error `DEPOSITS_STOPPED` (store and admin catalogs); audit action `store_switch.changed`, entity `store_switch` with admin labels; options `state` on both deposit methods; unit tests (100%)
+- [ ] Db (`/db-migration`): `store_switch_changes` (enums `store_switch`, `switch_channel`; index; append-only trigger and grants, `APPEND_ONLY_TABLES`; `TABLE_OWNERS`); a shared switch read helper; tests
+- [ ] Api `settings` module: `GET /api/store/status` (public, `max-age=10`), `GET/POST /api/admin/switches` (re-authentication), `GET /api/admin/switches/history`; SW2 lock, no-op on same value, audit; `test/settings.test.ts` (every route, re-authentication, parallel changes serialized)
+- [ ] Api `deposits`: SW5 shared lock and switch read in Sham Cash and USDT creation, `DEPOSITS_STOPPED`; options `state` (SW6); existing deposits unaffected (SW4); race test (creation vs stop)
+- [ ] Api `auth`: registration reads the switch (SW8); `REGISTRATION_OPEN` removed from api env, `.env.example`, vitest config and tests (fixtures open the switch)
+- [ ] Bridge: build, OpenAPI export, admin client
+- [ ] Store: stop banner (SW9) on every page, deposit method states and the stopped wizard, `DEPOSITS_STOPPED` keeps the form; i18n
+- [ ] Admin: `/settings/switches` (toggles, confirm dialog, re-authentication, history with filter), navigation entry, global banner (SW10); i18n
+- [ ] E2E: store banner and disabled wizard (phone, dark and light); admin switches page, confirm dialog, banner (light and dark)
+- [ ] Wiring checklist, docs (`docs/architecture.md` `settings` module, folder `CLAUDE.md`, `AGENTS.md` if a command changes)
+- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
 
-## PR 2 — Chain readers and worker jobs (`ccr-25210d15-4vpn8q`, cloud session branch) · Opus 5.5 `high`
-- [x] `ChainReader` interface and `ChainReaderError`; `fake` reader (a git-ignored JSON file, not a table: settled in the spec; memory store in tests; refused in production); TronGrid reader and BSC JSON-RPC reader with sanitized fixtures (synthetic: the providers were unreachable from the build environment; limits named in the spec and `docs/deployment.md`)
-- [x] `jobs/deposits/usdt-verify.job.ts` (U6, U9–U11, retry schedule from `search_started_at`, bounce, review, credit U7; singleton per deposit; safe twice)
-- [x] `jobs/deposits/usdt-scan.job.ts` (U12–U14: cursor with overlap, dust, bind and credit, replace a wrong customer TXID; 20 s while open, 5 min cron; stale alert on Telegram once per window; restarts lost verifications)
-- [x] Credit transaction shared with the api approval (U7, M1: `creditUsdtDeposit`) and its email (`core/email/outbox.ts`)
-- [x] CLI `usdt:fake-transfer`; commands table in `AGENTS.md`
-- [x] Tests: exact match, each bounce, each review reason, reader error never "not found", 30-minute window, TRON solidified, BSC finalized + 15, summing, 18-decimal remainder, cursor overlap and duplicates, dust, stale alert once, scanner vs verifier in parallel → one journal/audit/email
-- [x] From the PR 1 review: two customers with the same TXID: the verifier bounces the second with `txid_used` (final, never a retry loop)
-- [x] From the PR 1 review: a TXID whose transfer is under $1 bounces back to `pending` with `amount_too_small` (owner, 2026-10-08); the code to confirm with the owner at acceptance
-- [x] The worker checks `USDT_TRC20_ADDRESS` / `USDT_BEP20_ADDRESS` at boot too (edge case 17), with `CHAIN_READER` (`fake` refused in production; `stub` read as `fake`) and the reader variables; `.env.example` `CHAIN_READER=fake`
-- [x] API: a new USDT deposit sends its network's scan job (detection within about 20 seconds)
-- [x] Bridge: migrations 0016–0017 (check errors), build, OpenAPI export, admin client
-- [x] Docs (`docs/architecture.md`, `docs/deployment.md`, `AGENTS.md`, folder `CLAUDE.md`, spec settled notes)
-- [x] Reviewer: three blocking findings fixed (scanner skips claimed TXIDs; bounce with another pending deposit rejects instead, owner 2026-10-08; BSC lists only 15-confirmation blocks, a not-final listing waits quietly), with tests
-- [x] Checks on the final tree (all recorded), owner acceptance (2026-10-08), PR with auto-merge
+## PR 2 — F27 notifications, server side · Opus 5.5 `high`
+- [ ] Contracts: `NOTIFICATION_EVENTS`, `NOTIFICATION_PARAMS`, `customerNotificationSchema`, `notificationPageSchema`, `notificationPreferencesSchema`, `NOTIFICATION_EMAIL_TEMPLATE`; audit `customer.notification_preference_changed`; unit tests
+- [ ] Db (`/db-migration`): `customer_notifications` (indexes, `read_at`-only column grant and trigger), `notification_preferences`; `notifyCustomer` in `packages/db/src/notifications` (row, preference-aware email, `pg_notify` on commit); tests (rollback leaves nothing)
+- [ ] NT2 call sites moved to `notifyCustomer`: S03 approval and rejection and receipt request, S04 credits and rejections (api and worker), S02 adjustments and reversals
+- [ ] Api: `GET /api/notifications`, `POST /api/notifications/read`, `GET /api/notifications/stream` (LISTEN fan-out, heartbeat, 3 streams, 30 per minute, session re-check, `resync`), preference routes; `no-store`; tests (other customer, stream routing, 4th stream, revoked session)
+- [ ] nginx: stream location (buffering off, long timeout)
+- [ ] Bridge; docs (`docs/architecture.md`, folder `CLAUDE.md`)
+- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
 
-## PR 3 — Store and admin screens, E2E (`ccr-2fbe5259-ginzxd`, cloud session branch) · Opus 5.5 `high`
-- [x] Store: method picker with three methods and reasons; USDT form (network note, presets, limits, `DEPOSIT_AMOUNT_BUSY` ±$0.01); `/wallet/deposits/[id]` USDT states (exact amount with highlighted tail, QR from text, address in groups, warnings, TXID field, searching, confirming progress, review reason, final states; 10 s / 30 s refresh); method labels in lists and timeline; i18n
-- [x] Admin: queue method filter and chips; USDT deposit page (facts, TXID, transfer, flags, candidates, approve with live amount and re-authentication, reject, re-check, decider); `/deposits/transfers` with badge and prefilled S02 form; settings USDT section; audit filters; i18n
-- [x] E2E flows and RTL screenshots (store dark phone width; admin light and dark)
-- [x] Wiring checklist, `wiring.md` patterns, `docs/ROADMAP.md` S04 done
-- [x] Checks (lint, typecheck, test, build, e2e: all passed and recorded), reviewer (one blocking finding fixed: the full sender address in the transfers list), owner acceptance (2026-10-08), PR with auto-merge
+## PR 3 — F27 store screens · Opus 5.5 `medium`
+- [ ] Store: header bell with live count (`EventSource`, `visibilitychange` refetch), `/notifications` (list, load more, mark read, empty, loading, error), `/account` email preferences, live refresh of `/wallet` and `/wallet/deposits/<id>` (NT7); i18n
+- [ ] E2E: bell with badge, `/notifications` list and empty, preferences (phone width, dark and light)
+- [ ] Wiring checklist, `wiring.md` patterns (SSE client)
+- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
+
+## PR 4 — F07 Telegram bot foundation · Opus 5.5 `high`
+- [ ] Contracts: `telegram.ts` (message kinds and params, link status and code schemas, `TELEGRAM_CALLBACKS` parsing within 64 bytes), error `TELEGRAM_NOT_CONFIGURED`, audit actions `telegram.*`, queue `telegram.send`; unit tests
+- [ ] Db (`/db-migration`): `telegram_links`, `telegram_link_codes`, `telegram_messages`, `telegram_updates`, `telegram_prompts`, `telegram_bot_state`; indexes (one live link, one open prompt); tests
+- [ ] Env: api `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`; worker `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_URL`, `TELEGRAM_TRANSPORT`; `TELEGRAM_ALERTS_CHAT_ID` removed; `.env.example`
+- [ ] Api `telegram` module: link status, link code, unlink, test message; `POST /api/webhooks/telegram` (constant-time secret, strict update schema, 64 KB, `update_id` dedupe, TG4 sender check, `/start <code>`, `/status`, `/stop` with confirm (on only), `/help`, prompts TG7); switch changes insert `switch_changed` (SW2, AL2); tests
+- [ ] Worker: `telegram.send` (log transport to `.data/telegram/`, 429 `retry_after`, 403 no retry, skipped without a link, safe twice), `setWebhook` at start, `TelegramAlerts` to the linked chat (cached 60 s)
+- [ ] CLI `telegram:fake-update`; commands table in `AGENTS.md`
+- [ ] nginx: webhook location limited to Telegram ranges, 64 KB; `docs/deployment.md` (bot creation, webhook)
+- [ ] Bridge; docs (`docs/architecture.md`, folder `CLAUDE.md`)
+- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
+
+## PR 5 — F07 deposit cards, decisions, reminder, summary · Opus 5.5 `high`
+- [ ] Contracts: queues `telegram.deposit-card`, `telegram.review-reminder`, `telegram.daily-summary`; reminder due computation; settings `telegramApprovalMaxUsdUnits`; unit tests
+- [ ] Db (`/db-migration`): `telegram_deposit_cards`; `deposit_settings.telegram_approval_max_usd_units` with its check; tests
+- [ ] Api: deposits queue `telegram.deposit-card` on submission, review, decisions, expiry, cancellation, receipt request (TC1, TC6); approve from Telegram through the S03 service (TC4, channel `telegram`, `telegram:<promptId>`, re-checks); reject (TC5) for Sham Cash and USDT; deposit settings field; tests (Telegram confirm vs panel approval → one journal, audit, notification, email; same prompt twice → one credit; flagged, over limit, limit 0, changed submission, USDT refused)
+- [ ] Worker: `telegram.deposit-card` (send, edit, new card per submission, JPEG receipt), `usdt_unmatched` from the scanner (TC7), `telegram.review-reminder` (RM1–RM4, cleanup of updates and prompts), `telegram.daily-summary` (AL3); tests with fixed instants
+- [ ] Docs (`docs/architecture.md`)
+- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
+
+## PR 6 — F07 admin screens · Opus 5.5 `medium`
+- [ ] Admin: `/settings/telegram` (not configured, not linked with deep link, QR and countdown and polling, linked with test and unlink), navigation; `/settings/deposits` Telegram limit field; "من تيليجرام" on deposit decisions; i18n
+- [ ] E2E: `/settings/telegram` in its three states, deposit settings (light and dark)
+- [ ] Wiring checklist, `wiring.md` patterns, `docs/ROADMAP.md` S05 done
+- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
