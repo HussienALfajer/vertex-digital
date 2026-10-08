@@ -232,3 +232,21 @@ export function parseWholeSyp(text: string): number | null {
   if (!SYP_INPUT_PATTERN.test(value)) return null;
   return toUnits(BigInt(value) * SYP_SCALE);
 }
+
+/**
+ * An amount as a field shows it for editing or copying (the amount to send in Sham Cash, an
+ * approval's prefill, a limit): whole pounds (`2000`), or dollars (`25`, `25.50`). The exact
+ * inverse of `parseWholeSyp` and `parseUsd`; an amount that is not whole pounds or whole cents is
+ * refused, never rounded.
+ */
+export function formatAmountInput(currency: Currency, units: number): string {
+  const value = BigInt(unitsOrThrow(units));
+  if (currency === 'SYP') {
+    if (value % SYP_SCALE !== 0n) throw new RangeError(`Not whole pounds: ${units}`);
+    return (value / SYP_SCALE).toString();
+  }
+  if (!isWholeCents(units)) throw new RangeError(`Not whole cents: ${units}`);
+  const cents = value / BigInt(USD_CENT);
+  const whole = (cents / 100n).toString();
+  return cents % 100n === 0n ? whole : `${whole}.${(cents % 100n).toString().padStart(2, '0')}`;
+}

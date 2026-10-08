@@ -38,15 +38,6 @@ export function presetUnits(
   return sypDisplayPrice(usdUnits, rate.sypPerUsd, rate.displayStepSypUnits);
 }
 
-/** An amount in units as the field shows it: `2000`, `25`, `25.50`. */
-export function amountFieldText(currency: Currency, units: number): string {
-  if (currency === 'SYP') return String(units / CURRENCY_SCALE.SYP);
-  const cents = Math.round(units / (CURRENCY_SCALE.USD / 100));
-  return cents % 100 === 0
-    ? String(cents / 100)
-    : `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
-}
-
 /** What a SYP amount gets in USD (rule FX6), for the live preview. */
 export function previewUsd(sypUnits: number, rate: string): number {
   return sypDepositUsd(sypUnits, rate);

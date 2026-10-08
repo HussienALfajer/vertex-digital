@@ -6,6 +6,7 @@ import {
   currencySchema,
   exchangeRateSchema,
   floorToWholeCents,
+  formatAmountInput,
   formatRate,
   formatSignedUsd,
   formatSyp,
@@ -306,5 +307,21 @@ describe('SYP and rate display (S03)', () => {
     for (const text of ['', '1.5', '-1', '1,000', '١٢', '1e3', '1234567890123']) {
       expect(parseWholeSyp(text)).toBeNull();
     }
+  });
+});
+
+describe('formatAmountInput (S03)', () => {
+  it('writes whole pounds and dollars back as typed, exactly', () => {
+    expect(formatAmountInput('SYP', 200_000)).toBe('2000');
+    expect(formatAmountInput('USD', 25_000_000)).toBe('25');
+    expect(formatAmountInput('USD', 25_500_000)).toBe('25.50');
+    expect(formatAmountInput('USD', 10_000)).toBe('0.01');
+    expect(parseUsd(formatAmountInput('USD', 1_250_050_000))).toBe(1_250_050_000);
+  });
+
+  it('refuses a fraction of a pound or a cent instead of rounding', () => {
+    expect(() => formatAmountInput('SYP', 200_050)).toThrow(RangeError);
+    expect(() => formatAmountInput('USD', 25_000_001)).toThrow(RangeError);
+    expect(() => formatAmountInput('USD', -1)).toThrow(RangeError);
   });
 });

@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import ar from '@/messages/ar.json';
-import {
-  amountFieldText,
-  amountText,
-  limitText,
-  parseDepositAmount,
-  presetUnits,
-  previewUsd,
-} from './amounts';
+import { amountText, limitText, parseDepositAmount, presetUnits, previewUsd } from './amounts';
 
 const USD = 1_000_000;
 const rate = { sypPerUsd: '118', displayStepSypUnits: 500 };
@@ -27,12 +20,6 @@ describe('the deposit amounts', () => {
     expect(presetUnits('SYP', 10 * USD, rate)).toBe(118_000);
     expect(presetUnits('SYP', 5 * USD, { ...rate, sypPerUsd: '118.3' })).toBe(59_500);
     expect(presetUnits('SYP', 5 * USD, null)).toBeNull();
-  });
-
-  it('writes an amount back into the field', () => {
-    expect(amountFieldText('SYP', 118_000)).toBe('1180');
-    expect(amountFieldText('USD', 25 * USD)).toBe('25');
-    expect(amountFieldText('USD', 25_500_000)).toBe('25.50');
   });
 
   it('previews the USD of pounds, floored to cents (rule FX6)', () => {

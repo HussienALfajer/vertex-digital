@@ -3,6 +3,7 @@
 import {
   type Currency,
   depositLimitBreach,
+  formatAmountInput,
   formatRate,
   QUOTE_LOCK_MINUTES,
   type ShamCashOptions,
@@ -22,7 +23,6 @@ import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import {
-  amountFieldText,
   amountText,
   limitText,
   PRESETS_USD,
@@ -229,7 +229,7 @@ function ShamCashForm({
                 size="xl"
                 className="px-4 tabular-nums"
                 onClick={() => {
-                  setText(amountFieldText(currency, preset));
+                  setText(formatAmountInput(currency, preset));
                   setError(null);
                 }}
               >

@@ -4,6 +4,7 @@ import {
   type DepositSettings,
   type DepositSettingsInput,
   depositSettingsInputSchema,
+  formatAmountInput,
   parseUsd,
 } from '@vertex-digital/contracts';
 import {
@@ -26,7 +27,6 @@ import { type FormEvent, type ReactNode, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { amountText } from './approve-form';
 import {
   depositCountsQuery,
   depositSettingsQuery,
@@ -60,7 +60,7 @@ type FieldName = keyof Texts | 'sypQrFileId' | 'usdQrFileId';
 
 function textsOf(settings: DepositSettings): Texts {
   const usd = Object.fromEntries(
-    USD_FIELDS.map((field) => [field, amountText('USD', settings[field])]),
+    USD_FIELDS.map((field) => [field, formatAmountInput('USD', settings[field])]),
   ) as Record<UsdField, string>;
   return {
     ...usd,

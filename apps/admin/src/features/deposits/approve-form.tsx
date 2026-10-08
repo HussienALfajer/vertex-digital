@@ -1,22 +1,22 @@
 import { Link } from '@tanstack/react-router';
 import {
   type AdminDeposit,
+  APPROVAL_FLAG_CODES,
   type ApproveDeposit,
   approvalFlags,
   approvalNeedsReauthentication,
   approveDepositSchema,
   CURRENCIES,
-  CURRENCY_SCALE,
   type Currency,
   DEPOSIT_REFERENCE_CHECKS,
   type DepositFlagCode,
   type DepositReferenceCheck,
   depositCreditUsdUnits,
+  formatAmountInput,
   formatRate,
   formatUsd,
   parseUsd,
   parseWholeSyp,
-  USD_CENT,
 } from '@vertex-digital/contracts';
 import {
   Button,
@@ -44,13 +44,6 @@ import { useApproveDeposit } from './deposits.queries';
 
 type ApproveField = 'transaction' | 'amount' | 'reference' | 'flags';
 
-/** An amount as the admin types it: whole pounds, or dollars with cents. */
-export function amountText(currency: Currency, units: number): string {
-  if (currency === 'SYP') return String(units / CURRENCY_SCALE.SYP);
-  const cents = Math.floor(units / USD_CENT);
-  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
-}
-
 /** The typed amount in units of its currency, or null when it is not a whole amount. */
 export function parseAmount(currency: Currency, text: string): number | null {
   return currency === 'SYP' ? parseWholeSyp(text) : parseUsd(text);
@@ -68,7 +61,9 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
   const keyFor = useIdempotencyKey();
   const [transaction, setTransaction] = useState('');
   const [currency, setCurrency] = useState<Currency>(deposit.currency);
-  const [amount, setAmount] = useState(amountText(deposit.currency, deposit.declaredAmountUnits));
+  const [amount, setAmount] = useState(
+    formatAmountInput(deposit.currency, deposit.declaredAmountUnits),
+  );
   const [referenceCheck, setReferenceCheck] = useState<DepositReferenceCheck | null>(null);
   const [ticked, setTicked] = useState<DepositFlagCode[]>([]);
   const [note, setNote] = useState('');
@@ -95,10 +90,23 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
   const reauthentication =
     credit !== null && approvalNeedsReauthentication(credit, allFlags.length);
 
+  /**
+   * Rule RV5: an approval-time flag is acknowledged for the values it was raised on. A change to
+   * what was received or to the reference check clears those ticks, so a flag that comes back is
+   * read again.
+   */
+  const clearApprovalTicks = () =>
+    setTicked((previous) =>
+      previous.filter((code) => !(APPROVAL_FLAG_CODES as readonly string[]).includes(code)),
+    );
+
   function changeCurrency(next: Currency) {
+    clearApprovalTicks();
     setCurrency(next);
     // The declared amount is the useful start in its own currency only.
-    setAmount(next === deposit.currency ? amountText(next, deposit.declaredAmountUnits) : '');
+    setAmount(
+      next === deposit.currency ? formatAmountInput(next, deposit.declaredAmountUnits) : '',
+    );
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -196,7 +204,10 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
             inputMode={currency === 'SYP' ? 'numeric' : 'decimal'}
             autoComplete="off"
             value={amount}
-            onChange={(event) => setAmount(event.target.value)}
+            onChange={(event) => {
+              clearApprovalTicks();
+              setAmount(event.target.value);
+            }}
           />
           {currency === 'SYP' && rate && (
             <FieldDescription>
@@ -210,7 +221,10 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
           <ToggleGroup<DepositReferenceCheck>
             aria-label={t('deposits.approve.reference')}
             value={referenceCheck ? [referenceCheck] : []}
-            onValueChange={(value) => setReferenceCheck(value[0] ?? null)}
+            onValueChange={(value) => {
+              clearApprovalTicks();
+              setReferenceCheck(value[0] ?? null);
+            }}
           >
             {DEPOSIT_REFERENCE_CHECKS.map((item) => (
               <ToggleGroupItem key={item} value={item}>

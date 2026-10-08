@@ -2,6 +2,7 @@
 
 import {
   type Deposit,
+  formatAmountInput,
   formatRate,
   formatUsd,
   type QuoteOffer,
@@ -32,7 +33,7 @@ import { type ReactNode, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
-import { amountFieldText, amountText, usdText } from './amounts';
+import { amountText, usdText } from './amounts';
 import { CopyButton } from './copy-button';
 import { ReceiptPicker } from './receipt-picker';
 import { cancelDeposit, requoteDeposit, submitReceipt } from './requests';
@@ -150,7 +151,7 @@ export function PendingDeposit({
             <CopyLine label={t('deposits.pending.accountNumber')} value={payTo.accountNumber} ltr />
             <CopyLine
               label={t('deposits.pending.amount')}
-              value={amountFieldText(deposit.currency, deposit.declaredAmountUnits)}
+              value={formatAmountInput(deposit.currency, deposit.declaredAmountUnits)}
               shown={amountText(deposit.currency, deposit.declaredAmountUnits)}
               large
             />

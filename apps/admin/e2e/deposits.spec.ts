@@ -270,6 +270,12 @@ test.describe('deposits', () => {
     await submit.click();
     await expect(page.getByText(ar.deposits.approve.errors.flags)).toBeVisible();
     for (const box of await page.getByRole('checkbox').all()) await box.click();
+    // Rule RV5: a corrected amount clears the mismatch's tick; when it comes back, it is unticked.
+    await field(page, ar.deposits.approve.amountSYP).fill('3000');
+    await field(page, ar.deposits.approve.amountSYP).fill('2900');
+    const mismatch = page.getByRole('checkbox').nth(2);
+    await expect(mismatch).not.toBeChecked();
+    await mismatch.click();
     await submit.click();
     await reauthenticate(page);
     await expect(page.getByRole('heading', { name: ar.deposits.detail.decision })).toBeVisible();
