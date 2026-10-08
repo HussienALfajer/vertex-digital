@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  CATALOG_IMAGE_MAX_DIMENSION,
+  CATALOG_IMAGE_MAX_INPUT_PIXELS,
   DHASH_HEIGHT,
   DHASH_WIDTH,
   dHash,
@@ -9,7 +11,7 @@ import {
   UPLOAD_MAX_INPUT_PIXELS,
 } from '@vertex-digital/contracts';
 import { type Database, newId, storedFiles, type Transaction } from '@vertex-digital/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import sharp, { type OutputInfo } from 'sharp';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -36,21 +38,39 @@ export interface ServedFile {
   read: () => Promise<Buffer>;
 }
 
-/** What each kind becomes: receipts WebP up to 2000 px, QR images PNG up to 1000 px. */
+/**
+ * What each kind becomes: receipts WebP up to 2000 px, QR images PNG up to 1000 px, catalog images
+ * WebP up to 1600 px from at most 25 megapixels (S06 rule CT10); and the code that refuses it.
+ */
 const OUTPUT = {
   deposit_receipt: {
     format: 'webp',
     contentType: 'image/webp',
     maxDimension: RECEIPT_MAX_DIMENSION,
+    maxInputPixels: UPLOAD_MAX_INPUT_PIXELS,
+    invalidCode: 'RECEIPT_INVALID',
   },
-  sham_cash_qr: { format: 'png', contentType: 'image/png', maxDimension: QR_MAX_DIMENSION },
+  sham_cash_qr: {
+    format: 'png',
+    contentType: 'image/png',
+    maxDimension: QR_MAX_DIMENSION,
+    maxInputPixels: UPLOAD_MAX_INPUT_PIXELS,
+    invalidCode: 'RECEIPT_INVALID',
+  },
+  catalog_image: {
+    format: 'webp',
+    contentType: 'image/webp',
+    maxDimension: CATALOG_IMAGE_MAX_DIMENSION,
+    maxInputPixels: CATALOG_IMAGE_MAX_INPUT_PIXELS,
+    invalidCode: 'IMAGE_INVALID',
+  },
 } as const satisfies Record<StoredFileKind, unknown>;
 
 /** Formats accepted by their content, whatever the file name or declared type says (rule SC8). */
 const ACCEPTED_FORMATS = new Set(['jpeg', 'png', 'webp']);
 
-const invalid = () =>
-  new CodedException(400, 'RECEIPT_INVALID', 'The upload is not a JPEG, PNG or WebP image');
+const invalid = (kind: StoredFileKind) =>
+  new CodedException(400, OUTPUT[kind].invalidCode, 'The upload is not a JPEG, PNG or WebP image');
 
 /**
  * Uploaded images (S03 rule SC8): decoded with a pixel limit, rotated upright, stripped of their
@@ -65,17 +85,20 @@ export class FilesService {
     private readonly storage: FileStorage,
   ) {}
 
-  /** Re-encodes and writes an upload; `RECEIPT_INVALID` when it is not an accepted image. */
+  /**
+   * Re-encodes and writes an upload; `RECEIPT_INVALID` (`IMAGE_INVALID` for catalog images) when
+   * it is not an accepted image.
+   */
   async prepare(kind: StoredFileKind, upload: Buffer | undefined): Promise<PreparedImage> {
-    if (!upload || upload.length === 0) throw invalid();
+    if (!upload || upload.length === 0) throw invalid(kind);
     const output = OUTPUT[kind];
     const decode = () =>
-      sharp(upload, { limitInputPixels: UPLOAD_MAX_INPUT_PIXELS, failOn: 'error' }).rotate();
+      sharp(upload, { limitInputPixels: output.maxInputPixels, failOn: 'error' }).rotate();
     let encoded: { data: Buffer; info: OutputInfo };
     let pixels: { data: Buffer; info: OutputInfo };
     try {
       const { format } = await sharp(upload).metadata();
-      if (!format || !ACCEPTED_FORMATS.has(format)) throw invalid();
+      if (!format || !ACCEPTED_FORMATS.has(format)) throw invalid(kind);
       const resized = decode().resize({
         width: output.maxDimension,
         height: output.maxDimension,
@@ -94,7 +117,7 @@ export class FilesService {
     } catch (error) {
       if (error instanceof CodedException) throw error;
       // Not an image, truncated, or above the pixel limit (a decompression bomb).
-      throw invalid();
+      throw invalid(kind);
     }
     const id = newId();
     const storageKey = `${kind}/${id.slice(-2)}/${id}.${output.format}`;
@@ -142,6 +165,19 @@ export class FilesService {
       accelPath: this.storage.accelPath(row.storageKey),
       read: () => this.storage.read(row.storageKey),
     };
+  }
+
+  /** The size of each of `fileIds` that is a stored file of `kind`. */
+  async dimensions(
+    fileIds: readonly string[],
+    kind: StoredFileKind,
+  ): Promise<Map<string, { width: number; height: number }>> {
+    if (fileIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ id: storedFiles.id, width: storedFiles.width, height: storedFiles.height })
+      .from(storedFiles)
+      .where(and(inArray(storedFiles.id, [...fileIds]), eq(storedFiles.kind, kind)));
+    return new Map(rows.map(({ id, ...size }) => [id, size]));
   }
 
   /** Which of `fileIds` are stored files of `kind`. */

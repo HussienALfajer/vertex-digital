@@ -1,6 +1,6 @@
 import { StreamableFile } from '@nestjs/common';
 import type { Response } from 'express';
-import type { ServedFile } from '../files/index.js';
+import type { ServedFile } from './files.service.js';
 
 /**
  * Sends a stored image: through nginx (`X-Accel-Redirect`) in production, else the bytes. Never

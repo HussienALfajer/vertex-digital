@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import {
+  catalogStatusSchema,
+  inputFieldTypeSchema,
+  productKindSchema,
+  selectOptionSchema,
+} from './catalog.js';
+import {
   depositDeciderSchema,
   depositFlagCodeSchema,
   depositMethodSchema,
@@ -11,6 +17,7 @@ import {
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
 import { notificationEventSchema } from './notifications.js';
+import { marginRuleValuesSchema, marginScopeSchema } from './pricing.js';
 import { displayStepSchema } from './rates.js';
 import { storeSwitchSchema } from './settings.js';
 import {
@@ -46,6 +53,11 @@ export const AUDIT_ENTITY_TYPES = [
   'deposit',
   'store_switch',
   'telegram_link',
+  'catalog_category',
+  'catalog_game',
+  'catalog_input_field',
+  'catalog_product',
+  'margin_rule',
 ] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
@@ -105,6 +117,47 @@ const depositQuote = z.strictObject({
 });
 const flagCodes = z.array(depositFlagCodeSchema);
 const deposit = z.strictObject({ depositId: z.uuid() });
+
+/** Catalog values in audit details (S06): image changes as file ids. */
+const categoryValues = { slug: z.string(), nameAr: z.string() };
+const gameValues = {
+  categoryId: z.uuid(),
+  slug: z.string(),
+  nameAr: z.string(),
+  nameEn: z.string(),
+  status: catalogStatusSchema,
+  coverFileId: z.uuid().nullable(),
+  idGuideFileId: z.uuid().nullable(),
+  accentColor: z.string().nullable(),
+  regionNotesAr: z.string().nullable(),
+};
+/** A field's `key` is recorded as `identifier`: the audit test refuses any key named like a secret. */
+const inputFieldValues = {
+  identifier: z.string(),
+  labelAr: z.string(),
+  helpAr: z.string().nullable(),
+  type: inputFieldTypeSchema,
+  required: z.boolean(),
+  minLength: z.int().nullable(),
+  maxLength: z.int().nullable(),
+  options: z.array(selectOptionSchema).nullable(),
+};
+const productValues = {
+  kind: productKindSchema,
+  nameAr: z.string(),
+  gameAmount: z.int().nullable(),
+  officialPriceUsdUnits: z.int().nullable(),
+  maxQuantity: z.int(),
+  regionAr: z.string().nullable(),
+  redemptionAr: z.string().nullable(),
+  status: catalogStatusSchema,
+};
+const reordered = <Shape extends z.ZodRawShape>(parent: Shape) =>
+  z.strictObject({ ...parent, ids: z.array(z.uuid()) });
+const named = <Shape extends z.ZodRawShape>(parent: Shape) =>
+  z.strictObject({ ...parent, nameAr: z.string() });
+const marginTarget = { scope: marginScopeSchema, targetId: z.uuid().nullable() };
+const marginValues = marginRuleValuesSchema.strict();
 
 /**
  * Every audit action (`<entity>.<verb>`) with the shape of its `details`: before and after of the
@@ -255,6 +308,35 @@ export const AUDIT_DETAILS = {
   }),
   /** From the panel: the entity is the link that ended. */
   'telegram.unlinked': z.strictObject({ linkId: z.uuid() }),
+  /** S06 rule CT1–CT5: each catalog change in the transaction of its change. */
+  'catalog_category.created': z.strictObject(categoryValues),
+  'catalog_category.updated': changed(categoryValues),
+  'catalog_category.archived': named({}),
+  'catalog_category.restored': named({}),
+  'catalog_category.reordered': reordered({}),
+  'catalog_game.created': z.strictObject(gameValues),
+  /** Status changes included (rule CT4). */
+  'catalog_game.updated': changed(gameValues),
+  'catalog_game.archived': named({}),
+  'catalog_game.restored': named({}),
+  'catalog_game.reordered': reordered({ categoryId: z.uuid() }),
+  'catalog_input_field.created': z.strictObject({ gameId: z.uuid(), ...inputFieldValues }),
+  'catalog_input_field.updated': changed(inputFieldValues),
+  'catalog_input_field.archived': z.strictObject({ gameId: z.uuid(), identifier: z.string() }),
+  'catalog_input_field.restored': z.strictObject({ gameId: z.uuid(), identifier: z.string() }),
+  'catalog_input_field.reordered': reordered({ gameId: z.uuid() }),
+  'catalog_product.created': z.strictObject({ gameId: z.uuid(), ...productValues }),
+  'catalog_product.updated': changed(productValues),
+  'catalog_product.archived': named({ gameId: z.uuid() }),
+  'catalog_product.restored': named({ gameId: z.uuid() }),
+  'catalog_product.reordered': reordered({ gameId: z.uuid() }),
+  /** S06 rule PR9: `before` is null for a new rule. */
+  'margin_rule.set': z.strictObject({
+    ...marginTarget,
+    before: marginValues.nullable(),
+    after: marginValues,
+  }),
+  'margin_rule.archived': z.strictObject({ ...marginTarget, values: marginValues }),
 } as const satisfies Record<string, z.ZodType>;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;

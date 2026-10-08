@@ -948,6 +948,406 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/catalog/images/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CatalogController_image"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogAdminController_uploadImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CatalogAdminController_categories"];
+        put?: never;
+        post: operations["CatalogAdminController_createCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/categories/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CatalogAdminController_reorderCategories"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["CatalogAdminController_updateCategory"];
+        trace?: never;
+    };
+    "/api/admin/catalog/categories/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogAdminController_archiveCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/categories/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogAdminController_restoreCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/categories/{id}/games/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CatalogAdminController_reorderGames"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/games": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CatalogAdminController_games"];
+        put?: never;
+        post: operations["CatalogAdminController_createGame"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/games/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CatalogAdminController_game"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["CatalogAdminController_updateGame"];
+        trace?: never;
+    };
+    "/api/admin/catalog/games/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogAdminController_archiveGame"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/games/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogAdminController_restoreGame"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/games/{id}/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogItemsAdminController_createField"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/games/{id}/fields/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CatalogItemsAdminController_reorderFields"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/fields/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["CatalogItemsAdminController_updateField"];
+        trace?: never;
+    };
+    "/api/admin/catalog/fields/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogItemsAdminController_archiveField"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/fields/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogItemsAdminController_restoreField"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/games/{id}/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogItemsAdminController_createProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/games/{id}/products/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CatalogItemsAdminController_reorderProducts"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/products/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["CatalogItemsAdminController_updateProduct"];
+        trace?: never;
+    };
+    "/api/admin/catalog/products/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogItemsAdminController_archiveProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/products/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogItemsAdminController_restoreProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/pricing/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PricingAdminController_rules"];
+        put: operations["PricingAdminController_setRule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/pricing/rules/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PricingAdminController_archiveRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/pricing/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PricingAdminController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/telegram": {
         parameters: {
             query?: never;
@@ -1311,9 +1711,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -2038,6 +2438,353 @@ export interface components {
         };
         /** @enum {string} */
         UsdtTransferState: "credited" | "bound" | "unmatched";
+        CatalogImage: {
+            /** Format: uuid */
+            id: string;
+            url: string;
+            width: number;
+            height: number;
+        };
+        CategoryListQuery: {
+            /** @enum {string} */
+            archived?: "true" | "false";
+        };
+        Category: {
+            /** Format: uuid */
+            id: string;
+            sortOrder: number;
+            /** Format: date-time */
+            archivedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            slug: string;
+            nameAr: string;
+            gameCount: number;
+        };
+        CreateCategory: {
+            slug: string;
+            nameAr: string;
+        };
+        Reorder: {
+            ids: string[];
+        };
+        UpdateCategory: {
+            nameAr: string;
+        };
+        Game: {
+            /** Format: uuid */
+            id: string;
+            sortOrder: number;
+            /** Format: date-time */
+            archivedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: uuid */
+            categoryId: string;
+            slug: string;
+            nameAr: string;
+            nameEn: string;
+            status: components["schemas"]["CatalogStatus"];
+            cover: components["schemas"]["CatalogImage"] | null;
+            idGuide: components["schemas"]["CatalogImage"] | null;
+            accentColor: string | null;
+            regionNotesAr: string | null;
+            productCount: number;
+        };
+        /** @enum {string} */
+        CatalogStatus: "active" | "paused";
+        GameListQuery: {
+            /** @default 1 */
+            page: number;
+            /** @default 50 */
+            pageSize: number;
+            /** Format: uuid */
+            categoryId?: string;
+            status?: components["schemas"]["CatalogStatus"];
+            /** @enum {string} */
+            archived?: "true" | "false";
+            q?: string;
+        };
+        GamePage: {
+            items: components["schemas"]["Game"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateGame: {
+            slug: string;
+            /** Format: uuid */
+            categoryId: string;
+            nameAr: string;
+            nameEn: string & (string);
+            /** Format: uuid */
+            coverFileId?: string | null;
+            /** Format: uuid */
+            idGuideFileId?: string | null;
+            accentColor?: string | null;
+            regionNotesAr?: string | null;
+        };
+        GameDetail: {
+            /** Format: uuid */
+            id: string;
+            sortOrder: number;
+            /** Format: date-time */
+            archivedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: uuid */
+            categoryId: string;
+            slug: string;
+            nameAr: string;
+            nameEn: string;
+            status: components["schemas"]["CatalogStatus"];
+            cover: components["schemas"]["CatalogImage"] | null;
+            idGuide: components["schemas"]["CatalogImage"] | null;
+            accentColor: string | null;
+            regionNotesAr: string | null;
+            productCount: number;
+            categoryArchived: boolean;
+            fields: components["schemas"]["InputField"][];
+            products: components["schemas"]["Product"][];
+        };
+        InputField: {
+            /** Format: uuid */
+            id: string;
+            sortOrder: number;
+            /** Format: date-time */
+            archivedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: uuid */
+            gameId: string;
+            key: string;
+            labelAr: string;
+            helpAr: string | null;
+            type: components["schemas"]["InputFieldType"];
+            required: boolean;
+            minLength: number | null;
+            maxLength: number | null;
+            options: components["schemas"]["SelectOption"][] | null;
+        };
+        /** @enum {string} */
+        InputFieldType: "digits" | "text" | "select" | "phone";
+        SelectOption: {
+            value: string;
+            labelAr: string;
+        };
+        Product: {
+            /** Format: uuid */
+            id: string;
+            sortOrder: number;
+            /** Format: date-time */
+            archivedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: uuid */
+            gameId: string;
+            kind: components["schemas"]["ProductKind"];
+            nameAr: string;
+            gameAmount: number | null;
+            officialPriceUsdUnits: number | null;
+            maxQuantity: number;
+            regionAr: string | null;
+            redemptionAr: string | null;
+            status: components["schemas"]["CatalogStatus"];
+            availability: components["schemas"]["ProductAvailability"];
+        };
+        /** @enum {string} */
+        ProductKind: "direct" | "code";
+        /** @enum {string} */
+        ProductAvailability: "hidden" | "paused" | "paused_by_margin_guard" | "out_of_stock" | "available";
+        UpdateGame: {
+            /** Format: uuid */
+            categoryId?: string;
+            nameAr?: string;
+            nameEn?: string & (string);
+            /** Format: uuid */
+            coverFileId?: string | null;
+            /** Format: uuid */
+            idGuideFileId?: string | null;
+            accentColor?: string | null;
+            regionNotesAr?: string | null;
+            status?: components["schemas"]["CatalogStatus"];
+        };
+        CreateInputField: {
+            key: string;
+            labelAr: string;
+            helpAr?: string | null;
+            required: boolean;
+            /** @enum {string} */
+            type: "digits";
+            /** @default null */
+            minLength: number | null;
+            /** @default null */
+            maxLength: number | null;
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            options: null;
+        } | {
+            key: string;
+            labelAr: string;
+            helpAr?: string | null;
+            required: boolean;
+            /** @enum {string} */
+            type: "text";
+            /** @default null */
+            minLength: number | null;
+            /** @default null */
+            maxLength: number | null;
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            options: null;
+        } | {
+            key: string;
+            labelAr: string;
+            helpAr?: string | null;
+            required: boolean;
+            /** @enum {string} */
+            type: "select";
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            minLength: null;
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            maxLength: null;
+            options: components["schemas"]["SelectOption"][];
+        } | {
+            key: string;
+            labelAr: string;
+            helpAr?: string | null;
+            required: boolean;
+            /** @enum {string} */
+            type: "phone";
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            minLength: null;
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            maxLength: null;
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            options: null;
+        };
+        UpdateInputField: {
+            labelAr?: string;
+            helpAr?: string | null;
+            required?: boolean;
+            minLength?: number | null;
+            maxLength?: number | null;
+            options?: components["schemas"]["SelectOption"][] | null;
+        };
+        CreateProduct: {
+            /** @enum {string} */
+            kind: "direct";
+            nameAr: string;
+            gameAmount?: number | null;
+            officialPriceUsdUnits?: number | null;
+            /** @default 1 */
+            maxQuantity: number;
+        } | {
+            /** @enum {string} */
+            kind: "code";
+            nameAr: string;
+            gameAmount?: number | null;
+            officialPriceUsdUnits?: number | null;
+            /** @default 10 */
+            maxQuantity: number;
+            regionAr?: string | null;
+            redemptionAr?: string | null;
+        };
+        UpdateProduct: {
+            nameAr?: string;
+            gameAmount?: number | null;
+            officialPriceUsdUnits?: number | null;
+            maxQuantity?: number;
+            regionAr?: string | null;
+            redemptionAr?: string | null;
+            status?: components["schemas"]["CatalogStatus"];
+        };
+        MarginRule: {
+            percentBp: number;
+            fixedUsdUnits: number;
+            minMarginUsdUnits: number;
+            /** Format: uuid */
+            id: string;
+            scope: components["schemas"]["MarginScope"];
+            /** Format: uuid */
+            targetId: string | null;
+            targetName: string | null;
+            targetArchived: boolean;
+            productCount: number;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        MarginScope: "global" | "category" | "game" | "product";
+        SetMarginRule: {
+            percentBp: number;
+            fixedUsdUnits: number;
+            minMarginUsdUnits: number;
+            scope: components["schemas"]["MarginScope"];
+            /** Format: uuid */
+            targetId?: string | null;
+        };
+        PricingPreviewRequest: {
+            target: {
+                scope: components["schemas"]["MarginScope"];
+                /** Format: uuid */
+                targetId?: string | null;
+            };
+            costUsdUnits: number;
+            values?: components["schemas"]["MarginRuleValues"];
+        };
+        MarginRuleValues: {
+            percentBp: number;
+            fixedUsdUnits: number;
+            minMarginUsdUnits: number;
+        };
+        PricingPreview: {
+            rule: components["schemas"]["MarginRuleValues"];
+            ruleScope: components["schemas"]["MarginScope"] | null;
+            /** Format: uuid */
+            ruleId: string | null;
+            costUsdUnits: number;
+            priceUsdUnits: number;
+            marginUsdUnits: number;
+            marginBp: number;
+            priceSypUnits: number | null;
+            rate: components["schemas"]["ExchangeRate"] | null;
+            officialPriceUsdUnits: number | null;
+            savings: components["schemas"]["Savings"] | null;
+        };
+        Savings: {
+            amountUsdUnits: number;
+            percent: number | null;
+        };
         TelegramLinkStatus: {
             configured: boolean;
             link: {
@@ -2739,8 +3486,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked";
-                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule";
                 entityId?: string;
                 from?: string;
                 to?: string;
@@ -3593,6 +4340,694 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUsdtTransferPage"];
+                };
+            };
+        };
+    };
+    CatalogController_image: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A catalog image (WebP) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CatalogAdminController_uploadImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The stored image */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogImage"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_categories: {
+        parameters: {
+            query?: {
+                archived?: "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description In their order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"][];
+                };
+            };
+        };
+    };
+    CatalogAdminController_createCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCategory"];
+            };
+        };
+        responses: {
+            /** @description Last in the order */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_reorderCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reorder"];
+            };
+        };
+        responses: {
+            /** @description In their new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"][];
+                };
+            };
+        };
+    };
+    CatalogAdminController_updateCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCategory"];
+            };
+        };
+        responses: {
+            /** @description The category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_archiveCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_restoreCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_reorderGames: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reorder"];
+            };
+        };
+        responses: {
+            /** @description In their new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Game"][];
+                };
+            };
+        };
+    };
+    CatalogAdminController_games: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                categoryId?: string;
+                status?: "active" | "paused";
+                archived?: "true" | "false";
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of games */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GamePage"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_createGame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGame"];
+            };
+        };
+        responses: {
+            /** @description Paused, last in its category */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameDetail"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_game: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description With every field and product */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameDetail"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_updateGame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGame"];
+            };
+        };
+        responses: {
+            /** @description The game */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameDetail"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_archiveGame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The game */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameDetail"];
+                };
+            };
+        };
+    };
+    CatalogAdminController_restoreGame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The game */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameDetail"];
+                };
+            };
+        };
+    };
+    CatalogItemsAdminController_createField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInputField"];
+            };
+        };
+        responses: {
+            /** @description Last in the order */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputField"];
+                };
+            };
+        };
+    };
+    CatalogItemsAdminController_reorderFields: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reorder"];
+            };
+        };
+        responses: {
+            /** @description In their new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputField"][];
+                };
+            };
+        };
+    };
+    CatalogItemsAdminController_updateField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInputField"];
+            };
+        };
+        responses: {
+            /** @description The field */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputField"];
+                };
+            };
+        };
+    };
+    CatalogItemsAdminController_archiveField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The field */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputField"];
+                };
+            };
+        };
+    };
+    CatalogItemsAdminController_restoreField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The field */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputField"];
+                };
+            };
+        };
+    };
+    CatalogItemsAdminController_createProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProduct"];
+            };
+        };
+        responses: {
+            /** @description Last in the order */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+        };
+    };
+    CatalogItemsAdminController_reorderProducts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reorder"];
+            };
+        };
+        responses: {
+            /** @description In their new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"][];
+                };
+            };
+        };
+    };
+    CatalogItemsAdminController_updateProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProduct"];
+            };
+        };
+        responses: {
+            /** @description The product */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+        };
+    };
+    CatalogItemsAdminController_archiveProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The product */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+        };
+    };
+    CatalogItemsAdminController_restoreProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The product */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+        };
+    };
+    PricingAdminController_rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Live rules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarginRule"][];
+                };
+            };
+        };
+    };
+    PricingAdminController_setRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMarginRule"];
+            };
+        };
+        responses: {
+            /** @description The live rule of the target */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarginRule"];
+                };
+            };
+        };
+    };
+    PricingAdminController_archiveRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archived; the target falls back to its parent rule */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PricingAdminController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PricingPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description The price for this cost */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingPreview"];
                 };
             };
         };

@@ -8,7 +8,8 @@ import { id } from './columns.js';
  * Append-only (migration 0012).
  */
 
-export const STORED_FILE_KINDS = ['deposit_receipt', 'sham_cash_qr'] as const;
+/** `catalog_image` (S06 rule CT10): game covers and ID guides, WebP within 1600 px. */
+export const STORED_FILE_KINDS = ['deposit_receipt', 'sham_cash_qr', 'catalog_image'] as const;
 
 export const storedFileKindEnum = pgEnum('stored_file_kind', STORED_FILE_KINDS);
 

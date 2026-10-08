@@ -29,6 +29,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { DATABASE } from '../../core/database/database.module.js';
+import { violatedConstraint } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { AuthService } from '../auth/index.js';
@@ -53,15 +54,6 @@ interface Written {
   adjustment: Adjustment;
   /** False on a replay of an earlier request with the same key: nothing was written. */
   created: boolean;
-}
-
-/** A PostgreSQL unique violation's constraint, raw or wrapped by Drizzle; null otherwise. */
-function violatedConstraint(error: unknown): string | null {
-  for (const candidate of [error, (error as { cause?: unknown })?.cause]) {
-    const { code, constraint } = (candidate ?? {}) as { code?: unknown; constraint?: unknown };
-    if (code === '23505') return typeof constraint === 'string' ? constraint : '';
-  }
-  return null;
 }
 
 const refusals = {

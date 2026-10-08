@@ -169,6 +169,20 @@
       "when": 1791478366510,
       "tag": "0023_flat_skreet",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791484302720,
+      "tag": "0024_sudden_jane_foster",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791484309870,
+      "tag": "0025_s06_catalog_seeds",
+      "breakpoints": true
     }
   ]
 }

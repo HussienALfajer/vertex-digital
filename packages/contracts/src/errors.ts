@@ -101,6 +101,26 @@ export const ERROR_CODES = [
   'DEPOSITS_STOPPED',
   /** The bot's username or webhook secret is not set on the server (S05 rule TG1). */
   'TELEGRAM_NOT_CONFIGURED',
+  /** The slug is used by another row, archived ones included: URLs are never reused (S06). */
+  'SLUG_TAKEN',
+  /** An unarchived sibling already has this name (S06 rule CT1). */
+  'NAME_TAKEN',
+  /** The game already has a field with this key, archived ones included (S06 rule CT7). */
+  'FIELD_KEY_TAKEN',
+  /** The game cannot be active without these; `details.missing`: `cover`, `input_fields` (rule CT3). */
+  'CATALOG_INCOMPLETE',
+  /** The category still has unarchived games (S06 rule CT2). */
+  'CATALOG_NOT_EMPTY',
+  /** The parent (category or game) is archived (S06 rule CT1). */
+  'PARENT_ARCHIVED',
+  /** The accent is below 3:1 against the dark surface; `details.ratio` (S06 rule CT6). */
+  'ACCENT_CONTRAST_TOO_LOW',
+  /** The upload is not a decodable PNG, JPEG or WebP image within the limits (S06 rule CT10). */
+  'IMAGE_INVALID',
+  /** A game holds at most 10 input fields and 100 products (S06). */
+  'CATALOG_LIMIT_REACHED',
+  /** The global margin rule cannot be archived (S06 rule PR2). */
+  'GLOBAL_RULE_REQUIRED',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });
