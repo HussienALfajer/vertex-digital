@@ -1,6 +1,6 @@
 # 0002 — Stack per app
 
-Status: Accepted · Date: 2026-10-06
+Status: Accepted · Date: 2026-10-06 · Amended by [0019](0019-telegram-bot-switches-notifications.md) (Telegram updates by webhook to the API; customer notifications over SSE)
 
 ## Context
 The owner approved the stack. It reuses what works in the owner's other project (NestJS, Drizzle, React + Vite, Better Auth, pg-boss) and adds Next.js where search visibility and first-load speed on Syrian connections matter: the store.
