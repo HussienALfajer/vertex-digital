@@ -206,8 +206,10 @@ describe('append-only trigger', () => {
     );
     expect(rows.map((row) => row.name)).toEqual([
       'audit_entries',
+      'exchange_rates',
       'ledger_journals',
       'ledger_postings',
+      'payment_references',
       'wallet_adjustments',
     ]);
   });
@@ -239,8 +241,11 @@ describe('append-only trigger', () => {
   // deadlock with a read of another test file that joins them in the other order.
   it.each([
     ['ledger_postings', /is append-only: TRUNCATE/],
-    ['wallet_adjustments', /is append-only: TRUNCATE/],
-    // Referenced by postings and adjustments: refused before its trigger even runs.
+    ['exchange_rates', /is append-only: TRUNCATE/],
+    ['payment_references', /is append-only: TRUNCATE/],
+    // Referenced by postings, adjustments and payment references: refused before their trigger
+    // even runs.
+    ['wallet_adjustments', /cannot truncate a table referenced in a foreign key constraint/],
     ['ledger_journals', /cannot truncate a table referenced in a foreign key constraint/],
   ])('refuses TRUNCATE %s to the app role and to the owner', async (table, refusal) => {
     await rolledBack(async (client) => {

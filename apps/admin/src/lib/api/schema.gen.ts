@@ -308,6 +308,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["RatesAdminController_overview"];
+        put?: never;
+        post: operations["RatesAdminController_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/wallet": {
         parameters: {
             query?: never;
@@ -599,9 +615,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -629,6 +645,31 @@ export interface components {
         };
         /** @enum {string} */
         AuditChannel: "admin" | "store" | "telegram" | "worker" | "cli";
+        RatesOverview: {
+            current: components["schemas"]["ExchangeRateRecord"] | null;
+            stale: boolean;
+            history: components["schemas"]["RatePage"];
+        };
+        ExchangeRateRecord: {
+            /** Format: uuid */
+            id: string;
+            sypPerUsd: components["schemas"]["ExchangeRate"];
+            displayStepSypUnits: number;
+            changePercent: string | null;
+            adminName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ExchangeRate: string;
+        RatePage: {
+            items: components["schemas"]["ExchangeRateRecord"][];
+            nextCursor: string | null;
+        };
+        ChangeRate: {
+            sypPerUsd: components["schemas"]["ExchangeRate"];
+            displayStepSypUnits: number;
+            rateConfirmation?: string;
+        };
         Wallet: {
             balanceUnits: number;
             syp: {
@@ -636,7 +677,6 @@ export interface components {
                 rate: components["schemas"]["ExchangeRate"];
             } | null;
         };
-        ExchangeRate: string;
         WalletEntryQuery: {
             cursor?: string;
             /** @default 30 */
@@ -1259,8 +1299,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed";
-                entityType?: "admin_user" | "customer" | "wallet_adjustment";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate";
                 entityId?: string;
                 from?: string;
                 to?: string;
@@ -1278,6 +1318,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+        };
+    };
+    RatesAdminController_overview: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current rate and the history, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatesOverview"];
+                };
+            };
+        };
+    };
+    RatesAdminController_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeRate"];
+            };
+        };
+        responses: {
+            /** @description The new rate */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExchangeRateRecord"];
                 };
             };
         };

@@ -207,6 +207,7 @@ describe('module boundaries', () => {
     audit: 'audit',
     auth: 'auth',
     notifications: 'notifications',
+    rates: 'rates',
     system: null,
     wallet: 'wallet',
   };

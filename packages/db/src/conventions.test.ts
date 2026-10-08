@@ -31,6 +31,8 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   audit_entries: 'Append-only audit log (ADR 0011): never updated or archived; occurred_at instead',
   wallet_adjustments:
     'Append-only (S02): corrected by a reversal or a new adjustment, never changed',
+  exchange_rates: 'Append-only (S03): a change is a new row, the newest is the current rate',
+  payment_references: 'Append-only (S03): a claim is never released or moved',
   email_outbox: 'A delivery record: its status changes, it is never archived (S01)',
 };
 
@@ -48,6 +50,8 @@ const APPEND_ONLY_TABLES = [
   'ledger_postings',
   'audit_entries',
   'wallet_adjustments',
+  'exchange_rates',
+  'payment_references',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

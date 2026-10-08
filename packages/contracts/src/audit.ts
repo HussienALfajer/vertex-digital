@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
+import { exchangeRateSchema } from './money.js';
+import { displayStepSchema } from './rates.js';
 import {
   adjustmentCategorySchema,
   adjustmentDirectionSchema,
@@ -24,7 +26,12 @@ export const auditChannelSchema = z.enum(AUDIT_CHANNELS).meta({ id: 'AuditChanne
 
 export type AuditChannel = z.infer<typeof auditChannelSchema>;
 
-export const AUDIT_ENTITY_TYPES = ['admin_user', 'customer', 'wallet_adjustment'] as const;
+export const AUDIT_ENTITY_TYPES = [
+  'admin_user',
+  'customer',
+  'wallet_adjustment',
+  'exchange_rate',
+] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
 
@@ -37,6 +44,10 @@ const changed = <Shape extends z.ZodRawShape>(shape: Shape) => {
   return z.strictObject({ before: values, after: values });
 };
 const identity = z.strictObject({ name: z.string(), email: z.string(), phone: z.string() });
+const rate = z.strictObject({
+  sypPerUsd: exchangeRateSchema,
+  displayStepSypUnits: displayStepSchema,
+});
 const adjustment = {
   customerId: z.uuid(),
   direction: adjustmentDirectionSchema,
@@ -90,6 +101,13 @@ export const AUDIT_DETAILS = {
   'wallet_adjustment.reversed': z.strictObject({
     ...adjustment,
     reversedAdjustmentId: z.uuid(),
+  }),
+  /** A new rate or display step (S03 rule FX1); `before` is null for the first rate. */
+  'exchange_rate.changed': z.strictObject({
+    rateId: z.uuid(),
+    before: rate.nullable(),
+    after: rate,
+    changePercent: z.string().nullable(),
   }),
 } as const satisfies Record<string, z.ZodType>;
 

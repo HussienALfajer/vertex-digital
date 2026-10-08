@@ -67,6 +67,10 @@ export const ERROR_CODES = [
   'ADJUSTMENT_ALREADY_REVERSED',
   /** A reversal cannot itself be reversed (rule R3). */
   'ADJUSTMENT_NOT_REVERSIBLE',
+  /** A rate change above 5% without the rate typed a second time (S03 rule FX2). */
+  'RATE_CONFIRMATION_REQUIRED',
+  /** The rate typed a second time differs from the new rate (S03 rule FX2). */
+  'RATE_CONFIRMATION_MISMATCH',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

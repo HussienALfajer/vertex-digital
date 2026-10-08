@@ -10,6 +10,7 @@ import {
 } from '@vertex-digital/contracts';
 import {
   accountBalance,
+  claimPaymentReference,
   type Database,
   ensureCustomerWallet,
   ensureSystemAccount,
@@ -17,6 +18,8 @@ import {
   LedgerError,
   ledgerAccounts,
   newId,
+  type PaymentReferenceOwner,
+  paymentReferenceOwner,
   postJournal,
   recordAudit,
   walletAdjustments,
@@ -61,19 +64,16 @@ function violatedConstraint(error: unknown): string | null {
 }
 
 const refusals = {
-  externalReferenceTaken: () =>
+  /** `details` names the record that holds the reference (S03 rule SC14). */
+  externalReferenceTaken: (owner: PaymentReferenceOwner | null) =>
     new CodedException(
       409,
       'EXTERNAL_REFERENCE_TAKEN',
       'The external reference is already recorded for this method',
+      owner ?? undefined,
     ),
   alreadyReversed: () =>
     new CodedException(409, 'ADJUSTMENT_ALREADY_REVERSED', 'The adjustment was already reversed'),
-};
-
-const UNIQUE_REFUSALS: Record<string, () => CodedException> = {
-  wallet_adjustments_external_reference_unique: refusals.externalReferenceTaken,
-  wallet_adjustments_reverses_adjustment_id_unique: refusals.alreadyReversed,
 };
 
 /** Thrown inside the write's transaction when its key committed first: answered as a replay. */
@@ -288,6 +288,19 @@ export class WalletAdjustmentsService {
           })
           .returning();
         if (!row) throw new Error(`Adjustment ${id} was not written`);
+        if (request.depositMethod && request.externalReference) {
+          // One claim per real payment across deposits and adjustments (S03 rule SC14).
+          try {
+            await claimPaymentReference(tx, request.depositMethod, request.externalReference, {
+              walletAdjustmentId: id,
+            });
+          } catch (error) {
+            if (error instanceof LedgerError && error.code === 'EXTERNAL_REFERENCE_TAKEN') {
+              throw refusals.externalReferenceTaken(error.details as PaymentReferenceOwner | null);
+            }
+            throw error;
+          }
+        }
         const balanceAfterUnits = await walletBalanceAfter(tx, wallet, journalId);
         const audited = {
           customerId: request.customerId,
@@ -350,8 +363,18 @@ export class WalletAdjustmentsService {
         const replayed = await this.replay(idempotencyKey, request);
         if (replayed) return replayed;
       }
-      const refusal = constraint === null ? undefined : UNIQUE_REFUSALS[constraint];
-      if (refusal) throw refusal();
+      if (constraint === 'wallet_adjustments_reverses_adjustment_id_unique') {
+        throw refusals.alreadyReversed();
+      }
+      if (
+        constraint === 'wallet_adjustments_external_reference_unique' &&
+        request.depositMethod &&
+        request.externalReference
+      ) {
+        throw refusals.externalReferenceTaken(
+          await paymentReferenceOwner(this.db, request.depositMethod, request.externalReference),
+        );
+      }
       throw error;
     }
   }

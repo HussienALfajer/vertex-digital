@@ -142,7 +142,9 @@
       "AMOUNT_CONFIRMATION_MISMATCH": "المبلغ المكتوب في حقل التأكيد لا يطابق المبلغ.",
       "EXTERNAL_REFERENCE_TAKEN": "هذا الرقم المرجعي مسجَّل من قبل لهذه الطريقة.",
       "ADJUSTMENT_ALREADY_REVERSED": "عُكس هذا التعديل من قبل.",
-      "ADJUSTMENT_NOT_REVERSIBLE": "لا يمكن عكس عملية عكس. أضف تعديل «تصحيح خطأ» بدلًا منها."
+      "ADJUSTMENT_NOT_REVERSIBLE": "لا يمكن عكس عملية عكس. أضف تعديل «تصحيح خطأ» بدلًا منها.",
+      "RATE_CONFIRMATION_REQUIRED": "السعر الجديد يختلف بأكثر من 5% عن الحالي. أعد كتابته في حقل التأكيد.",
+      "RATE_CONFIRMATION_MISMATCH": "السعر المكتوب في حقل التأكيد لا يطابق السعر الجديد."
     }
   },
   "changePassword": {
@@ -268,7 +270,8 @@
     "entityTypes": {
       "admin_user": "حساب المدير",
       "customer": "عميل",
-      "wallet_adjustment": "تعديل رصيد"
+      "wallet_adjustment": "تعديل رصيد",
+      "exchange_rate": "سعر الصرف"
     },
     "fields": {
       "name": "الاسم",
@@ -284,7 +287,11 @@
       "externalReference": "المرجع الخارجي",
       "journalId": "القيد",
       "balanceAfterUnits": "الرصيد بعدها",
-      "reversedAdjustmentId": "التعديل المعكوس"
+      "reversedAdjustmentId": "التعديل المعكوس",
+      "rateId": "السعر",
+      "sypPerUsd": "ليرة لكل دولار",
+      "displayStepSypUnits": "خطوة العرض",
+      "changePercent": "نسبة التغيير"
     },
     "actions": {
       "admin.created": "إنشاء حساب المدير",
@@ -305,7 +312,8 @@
       "customer.test_created": "إنشاء عميل اختبار",
       "customer.test_password_reset": "إعادة تعيين كلمة مرور عميل اختبار",
       "wallet_adjustment.created": "تعديل رصيد عميل",
-      "wallet_adjustment.reversed": "عكس تعديل رصيد"
+      "wallet_adjustment.reversed": "عكس تعديل رصيد",
+      "exchange_rate.changed": "تغيير سعر الصرف"
     }
   },
   "testCustomers": {

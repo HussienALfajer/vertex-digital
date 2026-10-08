@@ -7,8 +7,10 @@ import {
   exchangeRateSchema,
   formatSignedUsd,
   formatUsd,
+  isSameRate,
   isWholeCents,
   parseUsd,
+  rateChangePercent,
   sypDisplayPrice,
   sypToUsd,
   USD_CENT,
@@ -220,5 +222,27 @@ describe('formatSignedUsd', () => {
   it('signs money in with a plus and money out with a minus sign', () => {
     expect(formatSignedUsd(25_000_000)).toBe('+$25.00');
     expect(formatSignedUsd(-1_250_000)).toBe('−$1.25');
+  });
+});
+
+describe('rate comparison (S03 rule FX2)', () => {
+  it('compares rates by value', () => {
+    expect(isSameRate('130', '130.0000')).toBe(true);
+    expect(isSameRate('130', '130.0001')).toBe(false);
+    expect(isSameRate('abc', 'abc')).toBe(false);
+  });
+
+  it('gives the change in percent of the old rate, rounded away from zero', () => {
+    expect(rateChangePercent('100', '105')).toBe('5.00');
+    expect(rateChangePercent('100', '105.0001')).toBe('5.01');
+    expect(rateChangePercent('100', '94.9999')).toBe('-5.01');
+    expect(rateChangePercent('118', '130')).toBe('10.17');
+    expect(rateChangePercent('118', '1180')).toBe('900.00');
+    expect(rateChangePercent('118', '118')).toBe('0.00');
+    expect(rateChangePercent('100', '99.99')).toBe('-0.01');
+  });
+
+  it('refuses invalid rates', () => {
+    expect(() => rateChangePercent('0', '1')).toThrow(RangeError);
   });
 });
