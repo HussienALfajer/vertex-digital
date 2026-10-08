@@ -5,16 +5,16 @@ Spec: `docs/specs/S05-alerts-and-control.md` (F07, F26, F27; ADRs 0002, 0003, 00
 Why four and not the spec's three: the spec's Telegram PR is too large for one reviewed session, so it splits into the bot foundation (link, commands, messages, alerts) and the deposit decisions with their jobs; the Telegram approval money path then ships alone with its concurrency tests. Until PR 3 ships, switch changes write no Telegram message (spec, implementation notes).
 
 ## PR 1 — F26 store switches, end to end · Opus 5.5 `high`
-- [ ] Contracts: `switches.ts` (`STORE_SWITCHES`, `STORE_SWITCH_DEFAULTS`, `storeStatusSchema` derivation, `adminSwitchesSchema`, `changeSwitchSchema`, `switchChangeSchema` and its page, method state of SW6); error `DEPOSITS_STOPPED` (store and admin catalogs); audit action `store_switch.changed`, entity `store_switch` with admin labels; options `state` on both deposit methods; unit tests (100%)
-- [ ] Db (`/db-migration`): `store_switch_changes` (enums `store_switch`, `switch_channel`; index; append-only trigger and grants, `APPEND_ONLY_TABLES`; `TABLE_OWNERS`); a shared switch read helper; tests
-- [ ] Api `settings` module: `GET /api/store/status` (public, `max-age=10`), `GET/POST /api/admin/switches` (re-authentication), `GET /api/admin/switches/history`; SW2 lock, no-op on same value, audit; `test/settings.test.ts` (every route, re-authentication, parallel changes serialized)
-- [ ] Api `deposits`: SW5 shared lock and switch read in Sham Cash and USDT creation, `DEPOSITS_STOPPED`; options `state` (SW6); existing deposits unaffected (SW4); race test (creation vs stop)
-- [ ] Api `auth`: registration reads the switch (SW8); `REGISTRATION_OPEN` removed from api env, `.env.example`, vitest config and tests (fixtures open the switch)
-- [ ] Bridge: build, OpenAPI export, admin client
-- [ ] Store: stop banner (SW9) on every page, deposit method states and the stopped wizard, `DEPOSITS_STOPPED` keeps the form; i18n
-- [ ] Admin: `/settings/switches` (toggles, confirm dialog, re-authentication, history with filter), navigation entry, global banner (SW10); i18n
-- [ ] E2E: store banner and disabled wizard (phone, dark and light); admin switches page, confirm dialog, banner (light and dark)
-- [ ] Wiring checklist, docs (`docs/architecture.md` `settings` module, folder `CLAUDE.md`, `AGENTS.md` if a command changes)
+- [x] Contracts: `settings.ts` (`STORE_SWITCHES`, `STORE_SWITCH_DEFAULTS`, `storeStatusSchema` derivation, `adminSwitchesSchema`, `changeSwitchSchema`, `switchChangeSchema` and its page, method state of SW6); error `DEPOSITS_STOPPED` (store and admin catalogs); audit action `store_switch.changed`, entity `store_switch` with admin labels; options `state` on both deposit methods; unit tests (100%)
+- [x] Db (`/db-migration`): `store_switch_changes` (enums `store_switch`, `switch_channel`; index; append-only trigger and grants, `APPEND_ONLY_TABLES`; `TABLE_OWNERS`; `created_at` stamped at insert); tests (the switches are read through `SettingsService`, the module that owns the table)
+- [x] Api `settings` module: `GET /api/store/status` (public, `max-age=10`), `GET/POST /api/admin/switches` (re-authentication), `GET /api/admin/switches/history`; SW2 lock, no-op on same value, audit; `test/settings.test.ts` (every route, re-authentication, parallel changes serialized)
+- [x] Api `deposits`: SW5 shared lock and switch read in Sham Cash and USDT creation, `DEPOSITS_STOPPED`; options `state` (SW6); existing deposits unaffected (SW4); race test (creation vs stop)
+- [x] Api `auth`: registration reads the switch (SW8); `REGISTRATION_OPEN` removed from api env, `.env.example`, vitest config and tests (fixtures open the switch)
+- [x] Bridge: build, OpenAPI export, admin client
+- [x] Store: stop banner (SW9) on every page, deposit method states and the stopped wizard, `DEPOSITS_STOPPED` keeps the form; i18n
+- [x] Admin: `/settings/switches` (toggles, confirm dialog, re-authentication, history with filter), navigation entry, global banner (SW10); i18n
+- [x] E2E: store banner and disabled wizard (phone, dark and light); admin switches page, confirm dialog, banner (light and dark)
+- [x] Wiring checklist, docs (`docs/architecture.md` `settings` module, `docs/deployment.md`, folder `CLAUDE.md`; no command changed; no nginx change: `/api/store/status` is a read under the general zone)
 - [ ] Checks, reviewer, owner acceptance, PR with auto-merge
 
 ## PR 2 — F27 notifications, end to end · Opus 5.5 `high`
