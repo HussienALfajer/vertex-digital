@@ -56,6 +56,6 @@ Only what the foundation uses: the deposit columns of `telegram_prompts`, `teleg
 - [x] Bridge
 - [x] Admin: `/settings/deposits` Telegram limit card; "من تيليجرام" on the deposit's audit trail; i18n (also the three new message kinds); E2E and screenshots (light and dark)
 - [x] Wiring checklist, `wiring.md` patterns, docs (`docs/architecture.md`, folder `CLAUDE.md`, `.env.example`), `docs/ROADMAP.md` S05 done
-- [ ] Db, api and worker tests: blocked locally (the local test database holds a first, wrong attempt of migration 0023; cleaning it needs the owner's approval), or run by CI on the PR
+- [x] Db, api and worker tests (the local test database cleaned with the owner's approval); found by the run: the decision key column holds UUIDs, so a Telegram decision is keyed by its prompt's id (spec implementation notes)
 - [x] Reviewer: two blocking findings fixed (a resubmission between "اعتماد" and the transaction number is now refused as `changed`, with a test; two worker tests no longer depend on rows other files leave)
-- [ ] Owner acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded on the final tree), owner acceptance (2026-10-08), PR with auto-merge
