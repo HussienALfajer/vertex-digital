@@ -15,7 +15,7 @@ Why four and not the spec's three: the spec's Telegram PR is too large for one r
 - [x] Admin: `/settings/switches` (toggles, confirm dialog, re-authentication, history with filter), navigation entry, global banner (SW10); i18n
 - [x] E2E: store banner and disabled wizard (phone, dark and light); admin switches page, confirm dialog, banner (light and dark)
 - [x] Wiring checklist, docs (`docs/architecture.md` `settings` module, `docs/deployment.md`, folder `CLAUDE.md`; no command changed; no nginx change: `/api/store/status` is a read under the general zone)
-- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (no blocking findings), owner acceptance (2026-10-08), PR with auto-merge
 
 ## PR 2 — F27 notifications, end to end · Opus 5.5 `high`
 - [ ] Contracts: `NOTIFICATION_EVENTS`, `NOTIFICATION_PARAMS`, `customerNotificationSchema`, `notificationPageSchema`, `notificationPreferencesSchema`, `NOTIFICATION_EMAIL_TEMPLATE`; audit `customer.notification_preference_changed`; unit tests
