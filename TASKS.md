@@ -11,7 +11,8 @@ Why three and not the spec's two: PR 1 of the spec (contracts, db, readers, jobs
 - [x] Api `deposits`: `GET /api/deposits/usdt/options`, `POST /api/deposits/usdt` (tail under advisory lock, U2–U5, idempotency, ALTCHA), `POST /api/deposits/:id/txid` (U8, per-hour counter, job in the transaction), list/read/cancel with the `usdt` block; admin queue method filter, counts, deposit with transfer and candidates, `approve-usdt` (U15, re-authentication always), reject with new reasons (review only), `recheck` (U17), `GET /api/admin/usdt-transfers`, settings USDT fields; S03 approve and request-receipt refuse USDT; wallet timeline `method`; the U7 credit steps (lock, claim, `postUsdtDepositCredit`, deposit update, audit, email) as one shared write path in `packages/db` so the api approval and the PR 2 worker credit through the same code; S02 `manual_deposit` normalizes TXIDs; `test/deposits-usdt.test.ts` (every route and error code, two customers, re-authentication, parallel creations → different tails and the 100th busy, two deposits one TXID, S02 vs deposit claim with `0x`/link/case variants, approval vs re-check, no-store)
 - [x] Bridge: build, OpenAPI export, admin client; admin typecheck; store/admin fixtures and E2E mocks adapted to changed shapes (the settings form keeps the USDT values until PR 3)
 - [x] Wiring checklist, docs (`docs/architecture.md`, `docs/deployment.md` variables and address-change note, folder `CLAUDE.md`, spec details settled; queue policies `stately` in `QUEUE_POLICIES`)
-- [ ] Checks (lint, typecheck, test, build, drift, e2e if fixtures changed), reviewer, owner acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, drift, e2e: all passed and recorded), reviewer (no blocking findings; three PR 2 notes below)
+- [ ] Owner acceptance, PR with auto-merge
 
 ## PR 2 — Chain readers and worker jobs · Opus 5.5 `high`
 - [ ] `ChainReader` interface and `ChainReaderError`; `fake` reader (test-database table only, refused in production); TronGrid reader and BSC JSON-RPC reader with recorded, sanitized public fixtures (endpoints, limits and the BSC provider named)
@@ -20,6 +21,9 @@ Why three and not the spec's two: PR 1 of the spec (contracts, db, readers, jobs
 - [ ] Credit transaction shared with the api approval (U7, M1) and its email
 - [ ] CLI `usdt:fake-transfer`; commands table in `AGENTS.md`
 - [ ] Tests: exact match, each bounce, each review reason, reader error never "not found", 30-minute window, TRON solidified, BSC finalized + 15, summing, 18-decimal remainder, cursor overlap and duplicates, dust, stale alert once, scanner vs verifier in parallel → one journal/audit/email
+- [ ] From the PR 1 review: two customers may hold the same TXID while `searching` (no lock on submission; credit stays single through the unique transfer, binding and claim): the verifier treats "transfer bound to another deposit" as a final outcome, never a retry loop
+- [ ] From the PR 1 review: a TXID whose transfer is under $1 cannot be recorded (`usdt_transfers` keeps $1 and up, rule U14) yet rule U11 binds it for review: decide its outcome with the owner (bounce, or review without a row) before the verifier is written
+- [ ] The worker checks `USDT_TRC20_ADDRESS` / `USDT_BEP20_ADDRESS` at boot too (edge case 17), with `CHAIN_READER` (`fake` refused in production) and the reader variables; `.env.example` `CHAIN_READER=fake`
 - [ ] Docs (`docs/architecture.md` jobs and readers), checks, reviewer, owner acceptance, PR with auto-merge
 
 ## PR 3 — Store and admin screens, E2E · Opus 5.5 `high`
