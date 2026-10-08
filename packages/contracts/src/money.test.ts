@@ -5,8 +5,10 @@ import {
   ceilToStep,
   currencySchema,
   exchangeRateSchema,
+  formatSignedUsd,
   formatUsd,
   isWholeCents,
+  parseUsd,
   sypDisplayPrice,
   sypToUsd,
   USD_CENT,
@@ -195,5 +197,28 @@ describe('formatUsd', () => {
 
   it('refuses a non-integer amount', () => {
     expect(() => formatUsd(1.5)).toThrow(RangeError);
+  });
+});
+
+describe('parseUsd', () => {
+  it('reads dollars with up to 2 decimals, exactly', () => {
+    expect(parseUsd('25')).toBe(25_000_000);
+    expect(parseUsd(' 25.5 ')).toBe(25_500_000);
+    expect(parseUsd('0.01')).toBe(USD_CENT);
+    expect(parseUsd('100.10')).toBe(100_100_000);
+    expect(parseUsd('999999999.99')).toBe(999_999_999_990_000);
+  });
+
+  it('refuses anything else', () => {
+    for (const text of ['', '.5', '1.', '1.234', '-1', '1,000', '1e3', '١٢', '1000000000']) {
+      expect(parseUsd(text)).toBeNull();
+    }
+  });
+});
+
+describe('formatSignedUsd', () => {
+  it('signs money in with a plus and money out with a minus sign', () => {
+    expect(formatSignedUsd(25_000_000)).toBe('+$25.00');
+    expect(formatSignedUsd(-1_250_000)).toBe('−$1.25');
   });
 });

@@ -143,3 +143,22 @@ export function formatUsd(units: number): string {
   const whole = (value / USD_SCALE).toLocaleString('en-US');
   return `${units < 0 ? '-' : ''}$${whole}.${fraction}`;
 }
+
+const USD_INPUT_PATTERN = /^\d{1,9}(\.\d{1,2})?$/;
+
+/**
+ * A USD amount typed by the admin (`25`, `25.5`, `1250.00`; Latin digits, no separators) in USD
+ * units, exact, or null when it is not dollars with at most 2 decimals. The inverse of
+ * `formatUsd` for whole cents. Up to $999,999,999.99, well within the safe integers.
+ */
+export function parseUsd(text: string): number | null {
+  const value = text.trim();
+  if (!USD_INPUT_PATTERN.test(value)) return null;
+  const [whole = '0', cents = ''] = value.split('.');
+  return toUnits(BigInt(whole) * USD_SCALE + BigInt(cents.padEnd(2, '0')) * BigInt(USD_CENT));
+}
+
+/** A signed movement for display: `+$25.00` in, `−$25.00` out (a real minus sign, U+2212). */
+export function formatSignedUsd(units: number): string {
+  return `${units < 0 ? '−' : '+'}${formatUsd(Math.abs(units))}`;
+}

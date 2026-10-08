@@ -14,7 +14,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopyButton } from '../../components/copy-button';
 import { formatExactTime } from '../../lib/format';
-import { actorLabel, fieldLabel } from './audit-labels';
+import { actorLabel, fieldLabel, fieldValue } from './audit-labels';
 
 type Changes = { before: Record<string, unknown>; after: Record<string, unknown> };
 
@@ -23,14 +23,6 @@ const isChanges = (details: Record<string, unknown>): details is Changes =>
   details.before !== null &&
   typeof details.after === 'object' &&
   details.after !== null;
-
-/** A value as written; `dir="auto"` keeps emails and phone numbers left to right. */
-const show = (value: unknown) =>
-  value === undefined || value === null
-    ? '—'
-    : typeof value === 'string'
-      ? value
-      : JSON.stringify(value);
 
 /** One audit entry in full (rule A4): labelled before and after values, IP and browser. */
 export function AuditDetailSheet({
@@ -113,10 +105,10 @@ function Details({ details }: { details: Record<string, unknown> }) {
             <TableRow key={key}>
               <TableHead scope="row">{fieldLabel(t, key)}</TableHead>
               <TableCell className="break-all">
-                <bdi dir="auto">{show(details.before[key])}</bdi>
+                <bdi dir="auto">{fieldValue(t, key, details.before[key])}</bdi>
               </TableCell>
               <TableCell className="break-all">
-                <bdi dir="auto">{show(details.after[key])}</bdi>
+                <bdi dir="auto">{fieldValue(t, key, details.after[key])}</bdi>
               </TableCell>
             </TableRow>
           ))}
@@ -132,10 +124,11 @@ function Details({ details }: { details: Record<string, unknown> }) {
     <div className="flex flex-col gap-2">
       <h3 className="text-base font-bold">{t('audit.detail.details')}</h3>
       <dl className="flex flex-col gap-3">
+        {/* `dir="auto"` keeps emails, phone numbers and amounts left to right. */}
         {keys.map((key) => (
           <Item key={key} label={fieldLabel(t, key)}>
             <bdi dir="auto" className="break-all">
-              {show(details[key])}
+              {fieldValue(t, key, details[key])}
             </bdi>
           </Item>
         ))}

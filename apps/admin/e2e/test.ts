@@ -101,8 +101,38 @@ const declared = Object.entries(openapi.paths as Record<string, Record<string, u
   }),
 );
 
+const WALLET_PATH = /^\/api\/admin\/wallets\/([^/]+)$/;
+const WALLET_ENTRIES_PATH = /^\/api\/admin\/wallets\/([^/]+)\/entries$/;
+const ADJUSTMENTS_PATH = /^\/api\/admin\/wallets\/([^/]+)\/adjustments$/;
+const REVERSE_PATH = /^\/api\/admin\/wallet-adjustments\/([^/]+)\/reverse$/;
 const RESET_PASSWORD_PATH = /^\/api\/admin\/test-customers\/[^/]+\/reset-password$/;
 const OWN_SESSION_PATH = /^\/api\/admin\/me\/sessions\/([^/]+)$/;
+
+/** One USD in micro-dollars (ADR 0003). */
+export const USD = 1_000_000;
+
+/** The wallet the S02 specs read and adjust: a test customer's. */
+export const WALLET_CUSTOMER = {
+  id: CUSTOMER_ID,
+  name: 'سارة الأحمد',
+  email: 'sara@example.com',
+  phone: '+963944123456',
+  isTest: true,
+};
+
+interface Adjustment {
+  id: string;
+  direction: 'credit' | 'debit';
+  amountUnits: number;
+  category: string;
+  reason: string;
+  customerNote: string | null;
+  depositMethod: string | null;
+  externalReference: string | null;
+  reversesAdjustmentId: string | null;
+  createdAt: string;
+  balanceAfterUnits: number;
+}
 
 interface TestCustomer {
   id: string;
@@ -121,6 +151,7 @@ export class AdminApi {
   readonly unexpected: string[] = [];
   readonly calls: string[] = [];
   readonly bodies: { key: string; body: unknown }[] = [];
+  readonly requests: { key: string; headers: Record<string, string> }[] = [];
   user = {
     id: ADMIN_ID,
     name: 'ريم الخطيب',
@@ -156,7 +187,89 @@ export class AdminApi {
       current: false,
     },
   ];
+  /** The wallet's adjustments, oldest first, and the request keys already answered (rule J9). */
+  adjustments: Adjustment[] = [];
+  private readonly adjustmentKeys = new Map<string, Adjustment>();
   private pendingTwoFactor = false;
+
+  /** The wallet's balance: the sum of its adjustments. */
+  get balanceUnits(): number {
+    return this.adjustments.reduce(
+      (sum, item) => sum + (item.direction === 'credit' ? item.amountUnits : -item.amountUnits),
+      0,
+    );
+  }
+
+  /** Writes an adjustment the way the API does (rules J5, J6, J8, J9), or answers its refusal. */
+  private adjust(
+    key: string | undefined,
+    input: Omit<Adjustment, 'id' | 'createdAt' | 'balanceAfterUnits'>,
+    confirmation: unknown,
+  ) {
+    if (!key) return { status: 400, code: 'VALIDATION_FAILED' } as const;
+    const replay = this.adjustmentKeys.get(key);
+    if (replay) return { status: 200, adjustment: replay } as const;
+    if (input.amountUnits > 100 * USD && confirmation === undefined) {
+      return { status: 400, code: 'AMOUNT_CONFIRMATION_REQUIRED' } as const;
+    }
+    if (confirmation !== undefined && confirmation !== input.amountUnits) {
+      return { status: 400, code: 'AMOUNT_CONFIRMATION_MISMATCH' } as const;
+    }
+    const reference = input.externalReference?.trim().toUpperCase();
+    if (
+      reference &&
+      this.adjustments.some(
+        (item) =>
+          item.depositMethod === input.depositMethod &&
+          item.externalReference?.trim().toUpperCase() === reference,
+      )
+    ) {
+      return { status: 409, code: 'EXTERNAL_REFERENCE_TAKEN' } as const;
+    }
+    if (input.direction === 'debit' && input.amountUnits > this.balanceUnits) {
+      return {
+        status: 409,
+        code: 'INSUFFICIENT_BALANCE',
+        balanceUnits: this.balanceUnits,
+      } as const;
+    }
+    const index = this.adjustments.length + 1;
+    const adjustment: Adjustment = {
+      ...input,
+      id: `0199a000-0000-7000-8000-0000000000${(0xb0 + index).toString(16)}`,
+      createdAt: new Date(Date.UTC(2026, 9, 8, 9, index)).toISOString(),
+      balanceAfterUnits:
+        this.balanceUnits + (input.direction === 'credit' ? input.amountUnits : -input.amountUnits),
+    };
+    this.adjustments.push(adjustment);
+    this.adjustmentKeys.set(key, adjustment);
+    return { status: 201, adjustment } as const;
+  }
+
+  /** The admin timeline of the wallet, newest first (rule W3). */
+  private walletEntries() {
+    return [...this.adjustments].reverse().map((item) => ({
+      occurredAt: item.createdAt,
+      kind: 'adjustment',
+      amountUnits: item.direction === 'credit' ? item.amountUnits : -item.amountUnits,
+      balanceAfterUnits: item.balanceAfterUnits,
+      journalId: item.id.replace('-8000-', '-9000-'),
+      adjustment: {
+        id: item.id,
+        direction: item.direction,
+        category: item.category,
+        customerNote: item.customerNote,
+        reversal: item.reversesAdjustmentId !== null,
+        reason: item.reason,
+        adminName: this.user.name,
+        depositMethod: item.depositMethod,
+        externalReference: item.externalReference,
+        reversesAdjustmentId: item.reversesAdjustmentId,
+        reversedByAdjustmentId:
+          this.adjustments.find((other) => other.reversesAdjustmentId === item.id)?.id ?? null,
+      },
+    }));
+  }
 
   /** The body of the last request to `key`. */
   lastBody(key: string): unknown {
@@ -171,6 +284,7 @@ export class AdminApi {
     this.calls.push(key);
     const body = request.postDataJSON() as Record<string, unknown> | null;
     this.bodies.push({ key, body });
+    this.requests.push({ key, headers: request.headers() });
     const json = (status: number, value: unknown) => route.fulfill({ status, json: value });
     const apiError = (status: number, code: string) =>
       json(status, { statusCode: status, code, message: code });
@@ -187,6 +301,79 @@ export class AdminApi {
     if (request.method() === 'POST' && RESET_PASSWORD_PATH.test(path)) {
       if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
       return json(200, { password: GENERATED_PASSWORD });
+    }
+    const walletPath = path.match(WALLET_PATH);
+    if (request.method() === 'GET' && walletPath) {
+      if (walletPath[1] !== CUSTOMER_ID) return apiError(404, 'NOT_FOUND');
+      return json(200, {
+        customer: WALLET_CUSTOMER,
+        balanceUnits: this.balanceUnits,
+        syp: null,
+        adjustmentCount: this.adjustments.length,
+      });
+    }
+    if (request.method() === 'GET' && WALLET_ENTRIES_PATH.test(path)) {
+      return json(200, { items: this.walletEntries(), nextCursor: null });
+    }
+    const adjustmentsPath = path.match(ADJUSTMENTS_PATH);
+    const reversePath = path.match(REVERSE_PATH);
+    if (request.method() === 'POST' && (adjustmentsPath || reversePath)) {
+      if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
+      const key = request.headers()['idempotency-key'];
+      let result: ReturnType<AdminApi['adjust']>;
+      if (reversePath) {
+        const original = this.adjustments.find((item) => item.id === reversePath[1]);
+        if (!original) return apiError(404, 'NOT_FOUND');
+        if (original.reversesAdjustmentId) return apiError(409, 'ADJUSTMENT_NOT_REVERSIBLE');
+        const replay = key ? this.adjustmentKeys.get(key) : undefined;
+        if (!replay && this.adjustments.some((item) => item.reversesAdjustmentId === original.id)) {
+          return apiError(409, 'ADJUSTMENT_ALREADY_REVERSED');
+        }
+        result = this.adjust(
+          key,
+          {
+            direction: original.direction === 'credit' ? 'debit' : 'credit',
+            amountUnits: original.amountUnits,
+            category: original.category,
+            reason: String(body?.reason),
+            customerNote: (body?.customerNote as string | undefined) ?? null,
+            depositMethod: null,
+            externalReference: null,
+            reversesAdjustmentId: original.id,
+          },
+          body?.amountConfirmationUnits,
+        );
+      } else {
+        result = this.adjust(
+          key,
+          {
+            direction: body?.direction as Adjustment['direction'],
+            amountUnits: Number(body?.amountUnits),
+            category: String(body?.category),
+            reason: String(body?.reason),
+            customerNote: (body?.customerNote as string | undefined) ?? null,
+            depositMethod: (body?.depositMethod as string | undefined) ?? null,
+            externalReference: (body?.externalReference as string | undefined) ?? null,
+            reversesAdjustmentId: null,
+          },
+          body?.amountConfirmationUnits,
+        );
+      }
+      if ('code' in result) {
+        const details =
+          'balanceUnits' in result ? { balanceUnits: result.balanceUnits } : undefined;
+        return json(result.status, {
+          statusCode: result.status,
+          code: result.code,
+          message: result.code,
+          details,
+        });
+      }
+      return json(result.status, {
+        ...result.adjustment,
+        customerId: CUSTOMER_ID,
+        journalId: result.adjustment.id,
+      });
     }
     const ownSession = path.match(OWN_SESSION_PATH);
     if (request.method() === 'DELETE' && ownSession) {
@@ -269,6 +456,40 @@ export class AdminApi {
         return json(200, {
           items: matching.slice(start, end),
           nextCursor: end < matching.length ? String(end) : null,
+        });
+      }
+      case 'GET /api/admin/ledger/summary': {
+        const owed = this.balanceUnits;
+        return json(200, {
+          owedToCustomersUnits: 0,
+          owedToTestCustomersUnits: owed,
+          walletsWithBalance: owed > 0 ? 1 : 0,
+          systemAccounts: [...new Set(this.adjustments.map((item) => item.category))].map(
+            (category) => ({
+              kind: 'adjustments',
+              code: `adjustments:${category}`,
+              currency: 'USD',
+              balanceUnits: -this.adjustments
+                .filter((item) => item.category === category)
+                .reduce(
+                  (sum, item) =>
+                    sum + (item.direction === 'credit' ? item.amountUnits : -item.amountUnits),
+                  0,
+                ),
+            }),
+          ),
+        });
+      }
+      case 'GET /api/admin/wallets': {
+        const q = (url.searchParams.get('q') ?? '').toLowerCase();
+        const { name, email, phone } = WALLET_CUSTOMER;
+        const found =
+          name.includes(q) ||
+          email.startsWith(q) ||
+          phone.replace('+', '').startsWith(q.replace('+', ''));
+        return json(200, {
+          items: found ? [{ ...WALLET_CUSTOMER, balanceUnits: this.balanceUnits }] : [],
+          nextCursor: null,
         });
       }
       case 'GET /api/admin/test-customers':

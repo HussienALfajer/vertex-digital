@@ -11,10 +11,10 @@ Spec: `docs/specs/S02-wallet-ledger.md` (F03; ADRs 0003, 0011, 0014, 0016). Two 
 - [x] Wiring checklist, docs (`docs/architecture.md` modules, folder `CLAUDE.md`, "Patterns to copy" ledger row in `wiring.md`, spec: `admin_id` without foreign key, error statuses)
 - [x] Checks (lint, typecheck, test, build, drift, e2e), reviewer (1 blocking finding fixed: timeline ordered by transaction start, now by posting write position), owner acceptance (2026-10-07), PR with auto-merge
 
-## PR 2 — Store and admin screens, E2E (`feat/s02-wallet-screens`) · Opus 5.5 `medium`
-- [ ] Store: header balance chip (Suspense hole, hidden on error), `/wallet` (card, timeline with labels per kind and category, running balance, load more, empty, error, sign-in redirect); i18n
-- [ ] Admin: audit detail labels for the adjustment keys (amounts formatted with `formatUsd`)
-- [ ] Admin: `/wallets` (summary card with system accounts, search, results, load more), `/wallets/$customerId` (header, timeline table, reversed/reversal links), adjust dialog (categories per direction and customer, manual-deposit fields, balance after, confirmation field without paste above $100, re-authentication retry with the same key, new key after an edited field), reverse dialog; navigation "المحافظ"; audit filters; i18n
-- [ ] E2E: flows and RTL screenshots (store dark at phone width, empty and with entries, chip; admin light and dark: wallets, wallet page, adjust dialog with confirmation, reverse dialog)
-- [ ] Wiring checklist, `docs/ROADMAP.md` (S02 done)
-- [ ] Checks (lint, typecheck, test, build, e2e), reviewer, owner acceptance (spec "Acceptance" 1–9 in the browser), PR with auto-merge
+## PR 2 — Store and admin screens, E2E (`claude/ecstatic-johnson-5kn2e7`, cloud session branch) · Opus 5.5 `medium`
+- [x] Store: header balance chip (Suspense hole, hidden on error), `/wallet` (card, timeline with labels per kind and category, running balance, load more, empty, error, sign-in redirect); i18n
+- [x] Admin: audit detail labels for the adjustment keys (amounts formatted with `formatUsd`)
+- [x] Admin: `/wallets` (summary card with system accounts, search, results, load more), `/wallets/$customerId` (header, timeline table, reversed/reversal links), adjust dialog (categories per direction and customer, manual-deposit fields, balance after, confirmation field without paste above $100, re-authentication retry with the same key, new key after an edited field), reverse dialog; navigation "المحافظ"; audit filters; i18n
+- [x] E2E: flows and RTL screenshots (store dark at phone width, empty and with entries, chip; admin light and dark: wallets, wallet page, adjust dialog with confirmation, reverse dialog)
+- [x] Wiring checklist, `docs/ROADMAP.md` (S02 done), spec (W8 chip read in the browser; admin timeline columns), `wiring.md` patterns, folder `CLAUDE.md`; contracts `parseUsd`, `formatSignedUsd`
+- [x] Checks (lint, typecheck, test, build, e2e), reviewer (1 blocking finding fixed: the header chip now re-reads on every client navigation), owner acceptance (2026-10-08), PR with auto-merge

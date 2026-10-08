@@ -3,8 +3,8 @@
 The customer site at `digital.vertexmedia.pro`: Next.js 16 (App Router, Turbopack, Cache Components), Arabic RTL, dark by default (ADR 0002, 0011, 0012). Read `brand/identity.md` (§6 is the store's own guidance) before visual work.
 
 ## Layout
-- `src/app/`: routes, thin: data loading and layout. `layout.tsx` (html `lang="ar" dir="rtl"`, the `dark` class, the theme script, header and footer), `page.tsx`, the account routes (`sign-in/`, `sign-up/`, `verify-email/`, `forgot-password/`, `account/`), `not-found.tsx`, `error.tsx`, `globals.css` (Tailwind + `@vertex-digital/ui/styles.css`).
-- `src/features/<area>/`: components, server data functions and actions of one area. Pattern to copy: `src/features/auth/` (`requests.ts`: pure request functions with a unit test; the client forms that use them; field messages in `validation.ts`) and `src/features/account/` (a page read in the browser with the session cookie: skeleton, error and sign-in redirect).
+- `src/app/`: routes, thin: data loading and layout. `layout.tsx` (html `lang="ar" dir="rtl"`, the `dark` class, the theme script, header and footer), `page.tsx`, the account routes (`sign-in/`, `sign-up/`, `verify-email/`, `forgot-password/`, `account/`), `wallet/`, `not-found.tsx`, `error.tsx`, `globals.css` (Tailwind + `@vertex-digital/ui/styles.css`).
+- `src/features/<area>/`: components, server data functions and actions of one area. Pattern to copy: `src/features/auth/` (`requests.ts`: pure request functions with a unit test; the client forms that use them; field messages in `validation.ts`) and `src/features/account/` (a page read in the browser with the session cookie: skeleton, error and sign-in redirect); `src/features/wallet/` adds a cursor list with "load more" and the header balance chip.
 - `src/components/`: app-wide pieces (header, footer, theme switch, account link and menu, form alert). `src/lib/`: `i18n.ts` (`t()`), `theme.ts`, `api.ts` (`apiRequest`: same-origin calls that answer a code, never throw), `errors.ts` (`errorText`), `altcha.ts` (proof of work in the browser), `safe-redirect.ts`, `format.ts` (dates), `use-search-param.ts`.
 - `src/messages/ar.json`: every UI string. `e2e/`: Playwright specs, `test.ts` (the API mock and screenshot helper).
 
@@ -23,6 +23,6 @@ The customer site at `digital.vertexmedia.pro`: Next.js 16 (App Router, Turbopac
 
 ## Tests
 - Unit: `src/**/*.test.ts` (Vitest), next to the code.
-- E2E (`e2e/`): against the production build on port 4001; the API is mocked per test with `api.on('METHOD /path', status, body)` (`api.last(key)` reads what was sent), and a request without a mock fails the test, as do page and console errors. Next.js keeps the previous page mounted but hidden after a client navigation: find fields among the visible ones (`accounts.spec.ts`, `field()`). Every new screen adds RTL screenshots, dark and light, at phone width and desktop (the `phone` and `desktop` projects).
+- E2E (`e2e/`): against the production build on port 4001; the API is mocked per test with `api.on('METHOD /path', status, body)` (`api.last(key)` reads what was sent; an empty wallet is answered by default, since the header chip reads it on every signed-in page), and a request without a mock fails the test, as do page and console errors. Next.js keeps the previous page mounted but hidden after a client navigation: find fields among the visible ones (`accounts.spec.ts`, `field()`). Every new screen adds RTL screenshots, dark and light, at phone width and desktop (the `phone` and `desktop` projects).
 
 Run: `pnpm --filter @vertex-digital/store test` · `pnpm --filter @vertex-digital/store typecheck` · `pnpm test:e2e` (builds first) · dev: `pnpm dev` (port 3001, with the API on 3000).
