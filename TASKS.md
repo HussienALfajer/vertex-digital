@@ -30,7 +30,7 @@ Why four and not the spec's three: the spec's Telegram PR is too large for one r
 - [x] Reviewer: two blocking findings fixed (nginx duplicate `proxy_read_timeout`; the store stream reopens after a non-200 answer), plus the stream's early-close and `LISTEN` failure cleanup and the first-preference race (test)
 - [x] Found by the full run: a new customer's wallet created by two writes at once could meet the `customer_id` unique index outside `ON CONFLICT (code)` and answer 500 (S02 `ensureAccount`); fixed with a test that reproduces it
 - [x] Found by the full run: `deposits-usdt.test.ts` seeded 95 reference codes per run from about 15 symbols, and the kept test rows made collisions likely; it now draws free codes from the API's alphabet
-- [ ] Checks (full run on the final tree), owner acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded on the final tree), owner acceptance (2026-10-08; script budget 205 KB accepted), PR with auto-merge
 
 ## PR 3 — F07 Telegram bot foundation and its admin page · Opus 5.5 `high`
 - [ ] Contracts: `telegram.ts` (message kinds and params, link status and code schemas, `TELEGRAM_CALLBACKS` parsing within 64 bytes), error `TELEGRAM_NOT_CONFIGURED`, audit actions `telegram.*`, queue `telegram.send`; unit tests
