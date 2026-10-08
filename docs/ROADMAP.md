@@ -20,7 +20,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 ## Phase 1 — Money core
 - [x] S01 Accounts: F01 Customer accounts · F02 Admin account, 2FA and audit log (one admin, no staff: ADR 0016)
 - [x] S02 Wallet and ledger: F03 alone (money core); spec `docs/specs/S02-wallet-ledger.md`
-- [ ] S03 Exchange rate and Sham Cash deposits: F04 Exchange rate and SYP display · F05 Sham Cash deposits
+- [~] S03 Exchange rate and Sham Cash deposits: F04 Exchange rate and SYP display · F05 Sham Cash deposits; spec `docs/specs/S03-exchange-rate-sham-cash-deposits.md`
 - [ ] S04 USDT deposits: F06 alone
 - [ ] S05 Alerts and control: F07 Telegram admin bot · F27 Customer notifications (email and notification center; deposit events) · F26 Store switches and emergency stop (registration closed by default)
 - Automations A01, A09, A10, A12, A13, A16, A17: each is specified and built inside the spec it belongs to, not as a separate item
