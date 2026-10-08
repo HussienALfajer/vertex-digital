@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/index.js';
 import { FilesModule } from '../files/index.js';
 import { NotificationsModule } from '../notifications/index.js';
 import { RatesModule } from '../rates/index.js';
+import { SettingsModule } from '../settings/index.js';
 import { WalletModule } from '../wallet/index.js';
 import { DepositReviewService } from './deposit-review.service.js';
 import { DepositSettingsService } from './deposit-settings.service.js';
@@ -20,7 +21,15 @@ import { UsdtReviewService } from './usdt-review.service.js';
  * ledger write paths in `packages/db`; the customer's balance comes from the wallet module.
  */
 @Module({
-  imports: [AuthModule, AdminModule, FilesModule, NotificationsModule, RatesModule, WalletModule],
+  imports: [
+    AuthModule,
+    AdminModule,
+    FilesModule,
+    NotificationsModule,
+    RatesModule,
+    SettingsModule,
+    WalletModule,
+  ],
   controllers: [DepositsController, DepositsAdminController],
   providers: [
     DepositsService,

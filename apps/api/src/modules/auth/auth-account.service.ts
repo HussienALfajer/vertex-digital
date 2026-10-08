@@ -17,12 +17,12 @@ import {
 } from '@vertex-digital/db';
 import { hashPassword, verifyPassword } from 'better-auth/crypto';
 import { and, eq, isNull, ne } from 'drizzle-orm';
-import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { NotificationsService } from '../notifications/index.js';
+import { SettingsService } from '../settings/index.js';
 import { type CodeCheck, checkCode, issueCode, issueDecoyCode } from './email-codes.js';
 import { type Limit, withinLimits } from './rate-counter.js';
 
@@ -78,13 +78,13 @@ export interface AccountHolder {
 export class AuthAccountService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
-    @Inject(ENV) private readonly env: Env,
     private readonly notifications: NotificationsService,
+    private readonly settings: SettingsService,
   ) {}
 
-  /** Rule C16: whether sign-up is open, so the store shows or hides it. */
-  registrationOpen(): boolean {
-    return this.env.REGISTRATION_OPEN;
+  /** Rule C16, S05 rule SW8: whether sign-up is open (the panel's switch), for the store. */
+  async registrationOpen(): Promise<boolean> {
+    return (await this.settings.values()).registration_open;
   }
 
   /** Rule C1, C2, C16: the same answer whether or not the email has an account. */
@@ -92,7 +92,7 @@ export class AuthAccountService {
     input: { name: string; email: string; password: string; phone: string },
     meta: RequestMeta,
   ): Promise<void> {
-    if (!this.env.REGISTRATION_OPEN) {
+    if (!(await this.registrationOpen())) {
       throw new CodedException(403, 'REGISTRATION_CLOSED', 'Registration is closed');
     }
     const email = input.email.trim().toLowerCase();

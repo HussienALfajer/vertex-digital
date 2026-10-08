@@ -75,7 +75,7 @@ Planned; each spec confirms its module's tables and exports. Built so far: `auth
 | `reports` | No business data; reports on read from module report services, Excel export | F22 |
 | `support` | Tickets, messages, attachments | F23 |
 | `notifications` | Email outbox, in-site customer notifications, web push subscriptions, notification preferences | F01, F24, F27 |
-| `settings` | Store switches (registration, emergency stop, per-method and per-supplier switches) with history | F26 |
+| `settings` | `store_switch_changes` (append-only: a change is a row, the newest is the value): registration, the emergency stop (purchases, deposits), a pause per deposit method; the per-supplier switch arrives with S07. `/api/store/status` (public), `/api/admin/switches` (change with re-authentication, history); `SettingsService.values()` for other modules, `valuesForDepositCreation(tx)` under the switches' shared lock (S05 rule SW5). Below the domain modules: it imports none | F26 |
 | `activity` | Anonymized live activity feed built from delivered orders | F25 |
 | `files` | `stored_files` (append-only) and the files under `FILES_ROOT`: uploads decoded with a pixel limit, stripped of metadata and re-encoded (receipts WebP, QR images PNG), with SHA-256 and dHash; `FilesService` (`prepare` before a transaction, `record` inside it, `serve` with `X-Accel-Redirect` in production). No routes of its own | F05, F23 |
 | `health` | No tables; `GET /api/health` for nginx, PM2 and the deploy checks | Phase 0 |

@@ -1,5 +1,10 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import {
+  STORE_SWITCH_DEFAULTS,
+  STORE_SWITCHES,
+  type StoreSwitchValues,
+} from '@vertex-digital/contracts';
+import {
   adminAccounts,
   adminUsers,
   auditEntries,
@@ -10,11 +15,12 @@ import {
   emailOutbox,
   ledgerAccounts,
   newId,
+  storeSwitchChanges,
 } from '@vertex-digital/db';
 import { type Challenge, solveChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
 import { hashPassword } from 'better-auth/crypto';
-import { and, asc, eq, inArray, like, notExists, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, like, notExists, or } from 'drizzle-orm';
 
 /*
  * Shared helpers for API integration tests: seed accounts straight into the test database, sign
@@ -326,4 +332,34 @@ export function auditOf(db: Database, entityId: string) {
     .from(auditEntries)
     .where(eq(auditEntries.entityId, entityId))
     .orderBy(asc(auditEntries.occurredAt), asc(auditEntries.id));
+}
+
+/**
+ * Sets every store switch to its default, or to `overrides` (S05 rule SW8: tests open
+ * registration through their fixtures). Switch rows are append-only and outlive a run, so each
+ * file that depends on a switch sets it first; only switches that differ get a row.
+ */
+export async function setSwitches(
+  db: Database,
+  overrides: Partial<StoreSwitchValues> = {},
+): Promise<void> {
+  const wanted = { ...STORE_SWITCH_DEFAULTS, ...overrides };
+  const rows = await db
+    .selectDistinctOn([storeSwitchChanges.switch])
+    .from(storeSwitchChanges)
+    .orderBy(
+      storeSwitchChanges.switch,
+      desc(storeSwitchChanges.createdAt),
+      desc(storeSwitchChanges.id),
+    );
+  const current = { ...STORE_SWITCH_DEFAULTS };
+  for (const row of rows) current[row.switch] = row.value;
+  const changes = STORE_SWITCHES.filter((name) => current[name] !== wanted[name]).map((name) => ({
+    id: newId(),
+    switch: name,
+    value: wanted[name],
+    adminId: newId(),
+    channel: 'admin' as const,
+  }));
+  if (changes.length > 0) await db.insert(storeSwitchChanges).values(changes);
 }

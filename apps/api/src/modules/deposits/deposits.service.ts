@@ -10,6 +10,7 @@ import {
   type DepositPage,
   depositCreditUsdUnits,
   depositLimitBreach,
+  depositMethodState,
   QUOTE_LOCK_MINUTES,
   type QuoteOffer,
   RECEIPT_SIMILAR_MAX_DISTANCE,
@@ -36,9 +37,11 @@ import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor
 import { AuthService, withinLimits } from '../auth/index.js';
 import { FilesService, type ServedFile } from '../files/index.js';
 import { type CurrentRate, RatesService } from '../rates/index.js';
+import { SettingsService } from '../settings/index.js';
 import {
   AlreadyCreated,
   checkCreation,
+  checkNotStopped,
   customerDeposit,
   customerEntry,
   type DepositRow,
@@ -71,13 +74,15 @@ export class DepositsService {
     private readonly rates: RatesService,
     private readonly customers: AuthService,
     private readonly files: FilesService,
+    private readonly switches: SettingsService,
   ) {}
 
   /** `GET /api/deposits/sham-cash/options` (rules SC1, SC3, SC13, FX8). */
   async options(customerId: string): Promise<ShamCashOptions> {
-    const [settings, rate, [pending]] = await Promise.all([
+    const [settings, rate, switches, [pending]] = await Promise.all([
       this.settings.current(),
       this.rates.current(),
+      this.switches.values(),
       this.db
         .select({ id: deposits.id })
         .from(deposits)
@@ -87,8 +92,14 @@ export class DepositsService {
       const reason = unavailableReason(settings, rate, currency);
       return { available: reason === null, reason };
     };
+    const currencies = { SYP: option('SYP'), USD: option('USD') };
     return {
-      currencies: { SYP: option('SYP'), USD: option('USD') },
+      state: depositMethodState({
+        stopped: switches.deposits_stopped,
+        paused: switches.sham_cash_paused,
+        ready: currencies.SYP.available || currencies.USD.available,
+      }),
+      currencies,
       account: settings && {
         name: settings.shamCashAccountName,
         number: settings.shamCashAccountNumber,
@@ -155,6 +166,7 @@ export class DepositsService {
           .from(deposits)
           .where(eq(deposits.idempotencyKey, idempotencyKey));
         if (written) throw new AlreadyCreated();
+        await checkNotStopped(this.switches, tx, 'sham_cash');
         await checkCreation(tx, customerId);
         const limits = await limitsOf(tx, customerId, settings);
         const breach = depositLimitBreach(limits, declaredUsdUnits);

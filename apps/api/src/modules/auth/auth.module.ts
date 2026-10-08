@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { NotificationsModule } from '../notifications/index.js';
+import { SettingsModule } from '../settings/index.js';
 import { AuthAdminController } from './auth.admin.controller.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
@@ -12,7 +13,7 @@ import { AuthTestCustomersService } from './auth-test-customers.service.js';
  * tables, the account changes, the profile and the admin's test customers.
  */
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, SettingsModule],
   controllers: [AuthController, AuthAccountController, AuthAdminController],
   providers: [AuthService, AuthAccountService, AuthTestCustomersService],
   exports: [AuthService],

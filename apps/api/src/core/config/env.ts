@@ -59,14 +59,6 @@ export const envSchema = z
      */
     ALTCHA_MAX_COUNTER: z.coerce.number().int().min(10).default(10_000),
     /**
-     * Customer sign-up (S01 rule C16): only `true` opens it. Closed by default, so production stays
-     * closed until the pilot; S05 replaces it with the panel's switch (F26).
-     */
-    REGISTRATION_OPEN: z
-      .string()
-      .optional()
-      .transform((value) => value === 'true'),
-    /**
      * Where uploaded files live (S03 receipts and QR images): outside the web root. Relative paths
      * resolve against the API's working directory.
      */
