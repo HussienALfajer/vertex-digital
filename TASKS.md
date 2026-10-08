@@ -12,8 +12,8 @@ Spec: `docs/specs/S06-catalog-and-pricing.md` (F08, F10; ADRs 0003, 0005, 0008, 
 - [x] Api `pricing` module: rules list, set (re-authentication, upsert under lock), archive (global refused), preview (rule or draft, SYP via `RatesService.current()`, savings); `test/pricing.test.ts` (every route, re-authentication, parallel sets leave one live rule)
 - [x] nginx: image route (immutable cache) and upload size, if the existing zones do not cover them
 - [x] Bridge: build, OpenAPI export, admin client
-- [ ] Wiring checklist, docs (`docs/architecture.md` `catalog`, `pricing`, `files` rows and "built so far", folder `CLAUDE.md` if needed)
-- [ ] Checks, reviewer, acceptance (endpoints summary), PR with auto-merge
+- [x] Wiring checklist, docs (`docs/architecture.md` `catalog`, `pricing`, `files` rows and "built so far", folder `CLAUDE.md`, `docs/deployment.md`, spec details settled, `wiring.md` patterns)
+- [ ] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (no blocking findings), acceptance (endpoints summary), PR with auto-merge
 
 ## PR 2 — Admin screens and E2E · Opus 5.5 `high`
 - [ ] Admin `features/catalog/`: `/catalog` (category tabs, game cards, filters, search, move up/down, empty, loading, error), categories dialog, `/catalog/games/new` and `/catalog/games/$id` (tabs: data with uploads and live contrast, input fields, products with archived filter, pricing)
