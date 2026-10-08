@@ -2,11 +2,22 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { PlaceOrderRequest } from '../core/adapter.js';
 import { SupplierError } from '../core/errors.js';
-import { FAKE_SIGNATURE_HEADER, FAKE_TIMESTAMP_HEADER, FakeSupplierAdapter } from './adapter.js';
+import {
+  FAKE_SIGNATURE_HEADER,
+  FAKE_TIMESTAMP_HEADER,
+  FakeSupplierAdapter,
+  type FakeSupplierState,
+  fakeSupplierStateSchema,
+} from './adapter.js';
 
 const webhookSecret = 'fake-webhook-secret';
-const adapter = (options: { balanceUsdUnits?: number } = {}) =>
-  new FakeSupplierAdapter({ webhookSecret, slowMs: 20, ...options });
+const adapter = (options: { balanceUsdUnits?: number; state?: Partial<FakeSupplierState> } = {}) =>
+  new FakeSupplierAdapter({
+    webhookSecret,
+    slowMs: 20,
+    ...options,
+    state: fakeSupplierStateSchema.parse(options.state ?? {}),
+  });
 
 const order = (
   playerId: string,
@@ -22,13 +33,60 @@ const order = (
 describe('fake supplier', () => {
   it('lists offers in USD units and reports its balance', async () => {
     const fake = adapter();
-    expect(await fake.listOffers()).toContainEqual({
+    const offers = await fake.listOffers();
+    expect(offers).toContainEqual({
       offerId: 'fake-uc-60',
       name: 'Fake UC 60',
       cost: { currency: 'USD', amountUnits: 880_000 },
       inStock: true,
+      group: 'PUBG Mobile',
+      kind: 'direct',
+      requiredFields: ['playerId'],
+    });
+    expect(offers).toHaveLength(10);
+    expect(new Set(offers.map((offer) => offer.group))).toEqual(
+      new Set(['PUBG Mobile', 'Free Fire', 'iTunes']),
+    );
+    expect(offers.find((offer) => offer.offerId === 'fake-gift-10')).toMatchObject({
+      kind: 'code',
+      requiredFields: [],
     });
     expect(await fake.getBalance()).toEqual({ currency: 'USD', amountUnits: 1_000_000_000 });
+  });
+
+  it('follows its scripted state: costs, stock, removals, failures, balance', async () => {
+    const scripted = adapter({
+      state: {
+        costs: { 'fake-uc-60': 920_000 },
+        outOfStock: ['fake-uc-325'],
+        removed: ['fake-ff-100'],
+        balanceUsdUnits: 20_000_000,
+      },
+    });
+    const offers = await scripted.listOffers();
+    expect(offers.find((offer) => offer.offerId === 'fake-uc-60')?.cost.amountUnits).toBe(920_000);
+    expect(offers.find((offer) => offer.offerId === 'fake-uc-325')?.inStock).toBe(false);
+    expect(offers.some((offer) => offer.offerId === 'fake-ff-100')).toBe(false);
+    expect(await scripted.getBalance()).toEqual({ currency: 'USD', amountUnits: 20_000_000 });
+    expect(await scripted.placeOrder(order('51234567', { offerId: 'fake-ff-100' }))).toMatchObject({
+      status: 'failed_definitive',
+      supplierCode: 'FAKE_REFUSED',
+    });
+    expect(await scripted.placeOrder(order('51234567', { offerId: 'fake-uc-325' }))).toMatchObject({
+      status: 'failed_definitive',
+      supplierCode: 'OUT_OF_STOCK',
+    });
+
+    const failingSync = adapter({ state: { failSync: true } });
+    await expect(failingSync.listOffers()).rejects.toMatchObject({ kind: 'retryable' });
+    expect((await failingSync.getBalance()).currency).toBe('USD');
+
+    const down = adapter({ state: { errors: true } });
+    await expect(down.listOffers()).rejects.toThrow(SupplierError);
+    await expect(down.getBalance()).rejects.toMatchObject({ kind: 'retryable' });
+    await expect(
+      down.validatePlayer({ offerId: 'fake-uc-60', fields: { playerId: '51234567' } }),
+    ).rejects.toThrow(SupplierError);
   });
 
   it('validates players', async () => {

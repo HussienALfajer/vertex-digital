@@ -12099,7 +12099,11 @@
           "daily_summary",
           "bot_reply",
           "link_changed",
-          "test"
+          "test",
+          "supplier_sync_summary",
+          "supplier_health",
+          "supplier_balance_low",
+          "supplier_sync_failing"
         ]
       },
       "TelegramMessageStatus": {

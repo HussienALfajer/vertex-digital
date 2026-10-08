@@ -1,13 +1,18 @@
+import { createHash } from 'node:crypto';
 import { hostname } from 'node:os';
 import { type UsdtMethod, usdtAddressSchemas } from '@vertex-digital/contracts';
 import { z } from 'zod';
+
+/** A value `.env.example` ships, never a real secret. */
+const isPlaceholder = (value: string) =>
+  value.startsWith('replace-') || value.includes('replace-me');
 
 /** Empty, or a value `.env.example` ships (never a real secret), counts as unset. */
 const optional = () =>
   z
     .string()
     .optional()
-    .transform((value) => (value && !value.includes('replace-me') ? value : undefined));
+    .transform((value) => (value && !isPlaceholder(value) ? value : undefined));
 
 /** The all-zero addresses an older `.env.example` shipped count as unset. */
 const isPlaceholderAddress = (value: string) => /^(T|0x)0+$/.test(value);
@@ -107,6 +112,23 @@ export const envSchema = z
     TRONGRID_API_KEY: optional(),
     /** A BSC JSON-RPC endpoint; a provider's key goes in the URL, so it is a secret. */
     BSC_RPC_URL: optional().pipe(z.url({ protocol: /^https$/ }).optional()),
+    /**
+     * The AES-256-GCM key of supplier credentials (S07 rule SP2): 32 bytes in base64, the API's
+     * value. Required in production; derived locally exactly as the API derives it.
+     */
+    SUPPLIER_KEYS_SECRET: optional().pipe(
+      z
+        .string()
+        .refine((value) => Buffer.from(value, 'base64').length === 32, 'Expected 32 bytes')
+        .optional(),
+    ),
+    /** The fake supplier (S07 rule SP1): development and E2E only, refused in production. */
+    SUPPLIER_FAKE_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    /** The fake supplier's scripted state, written by `supplier:fake` (development). */
+    FAKE_SUPPLIER_STATE_FILE: z.string().min(1).default('./.data/fake-supplier.json'),
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.TELEGRAM_TRANSPORT !== 'log', {
     message: 'Production sends Telegram messages through the Bot API',
@@ -125,6 +147,14 @@ export const envSchema = z
   .refine((env) => env.NODE_ENV !== 'production' || env.EMAIL_TRANSPORT === 'smtp', {
     message: 'Production sends email over SMTP',
     path: ['EMAIL_TRANSPORT'],
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || env.SUPPLIER_KEYS_SECRET, {
+    message: 'SUPPLIER_KEYS_SECRET is required',
+    path: ['SUPPLIER_KEYS_SECRET'],
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || !env.SUPPLIER_FAKE_ENABLED, {
+    message: 'The fake supplier is never enabled in production',
+    path: ['SUPPLIER_FAKE_ENABLED'],
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.CHAIN_READER === 'live', {
     message: 'Production reads the chains (CHAIN_READER=live)',
@@ -149,6 +179,12 @@ export const envSchema = z
   )
   .transform((env) => ({
     ...env,
+    // Outside production, the API's stable per-machine key: the same DATABASE_URL, the same label.
+    SUPPLIER_KEYS_SECRET:
+      env.SUPPLIER_KEYS_SECRET ??
+      createHash('sha256')
+        .update(`vertex-digital-dev-supplier-keys:${env.DATABASE_URL}`)
+        .digest('base64'),
     TELEGRAM_TRANSPORT:
       env.TELEGRAM_TRANSPORT ??
       (env.NODE_ENV === 'production' ? ('api' as const) : ('log' as const)),

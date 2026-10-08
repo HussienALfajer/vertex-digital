@@ -346,7 +346,7 @@ describe('the daily summary (rule AL3)', () => {
       { configured: false, call: async () => null },
       async () => null,
     );
-    const job = new DailySummaryJob(pgBoss, alerts, db);
+    const job = new DailySummaryJob(pgBoss, alerts, db, { ...env, SUPPLIER_FAKE_ENABLED: true });
     const now = new Date('2030-01-01T19:30:00Z');
     expect(damascusDate(now)).toBe('2030-01-01');
     await isolated(async (tx) => {
@@ -425,6 +425,10 @@ describe('the messages of PR 4', () => {
       registrationOpen: false,
       activeSwitches: [{ switch: 'deposits_stopped', since: '2030-01-01T10:00:00Z' }],
       suppressedAlerts: 3,
+      openReviews: 2,
+      marginGuarded: 1,
+      suppliersNotHealthy: [{ supplierNameAr: 'WDGZone', state: 'degraded' }],
+      balancesLow: [{ supplierNameAr: 'SHOP2TOPUP', currency: 'USD', amountUnits: 20 * USD }],
     };
     const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
     for (const line of [
@@ -433,6 +437,10 @@ describe('the messages of PR 4', () => {
       'التسجيل: مغلق',
       '⛔ الإيداع متوقف منذ 01/01 13:00',
       'تنبيهات حُجبت بحد الإرسال: 3',
+      'مراجعات أسعار مفتوحة: 2',
+      'باقات أوقفها حارس الهامش: 1',
+      '⚠️ المورد WDGZone: متراجع',
+      '💰 رصيد SHOP2TOPUP تحت الحد: $20.00',
     ]) {
       expect(text).toContain(line);
     }

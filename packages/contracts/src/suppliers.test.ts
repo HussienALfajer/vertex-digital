@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   createRouteSchema,
   fieldMapSchema,
+  HEALTH_PROBE_REASON,
+  type HealthCall,
+  healthWindowStart,
   importOffersSchema,
   isCostStale,
   orderRoutes,
   priceBasis,
+  probeOutcome,
   type RouteFacts,
   routeTier,
   routeUnusableReason,
@@ -14,6 +18,7 @@ import {
   SUPPLIER_POLICY_DEFAULTS,
   supplierAvailable,
   supplierHasCatalog,
+  supplierHealth,
   supplierPolicySchema,
   unmappedFields,
   updateSupplierSchema,
@@ -209,5 +214,174 @@ describe('route inputs', () => {
     });
     expect(importOffersSchema.safeParse({ gameId: id, rows: [row, row] }).success).toBe(false);
     expect(importOffersSchema.safeParse({ gameId: id, rows: [] }).success).toBe(false);
+  });
+});
+
+describe('supplierHealth (rules H1, H2)', () => {
+  const P = SUPPLIER_POLICY_DEFAULTS;
+  const call = (
+    result: HealthCall['result'],
+    latencyMs = 500,
+    operation: HealthCall['operation'] = 'get_balance',
+  ): HealthCall => ({ operation, result, latencyMs, at: now });
+  const calls = (ok: number, errors: number, refused = 0) => [
+    ...Array.from({ length: errors }, () => call('error')),
+    ...Array.from({ length: refused }, () => call('refused')),
+    ...Array.from({ length: ok }, () => call('ok')),
+  ];
+
+  it('is healthy with enough answered calls; a refusal counts as answered', () => {
+    expect(supplierHealth(calls(9, 0, 1), P, 'degraded')).toEqual({
+      state: 'healthy',
+      reason: 'success 100%',
+      calls: 10,
+      successBp: 10_000,
+      p90Ms: 500,
+    });
+    expect(supplierHealth(calls(9, 1), P, 'healthy')).toMatchObject({
+      state: 'healthy',
+      successBp: 9_000,
+    });
+  });
+
+  it('is degraded below 90% success or above the p90 limit', () => {
+    expect(supplierHealth(calls(8, 1, 0).concat(calls(0, 0, 0)), P, 'healthy')).toMatchObject({
+      state: 'degraded',
+      reason: 'success 88% < 90%',
+      successBp: 8_888,
+    });
+    const slow = [
+      ...Array.from({ length: 8 }, () => call('ok', 400)),
+      call('ok', 12_000),
+      call('ok', 15_000),
+    ];
+    expect(supplierHealth(slow, P, 'healthy')).toMatchObject({
+      state: 'degraded',
+      reason: 'p90 12000 ms > 10000 ms',
+      p90Ms: 12_000,
+    });
+    // At the limit exactly, and a slow catalog read does not count (rule H1).
+    expect(
+      supplierHealth(
+        [...calls(5, 0), call('ok', 10_000), call('ok', 60_000, 'list_offers')],
+        P,
+        'healthy',
+      ),
+    ).toMatchObject({ state: 'healthy', p90Ms: 10_000 });
+    expect(
+      supplierHealth([call('ok', 60_000, 'list_offers'), ...calls(4, 0)], P, 'healthy'),
+    ).toMatchObject({ state: 'healthy', calls: 5, p90Ms: 500 });
+  });
+
+  it('is down below 50% success, or after the consecutive errors', () => {
+    const mixed = (...results: HealthCall['result'][]) => results.map((result) => call(result));
+    // 2 of 4 answered, never 3 errors in a row: exactly 50% is degraded, not down.
+    expect(
+      supplierHealth(mixed('error', 'ok', 'error', 'ok', 'error', 'ok'), P, 'healthy'),
+    ).toMatchObject({ state: 'degraded', reason: 'success 50% < 90%', successBp: 5_000 });
+    expect(
+      supplierHealth(mixed('error', 'error', 'ok', 'error', 'error', 'ok'), P, 'healthy'),
+    ).toMatchObject({ state: 'down', reason: 'success 33% < 50%', successBp: 3_333 });
+    expect(supplierHealth([...calls(10, 0), ...calls(0, 3)], P, 'healthy')).toMatchObject({
+      state: 'down',
+      reason: '3 consecutive errors',
+      calls: 13,
+    });
+  });
+
+  it('keeps its state below the minimum count unless errors run (edge case 15)', () => {
+    expect(supplierHealth([], P, 'degraded')).toEqual({
+      state: 'degraded',
+      reason: '0 calls < 5',
+      calls: 0,
+      successBp: null,
+      p90Ms: null,
+    });
+    expect(supplierHealth([call('error')], P, 'healthy')).toMatchObject({
+      state: 'healthy',
+      reason: '1 calls < 5',
+      successBp: 0,
+    });
+    expect(supplierHealth(calls(0, 3), P, 'healthy')).toMatchObject({ state: 'down' });
+    expect(
+      supplierHealth(calls(0, 2), { ...P, downConsecutiveErrors: 2 }, 'healthy'),
+    ).toMatchObject({ state: 'down', reason: '2 consecutive errors' });
+  });
+});
+
+describe('probes (rule H3)', () => {
+  const P = SUPPLIER_POLICY_DEFAULTS;
+  const downSince = minutesAgo(30);
+  const at = (minutesAfterDown: number) =>
+    new Date(downSince.getTime() + minutesAfterDown * 60_000);
+
+  it('waits, then the first call is the probe', () => {
+    expect(probeOutcome(downSince, [], P)).toEqual({ recoveredAt: null, nextProbeAt: at(10) });
+    // A success inside the wait counts for nothing.
+    expect(probeOutcome(downSince, [{ result: 'ok', at: at(4) }], P)).toEqual({
+      recoveredAt: null,
+      nextProbeAt: at(10),
+    });
+    expect(
+      probeOutcome(
+        downSince,
+        [
+          { result: 'ok', at: at(4) },
+          { result: 'refused', at: at(11) },
+        ],
+        P,
+      ),
+    ).toEqual({ recoveredAt: at(11), nextProbeAt: at(10) });
+  });
+
+  it('waits again after a failed probe', () => {
+    expect(
+      probeOutcome(
+        downSince,
+        [
+          { result: 'error', at: at(10) },
+          { result: 'ok', at: at(15) },
+        ],
+        P,
+      ),
+    ).toEqual({ recoveredAt: null, nextProbeAt: at(20) });
+    expect(
+      probeOutcome(
+        downSince,
+        [
+          { result: 'error', at: at(10) },
+          { result: 'ok', at: at(20) },
+        ],
+        P,
+      ),
+    ).toEqual({ recoveredAt: at(20), nextProbeAt: at(20) });
+  });
+
+  it('reads only the calls since a probe while its degraded state stands', () => {
+    const window = minutesAgo(30);
+    expect(
+      healthWindowStart({ state: 'healthy', reason: 'x', since: minutesAgo(5) }, now, P),
+    ).toEqual(window);
+    expect(
+      healthWindowStart(
+        { state: 'degraded', reason: HEALTH_PROBE_REASON, since: minutesAgo(5) },
+        now,
+        P,
+      ),
+    ).toEqual(minutesAgo(5));
+    expect(
+      healthWindowStart(
+        { state: 'degraded', reason: HEALTH_PROBE_REASON, since: minutesAgo(50) },
+        now,
+        P,
+      ),
+    ).toEqual(window);
+    expect(
+      healthWindowStart(
+        { state: 'degraded', reason: 'success 80% < 90%', since: minutesAgo(5) },
+        now,
+        P,
+      ),
+    ).toEqual(window);
   });
 });

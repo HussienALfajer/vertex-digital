@@ -111,6 +111,50 @@ describe('Telegram messages', () => {
         .success,
     ).toBe(false);
   });
+
+  it('read a daily summary queued before S07 with the supplier lines empty', () => {
+    const summary = TELEGRAM_MESSAGE_PARAMS.daily_summary.parse({
+      date: '2026-10-08',
+      credited: [],
+      approvedFromTelegram: 0,
+      rejected: 0,
+      expired: 0,
+      waiting: 0,
+      oldestWaitMinutes: null,
+      unmatchedToday: 0,
+      unmatchedOpen: 0,
+      newCustomers: 0,
+      walletsTotalUsdUnits: 0,
+      registrationOpen: true,
+      activeSwitches: [],
+      suppressedAlerts: 0,
+    });
+    expect(summary).toMatchObject({
+      openReviews: 0,
+      marginGuarded: 0,
+      suppliersNotHealthy: [],
+      balancesLow: [],
+    });
+  });
+
+  it('tell a failing sync from stale costs (S07)', () => {
+    const stale = TELEGRAM_MESSAGE_PARAMS.supplier_sync_failing.parse({
+      reason: 'costs_stale',
+      supplier: 'fake',
+      supplierNameAr: 'مورد تجريبي',
+      unavailableProducts: 14,
+    });
+    expect(stale.reason).toBe('costs_stale');
+    expect(
+      TELEGRAM_MESSAGE_PARAMS.supplier_sync_failing.safeParse({
+        reason: 'runs_failed',
+        supplier: 'fake',
+        supplierNameAr: 'مورد تجريبي',
+        failedRuns: 0,
+        errorCode: null,
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('Telegram linking (S05 rule TG3)', () => {

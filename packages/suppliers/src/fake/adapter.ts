@@ -27,6 +27,10 @@ import { hmacSha256, verifyHmacSignature } from '../core/hmac.js';
  *   unknown…                   unknown (as after a timeout); polling finds it delivered
  *   badsig…                    pending; its webhook carries a wrong signature
  *   invalid…                   `validatePlayer` answers invalid
+ *
+ * Its catalog (S07) is about ten offers in three groups, changed by a `FakeSupplierState`: costs,
+ * stock, removed offers, a failing sync, every call failing, the balance. The worker reads that
+ * state from a git-ignored file the `supplier:fake` CLI writes (development and E2E only).
  */
 
 export const FAKE_SUPPLIER_CODE = 'fake';
@@ -35,27 +39,73 @@ export const FAKE_SUPPLIER_CODE = 'fake';
 export const FAKE_TIMESTAMP_HEADER = 'x-fake-timestamp';
 export const FAKE_SIGNATURE_HEADER = 'x-fake-signature';
 
+/** What the `supplier:fake` CLI scripts (S07): changes to the catalog and to the calls. */
+export const fakeSupplierStateSchema = z.object({
+  /** Offer id → cost in USD units. */
+  costs: z.record(z.string(), z.int().min(1).max(Number.MAX_SAFE_INTEGER)).default({}),
+  outOfStock: z.array(z.string()).default([]),
+  /** Offers left out of the list (and refused when ordered). */
+  removed: z.array(z.string()).default([]),
+  /** `listOffers` fails; the other calls answer. */
+  failSync: z.boolean().default(false),
+  /** Every catalog, balance and validation call fails, as a supplier that is down. */
+  errors: z.boolean().default(false),
+  balanceUsdUnits: z.int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).optional(),
+});
+
+export type FakeSupplierState = z.infer<typeof fakeSupplierStateSchema>;
+
 export interface FakeAdapterOptions {
   webhookSecret: string;
-  /** Prepaid balance in USD units; an order costing more is refused. Default 1,000 USD. */
+  /**
+   * Prepaid balance in USD units; an order costing more is refused. Default: the state's, else
+   * 1,000 USD.
+   */
   balanceUsdUnits?: number;
+  /** The scripted changes (S07); none by default. */
+  state?: FakeSupplierState;
   /** Delay of `slow…` orders. Default 3 seconds. */
   slowMs?: number;
 }
 
 const usd = (cents: number): SupplierMoney => ({ currency: 'USD', amountUnits: cents * USD_CENT });
 
-/** The fake catalog: two direct top-ups and one code product. */
-const OFFERS: (SupplierOffer & { delivers: 'topup' | 'code' })[] = [
-  { offerId: 'fake-uc-60', name: 'Fake UC 60', cost: usd(88), inStock: true, delivers: 'topup' },
-  { offerId: 'fake-uc-325', name: 'Fake UC 325', cost: usd(440), inStock: true, delivers: 'topup' },
-  {
-    offerId: 'fake-gift-10',
-    name: 'Fake gift card 10',
-    cost: usd(960),
-    inStock: true,
-    delivers: 'code',
-  },
+type FakeOffer = SupplierOffer & { delivers: 'topup' | 'code' };
+
+const topUp = (offerId: string, name: string, group: string, cents: number): FakeOffer => ({
+  offerId,
+  name,
+  cost: usd(cents),
+  inStock: true,
+  group,
+  kind: 'direct',
+  requiredFields: ['playerId'],
+  delivers: 'topup',
+});
+
+const giftCard = (offerId: string, name: string, cents: number): FakeOffer => ({
+  offerId,
+  name,
+  cost: usd(cents),
+  inStock: true,
+  group: 'iTunes',
+  kind: 'code',
+  requiredFields: [],
+  delivers: 'code',
+});
+
+/** The fake catalog: PUBG Mobile and Free Fire top-ups, and iTunes codes. */
+const OFFERS: readonly FakeOffer[] = [
+  topUp('fake-uc-60', 'Fake UC 60', 'PUBG Mobile', 88),
+  topUp('fake-uc-325', 'Fake UC 325', 'PUBG Mobile', 440),
+  topUp('fake-uc-660', 'Fake UC 660', 'PUBG Mobile', 870),
+  topUp('fake-uc-1800', 'Fake UC 1800', 'PUBG Mobile', 2_190),
+  topUp('fake-ff-100', 'Fake Free Fire 100', 'Free Fire', 95),
+  topUp('fake-ff-310', 'Fake Free Fire 310', 'Free Fire', 290),
+  topUp('fake-ff-520', 'Fake Free Fire 520', 'Free Fire', 480),
+  topUp('fake-ff-1060', 'Fake Free Fire 1060', 'Free Fire', 950),
+  giftCard('fake-gift-10', 'Fake gift card 10', 960),
+  giftCard('fake-itunes-25', 'Fake iTunes 25', 2_400),
 ];
 
 interface FakeOrder {
@@ -89,21 +139,28 @@ export class FakeSupplierAdapter implements SupplierAdapter {
   };
 
   private readonly orders = new Map<string, FakeOrder>();
+  private readonly state: FakeSupplierState;
   private balanceUnits: number;
 
   constructor(private readonly options: FakeAdapterOptions) {
-    this.balanceUnits = options.balanceUsdUnits ?? 1_000 * 100 * USD_CENT;
+    this.state = options.state ?? fakeSupplierStateSchema.parse({});
+    this.balanceUnits =
+      options.balanceUsdUnits ?? this.state.balanceUsdUnits ?? 1_000 * 100 * USD_CENT;
   }
 
   async listOffers(): Promise<SupplierOffer[]> {
-    return OFFERS.map(({ delivers: _, ...offer }) => offer);
+    this.failIfScripted();
+    if (this.state.failSync) throw new SupplierError('retryable', 'Fake catalog unavailable');
+    return this.catalog().map(({ delivers: _, ...offer }) => offer);
   }
 
   async getBalance(): Promise<SupplierMoney> {
+    this.failIfScripted();
     return { currency: 'USD', amountUnits: this.balanceUnits };
   }
 
   async validatePlayer(input: { offerId: string; fields: OrderFields }): Promise<PlayerValidation> {
+    this.failIfScripted();
     const playerId = input.fields.playerId;
     if (!playerId) throw new SupplierError('definitive', 'playerId is required');
     if (playerId.startsWith('invalid')) return { valid: false };
@@ -122,13 +179,20 @@ export class FakeSupplierAdapter implements SupplierAdapter {
             reason: 'Key reused for another order',
           };
     }
-    const offer = OFFERS.find((candidate) => candidate.offerId === request.offerId);
+    const offer = this.catalog().find((candidate) => candidate.offerId === request.offerId);
     const playerId = request.fields.playerId ?? '';
     if (!offer || !playerId || playerId.startsWith('fail')) {
       return this.record(request, {
         status: 'failed_definitive',
         supplierCode: 'FAKE_REFUSED',
         reason: offer ? 'Refused by the fake supplier' : 'Unknown offer',
+      });
+    }
+    if (!offer.inStock) {
+      return this.record(request, {
+        status: 'failed_definitive',
+        supplierCode: 'OUT_OF_STOCK',
+        reason: 'Out of stock at the fake supplier',
       });
     }
     const cost = offer.cost.amountUnits * request.quantity;
@@ -236,6 +300,21 @@ export class FakeSupplierAdapter implements SupplierAdapter {
             reason: 'Failed by the fake supplier',
           };
     return { eventId: parsed.eventId, idempotencyKey: parsed.idempotencyKey, outcome };
+  }
+
+  /** The catalog with the scripted costs, stock and removals. */
+  private catalog(): FakeOffer[] {
+    const { costs, outOfStock, removed } = this.state;
+    return OFFERS.filter((offer) => !removed.includes(offer.offerId)).map((offer) => ({
+      ...offer,
+      cost: { currency: 'USD', amountUnits: costs[offer.offerId] ?? offer.cost.amountUnits },
+      inStock: !outOfStock.includes(offer.offerId),
+    }));
+  }
+
+  /** A supplier that is down: no answer (S07 acceptance, `--errors on`). */
+  private failIfScripted(): void {
+    if (this.state.errors) throw new SupplierError('retryable', 'Fake supplier timed out');
   }
 
   private record(

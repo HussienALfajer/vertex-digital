@@ -15,8 +15,11 @@ import {
   depositSettings,
   deposits,
   ledgerSummary,
+  priceReviews,
+  productRoutingStates,
   queueTelegramMessage,
   storeSwitchChanges,
+  supplierStates,
   type Transaction,
   telegramPrompts,
   usdtTransferState,
@@ -24,6 +27,7 @@ import {
 } from '@vertex-digital/db';
 import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
 import { TelegramAlerts } from '../../core/alerts/telegram-alerts.js';
+import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { waitingDeposits } from './review-reminder.job.js';
@@ -57,6 +61,7 @@ export class DailySummaryJob implements OnApplicationBootstrap {
     private readonly pgBoss: PgBossService,
     private readonly alerts: TelegramAlerts,
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -216,6 +221,48 @@ export class DailySummaryJob implements OnApplicationBootstrap {
         since: (since.get(name) ?? now).toISOString(),
       })),
       suppressedAlerts: this.alerts.suppressedOn(date),
+      ...(await this.supplierLines(db, now)),
+    };
+  }
+
+  /**
+   * S07: the open reviews, the products the margin guard holds (only while a review holds their
+   * price, rule P6), and the suppliers in use that are not healthy or whose balance is low (H5).
+   */
+  private async supplierLines(db: Database | Transaction, now: Date) {
+    const context = { now, fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED };
+    const [open, states] = await Promise.all([
+      db
+        .select({ productId: priceReviews.productId })
+        .from(priceReviews)
+        .where(eq(priceReviews.status, 'open')),
+      supplierStates(db, context),
+    ]);
+    const routing = await productRoutingStates(
+      db,
+      open.map((row) => row.productId),
+      context,
+    );
+    const inUse = states.filter((state) => state.available && state.code !== 'manual');
+    return {
+      openReviews: open.length,
+      marginGuarded: [...routing.values()].filter(
+        (state) => state.availability === 'paused_by_margin_guard',
+      ).length,
+      suppliersNotHealthy: inUse
+        .filter((state) => state.health !== 'healthy')
+        .map((state) => ({ supplierNameAr: state.nameAr, state: state.health })),
+      balancesLow: inUse.flatMap((state) =>
+        state.balance?.currency === 'USD' && state.balance.amountUnits < state.lowBalanceUsdUnits
+          ? [
+              {
+                supplierNameAr: state.nameAr,
+                currency: state.balance.currency,
+                amountUnits: state.balance.amountUnits,
+              },
+            ]
+          : [],
+      ),
     };
   }
 }

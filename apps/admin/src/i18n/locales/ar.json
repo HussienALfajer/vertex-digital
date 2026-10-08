@@ -949,7 +949,11 @@
       "daily_summary": "الملخص اليومي",
       "bot_reply": "رد البوت",
       "link_changed": "تغيير الربط",
-      "test": "رسالة اختبار"
+      "test": "رسالة اختبار",
+      "supplier_sync_summary": "ملخص مزامنة مورد",
+      "supplier_health": "حالة مورد",
+      "supplier_balance_low": "رصيد مورد",
+      "supplier_sync_failing": "فشل مزامنة مورد"
     }
   },
   "rates": {
