@@ -13,6 +13,9 @@ export const RATE_CONFIRMATION_THRESHOLD_PERCENT = 5;
 /** The panel's banner shows while the newest rate is older than this (rule FX7). */
 export const RATE_STALE_AFTER_HOURS = 48;
 
+/** A SYP deposit's quote locks the rate for this long (rule FX5, A12). */
+export const QUOTE_LOCK_MINUTES = 15;
+
 /** The display step's bounds in SYP units: 1 to 50 pounds (rule FX3). */
 export const DISPLAY_STEP_MIN_SYP_UNITS = 1 * CURRENCY_SCALE.SYP;
 export const DISPLAY_STEP_MAX_SYP_UNITS = 50 * CURRENCY_SCALE.SYP;

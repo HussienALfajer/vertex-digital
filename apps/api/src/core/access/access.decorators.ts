@@ -1,4 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
+import { ADMIN_SESSION_RULES } from '@vertex-digital/contracts';
 
 /*
  * Who may call a route (ADR 0011, 0016). Every route carries exactly one of these; the
@@ -39,3 +40,17 @@ export const AdminSetupRoute = () =>
  * else `403 REAUTHENTICATION_REQUIRED` (rule D5). Each spec marks its own sensitive routes.
  */
 export const Sensitive = () => SetMetadata(SENSITIVE, true);
+
+/**
+ * True when the admin re-authenticated in the last 5 minutes (rule D5): what `@Sensitive()`
+ * checks, for a route whose need for it depends on the request (S03 rule RV4).
+ */
+export function isRecentlyReauthenticated(
+  admin: { reauthenticatedAt: Date | null },
+  now = Date.now(),
+): boolean {
+  return (
+    admin.reauthenticatedAt !== null &&
+    now - admin.reauthenticatedAt.getTime() <= ADMIN_SESSION_RULES.reauthenticationMs
+  );
+}

@@ -94,6 +94,58 @@ describe('the wallet adjustment email (S02)', () => {
   });
 });
 
+describe('the deposit emails (S03)', () => {
+  const depositId = '01890000-0000-7000-8000-0000000000d1';
+  const store = 'https://digital.example';
+  const link = `https://digital.example/wallet/deposits/${depositId}`;
+  const arabicRtl = (html: string) => expect(html).toContain('<html lang="ar" dir="rtl">');
+
+  it('says how much was credited, with a link to the deposit', () => {
+    const email = renderEmail(
+      'customer_deposit_credited',
+      {
+        at: '2026-10-08T09:30:00.000Z',
+        depositId,
+        referenceCode: 'VD-7KQ2M',
+        creditedUsdUnits: 16_100_000,
+      },
+      store,
+    );
+    expect(email.subject).toBe('أُضيف $16.10 إلى رصيدك من إيداع شام كاش');
+    expect(email.text).toContain('VD-7KQ2M');
+    expect(email.text).toContain(`عرض الإيداع: ${link}`);
+    arabicRtl(email.html);
+  });
+
+  it('gives the reason of a rejection in words, never a note', () => {
+    const email = renderEmail(
+      'customer_deposit_rejected',
+      { depositId, referenceCode: 'VD-7KQ2M', reason: 'receipt_invalid' },
+      store,
+    );
+    expect(email.text).toContain('السبب: الإيصال غير صالح أو معدَّل.');
+    expect(email.html).toContain(`href="${link}"`);
+    arabicRtl(email.html);
+    const other = renderEmail(
+      'customer_deposit_rejected',
+      { depositId, referenceCode: 'VD-7KQ2M', reason: 'other' },
+      store,
+    );
+    expect(other.text).toContain('موضَّح في صفحة الإيداع');
+  });
+
+  it('asks for a clearer receipt with a link to the deposit', () => {
+    const email = renderEmail(
+      'customer_deposit_receipt_requested',
+      { depositId, referenceCode: 'VD-7KQ2M' },
+      store,
+    );
+    expect(email.subject).toBe('نحتاج إيصالًا أوضح لإيداعك VD-7KQ2M');
+    expect(email.text).toContain(`عرض الإيداع: ${link}`);
+    arabicRtl(email.html);
+  });
+});
+
 describe('email.send', () => {
   it('writes a code email to a file in Arabic, right to left, and clears the code', async () => {
     const id = await queue(

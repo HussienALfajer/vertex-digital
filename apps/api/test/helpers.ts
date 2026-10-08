@@ -6,6 +6,7 @@ import {
   customerAccounts,
   customers,
   type Database,
+  deposits,
   emailOutbox,
   ledgerAccounts,
   newId,
@@ -32,6 +33,10 @@ const TEST_EMAIL_DOMAIN = '@test.vertex-digital.local';
 export const uniqueEmail = (label: string) =>
   `${label}-${randomUUID().slice(0, 8)}${TEST_EMAIL_DOMAIN}`;
 
+/** A Syrian mobile number of its own, for tests where a shared phone is a fraud flag (S03 FL5). */
+export const uniquePhone = () =>
+  `+9639${String(Math.floor(Math.random() * 100_000_000)).padStart(8, '0')}`;
+
 /** A client address per call: sign-in and routes are rate limited per address. */
 export const clientIp = () =>
   `10.${[0, 0, 0].map(() => Math.floor(Math.random() * 250) + 1).join('.')}`;
@@ -43,7 +48,7 @@ export interface Seeded {
 
 export async function seedCustomer(
   db: Database,
-  input: { emailVerified?: boolean; archived?: boolean; isTest?: boolean } = {},
+  input: { emailVerified?: boolean; archived?: boolean; isTest?: boolean; phone?: string } = {},
 ): Promise<Seeded> {
   const id = newId();
   const email = uniqueEmail('customer');
@@ -51,7 +56,7 @@ export async function seedCustomer(
     id,
     name: 'عميل اختبار',
     email,
-    phone: PHONE,
+    phone: input.phone ?? PHONE,
     emailVerified: input.emailVerified ?? true,
     isTest: input.isTest ?? false,
     archivedAt: input.archived ? new Date() : null,
@@ -89,15 +94,20 @@ export async function seedAdmin(db: Database, input: { archived?: boolean } = {}
 }
 
 /**
- * Customers without a wallet. A customer with one stays in the test database: the ledger and the
- * adjustments reference it for good (append-only, S02), as the ledger rows themselves stay.
+ * Customers without a wallet or a deposit. A customer with either stays in the test database: the
+ * ledger, the adjustments and the deposits reference it for good (S02, S03), as those rows stay.
  */
 const withoutWallet = (db: Database) =>
-  notExists(
-    db
-      .select({ id: ledgerAccounts.id })
-      .from(ledgerAccounts)
-      .where(eq(ledgerAccounts.customerId, customers.id)),
+  and(
+    notExists(
+      db
+        .select({ id: ledgerAccounts.id })
+        .from(ledgerAccounts)
+        .where(eq(ledgerAccounts.customerId, customers.id)),
+    ),
+    notExists(
+      db.select({ id: deposits.id }).from(deposits).where(eq(deposits.customerId, customers.id)),
+    ),
   );
 
 /**
@@ -182,6 +192,8 @@ export interface RequestOptions {
   /** Defaults to the origin of the route's host: admin for `/api/admin`, else the store. */
   origin?: string | null;
   headers?: Record<string, string>;
+  /** A multipart body (uploads); the boundary header comes with it. */
+  form?: FormData;
 }
 
 /** An HTTP client for the test app that looks like a browser on the right host. */
@@ -202,7 +214,7 @@ export function api(url: string) {
         ...(options.body !== undefined && { 'content-type': 'application/json' }),
         ...options.headers,
       },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: options.form ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
     });
   };
 

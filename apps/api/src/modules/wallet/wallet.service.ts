@@ -86,9 +86,20 @@ export class WalletService {
           customerNote: entry.adjustment.customerNote,
           reversal: entry.adjustment.reversesAdjustmentId !== null,
         },
+        deposit: entry.deposit && {
+          method: entry.deposit.method,
+          referenceCode: entry.deposit.referenceCode,
+          syp: entry.deposit.syp,
+        },
       })),
       nextCursor: page.nextCursor,
     };
+  }
+
+  /** The customer's balance (S03: the deposit review's customer panel). */
+  async balanceOf(customerId: string): Promise<number> {
+    const accountId = await findCustomerWallet(this.db, customerId);
+    return accountId ? accountBalance(this.db, accountId) : 0;
   }
 
   async search(q: string, query: CursorQuery): Promise<WalletSearchPage> {
@@ -147,6 +158,7 @@ export class WalletService {
           reversesAdjustmentId: entry.adjustment.reversesAdjustmentId,
           reversedByAdjustmentId: entry.adjustment.reversedByAdjustmentId,
         },
+        deposit: entry.deposit,
       })),
       nextCursor: page.nextCursor,
     };

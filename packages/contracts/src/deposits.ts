@@ -1,0 +1,880 @@
+import { z } from 'zod';
+import { cursorPageSchema, cursorQuerySchema } from './lists.js';
+import {
+  amountUnitsSchema,
+  CURRENCY_SCALE,
+  type Currency,
+  currencySchema,
+  exchangeRateSchema,
+  isWholeCents,
+  sypDepositUsd,
+  usdCentsSchema,
+} from './money.js';
+import { displayStepSchema } from './rates.js';
+
+/*
+ * Deposits (S03, F05; ADR 0006, 0017), owned by the api `deposits` module: Sham Cash deposits
+ * checked by hand, their states, limits, fraud flags, the review ETA and the deposit settings.
+ * S04 adds the USDT methods to the same model.
+ */
+
+/** How a deposit is paid. S04 adds `usdt_trc20` and `usdt_bep20`. */
+export const DEPOSIT_METHODS = ['sham_cash'] as const;
+
+export const depositMethodSchema = z.enum(DEPOSIT_METHODS).meta({ id: 'DepositMethod' });
+
+export type DepositMethod = z.infer<typeof depositMethodSchema>;
+
+export const DEPOSIT_STATUSES = [
+  'pending',
+  'submitted',
+  'credited',
+  'rejected',
+  'expired',
+  'cancelled',
+] as const;
+
+export const depositStatusSchema = z.enum(DEPOSIT_STATUSES).meta({ id: 'DepositStatus' });
+
+export type DepositStatus = z.infer<typeof depositStatusSchema>;
+
+/**
+ * The only allowed status changes (S03 "Deposit states", ADR 0017). `submitted → pending` is the
+ * clearer-receipt request, once per deposit (rule RV8). A status with no next status is final.
+ */
+export const DEPOSIT_TRANSITIONS: Readonly<Record<DepositStatus, readonly DepositStatus[]>> = {
+  pending: ['submitted', 'cancelled', 'expired'],
+  submitted: ['credited', 'rejected', 'pending'],
+  credited: [],
+  rejected: [],
+  expired: [],
+  cancelled: [],
+};
+
+export function canTransitionDeposit(from: DepositStatus, to: DepositStatus): boolean {
+  return DEPOSIT_TRANSITIONS[from].includes(to);
+}
+
+/** True for `credited`, `rejected`, `expired` and `cancelled`: the deposit never changes again. */
+export function isFinalDepositStatus(status: DepositStatus): boolean {
+  return DEPOSIT_TRANSITIONS[status].length === 0;
+}
+
+/** An approval above $100 needs a re-authentication (rule RV4); exactly $100 does not. */
+export const DEPOSIT_APPROVAL_REAUTH_THRESHOLD_USD_UNITS = 100 * CURRENCY_SCALE.USD;
+
+/** A deposit without a receipt expires this long after creation or a receipt request (SC12). */
+export const DEPOSIT_PENDING_HOURS = 24;
+
+/** At most this many `submitted` deposits per customer (rule SC5). */
+export const MAX_DEPOSITS_IN_REVIEW = 3;
+
+/** Two receipts whose dHashes differ in at most this many bits are similar (rule FL2). */
+export const RECEIPT_SIMILAR_MAX_DISTANCE = 6;
+
+/** Receipt and QR uploads (rule SC8): at most 5 MB, JPEG, PNG or WebP, decoded up to 40 MP. */
+export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+export const UPLOAD_MAX_INPUT_PIXELS = 40_000_000;
+export const RECEIPT_MAX_DIMENSION = 2000;
+export const QR_MAX_DIMENSION = 1000;
+
+/** Per-customer limits (rule SC6), counted in the database over the last hour. */
+export const DEPOSIT_CREATIONS_PER_HOUR = 10;
+export const RECEIPT_UPLOADS_PER_HOUR = 20;
+
+/** The time zone of the review hours (rule SC13). */
+export const REVIEW_TIME_ZONE = 'Asia/Damascus';
+
+/** The review ETA's sample (rule SC13): the last 20 decisions of 14 days; fewer than 5: target. */
+export const REVIEW_ETA_SAMPLE_SIZE = 20;
+export const REVIEW_ETA_SAMPLE_DAYS = 14;
+export const REVIEW_ETA_MIN_SAMPLES = 5;
+const REVIEW_ETA_STEP_MINUTES = 5;
+
+/* Reference codes ------------------------------------------------------------------------- */
+
+/** The characters of a reference code: no 0, O, 1, I or L, which read alike. */
+export const REFERENCE_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+export const REFERENCE_CODE_LENGTH = 5;
+export const REFERENCE_CODE_PREFIX = 'VD-';
+
+const REFERENCE_CODE_PATTERN = new RegExp(
+  `^${REFERENCE_CODE_PREFIX}[${REFERENCE_CODE_ALPHABET}]{${REFERENCE_CODE_LENGTH}}$`,
+);
+
+/**
+ * A deposit's reference code, as the customer writes it in the transfer note: `VD-` and 5
+ * characters. Accepts lower case and a missing dash, and normalizes to `VD-XXXXX`.
+ */
+export const referenceCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .transform((value) => value.replace(/^VD-?/, REFERENCE_CODE_PREFIX))
+  .pipe(z.string().regex(REFERENCE_CODE_PATTERN, 'Expected a reference code such as VD-7KQ2M'));
+
+/* Flags (A10) --------------------------------------------------------------------------- */
+
+/** Computed when a receipt is submitted, for that receipt (rules FL1–FL5). */
+export const SUBMISSION_FLAG_CODES = [
+  'receipt_reused',
+  'receipt_similar',
+  'new_account_large',
+  'velocity',
+  'shared_phone',
+] as const;
+
+/** Computed from the approval request and inserted with the approval (rules RV5, FL6). */
+export const APPROVAL_FLAG_CODES = [
+  'amount_mismatch',
+  'reference_missing',
+  'reference_different',
+] as const;
+
+export const DEPOSIT_FLAG_CODES = [...SUBMISSION_FLAG_CODES, ...APPROVAL_FLAG_CODES] as const;
+
+export const depositFlagCodeSchema = z.enum(DEPOSIT_FLAG_CODES).meta({ id: 'DepositFlagCode' });
+
+export type DepositFlagCode = z.infer<typeof depositFlagCodeSchema>;
+
+const receiptMatch = {
+  depositId: z.uuid(),
+  receiptId: z.uuid(),
+  customerId: z.uuid(),
+};
+
+/** The shape of each flag's `details`, checked before a flag is written (as audit details are). */
+export const DEPOSIT_FLAG_DETAILS = {
+  /** FL1: the other receipts with the same original bytes, any customer. */
+  receipt_reused: z.strictObject({ matches: z.array(z.strictObject(receiptMatch)).min(1) }),
+  /** FL2: the other receipts whose dHash is within the distance, not caught by FL1. */
+  receipt_similar: z.strictObject({
+    matches: z.array(z.strictObject({ ...receiptMatch, distance: z.int().min(0).max(64) })).min(1),
+  }),
+  /** FL3: a new customer's deposit at or above the setting. */
+  new_account_large: z.strictObject({
+    declaredUsdUnits: z.int().positive(),
+    thresholdUnits: z.int().positive(),
+  }),
+  /** FL4: the customer's submissions in 24 hours, this one included, above the setting. */
+  velocity: z.strictObject({ submissions: z.int().positive(), threshold: z.int().positive() }),
+  /** FL5: other non-archived customers with the same phone. */
+  shared_phone: z.strictObject({
+    count: z.int().positive(),
+    customerIds: z.array(z.uuid()).min(1),
+  }),
+  /** FL6: what was received differs from what was declared. */
+  amount_mismatch: z.strictObject({
+    declaredCurrency: currencySchema,
+    declaredAmountUnits: z.int().positive(),
+    receivedCurrency: currencySchema,
+    receivedAmountUnits: z.int().positive(),
+  }),
+  reference_missing: z.strictObject({}),
+  reference_different: z.strictObject({}),
+} as const satisfies Record<DepositFlagCode, z.ZodType>;
+
+export type DepositFlagDetails<Code extends DepositFlagCode> = z.infer<
+  (typeof DEPOSIT_FLAG_DETAILS)[Code]
+>;
+
+/** What the admin saw of the reference code in the transfer note (rule RV1). */
+export const DEPOSIT_REFERENCE_CHECKS = ['matches', 'missing', 'different'] as const;
+
+export const depositReferenceCheckSchema = z
+  .enum(DEPOSIT_REFERENCE_CHECKS)
+  .meta({ id: 'DepositReferenceCheck' });
+
+export type DepositReferenceCheck = z.infer<typeof depositReferenceCheckSchema>;
+
+/** Rule RV6; the customer sees each in words. `other` needs a customer note. */
+export const DEPOSIT_REJECT_REASONS = [
+  'not_received',
+  'receipt_invalid',
+  'receipt_used',
+  'reference_other_customer',
+  'wrong_account',
+  'other',
+] as const;
+
+export const depositRejectReasonSchema = z
+  .enum(DEPOSIT_REJECT_REASONS)
+  .meta({ id: 'DepositRejectReason' });
+
+export type DepositRejectReason = z.infer<typeof depositRejectReasonSchema>;
+
+/* Amounts and the credit ----------------------------------------------------------------- */
+
+/** True when `units` is a whole amount a customer can send: whole pounds, or whole cents. */
+export function isWholeDepositAmount(currency: Currency, units: number): boolean {
+  return currency === 'SYP' ? units % CURRENCY_SCALE.SYP === 0 : isWholeCents(units);
+}
+
+const positiveUnitsSchema = amountUnitsSchema.refine((units) => units > 0, 'Expected above zero');
+
+/**
+ * The USD an amount is worth to the store: USD as is; SYP converted at `rate` with rule FX6.
+ * Used for a deposit's declared USD (rule SC2) and an approval's credit (rule RV2, with the rate
+ * of rule RV3). `rate` is required for pounds.
+ */
+export function depositCreditUsdUnits(
+  receivedCurrency: Currency,
+  receivedAmountUnits: number,
+  rate: string | null,
+): number {
+  if (receivedCurrency === 'USD') return receivedAmountUnits;
+  if (rate === null) throw new RangeError('Converting pounds needs a rate');
+  return sypDepositUsd(receivedAmountUnits, rate);
+}
+
+/** The approval-time flags of a request (rule RV5). */
+export function approvalFlags(
+  deposit: { currency: Currency; declaredAmountUnits: number },
+  received: {
+    receivedCurrency: Currency;
+    receivedAmountUnits: number;
+    referenceCheck: DepositReferenceCheck;
+  },
+): DepositFlagCode[] {
+  const flags: DepositFlagCode[] = [];
+  if (
+    received.receivedCurrency !== deposit.currency ||
+    received.receivedAmountUnits !== deposit.declaredAmountUnits
+  ) {
+    flags.push('amount_mismatch');
+  }
+  if (received.referenceCheck === 'missing') flags.push('reference_missing');
+  if (received.referenceCheck === 'different') flags.push('reference_different');
+  return flags;
+}
+
+/** True when both lists hold the same flags, whatever the order or repeats (rule RV5). */
+export function sameFlags(a: readonly DepositFlagCode[], b: readonly DepositFlagCode[]): boolean {
+  const left = new Set(a);
+  const right = new Set(b);
+  return left.size === right.size && [...left].every((code) => right.has(code));
+}
+
+/** Rule RV4: above $100, or any flag at all, needs a re-authentication. */
+export function approvalNeedsReauthentication(creditUsdUnits: number, flagCount: number): boolean {
+  return creditUsdUnits > DEPOSIT_APPROVAL_REAUTH_THRESHOLD_USD_UNITS || flagCount > 0;
+}
+
+/* Limits (rule SC3) ---------------------------------------------------------------------- */
+
+export interface DepositLimitSettings {
+  minDepositUsdUnits: number;
+  newAccountPerDepositUsdUnits: number;
+  newAccountDailyUsdUnits: number;
+  establishedPerDepositUsdUnits: number;
+  establishedDailyUsdUnits: number;
+}
+
+export const depositLimitsSchema = z
+  .object({
+    /** False until the customer has one credited deposit (rule SC3). */
+    established: z.boolean(),
+    minUnits: amountUnitsSchema,
+    perDepositUnits: amountUnitsSchema,
+    dailyUnits: amountUnitsSchema,
+    /** What the 24-hour window still allows; 0 when used up. */
+    remainingTodayUnits: amountUnitsSchema,
+  })
+  .meta({ id: 'DepositLimits' });
+
+export type DepositLimits = z.infer<typeof depositLimitsSchema>;
+
+/**
+ * A customer's limits (rule SC3). `usedTodayUnits` is the declared USD of their `pending` and
+ * `submitted` deposits plus the credited USD of `credited` ones, all created in the last 24 hours.
+ */
+export function depositLimits(
+  settings: DepositLimitSettings,
+  established: boolean,
+  usedTodayUnits: number,
+): DepositLimits {
+  const dailyUnits = established
+    ? settings.establishedDailyUsdUnits
+    : settings.newAccountDailyUsdUnits;
+  return {
+    established,
+    minUnits: settings.minDepositUsdUnits,
+    perDepositUnits: established
+      ? settings.establishedPerDepositUsdUnits
+      : settings.newAccountPerDepositUsdUnits,
+    dailyUnits,
+    remainingTodayUnits: Math.max(0, dailyUnits - usedTodayUnits),
+  };
+}
+
+export const DEPOSIT_LIMIT_KINDS = ['minimum', 'per_deposit', 'daily'] as const;
+
+/** `DEPOSIT_LIMIT_EXCEEDED`'s `details`. */
+export interface DepositLimitBreach {
+  limit: (typeof DEPOSIT_LIMIT_KINDS)[number];
+  limitUnits: number;
+  remainingUnits: number;
+}
+
+/** The limit a new deposit of `declaredUsdUnits` breaks, or null (rule SC3). */
+export function depositLimitBreach(
+  limits: DepositLimits,
+  declaredUsdUnits: number,
+): DepositLimitBreach | null {
+  const breach = (limit: DepositLimitBreach['limit'], limitUnits: number) => ({
+    limit,
+    limitUnits,
+    remainingUnits: limits.remainingTodayUnits,
+  });
+  if (declaredUsdUnits < limits.minUnits) return breach('minimum', limits.minUnits);
+  if (declaredUsdUnits > limits.perDepositUnits) {
+    return breach('per_deposit', limits.perDepositUnits);
+  }
+  if (declaredUsdUnits > limits.remainingTodayUnits) return breach('daily', limits.dailyUnits);
+  return null;
+}
+
+/* Review hours and the ETA (rule SC13) --------------------------------------------------- */
+
+/** A time of day in the review time zone, `HH:MM` (24 hours). */
+export const reviewTimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM')
+  .meta({ id: 'ReviewTime' });
+
+export interface ReviewHours {
+  start: string;
+  end: string;
+}
+
+const minutesOfDay = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+
+const zoneFormat = new Intl.DateTimeFormat('en-US', {
+  timeZone: REVIEW_TIME_ZONE,
+  hourCycle: 'h23',
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+});
+
+/** The wall clock of the review time zone at `at`. */
+function zoneClock(at: Date) {
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(zoneFormat.formatToParts(at).find((item) => item.type === type)?.value);
+  return {
+    year: part('year'),
+    month: part('month'),
+    day: part('day'),
+    minutes: part('hour') * 60 + part('minute'),
+    seconds: part('second'),
+  };
+}
+
+/** The zone's offset from UTC at `at`, in milliseconds. */
+function zoneOffset(at: Date): number {
+  const clock = zoneClock(at);
+  const asUtc = Date.UTC(clock.year, clock.month - 1, clock.day, 0, clock.minutes, clock.seconds);
+  return asUtc - Math.floor(at.getTime() / 1000) * 1000;
+}
+
+/** The instant of a wall-clock time in the zone; `day` may run past the month's end. */
+function zoneInstant(year: number, month: number, day: number, minutes: number): Date {
+  const wall = Date.UTC(year, month - 1, day, 0, minutes);
+  const first = wall - zoneOffset(new Date(wall));
+  return new Date(wall - zoneOffset(new Date(first)));
+}
+
+/** True when `at` falls within the review hours, start included, end excluded. */
+export function isWithinReviewHours(at: Date, hours: ReviewHours): boolean {
+  const { minutes } = zoneClock(at);
+  return minutes >= minutesOfDay(hours.start) && minutes < minutesOfDay(hours.end);
+}
+
+/** The next time reviews open after `at`: today's start if it is still ahead, else tomorrow's. */
+export function nextReviewOpening(at: Date, hours: ReviewHours): Date {
+  const clock = zoneClock(at);
+  const start = minutesOfDay(hours.start);
+  const day = clock.minutes < start ? clock.day : clock.day + 1;
+  return zoneInstant(clock.year, clock.month, day, start);
+}
+
+/**
+ * The review ETA in minutes within hours (rule SC13): the median of the sampled review times
+ * (seconds from submission to decision), rounded up to 5 minutes, at least 5; the target when
+ * fewer than 5 decisions were sampled.
+ */
+export function reviewEtaMinutes(durationsSeconds: readonly number[], targetMinutes: number) {
+  if (durationsSeconds.length < REVIEW_ETA_MIN_SAMPLES) return targetMinutes;
+  const sorted = [...durationsSeconds].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const median =
+    sorted.length % 2 === 1
+      ? (sorted[middle] as number)
+      : ((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2;
+  const step = REVIEW_ETA_STEP_MINUTES * 60;
+  return Math.max(REVIEW_ETA_STEP_MINUTES, Math.ceil(median / step) * REVIEW_ETA_STEP_MINUTES);
+}
+
+/** What the customer is told about the review time (rule SC13): an ETA, or the next opening. */
+export const reviewEtaSchema = z
+  .discriminatedUnion('state', [
+    z.object({ state: z.literal('open'), minutes: z.int().positive() }),
+    z.object({ state: z.literal('closed'), opensAt: z.iso.datetime() }),
+  ])
+  .meta({ id: 'ReviewEta' });
+
+export type ReviewEta = z.infer<typeof reviewEtaSchema>;
+
+export function reviewEta(
+  now: Date,
+  hours: ReviewHours,
+  targetMinutes: number,
+  durationsSeconds: readonly number[],
+): ReviewEta {
+  if (!isWithinReviewHours(now, hours)) {
+    return { state: 'closed', opensAt: nextReviewOpening(now, hours).toISOString() };
+  }
+  return { state: 'open', minutes: reviewEtaMinutes(durationsSeconds, targetMinutes) };
+}
+
+/* Receipt hashes (rule FL2) -------------------------------------------------------------- */
+
+/** The dHash input: a 9×8 grayscale image, row by row. */
+export const DHASH_WIDTH = 9;
+export const DHASH_HEIGHT = 8;
+
+/**
+ * The 64-bit difference hash of a 9×8 grayscale image (one byte per pixel, row by row): a bit per
+ * pair of neighbours, set when the left one is brighter. A signed 64-bit integer, as stored.
+ */
+export function dHash(pixels: Uint8Array): bigint {
+  if (pixels.length !== DHASH_WIDTH * DHASH_HEIGHT) {
+    throw new RangeError(`Expected ${DHASH_WIDTH * DHASH_HEIGHT} pixels, got ${pixels.length}`);
+  }
+  let hash = 0n;
+  for (let row = 0; row < DHASH_HEIGHT; row += 1) {
+    for (let column = 0; column < DHASH_WIDTH - 1; column += 1) {
+      const left = pixels[row * DHASH_WIDTH + column] as number;
+      const right = pixels[row * DHASH_WIDTH + column + 1] as number;
+      hash = (hash << 1n) | (left > right ? 1n : 0n);
+    }
+  }
+  return BigInt.asIntN(64, hash);
+}
+
+/** How many of the 64 bits differ between two dHashes. */
+export function dHashDistance(a: bigint, b: bigint): number {
+  let rest = BigInt.asUintN(64, a ^ b);
+  let count = 0;
+  while (rest > 0n) {
+    count += Number(rest & 1n);
+    rest >>= 1n;
+  }
+  return count;
+}
+
+/* Settings ------------------------------------------------------------------------------- */
+
+/** A limit or threshold: whole cents above zero. */
+const limitSchema = usdCentsSchema.refine((units) => units > 0, 'Expected above zero');
+
+const depositSettingsFields = {
+  shamCashAccountName: z.string().trim().min(1).max(100),
+  shamCashAccountNumber: z.string().trim().min(1).max(64),
+  sypEnabled: z.boolean(),
+  usdEnabled: z.boolean(),
+  /** From `POST /api/admin/deposit-settings/qr`; required while the currency is enabled. */
+  sypQrFileId: z.uuid().nullable(),
+  usdQrFileId: z.uuid().nullable(),
+  minDepositUsdUnits: limitSchema,
+  newAccountPerDepositUsdUnits: limitSchema,
+  newAccountDailyUsdUnits: limitSchema,
+  establishedPerDepositUsdUnits: limitSchema,
+  establishedDailyUsdUnits: limitSchema,
+  reviewHoursStart: reviewTimeSchema,
+  reviewHoursEnd: reviewTimeSchema,
+  reviewTargetMinutes: z.int().min(1).max(1440),
+  flagNewAccountUsdUnits: limitSchema,
+  flagVelocityCount: z.int().min(1).max(50),
+};
+
+export type DepositSettingsValues = z.infer<z.ZodObject<typeof depositSettingsFields>>;
+
+/** What the first save starts from (owner, 2026-10-08); never seeded. */
+export const DEPOSIT_SETTINGS_DEFAULTS = {
+  shamCashAccountName: '',
+  shamCashAccountNumber: '',
+  sypEnabled: false,
+  usdEnabled: false,
+  sypQrFileId: null,
+  usdQrFileId: null,
+  minDepositUsdUnits: 2 * CURRENCY_SCALE.USD,
+  newAccountPerDepositUsdUnits: 50 * CURRENCY_SCALE.USD,
+  newAccountDailyUsdUnits: 100 * CURRENCY_SCALE.USD,
+  establishedPerDepositUsdUnits: 300 * CURRENCY_SCALE.USD,
+  establishedDailyUsdUnits: 1000 * CURRENCY_SCALE.USD,
+  reviewHoursStart: '10:00',
+  reviewHoursEnd: '22:00',
+  reviewTargetMinutes: 15,
+  flagNewAccountUsdUnits: 25 * CURRENCY_SCALE.USD,
+  flagVelocityCount: 3,
+} as const satisfies DepositSettingsValues;
+
+/** `PUT /api/admin/deposit-settings`: the cross-field rules of the table's checks. */
+export const depositSettingsInputSchema = z
+  .object(depositSettingsFields)
+  .superRefine((input, context) => {
+    const issue = (path: keyof DepositSettingsValues, message: string) =>
+      context.addIssue({ code: 'custom', path: [path], message });
+    if (input.sypEnabled && !input.sypQrFileId) issue('sypQrFileId', 'SYP needs its QR image');
+    if (input.usdEnabled && !input.usdQrFileId) issue('usdQrFileId', 'USD needs its QR image');
+    const tiers = [
+      ['newAccountPerDepositUsdUnits', 'newAccountDailyUsdUnits'],
+      ['establishedPerDepositUsdUnits', 'establishedDailyUsdUnits'],
+    ] as const;
+    for (const [perDeposit, daily] of tiers) {
+      if (input[perDeposit] < input.minDepositUsdUnits) {
+        issue(perDeposit, 'Below the minimum deposit');
+      }
+      if (input[daily] < input[perDeposit]) issue(daily, 'Below the per-deposit limit');
+    }
+    if (input.reviewHoursEnd <= input.reviewHoursStart) {
+      issue('reviewHoursEnd', 'Must be after the start');
+    }
+  })
+  .meta({ id: 'DepositSettingsInput' });
+
+export type DepositSettingsInput = z.input<typeof depositSettingsInputSchema>;
+
+/** `GET /api/admin/deposit-settings`: the current version, or the defaults before a first save. */
+export const depositSettingsSchema = z
+  .object({
+    ...depositSettingsFields,
+    shamCashAccountName: z.string(),
+    shamCashAccountNumber: z.string(),
+    /** False before the first save: Sham Cash deposits are unavailable (rule SC1). */
+    saved: z.boolean(),
+    savedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: 'DepositSettings' });
+
+export type DepositSettings = z.infer<typeof depositSettingsSchema>;
+
+/** `POST /api/admin/deposit-settings/qr`: the re-encoded image, to name in the settings. */
+export const storedFileRefSchema = z.object({ fileId: z.uuid() }).meta({ id: 'StoredFileRef' });
+
+export type StoredFileRef = z.infer<typeof storedFileRefSchema>;
+
+/* Customer routes ------------------------------------------------------------------------ */
+
+/** Why a currency cannot be deposited now (rules SC1, FX8). */
+export const DEPOSIT_UNAVAILABLE_REASONS = ['not_configured', 'disabled', 'no_rate'] as const;
+
+const currencyOption = z.object({
+  available: z.boolean(),
+  reason: z.enum(DEPOSIT_UNAVAILABLE_REASONS).nullable(),
+});
+
+/** `GET /api/deposits/sham-cash/options` (rules SC1, SC3, SC13). */
+export const shamCashOptionsSchema = z
+  .object({
+    currencies: z.object({ SYP: currencyOption, USD: currencyOption }),
+    /** The store's Sham Cash account; null before the settings exist. */
+    account: z.object({ name: z.string(), number: z.string() }).nullable(),
+    limits: depositLimitsSchema.nullable(),
+    rate: z
+      .object({
+        id: z.uuid(),
+        sypPerUsd: exchangeRateSchema,
+        displayStepSypUnits: displayStepSchema,
+      })
+      .nullable(),
+    reviewHours: z.object({ start: reviewTimeSchema, end: reviewTimeSchema }).nullable(),
+    eta: reviewEtaSchema.nullable(),
+    /** The customer's deposit awaiting a receipt, which the store opens instead (rule SC4). */
+    pendingDepositId: z.uuid().nullable(),
+  })
+  .meta({ id: 'ShamCashOptions' });
+
+export type ShamCashOptions = z.infer<typeof shamCashOptionsSchema>;
+
+/** `POST /api/deposits/sham-cash` (rule SC2): the amount in the currency's whole units. */
+export const createShamCashDepositSchema = z
+  .object({ currency: currencySchema, amountUnits: positiveUnitsSchema })
+  .superRefine((input, context) => {
+    if (!isWholeDepositAmount(input.currency, input.amountUnits)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['amountUnits'],
+        message: input.currency === 'SYP' ? 'Expected whole pounds' : 'Expected whole cents',
+      });
+    }
+  })
+  .meta({ id: 'CreateShamCashDeposit' });
+
+export type CreateShamCashDeposit = z.input<typeof createShamCashDepositSchema>;
+
+/** `POST /api/deposits/:id/receipt` (rule SC9): the rate the customer saw, for SYP. */
+export const submitReceiptSchema = z
+  .object({ rateId: z.uuid().optional() })
+  .meta({ id: 'SubmitReceipt' });
+
+export type SubmitReceipt = z.infer<typeof submitReceiptSchema>;
+
+/** A SYP deposit's locked rate (rule FX5). */
+export const depositQuoteSchema = z
+  .object({ rateId: z.uuid(), rate: exchangeRateSchema, expiresAt: z.iso.datetime() })
+  .meta({ id: 'DepositQuote' });
+
+/** `QUOTE_EXPIRED`'s `details` (rule SC9): the current rate and what the amount would get. */
+export const quoteOfferSchema = z
+  .object({ rateId: z.uuid(), rate: exchangeRateSchema, declaredUsdUnits: amountUnitsSchema })
+  .meta({ id: 'QuoteOffer' });
+
+export type QuoteOffer = z.infer<typeof quoteOfferSchema>;
+
+const depositBase = {
+  id: z.uuid(),
+  method: depositMethodSchema,
+  status: depositStatusSchema,
+  referenceCode: z.string(),
+  currency: currencySchema,
+  declaredAmountUnits: amountUnitsSchema,
+  declaredUsdUnits: amountUnitsSchema,
+  /** SYP only. */
+  quote: depositQuoteSchema.nullable(),
+  expiresAt: z.iso.datetime(),
+  createdAt: z.iso.datetime(),
+  submittedAt: z.iso.datetime().nullable(),
+  decidedAt: z.iso.datetime().nullable(),
+};
+
+/** A deposit as its customer sees it: no flags, transaction number or internal notes. */
+export const depositSchema = z
+  .object({
+    ...depositBase,
+    /** The rate was fixed at the first valid submission and never changes (rule SC9). */
+    rateFixed: z.boolean(),
+    /** The admin asked for a clearer receipt, with an optional note (rule RV8). */
+    receiptRequest: z.object({ at: z.iso.datetime(), note: z.string().nullable() }).nullable(),
+    /** While `pending`: where to send the money (rule SC7); the QR of the current settings. */
+    payTo: z
+      .object({
+        accountName: z.string(),
+        accountNumber: z.string(),
+        qrUrl: z.string().nullable(),
+      })
+      .nullable(),
+    /** While `submitted` (rule SC13). */
+    eta: reviewEtaSchema.nullable(),
+    credited: z
+      .object({
+        usdUnits: amountUnitsSchema,
+        receivedCurrency: currencySchema,
+        receivedAmountUnits: amountUnitsSchema,
+        /** The rate the pounds were converted at; null when USD was received. */
+        rate: exchangeRateSchema.nullable(),
+      })
+      .nullable(),
+    rejection: z
+      .object({ reason: depositRejectReasonSchema, note: z.string().nullable() })
+      .nullable(),
+  })
+  .meta({ id: 'Deposit' });
+
+export type Deposit = z.infer<typeof depositSchema>;
+
+export const depositListQuerySchema = cursorQuerySchema.meta({ id: 'DepositListQuery' });
+
+export type DepositListQuery = z.infer<typeof depositListQuerySchema>;
+
+export const depositPageSchema = cursorPageSchema(depositSchema, 'DepositPage');
+
+export type DepositPage = z.infer<typeof depositPageSchema>;
+
+/* Admin routes --------------------------------------------------------------------------- */
+
+/** `GET /api/admin/deposits` (rule RV10): `submitted` by default, flagged first, oldest first. */
+export const adminDepositQuerySchema = cursorQuerySchema
+  .extend({
+    status: z.enum([...DEPOSIT_STATUSES, 'all']).default('submitted'),
+    flagged: z.enum(['true', 'false']).optional(),
+    /** A reference code (any case, dash optional) or the customer's email prefix. */
+    q: z.string().trim().min(3).max(254).optional(),
+  })
+  .meta({ id: 'AdminDepositQuery' });
+
+export type AdminDepositQuery = z.infer<typeof adminDepositQuerySchema>;
+
+const depositCustomer = {
+  id: z.uuid(),
+  name: z.string(),
+  email: z.string(),
+  isTest: z.boolean(),
+};
+
+export const adminDepositListItemSchema = z
+  .object({
+    ...depositBase,
+    customer: z.object(depositCustomer),
+    flags: z.array(depositFlagCodeSchema),
+  })
+  .meta({ id: 'AdminDepositListItem' });
+
+export type AdminDepositListItem = z.infer<typeof adminDepositListItemSchema>;
+
+export const adminDepositPageSchema = cursorPageSchema(
+  adminDepositListItemSchema,
+  'AdminDepositPage',
+);
+
+export type AdminDepositPage = z.infer<typeof adminDepositPageSchema>;
+
+/** `GET /api/admin/deposits/counts`: the navigation badge. */
+export const adminDepositCountsSchema = z
+  .object({
+    submitted: z.int().nonnegative(),
+    submittedFlagged: z.int().nonnegative(),
+    pending: z.int().nonnegative(),
+  })
+  .meta({ id: 'AdminDepositCounts' });
+
+export type AdminDepositCounts = z.infer<typeof adminDepositCountsSchema>;
+
+export const depositFlagSchema = z
+  .object({
+    id: z.uuid(),
+    code: depositFlagCodeSchema,
+    /** The receipt a submission flag was raised for; null for approval-time flags. */
+    receiptId: z.uuid().nullable(),
+    details: z.record(z.string(), z.unknown()),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: 'DepositFlag' });
+
+export type DepositFlag = z.infer<typeof depositFlagSchema>;
+
+/**
+ * `GET /api/admin/deposits/:id`: everything the review needs (rules RV1–RV10, A10). Its audit
+ * trail is the audit log filtered by the deposit (`entityType=deposit&entityId=<id>`).
+ */
+export const adminDepositSchema = z
+  .object({
+    ...depositBase,
+    rateFixedAt: z.iso.datetime().nullable(),
+    receiptRequestedAt: z.iso.datetime().nullable(),
+    receiptRequestCount: z.int().min(0).max(1),
+    receiptRequestNote: z.string().nullable(),
+    /** The rate an approval converts received pounds at now (rule RV3); null without one. */
+    approvalRate: z.object({ rateId: z.uuid(), rate: exchangeRateSchema }).nullable(),
+    /** The admin who decided (approved or rejected); null once that admin was replaced. */
+    adminName: z.string().nullable(),
+    credit: z
+      .object({
+        transactionNumber: z.string(),
+        receivedCurrency: currencySchema,
+        receivedAmountUnits: amountUnitsSchema,
+        creditedUsdUnits: amountUnitsSchema,
+        creditRateId: z.uuid().nullable(),
+        creditRate: exchangeRateSchema.nullable(),
+        referenceCheck: depositReferenceCheckSchema,
+        journalId: z.uuid(),
+      })
+      .nullable(),
+    rejection: z
+      .object({ reason: depositRejectReasonSchema, customerNote: z.string().nullable() })
+      .nullable(),
+    /** Oldest first: the second one follows a clearer-receipt request. */
+    receipts: z.array(z.object({ id: z.uuid(), createdAt: z.iso.datetime() })),
+    flags: z.array(depositFlagSchema),
+    customer: z.object({
+      ...depositCustomer,
+      phone: z.string(),
+      createdAt: z.iso.datetime(),
+      /** Rule SC3: one credited deposit makes an account established. */
+      established: z.boolean(),
+      creditedCount: z.int().nonnegative(),
+      creditedTotalUsdUnits: amountUnitsSchema,
+      balanceUnits: amountUnitsSchema,
+      /** The customer's last 10 deposits, this one excluded, with their codes (edge case 16). */
+      recentDeposits: z.array(
+        z.object({
+          id: z.uuid(),
+          referenceCode: z.string(),
+          status: depositStatusSchema,
+          currency: currencySchema,
+          declaredAmountUnits: amountUnitsSchema,
+          createdAt: z.iso.datetime(),
+        }),
+      ),
+    }),
+    /** While `submitted`: what the customer is told (rule SC13). */
+    eta: reviewEtaSchema.nullable(),
+  })
+  .meta({ id: 'AdminDeposit' });
+
+export type AdminDeposit = z.infer<typeof adminDepositSchema>;
+
+const internalNoteSchema = z.string().trim().min(5).max(500);
+const depositCustomerNoteSchema = z.string().trim().min(1).max(300);
+
+/** `POST /api/admin/deposits/:id/approve` (rules RV1–RV5, RV9). */
+export const approveDepositSchema = z
+  .object({
+    /** From the store's Sham Cash account history, never from the image alone (rule RV1). */
+    transactionNumber: z.string().trim().min(1).max(64),
+    receivedCurrency: currencySchema,
+    receivedAmountUnits: positiveUnitsSchema,
+    referenceCheck: depositReferenceCheckSchema,
+    /** Every submission flag and every approval-time flag of this request (rule RV5). */
+    acknowledgedFlags: z.array(depositFlagCodeSchema).max(DEPOSIT_FLAG_CODES.length * 2),
+    internalNote: z.string().trim().min(1).max(500).optional(),
+  })
+  .superRefine((input, context) => {
+    if (!isWholeDepositAmount(input.receivedCurrency, input.receivedAmountUnits)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['receivedAmountUnits'],
+        message:
+          input.receivedCurrency === 'SYP' ? 'Expected whole pounds' : 'Expected whole cents',
+      });
+    }
+  })
+  .meta({ id: 'ApproveDeposit' });
+
+export type ApproveDeposit = z.input<typeof approveDepositSchema>;
+
+/** `POST /api/admin/deposits/:id/reject` (rule RV6). */
+export const rejectDepositSchema = z
+  .object({
+    reason: depositRejectReasonSchema,
+    /** Shown on the deposit page only, never in the email. Required for `other`. */
+    customerNote: depositCustomerNoteSchema.optional(),
+    /** The audit entry's reason. */
+    internalNote: internalNoteSchema,
+  })
+  .superRefine((input, context) => {
+    if (input.reason === 'other' && input.customerNote === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['customerNote'],
+        message: 'Another reason needs a note for the customer',
+      });
+    }
+  })
+  .meta({ id: 'RejectDeposit' });
+
+export type RejectDeposit = z.input<typeof rejectDepositSchema>;
+
+/** `POST /api/admin/deposits/:id/request-receipt` (rule RV8). */
+export const requestReceiptSchema = z
+  .object({
+    customerNote: depositCustomerNoteSchema.optional(),
+    internalNote: internalNoteSchema,
+  })
+  .meta({ id: 'RequestReceipt' });
+
+export type RequestReceipt = z.input<typeof requestReceiptSchema>;

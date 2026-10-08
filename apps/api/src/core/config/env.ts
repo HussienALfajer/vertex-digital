@@ -47,6 +47,25 @@ export const envSchema = z
       .string()
       .optional()
       .transform((value) => value === 'true'),
+    /**
+     * Where uploaded files live (S03 receipts and QR images): outside the web root. Relative paths
+     * resolve against the API's working directory.
+     */
+    FILES_ROOT: z.string().min(1).default('./.data/files'),
+    /**
+     * The nginx `internal` location that maps to `FILES_ROOT` (ADR 0009). When set, file routes
+     * answer with `X-Accel-Redirect` and nginx sends the bytes; unset, the API sends them.
+     */
+    FILES_ACCEL_PREFIX: z
+      .string()
+      .optional()
+      .transform((value) => value || undefined)
+      .pipe(
+        z
+          .string()
+          .regex(/^\/[\w/-]*[^/]$/)
+          .optional(),
+      ),
     /** Empty disables Sentry. */
     SENTRY_DSN: z
       .string()

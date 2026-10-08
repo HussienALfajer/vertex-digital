@@ -202,6 +202,7 @@ describe('the customer wallet (rules W1–W10)', () => {
         amountUnits: 25 * DOLLAR,
         balanceAfterUnits: 25 * DOLLAR,
         adjustment: { category: 'compensation', customerNote: 'تعويض عن التأخير', reversal: false },
+        deposit: null,
       },
     ]);
     expect(JSON.stringify(page)).not.toMatch(/Internal|journal|admin/i);

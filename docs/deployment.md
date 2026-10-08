@@ -16,7 +16,7 @@ Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`)
 | Repository mirror | `/srv/digital.vertexmedia.pro/repo.git` (public repository over HTTPS, no credentials) |
 | Environment | `/srv/digital.vertexmedia.pro/shared/.env` (600), linked into each release as `.env`; read by the apps |
 | Owner role credentials | `/etc/vertexdigital/owner.env` (600, root): `DATABASE_OWNER_URL` only, handed by `vertexdigital-deploy` to the migrate, snapshot and restore steps (ADR 0014); never in `shared/.env` |
-| Receipts and attachments | `/srv/digital.vertexmedia.pro/shared/files/` (`FILES_ROOT`, outside the releases; F05, F23) |
+| Receipts and attachments | `/srv/digital.vertexmedia.pro/shared/files/` (`FILES_ROOT`, outside the releases; F05, F23), group `www-data` so nginx sends them through `X-Accel-Redirect` (`FILES_ACCEL_PREFIX=/internal-files`, an `internal` location on each host) |
 | Pre-migration snapshots | `/srv/digital.vertexmedia.pro/shared/db-snapshots/` (last 10) |
 | State before a restore | `/srv/digital.vertexmedia.pro/shared/db-before-restore/` (never pruned) |
 | Madani font files | `/srv/digital.vertexmedia.pro/fonts/madani/` (ADR 0012; empty until Q2). The builds load them only when they are there: copy them in, then deploy again |
@@ -131,7 +131,7 @@ ssh vertex "runuser -u postgres -- pg_restore --clean --if-exists --no-owner --r
 Restore the files from the same backup:
 
 ```bash
-ssh vertex "rsync -a /var/backups/digital.vertexmedia.pro/<time>/files/ /srv/digital.vertexmedia.pro/shared/files/ && chown -R vertexdigital:vertexdigital /srv/digital.vertexmedia.pro/shared/files"
+ssh vertex "rsync -a /var/backups/digital.vertexmedia.pro/<time>/files/ /srv/digital.vertexmedia.pro/shared/files/ && chown -R vertexdigital:www-data /srv/digital.vertexmedia.pro/shared/files"
 ```
 
 Backups stay on the server until an off-server destination is chosen. That is required before launch (ADR 0009), and before the first real deposit receipt is stored.

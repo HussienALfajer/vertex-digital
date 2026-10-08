@@ -56,8 +56,11 @@ step "Directories"
 install -d -o "$APP_USER" -g "$APP_USER" -m 755 "$SITE_DIR" "$SITE_DIR/releases"
 # nginx (www-data) serves the admin build, the store's static files and the Madani fonts.
 install -d -o "$APP_USER" -g www-data -m 750 "$SITE_DIR/fonts" "$SITE_DIR/fonts/madani"
-# Receipts and attachments (F05, F23) live outside the releases; .env stays 600.
-install -d -o "$APP_USER" -g "$APP_USER" -m 700 "$SITE_DIR/shared" "$SITE_DIR/shared/files"
+# Receipts and QR images (S03) live outside the releases; .env stays 600. nginx (www-data) may
+# cross shared/ and read shared/files/ only, to send files through X-Accel-Redirect; setgid keeps
+# new folders and files in the www-data group.
+install -d -o "$APP_USER" -g "$APP_USER" -m 711 "$SITE_DIR/shared"
+install -d -o "$APP_USER" -g www-data -m 2750 "$SITE_DIR/shared/files"
 install -d -o "$APP_USER" -g "$APP_USER" -m 750 "$LOG_DIR"
 install -d -o root -g root -m 700 "$BACKUP_DIR"
 install -d -o root -g root -m 755 "$ACME_ROOT"
@@ -131,6 +134,7 @@ CUSTOMER_AUTH_SECRET=$(openssl rand -hex 32)
 ADMIN_AUTH_SECRET=$(openssl rand -hex 32)
 ALTCHA_HMAC_KEY=$(openssl rand -hex 32)
 FILES_ROOT=$SITE_DIR/shared/files
+FILES_ACCEL_PREFIX=/internal-files
 # Empty until the owner sets them (docs/deployment.md): Sentry (Q15), Telegram alerts (Q11).
 SENTRY_DSN=
 TELEGRAM_BOT_TOKEN=

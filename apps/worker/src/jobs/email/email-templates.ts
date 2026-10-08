@@ -1,5 +1,6 @@
 import {
   type AdjustmentCategory,
+  type DepositRejectReason,
   type EmailParams,
   type EmailTemplate,
   formatUsd,
@@ -46,6 +47,21 @@ const CATEGORY_LABELS: Record<AdjustmentCategory, string> = {
   manual_deposit: 'إيداع مسجَّل يدوياً',
   test_funds: 'رصيد تجريبي',
 };
+
+/** The customer-facing words of the reject reasons (S03 rule RV6). */
+const REJECT_REASON_LABELS: Record<DepositRejectReason, string> = {
+  not_received: 'لم يصل التحويل إلى حسابنا',
+  receipt_invalid: 'الإيصال غير صالح أو معدَّل',
+  receipt_used: 'الإيصال مستخدم في إيداع سابق',
+  reference_other_customer: 'رمز المرجع يخص حساباً آخر',
+  wrong_account: 'التحويل إلى حساب غير حساب المتجر',
+  other: 'سبب آخر، موضَّح في صفحة الإيداع',
+};
+
+const depositPage = (depositId: string) => ({
+  label: 'عرض الإيداع',
+  path: `/wallet/deposits/${depositId}`,
+});
 
 const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) => Content } = {
   customer_verify_email: ({ code }) => ({
@@ -116,6 +132,31 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
       link: { label: 'عرض المحفظة', path: '/wallet' },
     };
   },
+  customer_deposit_credited: ({ at, depositId, referenceCode, creditedUsdUnits }) => ({
+    subject: `أُضيف ${formatUsd(creditedUsdUnits)} إلى رصيدك من إيداع شام كاش`,
+    lines: [
+      `اعتُمد إيداعك ${referenceCode} وأُضيف ${formatUsd(creditedUsdUnits)} إلى رصيد محفظتك بتاريخ ${formatTime(at)}.`,
+      'تجد تفاصيل الإيداع ورصيدك الحالي في صفحة الإيداع. إذا كان لديك سؤال، تواصل مع الدعم.',
+    ],
+    link: depositPage(depositId),
+  }),
+  customer_deposit_rejected: ({ depositId, referenceCode, reason }) => ({
+    subject: `لم يُعتمد إيداعك ${referenceCode}`,
+    lines: [
+      `راجعنا إيداعك ${referenceCode} ولم نتمكن من اعتماده، ولم يُضف شيء إلى رصيدك.`,
+      `السبب: ${REJECT_REASON_LABELS[reason]}.`,
+      'إذا كنت حوّلت المبلغ فعلًا، تواصل مع الدعم ومعك رقم العملية من تطبيق شام كاش.',
+    ],
+    link: depositPage(depositId),
+  }),
+  customer_deposit_receipt_requested: ({ depositId, referenceCode }) => ({
+    subject: `نحتاج إيصالًا أوضح لإيداعك ${referenceCode}`,
+    lines: [
+      `راجعنا إيداعك ${referenceCode} ونحتاج صورة أوضح لإيصال التحويل قبل اعتماده.`,
+      'افتح صفحة الإيداع وأرسل لقطة شاشة كاملة وواضحة للإيصال خلال 24 ساعة.',
+    ],
+    link: depositPage(depositId),
+  }),
 };
 
 const escapeHtml = (value: string) =>

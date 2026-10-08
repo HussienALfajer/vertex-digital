@@ -5,7 +5,7 @@ NestJS standalone context for background work (ADR 0001, 0002): pg-boss queues a
 ## Layout
 - `src/main.ts` (imports `instrument.ts` first: Sentry), `src/worker.module.ts`.
 - `src/core/`: `config` (Zod env), `database` (`DATABASE` token, app role), `jobs/pg-boss.service.ts`, `alerts/telegram-alerts.ts`, `alerts/scrub-breadcrumb.ts` (keeps the bot token out of Sentry), `email/mailer.ts` (Nodemailer over SMTP, or `.eml` files under `EMAIL_LOG_DIR` when `EMAIL_TRANSPORT=log`, the default outside production).
-- `src/jobs/<area>/<name>.job.ts`: one queue per file. Pattern to copy: `src/jobs/system/heartbeat.job.ts` (scheduled), `src/jobs/email/send-email.job.ts` (a row locked and settled once, failures recorded and retried). `jobs/email/`: `email.send`, `email.purge-codes` and the Arabic templates (`email-templates.ts`). The Telegram bot (F07) goes under `src/telegram/`.
+- `src/jobs/<area>/<name>.job.ts`: one queue per file. Pattern to copy: `src/jobs/system/heartbeat.job.ts` (scheduled), `src/jobs/email/send-email.job.ts` (a row locked and settled once, failures recorded and retried). `jobs/email/`: `email.send`, `email.purge-codes` and the Arabic templates (`email-templates.ts`). `jobs/deposits/expire.job.ts`: `deposits.expire` (batches locked with `FOR UPDATE SKIP LOCKED`, an audit entry each). The Telegram bot (F07) goes under `src/telegram/`.
 
 ## Rules
 - Queue names are `<area>.<action>` (`system.heartbeat`), exported as constants next to the job; names shared with the API go in `packages/contracts`.

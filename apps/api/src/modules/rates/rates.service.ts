@@ -7,6 +7,7 @@ import {
   type RatesOverview,
   rateChangePercent,
   rateConfirmationError,
+  rateFromNumeric,
 } from '@vertex-digital/contracts';
 import { type Database, exchangeRates, newId, recordAudit } from '@vertex-digital/db';
 import { desc, sql } from 'drizzle-orm';
@@ -26,9 +27,6 @@ export interface CurrentRate {
 }
 
 type RateRow = typeof exchangeRates.$inferSelect;
-
-/** `numeric(12,4)` as PostgreSQL writes it (`118.5000`) without the trailing zeros. */
-const plainRate = (value: string) => value.replace(/\.?0+$/, '');
 
 /**
  * Serializes rate changes: the 5% check of rule FX2 compares with the rate a parallel change may
@@ -155,7 +153,7 @@ export class RatesService {
 function toCurrent(row: RateRow): CurrentRate {
   return {
     id: row.id,
-    sypPerUsd: plainRate(row.sypPerUsd),
+    sypPerUsd: rateFromNumeric(row.sypPerUsd),
     displayStepSypUnits: row.displayStepSypUnits,
     createdAt: row.createdAt,
   };
@@ -166,12 +164,12 @@ function toRecord(
   previous: RateRow | null,
   names: Map<string, string>,
 ): ExchangeRateRecord {
-  const sypPerUsd = plainRate(row.sypPerUsd);
+  const sypPerUsd = rateFromNumeric(row.sypPerUsd);
   return {
     id: row.id,
     sypPerUsd,
     displayStepSypUnits: row.displayStepSypUnits,
-    changePercent: previous && rateChangePercent(plainRate(previous.sypPerUsd), sypPerUsd),
+    changePercent: previous && rateChangePercent(rateFromNumeric(previous.sypPerUsd), sypPerUsd),
     adminName: names.get(row.adminId) ?? null,
     createdAt: row.createdAt.toISOString(),
   };

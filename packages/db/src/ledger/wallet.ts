@@ -1,16 +1,19 @@
-import type {
-  AdjustmentCategory,
-  AdjustmentDirection,
-  Currency,
-  JournalKind,
-  LedgerAccountKind,
-  ManualDepositMethod,
+import {
+  type AdjustmentCategory,
+  type AdjustmentDirection,
+  type Currency,
+  type DepositMethod,
+  type JournalKind,
+  type LedgerAccountKind,
+  type ManualDepositMethod,
+  rateFromNumeric,
 } from '@vertex-digital/contracts';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Database, Transaction } from '../client.js';
 import {
   customers,
+  deposits,
   ledgerAccounts,
   ledgerJournals,
   ledgerPostings,
@@ -49,6 +52,22 @@ export async function ensureCustomerWallet(tx: Transaction, customerId: string):
     currency: 'USD',
     customerId,
   });
+}
+
+/**
+ * The customer's wallet, created if needed and locked (`FOR UPDATE`) for the caller's transaction.
+ * Every write that both claims a payment reference and credits a wallet takes this lock first,
+ * so two such writes for one customer queue here instead of deadlocking on the reference and the
+ * wallet in opposite orders (S03 rule SC14).
+ */
+export async function lockCustomerWallet(tx: Transaction, customerId: string): Promise<string> {
+  const wallet = await ensureCustomerWallet(tx, customerId);
+  await tx
+    .select({ id: ledgerAccounts.id })
+    .from(ledgerAccounts)
+    .where(eq(ledgerAccounts.id, wallet))
+    .for('update');
+  return wallet;
 }
 
 /** A system account by its code (`adjustments:<category>`), created on first use (rule J2). */
@@ -136,6 +155,15 @@ export interface TimelineAdjustment {
   reversedByAdjustmentId: string | null;
 }
 
+/** A credited deposit as the timeline shows it (rule W5, S03). */
+export interface TimelineDeposit {
+  id: string;
+  method: DepositMethod;
+  referenceCode: string;
+  /** The pounds received and the rate they were converted at; null when USD was received. */
+  syp: { amountUnits: number; rate: string } | null;
+}
+
 export interface TimelineEntry {
   journalId: string;
   kind: JournalKind;
@@ -145,6 +173,7 @@ export interface TimelineEntry {
   amountUnits: number;
   balanceAfterUnits: number;
   adjustment: TimelineAdjustment | null;
+  deposit: TimelineDeposit | null;
 }
 
 /**
@@ -178,12 +207,11 @@ export async function walletTimeline(
   const first = pageRows[0];
   if (!first) return { entries: [], more };
 
-  const [balance, adjustments] = await Promise.all([
+  const journalIds = pageRows.map((row) => row.journalId);
+  const [balance, adjustments, depositsByJournal] = await Promise.all([
     walletBalanceAfter(db, accountId, first.journalId),
-    adjustmentsOf(
-      db,
-      pageRows.map((row) => row.journalId),
-    ),
+    adjustmentsOf(db, journalIds),
+    depositsOf(db, journalIds),
   ]);
   let balanceAfter = balance;
   const entries = pageRows.map((row): TimelineEntry => {
@@ -196,6 +224,7 @@ export async function walletTimeline(
       amountUnits,
       balanceAfterUnits: balanceAfter,
       adjustment: adjustments.get(row.journalId) ?? null,
+      deposit: depositsByJournal.get(row.journalId) ?? null,
     };
     balanceAfter -= amountUnits;
     return entry;
@@ -226,6 +255,38 @@ async function adjustmentsOf(
     .leftJoin(reversal, eq(reversal.reversesAdjustmentId, walletAdjustments.id))
     .where(inArray(walletAdjustments.journalId, journalIds));
   return new Map(rows.map(({ journalId, ...adjustment }) => [journalId, adjustment]));
+}
+
+async function depositsOf(
+  db: Executor,
+  journalIds: string[],
+): Promise<Map<string, TimelineDeposit>> {
+  const rows = await db
+    .select({
+      journalId: deposits.journalId,
+      id: deposits.id,
+      method: deposits.method,
+      referenceCode: deposits.referenceCode,
+      receivedCurrency: deposits.receivedCurrency,
+      receivedAmountUnits: deposits.receivedAmountUnits,
+      creditRate: deposits.creditRate,
+    })
+    .from(deposits)
+    .where(inArray(deposits.journalId, journalIds));
+  return new Map(
+    rows.map((row) => [
+      row.journalId as string,
+      {
+        id: row.id,
+        method: row.method,
+        referenceCode: row.referenceCode,
+        syp:
+          row.receivedCurrency === 'SYP' && row.receivedAmountUnits && row.creditRate
+            ? { amountUnits: row.receivedAmountUnits, rate: rateFromNumeric(row.creditRate) }
+            : null,
+      },
+    ]),
+  );
 }
 
 export interface LedgerSummaryRows {

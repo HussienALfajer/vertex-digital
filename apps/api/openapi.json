@@ -638,7 +638,16 @@
                 "customer.test_password_reset",
                 "wallet_adjustment.created",
                 "wallet_adjustment.reversed",
-                "exchange_rate.changed"
+                "exchange_rate.changed",
+                "deposit_settings.changed",
+                "deposit.created",
+                "deposit.requoted",
+                "deposit.submitted",
+                "deposit.cancelled",
+                "deposit.expired",
+                "deposit.credited",
+                "deposit.rejected",
+                "deposit.receipt_requested"
               ]
             }
           },
@@ -652,7 +661,9 @@
                 "admin_user",
                 "customer",
                 "wallet_adjustment",
-                "exchange_rate"
+                "exchange_rate",
+                "deposit_settings",
+                "deposit"
               ]
             }
           },
@@ -1092,6 +1103,683 @@
         },
         "tags": [
           "wallets"
+        ]
+      }
+    },
+    "/api/deposits/sham-cash/options": {
+      "get": {
+        "operationId": "DepositsController_options",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "What the wizard offers now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShamCashOptions"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/deposits/sham-cash/qr/{currency}": {
+      "get": {
+        "operationId": "DepositsController_qr",
+        "parameters": [
+          {
+            "name": "currency",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The QR image of an enabled currency"
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/deposits/sham-cash": {
+      "post": {
+        "operationId": "DepositsController_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShamCashDeposit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/deposits": {
+      "get": {
+        "operationId": "DepositsController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/deposits/{id}": {
+      "get": {
+        "operationId": "DepositsController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The deposit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/deposits/{id}/quote": {
+      "post": {
+        "operationId": "DepositsController_requote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A new 15-minute quote",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/deposits/{id}/receipt": {
+      "post": {
+        "operationId": "DepositsController_submitReceipt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitReceipt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Submitted for review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/deposits/{id}/cancel": {
+      "post": {
+        "operationId": "DepositsController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposit-settings": {
+      "get": {
+        "operationId": "DepositsAdminController_readSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "In force, or the defaults",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      },
+      "put": {
+        "operationId": "DepositsAdminController_saveSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepositSettingsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The new version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposit-settings/qr": {
+      "post": {
+        "operationId": "DepositsAdminController_uploadQr",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The re-encoded PNG",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredFileRef"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposit-settings/qr/{fileId}": {
+      "get": {
+        "operationId": "DepositsAdminController_qr",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A QR image"
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposits": {
+      "get": {
+        "operationId": "DepositsAdminController_queue",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "submitted",
+              "type": "string",
+              "enum": [
+                "pending",
+                "submitted",
+                "credited",
+                "rejected",
+                "expired",
+                "cancelled",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "flagged",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 254
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rule RV10 order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminDepositPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposits/counts": {
+      "get": {
+        "operationId": "DepositsAdminController_counts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The navigation badge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminDepositCounts"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposits/{id}": {
+      "get": {
+        "operationId": "DepositsAdminController_deposit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The deposit and its review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminDeposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposits/{id}/receipts/{receiptId}": {
+      "get": {
+        "operationId": "DepositsAdminController_receipt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "receiptId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The re-encoded receipt"
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposits/{id}/approve": {
+      "post": {
+        "operationId": "DepositsAdminController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveDeposit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credited (or its replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminDeposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposits/{id}/reject": {
+      "post": {
+        "operationId": "DepositsAdminController_reject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectDeposit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rejected (or its replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminDeposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposits/{id}/request-receipt": {
+      "post": {
+        "operationId": "DepositsAdminController_requestReceipt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestReceipt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Back to pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminDeposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
         ]
       }
     },
@@ -1702,7 +2390,16 @@
           "customer.test_password_reset",
           "wallet_adjustment.created",
           "wallet_adjustment.reversed",
-          "exchange_rate.changed"
+          "exchange_rate.changed",
+          "deposit_settings.changed",
+          "deposit.created",
+          "deposit.requoted",
+          "deposit.submitted",
+          "deposit.cancelled",
+          "deposit.expired",
+          "deposit.credited",
+          "deposit.rejected",
+          "deposit.receipt_requested"
         ]
       },
       "AuditEntityType": {
@@ -1711,7 +2408,9 @@
           "admin_user",
           "customer",
           "wallet_adjustment",
-          "exchange_rate"
+          "exchange_rate",
+          "deposit_settings",
+          "deposit"
         ]
       },
       "AuditPage": {
@@ -2039,6 +2738,43 @@
               "reversal"
             ],
             "additionalProperties": false
+          },
+          "deposit": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "method": {
+                "$ref": "#/components/schemas/DepositMethod"
+              },
+              "referenceCode": {
+                "type": "string"
+              },
+              "syp": {
+                "nullable": true,
+                "type": "object",
+                "properties": {
+                  "amountUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "rate": {
+                    "$ref": "#/components/schemas/ExchangeRate"
+                  }
+                },
+                "required": [
+                  "amountUnits",
+                  "rate"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "referenceCode",
+              "syp"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -2046,7 +2782,8 @@
           "kind",
           "amountUnits",
           "balanceAfterUnits",
-          "adjustment"
+          "adjustment",
+          "deposit"
         ],
         "additionalProperties": false
       },
@@ -2068,6 +2805,12 @@
           "cash_refund",
           "manual_deposit",
           "test_funds"
+        ]
+      },
+      "DepositMethod": {
+        "type": "string",
+        "enum": [
+          "sham_cash"
         ]
       },
       "WalletSearchQuery": {
@@ -2338,6 +3081,49 @@
               "reversedByAdjustmentId"
             ],
             "additionalProperties": false
+          },
+          "deposit": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "method": {
+                "$ref": "#/components/schemas/DepositMethod"
+              },
+              "referenceCode": {
+                "type": "string"
+              },
+              "syp": {
+                "nullable": true,
+                "type": "object",
+                "properties": {
+                  "amountUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "rate": {
+                    "$ref": "#/components/schemas/ExchangeRate"
+                  }
+                },
+                "required": [
+                  "amountUnits",
+                  "rate"
+                ],
+                "additionalProperties": false
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": [
+              "method",
+              "referenceCode",
+              "syp",
+              "id"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -2346,7 +3132,8 @@
           "amountUnits",
           "balanceAfterUnits",
           "journalId",
-          "adjustment"
+          "adjustment",
+          "deposit"
         ],
         "additionalProperties": false
       },
@@ -2588,7 +3375,8 @@
           "sales_revenue",
           "cost_of_goods",
           "refunds",
-          "adjustments"
+          "adjustments",
+          "currency_exchange"
         ]
       },
       "Currency": {
@@ -2596,6 +3384,1434 @@
         "enum": [
           "USD",
           "SYP"
+        ]
+      },
+      "ShamCashOptions": {
+        "type": "object",
+        "properties": {
+          "currencies": {
+            "type": "object",
+            "properties": {
+              "SYP": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "reason": {
+                    "nullable": true,
+                    "type": "string",
+                    "enum": [
+                      "not_configured",
+                      "disabled",
+                      "no_rate"
+                    ]
+                  }
+                },
+                "required": [
+                  "available",
+                  "reason"
+                ],
+                "additionalProperties": false
+              },
+              "USD": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "reason": {
+                    "nullable": true,
+                    "type": "string",
+                    "enum": [
+                      "not_configured",
+                      "disabled",
+                      "no_rate"
+                    ]
+                  }
+                },
+                "required": [
+                  "available",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "SYP",
+              "USD"
+            ],
+            "additionalProperties": false
+          },
+          "account": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "number": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "number"
+            ],
+            "additionalProperties": false
+          },
+          "limits": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DepositLimits"
+              }
+            ]
+          },
+          "rate": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "sypPerUsd": {
+                "$ref": "#/components/schemas/ExchangeRate"
+              },
+              "displayStepSypUnits": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 5000
+              }
+            },
+            "required": [
+              "id",
+              "sypPerUsd",
+              "displayStepSypUnits"
+            ],
+            "additionalProperties": false
+          },
+          "reviewHours": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "start": {
+                "$ref": "#/components/schemas/ReviewTime"
+              },
+              "end": {
+                "$ref": "#/components/schemas/ReviewTime"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "additionalProperties": false
+          },
+          "eta": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReviewEta"
+              }
+            ]
+          },
+          "pendingDepositId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "currencies",
+          "account",
+          "limits",
+          "rate",
+          "reviewHours",
+          "eta",
+          "pendingDepositId"
+        ],
+        "additionalProperties": false
+      },
+      "DepositLimits": {
+        "type": "object",
+        "properties": {
+          "established": {
+            "type": "boolean"
+          },
+          "minUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "perDepositUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "dailyUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "remainingTodayUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "established",
+          "minUnits",
+          "perDepositUnits",
+          "dailyUnits",
+          "remainingTodayUnits"
+        ],
+        "additionalProperties": false
+      },
+      "ReviewTime": {
+        "type": "string",
+        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+      },
+      "ReviewEta": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open"
+                ]
+              },
+              "minutes": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "state",
+              "minutes"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "closed"
+                ]
+              },
+              "opensAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "state",
+              "opensAt"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "CreateShamCashDeposit": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "amountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "currency",
+          "amountUnits"
+        ]
+      },
+      "Deposit": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "method": {
+            "$ref": "#/components/schemas/DepositMethod"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DepositStatus"
+          },
+          "referenceCode": {
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "declaredAmountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "declaredUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "quote": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DepositQuote"
+              }
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "submittedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "decidedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "rateFixed": {
+            "type": "boolean"
+          },
+          "receiptRequest": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "note": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "at",
+              "note"
+            ],
+            "additionalProperties": false
+          },
+          "payTo": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "accountName": {
+                "type": "string"
+              },
+              "accountNumber": {
+                "type": "string"
+              },
+              "qrUrl": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "accountName",
+              "accountNumber",
+              "qrUrl"
+            ],
+            "additionalProperties": false
+          },
+          "eta": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReviewEta"
+              }
+            ]
+          },
+          "credited": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "usdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "receivedCurrency": {
+                "$ref": "#/components/schemas/Currency"
+              },
+              "receivedAmountUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "rate": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ExchangeRate"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "usdUnits",
+              "receivedCurrency",
+              "receivedAmountUnits",
+              "rate"
+            ],
+            "additionalProperties": false
+          },
+          "rejection": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "reason": {
+                "$ref": "#/components/schemas/DepositRejectReason"
+              },
+              "note": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "reason",
+              "note"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "status",
+          "referenceCode",
+          "currency",
+          "declaredAmountUnits",
+          "declaredUsdUnits",
+          "quote",
+          "expiresAt",
+          "createdAt",
+          "submittedAt",
+          "decidedAt",
+          "rateFixed",
+          "receiptRequest",
+          "payTo",
+          "eta",
+          "credited",
+          "rejection"
+        ],
+        "additionalProperties": false
+      },
+      "DepositStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "submitted",
+          "credited",
+          "rejected",
+          "expired",
+          "cancelled"
+        ]
+      },
+      "DepositQuote": {
+        "type": "object",
+        "properties": {
+          "rateId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/ExchangeRate"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "rateId",
+          "rate",
+          "expiresAt"
+        ],
+        "additionalProperties": false
+      },
+      "DepositRejectReason": {
+        "type": "string",
+        "enum": [
+          "not_received",
+          "receipt_invalid",
+          "receipt_used",
+          "reference_other_customer",
+          "wrong_account",
+          "other"
+        ]
+      },
+      "DepositListQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      },
+      "DepositPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Deposit"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "SubmitReceipt": {
+        "type": "object",
+        "properties": {
+          "rateId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        }
+      },
+      "DepositSettings": {
+        "type": "object",
+        "properties": {
+          "shamCashAccountName": {
+            "type": "string"
+          },
+          "shamCashAccountNumber": {
+            "type": "string"
+          },
+          "sypEnabled": {
+            "type": "boolean"
+          },
+          "usdEnabled": {
+            "type": "boolean"
+          },
+          "sypQrFileId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "usdQrFileId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "minDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "newAccountPerDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "newAccountDailyUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "establishedPerDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "establishedDailyUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reviewHoursStart": {
+            "$ref": "#/components/schemas/ReviewTime"
+          },
+          "reviewHoursEnd": {
+            "$ref": "#/components/schemas/ReviewTime"
+          },
+          "reviewTargetMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "flagNewAccountUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "flagVelocityCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "saved": {
+            "type": "boolean"
+          },
+          "savedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "shamCashAccountName",
+          "shamCashAccountNumber",
+          "sypEnabled",
+          "usdEnabled",
+          "sypQrFileId",
+          "usdQrFileId",
+          "minDepositUsdUnits",
+          "newAccountPerDepositUsdUnits",
+          "newAccountDailyUsdUnits",
+          "establishedPerDepositUsdUnits",
+          "establishedDailyUsdUnits",
+          "reviewHoursStart",
+          "reviewHoursEnd",
+          "reviewTargetMinutes",
+          "flagNewAccountUsdUnits",
+          "flagVelocityCount",
+          "saved",
+          "savedAt"
+        ],
+        "additionalProperties": false
+      },
+      "DepositSettingsInput": {
+        "type": "object",
+        "properties": {
+          "shamCashAccountName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "shamCashAccountNumber": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "sypEnabled": {
+            "type": "boolean"
+          },
+          "usdEnabled": {
+            "type": "boolean"
+          },
+          "sypQrFileId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "usdQrFileId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "minDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "newAccountPerDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "newAccountDailyUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "establishedPerDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "establishedDailyUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reviewHoursStart": {
+            "$ref": "#/components/schemas/ReviewTime"
+          },
+          "reviewHoursEnd": {
+            "$ref": "#/components/schemas/ReviewTime"
+          },
+          "reviewTargetMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "flagNewAccountUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "flagVelocityCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "shamCashAccountName",
+          "shamCashAccountNumber",
+          "sypEnabled",
+          "usdEnabled",
+          "sypQrFileId",
+          "usdQrFileId",
+          "minDepositUsdUnits",
+          "newAccountPerDepositUsdUnits",
+          "newAccountDailyUsdUnits",
+          "establishedPerDepositUsdUnits",
+          "establishedDailyUsdUnits",
+          "reviewHoursStart",
+          "reviewHoursEnd",
+          "reviewTargetMinutes",
+          "flagNewAccountUsdUnits",
+          "flagVelocityCount"
+        ]
+      },
+      "StoredFileRef": {
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "fileId"
+        ],
+        "additionalProperties": false
+      },
+      "AdminDepositQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "status": {
+            "default": "submitted",
+            "type": "string",
+            "enum": [
+              "pending",
+              "submitted",
+              "credited",
+              "rejected",
+              "expired",
+              "cancelled",
+              "all"
+            ]
+          },
+          "flagged": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ]
+          },
+          "q": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 254
+          }
+        }
+      },
+      "AdminDepositPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminDepositListItem"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "AdminDepositListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "method": {
+            "$ref": "#/components/schemas/DepositMethod"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DepositStatus"
+          },
+          "referenceCode": {
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "declaredAmountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "declaredUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "quote": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DepositQuote"
+              }
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "submittedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "decidedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "isTest": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "isTest"
+            ],
+            "additionalProperties": false
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepositFlagCode"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "status",
+          "referenceCode",
+          "currency",
+          "declaredAmountUnits",
+          "declaredUsdUnits",
+          "quote",
+          "expiresAt",
+          "createdAt",
+          "submittedAt",
+          "decidedAt",
+          "customer",
+          "flags"
+        ],
+        "additionalProperties": false
+      },
+      "DepositFlagCode": {
+        "type": "string",
+        "enum": [
+          "receipt_reused",
+          "receipt_similar",
+          "new_account_large",
+          "velocity",
+          "shared_phone",
+          "amount_mismatch",
+          "reference_missing",
+          "reference_different"
+        ]
+      },
+      "AdminDepositCounts": {
+        "type": "object",
+        "properties": {
+          "submitted": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "submittedFlagged": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pending": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "submitted",
+          "submittedFlagged",
+          "pending"
+        ],
+        "additionalProperties": false
+      },
+      "AdminDeposit": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "method": {
+            "$ref": "#/components/schemas/DepositMethod"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DepositStatus"
+          },
+          "referenceCode": {
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "declaredAmountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "declaredUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "quote": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DepositQuote"
+              }
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "submittedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "decidedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "rateFixedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "receiptRequestedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "receiptRequestCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "receiptRequestNote": {
+            "nullable": true,
+            "type": "string"
+          },
+          "approvalRate": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "rateId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "rate": {
+                "$ref": "#/components/schemas/ExchangeRate"
+              }
+            },
+            "required": [
+              "rateId",
+              "rate"
+            ],
+            "additionalProperties": false
+          },
+          "adminName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "credit": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "transactionNumber": {
+                "type": "string"
+              },
+              "receivedCurrency": {
+                "$ref": "#/components/schemas/Currency"
+              },
+              "receivedAmountUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "creditedUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "creditRateId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "creditRate": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ExchangeRate"
+                  }
+                ]
+              },
+              "referenceCheck": {
+                "$ref": "#/components/schemas/DepositReferenceCheck"
+              },
+              "journalId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": [
+              "transactionNumber",
+              "receivedCurrency",
+              "receivedAmountUnits",
+              "creditedUsdUnits",
+              "creditRateId",
+              "creditRate",
+              "referenceCheck",
+              "journalId"
+            ],
+            "additionalProperties": false
+          },
+          "rejection": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "reason": {
+                "$ref": "#/components/schemas/DepositRejectReason"
+              },
+              "customerNote": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "reason",
+              "customerNote"
+            ],
+            "additionalProperties": false
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": [
+                "id",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepositFlag"
+            }
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "isTest": {
+                "type": "boolean"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "established": {
+                "type": "boolean"
+              },
+              "creditedCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "creditedTotalUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "balanceUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "recentDeposits": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "referenceCode": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "$ref": "#/components/schemas/DepositStatus"
+                    },
+                    "currency": {
+                      "$ref": "#/components/schemas/Currency"
+                    },
+                    "declaredAmountUnits": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "referenceCode",
+                    "status",
+                    "currency",
+                    "declaredAmountUnits",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "isTest",
+              "phone",
+              "createdAt",
+              "established",
+              "creditedCount",
+              "creditedTotalUsdUnits",
+              "balanceUnits",
+              "recentDeposits"
+            ],
+            "additionalProperties": false
+          },
+          "eta": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReviewEta"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "status",
+          "referenceCode",
+          "currency",
+          "declaredAmountUnits",
+          "declaredUsdUnits",
+          "quote",
+          "expiresAt",
+          "createdAt",
+          "submittedAt",
+          "decidedAt",
+          "rateFixedAt",
+          "receiptRequestedAt",
+          "receiptRequestCount",
+          "receiptRequestNote",
+          "approvalRate",
+          "adminName",
+          "credit",
+          "rejection",
+          "receipts",
+          "flags",
+          "customer",
+          "eta"
+        ],
+        "additionalProperties": false
+      },
+      "DepositReferenceCheck": {
+        "type": "string",
+        "enum": [
+          "matches",
+          "missing",
+          "different"
+        ]
+      },
+      "DepositFlag": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "code": {
+            "$ref": "#/components/schemas/DepositFlagCode"
+          },
+          "receiptId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "receiptId",
+          "details",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ApproveDeposit": {
+        "type": "object",
+        "properties": {
+          "transactionNumber": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "receivedCurrency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "receivedAmountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "referenceCheck": {
+            "$ref": "#/components/schemas/DepositReferenceCheck"
+          },
+          "acknowledgedFlags": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepositFlagCode"
+            }
+          },
+          "internalNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "transactionNumber",
+          "receivedCurrency",
+          "receivedAmountUnits",
+          "referenceCheck",
+          "acknowledgedFlags"
+        ]
+      },
+      "RejectDeposit": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/DepositRejectReason"
+          },
+          "customerNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "internalNote": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason",
+          "internalNote"
+        ]
+      },
+      "RequestReceipt": {
+        "type": "object",
+        "properties": {
+          "customerNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "internalNote": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "internalNote"
         ]
       },
       "HealthResponse": {

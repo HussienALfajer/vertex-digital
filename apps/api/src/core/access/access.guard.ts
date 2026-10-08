@@ -1,11 +1,16 @@
 import type { IncomingHttpHeaders } from 'node:http';
 import { type CanActivate, type ExecutionContext, Injectable, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ADMIN_SESSION_RULES, BACKGROUND_REQUEST_HEADER } from '@vertex-digital/contracts';
+import { BACKGROUND_REQUEST_HEADER } from '@vertex-digital/contracts';
 import { AdminAuthService } from '../../modules/admin/index.js';
 import { AuthService } from '../../modules/auth/index.js';
 import { CodedException } from '../errors/index.js';
-import { ACCESS, type RouteAccess, SENSITIVE } from './access.decorators.js';
+import {
+  ACCESS,
+  isRecentlyReauthenticated,
+  type RouteAccess,
+  SENSITIVE,
+} from './access.decorators.js';
 import type { AuthenticatedRequest } from './current-user.decorator.js';
 
 type GuardedRequest = AuthenticatedRequest & { headers: IncomingHttpHeaders };
@@ -61,11 +66,7 @@ export class AccessGuard implements CanActivate {
             throw new CodedException(403, 'TWO_FACTOR_REQUIRED', 'Set up two-factor sign-in first');
           }
           const sensitive = this.reflector.getAllAndOverride<boolean>(SENSITIVE, targets);
-          const fresh =
-            admin.reauthenticatedAt !== null &&
-            Date.now() - admin.reauthenticatedAt.getTime() <=
-              ADMIN_SESSION_RULES.reauthenticationMs;
-          if (sensitive && !fresh) {
+          if (sensitive && !isRecentlyReauthenticated(admin)) {
             throw new CodedException(
               403,
               'REAUTHENTICATION_REQUIRED',

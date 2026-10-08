@@ -1,6 +1,12 @@
 import { z } from 'zod';
+import {
+  depositFlagCodeSchema,
+  depositMethodSchema,
+  depositReferenceCheckSchema,
+  depositRejectReasonSchema,
+} from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
-import { exchangeRateSchema } from './money.js';
+import { currencySchema, exchangeRateSchema } from './money.js';
 import { displayStepSchema } from './rates.js';
 import {
   adjustmentCategorySchema,
@@ -31,6 +37,8 @@ export const AUDIT_ENTITY_TYPES = [
   'customer',
   'wallet_adjustment',
   'exchange_rate',
+  'deposit_settings',
+  'deposit',
 ] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
@@ -57,6 +65,35 @@ const adjustment = {
   journalId: z.uuid(),
   balanceAfterUnits: z.int().nonnegative(),
 };
+
+/** The deposit settings' values in audit details (S03); file ids for the QR images. */
+const depositSettingsValues = z
+  .strictObject({
+    shamCashAccountName: z.string(),
+    shamCashAccountNumber: z.string(),
+    sypEnabled: z.boolean(),
+    usdEnabled: z.boolean(),
+    sypQrFileId: z.uuid().nullable(),
+    usdQrFileId: z.uuid().nullable(),
+    minDepositUsdUnits: z.int(),
+    newAccountPerDepositUsdUnits: z.int(),
+    newAccountDailyUsdUnits: z.int(),
+    establishedPerDepositUsdUnits: z.int(),
+    establishedDailyUsdUnits: z.int(),
+    reviewHoursStart: z.string(),
+    reviewHoursEnd: z.string(),
+    reviewTargetMinutes: z.int(),
+    flagNewAccountUsdUnits: z.int(),
+    flagVelocityCount: z.int(),
+  })
+  .partial();
+const depositQuote = z.strictObject({
+  rateId: z.uuid(),
+  rate: exchangeRateSchema,
+  declaredUsdUnits: z.int().positive(),
+});
+const flagCodes = z.array(depositFlagCodeSchema);
+const deposit = z.strictObject({ depositId: z.uuid() });
 
 /**
  * Every audit action (`<entity>.<verb>`) with the shape of its `details`: before and after of the
@@ -108,6 +145,59 @@ export const AUDIT_DETAILS = {
     before: rate.nullable(),
     after: rate,
     changePercent: z.string().nullable(),
+  }),
+  /** A new version of the deposit settings (S03): the changed fields only. */
+  'deposit_settings.changed': z.strictObject({
+    settingsId: z.uuid(),
+    before: depositSettingsValues,
+    after: depositSettingsValues,
+  }),
+  'deposit.created': z.strictObject({
+    depositId: z.uuid(),
+    method: depositMethodSchema,
+    currency: currencySchema,
+    declaredAmountUnits: z.int().positive(),
+    declaredUsdUnits: z.int().nonnegative(),
+    rateId: z.uuid().nullable(),
+  }),
+  /** A new quote for a SYP deposit (rule SC10). */
+  'deposit.requoted': z.strictObject({
+    depositId: z.uuid(),
+    before: depositQuote,
+    after: depositQuote,
+  }),
+  'deposit.submitted': z.strictObject({
+    depositId: z.uuid(),
+    receiptId: z.uuid(),
+    rateFixed: z.boolean(),
+    flags: flagCodes,
+  }),
+  'deposit.cancelled': deposit,
+  /** By the worker (rule SC12). */
+  'deposit.expired': deposit,
+  /** The internal note is the entry's reason (rule RV7). */
+  'deposit.credited': z.strictObject({
+    depositId: z.uuid(),
+    customerId: z.uuid(),
+    transactionNumber: z.string(),
+    receivedCurrency: currencySchema,
+    receivedAmountUnits: z.int().positive(),
+    creditedUsdUnits: z.int().positive(),
+    creditRateId: z.uuid().nullable(),
+    referenceCheck: depositReferenceCheckSchema,
+    acknowledgedFlags: flagCodes,
+    journalId: z.uuid(),
+    balanceAfterUnits: z.int().nonnegative(),
+  }),
+  'deposit.rejected': z.strictObject({
+    depositId: z.uuid(),
+    customerId: z.uuid(),
+    rejectReason: depositRejectReasonSchema,
+    customerNote: z.string().nullable(),
+  }),
+  'deposit.receipt_requested': z.strictObject({
+    depositId: z.uuid(),
+    customerNote: z.string().nullable(),
   }),
 } as const satisfies Record<string, z.ZodType>;
 

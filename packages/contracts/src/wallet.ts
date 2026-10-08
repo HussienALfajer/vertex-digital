@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { depositMethodSchema } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import {
   amountUnitsSchema,
@@ -21,6 +22,8 @@ export const LEDGER_ACCOUNT_KINDS = [
   'cost_of_goods',
   'refunds',
   'adjustments',
+  /** The store's conversion position: pounds received against dollars credited (S03 rule M2). */
+  'currency_exchange',
 ] as const;
 
 export const ledgerAccountKindSchema = z
@@ -243,9 +246,23 @@ const walletAdjustmentExtras = z.object({
   reversal: z.boolean(),
 });
 
+/**
+ * What the timeline shows of a credited deposit (S02 rule W5, S03): the method, the reference
+ * code and, when pounds were received, the pounds and the rate they were converted at.
+ */
+const walletDepositExtras = z.object({
+  method: depositMethodSchema,
+  referenceCode: z.string(),
+  syp: z.object({ amountUnits: amountUnitsSchema, rate: exchangeRateSchema }).nullable(),
+});
+
 /** One timeline entry as the customer sees it: no journal id, account or internal reason. */
 export const walletEntrySchema = z
-  .object({ ...timelineEntry, adjustment: walletAdjustmentExtras.nullable() })
+  .object({
+    ...timelineEntry,
+    adjustment: walletAdjustmentExtras.nullable(),
+    deposit: walletDepositExtras.nullable(),
+  })
   .meta({ id: 'WalletEntry' });
 
 export type WalletEntry = z.infer<typeof walletEntrySchema>;
@@ -280,6 +297,7 @@ export const adminWalletEntrySchema = z
         reversedByAdjustmentId: z.uuid().nullable(),
       })
       .nullable(),
+    deposit: walletDepositExtras.extend({ id: z.uuid() }).nullable(),
   })
   .meta({ id: 'AdminWalletEntry' });
 

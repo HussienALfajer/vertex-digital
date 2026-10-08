@@ -79,7 +79,7 @@ One row per saved version; the current settings are the newest row. Before the f
 - Quote (SYP only, null for USD): `rate_id` foreign key to `exchange_rates`; `rate` numeric(12,4), a copy of the rate's value; `quote_expires_at` timestamptz (quote time + 15 minutes). A check: all three set if and only if `currency = 'SYP'`.
 - `rate_fixed_at` timestamptz, nullable: set at the first submission made within a valid quote. From then on, the deposit's rate never changes (rule SC9).
 - `expires_at` timestamptz: 24 hours after creation, or after a clearer-receipt request (rule SC12).
-- `receipt_requested_at` timestamptz, nullable; `receipt_request_count` smallint, default 0, at most 1 (rule RV8).
+- `receipt_requested_at` timestamptz, nullable; `receipt_request_count` smallint, default 0, at most 1 (rule RV8); `receipt_request_note` text, 1–300, nullable: the request's note to the customer.
 - `submitted_at`, `decided_at` timestamptz, nullable.
 - Decision, set once when credited:
   - `transaction_number` text, trimmed. Compared upper-cased; unique through `payment_references`.
@@ -89,7 +89,7 @@ One row per saved version; the current settings are the newest row. Before the f
   - `reference_check` enum `deposit_reference_check`: `matches`, `missing`, `different`.
   - `journal_id`, foreign key to `ledger_journals`, unique.
 - Rejection, set once when rejected: `reject_reason` enum `deposit_reject_reason` (rule RV6); `customer_note` text, 1–300, nullable.
-- `idempotency_key` uuid, required; unique `(customer_id, idempotency_key)`.
+- `idempotency_key` uuid, required, unique (across customers: the database convention keeps every idempotency key unique on its own; a key sent by another customer answers `IDEMPOTENCY_KEY_REUSED`).
 - `decision_idempotency_key` uuid, nullable, unique: the approval's or rejection's `Idempotency-Key`.
 - `admin_id` uuid, nullable, no foreign key: who decided.
 - `created_at`, `updated_at`.
@@ -250,6 +250,8 @@ Claims each real-world payment once across every table that can credit it (rule 
   9. enqueue the email.
 
   Any refusal rolls everything back. The after-commit hook for A02 is left as a no-op with a comment pointing to S08/S09.
+
+  Settled in PR 2: the wallet is created and locked (`lockCustomerWallet`) before the claim of step 3, the order of the S02 adjustments, so an approval and a manual deposit for one customer queue instead of deadlocking.
 - RV8. "Request a clearer receipt": once per deposit (`receipt_request_count` ≤ 1; the second answers `RECEIPT_ALREADY_REQUESTED`). It moves `submitted` back to `pending`, sets `receipt_requested_at` and a new `expires_at`, writes an optional customer note and a required internal note, and sends the email. It does not count toward SC4: a customer with another `pending` deposit keeps it, so the partial unique index refuses the move. The panel then explains it and offers reject instead.
 - RV9. Approval and rejection carry an `Idempotency-Key` (`decision_idempotency_key`). A replay with the same key and body returns the decided deposit (`200`), with no second journal, audit entry or email. The same key with another body answers `IDEMPOTENCY_KEY_REUSED`. A different key on a decided deposit answers `DEPOSIT_STATE_CONFLICT`.
 - RV10. Queue order: flagged deposits first, then oldest `submitted_at` first (owner, 2026-10-08).
@@ -509,3 +511,11 @@ Tests:
 - dHash: resize to 9×8 grayscale with sharp, compare neighbours, 64 bits as a signed bigint.
 - The `wallet` module exports the deposit-credit posting through `packages/db/src/ledger`. `deposits` never queries `ledger_*` tables directly. `deposits` reads the customer's balance through the wallet service for the admin panel.
 - Update `docs/architecture.md` (modules `rates`, `deposits`, `files`; job `deposits.expire`), `deploy/` nginx, `.env.example`, and the commands table if a command changes.
+- Settled in PR 2:
+  - Creation also requires ALTCHA (ADR 0008: deposit creation), so it answers the guard's `ALTCHA_*` codes.
+  - The per-customer limits of SC6 count in the database: creations of the last hour (10, from `deposits`) and receipt upload attempts of the last hour (20, refused ones included, in `customer_rate_limits`), answered `RATE_LIMITED`. A receipt is refused before its image is decoded or written unless the deposit is open and its quote valid, so a refused upload leaves no file. Requote and cancellation have per-address API limits (20 a minute).
+  - A `pending` deposit past `expires_at` is refused with `DEPOSIT_STATE_CONFLICT` and `details.status` `expired` (edge case 19).
+  - FL1 and FL2 compare with receipts of other deposits only: a second receipt on the same deposit after a clearer-receipt request is not a reuse.
+  - The admin deposit page reads its audit trail from the audit log (`GET /api/admin/audit?entityType=deposit&entityId=<id>`) instead of a field of `adminDepositSchema`; `adminDepositSchema` adds `approvalRate`, the rate an approval converts received pounds at (RV3).
+  - The deposit emails also carry `depositId`, for their link to `/wallet/deposits/<id>`.
+  - Files: `FILES_ACCEL_PREFIX=/internal-files` in production; the admin host's `internal` location maps it to `shared/files/`, the store host's to `shared/files/sham_cash_qr/` only (the customer QR route). `shared/files/` is group `www-data` (setgid) so nginx can read it; `shared/` stays closed but for traversal.
