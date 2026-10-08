@@ -647,7 +647,11 @@
                 "deposit.expired",
                 "deposit.credited",
                 "deposit.rejected",
-                "deposit.receipt_requested"
+                "deposit.receipt_requested",
+                "deposit.txid_submitted",
+                "deposit.transfer_bound",
+                "deposit.txid_bounced",
+                "deposit.rechecked"
               ]
             }
           },
@@ -1192,6 +1196,69 @@
         ]
       }
     },
+    "/api/deposits/usdt/options": {
+      "get": {
+        "operationId": "DepositsController_usdtOptions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The USDT networks now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsdtOptions"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/deposits/usdt": {
+      "post": {
+        "operationId": "DepositsController_createUsdt",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUsdtDeposit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
     "/api/deposits": {
       "get": {
         "operationId": "DepositsController_list",
@@ -1321,6 +1388,46 @@
         "responses": {
           "200": {
             "description": "Submitted for review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/deposits/{id}/txid": {
+      "post": {
+        "operationId": "DepositsController_submitTxid",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitTxid"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification started",
             "content": {
               "application/json": {
                 "schema": {
@@ -1530,6 +1637,19 @@
               "enum": [
                 "true",
                 "false"
+              ]
+            }
+          },
+          {
+            "name": "method",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sham_cash",
+                "usdt_trc20",
+                "usdt_bep20"
               ]
             }
           },
@@ -1773,6 +1893,154 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminDeposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposits/{id}/approve-usdt": {
+      "post": {
+        "operationId": "DepositsAdminController_approveUsdt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveUsdtDeposit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credited (or its replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminDeposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/deposits/{id}/recheck": {
+      "post": {
+        "operationId": "DepositsAdminController_recheck",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Verification sent again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminDeposit"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "deposits"
+        ]
+      }
+    },
+    "/api/admin/usdt-transfers": {
+      "get": {
+        "operationId": "DepositsAdminController_transfers",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "method",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "usdt_trc20",
+                "usdt_bep20"
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "unmatched",
+              "type": "string",
+              "enum": [
+                "unmatched",
+                "all"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUsdtTransferPage"
                 }
               }
             }
@@ -2399,7 +2667,11 @@
           "deposit.expired",
           "deposit.credited",
           "deposit.rejected",
-          "deposit.receipt_requested"
+          "deposit.receipt_requested",
+          "deposit.txid_submitted",
+          "deposit.transfer_bound",
+          "deposit.txid_bounced",
+          "deposit.rechecked"
         ]
       },
       "AuditEntityType": {
@@ -2810,7 +3082,9 @@
       "DepositMethod": {
         "type": "string",
         "enum": [
-          "sham_cash"
+          "sham_cash",
+          "usdt_trc20",
+          "usdt_bep20"
         ]
       },
       "WalletSearchQuery": {
@@ -3115,13 +3389,18 @@
                 "type": "string",
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "txid": {
+                "nullable": true,
+                "type": "string"
               }
             },
             "required": [
               "method",
               "referenceCode",
               "syp",
-              "id"
+              "id",
+              "txid"
             ],
             "additionalProperties": false
           }
@@ -3376,7 +3655,8 @@
           "cost_of_goods",
           "refunds",
           "adjustments",
-          "currency_exchange"
+          "currency_exchange",
+          "deposit_rounding"
         ]
       },
       "Currency": {
@@ -3804,6 +4084,14 @@
               "note"
             ],
             "additionalProperties": false
+          },
+          "usdt": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DepositUsdt"
+              }
+            ]
           }
         },
         "required": [
@@ -3824,7 +4112,8 @@
           "payTo",
           "eta",
           "credited",
-          "rejection"
+          "rejection",
+          "usdt"
         ],
         "additionalProperties": false
       },
@@ -3871,7 +4160,204 @@
           "receipt_used",
           "reference_other_customer",
           "wrong_account",
+          "wrong_network",
+          "transfer_other_customer",
           "other"
+        ]
+      },
+      "DepositUsdt": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "$ref": "#/components/schemas/UsdtMethod"
+          },
+          "address": {
+            "type": "string"
+          },
+          "payAmount": {
+            "type": "string"
+          },
+          "payAmountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "checkStatus": {
+            "$ref": "#/components/schemas/UsdtCheckStatus"
+          },
+          "checkError": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsdtCheckError"
+              }
+            ]
+          },
+          "txid": {
+            "nullable": true,
+            "type": "string"
+          },
+          "explorerUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "confirmations": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "requiredConfirmations": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "delayed": {
+            "type": "boolean"
+          },
+          "receivedAmountUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reviewReasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "amount_mismatch",
+                "wrong_network",
+                "sent_before_deposit"
+              ]
+            }
+          }
+        },
+        "required": [
+          "method",
+          "address",
+          "payAmount",
+          "payAmountUnits",
+          "checkStatus",
+          "checkError",
+          "txid",
+          "explorerUrl",
+          "confirmations",
+          "requiredConfirmations",
+          "delayed",
+          "receivedAmountUnits",
+          "reviewReasons"
+        ],
+        "additionalProperties": false
+      },
+      "UsdtMethod": {
+        "type": "string",
+        "enum": [
+          "usdt_trc20",
+          "usdt_bep20"
+        ]
+      },
+      "UsdtCheckStatus": {
+        "type": "string",
+        "enum": [
+          "awaiting_transfer",
+          "searching",
+          "confirming",
+          "review",
+          "done"
+        ]
+      },
+      "UsdtCheckError": {
+        "type": "string",
+        "enum": [
+          "not_found",
+          "tx_failed",
+          "not_to_store",
+          "wrong_token"
+        ]
+      },
+      "UsdtOptions": {
+        "type": "object",
+        "properties": {
+          "networks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "$ref": "#/components/schemas/UsdtMethod"
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "unavailableReason": {
+                  "nullable": true,
+                  "type": "string",
+                  "enum": [
+                    "not_configured",
+                    "disabled",
+                    "delayed"
+                  ]
+                },
+                "address": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "confirmations": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "method",
+                "available",
+                "unavailableReason",
+                "address",
+                "confirmations"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "limits": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DepositLimits"
+              }
+            ]
+          },
+          "pendingDepositId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "networks",
+          "limits",
+          "pendingDepositId"
+        ],
+        "additionalProperties": false
+      },
+      "CreateUsdtDeposit": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "$ref": "#/components/schemas/UsdtMethod"
+          },
+          "amountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "method",
+          "amountUnits"
         ]
       },
       "DepositListQuery": {
@@ -3919,6 +4405,19 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           }
         }
+      },
+      "SubmitTxid": {
+        "type": "object",
+        "properties": {
+          "txid": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "txid"
+        ]
       },
       "DepositSettings": {
         "type": "object",
@@ -3993,6 +4492,17 @@
             "minimum": 1,
             "maximum": 50
           },
+          "usdtTrc20Enabled": {
+            "type": "boolean"
+          },
+          "usdtBep20Enabled": {
+            "type": "boolean"
+          },
+          "usdtMinDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "saved": {
             "type": "boolean"
           },
@@ -4001,6 +4511,37 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "usdt": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "$ref": "#/components/schemas/UsdtMethod"
+                },
+                "address": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "lastScanAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "delayed": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "method",
+                "address",
+                "lastScanAt",
+                "delayed"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -4020,8 +4561,12 @@
           "reviewTargetMinutes",
           "flagNewAccountUsdUnits",
           "flagVelocityCount",
+          "usdtTrc20Enabled",
+          "usdtBep20Enabled",
+          "usdtMinDepositUsdUnits",
           "saved",
-          "savedAt"
+          "savedAt",
+          "usdt"
         ],
         "additionalProperties": false
       },
@@ -4101,6 +4646,17 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 50
+          },
+          "usdtTrc20Enabled": {
+            "type": "boolean"
+          },
+          "usdtBep20Enabled": {
+            "type": "boolean"
+          },
+          "usdtMinDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -4119,7 +4675,10 @@
           "reviewHoursEnd",
           "reviewTargetMinutes",
           "flagNewAccountUsdUnits",
-          "flagVelocityCount"
+          "flagVelocityCount",
+          "usdtTrc20Enabled",
+          "usdtBep20Enabled",
+          "usdtMinDepositUsdUnits"
         ]
       },
       "StoredFileRef": {
@@ -4168,6 +4727,13 @@
             "enum": [
               "true",
               "false"
+            ]
+          },
+          "method": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DepositMethod"
+              }
             ]
           },
           "q": {
@@ -4318,7 +4884,9 @@
           "shared_phone",
           "amount_mismatch",
           "reference_missing",
-          "reference_different"
+          "reference_different",
+          "wrong_network",
+          "sent_before_deposit"
         ]
       },
       "AdminDepositCounts": {
@@ -4338,12 +4906,24 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "usdtReview": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "unmatchedTransfers": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
           "submitted",
           "submittedFlagged",
-          "pending"
+          "pending",
+          "usdtReview",
+          "unmatchedTransfers"
         ],
         "additionalProperties": false
       },
@@ -4447,6 +5027,14 @@
             ],
             "additionalProperties": false
           },
+          "decidedBy": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DepositDecider"
+              }
+            ]
+          },
           "adminName": {
             "nullable": true,
             "type": "string"
@@ -4486,7 +5074,12 @@
                 ]
               },
               "referenceCheck": {
-                "$ref": "#/components/schemas/DepositReferenceCheck"
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/DepositReferenceCheck"
+                  }
+                ]
               },
               "journalId": {
                 "type": "string",
@@ -4660,6 +5253,14 @@
                 "$ref": "#/components/schemas/ReviewEta"
               }
             ]
+          },
+          "usdt": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminDepositUsdt"
+              }
+            ]
           }
         },
         "required": [
@@ -4680,15 +5281,24 @@
           "receiptRequestCount",
           "receiptRequestNote",
           "approvalRate",
+          "decidedBy",
           "adminName",
           "credit",
           "rejection",
           "receipts",
           "flags",
           "customer",
-          "eta"
+          "eta",
+          "usdt"
         ],
         "additionalProperties": false
+      },
+      "DepositDecider": {
+        "type": "string",
+        "enum": [
+          "admin",
+          "system"
+        ]
       },
       "DepositReferenceCheck": {
         "type": "string",
@@ -4734,6 +5344,273 @@
         ],
         "additionalProperties": false
       },
+      "AdminDepositUsdt": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "$ref": "#/components/schemas/UsdtMethod"
+          },
+          "address": {
+            "type": "string"
+          },
+          "payAmount": {
+            "type": "string"
+          },
+          "payAmountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "checkStatus": {
+            "$ref": "#/components/schemas/UsdtCheckStatus"
+          },
+          "checkError": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsdtCheckError"
+              }
+            ]
+          },
+          "txid": {
+            "nullable": true,
+            "type": "string"
+          },
+          "explorerUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "confirmations": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "requiredConfirmations": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "delayed": {
+            "type": "boolean"
+          },
+          "receivedAmountUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reviewReasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "amount_mismatch",
+                "wrong_network",
+                "sent_before_deposit"
+              ]
+            }
+          },
+          "tailUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "txidSource": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsdtTxidSource"
+              }
+            ]
+          },
+          "txidSubmissions": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "lastCheckedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "transfer": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsdtTransfer"
+              }
+            ]
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsdtCandidate"
+            }
+          }
+        },
+        "required": [
+          "method",
+          "address",
+          "payAmount",
+          "payAmountUnits",
+          "checkStatus",
+          "checkError",
+          "txid",
+          "explorerUrl",
+          "confirmations",
+          "requiredConfirmations",
+          "delayed",
+          "receivedAmountUnits",
+          "reviewReasons",
+          "tailUnits",
+          "txidSource",
+          "txidSubmissions",
+          "lastCheckedAt",
+          "transfer",
+          "candidates"
+        ],
+        "additionalProperties": false
+      },
+      "UsdtTxidSource": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "scan"
+        ]
+      },
+      "UsdtTransfer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "method": {
+            "$ref": "#/components/schemas/UsdtMethod"
+          },
+          "txid": {
+            "type": "string"
+          },
+          "explorerUrl": {
+            "type": "string"
+          },
+          "fromAddress": {
+            "type": "string"
+          },
+          "toAddress": {
+            "type": "string"
+          },
+          "rawAmount": {
+            "type": "string"
+          },
+          "amountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "blockNumber": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "blockTime": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "source": {
+            "$ref": "#/components/schemas/UsdtTransferSource"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "txid",
+          "explorerUrl",
+          "fromAddress",
+          "toAddress",
+          "rawAmount",
+          "amountUnits",
+          "blockNumber",
+          "blockTime",
+          "source",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "UsdtTransferSource": {
+        "type": "string",
+        "enum": [
+          "scan",
+          "txid"
+        ]
+      },
+      "UsdtCandidate": {
+        "type": "object",
+        "properties": {
+          "depositId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "referenceCode": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DepositStatus"
+          },
+          "payAmountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "depositId",
+          "referenceCode",
+          "status",
+          "payAmountUnits",
+          "createdAt",
+          "customer"
+        ],
+        "additionalProperties": false
+      },
       "ApproveDeposit": {
         "type": "object",
         "properties": {
@@ -4754,7 +5631,7 @@
             "$ref": "#/components/schemas/DepositReferenceCheck"
           },
           "acknowledgedFlags": {
-            "maxItems": 16,
+            "maxItems": 20,
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DepositFlagCode"
@@ -4812,6 +5689,209 @@
         },
         "required": [
           "internalNote"
+        ]
+      },
+      "ApproveUsdtDeposit": {
+        "type": "object",
+        "properties": {
+          "acknowledgedFlags": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepositFlagCode"
+            }
+          },
+          "internalNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "acknowledgedFlags"
+        ]
+      },
+      "AdminUsdtTransferQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "method": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsdtMethod"
+              }
+            ]
+          },
+          "state": {
+            "default": "unmatched",
+            "type": "string",
+            "enum": [
+              "unmatched",
+              "all"
+            ]
+          }
+        }
+      },
+      "AdminUsdtTransferPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminUsdtTransfer"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "AdminUsdtTransfer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "method": {
+            "$ref": "#/components/schemas/UsdtMethod"
+          },
+          "txid": {
+            "type": "string"
+          },
+          "explorerUrl": {
+            "type": "string"
+          },
+          "fromAddress": {
+            "type": "string"
+          },
+          "toAddress": {
+            "type": "string"
+          },
+          "rawAmount": {
+            "type": "string"
+          },
+          "amountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "blockNumber": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "blockTime": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "source": {
+            "$ref": "#/components/schemas/UsdtTransferSource"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "state": {
+            "$ref": "#/components/schemas/UsdtTransferState"
+          },
+          "holder": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "deposit",
+                  "adjustment"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "customer": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "email"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "customer"
+            ],
+            "additionalProperties": false
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsdtCandidate"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "txid",
+          "explorerUrl",
+          "fromAddress",
+          "toAddress",
+          "rawAmount",
+          "amountUnits",
+          "blockNumber",
+          "blockTime",
+          "source",
+          "createdAt",
+          "state",
+          "holder",
+          "candidates"
+        ],
+        "additionalProperties": false
+      },
+      "UsdtTransferState": {
+        "type": "string",
+        "enum": [
+          "credited",
+          "bound",
+          "unmatched"
         ]
       },
       "HealthResponse": {

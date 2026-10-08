@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { CURRENCY_SCALE } from '@vertex-digital/contracts';
 import {
   customers,
@@ -458,7 +458,19 @@ describe('adjustments (rules J1–J10)', () => {
       .from(paymentReferences)
       .where(eq(paymentReferences.reference, reference));
     expect(claims).toEqual([{ method: 'sham_cash', reference }]);
-    expect((await manual(reference, 'usdt_trc20')).status).toBe(201);
+    // A USDT reference is a TXID, claimed as the worker claims it: `0x`, a link or another
+    // case are the same claim (S04).
+    expect(await body(await manual(reference, 'usdt_trc20'))).toMatchObject({
+      status: 400,
+      code: 'VALIDATION_FAILED',
+    });
+    const txid = randomBytes(32).toString('hex');
+    expect((await manual(`0x${txid}`, 'usdt_trc20')).status).toBe(201);
+    expect(
+      await body(
+        await manual(`https://tronscan.org/#/transaction/${txid.toUpperCase()}`, 'usdt_trc20'),
+      ),
+    ).toMatchObject({ status: 409, code: 'EXTERNAL_REFERENCE_TAKEN' });
     expect(
       await body(
         await adjust(customer.id, {
@@ -556,7 +568,7 @@ describe('reversals (rules R1–R5)', () => {
 
   it('reverse a manual deposit as a debit without a method, keeping its reference taken (rule R5)', async () => {
     const customer = await newCustomer();
-    const reference = `TX${randomInt(100_000, 999_999)}`;
+    const reference = randomBytes(32).toString('hex');
     const original = await json<{ id: string }>(
       await adjust(customer.id, {
         direction: 'credit',

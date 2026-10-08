@@ -62,8 +62,9 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
-    # Deposit creation (S03): a tight limit on top of the API's per-customer counters.
-    location ~* ^/api/deposits/sham-cash/?$ {
+    # Deposit creation (S03, S04) and USDT TXIDs (S04 rule U8): a tight limit on top of the API's
+    # per-customer counters.
+    location ~* ^/api/deposits/(?:sham-cash|usdt|[0-9a-f-]{36}/txid)/?$ {
         limit_req zone=vddeposit burst=5 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;

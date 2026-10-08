@@ -457,3 +457,15 @@ Tests:
 - The readers follow the `packages/suppliers` pattern: one adapter per network behind the interface, recorded and sanitized fixtures, and no live call in tests. They live in the worker's `deposits` module unless a second consumer appears.
 - Time rules compare with the database's `now()` (S03). The verifier's retry schedule is computed from `search_started_at`, so tests set past timestamps instead of waiting.
 - Update `docs/architecture.md` (the `deposits` module's USDT parts, jobs `deposits.usdt-scan` and `deposits.usdt-verify`, the chain readers), `.env.example`, `docs/deployment.md` (the new variables and the address-change note), and the commands table for `usdt:fake-transfer`.
+- Settled in PR 1 (contracts, db, api):
+  - PRs: three instead of two. PR 1 is contracts, db and api; PR 2 the chain readers and the worker jobs; PR 3 the screens. Until PR 2, no scanner writes `usdt_scan_cursors`, so every network reads `delayed` and creation is refused (rule U1).
+  - Reservation (U3, U4): a deposit's amount is reserved while open and for 7 days after its last change, whatever its final status, credited and rejected included, so a customer's second payment of a credited amount never matches another customer's new deposit (edge case 3). Candidates use the same set.
+  - `deposit_open` is kept by a database trigger on the deposit's status (`deposits_sync_usdt_open`, migration 0014), not by the service; the USDT row's guard refuses any other value.
+  - A deposit's USDT check becomes `done` when it is credited, rejected, cancelled or expired.
+  - `POST /api/deposits/:id/txid` takes the pasted text (`submitTxidSchema`: up to 300 characters); the API normalizes it and answers `TXID_INVALID`. A TXID held by another deposit (bound, or being verified) or claimed on either network is `EXTERNAL_REFERENCE_TAKEN`.
+  - The customer's `usdt` block carries `receivedAmountUnits` and `reviewReasons` for the review page's sentence (U11); the admin's adds the tail, the TXID source and count, the transfer and the candidates.
+  - `deposits.usdt-verify` and `deposits.usdt-scan` are pg-boss `stately` queues (one job queued and one active per deposit or network), declared in `QUEUE_POLICIES` and created that way by the API and the worker.
+  - `approve-usdt` is a `@Sensitive()` route; `reject` refuses a USDT deposit not in review.
+  - The all-zero addresses an older `.env.example` shipped count as unset. `CHAIN_READER` and the reader variables arrive with PR 2, in the worker.
+  - The TRON contract was checked on Tronscan's contract page (2026-10-08); Tether's own page could not be reached from the build environment, so the BSC contract rests on BscScan and its EIP-55 checksum until the owner's live check.
+  - A TXID whose official-USDT transfer to the store is under $1 (rule U14 keeps it out of `usdt_transfers`) bounces the deposit back to `pending` with a clear reason instead of going to review (owner, 2026-10-08); PR 2 adds the reason.

@@ -5,7 +5,9 @@ import {
   type AdjustmentDirection,
   amountConfirmationError,
   type CreateAdjustment,
+  isUsdtMethod,
   type ManualDepositMethod,
+  normalizeTxid,
   type ReverseAdjustment,
 } from '@vertex-digital/contracts';
 import {
@@ -81,6 +83,24 @@ class AlreadyWritten extends Error {}
 const isUuid = (value: string) => z.uuid().safeParse(value).success;
 
 /**
+ * A manual deposit's reference as it is claimed: a USDT TXID normalized as the worker claims it
+ * (S04: `0x`, a link or another case are the same claim), refused when it is not a TXID.
+ */
+function externalReferenceOf(input: CreateAdjustment): string | null {
+  const reference = input.externalReference ?? null;
+  if (reference === null || !input.depositMethod || !isUsdtMethod(input.depositMethod)) {
+    return reference;
+  }
+  const txid = normalizeTxid(reference);
+  if (!txid) {
+    throw new CodedException(400, 'VALIDATION_FAILED', 'Expected a TXID', [
+      { path: ['externalReference'], message: 'Expected a TXID or an explorer link' },
+    ]);
+  }
+  return txid;
+}
+
+/**
  * The admin's wallet adjustments and their reversals (S02 rules J1–J10, R1–R5, M1–M3): the only
  * writer of `wallet_adjustments`. The row, its journal, its audit entry and its email are written
  * in one READ COMMITTED transaction (rule J3); the request's `Idempotency-Key` makes a retry
@@ -109,7 +129,7 @@ export class WalletAdjustmentsService {
       reason: input.reason,
       customerNote: input.customerNote ?? null,
       depositMethod: input.depositMethod ?? null,
-      externalReference: input.externalReference ?? null,
+      externalReference: externalReferenceOf(input),
       reversesAdjustmentId: null,
     };
     const replayed = await this.replay(idempotencyKey, request);

@@ -169,7 +169,9 @@
     "myDeposits": "إيداعاتي",
     "depositSyp": "{amount} ل.س بسعر {rate}",
     "depositMethods": {
-      "sham_cash": "إيداع شام كاش"
+      "sham_cash": "إيداع شام كاش",
+      "usdt_trc20": "إيداع USDT (TRC20)",
+      "usdt_bep20": "إيداع USDT (BEP20)"
     }
   },
   "deposits": {
@@ -205,6 +207,8 @@
       "receipt_used": "الإيصال مستخدم في إيداع سابق",
       "reference_other_customer": "رمز المرجع يخص حسابًا آخر",
       "wrong_account": "التحويل إلى حساب غير حساب المتجر",
+      "wrong_network": "التحويل على شبكة غير الشبكة المختارة",
+      "transfer_other_customer": "التحويل يخص طلب إيداع آخر",
       "other": "سبب آخر، موضّح أدناه"
     },
     "limits": {
@@ -351,7 +355,11 @@
     "DEPOSIT_ALREADY_PENDING": "لديك إيداع بانتظار الإيصال. أكمله أو ألغه أولًا.",
     "TOO_MANY_DEPOSITS_IN_REVIEW": "لديك 3 إيداعات قيد المراجعة. انتظر مراجعتها ثم أعد المحاولة.",
     "DEPOSIT_STATE_CONFLICT": "تغيّرت حالة الإيداع. أعد تحميل الصفحة.",
-    "RECEIPT_INVALID": "الملف ليس صورة صالحة. أرسل لقطة شاشة بصيغة JPEG أو PNG أو WebP."
+    "RECEIPT_INVALID": "الملف ليس صورة صالحة. أرسل لقطة شاشة بصيغة JPEG أو PNG أو WebP.",
+    "EXTERNAL_REFERENCE_TAKEN": "رقم العملية هذا مستخدم من قبل.",
+    "TXID_INVALID": "رقم العملية غير صالح. الصق رقم العملية (TXID) أو رابطها من Tronscan أو BscScan.",
+    "TXID_ATTEMPTS_EXCEEDED": "أرسلت رقم العملية 5 مرات لهذا الإيداع. سنواصل البحث عن التحويل تلقائيًا.",
+    "DEPOSIT_AMOUNT_BUSY": "هذا المبلغ مطلوب كثيرًا الآن. جرّب سنتًا أكثر أو أقل."
   },
   "notFound": {
     "title": "الصفحة غير موجودة",

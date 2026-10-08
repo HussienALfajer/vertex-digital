@@ -9,7 +9,7 @@ NestJS standalone context for background work (ADR 0001, 0002): pg-boss queues a
 
 ## Rules
 - Queue names are `<area>.<action>` (`system.heartbeat`), exported as constants next to the job; names shared with the API go in `packages/contracts`.
-- Register a job in `onApplicationBootstrap` with `PgBossService.work(queue, handler)`, which creates the queue and reports a failure to the logs, Sentry and the alert channel before pg-boss retries it. Schedules: `boss.schedule(queue, cron)` after `work`.
+- Register a job in `onApplicationBootstrap` with `PgBossService.work(queue, handler)`, which creates the queue (with its policy from `QUEUE_POLICIES` in the contracts, as the API does) and reports a failure to the logs, Sentry and the alert channel before pg-boss retries it. Schedules: `boss.schedule(queue, cron)` after `work`.
 - Every job is idempotent: pg-boss retries, so running it twice leaves the same result (upsert, check-then-act inside a transaction, idempotency keys on supplier calls).
 - Payloads carry ids, not records: load fresh data inside the job.
 - pg-boss runs as the app role (ADR 0014): `createPgBoss` from `@vertex-digital/db` never creates or migrates tables and never rebuilds indexes. Queues are unpartitioned (rows only). pg-boss's tables are installed by the owner with the migrations.

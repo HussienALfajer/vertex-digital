@@ -27,6 +27,28 @@ describe('API environment', () => {
     expect(parseEnv({ DATABASE_URL }).CUSTOMER_AUTH_SECRET).toBe(env.CUSTOMER_AUTH_SECRET);
   });
 
+  it('takes checksummed USDT addresses, treats empty and old placeholders as unset (S04 rule U1)', () => {
+    const tron = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+    const bsc = '0x55d398326f99059fF775485246999027B3197955';
+    expect(
+      parseEnv({ DATABASE_URL, USDT_TRC20_ADDRESS: ` ${tron} `, USDT_BEP20_ADDRESS: bsc }),
+    ).toMatchObject({ USDT_TRC20_ADDRESS: tron, USDT_BEP20_ADDRESS: bsc });
+    const unset = parseEnv({
+      DATABASE_URL,
+      USDT_TRC20_ADDRESS: 'T000000000000000000000000000000000',
+      USDT_BEP20_ADDRESS: '0x0000000000000000000000000000000000000000',
+    });
+    expect([unset.USDT_TRC20_ADDRESS, unset.USDT_BEP20_ADDRESS]).toEqual([undefined, undefined]);
+    expect(parseEnv({ DATABASE_URL, USDT_TRC20_ADDRESS: '' }).USDT_TRC20_ADDRESS).toBeUndefined();
+    // One character off fails the checksum: the start stops instead of showing a wrong address.
+    expect(() => parseEnv({ DATABASE_URL, USDT_TRC20_ADDRESS: `${tron.slice(0, -1)}u` })).toThrow(
+      'USDT_TRC20_ADDRESS',
+    );
+    expect(() => parseEnv({ DATABASE_URL, USDT_BEP20_ADDRESS: bsc.replace('fF', 'Ff') })).toThrow(
+      'USDT_BEP20_ADDRESS',
+    );
+  });
+
   it('accepts a complete production environment', () => {
     expect(parseEnv(production)).toMatchObject({
       STORE_URL: 'https://digital.vertexmedia.pro',

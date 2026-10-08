@@ -1,13 +1,24 @@
+import { randomInt } from 'node:crypto';
 import {
+  DEPOSIT_CREATIONS_PER_HOUR,
   type Deposit,
+  type DepositLimitSettings,
   type DepositStatus,
+  type DepositUsdt,
+  depositLimits,
+  MAX_DEPOSITS_IN_REVIEW,
+  REFERENCE_CODE_ALPHABET,
+  REFERENCE_CODE_LENGTH,
+  REFERENCE_CODE_PREFIX,
   type ReviewEta,
   rateFromNumeric,
 } from '@vertex-digital/contracts';
-import { deposits, type Transaction } from '@vertex-digital/db';
-import { and, eq, type SQL } from 'drizzle-orm';
+import { type Database, deposits, newId, type Transaction } from '@vertex-digital/db';
+import { and, eq, type SQL, sql } from 'drizzle-orm';
+import type { PgInsertValue } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { CodedException } from '../../core/errors/index.js';
+import type { RequestMeta } from '../../core/http/request-meta.js';
 import type { CurrentSettings } from './deposit-settings.service.js';
 
 /*
@@ -46,11 +57,12 @@ export const qrUrl = (currency: 'SYP' | 'USD') => `/api/deposits/sham-cash/qr/${
 
 /**
  * A deposit as its customer sees it (no flags, transaction number or internal notes). `payTo`
- * shows the current settings while `pending` (rule SC7, edge case 10); `eta` while `submitted`.
+ * shows the current settings while a Sham Cash deposit is `pending` (rule SC7, edge case 10);
+ * `eta` while `submitted`; `usdt` the payment and check of a USDT deposit (S04).
  */
 export function customerDeposit(
   row: DepositRow,
-  context: { settings: CurrentSettings | null; eta: ReviewEta | null },
+  context: { settings: CurrentSettings | null; eta: ReviewEta | null; usdt: DepositUsdt | null },
 ): Deposit {
   const { settings } = context;
   const enabled = settings && (row.currency === 'SYP' ? settings.sypEnabled : settings.usdEnabled);
@@ -62,7 +74,7 @@ export function customerDeposit(
       note: row.receiptRequestNote,
     },
     payTo:
-      row.status === 'pending' && settings
+      row.status === 'pending' && row.method === 'sham_cash' && settings
         ? {
             accountName: settings.shamCashAccountName,
             accountNumber: settings.shamCashAccountNumber,
@@ -80,6 +92,7 @@ export function customerDeposit(
           }
         : null,
     rejection: row.rejectReason && { reason: row.rejectReason, note: row.customerNote },
+    usdt: context.usdt,
   };
 }
 
@@ -106,4 +119,127 @@ export function depositFacts(row: DepositRow) {
     submittedAt: row.submittedAt?.toISOString() ?? null,
     decidedAt: row.decidedAt?.toISOString() ?? null,
   };
+}
+
+/** Thrown inside a create transaction when its key committed first: answered as a replay. */
+export class AlreadyCreated extends Error {}
+
+export const rateLimited = () =>
+  new CodedException(429, 'RATE_LIMITED', 'Too many deposit requests; retry later');
+
+/** A new reference code from a CSPRNG (`randomInt` is uniform over the alphabet). */
+const newReferenceCode = () =>
+  REFERENCE_CODE_PREFIX +
+  Array.from(
+    { length: REFERENCE_CODE_LENGTH },
+    () => REFERENCE_CODE_ALPHABET[randomInt(REFERENCE_CODE_ALPHABET.length)],
+  ).join('');
+
+/** Attempts at a free reference code: 31⁵ codes make a second attempt already rare. */
+const REFERENCE_CODE_ATTEMPTS = 5;
+
+/** Serializes a customer's creations, so the one-pending, in-review and limit checks see each other. */
+export const lockCustomerCreations = (tx: Transaction, customerId: string) =>
+  tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`deposits:${customerId}`}))`);
+
+/** Rules SC4, SC5, SC6: one pending, at most 3 in review, 10 creations an hour. */
+export async function checkCreation(tx: Transaction, customerId: string): Promise<void> {
+  const rows = await tx
+    .select({
+      pendingId: sql<
+        string | null
+      >`(array_agg(${deposits.id}) filter (where ${deposits.status} = 'pending'))[1]`,
+      submitted: sql<number>`(count(*) filter (where ${deposits.status} = 'submitted'))::int`,
+      lastHour: sql<number>`(count(*) filter (where ${deposits.createdAt} > now() - interval '1 hour'))::int`,
+    })
+    .from(deposits)
+    .where(eq(deposits.customerId, customerId));
+  const [state] = rows;
+  if (state?.pendingId) {
+    throw new CodedException(409, 'DEPOSIT_ALREADY_PENDING', 'A deposit awaits its receipt', {
+      depositId: state.pendingId,
+    });
+  }
+  if ((state?.submitted ?? 0) >= MAX_DEPOSITS_IN_REVIEW) {
+    throw new CodedException(409, 'TOO_MANY_DEPOSITS_IN_REVIEW', 'Too many deposits in review');
+  }
+  if ((state?.lastHour ?? 0) >= DEPOSIT_CREATIONS_PER_HOUR) throw rateLimited();
+}
+
+/** Rule SC3: new or established, and what the last 24 hours used. */
+export async function limitsOf(
+  db: Database | Transaction,
+  customerId: string,
+  settings: DepositLimitSettings,
+) {
+  const [row] = await db
+    .select({
+      established: sql<boolean>`bool_or(${deposits.status} = 'credited')`,
+      used: sql<string>`coalesce(sum(case
+        when ${deposits.status} in ('pending', 'submitted') then ${deposits.declaredUsdUnits}
+        when ${deposits.status} = 'credited' then ${deposits.creditedUsdUnits}
+        else 0 end) filter (where ${deposits.createdAt} > now() - interval '24 hours'), 0)::text`,
+    })
+    .from(deposits)
+    .where(eq(deposits.customerId, customerId));
+  return depositLimits(settings, row?.established ?? false, Number(row?.used ?? 0));
+}
+
+/** Inserts the deposit, drawing another reference code on the rare collision. */
+export async function insertDeposit(
+  tx: Transaction,
+  values: Omit<PgInsertValue<typeof deposits>, 'id' | 'referenceCode'>,
+): Promise<DepositRow> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      // A savepoint: a collision leaves the transaction usable for the next attempt.
+      const [row] = await tx.transaction((step) =>
+        step
+          .insert(deposits)
+          .values({ ...values, id: newId(), referenceCode: newReferenceCode() })
+          .returning(),
+      );
+      if (!row) throw new Error('The deposit was not written');
+      return row;
+    } catch (error) {
+      const constraint = (error as { cause?: { constraint?: string } }).cause?.constraint;
+      if (constraint !== 'deposits_reference_code_unique' || attempt >= REFERENCE_CODE_ATTEMPTS) {
+        throw error;
+      }
+    }
+  }
+}
+
+export function customerEntry(customerId: string, depositId: string, meta: RequestMeta) {
+  return {
+    actorKind: 'customer',
+    actorId: customerId,
+    channel: 'store',
+    entityType: 'deposit',
+    entityId: depositId,
+    reason: null,
+    ipAddress: meta.ipAddress,
+    userAgent: meta.userAgent,
+  } as const;
+}
+
+/**
+ * A `pending` deposit not past `expires_at`: the worker may not have expired it yet (edge case
+ * 19), so the database's clock decides.
+ */
+export async function isOpen(tx: Database | Transaction, deposit: DepositRow): Promise<boolean> {
+  return deposit.status === 'pending' && isTrue(tx, deposit.id, sql`${deposits.expiresAt} > now()`);
+}
+
+/** A condition on the deposit's row, by the database's clock (time rules compare with `now()`). */
+export async function isTrue(
+  tx: Database | Transaction,
+  depositId: string,
+  condition: SQL,
+): Promise<boolean> {
+  const [row] = await tx
+    .select({ holds: sql<boolean>`coalesce(${condition}, false)` })
+    .from(deposits)
+    .where(eq(deposits.id, depositId));
+  return row?.holds ?? false;
 }

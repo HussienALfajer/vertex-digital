@@ -65,6 +65,7 @@ function deposit(changes: Record<string, unknown> = {}) {
     eta: null,
     credited: null,
     rejection: null,
+    usdt: null,
     ...changes,
   };
 }

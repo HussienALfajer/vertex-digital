@@ -1,9 +1,14 @@
 import {
+  DEPOSIT_DECIDERS,
   DEPOSIT_FLAG_CODES,
   DEPOSIT_METHODS,
   DEPOSIT_REFERENCE_CHECKS,
   DEPOSIT_REJECT_REASONS,
   DEPOSIT_STATUSES,
+  USDT_CHECK_ERRORS,
+  USDT_CHECK_STATUSES,
+  USDT_TRANSFER_SOURCES,
+  USDT_TXID_SOURCES,
 } from '@vertex-digital/contracts';
 import { sql } from 'drizzle-orm';
 import {
@@ -29,13 +34,14 @@ import { customers } from './auth.js';
 import { amountUnits, currencyEnum, id, timestamps } from './columns.js';
 import { storedFiles } from './files.js';
 import { exchangeRates } from './rates.js';
-import { ledgerJournals } from './wallet.js';
+import { ledgerJournals, paymentMethodEnum } from './wallet.js';
 
 /*
- * Deposits (S03, F05; ADR 0006, 0017), owned by the api `deposits` module: the settings' versions,
- * the deposits, their receipts and their fraud flags. Settings, receipts and flags are
- * append-only; a deposit changes only along the transition table and never leaves a final state
- * (migration 0012).
+ * Deposits (S03, F05; S04, F06; ADR 0006, 0017, 0018), owned by the api `deposits` module: the
+ * settings' versions, the deposits, their receipts and their fraud flags; S04 adds each USDT
+ * deposit's payment and check, the USDT transfers seen on chain and the scanners' cursors.
+ * Settings, receipts, flags and transfers are append-only; a deposit changes only along the
+ * transition table and never leaves a final state (migrations 0012 and 0014).
  */
 
 export const depositMethodEnum = pgEnum('deposit_method', DEPOSIT_METHODS);
@@ -50,6 +56,22 @@ export const depositReferenceCheckEnum = pgEnum(
 export const depositRejectReasonEnum = pgEnum('deposit_reject_reason', DEPOSIT_REJECT_REASONS);
 
 export const depositFlagCodeEnum = pgEnum('deposit_flag_code', DEPOSIT_FLAG_CODES);
+
+export const depositDeciderEnum = pgEnum('deposit_decider', DEPOSIT_DECIDERS);
+
+export const usdtCheckStatusEnum = pgEnum('usdt_check_status', USDT_CHECK_STATUSES);
+
+export const usdtCheckErrorEnum = pgEnum('usdt_check_error', USDT_CHECK_ERRORS);
+
+export const usdtTxidSourceEnum = pgEnum('usdt_txid_source', USDT_TXID_SOURCES);
+
+export const usdtTransferSourceEnum = pgEnum('usdt_transfer_source', USDT_TRANSFER_SOURCES);
+
+/** The USDT methods of `payment_method` (S04). */
+const isUsdtMethod = (column: unknown) => sql`${column} in ('usdt_trc20', 'usdt_bep20')`;
+
+/** A normalized TXID: 64 lower-case hex characters, no `0x` (contracts `txidSchema`). */
+const isTxid = (column: unknown) => sql`${column} ~ '^[0-9a-f]{64}$'`;
 
 /** USD units of a limit or threshold: whole cents above zero. */
 const isLimit = (column: unknown) => sql`${column} > 0 and ${column} % 10000 = 0`;
@@ -79,6 +101,11 @@ export const depositSettings = pgTable(
     reviewTargetMinutes: integer('review_target_minutes').notNull(),
     flagNewAccountUsdUnits: amountUnits('flag_new_account_usd_units').notNull(),
     flagVelocityCount: integer('flag_velocity_count').notNull(),
+    /** S04: older versions read as disabled, with the $5 minimum (rule U1, U5). */
+    usdtTrc20Enabled: boolean('usdt_trc20_enabled').notNull().default(false),
+    usdtBep20Enabled: boolean('usdt_bep20_enabled').notNull().default(false),
+    /** Kept within both per-deposit limits by the contract (`depositSettingsInputSchema`). */
+    usdtMinDepositUsdUnits: amountUnits('usdt_min_deposit_usd_units').notNull().default(5_000_000),
     /** The admin who saved it; no foreign key, as `wallet_adjustments.admin_id`. */
     adminId: uuid('admin_id').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -110,6 +137,7 @@ export const depositSettings = pgTable(
       sql`${table.reviewHoursStart} < ${table.reviewHoursEnd} and ${table.reviewTargetMinutes} between 1 and 1440`,
     ),
     check('deposit_settings_velocity_check', sql`${table.flagVelocityCount} between 1 and 50`),
+    check('deposit_settings_usdt_min_check', isLimit(table.usdtMinDepositUsdUnits)),
   ],
 );
 
@@ -168,6 +196,8 @@ export const deposits = pgTable(
     decisionIdempotencyKey: uuid('decision_idempotency_key').unique(),
     /** Who decided; no foreign key, as `wallet_adjustments.admin_id`. */
     adminId: uuid('admin_id'),
+    /** The admin, or the worker on an exact USDT match (S04 rule U7); set with the decision. */
+    decidedBy: depositDeciderEnum('decided_by'),
     ...timestamps(),
   },
   (table) => [
@@ -207,16 +237,21 @@ export const deposits = pgTable(
       'deposits_submitted_check',
       sql`${table.status} not in ('submitted', 'credited', 'rejected') or ${table.submittedAt} is not null`,
     ),
+    // A USDT deposit is declared and credited in dollars (S04).
+    check('deposits_method_check', sql`${table.method} = 'sham_cash' or ${table.currency} = 'USD'`),
+    // Decided by the admin (with its decision key) or by the worker (S04 rule U7).
     check(
       'deposits_decided_check',
       sql`(${table.status} in ('credited', 'rejected')) = (${table.decidedAt} is not null)
-        and (${table.status} in ('credited', 'rejected')) = (${table.adminId} is not null)
-        and (${table.status} in ('credited', 'rejected')) = (${table.decisionIdempotencyKey} is not null)`,
+        and (${table.status} in ('credited', 'rejected')) = (${table.decidedBy} is not null)
+        and coalesce(${table.decidedBy} = 'admin', false) = (${table.adminId} is not null)
+        and coalesce(${table.decidedBy} = 'admin', false) = (${table.decisionIdempotencyKey} is not null)`,
     ),
     check(
       'deposits_credit_check',
-      sql`num_nonnulls(${table.transactionNumber}, ${table.receivedCurrency}, ${table.receivedAmountUnits}, ${table.creditedUsdUnits}, ${table.referenceCheck}, ${table.journalId})
-          = case when ${table.status} = 'credited' then 6 else 0 end
+      sql`num_nonnulls(${table.transactionNumber}, ${table.receivedCurrency}, ${table.receivedAmountUnits}, ${table.creditedUsdUnits}, ${table.journalId})
+          = case when ${table.status} = 'credited' then 5 else 0 end
+        and (${table.referenceCheck} is not null) = (${table.status} = 'credited' and ${table.method} = 'sham_cash')
         and num_nonnulls(${table.creditRateId}, ${table.creditRate})
           = case when ${table.status} = 'credited' and ${table.receivedCurrency} = 'SYP' then 2 else 0 end
         and (${table.transactionNumber} is null or char_length(${table.transactionNumber}) between 1 and 64)
@@ -286,4 +321,125 @@ export const depositFlags = pgTable(
       .nullsNotDistinct(),
     index('deposit_flags_receipt_id_idx').on(table.receiptId),
   ],
+);
+
+/**
+ * A USDT deposit's payment and check (S04), one per USDT deposit, keyed by it. Not append-only:
+ * it carries the verification state. Migration 0014 refuses a delete and any change of the
+ * deposit, method, address, tail or amount, or of the transfer once bound; it keeps
+ * `deposit_open` equal to the deposit being `pending` or `submitted`.
+ */
+export const usdtDeposits = pgTable(
+  'usdt_deposits',
+  {
+    depositId: uuid('deposit_id')
+      .primaryKey()
+      .references(() => deposits.id),
+    /** The deposit's method (checked by migration 0014's trigger at insert). */
+    method: paymentMethodEnum('method').notNull(),
+    /** The address shown to the customer, from the server environment at creation (rule U1). */
+    receivingAddress: text('receiving_address').notNull(),
+    /** 0.0001–0.0099 USDT in USD units (rule U3). */
+    tailUnits: amountUnits('tail_units').notNull(),
+    /** The exact USDT to send, in USD units: the declared amount plus the tail. */
+    payAmountUnits: amountUnits('pay_amount_units').notNull(),
+    /** Mirrors the deposit being `pending` or `submitted`: the amount's reservation backstop. */
+    depositOpen: boolean('deposit_open').notNull().default(true),
+    checkStatus: usdtCheckStatusEnum('check_status').notNull().default('awaiting_transfer'),
+    /** The last TXID failure shown to the customer (rule U10). */
+    checkError: usdtCheckErrorEnum('check_error'),
+    /** The TXID being verified or found. */
+    txid: text('txid'),
+    txidSource: usdtTxidSourceEnum('txid_source'),
+    txidSubmissions: smallint('txid_submissions').notNull().default(0),
+    /** When the current TXID was first looked for (rule U9). */
+    searchStartedAt: timestamp('search_started_at', { withTimezone: true }),
+    /** The last count read, for the customer's progress. */
+    confirmations: integer('confirmations'),
+    /** The transfer this deposit is bound to; never changed once set. */
+    transferId: uuid('transfer_id')
+      .unique()
+      .references(() => usdtTransfers.id),
+    lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    // No two open deposits of one network ask for the same amount (rule U3).
+    uniqueIndex('usdt_deposits_open_amount_unique')
+      .on(table.method, table.payAmountUnits)
+      .where(sql`${table.depositOpen}`),
+    index('usdt_deposits_amount_idx').on(table.method, table.payAmountUnits),
+    index('usdt_deposits_check_status_idx').on(table.checkStatus),
+    check('usdt_deposits_method_check', isUsdtMethod(table.method)),
+    check(
+      'usdt_deposits_amount_check',
+      sql`${table.tailUnits} between 100 and 9900 and ${table.tailUnits} % 100 = 0
+        and ${table.payAmountUnits} > ${table.tailUnits}
+        and (${table.payAmountUnits} - ${table.tailUnits}) % 10000 = 0`,
+    ),
+    check(
+      'usdt_deposits_txid_check',
+      sql`(${table.txid} is null or ${isTxid(table.txid)})
+        and (${table.txid} is null) = (${table.txidSource} is null)
+        and ${table.txidSubmissions} between 0 and 5
+        and (${table.confirmations} is null or ${table.confirmations} >= 0)`,
+    ),
+    check(
+      'usdt_deposits_check_error_check',
+      sql`${table.checkError} is null or ${table.checkStatus} = 'awaiting_transfer'`,
+    ),
+    check(
+      'usdt_deposits_transfer_check',
+      sql`${table.transferId} is null or ${table.checkStatus} in ('confirming', 'review', 'done')`,
+    ),
+  ],
+);
+
+/**
+ * Every confirmed official-USDT transfer of at least $1 to a store address that the scanner or
+ * the verifier has seen (S04 rules U13, U14): one row per transaction, its matching transfers
+ * summed. Append-only. Credited, bound or unmatched is derived, never stored.
+ */
+export const usdtTransfers = pgTable(
+  'usdt_transfers',
+  {
+    id: id(),
+    method: paymentMethodEnum('method').notNull(),
+    txid: text('txid').notNull(),
+    fromAddress: text('from_address').notNull(),
+    toAddress: text('to_address').notNull(),
+    /** The exact on-chain sum in the token's raw units (18 decimals on BSC). */
+    rawAmount: numeric('raw_amount', { precision: 78, scale: 0 }).notNull(),
+    /** The sum in USD units, floored (`rawToUsdUnits`). */
+    amountUnits: amountUnits('amount_units').notNull(),
+    blockNumber: bigint('block_number', { mode: 'number' }).notNull(),
+    blockTime: timestamp('block_time', { withTimezone: true }).notNull(),
+    /** Who saw it first. */
+    source: usdtTransferSourceEnum('source').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('usdt_transfers_txid_unique').on(table.method, table.txid),
+    index('usdt_transfers_block_time_idx').on(table.method, table.blockTime.desc()),
+    index('usdt_transfers_amount_idx').on(table.method, table.amountUnits),
+    check('usdt_transfers_method_check', isUsdtMethod(table.method)),
+    check('usdt_transfers_txid_check', isTxid(table.txid)),
+    check(
+      'usdt_transfers_amount_check',
+      sql`${table.rawAmount} > 0 and ${table.amountUnits} >= 1000000 and ${table.blockNumber} >= 0`,
+    ),
+  ],
+);
+
+/** Each network scanner's position (S04 rule U12): safe to move back, never a business record. */
+export const usdtScanCursors = pgTable(
+  'usdt_scan_cursors',
+  {
+    method: paymentMethodEnum('method').primaryKey(),
+    /** TRON: the last block timestamp in ms; BSC: the last scanned block number. */
+    cursor: text('cursor').notNull(),
+    lastSuccessAt: timestamp('last_success_at', { withTimezone: true }).notNull(),
+    ...timestamps(),
+  },
+  (table) => [check('usdt_scan_cursors_method_check', isUsdtMethod(table.method))],
 );

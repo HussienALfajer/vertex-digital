@@ -11,6 +11,7 @@ import {
   usdCentsSchema,
 } from './money.js';
 import { displayStepSchema } from './rates.js';
+import { USDT_METHODS, usdtMethodSchema } from './usdt.js';
 
 /*
  * Deposits (S03, F05; ADR 0006, 0017), owned by the api `deposits` module: Sham Cash deposits
@@ -18,8 +19,8 @@ import { displayStepSchema } from './rates.js';
  * S04 adds the USDT methods to the same model.
  */
 
-/** How a deposit is paid. S04 adds `usdt_trc20` and `usdt_bep20`. */
-export const DEPOSIT_METHODS = ['sham_cash'] as const;
+/** How a deposit is paid: Sham Cash (S03) or USDT on one of its networks (S04). */
+export const DEPOSIT_METHODS = ['sham_cash', ...USDT_METHODS] as const;
 
 export const depositMethodSchema = z.enum(DEPOSIT_METHODS).meta({ id: 'DepositMethod' });
 
@@ -131,7 +132,22 @@ export const APPROVAL_FLAG_CODES = [
   'reference_different',
 ] as const;
 
-export const DEPOSIT_FLAG_CODES = [...SUBMISSION_FLAG_CODES, ...APPROVAL_FLAG_CODES] as const;
+/**
+ * Why a USDT transfer went to review instead of an automatic credit (S04 rule U11).
+ * `amount_mismatch` compares the amount to pay with the amount received, both USD.
+ */
+export const USDT_REVIEW_FLAG_CODES = [
+  'amount_mismatch',
+  'wrong_network',
+  'sent_before_deposit',
+] as const;
+
+export const DEPOSIT_FLAG_CODES = [
+  ...SUBMISSION_FLAG_CODES,
+  ...APPROVAL_FLAG_CODES,
+  'wrong_network',
+  'sent_before_deposit',
+] as const;
 
 export const depositFlagCodeSchema = z.enum(DEPOSIT_FLAG_CODES).meta({ id: 'DepositFlagCode' });
 
@@ -172,6 +188,16 @@ export const DEPOSIT_FLAG_DETAILS = {
   }),
   reference_missing: z.strictObject({}),
   reference_different: z.strictObject({}),
+  /** U11: the transfer is on the other network, to the store's address there. */
+  wrong_network: z.strictObject({
+    depositMethod: usdtMethodSchema,
+    transferMethod: usdtMethodSchema,
+  }),
+  /** U11: the transfer's block is older than the deposit. */
+  sent_before_deposit: z.strictObject({
+    depositCreatedAt: z.iso.datetime(),
+    blockTime: z.iso.datetime(),
+  }),
 } as const satisfies Record<DepositFlagCode, z.ZodType>;
 
 export type DepositFlagDetails<Code extends DepositFlagCode> = z.infer<
@@ -194,6 +220,10 @@ export const DEPOSIT_REJECT_REASONS = [
   'receipt_used',
   'reference_other_customer',
   'wrong_account',
+  /** S04: the transfer is on another network than the deposit's. */
+  'wrong_network',
+  /** S04: the transfer belongs to another customer's deposit. */
+  'transfer_other_customer',
   'other',
 ] as const;
 
@@ -202,6 +232,49 @@ export const depositRejectReasonSchema = z
   .meta({ id: 'DepositRejectReason' });
 
 export type DepositRejectReason = z.infer<typeof depositRejectReasonSchema>;
+
+/** Who decided a deposit: the admin, or the worker on an exact USDT match (S04 rule U7). */
+export const DEPOSIT_DECIDERS = ['admin', 'system'] as const;
+
+export const depositDeciderSchema = z.enum(DEPOSIT_DECIDERS).meta({ id: 'DepositDecider' });
+
+export type DepositDecider = z.infer<typeof depositDeciderSchema>;
+
+/**
+ * Where a USDT deposit's check stands (S04 "Deposit states"): `pending` is `awaiting_transfer`;
+ * `submitted` is `searching` (a TXID not found yet), `confirming` (an exact match waiting for
+ * finality) or `review`; a final deposit is `done`.
+ */
+export const USDT_CHECK_STATUSES = [
+  'awaiting_transfer',
+  'searching',
+  'confirming',
+  'review',
+  'done',
+] as const;
+
+export const usdtCheckStatusSchema = z.enum(USDT_CHECK_STATUSES).meta({ id: 'UsdtCheckStatus' });
+
+export type UsdtCheckStatus = z.infer<typeof usdtCheckStatusSchema>;
+
+/** Why a TXID bounced the deposit back to `pending` (rule U10); the customer sees it in words. */
+export const USDT_CHECK_ERRORS = ['not_found', 'tx_failed', 'not_to_store', 'wrong_token'] as const;
+
+export const usdtCheckErrorSchema = z.enum(USDT_CHECK_ERRORS).meta({ id: 'UsdtCheckError' });
+
+export type UsdtCheckError = z.infer<typeof usdtCheckErrorSchema>;
+
+/** Who gave a USDT deposit its TXID: the customer (rule U8) or the scanner (rule U12). */
+export const USDT_TXID_SOURCES = ['customer', 'scan'] as const;
+
+export const usdtTxidSourceSchema = z.enum(USDT_TXID_SOURCES).meta({ id: 'UsdtTxidSource' });
+
+/** Who saw a transfer first: the scanner, or the verifier reading a TXID (rule U13). */
+export const USDT_TRANSFER_SOURCES = ['scan', 'txid'] as const;
+
+export const usdtTransferSourceSchema = z
+  .enum(USDT_TRANSFER_SOURCES)
+  .meta({ id: 'UsdtTransferSource' });
 
 /* Amounts and the credit ----------------------------------------------------------------- */
 
@@ -283,6 +356,16 @@ export const depositLimitsSchema = z
   .meta({ id: 'DepositLimits' });
 
 export type DepositLimits = z.infer<typeof depositLimitsSchema>;
+
+/** A USDT deposit's limits take the USDT minimum instead of Sham Cash's (S04 rule U5). */
+export function depositLimitSettingsFor(
+  method: DepositMethod,
+  settings: DepositLimitSettings & { usdtMinDepositUsdUnits: number },
+): DepositLimitSettings {
+  return method === 'sham_cash'
+    ? settings
+    : { ...settings, minDepositUsdUnits: settings.usdtMinDepositUsdUnits };
+}
 
 /**
  * A customer's limits (rule SC3). `usedTodayUnits` is the declared USD of their `pending` and
@@ -499,6 +582,10 @@ const depositSettingsFields = {
   reviewTargetMinutes: z.int().min(1).max(1440),
   flagNewAccountUsdUnits: limitSchema,
   flagVelocityCount: z.int().min(1).max(50),
+  /** S04: one switch per network; on only with its address in the server environment (U1). */
+  usdtTrc20Enabled: z.boolean(),
+  usdtBep20Enabled: z.boolean(),
+  usdtMinDepositUsdUnits: limitSchema,
 };
 
 export type DepositSettingsValues = z.infer<z.ZodObject<typeof depositSettingsFields>>;
@@ -521,6 +608,9 @@ export const DEPOSIT_SETTINGS_DEFAULTS = {
   reviewTargetMinutes: 15,
   flagNewAccountUsdUnits: 25 * CURRENCY_SCALE.USD,
   flagVelocityCount: 3,
+  usdtTrc20Enabled: false,
+  usdtBep20Enabled: false,
+  usdtMinDepositUsdUnits: 5 * CURRENCY_SCALE.USD,
 } as const satisfies DepositSettingsValues;
 
 /** `PUT /api/admin/deposit-settings`: the cross-field rules of the table's checks. */
@@ -541,6 +631,13 @@ export const depositSettingsInputSchema = z
       }
       if (input[daily] < input[perDeposit]) issue(daily, 'Below the per-deposit limit');
     }
+    const lowestPerDeposit = Math.min(
+      input.newAccountPerDepositUsdUnits,
+      input.establishedPerDepositUsdUnits,
+    );
+    if (input.usdtMinDepositUsdUnits > lowestPerDeposit) {
+      issue('usdtMinDepositUsdUnits', 'Above a per-deposit limit');
+    }
     if (input.reviewHoursEnd <= input.reviewHoursStart) {
       issue('reviewHoursEnd', 'Must be after the start');
     }
@@ -558,6 +655,16 @@ export const depositSettingsSchema = z
     /** False before the first save: Sham Cash deposits are unavailable (rule SC1). */
     saved: z.boolean(),
     savedAt: z.iso.datetime().nullable(),
+    /** S04: per network, read-only: the server's address and the scanner's health (rule U1). */
+    usdt: z.array(
+      z.object({
+        method: usdtMethodSchema,
+        /** From the server environment; null when not configured. Never editable here. */
+        address: z.string().nullable(),
+        lastScanAt: z.iso.datetime().nullable(),
+        delayed: z.boolean(),
+      }),
+    ),
   })
   .meta({ id: 'DepositSettings' });
 
@@ -636,6 +743,78 @@ export const quoteOfferSchema = z
 
 export type QuoteOffer = z.infer<typeof quoteOfferSchema>;
 
+/** Why a USDT network cannot take new deposits now (S04 rule U1). */
+export const USDT_UNAVAILABLE_REASONS = ['not_configured', 'disabled', 'delayed'] as const;
+
+/** `GET /api/deposits/usdt/options` (rules U1, U5). */
+export const usdtOptionsSchema = z
+  .object({
+    networks: z.array(
+      z.object({
+        method: usdtMethodSchema,
+        available: z.boolean(),
+        unavailableReason: z.enum(USDT_UNAVAILABLE_REASONS).nullable(),
+        /** Null while the network is not available. */
+        address: z.string().nullable(),
+        confirmations: z.int().positive(),
+      }),
+    ),
+    /** With the USDT minimum; null before the deposit settings exist. */
+    limits: depositLimitsSchema.nullable(),
+    /** The customer's deposit awaiting payment, which the store opens instead (rule SC4). */
+    pendingDepositId: z.uuid().nullable(),
+  })
+  .meta({ id: 'UsdtOptions' });
+
+export type UsdtOptions = z.infer<typeof usdtOptionsSchema>;
+
+/** `POST /api/deposits/usdt` (rule U2): the USD amount in whole cents. */
+export const createUsdtDepositSchema = z
+  .object({
+    method: usdtMethodSchema,
+    amountUnits: usdCentsSchema.refine((units) => units > 0, 'Expected above zero'),
+  })
+  .meta({ id: 'CreateUsdtDeposit' });
+
+export type CreateUsdtDeposit = z.input<typeof createUsdtDepositSchema>;
+
+/**
+ * `POST /api/deposits/:id/txid` (rule U8): what the customer pasted. The API normalizes it with
+ * `normalizeTxid` and answers `TXID_INVALID` when it is not a TXID; the store checks it first
+ * with `txidSchema`.
+ */
+export const submitTxidSchema = z
+  .object({ txid: z.string().trim().min(1).max(300) })
+  .meta({ id: 'SubmitTxid' });
+
+export type SubmitTxid = z.input<typeof submitTxidSchema>;
+
+/** A USDT deposit's payment and check, as its customer sees it (S04 "Screens"). */
+const depositUsdtFields = {
+  method: usdtMethodSchema,
+  /** The address shown at creation; it never changes for this deposit (rule U1). */
+  address: z.string(),
+  /** The exact amount to send, 4 decimals (`"25.0037"`). */
+  payAmount: z.string(),
+  payAmountUnits: amountUnitsSchema,
+  checkStatus: usdtCheckStatusSchema,
+  /** The last TXID's failure, shown while `awaiting_transfer` (rule U10). */
+  checkError: usdtCheckErrorSchema.nullable(),
+  txid: z.string().nullable(),
+  explorerUrl: z.string().nullable(),
+  confirmations: z.int().nonnegative().nullable(),
+  requiredConfirmations: z.int().positive(),
+  /** The network's scanner is late: verification may take longer (rule U12). */
+  delayed: z.boolean(),
+  /** In review: what arrived on chain and why it did not match (rule U11). */
+  receivedAmountUnits: amountUnitsSchema.nullable(),
+  reviewReasons: z.array(z.enum(USDT_REVIEW_FLAG_CODES)),
+};
+
+export const depositUsdtSchema = z.object(depositUsdtFields).meta({ id: 'DepositUsdt' });
+
+export type DepositUsdt = z.infer<typeof depositUsdtSchema>;
+
 const depositBase = {
   id: z.uuid(),
   method: depositMethodSchema,
@@ -682,6 +861,8 @@ export const depositSchema = z
     rejection: z
       .object({ reason: depositRejectReasonSchema, note: z.string().nullable() })
       .nullable(),
+    /** USDT deposits only (S04). */
+    usdt: depositUsdtSchema.nullable(),
   })
   .meta({ id: 'Deposit' });
 
@@ -702,6 +883,7 @@ export const adminDepositQuerySchema = cursorQuerySchema
   .extend({
     status: z.enum([...DEPOSIT_STATUSES, 'all']).default('submitted'),
     flagged: z.enum(['true', 'false']).optional(),
+    method: depositMethodSchema.optional(),
     /** A reference code (any case, dash optional) or the customer's email prefix. */
     q: z.string().trim().min(3).max(254).optional(),
   })
@@ -739,6 +921,10 @@ export const adminDepositCountsSchema = z
     submitted: z.int().nonnegative(),
     submittedFlagged: z.int().nonnegative(),
     pending: z.int().nonnegative(),
+    /** USDT deposits in review (S04 rule U11); also counted in `submitted`. */
+    usdtReview: z.int().nonnegative(),
+    /** USDT transfers of the last 30 days that no deposit or adjustment holds (rule U13). */
+    unmatchedTransfers: z.int().nonnegative(),
   })
   .meta({ id: 'AdminDepositCounts' });
 
@@ -758,6 +944,60 @@ export const depositFlagSchema = z
 export type DepositFlag = z.infer<typeof depositFlagSchema>;
 
 /**
+ * A reserved USDT deposit a transfer may belong to (rule U11): same network, and the same amount
+ * to pay or the same tail. Any customer's.
+ */
+export const usdtCandidateSchema = z
+  .object({
+    depositId: z.uuid(),
+    referenceCode: z.string(),
+    status: depositStatusSchema,
+    payAmountUnits: amountUnitsSchema,
+    createdAt: z.iso.datetime(),
+    customer: z.object({ id: z.uuid(), name: z.string(), email: z.string() }),
+  })
+  .meta({ id: 'UsdtCandidate' });
+
+export type UsdtCandidate = z.infer<typeof usdtCandidateSchema>;
+
+/** A confirmed official-USDT transfer to a store address (rule U13), as recorded. */
+export const usdtTransferSchema = z
+  .object({
+    id: z.uuid(),
+    method: usdtMethodSchema,
+    txid: z.string(),
+    explorerUrl: z.string(),
+    fromAddress: z.string(),
+    toAddress: z.string(),
+    /** The exact on-chain sum, in the token's raw units. */
+    rawAmount: z.string(),
+    /** The sum in USD units, floored. */
+    amountUnits: amountUnitsSchema,
+    blockNumber: z.int().nonnegative(),
+    blockTime: z.iso.datetime(),
+    source: usdtTransferSourceSchema,
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: 'UsdtTransfer' });
+
+export type UsdtTransfer = z.infer<typeof usdtTransferSchema>;
+
+/** A USDT deposit as the admin sees it: the customer's view, the tail, the transfer, candidates. */
+export const adminDepositUsdtSchema = z
+  .object({
+    ...depositUsdtFields,
+    tailUnits: amountUnitsSchema,
+    txidSource: usdtTxidSourceSchema.nullable(),
+    txidSubmissions: z.int().nonnegative(),
+    lastCheckedAt: z.iso.datetime().nullable(),
+    transfer: usdtTransferSchema.nullable(),
+    candidates: z.array(usdtCandidateSchema),
+  })
+  .meta({ id: 'AdminDepositUsdt' });
+
+export type AdminDepositUsdt = z.infer<typeof adminDepositUsdtSchema>;
+
+/**
  * `GET /api/admin/deposits/:id`: everything the review needs (rules RV1–RV10, A10). Its audit
  * trail is the audit log filtered by the deposit (`entityType=deposit&entityId=<id>`).
  */
@@ -770,6 +1010,8 @@ export const adminDepositSchema = z
     receiptRequestNote: z.string().nullable(),
     /** The rate an approval converts received pounds at now (rule RV3); null without one. */
     approvalRate: z.object({ rateId: z.uuid(), rate: exchangeRateSchema }).nullable(),
+    /** The admin, or the worker on an exact USDT match (S04 rule U7); null while undecided. */
+    decidedBy: depositDeciderSchema.nullable(),
     /** The admin who decided (approved or rejected); null once that admin was replaced. */
     adminName: z.string().nullable(),
     credit: z
@@ -780,7 +1022,8 @@ export const adminDepositSchema = z
         creditedUsdUnits: amountUnitsSchema,
         creditRateId: z.uuid().nullable(),
         creditRate: exchangeRateSchema.nullable(),
-        referenceCheck: depositReferenceCheckSchema,
+        /** Sham Cash only. */
+        referenceCheck: depositReferenceCheckSchema.nullable(),
         journalId: z.uuid(),
       })
       .nullable(),
@@ -813,6 +1056,8 @@ export const adminDepositSchema = z
     }),
     /** While `submitted`: what the customer is told (rule SC13). */
     eta: reviewEtaSchema.nullable(),
+    /** USDT deposits only (S04). */
+    usdt: adminDepositUsdtSchema.nullable(),
   })
   .meta({ id: 'AdminDeposit' });
 
@@ -847,6 +1092,19 @@ export const approveDepositSchema = z
 
 export type ApproveDeposit = z.input<typeof approveDepositSchema>;
 
+/**
+ * `POST /api/admin/deposits/:id/approve-usdt` (S04 rule U15): the credit is the received amount
+ * floored to whole cents, never typed; every flag must be acknowledged.
+ */
+export const approveUsdtDepositSchema = z
+  .object({
+    acknowledgedFlags: z.array(depositFlagCodeSchema).max(DEPOSIT_FLAG_CODES.length * 2),
+    internalNote: z.string().trim().min(1).max(500).optional(),
+  })
+  .meta({ id: 'ApproveUsdtDeposit' });
+
+export type ApproveUsdtDeposit = z.input<typeof approveUsdtDepositSchema>;
+
 /** `POST /api/admin/deposits/:id/reject` (rule RV6). */
 export const rejectDepositSchema = z
   .object({
@@ -878,3 +1136,48 @@ export const requestReceiptSchema = z
   .meta({ id: 'RequestReceipt' });
 
 export type RequestReceipt = z.input<typeof requestReceiptSchema>;
+
+/** Where a recorded USDT transfer stands (rule U13), derived, never stored. */
+export const USDT_TRANSFER_STATES = ['credited', 'bound', 'unmatched'] as const;
+
+export const usdtTransferStateSchema = z
+  .enum(USDT_TRANSFER_STATES)
+  .meta({ id: 'UsdtTransferState' });
+
+export type UsdtTransferState = z.infer<typeof usdtTransferStateSchema>;
+
+/** `GET /api/admin/usdt-transfers`: unmatched by default, newest first. */
+export const adminUsdtTransferQuerySchema = cursorQuerySchema
+  .extend({
+    method: usdtMethodSchema.optional(),
+    state: z.enum(['unmatched', 'all']).default('unmatched'),
+  })
+  .meta({ id: 'AdminUsdtTransferQuery' });
+
+export type AdminUsdtTransferQuery = z.infer<typeof adminUsdtTransferQuerySchema>;
+
+/** One transfer of the list (rule U13): its state, who holds it, and its candidates. */
+export const adminUsdtTransferSchema = usdtTransferSchema
+  .extend({
+    state: usdtTransferStateSchema,
+    /** The deposit bound to it, or the adjustment that claimed its TXID. */
+    holder: z
+      .object({
+        kind: z.enum(['deposit', 'adjustment']),
+        id: z.uuid(),
+        customer: z.object({ id: z.uuid(), name: z.string(), email: z.string() }),
+      })
+      .nullable(),
+    /** Unmatched only: reserved, expired or cancelled deposits it may belong to (U4, U11). */
+    candidates: z.array(usdtCandidateSchema),
+  })
+  .meta({ id: 'AdminUsdtTransfer' });
+
+export type AdminUsdtTransfer = z.infer<typeof adminUsdtTransferSchema>;
+
+export const adminUsdtTransferPageSchema = cursorPageSchema(
+  adminUsdtTransferSchema,
+  'AdminUsdtTransferPage',
+);
+
+export type AdminUsdtTransferPage = z.infer<typeof adminUsdtTransferPageSchema>;

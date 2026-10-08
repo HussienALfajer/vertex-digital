@@ -500,6 +500,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/deposits/usdt/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsController_usdtOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deposits/usdt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsController_createUsdt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/deposits": {
         parameters: {
             query?: never;
@@ -558,6 +590,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["DepositsController_submitReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deposits/{id}/txid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsController_submitTxid"];
         delete?: never;
         options?: never;
         head?: never;
@@ -740,6 +788,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/deposits/{id}/approve-usdt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsAdminController_approveUsdt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/deposits/{id}/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositsAdminController_recheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/usdt-transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositsAdminController_transfers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -903,7 +999,7 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked";
         /** @enum {string} */
         AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit";
         AuditPage: {
@@ -999,7 +1095,7 @@ export interface components {
         /** @enum {string} */
         AdjustmentCategory: "compensation" | "correction" | "cash_refund" | "manual_deposit" | "test_funds";
         /** @enum {string} */
-        DepositMethod: "sham_cash";
+        DepositMethod: "sham_cash" | "usdt_trc20" | "usdt_bep20";
         WalletSearchQuery: {
             cursor?: string;
             /** @default 50 */
@@ -1073,6 +1169,7 @@ export interface components {
                 } | null;
                 /** Format: uuid */
                 id: string;
+                txid: string | null;
             } | null;
         };
         /** @enum {string} */
@@ -1127,7 +1224,7 @@ export interface components {
             balanceUnits: number;
         };
         /** @enum {string} */
-        LedgerAccountKind: "customer_wallet" | "sham_cash_receipts" | "usdt_receipts" | "supplier_prepaid" | "sales_revenue" | "cost_of_goods" | "refunds" | "adjustments" | "currency_exchange";
+        LedgerAccountKind: "customer_wallet" | "sham_cash_receipts" | "usdt_receipts" | "supplier_prepaid" | "sales_revenue" | "cost_of_goods" | "refunds" | "adjustments" | "currency_exchange" | "deposit_rounding";
         /** @enum {string} */
         Currency: "USD" | "SYP";
         ShamCashOptions: {
@@ -1224,6 +1321,7 @@ export interface components {
                 reason: components["schemas"]["DepositRejectReason"];
                 note: string | null;
             } | null;
+            usdt: components["schemas"]["DepositUsdt"] | null;
         };
         /** @enum {string} */
         DepositStatus: "pending" | "submitted" | "credited" | "rejected" | "expired" | "cancelled";
@@ -1235,7 +1333,45 @@ export interface components {
             expiresAt: string;
         };
         /** @enum {string} */
-        DepositRejectReason: "not_received" | "receipt_invalid" | "receipt_used" | "reference_other_customer" | "wrong_account" | "other";
+        DepositRejectReason: "not_received" | "receipt_invalid" | "receipt_used" | "reference_other_customer" | "wrong_account" | "wrong_network" | "transfer_other_customer" | "other";
+        DepositUsdt: {
+            method: components["schemas"]["UsdtMethod"];
+            address: string;
+            payAmount: string;
+            payAmountUnits: number;
+            checkStatus: components["schemas"]["UsdtCheckStatus"];
+            checkError: components["schemas"]["UsdtCheckError"] | null;
+            txid: string | null;
+            explorerUrl: string | null;
+            confirmations: number | null;
+            requiredConfirmations: number;
+            delayed: boolean;
+            receivedAmountUnits: number | null;
+            reviewReasons: ("amount_mismatch" | "wrong_network" | "sent_before_deposit")[];
+        };
+        /** @enum {string} */
+        UsdtMethod: "usdt_trc20" | "usdt_bep20";
+        /** @enum {string} */
+        UsdtCheckStatus: "awaiting_transfer" | "searching" | "confirming" | "review" | "done";
+        /** @enum {string} */
+        UsdtCheckError: "not_found" | "tx_failed" | "not_to_store" | "wrong_token";
+        UsdtOptions: {
+            networks: {
+                method: components["schemas"]["UsdtMethod"];
+                available: boolean;
+                /** @enum {string|null} */
+                unavailableReason: "not_configured" | "disabled" | "delayed" | null;
+                address: string | null;
+                confirmations: number;
+            }[];
+            limits: components["schemas"]["DepositLimits"] | null;
+            /** Format: uuid */
+            pendingDepositId: string | null;
+        };
+        CreateUsdtDeposit: {
+            method: components["schemas"]["UsdtMethod"];
+            amountUnits: number;
+        };
         DepositListQuery: {
             cursor?: string;
             /** @default 50 */
@@ -1248,6 +1384,9 @@ export interface components {
         SubmitReceipt: {
             /** Format: uuid */
             rateId?: string;
+        };
+        SubmitTxid: {
+            txid: string;
         };
         DepositSettings: {
             shamCashAccountName: string;
@@ -1268,9 +1407,19 @@ export interface components {
             reviewTargetMinutes: number;
             flagNewAccountUsdUnits: number;
             flagVelocityCount: number;
+            usdtTrc20Enabled: boolean;
+            usdtBep20Enabled: boolean;
+            usdtMinDepositUsdUnits: number;
             saved: boolean;
             /** Format: date-time */
             savedAt: string | null;
+            usdt: {
+                method: components["schemas"]["UsdtMethod"];
+                address: string | null;
+                /** Format: date-time */
+                lastScanAt: string | null;
+                delayed: boolean;
+            }[];
         };
         DepositSettingsInput: {
             shamCashAccountName: string;
@@ -1291,6 +1440,9 @@ export interface components {
             reviewTargetMinutes: number;
             flagNewAccountUsdUnits: number;
             flagVelocityCount: number;
+            usdtTrc20Enabled: boolean;
+            usdtBep20Enabled: boolean;
+            usdtMinDepositUsdUnits: number;
         };
         StoredFileRef: {
             /** Format: uuid */
@@ -1307,6 +1459,7 @@ export interface components {
             status: "pending" | "submitted" | "credited" | "rejected" | "expired" | "cancelled" | "all";
             /** @enum {string} */
             flagged?: "true" | "false";
+            method?: components["schemas"]["DepositMethod"];
             q?: string;
         };
         AdminDepositPage: {
@@ -1341,11 +1494,13 @@ export interface components {
             flags: components["schemas"]["DepositFlagCode"][];
         };
         /** @enum {string} */
-        DepositFlagCode: "receipt_reused" | "receipt_similar" | "new_account_large" | "velocity" | "shared_phone" | "amount_mismatch" | "reference_missing" | "reference_different";
+        DepositFlagCode: "receipt_reused" | "receipt_similar" | "new_account_large" | "velocity" | "shared_phone" | "amount_mismatch" | "reference_missing" | "reference_different" | "wrong_network" | "sent_before_deposit";
         AdminDepositCounts: {
             submitted: number;
             submittedFlagged: number;
             pending: number;
+            usdtReview: number;
+            unmatchedTransfers: number;
         };
         AdminDeposit: {
             /** Format: uuid */
@@ -1376,6 +1531,7 @@ export interface components {
                 rateId: string;
                 rate: components["schemas"]["ExchangeRate"];
             } | null;
+            decidedBy: components["schemas"]["DepositDecider"] | null;
             adminName: string | null;
             credit: {
                 transactionNumber: string;
@@ -1385,7 +1541,7 @@ export interface components {
                 /** Format: uuid */
                 creditRateId: string | null;
                 creditRate: components["schemas"]["ExchangeRate"] | null;
-                referenceCheck: components["schemas"]["DepositReferenceCheck"];
+                referenceCheck: components["schemas"]["DepositReferenceCheck"] | null;
                 /** Format: uuid */
                 journalId: string;
             } | null;
@@ -1425,7 +1581,10 @@ export interface components {
                 }[];
             };
             eta: components["schemas"]["ReviewEta"] | null;
+            usdt: components["schemas"]["AdminDepositUsdt"] | null;
         };
+        /** @enum {string} */
+        DepositDecider: "admin" | "system";
         /** @enum {string} */
         DepositReferenceCheck: "matches" | "missing" | "different";
         DepositFlag: {
@@ -1439,6 +1598,64 @@ export interface components {
             };
             /** Format: date-time */
             createdAt: string;
+        };
+        AdminDepositUsdt: {
+            method: components["schemas"]["UsdtMethod"];
+            address: string;
+            payAmount: string;
+            payAmountUnits: number;
+            checkStatus: components["schemas"]["UsdtCheckStatus"];
+            checkError: components["schemas"]["UsdtCheckError"] | null;
+            txid: string | null;
+            explorerUrl: string | null;
+            confirmations: number | null;
+            requiredConfirmations: number;
+            delayed: boolean;
+            receivedAmountUnits: number | null;
+            reviewReasons: ("amount_mismatch" | "wrong_network" | "sent_before_deposit")[];
+            tailUnits: number;
+            txidSource: components["schemas"]["UsdtTxidSource"] | null;
+            txidSubmissions: number;
+            /** Format: date-time */
+            lastCheckedAt: string | null;
+            transfer: components["schemas"]["UsdtTransfer"] | null;
+            candidates: components["schemas"]["UsdtCandidate"][];
+        };
+        /** @enum {string} */
+        UsdtTxidSource: "customer" | "scan";
+        UsdtTransfer: {
+            /** Format: uuid */
+            id: string;
+            method: components["schemas"]["UsdtMethod"];
+            txid: string;
+            explorerUrl: string;
+            fromAddress: string;
+            toAddress: string;
+            rawAmount: string;
+            amountUnits: number;
+            blockNumber: number;
+            /** Format: date-time */
+            blockTime: string;
+            source: components["schemas"]["UsdtTransferSource"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        UsdtTransferSource: "scan" | "txid";
+        UsdtCandidate: {
+            /** Format: uuid */
+            depositId: string;
+            referenceCode: string;
+            status: components["schemas"]["DepositStatus"];
+            payAmountUnits: number;
+            /** Format: date-time */
+            createdAt: string;
+            customer: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                email: string;
+            };
         };
         ApproveDeposit: {
             transactionNumber: string;
@@ -1457,6 +1674,58 @@ export interface components {
             customerNote?: string;
             internalNote: string;
         };
+        ApproveUsdtDeposit: {
+            acknowledgedFlags: components["schemas"]["DepositFlagCode"][];
+            internalNote?: string;
+        };
+        AdminUsdtTransferQuery: {
+            cursor?: string;
+            /** @default 50 */
+            limit: number;
+            method?: components["schemas"]["UsdtMethod"];
+            /**
+             * @default unmatched
+             * @enum {string}
+             */
+            state: "unmatched" | "all";
+        };
+        AdminUsdtTransferPage: {
+            items: components["schemas"]["AdminUsdtTransfer"][];
+            nextCursor: string | null;
+        };
+        AdminUsdtTransfer: {
+            /** Format: uuid */
+            id: string;
+            method: components["schemas"]["UsdtMethod"];
+            txid: string;
+            explorerUrl: string;
+            fromAddress: string;
+            toAddress: string;
+            rawAmount: string;
+            amountUnits: number;
+            blockNumber: number;
+            /** Format: date-time */
+            blockTime: string;
+            source: components["schemas"]["UsdtTransferSource"];
+            /** Format: date-time */
+            createdAt: string;
+            state: components["schemas"]["UsdtTransferState"];
+            holder: {
+                /** @enum {string} */
+                kind: "deposit" | "adjustment";
+                /** Format: uuid */
+                id: string;
+                customer: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    email: string;
+                };
+            } | null;
+            candidates: components["schemas"]["UsdtCandidate"][];
+        };
+        /** @enum {string} */
+        UsdtTransferState: "credited" | "bound" | "unmatched";
         HealthResponse: {
             /** @enum {string} */
             status: "ok" | "error";
@@ -1934,7 +2203,7 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked";
                 entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit";
                 entityId?: string;
                 from?: string;
@@ -2263,6 +2532,53 @@ export interface operations {
             };
         };
     };
+    DepositsController_usdtOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The USDT networks now */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsdtOptions"];
+                };
+            };
+        };
+    };
+    DepositsController_createUsdt: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUsdtDeposit"];
+            };
+        };
+        responses: {
+            /** @description Created (200: a replay) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deposit"];
+                };
+            };
+        };
+    };
     DepositsController_list: {
         parameters: {
             query?: {
@@ -2346,6 +2662,32 @@ export interface operations {
         };
         responses: {
             /** @description Submitted for review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deposit"];
+                };
+            };
+        };
+    };
+    DepositsController_submitTxid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitTxid"];
+            };
+        };
+        responses: {
+            /** @description Verification started */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2476,6 +2818,7 @@ export interface operations {
                 limit?: number;
                 status?: "pending" | "submitted" | "credited" | "rejected" | "expired" | "cancelled" | "all";
                 flagged?: "true" | "false";
+                method?: "sham_cash" | "usdt_trc20" | "usdt_bep20";
                 q?: string;
             };
             header?: never;
@@ -2638,6 +2981,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminDeposit"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_approveUsdt: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveUsdtDeposit"];
+            };
+        };
+        responses: {
+            /** @description Credited (or its replay) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDeposit"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_recheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verification sent again */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDeposit"];
+                };
+            };
+        };
+    };
+    DepositsAdminController_transfers: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                method?: "usdt_trc20" | "usdt_bep20";
+                state?: "unmatched" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUsdtTransferPage"];
                 };
             };
         };

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { type UsdtMethod, usdtAddressSchemas } from '@vertex-digital/contracts';
 import { z } from 'zod';
 
 /** Values `.env.example` ships: never secrets, so they count as unset. */
@@ -12,6 +13,24 @@ const secret = () =>
     .optional()
     .transform((value) => (value && !isPlaceholder(value) ? value : undefined))
     .pipe(z.string().min(32).optional());
+
+/** The all-zero placeholders an older `.env.example` shipped: a burn address, never a wallet. */
+const isPlaceholderAddress = (value: string) => /^(T|0x)0+$/.test(value);
+
+/**
+ * A USDT receiving address (S04 rule U1): unset, empty or a placeholder makes its network
+ * unavailable; a value that fails its checksum stops the start, so no deposit ever shows a
+ * mistyped address.
+ */
+const usdtAddress = (method: UsdtMethod) =>
+  z
+    .string()
+    .optional()
+    .transform((value) => {
+      const address = value?.trim();
+      return address && !isPlaceholderAddress(address) ? address : undefined;
+    })
+    .pipe(usdtAddressSchemas[method].optional());
 
 const origin = () => z.url({ protocol: /^https?$/ }).transform((value) => new URL(value).origin);
 
@@ -66,6 +85,12 @@ export const envSchema = z
           .regex(/^\/[\w/-]*[^/]$/)
           .optional(),
       ),
+    /**
+     * The owner's USDT receiving addresses (S04, ADR 0018): set on the server only, never in the
+     * panel. Changing one needs a quiet moment with no open USDT deposits (`docs/deployment.md`).
+     */
+    USDT_TRC20_ADDRESS: usdtAddress('usdt_trc20'),
+    USDT_BEP20_ADDRESS: usdtAddress('usdt_bep20'),
     /** Empty disables Sentry. */
     SENTRY_DSN: z
       .string()

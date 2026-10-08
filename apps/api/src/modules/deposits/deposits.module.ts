@@ -10,15 +10,24 @@ import { DepositSettingsService } from './deposit-settings.service.js';
 import { DepositsAdminController } from './deposits.admin.controller.js';
 import { DepositsController } from './deposits.controller.js';
 import { DepositsService } from './deposits.service.js';
+import { UsdtDepositsService } from './usdt-deposits.service.js';
+import { UsdtReviewService } from './usdt-review.service.js';
 
 /**
- * Deposits (S03, F05): `deposits`, `deposit_receipts`, `deposit_flags` and `deposit_settings`.
- * The customer's Sham Cash wizard and the admin's review. Credits post through the ledger write
- * path in `packages/db`; the customer's balance comes from the wallet module.
+ * Deposits (S03, F05; S04, F06): `deposits`, `deposit_receipts`, `deposit_flags`,
+ * `deposit_settings`, and the USDT tables `usdt_deposits`, `usdt_transfers`, `usdt_scan_cursors`.
+ * The customer's Sham Cash and USDT deposits and the admin's review. Credits post through the
+ * ledger write paths in `packages/db`; the customer's balance comes from the wallet module.
  */
 @Module({
   imports: [AuthModule, AdminModule, FilesModule, NotificationsModule, RatesModule, WalletModule],
   controllers: [DepositsController, DepositsAdminController],
-  providers: [DepositsService, DepositReviewService, DepositSettingsService],
+  providers: [
+    DepositsService,
+    DepositReviewService,
+    DepositSettingsService,
+    UsdtDepositsService,
+    UsdtReviewService,
+  ],
 })
 export class DepositsModule {}

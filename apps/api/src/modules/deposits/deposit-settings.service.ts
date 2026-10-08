@@ -8,9 +8,21 @@ import {
   REVIEW_ETA_SAMPLE_SIZE,
   type ReviewEta,
   reviewEta,
+  USDT_METHODS,
+  USDT_SCANNER_STALE_MINUTES,
+  type USDT_UNAVAILABLE_REASONS,
+  type UsdtMethod,
 } from '@vertex-digital/contracts';
-import { type Database, depositSettings, deposits, newId, recordAudit } from '@vertex-digital/db';
+import {
+  type Database,
+  depositSettings,
+  deposits,
+  newId,
+  recordAudit,
+  usdtScanCursors,
+} from '@vertex-digital/db';
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
@@ -29,19 +41,76 @@ const FIELDS = Object.keys(DEPOSIT_SETTINGS_DEFAULTS) as (keyof DepositSettingsV
 /** Serializes saves, so each version's audit entry compares with the version it replaces. */
 const SETTINGS_SAVE_LOCK = sql`select pg_advisory_xact_lock(hashtext('deposit_settings'))`;
 
+/** A USDT network's state (S04 rule U1): what the options, the settings and the pages show. */
+export interface UsdtNetworkState {
+  method: UsdtMethod;
+  /** From the server environment; null when not configured. */
+  address: string | null;
+  enabled: boolean;
+  lastScanAt: Date | null;
+  /** No successful scan in the last 10 minutes (rule U12). */
+  delayed: boolean;
+  /** Null when new deposits are accepted. */
+  unavailableReason: (typeof USDT_UNAVAILABLE_REASONS)[number] | null;
+}
+
+const SWITCHES = { usdt_trc20: 'usdtTrc20Enabled', usdt_bep20: 'usdtBep20Enabled' } as const;
+
 /** How far back the ETA sample reaches, at most: the decisions of the sample window. */
 const ETA_SCAN_LIMIT = 200;
 
 /**
- * The Sham Cash deposit settings (S03): versions, the QR images and the review ETA (rule SC13).
- * The only writer of `deposit_settings`.
+ * The deposit settings (S03, S04): versions, the QR images, the review ETA (rule SC13) and the
+ * USDT networks' state. The only writer of `deposit_settings`.
  */
 @Injectable()
 export class DepositSettingsService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(ENV) private readonly env: Env,
     private readonly files: FilesService,
   ) {}
+
+  /** The address a USDT network takes payments to, from the environment (rule U1). */
+  usdtAddress(method: UsdtMethod): string | null {
+    return (
+      (method === 'usdt_trc20' ? this.env.USDT_TRC20_ADDRESS : this.env.USDT_BEP20_ADDRESS) ?? null
+    );
+  }
+
+  /**
+   * Each USDT network's state (rules U1, U12): available with its address, its switch on and a
+   * scanner that succeeded within 10 minutes, by the database's clock.
+   */
+  async usdtNetworks(settings: CurrentSettings | null): Promise<UsdtNetworkState[]> {
+    const cursors = await this.db
+      .select({
+        method: usdtScanCursors.method,
+        lastSuccessAt: usdtScanCursors.lastSuccessAt,
+        fresh: sql<boolean>`${usdtScanCursors.lastSuccessAt} > now() - make_interval(mins => ${USDT_SCANNER_STALE_MINUTES})`,
+      })
+      .from(usdtScanCursors);
+    return USDT_METHODS.map((method) => {
+      const address = this.usdtAddress(method);
+      const enabled = settings?.[SWITCHES[method]] ?? false;
+      const cursor = cursors.find((row) => row.method === method);
+      const delayed = !cursor?.fresh;
+      return {
+        method,
+        address,
+        enabled,
+        lastScanAt: cursor?.lastSuccessAt ?? null,
+        delayed,
+        unavailableReason: !address
+          ? 'not_configured'
+          : !enabled
+            ? 'disabled'
+            : delayed
+              ? 'delayed'
+              : null,
+      };
+    });
+  }
 
   /** The newest version, or null before the first save (rule SC1). */
   async current(): Promise<CurrentSettings | null> {
@@ -56,9 +125,15 @@ export class DepositSettingsService {
   /** `GET /api/admin/deposit-settings`: the current version, or the defaults to start from. */
   async read(): Promise<DepositSettings> {
     const current = await this.current();
-    if (!current) return { ...DEPOSIT_SETTINGS_DEFAULTS, saved: false, savedAt: null };
+    const usdt = (await this.usdtNetworks(current)).map((network) => ({
+      method: network.method,
+      address: network.address,
+      lastScanAt: network.lastScanAt?.toISOString() ?? null,
+      delayed: network.delayed,
+    }));
+    if (!current) return { ...DEPOSIT_SETTINGS_DEFAULTS, saved: false, savedAt: null, usdt };
     const { id: _, createdAt, ...values } = current;
-    return { ...values, saved: true, savedAt: createdAt.toISOString() };
+    return { ...values, saved: true, savedAt: createdAt.toISOString(), usdt };
   }
 
   /** `PUT /api/admin/deposit-settings`: a new version and its audit entry. */
@@ -78,6 +153,21 @@ export class DepositSettingsService {
         'VALIDATION_FAILED',
         'Unknown QR image',
         unknown.map((key) => ({ path: [key], message: 'Upload the QR image first' })),
+      );
+    }
+    // Rule U1: a network takes deposits only to the address the server is configured with.
+    const unconfigured = USDT_METHODS.filter(
+      (method) => input[SWITCHES[method]] && !this.usdtAddress(method),
+    );
+    if (unconfigured.length > 0) {
+      throw new CodedException(
+        400,
+        'VALIDATION_FAILED',
+        'No receiving address on the server',
+        unconfigured.map((method) => ({
+          path: [SWITCHES[method]],
+          message: 'Set the receiving address on the server first',
+        })),
       );
     }
     await this.db.transaction(async (tx) => {
@@ -173,6 +263,9 @@ function toCurrent(row: SettingsRow): CurrentSettings {
     reviewTargetMinutes: row.reviewTargetMinutes,
     flagNewAccountUsdUnits: row.flagNewAccountUsdUnits,
     flagVelocityCount: row.flagVelocityCount,
+    usdtTrc20Enabled: row.usdtTrc20Enabled,
+    usdtBep20Enabled: row.usdtBep20Enabled,
+    usdtMinDepositUsdUnits: row.usdtMinDepositUsdUnits,
   };
 }
 

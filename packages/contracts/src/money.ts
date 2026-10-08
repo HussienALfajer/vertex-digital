@@ -250,3 +250,37 @@ export function formatAmountInput(currency: Currency, units: number): string {
   const whole = (cents / 100n).toString();
   return cents % 100n === 0n ? whole : `${whole}.${(cents % 100n).toString().padStart(2, '0')}`;
 }
+
+/*
+ * USDT (S04, ADR 0006): 1 USDT = 1 USD, so a USDT amount is carried in USD units. USD units have
+ * 6 decimals, as TRON USDT does; BSC USDT has 18, so its raw amounts are scaled down.
+ */
+
+/**
+ * A USDT amount for display and copying, Latin digits, no grouping, at least 4 decimals (`25.0037`,
+ * `10.0000`); more only when the amount is finer than 0.0001 (`24.003712`). Exact, in BigInt.
+ */
+export function formatUsdtAmount(units: number): string {
+  const value = BigInt(unitsOrThrow(units));
+  let fraction = (value % USD_SCALE).toString().padStart(6, '0');
+  while (fraction.length > 4 && fraction.endsWith('0')) fraction = fraction.slice(0, -1);
+  return `${value / USD_SCALE}.${fraction}`;
+}
+
+function scaleOrThrow(decimals: number): bigint {
+  if (!Number.isInteger(decimals) || decimals < 6 || decimals > 36) {
+    throw new RangeError(`Expected token decimals from 6 to 36, got ${decimals}`);
+  }
+  return 10n ** BigInt(decimals - 6);
+}
+
+/** A raw on-chain token amount in USD units, floored (rule M2: never credit a fraction more). */
+export function rawToUsdUnits(raw: bigint, decimals: number): number {
+  if (raw < 0n) throw new RangeError('Expected a non-negative raw amount');
+  return toUnits(raw / scaleOrThrow(decimals));
+}
+
+/** The exact raw on-chain amount of `units` USD units for a token with `decimals` (rule U7). */
+export function usdtRawForUnits(units: number, decimals: number): bigint {
+  return unitsOrThrow(units) * scaleOrThrow(decimals);
+}

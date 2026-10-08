@@ -58,6 +58,7 @@ function deposit(changes: Partial<MockDeposit> & { id: string }): MockDeposit {
     receiptRequestCount: 0,
     receiptRequestNote: null,
     approvalRate: { rateId: RATE_ID, rate: '118' },
+    decidedBy: null,
     adminName: null,
     credit: null,
     rejection: null,
@@ -77,6 +78,7 @@ function deposit(changes: Partial<MockDeposit> & { id: string }): MockDeposit {
       recentDeposits: [],
     },
     eta: { state: 'open', minutes: 15 },
+    usdt: null,
     ...changes,
   };
 }

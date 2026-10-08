@@ -39,11 +39,16 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   deposit_flags: 'Append-only (S03): a flag is raised once and never cleared',
   stored_files: 'Append-only (S03): a file and its row are never changed or deleted',
   email_outbox: 'A delivery record: its status changes, it is never archived (S01)',
+  usdt_deposits: 'Part of its deposit (S04): never archived, keyed by the deposit',
+  usdt_transfers: 'Append-only (S04): what the chain showed, never changed',
+  usdt_scan_cursors: "A scanner's position (S04): overwritten each run, safe to move back",
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
 const NATURAL_KEYS: Record<string, string> = {
   worker_heartbeats: 'Keyed by the worker name: one row per process, upserted by the heartbeat',
+  usdt_deposits: 'Keyed by its deposit: one row per USDT deposit (S04)',
+  usdt_scan_cursors: 'Keyed by the network: one cursor per scanner (S04)',
 };
 
 /**
@@ -61,6 +66,7 @@ const APPEND_ONLY_TABLES = [
   'deposit_receipts',
   'deposit_flags',
   'stored_files',
+  'usdt_transfers',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

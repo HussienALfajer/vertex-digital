@@ -142,6 +142,10 @@ function SettingsForm({ settings }: { settings: DepositSettings }) {
       newAccountDailyUsdUnits: parseUsd(texts.newAccountDailyUsdUnits) ?? Number.NaN,
       establishedPerDepositUsdUnits: parseUsd(texts.establishedPerDepositUsdUnits) ?? Number.NaN,
       establishedDailyUsdUnits: parseUsd(texts.establishedDailyUsdUnits) ?? Number.NaN,
+      // The USDT section arrives with S04 PR 3: a save keeps the USDT values in force.
+      usdtTrc20Enabled: settings.usdtTrc20Enabled,
+      usdtBep20Enabled: settings.usdtBep20Enabled,
+      usdtMinDepositUsdUnits: settings.usdtMinDepositUsdUnits,
       reviewHoursStart: texts.reviewHoursStart,
       reviewHoursEnd: texts.reviewHoursEnd,
       reviewTargetMinutes: whole(texts.reviewTargetMinutes),

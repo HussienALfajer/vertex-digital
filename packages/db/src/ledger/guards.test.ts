@@ -216,6 +216,9 @@ describe('append-only trigger', () => {
       'ledger_postings',
       'payment_references',
       'stored_files',
+      // Its TRUNCATE trigger: rows are guarded by `usdt_deposits_guard` (deposits.test.ts).
+      'usdt_deposits',
+      'usdt_transfers',
       'wallet_adjustments',
     ]);
   });

@@ -24,6 +24,8 @@ export const LEDGER_ACCOUNT_KINDS = [
   'adjustments',
   /** The store's conversion position: pounds received against dollars credited (S03 rule M2). */
   'currency_exchange',
+  /** The sub-cent part of USDT received, never credited to the customer (S04 rule M2). */
+  'deposit_rounding',
 ] as const;
 
 export const ledgerAccountKindSchema = z
@@ -297,7 +299,8 @@ export const adminWalletEntrySchema = z
         reversedByAdjustmentId: z.uuid().nullable(),
       })
       .nullable(),
-    deposit: walletDepositExtras.extend({ id: z.uuid() }).nullable(),
+    /** The admin also sees the deposit's id and, for USDT, its TXID (S04). */
+    deposit: walletDepositExtras.extend({ id: z.uuid(), txid: z.string().nullable() }).nullable(),
   })
   .meta({ id: 'AdminWalletEntry' });
 

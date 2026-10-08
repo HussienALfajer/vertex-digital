@@ -160,7 +160,10 @@
       "RECEIPT_INVALID": "الملف ليس صورة صالحة. ارفع صورة JPEG أو PNG أو WebP.",
       "PAYLOAD_TOO_LARGE": "الملف أكبر من 5 ميغابايت.",
       "FLAGS_NOT_ACKNOWLEDGED": "أكّد الاطلاع على كل التنبيهات قبل الاعتماد.",
-      "RECEIPT_ALREADY_REQUESTED": "طُلب إيصال أوضح لهذا الإيداع من قبل. يمكن طلبه مرة واحدة فقط."
+      "RECEIPT_ALREADY_REQUESTED": "طُلب إيصال أوضح لهذا الإيداع من قبل. يمكن طلبه مرة واحدة فقط.",
+      "TXID_INVALID": "رقم العملية غير صالح. الصق رقم العملية (TXID) أو رابطها من Tronscan أو BscScan.",
+      "TXID_ATTEMPTS_EXCEEDED": "أُرسل رقم العملية لهذا الإيداع 5 مرات، وهو الحد.",
+      "DEPOSIT_AMOUNT_BUSY": "كل المبالغ الدقيقة لهذا المبلغ محجوزة على هذه الشبكة. جرّب سنتًا أكثر أو أقل."
     }
   },
   "changePassword": {
@@ -359,7 +362,11 @@
       "deposit.expired": "انتهاء مهلة إيداع",
       "deposit.credited": "اعتماد إيداع",
       "deposit.rejected": "رفض إيداع",
-      "deposit.receipt_requested": "طلب إيصال أوضح"
+      "deposit.receipt_requested": "طلب إيصال أوضح",
+      "deposit.txid_submitted": "إرسال رقم عملية USDT",
+      "deposit.transfer_bound": "ربط تحويل USDT بإيداع",
+      "deposit.txid_bounced": "رفض رقم عملية USDT تلقائيًا",
+      "deposit.rechecked": "إعادة التحقق من إيداع USDT"
     }
   },
   "testCustomers": {
@@ -442,7 +449,8 @@
       "cost_of_goods": "تكلفة البضاعة",
       "refunds": "المبالغ المعادة",
       "adjustments": "التعديلات",
-      "currency_exchange": "صرف العملات"
+      "currency_exchange": "صرف العملات",
+      "deposit_rounding": "كسور الإيداع"
     },
     "summary": {
       "title": "ما يدين به المتجر للعملاء",
@@ -537,7 +545,9 @@
       "submitting": "جارٍ العكس…"
     },
     "depositMethods": {
-      "sham_cash": "إيداع شام كاش"
+      "sham_cash": "إيداع شام كاش",
+      "usdt_trc20": "إيداع USDT (TRC20)",
+      "usdt_bep20": "إيداع USDT (BEP20)"
     }
   },
   "rates": {
@@ -661,6 +671,14 @@
         "label": "رمز مرجع مختلف",
         "description": "ملاحظة التحويل تحمل رمزًا آخر."
       },
+      "wrong_network": {
+        "label": "شبكة مختلفة",
+        "description": "التحويل على شبكة غير الشبكة التي اختارها العميل، إلى عنوان المتجر فيها."
+      },
+      "sent_before_deposit": {
+        "label": "تحويل أقدم من الإيداع",
+        "description": "وقت التحويل على الشبكة قبل إنشاء طلب الإيداع."
+      },
       "none": "لا تنبيهات على هذا الإيداع.",
       "otherDeposit": "الإيداع الآخر",
       "otherReceipt": "إيصاله",
@@ -681,6 +699,8 @@
       "receipt_used": "الإيصال مستخدم في إيداع سابق",
       "reference_other_customer": "رمز المرجع يخص حسابًا آخر",
       "wrong_account": "التحويل إلى حساب غير حساب المتجر",
+      "wrong_network": "التحويل على شبكة غير الشبكة المختارة",
+      "transfer_other_customer": "التحويل يخص طلب إيداع آخر",
       "other": "سبب آخر"
     },
     "receipt": {

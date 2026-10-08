@@ -24,13 +24,16 @@ import {
 } from '@nestjs/swagger';
 import {
   createShamCashDepositSchema,
+  createUsdtDepositSchema,
   type DepositListQuery,
   depositListQuerySchema,
   depositPageSchema,
   depositSchema,
   shamCashOptionsSchema,
   submitReceiptSchema,
+  submitTxidSchema,
   UPLOAD_MAX_BYTES,
+  usdtOptionsSchema,
 } from '@vertex-digital/contracts';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
@@ -43,6 +46,7 @@ import { RateLimit } from '../../core/rate-limit/rate-limit.js';
 import type { CustomerIdentity } from '../auth/index.js';
 import { DepositsService } from './deposits.service.js';
 import { sendImage, uploadBody } from './served-file.js';
+import { UsdtDepositsService } from './usdt-deposits.service.js';
 
 /** One image, at most 5 MB (rule SC8); a larger one answers `413 PAYLOAD_TOO_LARGE`. */
 const receiptUpload = FileInterceptor('file', {
@@ -50,13 +54,17 @@ const receiptUpload = FileInterceptor('file', {
 });
 
 /**
- * The customer's own Sham Cash deposits (S03). Never cached (rule SC15); a deposit of another
- * customer answers `404`. Creation and receipts have per-customer limits in the database (SC6).
+ * The customer's own deposits: Sham Cash (S03) and USDT (S04). Never cached (rules SC15, U18); a
+ * deposit of another customer answers `404`. Creation, receipts and TXIDs have per-customer
+ * limits in the database (SC6, U8).
  */
 @ApiTags('deposits')
 @Controller('deposits')
 export class DepositsController {
-  constructor(private readonly deposits: DepositsService) {}
+  constructor(
+    private readonly deposits: DepositsService,
+    private readonly usdt: UsdtDepositsService,
+  ) {}
 
   @Get('sham-cash/options')
   @CustomerRoute()
@@ -95,6 +103,40 @@ export class DepositsController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const { deposit, created } = await this.deposits.create(
+      customer.id,
+      idempotencyKey,
+      body,
+      requestMeta(request),
+    );
+    response.status(created ? 201 : 200);
+    return deposit;
+  }
+
+  @Get('usdt/options')
+  @CustomerRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: usdtOptionsSchema })
+  @ApiOkResponse({ description: 'The USDT networks now', standardSchema: usdtOptionsSchema })
+  usdtOptions(@CurrentCustomer() customer: CustomerIdentity) {
+    return this.usdt.options(customer.id);
+  }
+
+  @Post('usdt')
+  @CustomerRoute()
+  @RequireAltcha()
+  @RateLimit({ limit: 20, perSeconds: 60 })
+  @ApiIdempotencyKey()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: depositSchema })
+  @ApiCreatedResponse({ description: 'Created (200: a replay)', standardSchema: depositSchema })
+  async createUsdt(
+    @CurrentCustomer() customer: CustomerIdentity,
+    @IdempotencyKey() idempotencyKey: string,
+    @Body({ schema: createUsdtDepositSchema }) body: z.output<typeof createUsdtDepositSchema>,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const { deposit, created } = await this.usdt.create(
       customer.id,
       idempotencyKey,
       body,
@@ -165,6 +207,22 @@ export class DepositsController {
       body.rateId,
       requestMeta(request),
     );
+  }
+
+  @Post(':id/txid')
+  @CustomerRoute()
+  @RateLimit({ limit: 20, perSeconds: 60 })
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: depositSchema })
+  @ApiOkResponse({ description: 'Verification started', standardSchema: depositSchema })
+  submitTxid(
+    @CurrentCustomer() customer: CustomerIdentity,
+    @Param('id') id: string,
+    @Body({ schema: submitTxidSchema }) body: z.output<typeof submitTxidSchema>,
+    @Req() request: Request,
+  ) {
+    return this.usdt.submitTxid(customer.id, id, body, requestMeta(request));
   }
 
   @Post(':id/cancel')
