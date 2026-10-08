@@ -28,6 +28,7 @@ const LIMITS = {
 };
 
 const SHAM_CASH_OPTIONS = {
+  state: 'available',
   currencies: { SYP: { available: true, reason: null }, USD: { available: true, reason: null } },
   account: { name: 'متجر تجريبي', number: '0990000000' },
   limits: { ...LIMITS, minUnits: 2 * USD },
@@ -41,6 +42,7 @@ const USDT_OPTIONS = {
   networks: [
     {
       method: 'usdt_trc20',
+      state: 'available',
       available: true,
       unavailableReason: null,
       address: TRON_ADDRESS,
@@ -48,6 +50,7 @@ const USDT_OPTIONS = {
     },
     {
       method: 'usdt_bep20',
+      state: 'unavailable',
       available: false,
       unavailableReason: 'delayed',
       address: null,
@@ -316,7 +319,12 @@ for (const theme of ['dark', 'light'] as const) {
     api.on('GET /api/deposits/usdt/options', 200, {
       ...USDT_OPTIONS,
       networks: [
-        { ...USDT_OPTIONS.networks[0], available: false, unavailableReason: 'disabled' },
+        {
+          ...USDT_OPTIONS.networks[0],
+          state: 'unavailable',
+          available: false,
+          unavailableReason: 'disabled',
+        },
         { ...USDT_OPTIONS.networks[1], address: BSC_ADDRESS },
       ],
     });

@@ -27,6 +27,7 @@ function signedIn(api: MockApi): MockApi {
 }
 
 const OPTIONS = {
+  state: 'available',
   currencies: { SYP: { available: true, reason: null }, USD: { available: true, reason: null } },
   account: { name: 'متجر تجريبي', number: '0990000000' },
   limits: {
@@ -46,6 +47,7 @@ const OPTIONS = {
 const USDT_OFF = {
   networks: ['usdt_trc20', 'usdt_bep20'].map((method) => ({
     method,
+    state: 'unavailable',
     available: false,
     unavailableReason: 'not_configured',
     address: null,
@@ -254,6 +256,7 @@ test.describe('deposits', () => {
     // Nothing to deposit with yet (edge case 11).
     api.on('GET /api/deposits/sham-cash/options', 200, {
       ...OPTIONS,
+      state: 'unavailable',
       currencies: {
         SYP: { available: false, reason: 'not_configured' },
         USD: { available: false, reason: 'not_configured' },

@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
+import { StopBanner } from '@/components/stop-banner';
 import { t } from '@/lib/i18n';
 import { THEME_SCRIPT } from '@/lib/theme';
 // The brand files stay in brand/ (their single home); the build copies them with hashed names.
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="flex min-h-dvh flex-col">
         <DirectionProvider direction="rtl">
           <SiteHeader />
+          <StopBanner />
           <main className="flex flex-1 flex-col">{children}</main>
           <SiteFooter />
         </DirectionProvider>
