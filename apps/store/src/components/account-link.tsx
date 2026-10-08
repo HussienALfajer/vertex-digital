@@ -8,17 +8,17 @@ import { t } from '@/lib/i18n';
 
 type Session = { user: { name: string; email: string } } | null;
 
-// Only signed-in customers download the menu: the first load stays within its budget.
-const AccountMenu = dynamic(() => import('./account-menu').then((module) => module.AccountMenu));
-const BalanceChip = dynamic(() =>
-  import('@/features/wallet/balance-chip').then((module) => module.BalanceChip),
+// Only signed-in customers download the balance, the bell and the menu, as one chunk: the first
+// load stays within its budget.
+const SignedInHeader = dynamic(() =>
+  import('./signed-in-header').then((module) => module.SignedInHeader),
 );
 
 /**
  * The header's account entry. Read in the browser, so every page stays static and cacheable:
  * "sign in" (and "create account" while registration is open, rule C16) until a session is known
- * to exist, then the wallet balance (rule W8 of S02) and the customer's initial with the account
- * menu.
+ * to exist, then the wallet balance (rule W8 of S02), the notification bell (S05) and the
+ * customer's initial with the account menu.
  */
 export function AccountLink() {
   const [session, setSession] = useState<Session>(null);
@@ -42,14 +42,7 @@ export function AccountLink() {
     };
   }, []);
 
-  if (session) {
-    return (
-      <div className="flex items-center gap-1">
-        <BalanceChip />
-        <AccountMenu name={session.user.name} email={session.user.email} />
-      </div>
-    );
-  }
+  if (session) return <SignedInHeader name={session.user.name} email={session.user.email} />;
 
   return (
     <div className="flex items-center gap-1">

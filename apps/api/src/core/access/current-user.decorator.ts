@@ -5,6 +5,8 @@ import type { CustomerIdentity } from '../../modules/auth/index.js';
 /** What `AccessGuard` attaches to the request once it lets it through. */
 export interface AuthenticatedRequest {
   customer?: CustomerIdentity;
+  /** On customer routes: whether the request's session still passes the guard's checks. */
+  customerSessionValid?: () => Promise<boolean>;
   admin?: AdminIdentity;
 }
 
@@ -23,4 +25,10 @@ export const CurrentCustomer = createParamDecorator(
 /** The signed-in admin of an `@AdminRoute()`. */
 export const CurrentAdmin = createParamDecorator(
   (_: unknown, context: ExecutionContext): AdminIdentity => attached('admin', context),
+);
+
+/** On a `@CustomerRoute()`: re-runs the guard's checks on the request's session (S05 rule NT6). */
+export const CustomerSessionCheck = createParamDecorator(
+  (_: unknown, context: ExecutionContext): (() => Promise<boolean>) =>
+    attached('customerSessionValid', context),
 );

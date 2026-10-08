@@ -11,6 +11,7 @@ import {
 import {
   auditEntries,
   claimPaymentReference,
+  customerNotifications,
   customers,
   type Database,
   depositFlags,
@@ -337,6 +338,13 @@ describe('the exact match (rule U7)', () => {
     // Safe twice: a second run finds nothing to do.
     expect(await verify.verify(deposit.id)).toBe('skipped');
     expect(await creditEmails(deposit.customerId)).toHaveLength(1);
+    // One notification too (S05 rule NT2), without the TXID.
+    const notifications = await db
+      .select({ event: customerNotifications.event, params: customerNotifications.params })
+      .from(customerNotifications)
+      .where(eq(customerNotifications.customerId, deposit.customerId));
+    expect(notifications.map((item) => item.event)).toEqual(['deposit_credited']);
+    expect(JSON.stringify(notifications[0]?.params)).not.toContain(hash);
   });
 
   it('waits for finality: TRON not solidified is confirming, re-read every 10 seconds', async () => {
@@ -479,6 +487,12 @@ describe('bounces (rule U10)', () => {
         ),
       );
     expect(emails).toEqual([{ params: expect.objectContaining({ reason: 'not_received' }) }]);
+    expect(
+      await db
+        .select({ event: customerNotifications.event })
+        .from(customerNotifications)
+        .where(eq(customerNotifications.customerId, deposit.customerId)),
+    ).toEqual([{ event: 'deposit_rejected' }]);
     // Final: a second run does nothing.
     expect(await verify.verify(deposit.id)).toBe('skipped');
   });

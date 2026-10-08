@@ -145,7 +145,7 @@ export class WalletAdjustmentsService {
         'Test funds are for test customers only',
       );
     }
-    return this.write(adminId, idempotencyKey, request, customer.email, meta);
+    return this.write(adminId, idempotencyKey, request, meta);
   }
 
   async reverse(
@@ -186,9 +186,7 @@ export class WalletAdjustmentsService {
       .where(eq(walletAdjustments.reversesAdjustmentId, original.id));
     if (reversed) throw refusals.alreadyReversed();
     this.checkConfirmation(original.amountUsdUnits, input.amountConfirmationUnits);
-    const customer = await this.customers.walletCustomer(original.customerId);
-    if (!customer) throw new Error(`Adjustment ${original.id} has no customer`);
-    return this.write(adminId, idempotencyKey, request, customer.email, meta);
+    return this.write(adminId, idempotencyKey, request, meta);
   }
 
   private checkConfirmation(amountUnits: number, confirmationUnits: number | undefined): void {
@@ -231,12 +229,11 @@ export class WalletAdjustmentsService {
     return { adjustment: shape(row, balanceAfterUnits), created: false };
   }
 
-  /** Rules J2, J3, J5, M1–M3: journal, row, audit entry and email in one transaction. */
+  /** Rules J2, J3, J5, M1–M3: journal, row, audit entry and notification in one transaction. */
   private async write(
     adminId: string,
     idempotencyKey: string,
     request: AdjustmentRequest,
-    email: string,
     meta: RequestMeta,
   ): Promise<Written> {
     const id = newId();
@@ -352,18 +349,16 @@ export class WalletAdjustmentsService {
             },
           });
         }
-        // No reason, note or admin name: S01 email rule (no free text someone else typed).
-        await this.notifications.queueEmail(tx, {
-          to: email,
-          template: 'customer_wallet_adjusted',
+        // No reason, note or admin name: S01 email rule, S05 rule NT3.
+        await this.notifications.notifyCustomer(tx, {
+          customerId: request.customerId,
+          event: 'wallet_adjusted',
           params: {
-            at: row.createdAt.toISOString(),
             direction: request.direction,
             amountUnits: request.amountUnits,
             category: request.category,
             reversal: request.reversesAdjustmentId !== null,
           },
-          customerId: request.customerId,
         });
         return { adjustment: shape(row, balanceAfterUnits), created: true };
       });

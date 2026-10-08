@@ -118,8 +118,7 @@ export class UsdtReviewService {
             },
           });
           // The amount only; never the TXID, an address or a note (S01 email rule).
-          await this.review.queueEmail(tx, credited.deposit, 'customer_deposit_credited', {
-            at: (credited.deposit.decidedAt as Date).toISOString(),
+          await this.review.notify(tx, credited.deposit, 'deposit_credited', {
             depositId: credited.deposit.id,
             referenceCode: credited.deposit.referenceCode,
             creditedUsdUnits,

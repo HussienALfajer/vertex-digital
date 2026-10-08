@@ -15,6 +15,7 @@ import {
 import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { useNotificationEvents } from '@/features/notifications/live';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { amountText, STATUS_TONES, statusText } from './amounts';
@@ -59,6 +60,17 @@ export function DepositPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A decision on this deposit arrives live (S05 rule NT7); after a `resync`, read it again.
+  useNotificationEvents((event) => {
+    if (
+      event.type === 'resync' ||
+      (event.type === 'notification' &&
+        event.notification.event !== 'wallet_adjusted' &&
+        event.notification.params.depositId === id)
+    )
+      void load();
+  });
 
   const open =
     state.status === 'ready' &&

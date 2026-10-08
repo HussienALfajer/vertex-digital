@@ -23,6 +23,7 @@ import {
   auditOf,
   body,
   emailsTo,
+  notificationsOf,
   PASSWORD,
   removeAccounts,
   seedCustomer,
@@ -1037,6 +1038,9 @@ describe('approving (rules RV1–RV5, RV7, RV9, M1–M3)', () => {
     ]);
     const [email] = await depositEmails(someone.email);
     expect(email).toMatchObject({ template: 'customer_deposit_credited' });
+    expect((await notificationsOf(test.db, someone.id)).map((item) => item.event)).toEqual([
+      'deposit_credited',
+    ]);
     expect(JSON.stringify(email?.params)).not.toContain(input.transactionNumber);
     // The wallet timeline shows the deposit with its pounds and rate (S02 rule W5).
     const entries = (await (
@@ -1327,6 +1331,17 @@ describe('rejecting (rule RV6) and asking for a clearer receipt (rule RV8)', () 
     });
     const emails = await depositEmails(someone.email);
     expect(emails.map((email) => email.template)).toEqual(['customer_deposit_rejected']);
+    expect(await notificationsOf(test.db, someone.id)).toEqual([
+      {
+        event: 'deposit_rejected',
+        params: {
+          depositId: deposit.id,
+          referenceCode: expect.any(String),
+          reason: 'receipt_invalid',
+        },
+        readAt: null,
+      },
+    ]);
     expect(JSON.stringify(emails[0]?.params)).not.toContain('الصورة');
     const [entry] = (await auditOf(test.db, deposit.id)).filter(
       (item) => item.action === 'deposit.rejected',
@@ -1368,6 +1383,9 @@ describe('rejecting (rule RV6) and asking for a clearer receipt (rule RV8)', () 
     expect(detail.receipts).toHaveLength(2);
     expect((await depositEmails(someone.email)).map((email) => email.template)).toEqual([
       'customer_deposit_receipt_requested',
+    ]);
+    expect((await notificationsOf(test.db, someone.id)).map((item) => item.event)).toEqual([
+      'deposit_receipt_requested',
     ]);
   });
 

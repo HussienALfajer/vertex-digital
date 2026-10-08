@@ -3,7 +3,7 @@ import { type CanActivate, type ExecutionContext, Injectable, Logger } from '@ne
 import { Reflector } from '@nestjs/core';
 import { BACKGROUND_REQUEST_HEADER } from '@vertex-digital/contracts';
 import { AdminAuthService } from '../../modules/admin/index.js';
-import { AuthService } from '../../modules/auth/index.js';
+import { AuthService, type CustomerIdentity } from '../../modules/auth/index.js';
 import { CodedException } from '../errors/index.js';
 import {
   ACCESS,
@@ -40,14 +40,14 @@ export class AccessGuard implements CanActivate {
       case 'public':
         return true;
       case 'customer': {
-        const customer = await this.customers.customerOf(request.headers);
-        if (!customer || customer.archived) {
-          throw new CodedException(401, 'UNAUTHORIZED', 'Sign in first');
-        }
-        if (!customer.emailVerified) {
-          throw new CodedException(403, 'EMAIL_NOT_VERIFIED', 'Verify your email first');
-        }
+        const customer = await this.customerOf(request.headers);
         request.customer = customer;
+        // For long requests (the notification stream, S05 rule NT6): the same checks again.
+        request.customerSessionValid = () =>
+          this.customerOf(request.headers).then(
+            (again) => again.id === customer.id && again.sessionId === customer.sessionId,
+            () => false,
+          );
         return true;
       }
       case 'admin':
@@ -81,5 +81,16 @@ export class AccessGuard implements CanActivate {
         this.logger.error(`Route without an access declaration: ${context.getClass().name}`);
         throw new CodedException(403, 'FORBIDDEN', 'Route access is not declared');
     }
+  }
+
+  private async customerOf(headers: IncomingHttpHeaders): Promise<CustomerIdentity> {
+    const customer = await this.customers.customerOf(headers);
+    if (!customer || customer.archived) {
+      throw new CodedException(401, 'UNAUTHORIZED', 'Sign in first');
+    }
+    if (!customer.emailVerified) {
+      throw new CodedException(403, 'EMAIL_NOT_VERIFIED', 'Verify your email first');
+    }
+    return customer;
   }
 }

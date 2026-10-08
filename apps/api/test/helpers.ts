@@ -9,12 +9,14 @@ import {
   adminUsers,
   auditEntries,
   customerAccounts,
+  customerNotifications,
   customers,
   type Database,
   deposits,
   emailOutbox,
   ledgerAccounts,
   newId,
+  notificationPreferences,
   storeSwitchChanges,
 } from '@vertex-digital/db';
 import { type Challenge, solveChallenge } from 'altcha-lib';
@@ -114,6 +116,13 @@ const withoutWallet = (db: Database) =>
     notExists(
       db.select({ id: deposits.id }).from(deposits).where(eq(deposits.customerId, customers.id)),
     ),
+    // Notifications are never deleted (S05 rule NT1).
+    notExists(
+      db
+        .select({ id: customerNotifications.id })
+        .from(customerNotifications)
+        .where(eq(customerNotifications.customerId, customers.id)),
+    ),
   );
 
 /**
@@ -123,6 +132,7 @@ const withoutWallet = (db: Database) =>
 export async function removeAccounts(db: Database, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   await db.delete(emailOutbox).where(inArray(emailOutbox.customerId, ids));
+  await db.delete(notificationPreferences).where(inArray(notificationPreferences.customerId, ids));
   await db.delete(customers).where(and(inArray(customers.id, ids), withoutWallet(db)));
   await db.delete(adminUsers).where(inArray(adminUsers.id, ids));
 }
@@ -141,6 +151,9 @@ export async function removeLeftovers(db: Database): Promise<void> {
         like(emailOutbox.toAddress, `%${TEST_EMAIL_DOMAIN}`),
       ),
     );
+  await db
+    .delete(notificationPreferences)
+    .where(inArray(notificationPreferences.customerId, leftovers));
   await db
     .delete(customers)
     .where(and(like(customers.email, `%${TEST_EMAIL_DOMAIN}`), withoutWallet(db)));
@@ -306,6 +319,19 @@ export function api(url: string) {
     enrolTotp,
     adminWithTotp,
   };
+}
+
+/** A customer's notifications (S05 rule NT1), oldest first. */
+export function notificationsOf(db: Database, customerId: string) {
+  return db
+    .select({
+      event: customerNotifications.event,
+      params: customerNotifications.params,
+      readAt: customerNotifications.readAt,
+    })
+    .from(customerNotifications)
+    .where(eq(customerNotifications.customerId, customerId))
+    .orderBy(asc(customerNotifications.createdAt), asc(customerNotifications.id));
 }
 
 /** The emails queued to an address, oldest first. */

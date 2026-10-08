@@ -18,16 +18,19 @@ Why four and not the spec's three: the spec's Telegram PR is too large for one r
 - [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (no blocking findings), owner acceptance (2026-10-08), PR with auto-merge
 
 ## PR 2 — F27 notifications, end to end · Opus 5.5 `high`
-- [ ] Contracts: `NOTIFICATION_EVENTS`, `NOTIFICATION_PARAMS`, `customerNotificationSchema`, `notificationPageSchema`, `notificationPreferencesSchema`, `NOTIFICATION_EMAIL_TEMPLATE`; audit `customer.notification_preference_changed`; unit tests
-- [ ] Db (`/db-migration`): `customer_notifications` (indexes, `read_at`-only column grant and trigger), `notification_preferences`; `notifyCustomer` in `packages/db/src/notifications` (row, preference-aware email, `pg_notify` on commit); tests (rollback leaves nothing)
-- [ ] NT2 call sites moved to `notifyCustomer`: S03 approval, rejection and receipt request, S04 credits and rejections (api and worker), S02 adjustments and reversals
-- [ ] Api: `GET /api/notifications`, `POST /api/notifications/read`, `GET /api/notifications/stream` (LISTEN fan-out, heartbeat, 3 streams, 30 per minute, session re-check, `resync`), preference routes; `no-store`; tests (other customer, stream routing, 4th stream, revoked session)
-- [ ] nginx: stream location (buffering off, long timeout)
-- [ ] Bridge
-- [ ] Store: header bell with live count (`EventSource`, `visibilitychange` refetch), `/notifications` (list, load more, mark read, empty, loading, error), `/account` email preferences, live refresh of `/wallet` and `/wallet/deposits/<id>` (NT7); i18n
-- [ ] E2E: bell with badge, `/notifications` list and empty, preferences (phone width, dark and light)
-- [ ] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md`, `wiring.md` SSE pattern)
-- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
+- [x] Contracts: `NOTIFICATION_EVENTS`, `NOTIFICATION_PARAMS`, `customerNotificationSchema`, `notificationPageSchema`, `notificationPreferencesSchema`, `NOTIFICATION_EMAIL_TEMPLATE`; audit `customer.notification_preference_changed`; unit tests
+- [x] Db (`/db-migration`): `customer_notifications` (indexes, `read_at`-only column grant and trigger), `notification_preferences`; `notifyCustomer` in `packages/db/src/notifications` (row, preference-aware email, `pg_notify` on commit); tests (rollback leaves nothing)
+- [x] NT2 call sites moved to `notifyCustomer`: S03 approval, rejection and receipt request, S04 credits and rejections (api and worker), S02 adjustments and reversals
+- [x] Api: `GET /api/notifications`, `POST /api/notifications/read`, `GET /api/notifications/stream` (LISTEN fan-out, heartbeat, 3 streams, 30 per minute, session re-check, `resync`), preference routes; `no-store`; tests (other customer, stream routing, 4th stream, revoked session)
+- [x] nginx: stream location (buffering off, long timeout)
+- [x] Bridge
+- [x] Store: header bell with live count (`EventSource`, `visibilitychange` refetch), `/notifications` (list, load more, mark read, empty, loading, error), `/account` email preferences, live refresh of `/wallet` and `/wallet/deposits/<id>` (NT7); i18n
+- [x] E2E: bell with badge, `/notifications` list and empty, preferences (phone width, dark and light)
+- [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md`, `wiring.md` SSE pattern)
+- [x] Reviewer: two blocking findings fixed (nginx duplicate `proxy_read_timeout`; the store stream reopens after a non-200 answer), plus the stream's early-close and `LISTEN` failure cleanup and the first-preference race (test)
+- [x] Found by the full run: a new customer's wallet created by two writes at once could meet the `customer_id` unique index outside `ON CONFLICT (code)` and answer 500 (S02 `ensureAccount`); fixed with a test that reproduces it
+- [x] Found by the full run: `deposits-usdt.test.ts` seeded 95 reference codes per run from about 15 symbols, and the kept test rows made collisions likely; it now draws free codes from the API's alphabet
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded on the final tree), owner acceptance (2026-10-08; script budget 205 KB accepted), PR with auto-merge
 
 ## PR 3 — F07 Telegram bot foundation and its admin page · Opus 5.5 `high`
 - [ ] Contracts: `telegram.ts` (message kinds and params, link status and code schemas, `TELEGRAM_CALLBACKS` parsing within 64 bytes), error `TELEGRAM_NOT_CONFIGURED`, audit actions `telegram.*`, queue `telegram.send`; unit tests

@@ -357,6 +357,7 @@
       "customer.sessions_revoked": "تسجيل خروج جلسات العميل",
       "customer.test_created": "إنشاء عميل اختبار",
       "customer.test_password_reset": "إعادة تعيين كلمة مرور عميل اختبار",
+      "customer.notification_preference_changed": "تغيير تفضيلات بريد الإشعارات",
       "wallet_adjustment.created": "تعديل رصيد عميل",
       "wallet_adjustment.reversed": "عكس تعديل رصيد",
       "exchange_rate.changed": "تغيير سعر الصرف",

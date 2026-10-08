@@ -98,7 +98,9 @@ for (const theme of ['dark', 'light'] as const) {
  * Performance budget of the first page (ADR 0008: Syrian connections). Sizes are gzipped, as
  * nginx sends them; Brotli is smaller still. Raise a budget only with a reason in the PR.
  */
-const BUDGET_KB = { script: 200, stylesheet: 20 };
+// Script raised from 200 (S05 PR 2): the whole Arabic catalog (`src/messages/ar.json`) ships in
+// the first load, so each feature's strings add to it; the notification strings took it to 201.
+const BUDGET_KB = { script: 205, stylesheet: 20 };
 
 test('the home page stays within its performance budget', async ({ page, api: _api }) => {
   test.skip(test.info().project.name !== 'desktop', 'measured once');

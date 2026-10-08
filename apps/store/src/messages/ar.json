@@ -11,7 +11,9 @@
     "signOut": "تسجيل الخروج",
     "account": "حسابي",
     "menu": "قائمة الحساب",
-    "balance": "رصيد المحفظة {balance}"
+    "balance": "رصيد المحفظة {balance}",
+    "notifications": "الإشعارات",
+    "notificationsUnread": "الإشعارات، {count} غير مقروءة"
   },
   "stopBanner": {
     "deposits": "نجري صيانة قصيرة. الإيداع متوقف مؤقتاً، ورصيدك وطلباتك بأمان.",
@@ -140,6 +142,22 @@
       "confirm": "سجّل الخروج من الكل",
       "cancel": "إلغاء",
       "unknown": "غير معروف"
+    },
+    "notifications": {
+      "title": "الإشعارات",
+      "description": "اختر ما يصلك بالبريد. يعرض مركز الإشعارات كل شيء دائمًا، مهما اخترت هنا.",
+      "events": {
+        "deposit_credited": "عند إضافة إيداع إلى رصيدك",
+        "deposit_rejected": "عند رفض إيداع",
+        "deposit_receipt_requested": "عند طلب إيصال أوضح",
+        "wallet_adjusted": "عند تعديل رصيدك من الإدارة"
+      },
+      "emailLabel": "البريد: {event}",
+      "security": "رسائل الأمان (رموز التحقق، تغيير كلمة المرور، تسجيل دخول جديد)",
+      "alwaysOn": "تصل دائمًا",
+      "saved": "حُفظ اختيارك.",
+      "saveFailed": "لم يُحفظ اختيارك",
+      "close": "إغلاق"
     }
   },
   "wallet": {
@@ -405,6 +423,24 @@
     "submitting": "جارٍ التأكيد…",
     "done": "تغيّر بريدك الإلكتروني، وأرسلنا إشعارًا إلى بريدك السابق.",
     "back": "العودة إلى حسابي"
+  },
+  "notifications": {
+    "title": "الإشعارات",
+    "subtitle": "ما حدث لرصيدك وإيداعاتك.",
+    "empty": "لا توجد إشعارات بعد. سنخبرك هنا عند إضافة رصيدك أو أي تغيير عليه.",
+    "loadFailed": "تعذّر تحميل الإشعارات. تحقّق من اتصالك ثم أعد المحاولة.",
+    "retry": "أعد المحاولة",
+    "loadMore": "عرض المزيد",
+    "loadingMore": "جارٍ التحميل…",
+    "loadMoreFailed": "تعذّر تحميل المزيد. أعد المحاولة.",
+    "unread": "جديد",
+    "events": {
+      "deposit_credited": "أُضيف {amount} إلى رصيدك ({reference}).",
+      "deposit_rejected": "رُفض الإيداع {reference}: {reason}.",
+      "deposit_receipt_requested": "نحتاج إيصالًا أوضح للإيداع {reference}. افتحه وأرسل صورة جديدة.",
+      "wallet_adjusted_credit": "أضافت الإدارة {amount} إلى رصيدك: {category}.",
+      "wallet_adjusted_debit": "خصمت الإدارة {amount} من رصيدك: {category}."
+    }
   },
   "errors": {
     "INVALID_EMAIL_OR_PASSWORD": "البريد الإلكتروني أو كلمة المرور غير صحيحين. تحقّق منهما وأعد المحاولة.",

@@ -1,5 +1,11 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
-import { DEPOSIT_SETTINGS_DEFAULTS, USDT_NETWORKS } from '@vertex-digital/contracts';
+import {
+  DEPOSIT_SETTINGS_DEFAULTS,
+  REFERENCE_CODE_ALPHABET,
+  REFERENCE_CODE_LENGTH,
+  REFERENCE_CODE_PREFIX,
+  USDT_NETWORKS,
+} from '@vertex-digital/contracts';
 import {
   depositFlags,
   deposits,
@@ -19,6 +25,7 @@ import {
   auditOf,
   body,
   emailsTo,
+  notificationsOf,
   PASSWORD,
   removeAccounts,
   seedCustomer,
@@ -240,6 +247,24 @@ async function saveSettings(input: Record<string, unknown>) {
     cookie: admin.cookie,
     body: input,
   });
+}
+
+/**
+ * A reference code no deposit holds, from the API's alphabet. Test rows stay in the database, so
+ * a code drawn at random must be checked against them.
+ */
+async function freeReferenceCode(): Promise<string> {
+  for (;;) {
+    const code = `${REFERENCE_CODE_PREFIX}${Array.from(
+      { length: REFERENCE_CODE_LENGTH },
+      () => REFERENCE_CODE_ALPHABET[randomInt(REFERENCE_CODE_ALPHABET.length)],
+    ).join('')}`;
+    const [taken] = await test.db
+      .select({ id: deposits.id })
+      .from(deposits)
+      .where(eq(deposits.referenceCode, code));
+    if (!taken) return code;
+  }
 }
 
 beforeAll(async () => {
@@ -547,11 +572,7 @@ describe('creating a USDT deposit (rules U2–U5)', () => {
           method: 'usdt_trc20',
           status: 'submitted',
           submittedAt: new Date(),
-          referenceCode: `VD-${randomBytes(5)
-            .toString('hex')
-            .toUpperCase()
-            .replace(/[^23456789ABCDEFGHJKMNPQRSTUVWXYZ]/g, 'Z')
-            .slice(0, 5)}`,
+          referenceCode: await freeReferenceCode(),
           currency: 'USD',
           declaredAmountUnits: declared,
           declaredUsdUnits: declared,
@@ -831,6 +852,9 @@ describe('the review of a USDT deposit (rules U11, U15)', () => {
     );
     expect(emails).toHaveLength(1);
     expect(JSON.stringify(emails[0]?.params)).not.toContain(bound.txid);
+    expect((await notificationsOf(test.db, someone.id)).map((item) => item.event)).toEqual([
+      'deposit_credited',
+    ]);
     const audit = (await auditOf(test.db, deposit.id)).at(-1);
     expect(audit).toMatchObject({
       action: 'deposit.credited',
@@ -980,6 +1004,9 @@ describe('rejecting and re-checking a USDT deposit (rules U16, U17)', () => {
     expect(claims).toEqual([]);
     expect((await emailsTo(test.db, other.email)).map((email) => email.template)).toContain(
       'customer_deposit_rejected',
+    );
+    expect((await notificationsOf(test.db, other.id)).map((item) => item.event)).toContain(
+      'deposit_rejected',
     );
     // Rejected, its transfer is unmatched again: its owner can still be credited by hand.
     const list = (await (

@@ -14,6 +14,7 @@ import {
   auditOf,
   body,
   emailsTo,
+  notificationsOf,
   PASSWORD,
   removeAccounts,
   type Seeded,
@@ -361,6 +362,19 @@ describe('adjustments (rules J1–J10)', () => {
       category: 'compensation',
       reversal: false,
     });
+    // The notification center records it too (S05 rule NT2), without the time.
+    expect(await notificationsOf(test.db, customer.id)).toEqual([
+      {
+        event: 'wallet_adjusted',
+        params: {
+          direction: 'credit',
+          amountUnits: 25 * DOLLAR,
+          category: 'compensation',
+          reversal: false,
+        },
+        readAt: null,
+      },
+    ]);
   });
 
   it('refuse a direction the category does not allow (rule J1)', async () => {

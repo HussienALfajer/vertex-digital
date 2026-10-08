@@ -8,6 +8,7 @@ import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { CircleAlertIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { NotificationPreferencesCard } from '@/features/notifications/preferences-card';
 import { t } from '@/lib/i18n';
 import { PasswordCard } from './password-card';
 import { ProfileCard } from './profile-card';
@@ -25,8 +26,9 @@ type State =
     };
 
 /**
- * The customer's account (S01 screens): profile, password and signed-in devices. Read in the
- * browser, never cached; without a session the customer signs in and comes back here.
+ * The customer's account (S01 screens): profile, password, signed-in devices and the email
+ * choices of S05 (rule NT8). Read in the browser, never cached; without a session the customer
+ * signs in and comes back here.
  */
 export function AccountPage() {
   const router = useRouter();
@@ -93,6 +95,7 @@ export function AccountPage() {
           update({ sessions: state.sessions.filter((session) => session.token !== token) })
         }
       />
+      <NotificationPreferencesCard />
     </div>
   );
 }
