@@ -55,7 +55,7 @@ const STATE_TONES: Record<UsdtTransferState, NonNullable<BadgeProps['tone']>> = 
   unmatched: 'warning',
 };
 
-/** A long address or TXID, its ends kept: enough to compare, the whole in the title. */
+/** A TXID, its ends kept, the whole in the title: a hash, never compared by eye to a claim. */
 const short = (text: string) => `${text.slice(0, 6)}…${text.slice(-6)}`;
 
 /**
@@ -205,9 +205,10 @@ function TransferRow({
         <TableCell className="whitespace-nowrap">
           {t(`wallets.methods.${transfer.method}`)}
         </TableCell>
-        <TableCell>
-          <code dir="ltr" title={transfer.fromAddress}>
-            {short(transfer.fromAddress)}
+        <TableCell className="min-w-64 whitespace-normal">
+          {/* In full: look-alike addresses share their ends (address poisoning). */}
+          <code dir="ltr" className="break-all">
+            {transfer.fromAddress}
           </code>
         </TableCell>
         <TableCell className="font-medium whitespace-nowrap tabular-nums">
@@ -305,6 +306,12 @@ function ManualDepositDialog({
           {t('deposits.transfers.pickCustomer', { amount: usdtText(transfer.amountUnits) })}
         </DialogDescription>
       </DialogHeader>
+      <dl className="flex flex-col gap-1 text-sm">
+        <dt className="text-muted-foreground">{t('deposits.usdt.from')}</dt>
+        <dd className="font-medium break-all" dir="ltr">
+          <code>{transfer.fromAddress}</code>
+        </dd>
+      </dl>
       {customerId && wallet.isPending && <Skeleton className="h-24 w-full" aria-hidden="true" />}
       {wallet.isError && <FormAlert>{errorMessage(t, wallet.error)}</FormAlert>}
       {transfer.candidates.length > 0 && (
