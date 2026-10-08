@@ -20,6 +20,9 @@ export default defineConfig({
       ALTCHA_MAX_COUNTER: '20',
       // Uploaded files of the tests, git-ignored.
       FILES_ROOT: './.data/test-files',
+      // The Telegram bot is configured; a test turns it off to see the refusal.
+      TELEGRAM_BOT_USERNAME: 'vertex_test_bot',
+      TELEGRAM_WEBHOOK_SECRET: 'test-webhook-secret-0123456789abcdef',
     },
     testTimeout: 30_000,
     hookTimeout: 30_000,

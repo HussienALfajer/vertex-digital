@@ -15,7 +15,6 @@ import {
   bigint,
   boolean,
   check,
-  customType,
   index,
   integer,
   jsonb,
@@ -31,7 +30,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { customers } from './auth.js';
-import { amountUnits, currencyEnum, id, timestamps } from './columns.js';
+import { amountUnits, bytea, currencyEnum, id, timestamps } from './columns.js';
 import { storedFiles } from './files.js';
 import { exchangeRates } from './rates.js';
 import { ledgerJournals, paymentMethodEnum } from './wallet.js';
@@ -266,9 +265,6 @@ export const deposits = pgTable(
     ),
   ],
 );
-
-/** SHA-256 digests: PostgreSQL `bytea`, a Node `Buffer`. */
-const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
 
 /**
  * A receipt image of a deposit: one, or two after a clearer-receipt request; the newest is the

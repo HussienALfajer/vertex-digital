@@ -12,7 +12,8 @@
     "openapi:export": "node dist/cli/openapi.js",
     "admin:create": "node dist/cli/create-admin.js",
     "admin:reset-password": "node dist/cli/reset-password.js",
-    "admin:reset-two-factor": "node dist/cli/reset-two-factor.js"
+    "admin:reset-two-factor": "node dist/cli/reset-two-factor.js",
+    "telegram:fake-update": "node dist/cli/telegram-fake-update.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",

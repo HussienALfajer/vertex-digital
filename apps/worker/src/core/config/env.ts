@@ -37,19 +37,32 @@ export const envSchema = z
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
     /** Empty disables Sentry. */
     SENTRY_DSN: optional().pipe(z.url().optional()),
-    /** The admin alert channel (ADR 0002): off unless both are set (Q11). */
+    /**
+     * The Telegram admin bot (S05 F07, ADR 0019): its token lives here only; the API never holds
+     * it. Unset, nothing is sent to Telegram (messages are `skipped`, alerts logged).
+     */
     TELEGRAM_BOT_TOKEN: optional().pipe(
       z
         .string()
         .regex(/^\d+:[\w-]+$/)
         .optional(),
     ),
-    TELEGRAM_ALERTS_CHAT_ID: optional().pipe(
+    /** The `secret_token` the worker registers with `setWebhook`; the API's value. */
+    TELEGRAM_WEBHOOK_SECRET: optional().pipe(
       z
         .string()
-        .regex(/^-?\d+$/)
+        .regex(/^[\w-]{32,256}$/)
         .optional(),
     ),
+    /** The webhook Telegram posts updates to: `https://<store host>/api/webhooks/telegram`. */
+    TELEGRAM_WEBHOOK_URL: optional().pipe(z.url({ protocol: /^https$/ }).optional()),
+    /**
+     * How bot messages and alerts leave: `log` writes each one, with its buttons, as a JSON file
+     * under TELEGRAM_LOG_DIR and calls nothing (development and tests); `api` calls Telegram, the
+     * default and the only choice in production.
+     */
+    TELEGRAM_TRANSPORT: z.enum(['log', 'api']).optional(),
+    TELEGRAM_LOG_DIR: z.string().min(1).default('./.data/telegram'),
     /** The Bot API origin; tests point it at a local fake server. */
     TELEGRAM_API_URL: z.url().default('https://api.telegram.org'),
     /**
@@ -88,10 +101,20 @@ export const envSchema = z
     /** A BSC JSON-RPC endpoint; a provider's key goes in the URL, so it is a secret. */
     BSC_RPC_URL: optional().pipe(z.url({ protocol: /^https$/ }).optional()),
   })
-  .refine((env) => Boolean(env.TELEGRAM_BOT_TOKEN) === Boolean(env.TELEGRAM_ALERTS_CHAT_ID), {
-    message: 'TELEGRAM_BOT_TOKEN and TELEGRAM_ALERTS_CHAT_ID are set together',
-    path: ['TELEGRAM_ALERTS_CHAT_ID'],
+  .refine((env) => env.NODE_ENV !== 'production' || env.TELEGRAM_TRANSPORT !== 'log', {
+    message: 'Production sends Telegram messages through the Bot API',
+    path: ['TELEGRAM_TRANSPORT'],
   })
+  .refine(
+    (env) =>
+      (env.TELEGRAM_TRANSPORT ?? (env.NODE_ENV === 'production' ? 'api' : 'log')) !== 'api' ||
+      !env.TELEGRAM_BOT_TOKEN ||
+      Boolean(env.TELEGRAM_WEBHOOK_SECRET && env.TELEGRAM_WEBHOOK_URL),
+    {
+      message: 'TELEGRAM_WEBHOOK_SECRET and TELEGRAM_WEBHOOK_URL are required with the bot token',
+      path: ['TELEGRAM_WEBHOOK_URL'],
+    },
+  )
   .refine((env) => env.NODE_ENV !== 'production' || env.EMAIL_TRANSPORT === 'smtp', {
     message: 'Production sends email over SMTP',
     path: ['EMAIL_TRANSPORT'],
@@ -116,7 +139,12 @@ export const envSchema = z
       message: 'SMTP_HOST, SMTP_USER and SMTP_PASSWORD are required for SMTP',
       path: ['SMTP_HOST'],
     },
-  );
+  )
+  .transform((env) => ({
+    ...env,
+    TELEGRAM_TRANSPORT:
+      env.TELEGRAM_TRANSPORT ?? (env.NODE_ENV === 'production' ? ('api' as const) : ('log' as const)),
+  }));
 
 export type Env = z.infer<typeof envSchema>;
 

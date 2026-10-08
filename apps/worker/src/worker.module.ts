@@ -1,9 +1,10 @@
 import { Inject, Logger, Module, type OnApplicationBootstrap } from '@nestjs/common';
+import type { Database } from '@vertex-digital/db';
 import { LoggerModule } from 'nestjs-pino';
 import { TelegramAlerts } from './core/alerts/telegram-alerts.js';
 import { ConfigModule } from './core/config/config.module.js';
 import { ENV, type Env } from './core/config/env.js';
-import { DatabaseModule } from './core/database/database.module.js';
+import { DATABASE, DatabaseModule } from './core/database/database.module.js';
 import { Mailer } from './core/email/mailer.js';
 import { PgBossService } from './core/jobs/pg-boss.service.js';
 import { chainReadersProvider } from './jobs/deposits/chain/chain-readers.provider.js';
@@ -13,6 +14,10 @@ import { UsdtVerifyJob } from './jobs/deposits/usdt-verify.job.js';
 import { PurgeCodesJob } from './jobs/email/purge-codes.job.js';
 import { SendEmailJob } from './jobs/email/send-email.job.js';
 import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
+import { SendTelegramJob } from './jobs/telegram/send.job.js';
+import { TelegramBot } from './telegram/bot-api.js';
+import { LinkedChat } from './telegram/linked-chat.js';
+import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
 
 @Module({
   imports: [
@@ -30,16 +35,24 @@ import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
   ],
   providers: [
     {
-      provide: TelegramAlerts,
+      provide: TelegramBot,
       inject: [ENV],
       useFactory: (env: Env) =>
-        new TelegramAlerts({
+        new TelegramBot({
+          transport: env.TELEGRAM_TRANSPORT,
           botToken: env.TELEGRAM_BOT_TOKEN,
-          chatId: env.TELEGRAM_ALERTS_CHAT_ID,
           apiUrl: env.TELEGRAM_API_URL,
-          source: `worker ${env.WORKER_NAME}`,
+          logDir: env.TELEGRAM_LOG_DIR,
         }),
     },
+    { provide: LinkedChat, inject: [DATABASE], useFactory: (db: Database) => new LinkedChat(db) },
+    {
+      provide: TelegramAlerts,
+      inject: [ENV, TelegramBot, LinkedChat],
+      useFactory: (env: Env, bot: TelegramBot, chat: LinkedChat) =>
+        new TelegramAlerts({ source: `worker ${env.WORKER_NAME}` }, bot, () => chat.chatId()),
+    },
+    TelegramWebhookSetup,
     PgBossService,
     Mailer,
     HeartbeatJob,
@@ -49,6 +62,7 @@ import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
     chainReadersProvider,
     UsdtVerifyJob,
     UsdtScanJob,
+    SendTelegramJob,
   ],
 })
 export class WorkerModule implements OnApplicationBootstrap {
@@ -60,7 +74,7 @@ export class WorkerModule implements OnApplicationBootstrap {
   onApplicationBootstrap(): void {
     const logger = new Logger(WorkerModule.name);
     if (!this.alerts.enabled) {
-      logger.warn('Telegram alerts are off (TELEGRAM_BOT_TOKEN unset)');
+      logger.warn('Telegram is off (TELEGRAM_BOT_TOKEN unset): messages are skipped');
     }
     logger.log(
       `USDT: ${this.env.CHAIN_READER} readers; TRC20 ${this.env.USDT_TRC20_ADDRESS ? 'on' : 'off'}, BEP20 ${this.env.USDT_BEP20_ADDRESS ? 'on' : 'off'}`,

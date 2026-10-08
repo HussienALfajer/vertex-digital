@@ -20,6 +20,7 @@ import { HealthModule } from './modules/health/index.js';
 import { NotificationsModule } from './modules/notifications/index.js';
 import { RatesModule } from './modules/rates/index.js';
 import { SettingsModule } from './modules/settings/index.js';
+import { TelegramModule } from './modules/telegram/index.js';
 import { WalletModule } from './modules/wallet/index.js';
 
 @Module({
@@ -53,6 +54,7 @@ import { WalletModule } from './modules/wallet/index.js';
     WalletModule,
     FilesModule,
     DepositsModule,
+    TelegramModule,
     HealthModule,
   ],
   providers: [

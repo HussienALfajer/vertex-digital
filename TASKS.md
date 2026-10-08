@@ -33,22 +33,23 @@ Why four and not the spec's three: the spec's Telegram PR is too large for one r
 - [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded on the final tree), owner acceptance (2026-10-08; script budget 205 KB accepted), PR with auto-merge
 
 ## PR 3 — F07 Telegram bot foundation and its admin page · Opus 5.5 `high`
-- [ ] Contracts: `telegram.ts` (message kinds and params, link status and code schemas, `TELEGRAM_CALLBACKS` parsing within 64 bytes), error `TELEGRAM_NOT_CONFIGURED`, audit actions `telegram.*`, queue `telegram.send`; unit tests
-- [ ] Db (`/db-migration`): `telegram_links`, `telegram_link_codes`, `telegram_messages`, `telegram_updates`, `telegram_prompts`, `telegram_bot_state`; indexes (one live link, one open prompt); tests
-- [ ] Env: api `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`; worker `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_URL`, `TELEGRAM_TRANSPORT`; `TELEGRAM_ALERTS_CHAT_ID` removed; `.env.example`
-- [ ] Api `telegram` module: link status, link code, unlink, test message; `POST /api/webhooks/telegram` (constant-time secret, strict update schema, 64 KB, `update_id` dedupe, TG4 sender check, `/start <code>`, `/status`, `/stop` with confirm (on only), `/help`, prompts TG7); switch changes insert `switch_changed` (SW2, AL2); tests
-- [ ] Worker: `telegram.send` (log transport to `.data/telegram/`, 429 `retry_after`, 403 no retry, skipped without a link, safe twice), `setWebhook` at start, `TelegramAlerts` to the linked chat (cached 60 s)
-- [ ] CLI `telegram:fake-update`; commands table in `AGENTS.md`
-- [ ] nginx: webhook location limited to Telegram ranges, 64 KB; `docs/deployment.md` (bot creation, webhook)
+Only what the foundation uses: the deposit columns of `telegram_prompts`, `telegram_bot_state`, the message kinds `usdt_unmatched`, `review_reminder`, `daily_summary`, the prompt kinds `approve_*`/`reject_note` and the callbacks `ap:`, `rj:`, `rr:` arrive with PR 4.
+- [x] Contracts: `telegram.ts` (message kinds, statuses and params, bot replies, stop scopes, prompt kind `stop_confirm`, `TELEGRAM_CALLBACKS` `st:`/`ok:`/`no:` within 64 bytes, link status and code schemas, the webhook's update subset), error `TELEGRAM_NOT_CONFIGURED`, audit actions `telegram.link_code_created`, `telegram.linked`, `telegram.unlinked` and entity `telegram_link`, queue `telegram.send`; unit tests (100%)
+- [x] Db (`/db-migration`): `telegram_links` (one live link), `telegram_link_codes`, `telegram_messages` (outbox, `chat_id` for a reply to an unlinked chat), `telegram_updates`, `telegram_prompts` (one open prompt); `queueTelegramMessage` in `packages/db/src/telegram`; tests
+- [x] Env: api `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`; worker `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_URL`, `TELEGRAM_TRANSPORT`, `TELEGRAM_LOG_DIR`; `TELEGRAM_ALERTS_CHAT_ID` removed; `.env.example`
+- [x] Api `telegram` module: link status, link code, unlink, test message; `POST /api/webhooks/telegram` (constant-time secret, update subset schema, 64 KB, `update_id` dedupe, TG4 sender check, `/start <code>`, `/status`, `/stop` with confirm (on only), `/help`, prompts TG7); switch changes queue `switch_changed` (SW2, AL2); tests
+- [x] Worker: `telegram.send` (log transport to `.data/telegram/`, 429 `retry_after`, 403 no retry, skipped without a link, safe twice), `setWebhook` at start, `TelegramAlerts` to the linked chat (cached 60 s); tests
+- [x] CLI `telegram:fake-update`; commands table in `AGENTS.md`
+- [x] nginx: webhook location limited to Telegram ranges, 64 KB; `docs/deployment.md` (bot creation, webhook)
 - [ ] Bridge
 - [ ] Admin: `/settings/telegram` (not configured; not linked with deep link, QR, countdown and polling; linked with test and unlink), navigation; i18n
 - [ ] E2E: `/settings/telegram` in its three states (light and dark)
-- [ ] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md`)
+- [ ] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md`, spec details settled)
 - [ ] Checks, reviewer, owner acceptance, PR with auto-merge
 
 ## PR 4 — F07 deposit cards, decisions, reminder, summary · Opus 5.5 `high`
-- [ ] Contracts: queues `telegram.deposit-card`, `telegram.review-reminder`, `telegram.daily-summary`; reminder due computation; settings `telegramApprovalMaxUsdUnits`; unit tests
-- [ ] Db (`/db-migration`): `telegram_deposit_cards`; `deposit_settings.telegram_approval_max_usd_units` with its check; tests
+- [ ] Contracts: queues `telegram.deposit-card`, `telegram.review-reminder`, `telegram.daily-summary`; message kinds `usdt_unmatched`, `review_reminder`, `daily_summary`; prompt kinds `approve_number`, `approve_confirm`, `reject_note`; callbacks `ap:`, `rj:`, `rr:`; reminder due computation; settings `telegramApprovalMaxUsdUnits`; unit tests
+- [ ] Db (`/db-migration`): `telegram_deposit_cards`, `telegram_bot_state`, the deposit columns of `telegram_prompts`, the new enum values; `deposit_settings.telegram_approval_max_usd_units` with its check; tests
 - [ ] Api: deposits queue `telegram.deposit-card` on submission, review, decisions, expiry, cancellation, receipt request (TC1, TC6); approve from Telegram through the S03 service (TC4, channel `telegram`, `telegram:<promptId>`, re-checks); reject (TC5) for Sham Cash and USDT; deposit settings field; tests (Telegram confirm vs panel approval → one journal, audit, notification, email; same prompt twice → one credit; flagged, over limit, limit 0, changed submission, USDT refused)
 - [ ] Worker: `telegram.deposit-card` (send, edit, new card per submission, JPEG receipt), `usdt_unmatched` from the scanner (TC7), `telegram.review-reminder` (RM1–RM4, cleanup of updates and prompts), `telegram.daily-summary` (AL3); tests with fixed instants
 - [ ] Bridge

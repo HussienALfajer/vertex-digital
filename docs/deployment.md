@@ -4,7 +4,7 @@ Production runs on the owner's VPS (`ssh vertex`), shared with other sites, foll
 
 Server work needs the owner's explicit approval in the current conversation (AGENTS.md). Deploys happen once per phase, in their own session (`docs/workflow.md`).
 
-Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`); the health timer is on. Sentry (Q15) and the Telegram alerts (Q11) are not configured yet: add their values to `shared/.env` when decided.
+Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`); the health timer is on. Sentry (Q15) is not configured yet: add its DSN to `shared/.env` when decided. The Telegram bot (S05, ADR 0019) is set up as "Telegram admin bot" below says.
 
 ## Layout
 
@@ -48,6 +48,8 @@ Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`)
 | store | `/api/auth/sign-in/email` | API, 30 a minute per address (burst 10) |
 | store | `/api/deposits/{sham-cash,usdt}`, `/api/deposits/:id/txid` | API, 10 a minute per address (burst 5) |
 | store | `/api/deposits/:id/receipt` | API, bodies up to 6 MB, the upload limit |
+| store | `/api/notifications/stream` | API, unbuffered, open up to an hour (S05 server-sent events) |
+| store | `/api/webhooks/telegram` (any case) | API from Telegram's webhook ranges only (149.154.160.0/20, 91.108.4.0/22), bodies up to 64 KB |
 | store | `/api/*` | API |
 | store | everything else | store (Next.js) |
 | admin | `/assets/*` | disk, cached a year |
@@ -143,7 +145,7 @@ Backups stay on the server until an off-server destination is chosen. That is re
 Done on 2026-10-07 (ports 3060 and 3061 confirmed free in `/root/SERVER.md`, both A records added at Hostinger). For a rebuilt server, in a deploy session with the owner:
 1. Read `/root/SERVER.md` on the server and confirm the ports 3060 (API) and 3061 (store) are free in its port map; if not, change them in every file listed in `deploy/CLAUDE.md`.
 2. Confirm the server address in `provision.sh` (`SERVER_IP`, the address of `ssh vertex`) and point both DNS records (`digital`, `digital-admin` under `vertexmedia.pro`) at it.
-3. Confirm the Sentry account (open question Q15); its DSN goes into `shared/.env` after provisioning (`SENTRY_DSN`), and the Telegram alert values (Q11) the same way.
+3. Confirm the Sentry account (open question Q15); its DSN goes into `shared/.env` after provisioning (`SENTRY_DSN`); the Telegram bot as "Telegram admin bot" below says.
 
 Then, from a checkout:
 
@@ -162,3 +164,11 @@ ssh vertex "systemctl enable --now vertexdigital-health.timer"
 - Secrets: edit `shared/.env` on the server as `vertexdigital`, then `pm2 reload all --update-env`. Rotating `CUSTOMER_AUTH_SECRET` or `ADMIN_AUTH_SECRET` signs everyone out (the admin secret also encrypts the TOTP secret: rotating it means the admin enrols again).
 - USDT receiving addresses (S04, ADR 0018): `USDT_TRC20_ADDRESS` and `USDT_BEP20_ADDRESS` in `shared/.env`, the owner's own wallets (never a private key). Empty leaves that network unavailable; a value that fails its checksum stops the API from starting, so check the log after the reload. Change an address only when no USDT deposit is open (the panel's queue and pending count are empty): open deposits keep the address they showed, and a transfer to an old address is then caught only by its TXID. The panel shows the addresses read-only and cannot change them. The worker checks the same addresses at boot and refuses a bad one too.
 - Chain readers (S04 PR 2), in the worker's environment: `CHAIN_READER=live` (production refuses `fake`), `TRONGRID_API_KEY` (required when the TRC20 address is set; `TRONGRID_API_URL` defaults to `https://api.trongrid.io`) and `BSC_RPC_URL` (an HTTPS JSON-RPC endpoint of a BSC provider, required when the BEP20 address is set; a provider's key is part of the URL, so treat it as a secret). The provider must allow `eth_getLogs` over 1,000 blocks and the `finalized` block tag. After the reload, the panel's deposit settings show each network's last scan: a network stays `delayed` (new USDT deposits wait) until its scanner has caught up.
+
+### Telegram admin bot (S05, ADR 0019)
+1. The owner creates the bot with BotFather (`/newbot`) and keeps its token private.
+2. In `shared/.env`: `TELEGRAM_BOT_TOKEN` (the worker only reads it; the API never does), `TELEGRAM_BOT_USERNAME` (without `@`), `TELEGRAM_WEBHOOK_SECRET` (`openssl rand -hex 32`, read by both) and `TELEGRAM_WEBHOOK_URL=https://digital.vertexmedia.pro/api/webhooks/telegram`. `TELEGRAM_TRANSPORT` defaults to `api` in production (`log` is refused there). Remove the former `TELEGRAM_ALERTS_CHAT_ID`: it is ignored.
+3. `pm2 reload all --update-env`: at start the worker calls `setWebhook` with the URL, the secret and the update kinds `message` and `callback_query` (every start, idempotent; a failure is logged and retried at the next start).
+4. In the panel, `/settings/telegram` → "ربط تيليجرام" (re-authentication), then open the link on the owner's phone and press Start. The page turns to linked; "إرسال رسالة اختبار" checks the whole path.
+
+nginx accepts the webhook only from Telegram's published ranges (`deploy/nginx/digital.vertexmedia.pro`); recheck them at core.telegram.org/bots/webhooks when Telegram announces a change, then re-run `provision.sh`. Rotating the secret: change it in `shared/.env` and reload; the worker registers the new one. A leaked token: revoke it in BotFather (`/revoke`), set the new one and reload.

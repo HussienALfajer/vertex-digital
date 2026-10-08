@@ -63,6 +63,19 @@ server {
         proxy_read_timeout 1h;
     }
 
+    # The Telegram bot's webhook (S05 rules TG2, TG4): Telegram's published webhook ranges only
+    # (core.telegram.org/bots/webhooks; recheck them when Telegram announces a change), bodies up
+    # to 64 KB. The API also checks the secret header and the linked user and chat. Regex, so any
+    # letter case or a trailing slash, which the API also routes here, cannot step around it.
+    location ~* ^/api/webhooks/telegram/?$ {
+        allow 149.154.160.0/20;
+        allow 91.108.4.0/22;
+        deny all;
+        client_max_body_size 64k;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Password guessing: a tight limit on the sign-in endpoint on top of Better Auth's own.
     # Regex, so any letter case or a trailing slash cannot step around it.
     # The same for the routes that send or check an email code or a password (S01): sign-up,

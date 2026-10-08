@@ -3,12 +3,16 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { scrubBreadcrumb } from '../src/core/alerts/scrub-breadcrumb.js';
 import { TelegramAlerts } from '../src/core/alerts/telegram-alerts.js';
+import { TelegramBot } from '../src/telegram/bot-api.js';
 
-/* The admin alert channel against a local fake Bot API: nothing calls Telegram in tests. */
+/*
+ * The admin alert channel against a local fake Bot API: nothing calls Telegram in tests. The chat
+ * is the live link's (S05 rule AL1), given here by a function.
+ */
 
 interface Received {
   path: string;
-  body: { chat_id: string; text: string };
+  body: { chat_id: number; text: string };
 }
 
 let server: Server;
@@ -39,22 +43,26 @@ beforeEach(() => {
   status = 200;
 });
 
-const channel = () =>
-  new TelegramAlerts({ botToken: '123:abc', chatId: '-100200', apiUrl, source: 'worker test' });
+/** `null`: no token. */
+const bot = (url = apiUrl, botToken: string | null = '123:abc') =>
+  new TelegramBot({ transport: 'api', botToken: botToken ?? undefined, apiUrl: url, logDir: '' });
+
+const channel = (chatId: number | null = 4200) =>
+  new TelegramAlerts({ source: 'worker test' }, bot(), async () => chatId);
 
 describe('Telegram alerts', () => {
-  it('send to the configured chat through the Bot API', async () => {
+  it('send to the linked chat through the Bot API', async () => {
     expect(await channel().send('Supplier wdgzone is down')).toBe(true);
     expect(received).toEqual([
       {
         path: '/bot123:abc/sendMessage',
-        body: { chat_id: '-100200', text: '[worker test] Supplier wdgzone is down' },
+        body: { chat_id: 4200, text: '[worker test] Supplier wdgzone is down' },
       },
     ]);
   });
 
   it('are off without a token, and send nothing', async () => {
-    const off = new TelegramAlerts({ apiUrl, source: 'worker test' });
+    const off = new TelegramAlerts({ source: 'worker test' }, bot(apiUrl, null), async () => 1);
     expect(off.enabled).toBe(false);
     expect(await off.send('anything')).toBe(false);
     expect(received).toEqual([]);
@@ -84,13 +92,17 @@ describe('Telegram alerts', () => {
   it('never throw when Telegram refuses or cannot be reached', async () => {
     status = 401;
     expect(await channel().send('refused')).toBe(false);
-    const unreachable = new TelegramAlerts({
-      botToken: '123:abc',
-      chatId: '-100200',
-      apiUrl: 'http://127.0.0.1:9',
-      source: 'worker test',
-    });
+    const unreachable = new TelegramAlerts(
+      { source: 'worker test' },
+      bot('http://127.0.0.1:9'),
+      async () => 4200,
+    );
     expect(await unreachable.send('unreachable')).toBe(false);
+  });
+
+  it('are logged and dropped while no chat is linked', async () => {
+    expect(await channel(null).send('nobody linked')).toBe(false);
+    expect(received).toEqual([]);
   });
 
   it('never reach Sentry with the token: request breadcrumbs are scrubbed', () => {

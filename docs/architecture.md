@@ -35,7 +35,7 @@ vertex-digital/
 | Store | Next.js 16 App Router, Server Components, Cache Components, Motion, PWA | 0002 |
 | Admin | React 19, Vite, TanStack Router / Query / Table, React Hook Form | 0002 |
 | API | NestJS 12, native Standard Schema validation, OpenAPI | 0002 |
-| Worker | NestJS standalone, pg-boss consumer, Telegram Bot API (long polling), Nodemailer | 0002 |
+| Worker | NestJS standalone, pg-boss consumer, Telegram Bot API (sends only; updates reach the API's webhook, ADR 0019), Nodemailer | 0002, 0019 |
 | Database | PostgreSQL 17, Drizzle ORM and drizzle-kit migrations | 0002, 0011 |
 | Auth | Better Auth: customer instance (email OTP) and admin instance (one account, mandatory TOTP) | 0007, 0016 |
 | Jobs | pg-boss, enqueued in the same transaction as the change | 0002, 0004 |
@@ -53,12 +53,12 @@ vertex-digital/
 
 ## API modules
 
-Planned; each spec confirms its module's tables and exports. Built so far: `auth`, `admin`, `audit`, `notifications` (S01) and `health`.
+Planned; each spec confirms its module's tables and exports. Built so far: `auth`, `admin`, `audit`, `notifications` (S01, S05), `wallet` (S02), `rates`, `files`, `deposits` (S03, S04), `settings`, `telegram` (S05) and `health`.
 
 | Module | Owns | Feature |
 |---|---|---|
 | `auth` | Customer Better Auth tables, `customer_rate_limits` (code and sign-up counters), account changes (Nest routes in front of Better Auth under `/api/auth`, so each change is audited in its transaction), `/api/account`, test customers | F01 |
-| `admin` | The admin Better Auth tables (one account, ADR 0016), the CLI account functions, the password change, re-authentication and own sessions; Telegram link later | F02, F07 |
+| `admin` | The admin Better Auth tables (one account, ADR 0016), the CLI account functions, the password change, re-authentication and own sessions | F02 |
 | `audit` | Reads `audit_entries` for the audit log; every module writes its entries with `recordAudit` from `packages/db/src/audit`, in its own transaction | F02 |
 | `wallet` | Ledger accounts, journals, postings (through `packages/db/src/ledger`), `wallet_adjustments`, `payment_references` (each real payment's reference claimed once, through `claimPaymentReference`); balances with their SYP value and timelines (`/api/wallet`), the admin wallet screens, adjustments and reversals, the ledger summary | F03, F04 |
 | `rates` | `exchange_rates` (append-only: the rate and display step, the newest row is in force); `/api/admin/rates` (history, change with re-authentication); `RatesService.current()` for other modules. Quote locks live on the deposit (S03) | F04 |
@@ -76,6 +76,7 @@ Planned; each spec confirms its module's tables and exports. Built so far: `auth
 | `support` | Tickets, messages, attachments | F23 |
 | `notifications` | `email_outbox` (S01), `customer_notifications` (only `read_at` changes, never deleted), `notification_preferences` (S05; web push subscriptions arrive with F24). Every customer event is written by `notifyCustomer` in `packages/db/src/notifications` in the transaction of the change (the row, the email unless the customer turned it off, `pg_notify` at commit), called through `NotificationsService.notifyCustomer` by `deposits` and `wallet` and directly by the worker. `/api/notifications` (list, `read`, and `stream`: SSE fanned out from one `LISTEN customer_notifications` connection per API process, 3 streams per customer, session re-checked through the access guard), `/api/account/notification-preferences` | F01, F24, F27 |
 | `settings` | `store_switch_changes` (append-only: a change is a row, the newest is the value): registration, the emergency stop (purchases, deposits), a pause per deposit method; the per-supplier switch arrives with S07. `/api/store/status` (public), `/api/admin/switches` (change with re-authentication, history); `SettingsService.values()` for other modules, `valuesForDepositCreation(tx)` under the switches' shared lock (S05 rule SW5). Below the domain modules: it imports none | F26 |
+| `telegram` | `telegram_links` (one live link; history kept), `telegram_link_codes` (single-use, SHA-256 only), `telegram_messages` (the bot's outbox, sent by the worker's `telegram.send`), `telegram_updates` (handled update ids), `telegram_prompts` (one open bot question). `/api/admin/telegram` (status, link code and unlink with re-authentication, test message); `POST /api/webhooks/telegram` (secret header, Telegram's ranges in nginx, the linked user and chat): `/start <code>`, `/status`, `/stop` with a confirmation (stops on only, through `SettingsService.changeIn` with the channel `telegram`), `/help`. A domain module above `deposits` (`DepositReviewService.waitingCounts`) and `settings`; other modules queue bot messages with `queueTelegramMessage` from `packages/db/src/telegram` (the switch notices do), never through it. The API never calls Telegram (ADR 0019) | F07 |
 | `activity` | Anonymized live activity feed built from delivered orders | F25 |
 | `files` | `stored_files` (append-only) and the files under `FILES_ROOT`: uploads decoded with a pixel limit, stripped of metadata and re-encoded (receipts WebP, QR images PNG), with SHA-256 and dHash; `FilesService` (`prepare` before a transaction, `record` inside it, `serve` with `X-Accel-Redirect` in production). No routes of its own | F05, F23 |
 | `health` | No tables; `GET /api/health` for nginx, PM2 and the deploy checks | Phase 0 |
@@ -96,7 +97,7 @@ Rules (anatomy and the tests that enforce them: ADR 0011):
 | Suppliers | `suppliers.webhook` (process stored events), `suppliers.sync-prices` (A06), `suppliers.balances` (A07), `suppliers.health` (A08) |
 | Deposits | `deposits.expire` (S03 rule SC12: every 5 minutes, overdue `pending` deposits to `expired`), `deposits.usdt-verify` (S04 rules U9–U11: one deposit's TXID, `stately` per deposit, re-sent by itself with `startAfter`: 15 s, then 60 s after 5 minutes of search, 10 s while confirming; credits an exact final match, sends a mismatch to review, bounces a failed TXID) and `deposits.usdt-scan` (rule U12: a network's final incoming transfers since its cursor, `stately` per network, every 20 s while a USDT deposit is open and every 5 minutes otherwise; credits the one exact pending deposit, alerts when stale, restarts a lost verification), both reading through the chain readers in `apps/worker/src/jobs/deposits/chain/` (`ChainReader`: TronGrid, BSC JSON-RPC, and the `fake` chain file for development), `deposits.review-reminder` (A09) |
 | Money | `reconciliation.nightly` (A11) |
-| Messaging | `email.send` (one outbox row; files locally, SMTP in production), `email.purge-codes` (every 10 minutes), `push.send`, `telegram.*` (admin bot, alerts, daily summary) |
+| Messaging | `email.send` (one outbox row; files locally, SMTP in production), `email.purge-codes` (every 10 minutes), `push.send`, `telegram.send` (S05: one `telegram_messages` row to its chat or the live link; files under `TELEGRAM_LOG_DIR` locally, the Bot API in production; a `429` waits its `retry_after`, a `403` fails at once); later `telegram.*` (deposit cards, review reminder, daily summary). At start the worker registers the webhook (`setWebhook`). Alerts (`TelegramAlerts`) go straight to the linked chat, read through `LinkedChat` (cached 60 s) |
 | System | `system.heartbeat` (every minute: `worker_heartbeats`, read by the deploy check) |
 
 ## Request flow
@@ -105,6 +106,7 @@ Rules (anatomy and the tests that enforce them: ADR 0011):
 Customer browser ──HTTPS──> nginx (digital.vertexmedia.pro)
    ├── /_next/static, images  → served from disk, immutable cache
    ├── /api/admin/*           → 404 (any letter case)
+   ├── /api/webhooks/telegram → API from Telegram's ranges only, 64 KB (secret header, linked chat)
    ├── /api/webhooks/*        → API (supplier HMAC, IP allowlist)
    ├── /api/*                 → API 127.0.0.1 (SSE without buffering)
    └── /*                     → store (Next.js) 127.0.0.1, proxy_cache for anonymous catalog pages

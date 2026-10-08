@@ -45,6 +45,11 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   customer_notifications: 'A delivery record (S05 NT1): only read_at changes, never archived',
   notification_preferences: "A customer's email choice (S05 NT8): overwritten, never archived",
   store_switch_changes: 'Append-only (S05): a change is a new row, the newest is the value',
+  telegram_links: 'A link history (S05 TG3): ended by unlinked_at, never archived',
+  telegram_link_codes: 'Short-lived one-time codes (S05 TG3): used once or expired',
+  telegram_messages: 'A delivery record (S05 F07): its status changes, it is never archived',
+  telegram_updates: 'Handled Telegram update ids (S05 TG5): pruned after 7 days',
+  telegram_prompts: 'The bot question of the moment (S05 TG7): closed, never archived',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -52,6 +57,7 @@ const NATURAL_KEYS: Record<string, string> = {
   worker_heartbeats: 'Keyed by the worker name: one row per process, upserted by the heartbeat',
   usdt_deposits: 'Keyed by its deposit: one row per USDT deposit (S04)',
   usdt_scan_cursors: 'Keyed by the network: one cursor per scanner (S04)',
+  telegram_updates: "Keyed by Telegram's update id: one row per handled update (S05 TG5)",
 };
 
 /**

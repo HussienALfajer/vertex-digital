@@ -15,6 +15,7 @@ import {
 import {
   type Database,
   newId,
+  queueTelegramMessage,
   recordAudit,
   storeSwitchChanges,
   type Transaction,
@@ -22,6 +23,7 @@ import {
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
+import { JobsService } from '../../core/jobs/index.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 
 /**
@@ -46,7 +48,10 @@ interface SwitchState {
  */
 @Injectable()
 export class SettingsService {
-  constructor(@Inject(DATABASE) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly jobs: JobsService,
+  ) {}
 
   /** Every switch's current value: its newest row, or its default. */
   async values(executor: Executor = this.db): Promise<StoreSwitchValues> {
@@ -82,9 +87,9 @@ export class SettingsService {
   }
 
   /**
-   * Rule SW2: under the switches lock, a change to a new value writes its row and its audit entry
-   * in one transaction; a change to the current value writes nothing. Re-authentication and the
-   * channel's limits (rule SW3) are the caller's.
+   * Rule SW2: under the switches lock, a change to a new value writes its row, its audit entry and
+   * its Telegram notice (rule AL2) in one transaction; a change to the current value writes
+   * nothing. Re-authentication and the channel's limits (rule SW3) are the caller's.
    */
   async change(
     adminId: string,
@@ -93,32 +98,48 @@ export class SettingsService {
     meta: RequestMeta,
   ): Promise<AdminSwitches> {
     return this.db.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(${SWITCHES_KEY})`);
-      const before = (await this.values(tx))[input.switch];
-      if (before !== input.value) {
-        const id = newId();
-        await tx.insert(storeSwitchChanges).values({
-          id,
-          switch: input.switch,
-          value: input.value,
-          adminId,
-          channel,
-        });
-        await recordAudit(tx, {
-          action: 'store_switch.changed',
-          actorKind: 'admin',
-          actorId: adminId,
-          channel,
-          entityType: 'store_switch',
-          entityId: id,
-          reason: null,
-          ipAddress: meta.ipAddress,
-          userAgent: meta.userAgent,
-          details: { switch: input.switch, before, after: input.value },
-        });
-      }
+      await this.changeIn(tx, adminId, input, channel, meta);
       return this.adminSwitches(tx);
     });
+  }
+
+  /** `change` inside the caller's transaction (the Telegram stop, rule AL4); true if it changed. */
+  async changeIn(
+    tx: Transaction,
+    adminId: string,
+    input: ChangeSwitch,
+    channel: SwitchChannel,
+    meta: RequestMeta,
+  ): Promise<boolean> {
+    await tx.execute(sql`select pg_advisory_xact_lock(${SWITCHES_KEY})`);
+    const before = (await this.values(tx))[input.switch];
+    if (before === input.value) return false;
+    const id = newId();
+    await tx.insert(storeSwitchChanges).values({
+      id,
+      switch: input.switch,
+      value: input.value,
+      adminId,
+      channel,
+    });
+    await recordAudit(tx, {
+      action: 'store_switch.changed',
+      actorKind: 'admin',
+      actorId: adminId,
+      channel,
+      entityType: 'store_switch',
+      entityId: id,
+      reason: null,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+      details: { switch: input.switch, before, after: input.value },
+    });
+    await queueTelegramMessage(tx, this.jobs, {
+      kind: 'switch_changed',
+      params: { switch: input.switch, value: input.value, channel },
+      dedupeKey: `switch:${id}`,
+    });
+    return true;
   }
 
   /** `GET /api/admin/switches/history`: newest first, one switch or all. */

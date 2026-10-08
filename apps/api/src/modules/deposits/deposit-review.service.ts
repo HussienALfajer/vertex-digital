@@ -205,6 +205,24 @@ export class DepositReviewService {
     };
   }
 
+  /**
+   * What waits for the admin (S05 rule RM2, the bot's `/status`): Sham Cash deposits submitted and
+   * USDT deposits in review; and the open unmatched transfers.
+   */
+  async waitingCounts(): Promise<{ waiting: number; unmatchedTransfers: number }> {
+    const [counts, [shamCash]] = await Promise.all([
+      this.counts(),
+      this.db
+        .select({ count: count() })
+        .from(deposits)
+        .where(and(eq(deposits.status, 'submitted'), eq(deposits.method, 'sham_cash'))),
+    ]);
+    return {
+      waiting: (shamCash?.count ?? 0) + counts.usdtReview,
+      unmatchedTransfers: counts.unmatchedTransfers,
+    };
+  }
+
   /** `GET /api/admin/deposits/:id`. */
   async deposit(id: string): Promise<AdminDeposit> {
     const [row] = isUuid(id)
