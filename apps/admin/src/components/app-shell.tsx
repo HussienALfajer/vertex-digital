@@ -27,6 +27,7 @@ import {
   MenuIcon,
   ScrollTextIcon,
   SettingsIcon,
+  ToggleRightIcon,
   UserRoundCogIcon,
   UsersRoundIcon,
   WalletIcon,
@@ -35,6 +36,7 @@ import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { depositCountsQuery } from '../features/deposits/deposits.queries';
 import { StaleRateBanner } from '../features/rates/stale-rate-banner';
+import { SwitchesBanner } from '../features/settings/switches-banner';
 import { type AdminSession, authClient, leaveSession, useSession } from '../lib/auth';
 import { ThemeToggle } from './theme-toggle';
 
@@ -47,6 +49,7 @@ interface NavItem {
     | 'nav.wallets'
     | 'nav.rates'
     | 'nav.depositSettings'
+    | 'nav.switches'
     | 'nav.audit'
     | 'nav.testCustomers'
     | 'nav.account';
@@ -70,6 +73,7 @@ const navItems: NavItem[] = [
   { to: '/wallets', label: 'nav.wallets', icon: WalletIcon },
   { to: '/rates', label: 'nav.rates', icon: ArrowLeftRightIcon },
   { to: '/settings/deposits', label: 'nav.depositSettings', icon: SettingsIcon },
+  { to: '/settings/switches', label: 'nav.switches', icon: ToggleRightIcon },
   { to: '/audit', label: 'nav.audit', icon: ScrollTextIcon },
   { to: '/test-customers', label: 'nav.testCustomers', icon: UsersRoundIcon },
   { to: '/account', label: 'nav.account', icon: UserRoundCogIcon },
@@ -94,6 +98,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <TopBar session={session} />
         <main id="main" tabIndex={-1} className="flex-1 outline-none">
           <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 md:px-8">
+            <SwitchesBanner />
             <StaleRateBanner />
             {children}
           </div>
