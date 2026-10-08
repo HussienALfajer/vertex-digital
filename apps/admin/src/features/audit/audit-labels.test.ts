@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import i18n from '../../i18n';
 import ar from '../../i18n/locales/ar.json';
-import { fieldValue } from './audit-labels';
+import { changesOf, fieldValue, flatDetails } from './audit-labels';
 
 const t = i18n.t.bind(i18n);
 
@@ -40,5 +40,38 @@ describe('fieldValue', () => {
     expect(fieldValue(t, 'amountUnits', '25')).toBe('25');
     expect(fieldValue(t, 'depositMethod', null)).toBe('—');
     expect(fieldValue(t, 'count', 3)).toBe('3');
+  });
+});
+
+describe('margin rules in the audit log (S06)', () => {
+  const values = { percentBp: 1200, fixedUsdUnits: 0, minMarginUsdUnits: 150_000 };
+
+  it('shows a new rule as a change from nothing', () => {
+    expect(changesOf({ scope: 'category', targetId: 'x', before: null, after: values })).toEqual({
+      before: {},
+      after: values,
+    });
+    expect(changesOf({ before: values, after: values })).toEqual({ before: values, after: values });
+    expect(changesOf({ name: 'a' })).toBeNull();
+    expect(changesOf({ before: null, after: null })).toBeNull();
+    expect(changesOf({ before: 'x', after: values })).toBeNull();
+  });
+
+  it('shows an archived rule value by value, in dollars and percent', () => {
+    const fields = flatDetails({ scope: 'product', targetId: 'x', values });
+    expect(fields.map(([key]) => key)).toEqual([
+      'scope',
+      'targetId',
+      'percentBp',
+      'fixedUsdUnits',
+      'minMarginUsdUnits',
+    ]);
+    expect(fields.map(([key, value]) => fieldValue(t, key, value))).toEqual([
+      ar.pricing.scopes.product,
+      'x',
+      '12%',
+      '$0.00',
+      '$0.15',
+    ]);
   });
 });

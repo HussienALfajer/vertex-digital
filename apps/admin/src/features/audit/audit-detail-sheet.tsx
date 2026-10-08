@@ -14,15 +14,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopyButton } from '../../components/copy-button';
 import { formatExactTime } from '../../lib/format';
-import { actorLabel, fieldLabel, fieldValue } from './audit-labels';
-
-type Changes = { before: Record<string, unknown>; after: Record<string, unknown> };
-
-const isChanges = (details: Record<string, unknown>): details is Changes =>
-  typeof details.before === 'object' &&
-  details.before !== null &&
-  typeof details.after === 'object' &&
-  details.after !== null;
+import { actorLabel, changesOf, fieldLabel, fieldValue, flatDetails } from './audit-labels';
 
 /** One audit entry in full (rule A4): labelled before and after values, IP and browser. */
 export function AuditDetailSheet({
@@ -89,8 +81,9 @@ function Item({ label, children }: { label: string; children: ReactNode }) {
 
 function Details({ details }: { details: Record<string, unknown> }) {
   const { t } = useTranslation();
-  if (isChanges(details)) {
-    const keys = [...new Set([...Object.keys(details.before), ...Object.keys(details.after)])];
+  const changes = changesOf(details);
+  if (changes) {
+    const keys = [...new Set([...Object.keys(changes.before), ...Object.keys(changes.after)])];
     return (
       <Table>
         <TableHeader>
@@ -105,10 +98,10 @@ function Details({ details }: { details: Record<string, unknown> }) {
             <TableRow key={key}>
               <TableHead scope="row">{fieldLabel(t, key)}</TableHead>
               <TableCell className="break-all">
-                <bdi dir="auto">{fieldValue(t, key, details.before[key])}</bdi>
+                <bdi dir="auto">{fieldValue(t, key, changes.before[key])}</bdi>
               </TableCell>
               <TableCell className="break-all">
-                <bdi dir="auto">{fieldValue(t, key, details.after[key])}</bdi>
+                <bdi dir="auto">{fieldValue(t, key, changes.after[key])}</bdi>
               </TableCell>
             </TableRow>
           ))}
@@ -116,8 +109,8 @@ function Details({ details }: { details: Record<string, unknown> }) {
       </Table>
     );
   }
-  const keys = Object.keys(details);
-  if (keys.length === 0) {
+  const fields = flatDetails(details);
+  if (fields.length === 0) {
     return <p className="text-sm text-muted-foreground">{t('audit.detail.noDetails')}</p>;
   }
   return (
@@ -125,10 +118,10 @@ function Details({ details }: { details: Record<string, unknown> }) {
       <h3 className="text-base font-bold">{t('audit.detail.details')}</h3>
       <dl className="flex flex-col gap-3">
         {/* `dir="auto"` keeps emails, phone numbers and amounts left to right. */}
-        {keys.map((key) => (
+        {fields.map(([key, value]) => (
           <Item key={key} label={fieldLabel(t, key)}>
             <bdi dir="auto" className="break-all">
-              {fieldValue(t, key, details[key])}
+              {fieldValue(t, key, value)}
             </bdi>
           </Item>
         ))}
