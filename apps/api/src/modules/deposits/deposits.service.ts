@@ -40,7 +40,7 @@ import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
-import { AuthService } from '../auth/index.js';
+import { AuthService, withinLimits } from '../auth/index.js';
 import { FilesService, type ServedFile } from '../files/index.js';
 import { type CurrentRate, RatesService } from '../rates/index.js';
 import {
@@ -55,6 +55,8 @@ import { type CurrentSettings, DepositSettingsService } from './deposit-settings
 
 /** Thrown inside the create transaction when its key committed first: answered as a replay. */
 class AlreadyCreated extends Error {}
+
+const HOUR_MS = 60 * 60 * 1000;
 
 const rateLimited = () =>
   new CodedException(429, 'RATE_LIMITED', 'Too many deposit requests; retry later');
@@ -296,18 +298,20 @@ export class DepositsService {
     rateId: string | undefined,
     meta: RequestMeta,
   ): Promise<Deposit> {
-    const [uploads] = await this.db
-      .select({ count: count() })
-      .from(depositReceipts)
-      .innerJoin(deposits, eq(deposits.id, depositReceipts.depositId))
-      .where(
-        and(
-          eq(deposits.customerId, customerId),
-          sql`${depositReceipts.createdAt} > now() - interval '1 hour'`,
-        ),
-      );
-    if ((uploads?.count ?? 0) >= RECEIPT_UPLOADS_PER_HOUR) throw rateLimited();
-    await this.read(customerId, id);
+    // Every attempt counts, refused or not: an upload costs a decode and a file (rule SC6).
+    const allowed = await withinLimits(this.db, [
+      { key: `deposit-receipt:${customerId}`, max: RECEIPT_UPLOADS_PER_HOUR, windowMs: HOUR_MS },
+    ]);
+    if (!allowed) throw rateLimited();
+    // Refused before the image is decoded or written: only an open deposit gets a file.
+    const [current] = isUuid(id)
+      ? await this.db
+          .select()
+          .from(deposits)
+          .where(and(eq(deposits.id, id), eq(deposits.customerId, customerId)))
+      : [];
+    if (!current) throw notFound();
+    await this.checkSubmittable(this.db, current, rateId);
     const prepared = await this.files.prepare('deposit_receipt', upload);
     const [settings, sharedWith] = await Promise.all([
       this.settings.current(),
@@ -315,12 +319,8 @@ export class DepositsService {
     ]);
     const row = await this.db.transaction(async (tx) => {
       const deposit = await lockDeposit(tx, id, eq(deposits.customerId, customerId));
-      if (!(await isOpen(tx, deposit))) throw stateConflict(openStatus(deposit));
-      const fixing = deposit.currency === 'SYP' && deposit.rateFixedAt === null;
-      if (fixing) {
-        const valid = await isTrue(tx, deposit.id, sql`${deposits.quoteExpiresAt} > now()`);
-        if (!valid || rateId !== deposit.rateId) await this.refuseExpiredQuote(deposit);
-      }
+      // Again under the lock: the expiry job or a requote may have committed meanwhile.
+      const fixing = await this.checkSubmittable(tx, deposit, rateId);
       const fileId = await this.files.record(tx, prepared);
       const [receipt] = await tx
         .insert(depositReceipts)
@@ -497,6 +497,24 @@ export class DepositsService {
     return rate;
   }
 
+  /**
+   * Rules SC8, SC9: a receipt goes to an open `pending` deposit; an unfixed SYP deposit also
+   * needs a valid quote and the rate the customer saw. True when this submission fixes the rate.
+   */
+  private async checkSubmittable(
+    db: Database | Transaction,
+    deposit: DepositRow,
+    rateId: string | undefined,
+  ): Promise<boolean> {
+    if (!(await isOpen(db, deposit))) throw stateConflict(openStatus(deposit));
+    const fixing = deposit.currency === 'SYP' && deposit.rateFixedAt === null;
+    if (fixing) {
+      const valid = await isTrue(db, deposit.id, sql`${deposits.quoteExpiresAt} > now()`);
+      if (!valid || rateId !== deposit.rateId) await this.refuseExpiredQuote(deposit);
+    }
+    return fixing;
+  }
+
   /** Rule SC9: the customer sees the current rate and what the pounds would get, then accepts. */
   private async refuseExpiredQuote(deposit: DepositRow): Promise<never> {
     const rate = await this.currentRateOrRefuse();
@@ -605,7 +623,7 @@ function unavailableReason(
  * A `pending` deposit not past `expires_at`: the worker may not have expired it yet (edge case
  * 19), so the database's clock decides.
  */
-async function isOpen(tx: Transaction, deposit: DepositRow): Promise<boolean> {
+async function isOpen(tx: Database | Transaction, deposit: DepositRow): Promise<boolean> {
   return deposit.status === 'pending' && isTrue(tx, deposit.id, sql`${deposits.expiresAt} > now()`);
 }
 
@@ -614,7 +632,11 @@ const openStatus = (deposit: DepositRow) =>
   deposit.status === 'pending' ? 'expired' : deposit.status;
 
 /** A condition on the deposit's row, by the database's clock (time rules compare with `now()`). */
-async function isTrue(tx: Transaction, depositId: string, condition: SQL): Promise<boolean> {
+async function isTrue(
+  tx: Database | Transaction,
+  depositId: string,
+  condition: SQL,
+): Promise<boolean> {
   const [row] = await tx
     .select({ holds: sql<boolean>`coalesce(${condition}, false)` })
     .from(deposits)

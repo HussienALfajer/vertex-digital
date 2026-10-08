@@ -513,7 +513,7 @@ Tests:
 - Update `docs/architecture.md` (modules `rates`, `deposits`, `files`; job `deposits.expire`), `deploy/` nginx, `.env.example`, and the commands table if a command changes.
 - Settled in PR 2:
   - Creation also requires ALTCHA (ADR 0008: deposit creation), so it answers the guard's `ALTCHA_*` codes.
-  - The per-customer limits of SC6 count in the database: creations of the last hour (10) and receipts of the last hour (20), answered `RATE_LIMITED`. Requote and cancellation have per-address API limits (20 a minute).
+  - The per-customer limits of SC6 count in the database: creations of the last hour (10, from `deposits`) and receipt upload attempts of the last hour (20, refused ones included, in `customer_rate_limits`), answered `RATE_LIMITED`. A receipt is refused before its image is decoded or written unless the deposit is open and its quote valid, so a refused upload leaves no file. Requote and cancellation have per-address API limits (20 a minute).
   - A `pending` deposit past `expires_at` is refused with `DEPOSIT_STATE_CONFLICT` and `details.status` `expired` (edge case 19).
   - FL1 and FL2 compare with receipts of other deposits only: a second receipt on the same deposit after a clearer-receipt request is not a reuse.
   - The admin deposit page reads its audit trail from the audit log (`GET /api/admin/audit?entityType=deposit&entityId=<id>`) instead of a field of `adminDepositSchema`; `adminDepositSchema` adds `approvalRate`, the rate an approval converts received pounds at (RV3).

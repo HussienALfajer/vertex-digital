@@ -1,4 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { crc32 } from 'node:zlib';
 import { DEPOSIT_SETTINGS_DEFAULTS, UPLOAD_MAX_BYTES } from '@vertex-digital/contracts';
 import {
@@ -676,27 +678,17 @@ describe('receipts (rule SC8)', () => {
     });
   });
 
-  it('allows 20 receipt uploads an hour per customer (rule SC6)', async () => {
+  it('counts every upload, refused or not, and writes no file for a refused one (rule SC6)', async () => {
     const someone = await customer();
     const deposit = await created(someone.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    await client.post(`/api/deposits/${deposit.id}/cancel`, { cookie: someone.cookie });
+    const files = () =>
+      readdir(resolve(process.env.FILES_ROOT as string), { recursive: true }).catch(() => []);
+    const before = (await files()).length;
     for (let count = 0; count < 20; count += 1) {
-      const fileId = newId();
-      await test.db.insert(storedFiles).values({
-        id: fileId,
-        kind: 'deposit_receipt',
-        storageKey: `deposit_receipt/${fileId.slice(-2)}/${fileId}.webp`,
-        contentType: 'image/webp',
-        byteSize: 1,
-        width: 1,
-        height: 1,
-      });
-      await test.db.insert(depositReceipts).values({
-        depositId: deposit.id,
-        fileId,
-        originalSha256: randomBytes(32),
-        perceptualHash: 0n,
-      });
+      expect((await submit(someone.cookie, deposit.id)).status).toBe(409);
     }
+    expect((await files()).length).toBe(before);
     expect(await body(await submit(someone.cookie, deposit.id))).toMatchObject({
       status: 429,
       code: 'RATE_LIMITED',
