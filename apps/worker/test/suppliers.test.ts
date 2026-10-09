@@ -1022,7 +1022,10 @@ describe('suppliers.balances (rule H5)', () => {
       expect((await routing(tx, p))?.availability).toBe('available');
 
       current = balance(20);
+      sent.length = 0;
       await balances.readAll(tx);
+      // S09 rule SF4: the balance crossed the offer's cost, so the store's prices changed.
+      expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
       const [read] = await tx
         .select()
         .from(supplierBalanceReads)

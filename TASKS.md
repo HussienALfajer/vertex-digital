@@ -26,7 +26,7 @@ Spec: `docs/specs/S09-storefront-and-purchase.md` (F12, F13, F15 with A02, A08's
 - [x] `store.revalidate` (singleton, at most once per 10 s, 5 s timeout, 3 retries, warning only)
 - [x] Notifications `order_paid` (center) and `order_cancelled` (center and email with its template); Telegram `validation_quota_reached` sending; daily summary lines (validations per supplier, reservations paid and expired)
 - [x] Worker env `STORE_REVALIDATE_SECRET`, `STORE_PORT`
-- [x] Worker change points queue `store.revalidate`: a successful sync, a health change, a newly stale cost
+- [x] Worker change points queue `store.revalidate`: a successful sync, a health change, a balance crossing an offer's cost, a newly stale cost
 - [x] Tests (each RS4 step and outcome, expiry, cleanup, waiting sweep, revalidate singleton and failure, quota message dedupe, notifications)
 - [x] Wiring checklist, docs
 - [ ] Checks (lint, typecheck, test, build, e2e, drift), reviewer, owner acceptance, PR with auto-merge

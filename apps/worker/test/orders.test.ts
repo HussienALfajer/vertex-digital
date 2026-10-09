@@ -1163,15 +1163,13 @@ async function pastReservation(tx: Transaction, reservation: { id: string }): Pr
 }
 
 async function stopPurchases(tx: Transaction, value: boolean) {
-  await tx
-    .insert(storeSwitchChanges)
-    .values({
-      id: newId(),
-      switch: 'purchases_stopped',
-      value,
-      channel: 'admin',
-      adminId: newId(),
-    });
+  await tx.insert(storeSwitchChanges).values({
+    id: newId(),
+    switch: 'purchases_stopped',
+    value,
+    channel: 'admin',
+    adminId: newId(),
+  });
 }
 
 describe('paying reservations (S09 rules RS4–RS6, A02)', () => {
