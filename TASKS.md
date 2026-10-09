@@ -34,4 +34,4 @@ Spec: `docs/specs/S08-orders-and-fulfilment.md` (F11 with F26 SW7, F27 and F13's
 - [x] Admin `features/orders/`: `/orders` (tabs, filters, search), `/orders/$id` (decision panel, attempts with candidates, events, journals, codes and reveals, webhook events), `/orders/policy`; navigation with the badge; "وقت التسليم" column on the game page; i18n
 - [x] E2E flows and RTL screenshots (store phone width dark and light; admin light and dark)
 - [x] Wiring checklist, docs (`docs/ROADMAP.md` S08 done, `wiring.md` patterns, folder `CLAUDE.md` files)
-- [ ] Checks, reviewer, owner acceptance (the spec's ten browser steps), PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift, OpenAPI drift: all passed and recorded), reviewer (four blocking findings: codes in the query cache, one shared hide timer, hard-coded duration units, no product filter control; fixed and re-reviewed: no blocking issues), owner acceptance waived by the owner for this PR, PR with auto-merge
