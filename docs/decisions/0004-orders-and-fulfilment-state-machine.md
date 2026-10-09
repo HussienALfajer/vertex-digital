@@ -1,6 +1,6 @@
 # 0004 — Orders and the fulfilment state machine
 
-Status: Accepted · Date: 2026-10-06 · Amended by [0013](0013-refund-paid-order-without-route.md) (`paid → refunded`), [0016](0016-single-admin-account.md) (one admin account, no staff or roles), [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) (the hard limit, admin decisions, input rejections, test orders)
+Status: Accepted · Date: 2026-10-06 · Amended by [0013](0013-refund-paid-order-without-route.md) (`paid → refunded`), [0016](0016-single-admin-account.md) (one admin account, no staff or roles), [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) (the hard limit, admin decisions, input rejections, test orders), [0023](0023-reservations-and-player-validation.md) (reservations: price at pay, expiry, limits)
 
 ## Context
 An order spends the customer's money and asks a supplier for goods over the network. Networks time out, suppliers answer late through webhooks, and customers double-tap. The two failures that matter most are charging without delivering and delivering twice (paying two suppliers for one sale).

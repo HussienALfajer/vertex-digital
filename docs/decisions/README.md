@@ -26,6 +26,7 @@ Short records of decisions that shape the system. Each has a status: **Accepted*
 | [0020](0020-pricing-engine.md) | Pricing: margin rules per category, game and product over a 10% / $0.10 default, prices rounded up to whole cents on the cheapest healthy route, the guard at `price − cost ≥ minimum margin`, admin-entered official prices (amends 0005) | Accepted |
 | [0021](0021-supplier-sync-price-review-and-health.md) | Supplier sync every 15 minutes with costs stale after 2 hours, cost changes above 10% held for review, route changes reprice at once, manual supplier as last resort, health and balance thresholds, no supplier funding in the ledger before S13, adapters once documented (amends 0005, 0020) | Accepted |
 | [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) | Orders: polling then held for the admin after 30 minutes, unknown outcomes re-sent with the same key, four re-authenticated admin decisions, delivered is final, manual cards, input rejections refunded at once, test orders on `fake` and `manual` only, logged code reveal, delivery time over 50 orders (amends 0004, 0005) | Accepted |
+| [0023](0023-reservations-and-player-validation.md) | Reservations: 3 per customer for 24 hours, paid after a deposit at the lower of the saved and current price, skipping what the balance cannot cover; player validation cached and limited, a "not found" a warning the customer confirms (amends 0004) | Accepted |
 
 Template:
 
