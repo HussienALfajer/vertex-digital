@@ -18,7 +18,7 @@ Spec: `docs/specs/S09-storefront-and-purchase.md` (F12, F13, F15 with A02, A08's
 - [x] Bridge: build, OpenAPI export, admin client; admin and store E2E mocks follow changed shapes (`timeline`), the store's stage, step and notification texts
 - [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, spec "Settled in implementation")
 - [x] Review fixes: the worker creates every shared queue at start; player-check limits count only supplier calls; image sizes written whole; concurrent payment races (repricing, stop, expiry); shared test rows kept out of the worker's health and sweep tests
-- [ ] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (four blocking findings: a queue the worker never created, missing concurrent races, limits counting non-supplier answers, half-written image sizes; fixed and re-reviewed: no blocking issues), owner acceptance (endpoints at `/api/docs`), PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (four blocking findings: a queue the worker never created, missing concurrent races, limits counting non-supplier answers, half-written image sizes; fixed and re-reviewed: no blocking issues), owner acceptance (2026-10-09), PR with auto-merge
 
 ## PR 2 — Worker: paying and expiring reservations, cache cleanup, store revalidation, Telegram · Opus 5.5 `high`
 - [ ] Jobs `orders.pay_waiting` (stately per customer, RS4 through the db write path), `orders.waiting_sweep` (every 5 minutes, at most 500)
