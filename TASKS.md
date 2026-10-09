@@ -1,40 +1,36 @@
-# TASKS — S07 Suppliers, mapping and price sync
+# TASKS — S08 Orders and fulfilment engine
 
-Spec: `docs/specs/S07-suppliers.md` (F09 with F10, CT9; ADRs 0003, 0004, 0005, 0008, 0011, 0016, 0019, 0020, 0021). Three PRs, as the spec's implementation notes suggest; each leaves `main` green and runs in its own session. The `shop2topup` and `wdgzone` adapters follow later through `/supplier-adapter` (Q12).
+Spec: `docs/specs/S08-orders-and-fulfilment.md` (F11 with F26 SW7, F27 and F13's pay step; ADRs 0003, 0004, 0005, 0011, 0013, 0014, 0016, 0019, 0020, 0021, 0022). Three PRs, as the spec's implementation notes suggest; each leaves `main` green and runs in its own session. Real adapters' order calls follow in their own `/supplier-adapter` PRs (Q12).
 
-## PR 1 — Contracts, db, repricing write path, `suppliers` API module, `pricing` additions, bridge · Opus 5.5 `high`
-- [x] Contracts `suppliers.ts`: codes, health states, call operations and results, credential fields, sync triggers and statuses, policy schema; schemas for every request and response; pure `routeUnusableReason` (RT4), `routeTier`, `orderRoutes`, `priceBasis` (RT5–RT6, P1); unit tests (100%)
-- [x] Contracts `pricing.ts`: price change causes, review statuses, price / review / decide schemas; pure `needsReview` (P3), `costChangeBasisPoints`; `rates.ts`: `maxDisplayStepSypUnits` (P9); `catalog.ts`: `productAvailability` with routes and held price (P6), product price fields; `settings.ts`: four supplier switches; unit tests (100%)
-- [x] Contracts: error codes with Arabic admin text; audit entity types and actions with admin labels; queue `suppliers.sync`
-- [x] Db (`/db-migration`): 12 tables, enums, checks, partial unique indexes, append-only triggers and grants, run and review guards, seeds (0026 generated, 0027 hand-written); `TABLE_OWNERS`; tests
-- [x] Db: credential encryption (AES-256-GCM, supplier id as associated data, key version); tests
-- [x] Db: repricing write path and routing state `packages/db/src/pricing` (P1–P6, P9 read); tests on real PostgreSQL
-- [x] Api `suppliers` module (suppliers, credentials, threshold, sync request, runs, offers, cost history, import, routes, policy) and catalog products with price and availability; `test/suppliers.test.ts` (incl. 100-row import, parallel mapping, parallel decisions)
-- [x] Api `pricing` additions: reviews, decide, adjust margin, price history; rule changes reprice (P5); rates refuse `DISPLAY_STEP_TOO_LARGE` (P9); a supplier's pause reprices (SP3)
-- [x] Env: `SUPPLIER_KEYS_SECRET` (required in production, derived locally), `SUPPLIER_FAKE_ENABLED` (refused in production); `.env.example`, `provision.sh`, `docs/deployment.md`; no nginx change (admin routes, "sync now" limited in the API)
-- [x] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow the new product shape
-- [x] Docs: `docs/architecture.md`, folder `CLAUDE.md` files, `docs/deployment.md`, spec "Settled in implementation"
-- [x] Wiring checklist, `wiring.md` patterns
-- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (five blocking findings, fixed with tests), owner acceptance (2026-10-08, P9's 1-pound minimum confirmed), PR with auto-merge
+## PR 1 — Contracts, db, order write path, `orders` API module, webhook intake, `order:place`, bridge · Opus 5.5 `high`
+- [ ] Contracts `orders.ts`: attempt statuses and resolvers, event kinds and actors, refund reasons, route skip reasons; `orderCustomerStage` (O13); schemas (create, summary, order, admin list query and page, admin order, resolve, refund, reveal, policy); pure `orderTotal`, `refundAmount`, `costOfGoods`, `routeProfitable`, `orderCandidates` (R1–R4), `nextPollAt`, `pastHardLimit` (F7), `deliveryStats` (T1), `orderNumberSchema`, `maskCode`; unit tests (100%)
+- [ ] Contracts: error codes with Arabic store and admin text; audit entity types and actions with admin labels; queues `orders.fulfil`, `orders.poll`, `orders.sweep`, `suppliers.webhook`; notification kinds (`order_delivered`, `order_partially_refunded`, `order_refunded`, `order_delayed`); Telegram kinds (`manual_order`, `manual_order_reminder`, `order_needs_review`, `order_conflict`); ledger account kinds and journal kinds
+- [ ] Suppliers interface: `delivered.quantity`, `failed_definitive.inputRejected`; the fake adapter answers by the new shape (scripting stays in PR 2)
+- [ ] Db (`/db-migration`): `orders`, `order_events`, `fulfilment_attempts`, `order_codes`, `order_code_reveals`, `supplier_webhook_events`, `order_policy` (seeded); enums, checks, partial unique indexes, triggers, grants; `TABLE_OWNERS`; tests
+- [ ] Db: codes and webhook body encryption (AES-256-GCM, row id as associated data, key version, `ORDER_CODES_SECRET`); tests
+- [ ] Db: order write path `packages/db/src/orders` (`purchase`, `transitionOrder`, `applyOutcome`, `refundRemaining`, cost of goods; M1–M3); tests on real PostgreSQL (lost race, one refund, parallel purchases, one key in parallel, purchase against repricing and stop)
+- [ ] Api `orders` module: customer routes (buy, list, read, reveal), admin routes (list, counts, read, poll, resolve, refund, reveal, policy), delivery stats on the admin game page, wallet entries with order number and product; `test/orders.test.ts`
+- [ ] Api `suppliers` webhook intake (`POST /api/webhooks/suppliers/:code`: raw body cap, HMAC and timestamp, stored once, job queued); tests
+- [ ] Rate limits (API and nginx zones in `deploy/`): purchase, reveal, webhook
+- [ ] Env: `ORDER_CODES_SECRET` (api and worker, required in production, derived locally); `.env.example`, `provision.sh`, `docs/deployment.md`
+- [ ] Dev CLI `order:place`; commands table in `AGENTS.md`
+- [ ] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow changed shapes
+- [ ] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, `wiring.md` "Order transition" pattern, spec "Settled in implementation")
+- [ ] Checks (lint, typecheck, test, build, e2e, drift), reviewer, owner acceptance (endpoints at `/api/docs`), PR with auto-merge
 
-## PR 2 — Worker: registry, sync, balances, health, messages, fake scripting · Opus 5.5 `high`
-- [x] Suppliers: `SupplierOffer` gains optional `group`, `kind`, `requiredFields`; fake catalog (10 offers, groups, kinds, fields) with scripted overrides from `FAKE_SUPPLIER_STATE_FILE`
-- [x] Contracts: `supplierHealth` (H1, H2), `probeOutcome` (H3), `healthWindowStart` with unit tests (100%); queues `suppliers.sync-schedule`, `suppliers.balances`, `suppliers.health`; Telegram kinds and daily summary fields (db enum migration 0029, admin labels)
-- [x] Worker env: `SUPPLIER_KEYS_SECRET` derived exactly as the API's, `SUPPLIER_FAKE_ENABLED` refused in production, `FAKE_SUPPLIER_STATE_FILE`
-- [x] Worker registry (`SupplierRegistry.get`, `connect`), decryption per call, every call in `supplier_calls` (`recordedCall`), messages sanitized
-- [x] Jobs `suppliers.sync` (SY1–SY4), `suppliers.sync-schedule`, `suppliers.balances` (H5), `suppliers.health` (H1–H4, SY5 stale repricing)
-- [x] Telegram kinds `supplier_sync_summary`, `supplier_health`, `supplier_balance_low`, `supplier_sync_failing`; daily summary lines
-- [x] Dev CLI `supplier:fake`; commands table in `AGENTS.md`; `.env.example`
-- [x] Tests (sync, suspicious list, failure, stale, missing, concurrent run; balances; health and probe; dedupe keys; credentials never logged); worker tests ordered after the api and db tests in `turbo.json`
-- [x] Bridge: OpenAPI (message kinds) and the admin client
-- [x] Wiring checklist, docs (`docs/architecture.md`, `docs/deployment.md`, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (two blocking findings: job lock order and query parameters, fixed with tests), owner acceptance (2026-10-08), PR with auto-merge
+## PR 2 — Worker: routing, sending, polling, webhooks, sweep, manual, notifications · Opus 5.5 `high`
+- [ ] Jobs `orders.fulfil` (R1–R6), `orders.poll` (F3), `suppliers.webhook` (F5), `orders.sweep` (F6, F7, MN2); supplier calls recorded in `supplier_calls`
+- [ ] Telegram kinds and cards (`manual_order`, reminder, `order_needs_review`, `order_conflict`) with dedupe keys; daily summary lines
+- [ ] Customer notifications in the change's transaction; codes never logged (log redaction covers `codes`)
+- [ ] Fake supplier order scripting (`--order`, `--resolve … --via poll|webhook`); commands table
+- [ ] Worker env `ORDER_CODES_SECRET`
+- [ ] Tests (each tier, guard, balance, already tried, test customers, every outcome, partial, input rejection, schedule and hard limit, review polling, sweep, webhooks applied / same result / unknown key / conflict, manual cards and reminder, dedupe keys, log capture)
+- [ ] Wiring checklist, docs
+- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
 
-## PR 3 — Admin screens and E2E · Opus 5.5 `high`
-- [x] Admin `features/suppliers/`: `/suppliers`, `/suppliers/$code` (connection, offers with import dialog, sync, health), `/suppliers/policy`
-- [x] Admin catalog game page: price, basis, availability; routes drawer (tiers, usability, add route, manual route, priority, enable, archive/restore, price history)
-- [x] Admin `/pricing/reviews` (bulk accept, adjust margin, pause, `REVIEW_STALE`); `/settings/rates` step error
-- [x] Navigation "الموردون" and "مراجعة الأسعار" with count; i18n
-- [x] E2E flows and RTL screenshots (light and dark)
-- [x] Wiring checklist, docs (`docs/ROADMAP.md` S07 done and the adapters as their own item, `wiring.md` patterns, `apps/admin/CLAUDE.md`, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, test, build, e2e: all passed and recorded), reviewer (four blocking findings: credential fields and password managers, Arabic health reasons, cards stuck on a running sync, bulk accept beyond the page; fixed with tests), owner acceptance (2026-10-09), PR with auto-merge
+## PR 3 — Store and admin screens, E2E · Opus 5.5 `high`
+- [ ] Store `features/orders/`: `/orders` and `/orders/[id]` (stages, fields, code reveal, refetch on notification); account menu and wallet entry links; i18n
+- [ ] Admin `features/orders/`: `/orders` (tabs, filters, search), `/orders/$id` (decision panel, attempts with candidates, events, journals, codes and reveals, webhook events), `/orders/policy`; navigation with the badge; "وقت التسليم" column on the game page; i18n
+- [ ] E2E flows and RTL screenshots (store phone width dark and light; admin light and dark)
+- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S08 done, `wiring.md` patterns, folder `CLAUDE.md` files)
+- [ ] Checks, reviewer, owner acceptance (the spec's ten browser steps), PR with auto-merge
