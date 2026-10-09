@@ -29,7 +29,7 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
-import { askSupplier, orderContext } from './order-calls.js';
+import { askSupplier, orderContext, reportLateResult } from './order-calls.js';
 
 type Executor = Database | Transaction;
 
@@ -78,11 +78,15 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
     if (decided.kind !== 'sent' || decided.manual) return decided;
     const attempt = decided.attempt;
     const outcome = await askSupplier(db, this.registry, attempt, 'place');
-    const applied = await db.transaction((tx) =>
-      applyOutcome(tx, orderContext(this.pgBoss, this.codesKey), attempt.id, outcome, {
-        by: 'supplier',
-      }),
-    );
+    const applied = await db.transaction(async (tx) => {
+      const context = orderContext(this.pgBoss, this.codesKey);
+      const result = await applyOutcome(tx, context, attempt.id, outcome, { by: 'supplier' });
+      // Closed while the call was out (a webhook): a different answer is a conflict (rule F5).
+      if (!result.applied) {
+        await reportLateResult(tx, context, result, outcome, { kind: 'supplier' });
+      }
+      return result;
+    });
     return { kind: 'sent', attempt: applied.attempt, manual: false };
   }
 
@@ -151,6 +155,7 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
         supplierId: route.supplier.id,
         offerId: route.offer.id,
         supplierOfferId: route.offer.offerId,
+        fieldMap: route.fieldMap,
         quantity: remainingUnits,
         unitCostUsdUnits: route.costUsdUnits as number,
         // A manual attempt waits for the admin at once; it is never polled (rule MN2).

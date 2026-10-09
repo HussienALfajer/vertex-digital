@@ -1,12 +1,15 @@
 import type { SupplierCallResult } from '@vertex-digital/contracts';
 import {
+  type AppliedOutcome,
   type AttemptOutcome,
   type AttemptRow,
+  addOrderEvent,
   bossJobSender,
   type Database,
   type OrderContext,
   orders,
   productRoutes,
+  queueTelegramMessage,
   suppliers,
   type Transaction,
 } from '@vertex-digital/db';
@@ -104,9 +107,13 @@ export async function askSupplier(
   }
   if (!connected) return { status: 'unknown', reason: 'supplier_unavailable' };
   const { adapter, secrets } = connected;
-  // The route's map: the supplier's field name → the order's input field key (S07 rule RT3).
+  // The map the attempt was written with (S07 rule RT3: the supplier's field name → the order's
+  // input field key), so a re-send under the same key is the same request.
   const fields = Object.fromEntries(
-    Object.entries(row.fieldMap).map(([name, key]) => [name, row.fields[key] ?? '']),
+    Object.entries(attempt.fieldMap ?? row.fieldMap).map(([name, key]) => [
+      name,
+      row.fields[key] ?? '',
+    ]),
   );
   const answer = await recordedCall(
     db,
@@ -124,4 +131,61 @@ export async function askSupplier(
     callResult,
   );
   return attemptOutcome(answer.ok ? answer.value : outcomeOfOrderError(answer.error), secrets);
+}
+
+/** Where a result for an attempt came from, for its conflict alert's dedupe key. */
+export type ResultSource = { kind: 'webhook'; eventId: string } | { kind: 'poll' | 'supplier' };
+
+/**
+ * Rule F5 for every result that reached an attempt already closed (a webhook, a poll's or the
+ * first call's late answer after a webhook or the admin's decision): the same result changes
+ * nothing; another one (delivered after failed, or failed after delivered) changes no state or
+ * money either, but writes a `note` on the order and an `order_conflict` alert, since the
+ * supplier may have delivered goods the order no longer counts (edge case 11). A `pending` or
+ * `unknown` answer tells nothing new.
+ */
+export async function reportLateResult(
+  tx: Transaction,
+  context: OrderContext,
+  applied: AppliedOutcome,
+  outcome: AttemptOutcome,
+  source: ResultSource,
+): Promise<'same_result' | 'conflict'> {
+  const closed = applied.attempt.status;
+  const reported =
+    outcome.status === 'delivered' ? 'delivered' : outcome.status === 'failed' ? 'failed' : null;
+  if (reported === null || reported === closed || (closed !== 'delivered' && closed !== 'failed')) {
+    return 'same_result';
+  }
+  const attemptId = applied.attempt.id;
+  await addOrderEvent(tx, applied.order.id, 'note', {
+    actor: 'supplier',
+    attemptId,
+    reason: source.kind === 'webhook' ? 'webhook_conflict' : 'late_result_conflict',
+    details: {
+      source: source.kind,
+      ...(source.kind === 'webhook' && { webhookEventId: source.eventId }),
+      attemptStatus: closed,
+      reported,
+    },
+  });
+  const [supplier] = await tx
+    .select({ nameAr: suppliers.nameAr })
+    .from(suppliers)
+    .where(eq(suppliers.id, applied.attempt.supplierId));
+  await queueTelegramMessage(tx, context.jobs, {
+    kind: 'order_conflict',
+    params: {
+      orderId: applied.order.id,
+      orderNumber: applied.order.number,
+      supplierNameAr: supplier?.nameAr ?? '',
+      attemptStatus: closed,
+      reported,
+    },
+    dedupeKey:
+      source.kind === 'webhook'
+        ? `conflict:${source.eventId}`
+        : `conflict:${attemptId}:${source.kind}`,
+  });
+  return 'conflict';
 }

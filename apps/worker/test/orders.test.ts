@@ -8,6 +8,7 @@ import {
 } from '@vertex-digital/contracts';
 import {
   accountBalance,
+  applyOutcome,
   bossJobSender,
   createDatabase,
   customerNotifications,
@@ -838,6 +839,78 @@ describe('polling, the hard limit and the sweep (rules F3, F6, F7)', () => {
       expect(reminder).toMatchObject({ kind: 'manual_order_reminder' });
       expect(reminder?.params).toMatchObject({ orderNumber: order.number, waitMinutes: 16 });
       expect((await sweep.sweep(now, tx)).reminded).not.toContain(manual?.id);
+    });
+  });
+});
+
+describe('re-sends and late answers (rules F3, F5, F6)', () => {
+  it('sends again with the fields of the first send, whatever the route map became', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      script('fake-uc-60', 'unknown');
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [attempt] = await attemptsOf(tx, order.id);
+      expect(attempt?.fieldMap).toEqual({ playerId: 'player_id' });
+      const first = fakeState.orders[attempt?.id as string]?.request;
+      // The admin maps one more supplier field while the attempt is still open.
+      await tx
+        .update(productRoutes)
+        .set({ fieldMap: { playerId: 'player_id', zoneId: 'player_id' } })
+        .where(eq(productRoutes.id, item.fakeRoute as string));
+      await poll.poll(attempt?.id as string, tx);
+      // The same request under the same key: the supplier answers it, never a reused-key refusal.
+      expect(fakeState.orders[attempt?.id as string]?.request).toEqual(first);
+      expect((await attemptsOf(tx, order.id))[0]).toMatchObject({ status: 'unknown' });
+      expect(await orderOf(tx, order.id)).toMatchObject({ status: 'sent_to_supplier' });
+    });
+  });
+
+  it('reports a delivery found after the admin confirmed the attempt failed', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, { manualCost: usd(0.9) });
+      script('fake-uc-60', 'pending');
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [attempt] = await attemptsOf(tx, order.id);
+      const attemptId = attempt?.id as string;
+      // While the poll's call is out, the admin confirms the attempt failed (rule D3); then the
+      // supplier answers that it delivered.
+      const racing = {
+        connect: async () => ({
+          adapter: {
+            getOrder: async () => {
+              await applyOutcome(
+                tx,
+                { jobs, codesKey, now: new Date() },
+                attemptId,
+                { status: 'failed', reason: 'admin' },
+                {
+                  by: 'admin',
+                  admin: { id: newId(), reason: 'confirmed', idempotencyKey: newId() },
+                },
+              );
+              return { status: 'delivered', supplierOrderId: 'late', quantity: 1 };
+            },
+          },
+          secrets: [],
+        }),
+      } as unknown as SupplierRegistry;
+      const applied = await new OrdersPollJob(pgBoss, racing, db, env).poll(attemptId, tx);
+      expect(applied?.applied).toBe(false);
+      expect((await attemptsOf(tx, order.id))[0]).toMatchObject({ status: 'failed' });
+      const notes = await tx
+        .select({ reason: orderEvents.reason, details: orderEvents.details })
+        .from(orderEvents)
+        .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.kind, 'note')));
+      expect(notes).toEqual([
+        {
+          reason: 'late_result_conflict',
+          details: { source: 'poll', attemptStatus: 'failed', reported: 'delivered' },
+        },
+      ]);
+      const [alert] = await messagesOf(tx, [`conflict:${attemptId}:poll`]);
+      expect(alert).toMatchObject({ kind: 'order_conflict' });
     });
   });
 });

@@ -6,14 +6,11 @@ import {
   type WebhookEventResult,
 } from '@vertex-digital/contracts';
 import {
-  addOrderEvent,
   applyOutcome,
-  bossJobSender,
   type Database,
   decryptSecret,
   fulfilmentAttempts,
   orderCodesKey,
-  queueTelegramMessage,
   suppliers,
   supplierWebhookEvents,
   type Transaction,
@@ -25,7 +22,7 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
-import { attemptOutcome, orderContext } from '../orders/order-calls.js';
+import { attemptOutcome, orderContext, reportLateResult } from '../orders/order-calls.js';
 
 type Executor = Database | Transaction;
 
@@ -98,40 +95,9 @@ export class SupplierWebhookJob implements OnApplicationBootstrap {
       if (locked?.processedAt) return null;
       const context = orderContext(this.pgBoss, this.codesKey);
       const applied = await applyOutcome(tx, context, attempt.id, outcome, { by: 'webhook' });
-      let result: WebhookEventResult = 'applied';
-      if (!applied.applied) {
-        const closed = applied.attempt.status;
-        const reported =
-          outcome.status === 'delivered'
-            ? 'delivered'
-            : outcome.status === 'failed'
-              ? 'failed'
-              : null;
-        result = reported === null || reported === closed ? 'same_result' : 'conflict';
-        if (result === 'conflict' && (closed === 'delivered' || closed === 'failed') && reported) {
-          await addOrderEvent(tx, applied.order.id, 'note', {
-            actor: 'supplier',
-            attemptId: attempt.id,
-            reason: 'webhook_conflict',
-            details: { webhookEventId: eventId, attemptStatus: closed, reported },
-          });
-          const [supplier] = await tx
-            .select({ nameAr: suppliers.nameAr })
-            .from(suppliers)
-            .where(eq(suppliers.id, supplierId));
-          await queueTelegramMessage(tx, bossJobSender(this.pgBoss.boss), {
-            kind: 'order_conflict',
-            params: {
-              orderId: applied.order.id,
-              orderNumber: applied.order.number,
-              supplierNameAr: supplier?.nameAr ?? '',
-              attemptStatus: closed,
-              reported,
-            },
-            dedupeKey: `conflict:${eventId}`,
-          });
-        }
-      }
+      const result: WebhookEventResult = applied.applied
+        ? 'applied'
+        : await reportLateResult(tx, context, applied, outcome, { kind: 'webhook', eventId });
       return this.finish(tx, eventId, result, attempt.id);
     });
   }

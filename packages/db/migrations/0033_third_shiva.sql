@@ -1,0 +1,1 @@
+ALTER TABLE "fulfilment_attempts" ADD COLUMN "field_map" jsonb;

@@ -20,7 +20,7 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
-import { askSupplier, orderContext } from './order-calls.js';
+import { askSupplier, orderContext, reportLateResult } from './order-calls.js';
 
 type Executor = Database | Transaction;
 
@@ -78,9 +78,11 @@ export class OrdersPollJob implements OnApplicationBootstrap {
             inArray(fulfilmentAttempts.status, ['sending', 'pending', 'unknown']),
           ),
         );
-      return applyOutcome(tx, orderContext(this.pgBoss, this.codesKey), attemptId, outcome, {
-        by: 'poll',
-      });
+      const context = orderContext(this.pgBoss, this.codesKey);
+      const applied = await applyOutcome(tx, context, attemptId, outcome, { by: 'poll' });
+      // Closed meanwhile (a webhook, the admin): a different answer is a conflict (rule F5).
+      if (!applied.applied) await reportLateResult(tx, context, applied, outcome, { kind: 'poll' });
+      return applied;
     });
   }
 }

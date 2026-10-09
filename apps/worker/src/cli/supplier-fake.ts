@@ -104,7 +104,11 @@ if (values.cost !== undefined) {
 }
 await writeFakeSupplierState(env.FAKE_SUPPLIER_STATE_FILE, next);
 process.stdout.write(`Fake supplier state (${env.FAKE_SUPPLIER_STATE_FILE}):\n`);
-process.stdout.write(`${JSON.stringify(next, null, 2)}\n`);
+// The kept orders hold codes and player fields: only their count is shown.
+const { orders: kept, ...shown } = next;
+process.stdout.write(
+  `${JSON.stringify({ ...shown, orders: Object.keys(kept).length }, null, 2)}\n`,
+);
 
 /** `--resolve`: settles the order's open fake attempt, then lets a poll or a webhook report it. */
 async function resolve(number: string, outcome: string | undefined, how: string | undefined) {
