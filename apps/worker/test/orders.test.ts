@@ -814,6 +814,11 @@ describe('polling, the hard limit and the sweep (rules F3, F6, F7)', () => {
         .set({ nextPollAt: new Date(now.getTime() - 2 * 60_000) })
         .where(eq(fulfilmentAttempts.id, pending?.id as string));
 
+      // Other tests' paid orders (the api's, never routed there) wait behind this one, so the
+      // sweep's batch of 100 always reaches it.
+      await tx.execute(
+        sql`update orders set updated_at = now() where status in ('paid', 'failed') and id <> ${lost.id}`,
+      );
       sent.length = 0;
       const result = await sweep.sweep(now, tx);
       expect(result.resent).toContain(sendingId);

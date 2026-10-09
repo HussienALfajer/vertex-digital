@@ -23,6 +23,7 @@ import { FakeSupplierAdapter } from '@vertex-digital/suppliers';
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { parseEnv } from '../src/core/config/env.js';
+import { SupplierAdaptersService } from '../src/modules/suppliers/supplier-adapters.service.js';
 import {
   api,
   body,
@@ -177,6 +178,13 @@ const fresh = () => String(1_000_000_000 + Math.floor(Math.random() * 8_000_000_
 const callsOfFake = async () =>
   (await validationsToday(test.db, [ids.fake])).get(ids.fake) as number;
 
+/**
+ * The supplier calls the checks made. They are not written: `supplier_calls` is append-only and
+ * the worker's health tests read the fake's recent calls, so rows left here would change them.
+ * The write itself is tested once, in a rolled-back transaction.
+ */
+const recorded: { supplierId: string; operation: string; result: string }[] = [];
+
 const writeState = async (state: object) => {
   await mkdir(dirname(STATE_FILE), { recursive: true });
   await writeFile(STATE_FILE, JSON.stringify(state));
@@ -202,6 +210,11 @@ beforeAll(async () => {
   const [fake] = await test.db.select().from(suppliers).where(eq(suppliers.code, 'fake'));
   ids.fake = fake?.id as string;
   quotaBefore = fake?.validationDailyQuota ?? 1_000;
+  vi.spyOn(SupplierAdaptersService.prototype, 'recordCall').mockImplementation(
+    async (_tx, call) => {
+      recorded.push(call);
+    },
+  );
   await setQuota(1_000_000);
   await test.db
     .insert(supplierBalanceReads)
@@ -254,6 +267,38 @@ afterAll(async () => {
 });
 
 describe('POST /api/player-checks (rules PV1–PV7)', () => {
+  it("records a call in supplier_calls (rule PV6), in the caller's transaction", async () => {
+    const rollback = new Error('rollback');
+    const real = vi.mocked(SupplierAdaptersService.prototype.recordCall).getMockImplementation();
+    vi.mocked(SupplierAdaptersService.prototype.recordCall).mockRestore();
+    try {
+      await expect(
+        test.db.transaction(async (tx) => {
+          await test.app.get(SupplierAdaptersService).recordCall(tx, {
+            supplierId: ids.fake,
+            operation: 'validate_player',
+            result: 'error',
+            latencyMs: 12,
+          });
+          const [row] = await tx
+            .select()
+            .from(supplierCalls)
+            .where(eq(supplierCalls.supplierId, ids.fake))
+            .orderBy(sql`${supplierCalls.createdAt} desc`)
+            .limit(1);
+          expect(row).toMatchObject({
+            operation: 'validate_player',
+            result: 'error',
+            latencyMs: 12,
+          });
+          throw rollback;
+        }),
+      ).rejects.toBe(rollback);
+    } finally {
+      vi.spyOn(SupplierAdaptersService.prototype, 'recordCall').mockImplementation(real as never);
+    }
+  });
+
   it('answers 401 signed out and to the admin, 403 before the email is verified', async () => {
     const item = await product(ids.gameId, 'direct', 0.88);
     expect((await check(null, item, fresh())).status).toBe(401);
@@ -280,18 +325,20 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
     const item = await product(ids.gameId, 'direct', 0.88);
     const [first, second] = [await buyer(), await buyer()];
     const playerId = fresh();
-    const calls = await callsOfFake();
+    const calls = recorded.length;
     const response = await check(first, item, playerId);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(await json(response, 200)).toEqual({
       result: 'valid',
       playerName: `Player ${playerId.slice(-4)}`,
     });
-    expect(await callsOfFake()).toBe(calls + 1);
+    expect(recorded.slice(calls)).toEqual([
+      expect.objectContaining({ supplierId: ids.fake, operation: 'validate_player', result: 'ok' }),
+    ]);
     expect(await json(await check(second, item, ` ${playerId} `), 200)).toMatchObject({
       result: 'valid',
     });
-    expect(await callsOfFake()).toBe(calls + 1);
+    expect(recorded).toHaveLength(calls + 1);
     // Only an HMAC of the fields is stored, never the player id; valid for 24 hours.
     const rows = await test.db
       .select()
@@ -333,15 +380,7 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
       reason: 'supplier',
     });
     await writeState({});
-    const [call] = await test.db
-      .select()
-      .from(supplierCalls)
-      .where(
-        and(eq(supplierCalls.supplierId, ids.fake), eq(supplierCalls.operation, 'validate_player')),
-      )
-      .orderBy(sql`${supplierCalls.createdAt} desc`)
-      .limit(1);
-    expect(call?.result).toBe('error');
+    expect(recorded.at(-1)?.result).toBe('error');
     // Not cached: the next check asks again and finds the player.
     expect(await json(await check(customer, item, playerId), 200)).toMatchObject({
       result: 'valid',
@@ -405,6 +444,15 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
     const customer = await buyer();
     const known = fresh();
     expect(await json(await check(customer, item, known), 200)).toMatchObject({ result: 'valid' });
+    // A quota already used up today. On a database with no check today, one call at 00:00
+    // Damascus stands for it: far from the worker tests' health window, which reads recent calls.
+    if ((await callsOfFake()) === 0) {
+      await test.db.execute(
+        sql`insert into supplier_calls (id, supplier_id, operation, result, latency_ms, created_at)
+          values (${newId()}, ${ids.fake}, 'validate_player', 'ok', 1,
+            (now() at time zone 'Asia/Damascus')::date::timestamp at time zone 'Asia/Damascus')`,
+      );
+    }
     await setQuota(await callsOfFake());
     try {
       for (let i = 0; i < 2; i += 1) {
