@@ -485,7 +485,13 @@ export const deliveredCodeSchema = z
 /** A field's value as the customer typed it, before its type's rules. */
 const typedValue = z.string().max(200);
 
-function fieldValueSchema(field: InputField): z.ZodType<string, string> {
+/** What a field's value rules read (S06 CT7). */
+export type OrderFieldRules = Pick<
+  InputField,
+  'key' | 'type' | 'required' | 'minLength' | 'maxLength' | 'options'
+>;
+
+function fieldValueSchema(field: OrderFieldRules): z.ZodType<string, string> {
   const length = (schema: z.ZodString, max: number) =>
     schema.min(field.minLength ?? 1).max(field.maxLength ?? max);
   switch (field.type) {
@@ -506,7 +512,7 @@ function fieldValueSchema(field: InputField): z.ZodType<string, string> {
  * trimmed (phones in E.164). Issues carry the field's key as their first path element.
  */
 export function orderFieldValuesSchema(
-  fields: readonly InputField[],
+  fields: readonly OrderFieldRules[],
 ): z.ZodType<Record<string, string>, Record<string, string>> {
   const shape: Record<string, z.ZodType<string | undefined, string | undefined>> = {};
   for (const field of fields) {

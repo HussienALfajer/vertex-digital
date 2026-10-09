@@ -8,15 +8,17 @@ import {
   type ManualDepositMethod,
   rateFromNumeric,
 } from '@vertex-digital/contracts';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Database, Transaction } from '../client.js';
 import {
+  catalogProducts,
   customers,
   deposits,
   ledgerAccounts,
   ledgerJournals,
   ledgerPostings,
+  orders,
   walletAdjustments,
 } from '../schema/index.js';
 
@@ -166,6 +168,13 @@ export interface TimelineDeposit {
   txid: string | null;
 }
 
+/** The order of a `purchase` or `refund` entry (S08 "Money flows"). */
+export interface TimelineOrder {
+  id: string;
+  number: string;
+  productNameAr: string;
+}
+
 export interface TimelineEntry {
   journalId: string;
   kind: JournalKind;
@@ -176,6 +185,7 @@ export interface TimelineEntry {
   balanceAfterUnits: number;
   adjustment: TimelineAdjustment | null;
   deposit: TimelineDeposit | null;
+  order: TimelineOrder | null;
 }
 
 /**
@@ -210,10 +220,11 @@ export async function walletTimeline(
   if (!first) return { entries: [], more };
 
   const journalIds = pageRows.map((row) => row.journalId);
-  const [balance, adjustments, depositsByJournal] = await Promise.all([
+  const [balance, adjustments, depositsByJournal, ordersByJournal] = await Promise.all([
     walletBalanceAfter(db, accountId, first.journalId),
     adjustmentsOf(db, journalIds),
     depositsOf(db, journalIds),
+    ordersOf(db, journalIds),
   ]);
   let balanceAfter = balance;
   const entries = pageRows.map((row): TimelineEntry => {
@@ -227,6 +238,7 @@ export async function walletTimeline(
       balanceAfterUnits: balanceAfter,
       adjustment: adjustments.get(row.journalId) ?? null,
       deposit: depositsByJournal.get(row.journalId) ?? null,
+      order: ordersByJournal.get(row.journalId) ?? null,
     };
     balanceAfter -= amountUnits;
     return entry;
@@ -257,6 +269,31 @@ async function adjustmentsOf(
     .leftJoin(reversal, eq(reversal.reversesAdjustmentId, walletAdjustments.id))
     .where(inArray(walletAdjustments.journalId, journalIds));
   return new Map(rows.map(({ journalId, ...adjustment }) => [journalId, adjustment]));
+}
+
+async function ordersOf(
+  db: Executor,
+  journalIds: string[],
+): Promise<Map<string, TimelineOrder>> {
+  const rows = await db
+    .select({
+      id: orders.id,
+      number: orders.number,
+      productNameAr: catalogProducts.nameAr,
+      purchaseJournalId: orders.purchaseJournalId,
+      refundJournalId: orders.refundJournalId,
+    })
+    .from(orders)
+    .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
+    .where(
+      or(inArray(orders.purchaseJournalId, journalIds), inArray(orders.refundJournalId, journalIds)),
+    );
+  const byJournal = new Map<string, TimelineOrder>();
+  for (const { purchaseJournalId, refundJournalId, ...order } of rows) {
+    byJournal.set(purchaseJournalId, order);
+    if (refundJournalId) byJournal.set(refundJournalId, order);
+  }
+  return byJournal;
 }
 
 async function depositsOf(
