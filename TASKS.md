@@ -29,7 +29,8 @@ Spec: `docs/specs/S09-storefront-and-purchase.md` (F12, F13, F15 with A02, A08's
 - [x] Worker change points queue `store.revalidate`: a successful sync, a health change, a balance crossing an offer's cost, a newly stale cost
 - [x] Tests (each RS4 step and outcome, expiry, cleanup, waiting sweep, revalidate singleton and failure, quota message dedupe, notifications)
 - [x] Wiring checklist, docs
-- [ ] Checks (lint, typecheck, test, build, e2e, drift), reviewer, owner acceptance, PR with auto-merge
+- [x] Review fix: a balance crossing an offer's cost queues `store.revalidate`
+- [x] Checks (lint, typecheck, test, build, drift: all passed and recorded; no e2e, no front end changed), reviewer (one blocking finding: the balance change point; fixed), owner acceptance (2026-10-09), PR with auto-merge
 
 ## PR 3 — Store and admin screens, E2E, nginx · Opus 5.5 `high`
 - [ ] Store `features/catalog/`: home (hero search, service line, category chips, game cards), `/games/[slug]` (hero, ID guide, packs, calculator), cached reads with the `catalog` tag and 5-minute life, `POST /_internal/revalidate` (loopback, secret), `sitemap.xml`, `robots.txt`, metadata, `srcset`
@@ -38,6 +39,7 @@ Spec: `docs/specs/S09-storefront-and-purchase.md` (F12, F13, F15 with A02, A08's
 - [ ] Store `features/search/`: header button, `Ctrl+K` / `⌘K` / `/`, lazy dialog and index, recent searches (try/catch)
 - [ ] Admin: search terms chips on the game form; validation quota and usage on the supplier page; reservation, cancel and player-check fields on the order page; statuses in the list filter
 - [ ] i18n keys (store and admin)
+- [ ] Follow-up from PR 2: a second `store.revalidate` sent within 10 s of one that already ran is dropped (`singleton` + `singletonSeconds`), so that change waits for the 5-minute cache life; decide with the store's route whether to make the queue `stately` with a 10 s `startAfter` (one refresh queued at a time, no change lost)
 - [ ] nginx: `/_internal/` denied, `vdplayercheck` zone
 - [ ] E2E flows and RTL screenshots (store phone and desktop, dark and light; admin light and dark); game page first-load budget recorded in `apps/store/CLAUDE.md`
 - [ ] Wiring checklist, docs (`docs/ROADMAP.md` S09 done, `wiring.md` "Store page with cached reads" pattern, `apps/store/CLAUDE.md`)
