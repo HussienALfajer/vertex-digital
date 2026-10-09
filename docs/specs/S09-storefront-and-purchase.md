@@ -401,3 +401,5 @@ PR 3 (store, admin and E2E, 2026-10-09):
 - "طلباتي" reads its newest page again on an `order` event, a `resync` or the tab coming back, and merges it over the cards already loaded. The order page and the list also read again when the tab comes back into view.
 - The success sequence plays once per order in a tab (session storage), not on each visit.
 - The admin's status filter lists every order status; `awaiting_balance` is shown in the warning tone (`brand/identity.md` §2).
+- The buy box keeps each attempt's `Idempotency-Key` in session storage per pack (`features/purchase/attempt.ts`), so a retry of the same body after a lost answer reuses it even after the sheet was closed or the page reloaded; a definitive answer clears it. `PLAYER_NOT_CONFIRMED` shows the confirmation even when the cached page said the pack cannot be checked, and refreshes the page.
+- The store process copies only the settings it needs from the root `.env`, never the other apps' secrets.

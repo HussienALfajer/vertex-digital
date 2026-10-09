@@ -36,6 +36,7 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
+import { attemptKey, clearAttempt } from './attempt';
 import { useBalance, usePurchasesStopped } from './customer';
 import { clearDraft, readDraft, saveDraft } from './draft';
 import { FieldInput } from './field-input';
@@ -87,7 +88,7 @@ export function BuyBox({
   const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState<Sending>({ status: 'idle' });
   const [slide, setSlide] = useState(0);
-  const attempt = useRef<{ body: string; key: string } | null>(null);
+  const lastBody = useRef<CreateOrder | null>(null);
   const confirmId = useId();
 
   // Rule BB3: the fields typed before signing in come back with the same pack.
@@ -117,9 +118,11 @@ export function BuyBox({
 
   /** Rule PV8: a checkable pack needs the confirmation unless its id is known `valid`. */
   const needsConfirm = (result: PlayerCheck | null) =>
-    checkable &&
-    (forceConfirm ||
-      (result !== null && result.result !== 'valid' && result.result !== 'not_supported'));
+    forceConfirm ||
+    (checkable &&
+      result !== null &&
+      result.result !== 'valid' &&
+      result.result !== 'not_supported');
 
   function change(key: string, value: string) {
     setTyped((current) => ({ ...current, [key]: value }));
@@ -165,16 +168,20 @@ export function BuyBox({
 
   async function send(body: CreateOrder) {
     const sent = JSON.stringify(body);
-    // One `Idempotency-Key` per request body: a retry of the same body after a lost answer gets
-    // the first order back (rule BB6); a changed body is a new attempt.
-    if (attempt.current?.body !== sent) attempt.current = { body: sent, key: crypto.randomUUID() };
+    // One `Idempotency-Key` per request body, kept in session storage: a retry of the same body
+    // after a lost answer gets the first order back (rule BB6), even after the box was reopened.
+    const key = attemptKey(product.id, sent);
+    lastBody.current = body;
     setSending({ status: 'sending' });
-    const result = await createOrder(body, attempt.current.key);
+    const result = await createOrder(body, key);
     if (result.ok) {
+      clearAttempt(product.id);
       clearDraft();
       router.push(`/orders/${result.data.id}`);
       return;
     }
+    // A refusal is definitive; a lost answer keeps the key for the retry.
+    if (result.reason !== 'NETWORK' && result.reason !== 'UNKNOWN') clearAttempt(product.id);
     refused(result.reason, result.details);
   }
 
@@ -204,6 +211,8 @@ export function BuyBox({
         setSending({ status: 'idle' });
         return setNotice(errorText(reason));
       case 'PLAYER_NOT_CONFIRMED':
+        // The server can check this pack though the cached page said not (rule PV8): ask anyway.
+        router.refresh();
         setForceConfirm(true);
         setConfirmed(false);
         setConfirmMissing(true);
@@ -311,11 +320,8 @@ export function BuyBox({
             <LoaderCircleIcon className="size-5 animate-spin" aria-hidden="true" />
             {t(mode === 'reserve' ? 'purchase.reserving' : 'purchase.paying')}
           </p>
-        ) : sending.status === 'failed' && sending.retry && attempt.current ? (
-          <Button
-            size="xl"
-            onClick={() => void send(JSON.parse(attempt.current?.body ?? '{}') as CreateOrder)}
-          >
+        ) : sending.status === 'failed' && sending.retry && lastBody.current ? (
+          <Button size="xl" onClick={() => lastBody.current && void send(lastBody.current)}>
             {t('purchase.retry')}
           </Button>
         ) : (
@@ -380,7 +386,7 @@ export function BuyBox({
           {game.idGuide && <IdGuideButton image={game.idGuide} gameName={game.nameAr} />}
         </div>
       )}
-      {checkable && (
+      {(checkable || forceConfirm) && (
         // A fixed slot: the check starts when a field loses focus, often by a press on "متابعة",
         // and its status must not move that button between the press and the release.
         <div className="flex min-h-8 flex-col justify-center">
