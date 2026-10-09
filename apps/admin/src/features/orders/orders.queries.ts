@@ -44,7 +44,10 @@ export const orderPolicyQuery = queryOptions({
 });
 
 /** A decision changes the order, the lists, the badge, the customer's wallet and the audit log. */
-function useOrdersMutation<Input, Output>(request: (input: Input) => Promise<Output>) {
+function useOrdersMutation<Input, Output>(
+  request: (input: Input) => Promise<Output>,
+  options: { gcTime?: number } = {},
+) {
   const queryClient = useQueryClient();
   const withReauthentication = useReauthentication();
   return useMutation({
@@ -55,6 +58,7 @@ function useOrdersMutation<Input, Output>(request: (input: Input) => Promise<Out
           queryClient.invalidateQueries({ queryKey: [key] }),
         ),
       ),
+    ...options,
   });
 }
 
@@ -69,7 +73,10 @@ export const usePollAttempt = (orderId: string) =>
     ),
   );
 
-/** Rules D2, D3: delivered (units, codes) or failed, with the attempt's `Idempotency-Key`. */
+/**
+ * Rules D2, D3: delivered (units, codes) or failed, with the attempt's `Idempotency-Key`. The
+ * codes typed leave the mutation cache as soon as it settles (rule C1).
+ */
 export const useResolveAttempt = (orderId: string) =>
   useOrdersMutation(
     ({ attemptId, body, key }: { attemptId: string; body: ResolveAttempt; key: string }) =>
@@ -79,6 +86,7 @@ export const useResolveAttempt = (orderId: string) =>
           body: body as never,
         }),
       ),
+    { gcTime: 0 },
   );
 
 /** Rule D5: the remaining units back to the customer's wallet. */
@@ -92,14 +100,16 @@ export const useRefundOrder = (orderId: string) =>
     ),
   );
 
-/** Rule C3: a code's value, re-authenticated and logged. */
+/** Rule C3: a code's value, re-authenticated and logged; never kept in the mutation cache. */
 export const useRevealCode = (orderId: string) =>
-  useOrdersMutation((codeId: string) =>
-    call(
-      api.POST('/api/admin/orders/{id}/codes/{codeId}/reveal', {
-        params: { path: { id: orderId, codeId } },
-      }),
-    ),
+  useOrdersMutation(
+    (codeId: string) =>
+      call(
+        api.POST('/api/admin/orders/{id}/codes/{codeId}/reveal', {
+          params: { path: { id: orderId, codeId } },
+        }),
+      ),
+    { gcTime: 0 },
   );
 
 export const useSetOrderPolicy = () =>

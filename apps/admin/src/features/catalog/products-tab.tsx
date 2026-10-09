@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { formatSyp, formatUsd, type GameDetail, type Product } from '@vertex-digital/contracts';
 import {
   Badge,
@@ -140,16 +141,25 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                   </span>
                 </TableCell>
                 <TableCell className="whitespace-nowrap tabular-nums">
-                  {product.deliveryStats ? (
-                    t('catalog.products.deliveryTime', {
-                      median: formatDuration(product.deliveryStats.medianMs),
-                      p90: formatDuration(product.deliveryStats.p90Ms),
-                    })
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {t('catalog.products.noDeliveryData')}
-                    </span>
-                  )}
+                  <span className="flex flex-col items-start gap-1">
+                    {product.deliveryStats ? (
+                      t('catalog.products.deliveryTime', {
+                        median: formatDuration(product.deliveryStats.medianMs),
+                        p90: formatDuration(product.deliveryStats.p90Ms),
+                      })
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {t('catalog.products.noDeliveryData')}
+                      </span>
+                    )}
+                    <Link
+                      to="/orders"
+                      search={{ productId: product.id }}
+                      className="text-sm text-primary underline-offset-4 hover:underline"
+                    >
+                      {t('catalog.products.orders')}
+                    </Link>
+                  </span>
                 </TableCell>
                 <TableCell>
                   <span className="flex items-center justify-end gap-1">

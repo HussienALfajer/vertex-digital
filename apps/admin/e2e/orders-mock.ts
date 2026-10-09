@@ -296,6 +296,7 @@ export class OrdersMock {
       const tab = (url.searchParams.get('tab') ?? 'all') as AdminOrderTab;
       const q = url.searchParams.get('q')?.toLowerCase();
       const supplier = url.searchParams.get('supplier');
+      const productId = url.searchParams.get('productId');
       const page = Number(url.searchParams.get('page') ?? 1);
       const pageSize = Number(url.searchParams.get('pageSize') ?? 50);
       const items = this.orders
@@ -313,7 +314,8 @@ export class OrdersMock {
             row.number.toLowerCase().includes(q.replace(/^vo-?/, '')) ||
             row.customer.email.includes(q),
         )
-        .filter((row) => !supplier || row.supplierCode === supplier);
+        .filter((row) => !supplier || row.supplierCode === supplier)
+        .filter((row) => !productId || row.product.id === productId);
       return {
         status: 200,
         json: {

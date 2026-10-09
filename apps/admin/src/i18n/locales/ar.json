@@ -1711,7 +1711,8 @@
       "reviewOpen": "بانتظار مراجعة السعر",
       "routes": "المسارات",
       "deliveryTime": "الوسيط {{median}} · 90% خلال {{p90}}",
-      "noDeliveryData": "لا بيانات بعد"
+      "noDeliveryData": "لا بيانات بعد",
+      "orders": "طلبات الباقة"
     }
   },
   "pricing": {

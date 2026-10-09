@@ -35,11 +35,23 @@ export function formatSince(iso: string, now: Date = new Date()): string {
  */
 export const ltr = (text: string) => `⁦${text}⁩`;
 
-/** A delivery time (S08 rule T1): "45 ث" under a minute, "3.5 د" under an hour, else "2 س". */
+const units = Object.fromEntries(
+  (['second', 'minute', 'hour'] as const).map((unit) => [
+    unit,
+    new Intl.NumberFormat(LOCALE, {
+      style: 'unit',
+      unit,
+      unitDisplay: 'short',
+      maximumFractionDigits: 1,
+    }),
+  ]),
+) as Record<'second' | 'minute' | 'hour', Intl.NumberFormat>;
+
+/** A delivery time (S08 rule T1), in seconds under a minute, minutes under an hour, else hours. */
 export function formatDuration(ms: number): string {
   const seconds = Math.round(ms / 1_000);
-  if (seconds < 60) return `${seconds} ث`;
+  if (seconds < 60) return units.second.format(seconds);
   const minutes = seconds / 60;
-  if (minutes < 60) return `${Number(minutes.toFixed(1))} د`;
-  return `${Number((minutes / 60).toFixed(1))} س`;
+  if (minutes < 60) return units.minute.format(minutes);
+  return units.hour.format(minutes / 60);
 }

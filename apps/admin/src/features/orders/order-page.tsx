@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, CircleAlertIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopyButton } from '../../components/copy-button';
 import { FormAlert } from '../../components/form-alert';
@@ -235,19 +235,36 @@ function Codes({ order }: { order: AdminOrder }) {
   const reveal = useRevealCode(order.id);
   const [shown, setShown] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState<string | null>(null);
+  // One timer per code: each is hidden 30 seconds after its own reveal.
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  const hide = useCallback((codeId: string) => {
+    clearTimeout(timers.current.get(codeId));
+    timers.current.delete(codeId);
+    setShown(({ [codeId]: _hidden, ...rest }) => rest);
+  }, []);
 
   useEffect(() => {
-    if (Object.keys(shown).length === 0) return;
-    const timer = setTimeout(() => setShown({}), REVEAL_MS);
-    return () => clearTimeout(timer);
-  }, [shown]);
+    const pending = timers.current;
+    return () => {
+      for (const timer of pending.values()) clearTimeout(timer);
+    };
+  }, []);
 
   async function show(codeId: string) {
     setFailure(null);
     try {
       const { code } = await reveal.mutateAsync(codeId);
+      // The value lives only in this card's state, never in the query client (rule C1).
+      reveal.reset();
       setShown((previous) => ({ ...previous, [codeId]: code }));
+      clearTimeout(timers.current.get(codeId));
+      timers.current.set(
+        codeId,
+        setTimeout(() => hide(codeId), REVEAL_MS),
+      );
     } catch (error) {
+      reveal.reset();
       setFailure(errorMessage(t, error));
     }
   }
@@ -261,17 +278,13 @@ function Codes({ order }: { order: AdminOrder }) {
           return (
             <li key={code.id} className="flex flex-col gap-2 rounded-md border border-border p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono" dir="ltr">
+                <span className="font-medium tabular-nums" dir="ltr">
                   {code.position}. {value ?? code.masked}
                 </span>
                 {value ? (
                   <span className="flex gap-2">
                     <CopyButton value={value} label={t('orders.codes.copy')} />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShown(({ [code.id]: _hidden, ...rest }) => rest)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => hide(code.id)}>
                       <EyeOffIcon />
                       {t('orders.codes.hide')}
                     </Button>
@@ -358,7 +371,7 @@ function Attempts({ attempts }: { attempts: FulfilmentAttempt[] }) {
               <bdi dir="ltr">{formatUsd(attempt.unitCostUsdUnits)}</bdi>
             </Fact>
             <Fact label={t('orders.attempts.key')}>
-              <bdi dir="ltr" className="font-mono text-xs break-all">
+              <bdi dir="ltr" className="text-xs break-all">
                 {attempt.id}
               </bdi>
             </Fact>
@@ -439,7 +452,7 @@ function Attempts({ attempts }: { attempts: FulfilmentAttempt[] }) {
               <ul className="flex flex-col gap-1 text-sm">
                 {attempt.webhookEvents.map((event) => (
                   <li key={event.id} className="flex flex-wrap items-center gap-2">
-                    <bdi dir="ltr" className="font-mono text-xs">
+                    <bdi dir="ltr" className="text-xs">
                       {event.eventId}
                     </bdi>
                     {event.result && (

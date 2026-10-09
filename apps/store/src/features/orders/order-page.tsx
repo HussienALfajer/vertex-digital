@@ -203,7 +203,7 @@ function CodeRow({ orderId, code }: { orderId: string; code: OrderCode }) {
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-border p-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="min-w-0 font-mono text-base break-all" dir="ltr">
+        <p className="min-w-0 text-base font-medium tabular-nums break-all" dir="ltr">
           {revealed ? revealed.code : code.masked}
         </p>
         {revealed ? (

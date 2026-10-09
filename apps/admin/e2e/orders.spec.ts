@@ -57,6 +57,17 @@ test.describe('orders', () => {
     await expect(page.getByText(o.empty.active)).toBeVisible();
   });
 
+  test("filters by one product from the game page's link, then clears it", async ({
+    page,
+    admin,
+  }) => {
+    await open(page, admin, '/orders?productId=0199b000-0000-7000-8000-000000000046');
+    await expect(page.getByText(o.filters.oneProduct)).toBeVisible();
+    await page.getByRole('button', { name: o.filters.clearProduct }).click();
+    await expect(page).not.toHaveURL(/productId/);
+    await expect(rows(page)).toHaveCount(4);
+  });
+
   test('polls a held order again, then refunds it with re-authentication (rules D4, D5)', async ({
     page,
     admin,
