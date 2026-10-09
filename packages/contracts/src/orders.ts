@@ -9,6 +9,7 @@ import {
   type ProductAvailability,
   productAvailability,
   productKindSchema,
+  productSchema,
 } from './catalog.js';
 import { REFERENCE_CODE_ALPHABET } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema, pagedListSchema, pageQuerySchema } from './lists.js';
@@ -425,8 +426,9 @@ export const DELIVERY_STATS_SAMPLE_SIZE = 50;
 export const DELIVERY_STATS_SAMPLE_DAYS = 30;
 export const DELIVERY_STATS_MIN_SAMPLES = 5;
 
-export const deliveryStatsSchema = z
-  .object({ medianMs: z.int().nonnegative(), p90Ms: z.int().nonnegative(), count: z.int() })
+/** `catalog.ts` holds the shape on each product (it cannot import this file). */
+export const deliveryStatsSchema = productSchema.shape.deliveryStats
+  .unwrap()
   .meta({ id: 'DeliveryStats' });
 
 export type DeliveryStats = z.infer<typeof deliveryStatsSchema>;

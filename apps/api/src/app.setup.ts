@@ -14,6 +14,7 @@ import {
   CUSTOMER_AUTH_BASE_PATH,
   CUSTOMER_AUTH_NEST_PATHS,
 } from './modules/auth/index.js';
+import { SUPPLIER_WEBHOOK_ROUTE, supplierWebhookBody } from './modules/suppliers/index.js';
 import { TELEGRAM_WEBHOOK_PATH, telegramWebhookBodyLimit } from './modules/telegram/index.js';
 
 export const API_PREFIX = 'api';
@@ -31,6 +32,7 @@ export function configureApp(app: NestExpressApplication): void {
   app.use(sameOriginOnly({ store: env.STORE_URL, admin: env.ADMIN_URL }));
   // Before Nest's body parser, which Nest registers when the app initializes.
   server.post(TELEGRAM_WEBHOOK_PATH, telegramWebhookBodyLimit);
+  server.post(SUPPLIER_WEBHOOK_ROUTE, supplierWebhookBody);
   // Better Auth reads its own request bodies, so its handlers go before Nest's body parser, which
   // Nest registers when the app initializes. The admin path is the more specific one: first.
   server.all(

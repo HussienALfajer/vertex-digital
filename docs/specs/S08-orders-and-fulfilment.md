@@ -282,3 +282,17 @@ Tests:
   3. Store `/orders` and the order page; admin `/orders`, the order page, the policy page and the delivery time column; E2E and screenshots.
 - Module layering: `orders` sits above `catalog`, `pricing`, `suppliers`, `wallet` and `settings`, reading them through their services; the webhook intake belongs to `suppliers` and hands events to the worker.
 - Update `docs/architecture.md` (the `orders` and `suppliers` rows, worker jobs), `.env.example` (`ORDER_CODES_SECRET`), `docs/deployment.md` (the key on api and worker), the commands table (`order:place`, the fake supplier's new options), and S02's timeline extras.
+
+## Settled in implementation
+PR 1 (contracts, db, api, 2026-10-09):
+- The adapter interface change (`delivered.quantity`, `failed_definitive.inputRejected`, a repeated key answering the order's current outcome) ships in PR 1 with the fake adapter (an `invalid…` player is refused with `inputRejected`), since the write path applies those outcomes; the Telegram kinds and the daily summary lines move to PR 2 with the jobs that send them.
+- `orders.idempotency_key` is unique across customers (the database convention for keys): another customer's key answers `IDEMPOTENCY_KEY_REUSED`, never their order. A replay of the same key and body answers even while purchases are stopped; a new purchase does not.
+- The 10-entry cap of `orders.fields` is the contract's (`createOrderSchema`); PostgreSQL checks only that it is an object (a check cannot count keys).
+- Column names: `fulfilment_attempts.supplier_error_code` (the supplier's own error code, not its supplier), `supplier_offer_id` (the offer id sent), `reminded_at` (rule MN2), `decision_idempotency_key` (rules D2, D3); `orders.refund_idempotency_key` (rule D5). A decision's key is replayed even when the second request waited on the order lock behind the first.
+- Polling times: `firstPollAt(sentAt, policy)`, then `nextPollAt(sentAt, now, policy)` from the time of each poll (so a late worker does not poll in a burst), null once `review_poll_hours` past the hard limit; `manualReminderAt` for MN2.
+- The admin list's `status` filter takes one status; the tabs (`all`, `review`, `manual`, `active`, `delivered`, `refunded`) carry the sets of statuses.
+- Every product response carries `deliveryStats` (rule T1), so S09 can show it on the store without another route.
+- The code reveal's audit detail names the stored row `itemId` (the audit test refuses any detail key containing "code").
+- `awaiting_balance` reads as `processing` for the customer until S09 defines its stage.
+- A webhook the adapter cannot parse is stored under `malformed:<SHA-256 of the body>` for the worker to mark `malformed`.
+- The purchase rate limits count in `customer_rate_limits` (every request, refused or not, as S01's counters); nginx adds `vdpurchase` (POST only), `vdreveal` and `vdwebhook`.

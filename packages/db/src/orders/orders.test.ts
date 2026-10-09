@@ -189,6 +189,7 @@ function request(
     idempotencyKey: newId(),
     requestHash: hash({ productId: item.id }),
     fakeEnabled: true,
+    purchasesStopped: false,
     channel: 'store',
     ...overrides,
   };
@@ -288,6 +289,11 @@ describe('purchase (rules O1–O6, M1)', () => {
     expect(await refusal(buy({ ...input, requestHash: hash({ other: 1 }) }))).toMatchObject({
       code: 'IDEMPOTENCY_KEY_REUSED',
     });
+    // A replay still answers while purchases are stopped; a new purchase does not (rule O2).
+    expect(await buy({ ...input, purchasesStopped: true })).toMatchObject({ created: false });
+    expect(
+      await refusal(buy({ ...input, idempotencyKey: newId(), purchasesStopped: true })),
+    ).toMatchObject({ code: 'PURCHASES_STOPPED' });
     const stranger = await customer({ funds: usd(10) });
     expect(await refusal(buy({ ...input, customerId: stranger }))).toMatchObject({
       code: 'IDEMPOTENCY_KEY_REUSED',

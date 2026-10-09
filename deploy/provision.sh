@@ -134,6 +134,7 @@ CUSTOMER_AUTH_SECRET=$(openssl rand -hex 32)
 ADMIN_AUTH_SECRET=$(openssl rand -hex 32)
 ALTCHA_HMAC_KEY=$(openssl rand -hex 32)
 SUPPLIER_KEYS_SECRET=$(openssl rand -base64 32)
+ORDER_CODES_SECRET=$(openssl rand -base64 32)
 FILES_ROOT=$SITE_DIR/shared/files
 FILES_ACCEL_PREFIX=/internal-files
 # Empty until the owner sets them (docs/deployment.md): Sentry (Q15), the Telegram bot (ADR 0019).

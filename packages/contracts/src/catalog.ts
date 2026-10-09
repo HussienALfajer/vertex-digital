@@ -328,6 +328,10 @@ export const productSchema = z
     basisSupplierNameAr: z.string().nullable(),
     /** A price review holds the price (rule P2). */
     reviewOpen: z.boolean(),
+    /** Delivery time (S08 rule T1): null with fewer than 5 delivered orders. */
+    deliveryStats: z
+      .object({ medianMs: z.int().nonnegative(), p90Ms: z.int().nonnegative(), count: z.int() })
+      .nullable(),
   })
   .meta({ id: 'Product' });
 

@@ -51,6 +51,8 @@ export interface PurchaseInput {
   requestHash: string;
   /** `SUPPLIER_FAKE_ENABLED` (S07 rule SP1). */
   fakeEnabled: boolean;
+  /** The `purchases_stopped` switch, read under the switches' shared lock (rule O2). */
+  purchasesStopped: boolean;
   /** `store` for the customer's request, `cli` for `order:place`. */
   channel: Extract<AuditChannel, 'store' | 'cli'>;
   ipAddress?: string | null;
@@ -76,8 +78,8 @@ const uniqueViolation = (error: unknown, constraint: string): boolean => {
 
 /**
  * The pay step (rules O1–O6, M1) in the caller's READ COMMITTED transaction, after the caller took
- * the switches lock shared and checked the purchase stop (rule O2): replays the same key and
- * body, locks the product `FOR SHARE` (repricing takes it `FOR UPDATE`, so the price read is the
+ * the switches lock shared and read the purchase stop (rule O2): replays the same key and body
+ * (even while stopped), refuses a new purchase while stopped, locks the product `FOR SHARE` (repricing takes it `FOR UPDATE`, so the price read is the
  * one in force), checks availability for this customer, the price, the quantity and the fields,
  * then posts the purchase journal (which locks the wallet and refuses `INSUFFICIENT_BALANCE`),
  * inserts the `paid` order, its event, the audit entry and the `orders.fulfil` job. Any refusal
@@ -100,6 +102,7 @@ export async function purchaseOrder(
     }
     return { order: existing, created: false };
   }
+  if (input.purchasesStopped) throw new OrderError('PURCHASES_STOPPED', 'Purchases are stopped');
 
   const [customer] = await tx
     .select({ isTest: customers.isTest })
