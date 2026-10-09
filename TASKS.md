@@ -1,37 +1,42 @@
-# TASKS — S08 Orders and fulfilment engine
+# TASKS — S09 Storefront and purchase
 
-Spec: `docs/specs/S08-orders-and-fulfilment.md` (F11 with F26 SW7, F27 and F13's pay step; ADRs 0003, 0004, 0005, 0011, 0013, 0014, 0016, 0019, 0020, 0021, 0022). Three PRs, as the spec's implementation notes suggest; each leaves `main` green and runs in its own session. Real adapters' order calls follow in their own `/supplier-adapter` PRs (Q12).
+Spec: `docs/specs/S09-storefront-and-purchase.md` (F12, F13, F15 with A02, A08's store side, A15, F26 SW7 and F27; ADRs 0002, 0003, 0004, 0005, 0008, 0011, 0012, 0013, 0015, 0019, 0020, 0021, 0022, 0023). Three PRs, as the spec's implementation notes suggest; each leaves `main` green and runs in its own session.
 
-## PR 1 — Contracts, db, order write path, `orders` API module, webhook intake, `order:place`, bridge · Opus 5.5 `high`
-- [x] Contracts `orders.ts`: attempt statuses and resolvers, event kinds and actors, refund reasons, route skip reasons; `orderCustomerStage` (O13); schemas (create, summary, order, admin list query and page, admin order, resolve, refund, reveal, policy); pure `orderTotal`, `refundAmount`, `costOfGoods`, `routeProfitable`, `orderCandidates` (R1–R4), `nextPollAt`, `pastHardLimit` (F7), `deliveryStats` (T1), `orderNumberSchema`, `maskCode`; unit tests (100%)
-- [x] Contracts: error codes with Arabic store and admin text; audit entity types and actions with admin labels; queues `orders.fulfil`, `orders.poll`, `orders.sweep`, `suppliers.webhook`; notification kinds (`order_delivered`, `order_partially_refunded`, `order_refunded`, `order_delayed`); ledger account kinds and journal kinds (Telegram kinds move to PR 2, with their jobs)
-- [x] Suppliers interface: `delivered.quantity`, `failed_definitive.inputRejected`; the fake adapter answers by the new shape (scripting stays in PR 2)
-- [x] Db (`/db-migration`): `orders`, `order_events`, `fulfilment_attempts`, `order_codes`, `order_code_reveals`, `supplier_webhook_events`, `order_policy` (seeded); enums, checks, partial unique indexes, triggers, grants; `TABLE_OWNERS`; tests
-- [x] Db: codes and webhook body encryption (AES-256-GCM, row id as associated data, key version, `ORDER_CODES_SECRET`); tests
-- [x] Db: order write path `packages/db/src/orders` (`purchaseOrder`, `transitionOrder`, `applyOutcome`, `refundRemaining`, cost of goods; M1–M3) and its reads (customer and admin views, `revealCode`, delivery stats, orders on the wallet timeline); tests on real PostgreSQL (lost race, one refund, parallel purchases, one key in parallel, purchase against repricing; the stop is the API's switches lock)
-- [x] Api `orders` module: customer routes (buy, list, read, reveal), admin routes (list, counts, read, poll, resolve, refund, reveal, policy), delivery stats on the admin game page, wallet entries with order number and product; `test/orders.test.ts`
-- [x] Api `suppliers` webhook intake (`POST /api/webhooks/suppliers/:code`: raw body cap, HMAC and timestamp, stored once, job queued); tests
-- [x] Rate limits (API and nginx zones in `deploy/`): purchase, reveal, webhook
-- [x] Env: `ORDER_CODES_SECRET` (api and worker, required in production, derived locally); `.env.example`, `provision.sh`, `docs/deployment.md`
-- [x] Dev CLI `order:place`; commands table in `AGENTS.md`
-- [x] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow changed shapes
-- [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, `wiring.md` "Order transition" pattern, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (one blocking finding: race and limit tests on the money and public routes, added), owner acceptance (2026-10-09), PR with auto-merge
+## PR 1 — Contracts, db, api (public catalog, player checks, reservations, cancel, stream, admin additions), bridge · Opus 5.5 `high`
+- [ ] Contracts `catalog.ts`: `searchTermsSchema`, `storefrontSchema`, `storeGameSchema`, `storeProductSchema`, `searchIndexSchema`, service statuses; pure `normalizeSearchText`, `searchCatalog`, `cheapestPackCombination`, `gameServiceStatus`, `storeServiceState`, `CATALOG_IMAGE_WIDTHS`; unit tests (100%)
+- [ ] Contracts `orders.ts`: `awaiting_balance` stage, `CANCEL_REASONS`, `PLAYER_CHECK_STATES`, `createOrderSchema` (`whenBalanceShort`, `confirmPlayer`), player-check schemas, `ORDER_TIMELINE_STEPS` and `orderTimeline` (replaces `stageTimeline`), `reservationCharge`, reservation limits; order and admin order shapes extended; unit tests
+- [ ] Contracts: `validationQuotaSchema`; notification events `order_paid`, `order_cancelled` and the stream's `order` event; Telegram kind `validation_quota_reached`; error codes (`PLAYER_NOT_CONFIRMED`, `RESERVATIONS_LIMIT_REACHED`, `ORDER_NOT_CANCELLABLE`) with Arabic store and admin text; audit actions with admin labels; queues `orders.pay_waiting`, `orders.waiting_sweep`, `store.revalidate`
+- [ ] Db (`/db-migration`): `orders` columns (nullable journal with its check, `expires_at`, `reserved_at`, `cancel_reason`, `player_check`, `player_name`), indexes, guard trigger change (`awaiting_balance → paid` price columns); `player_checks` (grants without `UPDATE`); `suppliers.validation_daily_quota`; `supplier_calls` index; `catalog_games.search_terms`; tests
+- [ ] Db: order write path: reserve in `purchaseOrder` (limit of 3 under the wallet lock, PV8 states), `payWaitingOrders` (RS4 steps, RS6 charge, skip and continue), `cancelReservation`, `expireReservations`; `pg_notify('customer_orders', …)` on every status change; reads extended; concurrency tests (two credits on one reservation, pay against cancel and expiry, repricing and stop, one key with `reserve` in parallel, skip-and-continue)
+- [ ] Api `catalog`: public `storefront`, `games/:slug`, `search-index` (no cookie, `public, max-age=30`, no supplier data), image widths (`?w=`, WebP variants made once); admin search terms on the game edit; `store.revalidate` queued at the change points (catalog, prices, availability, health, supplier pause, rate)
+- [ ] Api `orders`: `POST /api/player-checks` (PV1–PV7: route choice, HMAC cache, limits counting supplier calls only, daily quota with the Telegram alert, 5 s timeout, `supplier_calls`); purchase with `reserve` and `confirmPlayer`; `POST /api/orders/:id/cancel`; responses with `timeline`, `expiresAt`, `cancelReason`, `playerName`; admin list and detail fields and statuses
+- [ ] Api: `orders.pay_waiting` queued at the three A02 credit points and after a reservation; the stream's `order` event (LISTEN on `customer_orders`, fan-out by customer); admin `PUT /api/admin/suppliers/:code/validation-quota` with today's usage
+- [ ] Rate limits: player checks (API per customer and per IP; nginx zone `vdplayercheck` in `deploy/`)
+- [ ] Env: `PLAYER_CHECK_SECRET` (api), `STORE_REVALIDATE_SECRET` (api, worker, store); `.env.example`, `provision.sh`, `docs/deployment.md`
+- [ ] Dev CLI `order:place --reserve --confirm-player`; commands table in `AGENTS.md`
+- [ ] Tests: `test/catalog.test.ts`, `test/orders.test.ts`, `test/player-checks.test.ts`, `test/notifications.test.ts`, `test/suppliers.test.ts` additions per the spec's API list
+- [ ] Bridge: build, OpenAPI export, admin client; admin and store E2E mocks follow changed shapes (`timeline`)
+- [ ] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, spec "Settled in implementation")
+- [ ] Checks (lint, typecheck, test, build, e2e, drift), reviewer, owner acceptance (endpoints at `/api/docs`), PR with auto-merge
 
-## PR 2 — Worker: routing, sending, polling, webhooks, sweep, manual, notifications · Opus 5.5 `high`
-- [x] Jobs `orders.fulfil` (R1–R6), `orders.poll` (F3), `suppliers.webhook` (F5), `orders.sweep` (F6, F7, MN2); supplier calls recorded in `supplier_calls`
-- [x] Telegram kinds and cards (`manual_order`, reminder, `order_needs_review`, `order_conflict`) with dedupe keys; daily summary lines
-- [x] Customer notifications in the change's transaction; codes never logged (log redaction covers `codes`)
-- [x] Fake supplier order scripting (`--order`, `--resolve … --via poll|webhook`); commands table
-- [x] Worker env `ORDER_CODES_SECRET` (required in production, derived locally exactly as the API's)
-- [x] Tests (each tier, guard, balance, already tried, test customers, every outcome, partial, input rejection, schedule and hard limit, review polling, sweep, webhooks applied / same result / unknown key / conflict, manual cards and reminder, dedupe keys, log capture)
-- [x] Migration 0033: `fulfilment_attempts.field_map` (reviewer finding: a re-send keeps the fields of the first send); late results of polls and first calls reported as conflicts (reviewer finding)
-- [x] Wiring checklist, docs
-- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (two blocking findings, fixed and re-reviewed: no blocking issues), owner acceptance waived by the owner for this PR, PR with auto-merge
+## PR 2 — Worker: paying and expiring reservations, cache cleanup, store revalidation, Telegram · Opus 5.5 `high`
+- [ ] Jobs `orders.pay_waiting` (stately per customer, RS4 through the db write path), `orders.waiting_sweep` (every 5 minutes, at most 500)
+- [ ] `orders.sweep` steps: RS7 expiry (at most 100, `SKIP LOCKED`) and `player_checks` cleanup
+- [ ] `store.revalidate` (singleton, at most once per 10 s, 5 s timeout, 3 retries, warning only)
+- [ ] Notifications `order_paid` (center) and `order_cancelled` (center and email with its template); Telegram `validation_quota_reached` sending; daily summary lines (validations per supplier, reservations paid and expired)
+- [ ] Worker env `STORE_REVALIDATE_SECRET`, `STORE_PORT`
+- [ ] Tests (each RS4 step and outcome, expiry, cleanup, waiting sweep, revalidate singleton and failure, quota message dedupe, notifications)
+- [ ] Wiring checklist, docs
+- [ ] Checks (lint, typecheck, test, build, e2e, drift), reviewer, owner acceptance, PR with auto-merge
 
-## PR 3 — Store and admin screens, E2E · Opus 5.5 `high`
-- [x] Store `features/orders/`: `/orders` and `/orders/[id]` (stages, fields, code reveal, refetch on notification); account menu and wallet entry links; i18n
-- [x] Admin `features/orders/`: `/orders` (tabs, filters, search), `/orders/$id` (decision panel, attempts with candidates, events, journals, codes and reveals, webhook events), `/orders/policy`; navigation with the badge; "وقت التسليم" column on the game page; i18n
-- [x] E2E flows and RTL screenshots (store phone width dark and light; admin light and dark)
-- [x] Wiring checklist, docs (`docs/ROADMAP.md` S08 done, `wiring.md` patterns, folder `CLAUDE.md` files)
-- [x] Checks (lint, typecheck, test, build, e2e, drift, OpenAPI drift: all passed and recorded), reviewer (four blocking findings: codes in the query cache, one shared hide timer, hard-coded duration units, no product filter control; fixed and re-reviewed: no blocking issues), owner acceptance waived by the owner for this PR, PR with auto-merge
+## PR 3 — Store and admin screens, E2E, nginx · Opus 5.5 `high`
+- [ ] Store `features/catalog/`: home (hero search, service line, category chips, game cards), `/games/[slug]` (hero, ID guide, packs, calculator), cached reads with the `catalog` tag and 5-minute life, `POST /_internal/revalidate` (loopback, secret), `sitemap.xml`, `robots.txt`, metadata, `srcset`
+- [ ] Store buy box: fields with the CT7 schema, sign-in return with session storage, balance and shortfall, player check UI (PV7), slide-to-pay (threshold, keyboard, reduced motion), idempotent submit and its error views, reservation
+- [ ] Store `features/orders/`: LT1 timeline, live `order` events, reservation countdown and cancel, cancel reasons, player name, expected time, success sequence; "طلباتي" live; deposit wizard `?amount` and `?order`
+- [ ] Store `features/search/`: header button, `Ctrl+K` / `⌘K` / `/`, lazy dialog and index, recent searches (try/catch)
+- [ ] Admin: search terms chips on the game form; validation quota and usage on the supplier page; reservation, cancel and player-check fields on the order page; statuses in the list filter
+- [ ] i18n keys (store and admin)
+- [ ] nginx: `/_internal/` denied, `vdplayercheck` zone
+- [ ] E2E flows and RTL screenshots (store phone and desktop, dark and light; admin light and dark); game page first-load budget recorded in `apps/store/CLAUDE.md`
+- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S09 done, `wiring.md` "Store page with cached reads" pattern, `apps/store/CLAUDE.md`)
+- [ ] Checks (lint, typecheck, test, build, e2e, drift, OpenAPI drift), reviewer, owner acceptance (the spec's 13 browser steps), PR with auto-merge
