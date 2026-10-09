@@ -1,4 +1,4 @@
-import { formatUsd, type GameDetail, type Product } from '@vertex-digital/contracts';
+import { formatSyp, formatUsd, type GameDetail, type Product } from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
@@ -14,10 +14,11 @@ import {
   TabsList,
   TabsTrigger,
 } from '@vertex-digital/ui';
-import { ArrowDownIcon, ArrowUpIcon, PackageIcon, PlusIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, PackageIcon, PlusIcon, RouteIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
+import { RoutesDrawer } from '../suppliers/routes-drawer';
 import { useArchiveProduct, useReorderProducts, useUpdateProduct } from './catalog.queries';
 import { AvailabilityBadge, catalogFailure, MoveButton, StatusBadge } from './catalog-parts';
 import { moved } from './catalog-search';
@@ -26,12 +27,14 @@ import { ProductDialog } from './product-dialog';
 /**
  * "الباقات" (S06 screens): the game's products in order (name, kind, in-game amount, official
  * price, max quantity, status, availability), add and edit by kind, pause and resume (rule CT4),
- * order (rule CT5), archive and restore with an archived filter (rule CT1).
+ * order (rule CT5), archive and restore with an archived filter (rule CT1). S07: the stored price
+ * in USD and SYP, the supplier it follows, a held review, and each product's routes drawer.
  */
 export function ProductsTab({ game }: { game: GameDetail }) {
   const { t } = useTranslation();
   const [archived, setArchived] = useState(false);
   const [editing, setEditing] = useState<Product | 'new' | null>(null);
+  const [routing, setRouting] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const reorder = useReorderProducts(game.id);
   const archive = useArchiveProduct();
@@ -91,6 +94,7 @@ export function ProductsTab({ game }: { game: GameDetail }) {
               <TableHead>{t('catalog.products.columns.kind')}</TableHead>
               <TableHead>{t('catalog.products.columns.amount')}</TableHead>
               <TableHead>{t('catalog.products.columns.official')}</TableHead>
+              <TableHead>{t('catalog.products.columns.price')}</TableHead>
               <TableHead>{t('catalog.products.columns.maxQuantity')}</TableHead>
               <TableHead>{t('catalog.products.columns.status')}</TableHead>
               <TableHead>{t('catalog.products.columns.availability')}</TableHead>
@@ -118,12 +122,20 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                     <bdi dir="ltr">{formatUsd(product.officialPriceUsdUnits)}</bdi>
                   )}
                 </TableCell>
+                <TableCell>
+                  <ProductPrice product={product} />
+                </TableCell>
                 <TableCell className="tabular-nums">{product.maxQuantity}</TableCell>
                 <TableCell>
                   <StatusBadge status={product.status} />
                 </TableCell>
                 <TableCell>
-                  <AvailabilityBadge availability={product.availability} />
+                  <span className="flex flex-col items-start gap-1">
+                    <AvailabilityBadge availability={product.availability} />
+                    {product.reviewOpen && (
+                      <Badge tone="warning">{t('catalog.products.reviewOpen')}</Badge>
+                    )}
+                  </span>
                 </TableCell>
                 <TableCell>
                   <span className="flex items-center justify-end gap-1">
@@ -156,6 +168,10 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                         </MoveButton>
                         <Button variant="outline" size="sm" onClick={() => setEditing(product)}>
                           {t('catalog.actions.edit')}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setRouting(product.id)}>
+                          <RouteIcon />
+                          {t('catalog.products.routes')}
                         </Button>
                         <Button
                           variant="ghost"
@@ -193,6 +209,11 @@ export function ProductsTab({ game }: { game: GameDetail }) {
           </TableBody>
         </Table>
       )}
+      <RoutesDrawer
+        game={game}
+        product={game.products.find((product) => product.id === routing) ?? null}
+        onClose={() => setRouting(null)}
+      />
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         {editing !== null && (
           <ProductDialog
@@ -203,5 +224,30 @@ export function ProductsTab({ game }: { game: GameDetail }) {
         )}
       </Dialog>
     </div>
+  );
+}
+
+/** The stored price (S07 rule P2) with its SYP display price, and the supplier it follows (P1). */
+function ProductPrice({ product }: { product: Product }) {
+  const { t } = useTranslation();
+  if (product.priceUsdUnits === null) {
+    return <span className="text-sm text-muted-foreground">{t('catalog.products.noPrice')}</span>;
+  }
+  return (
+    <span className="flex flex-col gap-0.5">
+      <bdi dir="ltr" className="font-medium tabular-nums">
+        {formatUsd(product.priceUsdUnits)}
+      </bdi>
+      {product.priceSypUnits !== null && (
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {t('catalog.products.syp', { amount: formatSyp(product.priceSypUnits) })}
+        </span>
+      )}
+      {product.basisSupplierNameAr && (
+        <span className="text-xs text-muted-foreground">
+          {t('catalog.products.basis', { supplier: product.basisSupplierNameAr })}
+        </span>
+      )}
+    </span>
   );
 }

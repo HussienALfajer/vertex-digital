@@ -14,6 +14,7 @@ import {
   marginBasisPoints,
   missingForActivation,
   type Product,
+  type ProductAvailability,
   type ProductKind,
   priceFromCost,
   productAvailability,
@@ -52,6 +53,14 @@ type StoredGame = Omit<Row<Game>, 'cover' | 'idGuide'> & {
   idGuideFileId: string | null;
 };
 
+/** What the suppliers mock tells the catalog about a product's price (S07). */
+export interface ProductPricing {
+  price: { priceUsdUnits: number; minMarginUsdUnits: number } | null;
+  usableRouteCostsUsdUnits: number[];
+  basisSupplierNameAr: string | null;
+  reviewOpen: boolean;
+}
+
 type StoredRule = MarginRuleValues & {
   id: string;
   scope: MarginScope;
@@ -63,7 +72,7 @@ const NOW = '2026-10-08T09:00:00.000Z';
 
 let sequence = 0;
 /** A UUIDv7-shaped id, unique within the run. */
-const nextId = () =>
+export const nextId = () =>
   `0199a000-0000-7000-8000-${(0xc00 + ++sequence).toString(16).padStart(12, '0')}`;
 
 const error = (status: number, code: string, details?: unknown): Answer => ({
@@ -102,6 +111,15 @@ export class CatalogMock {
       updatedAt: NOW,
     },
   ];
+
+  /**
+   * S07: a product's stored price and what its availability reads (rules P2, P6), from the
+   * suppliers mock; without it a product has no price and no route.
+   */
+  pricing: ((productId: string) => ProductPricing) | null = null;
+
+  /** S07 rule P5: a rule change reprices what it governs. */
+  onRulesChanged: () => void = () => {};
 
   constructor(
     /** The current rate (S03), for SYP prices (rule PR8). */
@@ -209,26 +227,64 @@ export class CatalogMock {
     };
   }
 
-  private product(row: Row<Product>): Product {
+  /** Rule CT9 with S07 rule P6: derived on read from the product and its routes. */
+  availabilityOf(productId: string): ProductAvailability {
+    const row = this.products.find((item) => item.id === productId) as Row<Product>;
     const game = this.games.find((item) => item.id === row.gameId) as StoredGame;
     const category = this.categories.find((item) => item.id === game.categoryId);
+    const pricing = this.pricing?.(row.id);
+    return productAvailability({
+      categoryArchived: !!category?.archivedAt,
+      gameArchived: !!game.archivedAt,
+      productArchived: !!row.archivedAt,
+      gameStatus: game.status,
+      productStatus: row.status,
+      price: pricing?.price ?? null,
+      usableRouteCostsUsdUnits: pricing?.usableRouteCostsUsdUnits ?? [],
+    });
+  }
+
+  /** A product's own margin rule, created or replaced (S07 rule P4's margin adjustment). */
+  setProductRule(productId: string, values: MarginRuleValues): void {
+    const row = this.rules.find((item) => item.scope === 'product' && item.targetId === productId);
+    if (row) Object.assign(row, values, { updatedAt: new Date().toISOString() });
+    else {
+      this.rules.push({
+        id: nextId(),
+        scope: 'product',
+        targetId: productId,
+        ...values,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  /** The rule that governs a product (rule PR2). */
+  ruleOf(productId: string): MarginRuleValues & { id: string } {
+    return resolveMarginRule(this.rules, this.target('product', productId)?.path ?? {});
+  }
+
+  private product(row: Row<Product>): Product {
+    const pricing = this.pricing?.(row.id);
+    const rate = this.rate();
+    const price = pricing?.price?.priceUsdUnits ?? null;
     return {
       ...row,
-      availability: productAvailability({
-        categoryArchived: !!category?.archivedAt,
-        gameArchived: !!game.archivedAt,
-        productArchived: !!row.archivedAt,
-        gameStatus: game.status,
-        productStatus: row.status,
-        // No supplier routes in this mock (S07): no price, so out of stock once active.
-        price: null,
-        usableRouteCostsUsdUnits: [],
-      }),
-      priceUsdUnits: null,
-      priceSypUnits: null,
-      basisSupplierNameAr: null,
-      reviewOpen: false,
+      availability: this.availabilityOf(row.id),
+      priceUsdUnits: price,
+      priceSypUnits:
+        price !== null && rate
+          ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
+          : null,
+      basisSupplierNameAr: pricing?.basisSupplierNameAr ?? null,
+      reviewOpen: pricing?.reviewOpen ?? false,
     };
+  }
+
+  /** A product as the API answers it, for the routes drawer and the reviews. */
+  productView(productId: string): Product | null {
+    const row = this.products.find((item) => item.id === productId);
+    return row ? this.product(row) : null;
   }
 
   private detail(row: StoredGame) {
@@ -587,6 +643,7 @@ export class CatalogMock {
         row = { id: nextId(), scope, targetId, ...values, updatedAt: new Date().toISOString() };
         this.rules.push(row);
       }
+      this.onRulesChanged();
       return { status: 200, json: this.rule(row) };
     }
     const ruleId = match(/^\/api\/admin\/pricing\/rules\/([^/]+)\/archive$/);
@@ -596,6 +653,7 @@ export class CatalogMock {
       if (!row) return notFound();
       if (row.scope === 'global') return error(409, 'GLOBAL_RULE_REQUIRED');
       this.rules = this.rules.filter((item) => item.id !== ruleId);
+      this.onRulesChanged();
       return { status: 204 };
     }
     if (key === 'POST /api/admin/pricing/preview') {

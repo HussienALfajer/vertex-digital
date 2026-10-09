@@ -34,6 +34,14 @@ export function parseCostUsd(text: string): number | null {
   return Number(whole) * CURRENCY_SCALE.USD + Number(decimals.padEnd(6, '0'));
 }
 
+/** 887,500 USD units → `0.8875`, 1,000,000 → `1.00`: the inverse of `parseCostUsd`. */
+export function formatCostUsd(units: number): string {
+  const digits = String(units).padStart(7, '0');
+  const whole = digits.slice(0, -6);
+  const decimals = digits.slice(-6).replace(/0+$/, '').padEnd(2, '0');
+  return `${whole}.${decimals}`;
+}
+
 /** A rule's values as the form shows them: percent, then dollars with 2 decimals. */
 export function ruleTexts(rule: MarginRuleValues): {
   percent: string;

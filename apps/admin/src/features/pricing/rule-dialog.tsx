@@ -55,13 +55,16 @@ function invalidFields(texts: Record<RuleField, string>): RuleField[] {
 
 /**
  * The rule form (rule PR9): percent, fixed amount and minimum margin, with a live preview for a
- * sample cost (rule PR10). Saving opens re-authentication when the API asks for it.
+ * sample cost (rule PR10). Saving opens re-authentication when the API asks for it. A price
+ * review's "تعديل الهامش" (S07 rule P4) saves through `onSave` instead, from the review's cost.
  */
 export function RuleDialog({
   scope,
   targetId,
   targetName,
   initial,
+  sampleCost = SAMPLE_COST,
+  onSave,
   onDone,
 }: {
   scope: MarginScope;
@@ -70,12 +73,17 @@ export function RuleDialog({
   targetName: string | null;
   /** The rule in force: the target's own, or the one it inherits. */
   initial: MarginRuleValues;
+  /** The cost the preview starts with, in dollars. */
+  sampleCost?: string;
+  /** Saves the values another way than setting the target's rule. */
+  onSave?: (values: MarginRuleValues) => Promise<unknown>;
   onDone: () => void;
 }) {
   const { t } = useTranslation();
   const setRule = useSetRule();
+  const [saving, setSaving] = useState(false);
   const [texts, setTexts] = useState(() => ruleTexts(initial));
-  const [costText, setCostText] = useState(SAMPLE_COST);
+  const [costText, setCostText] = useState(sampleCost);
   const [errors, setErrors] = useState<RuleField[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -91,11 +99,15 @@ export function RuleDialog({
     setErrors(invalid);
     const parsed = setMarginRuleSchema.safeParse({ ...values, scope, targetId });
     if (invalid.length > 0 || !parsed.success) return;
+    setSaving(true);
     try {
-      await setRule.mutateAsync(parsed.data);
+      if (onSave && values) await onSave(values);
+      else await setRule.mutateAsync(parsed.data);
       onDone();
     } catch (error) {
       setFailure(errorMessage(t, error));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -155,8 +167,8 @@ export function RuleDialog({
         </section>
         {failure && <FormAlert>{failure}</FormAlert>}
         <DialogFooter>
-          <Button type="submit" disabled={setRule.isPending}>
-            {setRule.isPending ? t('pricing.form.saving') : t('pricing.form.save')}
+          <Button type="submit" disabled={saving}>
+            {saving ? t('pricing.form.saving') : t('pricing.form.save')}
           </Button>
         </DialogFooter>
       </form>

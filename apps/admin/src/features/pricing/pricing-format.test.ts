@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatPercentBp, parseCostUsd, parsePercentBp, ruleTexts } from './pricing-format';
+import {
+  formatCostUsd,
+  formatPercentBp,
+  parseCostUsd,
+  parsePercentBp,
+  ruleTexts,
+} from './pricing-format';
 
 describe('parsePercentBp', () => {
   it('reads whole and decimal percents as basis points', () => {
@@ -25,6 +31,22 @@ describe('formatPercentBp', () => {
     expect(formatPercentBp(0)).toBe('0');
     for (const bp of [1, 99, 101, 1205, 10_000]) {
       expect(parsePercentBp(formatPercentBp(bp))).toBe(bp);
+    }
+  });
+});
+
+describe('formatCostUsd', () => {
+  it('writes dollars with at least two decimals and no trailing zeros past them', () => {
+    expect(formatCostUsd(1_000_000)).toBe('1.00');
+    expect(formatCostUsd(887_500)).toBe('0.8875');
+    expect(formatCostUsd(1)).toBe('0.000001');
+    expect(formatCostUsd(1_100_000)).toBe('1.10');
+    expect(formatCostUsd(10_000_000_000)).toBe('10000.00');
+  });
+
+  it('reads back as the same units', () => {
+    for (const units of [1, 880_000, 887_500, 1_234_567, 10_000_000_000]) {
+      expect(parseCostUsd(formatCostUsd(units))).toBe(units);
     }
   });
 });

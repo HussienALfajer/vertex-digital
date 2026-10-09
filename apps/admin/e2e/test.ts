@@ -11,11 +11,14 @@ import {
   STORE_SWITCH_DEFAULTS,
   STORE_SWITCHES,
   type StoreSwitch,
+  SUPPLIER_CODES,
+  type SupplierCode,
   type SwitchChange,
   type TelegramLinkStatus,
 } from '@vertex-digital/contracts';
 import openapi from '../../api/openapi.json' with { type: 'json' };
 import { CatalogMock } from './catalog-mock';
+import { SuppliersMock } from './suppliers-mock';
 
 /*
  * The `test` every admin spec uses: Playwright's, with a mocked API (`admin`) and failing a test
@@ -251,6 +254,8 @@ export class AdminApi {
       createdAt: hoursAgo(1),
     },
   ];
+  /** S07 rule P9: the largest display step allowed now; null when no product is available. */
+  maxDisplayStepSypUnits: number | null = null;
   /** The audit log, newest first; a test adds its own entries (S05: a decision from Telegram). */
   auditEntries: AuditEntry[] = [...AUDIT_ENTRIES] as AuditEntry[];
   /** The store switch changes, newest first (S05 rule SW1): none, so every switch has its default. */
@@ -273,6 +278,13 @@ export class AdminApi {
   /** S06: the catalog and the margin rules, seeded as the migration seeds them. */
   readonly catalog = new CatalogMock(
     () => this.rates[0] ?? null,
+    () => this.reauthenticationRequired,
+  );
+  /** S07: the suppliers, their offers and routes, stored prices and reviews. */
+  readonly suppliers = new SuppliersMock(
+    this.catalog,
+    (code) =>
+      this.switches().switches.find((item) => item.switch === `${code}_paused`)?.value ?? false,
     () => this.reauthenticationRequired,
   );
   /** S04: the recorded USDT transfers, newest first, with their holder and candidates. */
@@ -412,6 +424,10 @@ export class AdminApi {
           },
           ...this.switchChanges,
         ];
+        const supplier = input.switch.match(/^(.+)_paused$/)?.[1];
+        if (supplier && (SUPPLIER_CODES as readonly string[]).includes(supplier)) {
+          this.suppliers.repriceSupplier(supplier as SupplierCode);
+        }
       }
       return json(200, this.switches());
     }
@@ -493,6 +509,15 @@ export class AdminApi {
       const input = body as { sypPerUsd: string; rateConfirmation?: string };
       const refusal = rateConfirmationError(current?.sypPerUsd ?? null, input);
       if (refusal) return apiError(400, refusal);
+      // S07 rule P9: a test sets the largest step the cheapest available product allows.
+      if (
+        this.maxDisplayStepSypUnits !== null &&
+        Number(body?.displayStepSypUnits) > this.maxDisplayStepSypUnits
+      ) {
+        return apiError(409, 'DISPLAY_STEP_TOO_LARGE', {
+          maxStepSypUnits: this.maxDisplayStepSypUnits,
+        });
+      }
       const record: RateRecord = {
         id: `0199a000-0000-7000-8000-0000000000${(0xf1 + this.rates.length).toString(16)}`,
         sypPerUsd: input.sypPerUsd,
@@ -826,6 +851,16 @@ export class AdminApi {
         .filter((transfer) => state === 'all' || transfer.state === 'unmatched')
         .filter((transfer) => !byMethod || transfer.method === byMethod);
       return json(200, { items, nextCursor: null });
+    }
+    if (
+      path.startsWith('/api/admin/suppliers') ||
+      path.startsWith('/api/admin/routes/') ||
+      path.startsWith('/api/admin/pricing/reviews') ||
+      /^\/api\/admin\/catalog\/products\/[^/]+\/(routes|prices)/.test(path)
+    ) {
+      const answer = this.suppliers.answer(request.method(), url, body);
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
+      if (answer) return route.fulfill({ status: answer.status });
     }
     if (
       path.startsWith('/api/admin/catalog') ||
