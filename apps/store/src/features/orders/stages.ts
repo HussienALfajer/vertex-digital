@@ -39,3 +39,44 @@ export function stageSentence(
   }
   return t(`orders.sentences.${order.stage}`);
 }
+
+/** The stages during which the order still moves (rule LT1: upcoming steps are shown). */
+const OPEN_STAGES: readonly OrderStage[] = ['awaiting_balance', 'processing', 'delayed'];
+
+/** The happy path the customer waits along: paid → قيد الشحن → تم التسليم. */
+const PATH = ['paid', 'sent', 'delivered'] as const satisfies readonly OrderTimelineStep[];
+
+/** How far along the path a reached step is. */
+const PATH_INDEX: Partial<Record<OrderTimelineStep, number>> = {
+  reserved: -1,
+  paid: 0,
+  sent: 1,
+  retrying: 1,
+  delayed: 1,
+  delivered: 2,
+};
+
+export type TimelineEntry =
+  | { step: OrderTimelineStep; at: string; state: 'done' | 'current' }
+  | { step: OrderTimelineStep; at: null; state: 'upcoming' };
+
+/**
+ * Rule LT1 on the order page: the steps reached, the newest one current while the order is open,
+ * then the path's steps still ahead, greyed.
+ */
+export function timelineEntries(order: Pick<Order, 'stage' | 'timeline'>): TimelineEntry[] {
+  const open = OPEN_STAGES.includes(order.stage);
+  const reached: TimelineEntry[] = order.timeline.map((entry, index) => ({
+    step: entry.step,
+    at: entry.at,
+    state: open && index === order.timeline.length - 1 ? 'current' : 'done',
+  }));
+  if (!open) return reached;
+  const furthest = Math.max(-1, ...order.timeline.map((entry) => PATH_INDEX[entry.step] ?? -1));
+  return [
+    ...reached,
+    ...PATH.slice(furthest + 1).map(
+      (step): TimelineEntry => ({ step, at: null, state: 'upcoming' }),
+    ),
+  ];
+}

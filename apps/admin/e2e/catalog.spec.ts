@@ -318,6 +318,44 @@ test.describe('catalog', () => {
   });
 });
 
+test.describe('search terms (S09 rule AD1)', () => {
+  test('adds terms as chips, refuses a duplicate after normalization, removes one and saves', async ({
+    page,
+    admin,
+  }) => {
+    const game = admin.catalog.addGame({
+      categorySlug: 'games',
+      slug: 'pubg-mobile',
+      nameAr: 'ببجي موبايل',
+      nameEn: 'PUBG Mobile',
+    });
+    await open(page, admin, `/catalog/games/${game.id}`);
+    const input = page.getByLabel(ar.catalog.searchTerms.label, { exact: true });
+    const terms = page.getByRole('list', { name: ar.catalog.searchTerms.list });
+    for (const typed of ['PUBG', 'بَبجي', 'بوبجي']) {
+      await input.fill(typed);
+      await input.press('Enter');
+    }
+    await expect(terms.getByRole('listitem')).toHaveText(['pubg', 'ببجي', 'بوبجي']);
+    await input.fill('ببجى');
+    await input.press('Enter');
+    await expect(page.getByText(ar.catalog.searchTerms.refused.duplicate)).toBeVisible();
+    await page
+      .getByRole('button', { name: fill(ar.catalog.searchTerms.remove, { term: 'بوبجي' }) })
+      .click();
+    await expect(terms.getByRole('listitem')).toHaveText(['pubg', 'ببجي']);
+    await page.getByRole('button', { name: ar.catalog.game.save }).click();
+    await expect(page.getByText(ar.catalog.game.saved)).toBeVisible();
+    expect(admin.lastBody(`PATCH /api/admin/catalog/games/${game.id}`)).toMatchObject({
+      searchTerms: ['pubg', 'ببجي'],
+    });
+    await page.reload();
+    await expect(
+      page.getByRole('list', { name: ar.catalog.searchTerms.list }).getByRole('listitem'),
+    ).toHaveText(['pubg', 'ببجي']);
+  });
+});
+
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`${colorScheme} theme`, () => {
     test.use({ colorScheme });
@@ -353,7 +391,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
           officialPriceUsdUnits: official,
         });
       }
-      Object.assign(admin.catalog.games[0] ?? {}, { accentColor: '#F2A900' });
+      Object.assign(admin.catalog.games[0] ?? {}, {
+        accentColor: '#F2A900',
+        searchTerms: ['ببجي', 'pubg', 'بوبجي'],
+      });
 
       await open(page, admin, '/catalog');
       await expect(page.getByRole('listitem').first()).toContainText('ببجي موبايل');

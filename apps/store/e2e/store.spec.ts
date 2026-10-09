@@ -1,4 +1,5 @@
 import { gzipSync } from 'node:zlib';
+import type { Page } from '@playwright/test';
 import ar from '../src/messages/ar.json' with { type: 'json' };
 import { expect, screenshot, test } from './test';
 
@@ -100,10 +101,17 @@ for (const theme of ['dark', 'light'] as const) {
  */
 // Script raised from 200 (S05 PR 2): the whole Arabic catalog (`src/messages/ar.json`) ships in
 // the first load, so each feature's strings add to it; the notification strings took it to 201.
-const BUDGET_KB = { script: 205, stylesheet: 20 };
+// Raised to 210 (S09 PR 3): the catalog, buy box, search and reservation strings took it to 206.
+const BUDGET_KB = { script: 210, stylesheet: 20 };
 
-test('the home page stays within its performance budget', async ({ page, api: _api }) => {
-  test.skip(test.info().project.name !== 'desktop', 'measured once');
+/**
+ * The game page (S09): the home page's first load plus the buy box, the calculator and the
+ * player check, which only a game page downloads. Measured in S09 PR 3 (apps/store/CLAUDE.md).
+ */
+const GAME_BUDGET_KB = { script: 230, stylesheet: 20 };
+
+/** The JS and CSS of a page's first load, gzipped, in KB. */
+async function firstLoad(page: Page, path: string) {
   const sizes = { script: 0, stylesheet: 0 };
   const pending: Promise<void>[] = [];
   page.on('response', (response) => {
@@ -115,13 +123,29 @@ test('the home page stays within its performance budget', async ({ page, api: _a
       }),
     );
   });
-  await page.goto('/', { waitUntil: 'networkidle' });
+  await page.goto(path, { waitUntil: 'networkidle' });
   await Promise.all(pending);
-  const kb = (bytes: number) => Math.round(bytes / 1024);
+  const kb = {
+    script: Math.round(sizes.script / 1024),
+    stylesheet: Math.round(sizes.stylesheet / 1024),
+  };
   test.info().annotations.push({
-    type: 'first load (gzip)',
-    description: `JS ${kb(sizes.script)} KB, CSS ${kb(sizes.stylesheet)} KB`,
+    type: `first load of ${path} (gzip)`,
+    description: `JS ${kb.script} KB, CSS ${kb.stylesheet} KB`,
   });
-  expect(kb(sizes.script)).toBeLessThanOrEqual(BUDGET_KB.script);
-  expect(kb(sizes.stylesheet)).toBeLessThanOrEqual(BUDGET_KB.stylesheet);
+  return kb;
+}
+
+test('the home page stays within its performance budget', async ({ page, api: _api }) => {
+  test.skip(test.info().project.name !== 'desktop', 'measured once');
+  const kb = await firstLoad(page, '/');
+  expect(kb.script).toBeLessThanOrEqual(BUDGET_KB.script);
+  expect(kb.stylesheet).toBeLessThanOrEqual(BUDGET_KB.stylesheet);
+});
+
+test('the game page stays within its performance budget', async ({ page, api: _api }) => {
+  test.skip(test.info().project.name !== 'desktop', 'measured once');
+  const kb = await firstLoad(page, '/games/pubg-mobile');
+  expect(kb.script).toBeLessThanOrEqual(GAME_BUDGET_KB.script);
+  expect(kb.stylesheet).toBeLessThanOrEqual(GAME_BUDGET_KB.stylesheet);
 });

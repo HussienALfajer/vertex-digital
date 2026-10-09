@@ -13,6 +13,7 @@ import {
   createOrderSchema,
   deliveredCodeSchema,
   deliveryStats,
+  displaySypTotal,
   firstPollAt,
   isOpenAttempt,
   isTerminalOrderStatus,
@@ -251,6 +252,17 @@ describe('money of an order (rules M1–M3)', () => {
     expect(() => orderTotal(1.5, 1)).toThrow(RangeError);
     expect(() => refundAmount(1, -1)).toThrow(RangeError);
     expect(() => costOfGoods(1, 0.5)).toThrow(RangeError);
+  });
+
+  it('sums the SYP display prices of packs (S09 rules BB1, CL3)', () => {
+    expect(displaySypTotal([])).toBe(0);
+    expect(
+      displaySypTotal([
+        { sypUnits: 1_300_000, count: 3 },
+        { sypUnits: 650_000, count: 1 },
+      ]),
+    ).toBe(4_550_000);
+    expect(() => displaySypTotal([{ sypUnits: -1, count: 1 }])).toThrow(RangeError);
   });
 
   it('keeps the margin guard at its boundary (ADR 0020)', () => {

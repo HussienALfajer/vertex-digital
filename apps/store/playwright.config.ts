@@ -1,6 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
+import { CATALOG_PORT, E2E_REVALIDATE_SECRET, EMPTY_STORE_URL } from './e2e/servers';
 
 const baseURL = 'http://127.0.0.1:4001';
+
+const storeEnv = (api: string, port: number) => ({
+  API_INTERNAL_URL: api,
+  STORE_URL: `http://127.0.0.1:${port}`,
+  STORE_REVALIDATE_SECRET: E2E_REVALIDATE_SECRET,
+});
 
 export default defineConfig({
   testDir: './e2e',
@@ -22,10 +29,25 @@ export default defineConfig({
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
   ],
   // The production build; `pnpm test:e2e` from the root builds it first. The API is mocked per
-  // test in the browser (e2e/test.ts), so no database or API process is needed.
-  webServer: {
-    command: 'pnpm start --port 4001',
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-  },
+  // test in the browser (e2e/test.ts), and the catalog the server components read is served by
+  // e2e/catalog-server.mjs, so no database or API process is needed.
+  webServer: [
+    {
+      command: `node e2e/catalog-server.mjs ${CATALOG_PORT}`,
+      url: `http://127.0.0.1:${CATALOG_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: 'pnpm start --port 4001',
+      url: baseURL,
+      env: storeEnv(`http://127.0.0.1:${CATALOG_PORT}`, 4001),
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: 'pnpm start --port 4003',
+      url: EMPTY_STORE_URL,
+      env: storeEnv(`http://127.0.0.1:${CATALOG_PORT}/empty`, 4003),
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
 });

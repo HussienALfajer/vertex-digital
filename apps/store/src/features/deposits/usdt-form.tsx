@@ -20,6 +20,7 @@ import {
   limitText,
   ONE_CENT_UNITS,
   parseDepositAmount,
+  prefillText,
   USDT_PRESETS_USD,
   usdText,
 } from './amounts';
@@ -29,9 +30,18 @@ import { createUsdtDeposit } from './requests';
  * The USDT form (S04 screens): the network note, the USD amount with its presets and limits, and
  * who pays the fees. `DEPOSIT_AMOUNT_BUSY` (rule U3) offers the same amount one cent up or down.
  */
-export function UsdtForm({ options, method }: { options: UsdtOptions; method: UsdtMethod }) {
+export function UsdtForm({
+  options,
+  method,
+  prefillUnits = null,
+}: {
+  options: UsdtOptions;
+  method: UsdtMethod;
+  /** The shortfall of a reservation (S09 rule BB8). */
+  prefillUnits?: number | null;
+}) {
   const router = useRouter();
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => prefillText(prefillUnits, options.limits?.minUnits));
   const [error, setError] = useState<string | null>(null);
   const [busyAlternatives, setBusyAlternatives] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);

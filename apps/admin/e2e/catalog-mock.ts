@@ -20,6 +20,7 @@ import {
   productAvailability,
   resolveMarginRule,
   savings,
+  searchTermsSchema,
   sypDisplayPrice,
 } from '@vertex-digital/contracts';
 
@@ -52,6 +53,8 @@ type Row<T> = Omit<
 type StoredGame = Omit<Row<Game>, 'cover' | 'idGuide'> & {
   coverFileId: string | null;
   idGuideFileId: string | null;
+  /** S09 rule AD1: stored normalized (SR1). */
+  searchTerms?: string[];
 };
 
 /** What the suppliers mock tells the catalog about a product's price (S07). */
@@ -296,8 +299,7 @@ export class CatalogMock {
     return {
       ...this.game(row),
       categoryArchived: !!this.categories.find((item) => item.id === row.categoryId)?.archivedAt,
-      // S09 rule AD1 (edited with S09's screens).
-      searchTerms: [] as string[],
+      searchTerms: row.searchTerms ?? [],
       fields: bySort(this.fields.filter((item) => item.gameId === row.id)),
       products: bySort(this.products.filter((item) => item.gameId === row.id)).map((item) =>
         this.product(item),
@@ -584,6 +586,14 @@ export class CatalogMock {
         const refusal = this.accentRefusal(body?.accentColor);
         if (refusal) return refusal;
         const before = { ...row };
+        if (body && 'searchTerms' in body) {
+          // S09 rule AD1: normalized, at most 20, unique (the contracts' schema).
+          const terms = searchTermsSchema.safeParse(body.searchTerms);
+          if (!terms.success) {
+            return error(400, 'VALIDATION_FAILED', [{ path: ['searchTerms'], message: 'Invalid' }]);
+          }
+          row.searchTerms = terms.data;
+        }
         Object.assign(row, this.gameValues(body));
         if (body?.status) row.status = body.status as StoredGame['status'];
         const missing = this.missing(row.id);

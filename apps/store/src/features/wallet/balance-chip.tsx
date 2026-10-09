@@ -50,7 +50,7 @@ export function BalanceChip() {
     <Button
       variant="ghost"
       size="xl"
-      className="px-3"
+      className="px-2 sm:px-3"
       aria-label={t('header.balance', { balance })}
       render={<Link href="/wallet" />}
     >

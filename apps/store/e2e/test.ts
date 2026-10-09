@@ -43,7 +43,7 @@ type Route = Parameters<Parameters<Page['route']>[1]>[0];
 type Answer =
   | { status: number; body: unknown }
   | { status: 200; image: true }
-  | { status: 200; events: string };
+  | { status: 200; events: string; delayMs: number };
 
 /**
  * Server-sent events as the API writes them (S05 rule NT6). The body ends after the events, so
@@ -97,7 +97,11 @@ export class MockApi {
     // No unread notification: the header's bell opens the stream once signed in (S05 NT6).
     [
       'GET /api/notifications/stream',
-      { status: 200, events: eventStream([{ event: 'unread', data: { unreadCount: 0 } }]) },
+      {
+        status: 200,
+        events: eventStream([{ event: 'unread', data: { unreadCount: 0 } }]),
+        delayMs: 0,
+      },
     ],
   ]);
 
@@ -111,9 +115,12 @@ export class MockApi {
     return this;
   }
 
-  /** Answers `key` with server-sent events (the notification stream). */
-  stream(key: string, events: { event: string; data: unknown }[]): this {
-    this.answers.set(key, { status: 200, events: eventStream(events) });
+  /**
+   * Answers `key` with server-sent events (the notification stream), after `delayMs`: a test can
+   * change what the page reads next before the events arrive (S09 rule LT2).
+   */
+  stream(key: string, events: { event: string; data: unknown }[], delayMs = 0): this {
+    this.answers.set(key, { status: 200, events: eventStream(events), delayMs });
     return this;
   }
 
@@ -127,7 +134,10 @@ export class MockApi {
     const request = route.request();
     const key = `${request.method()} ${new URL(request.url()).pathname}`;
     this.requests.push({ key, body: bodyOf(request), headers: request.headers() });
-    const answer = this.answers.get(key);
+    // Catalog images are public files on every catalog page (S09 rule SF5): a PNG by default.
+    const answer =
+      this.answers.get(key) ??
+      (key.startsWith('GET /api/catalog/images/') ? ({ status: 200, image: true } as const) : null);
     if (!answer) {
       this.unexpected.push(key);
       await route.fulfill({ status: 404, json: { statusCode: 404, code: 'NOT_FOUND' } });
@@ -138,6 +148,7 @@ export class MockApi {
       return;
     }
     if ('events' in answer) {
+      if (answer.delayMs > 0) await new Promise((done) => setTimeout(done, answer.delayMs));
       await route.fulfill({ status: 200, contentType: 'text/event-stream', body: answer.events });
       return;
     }

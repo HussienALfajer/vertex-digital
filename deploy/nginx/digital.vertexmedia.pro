@@ -45,6 +45,9 @@ server {
 
     # The API documentation is disabled in production; don't forward probes for it.
     location ^~ /api/docs { return 404; }
+    # The store's cache refresh (S09 rule SF4) is for the worker on 127.0.0.1 only; the route also
+    # refuses anything proxied. Matched on the decoded path, so %5F does not get around it.
+    location ~* ^/_internal(?:/|$) { return 404; }
 
     location /api/ {
         proxy_pass http://127.0.0.1:3060;

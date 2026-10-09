@@ -5,6 +5,7 @@ import {
   type AdminOrderSummary,
   type AdminOrderTab,
   formatUsd,
+  ORDER_STATUSES,
   SUPPLIER_CODES,
 } from '@vertex-digital/contracts';
 import {
@@ -132,6 +133,7 @@ function Filters({
   onSearch: (search: OrderSearch) => void;
 }) {
   const { t } = useTranslation();
+  const [status, setStatus] = useState<string>(search.status ?? ALL);
   const [supplier, setSupplier] = useState<string>(search.supplier ?? ALL);
   const [test, setTest] = useState<string>(search.test ?? ALL);
 
@@ -147,6 +149,7 @@ function Filters({
         q: text('q'),
         from: text('from'),
         to: text('to'),
+        status: status === ALL ? undefined : (status as OrderSearch['status']),
         supplier: supplier === ALL ? undefined : (supplier as OrderSearch['supplier']),
         test: test === ALL ? undefined : (test as OrderSearch['test']),
       }),
@@ -174,6 +177,15 @@ function Filters({
               defaultValue={search.q}
             />
           </Field>
+          <FilterSelect
+            label={t('orders.filters.status')}
+            value={status}
+            onChange={setStatus}
+            options={ORDER_STATUSES.map((value) => ({
+              value,
+              label: t(`orders.statuses.${value}`),
+            }))}
+          />
           <FilterSelect
             label={t('orders.filters.supplier')}
             value={supplier}

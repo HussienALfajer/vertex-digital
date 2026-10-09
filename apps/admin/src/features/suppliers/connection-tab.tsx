@@ -8,6 +8,7 @@ import {
   setSupplierCredentialsSchema,
   supplierHasCatalog,
   updateSupplierSchema,
+  validationQuotaSchema,
 } from '@vertex-digital/contracts';
 import {
   Button,
@@ -38,12 +39,12 @@ import { formatDateTime } from '../../lib/format';
 import { switchesQuery, useChangeSwitch } from '../settings/settings.queries';
 import { credentialLabel } from './credential-fields';
 import { LastRun } from './supplier-parts';
-import { useSetCredentials, useUpdateSupplier } from './suppliers.queries';
+import { useSetCredentials, useSetValidationQuota, useUpdateSupplier } from './suppliers.queries';
 
 /**
  * "الاتصال" (S07 screens): the credentials by their hints only (rule SP2) and the connection test
- * that follows a change, the pause switch (rule SP3, the S05 write path) and the low-balance
- * threshold (A07).
+ * that follows a change, the pause switch (rule SP3, the S05 write path), the low-balance
+ * threshold (A07) and, for a supplier that checks player ids, the daily validation quota (S09 AD2).
  */
 export function ConnectionTab({ supplier }: { supplier: SupplierDetail }) {
   return (
@@ -55,6 +56,7 @@ export function ConnectionTab({ supplier }: { supplier: SupplierDetail }) {
           // A new key resets the form to the saved threshold once it changes.
           <ThresholdCard key={supplier.lowBalanceUsdUnits} supplier={supplier} />
         )}
+        {supplier.canValidatePlayer && <ValidationQuotaCard supplier={supplier} />}
       </div>
     </div>
   );
@@ -302,6 +304,82 @@ function ThresholdCard({ supplier }: { supplier: SupplierDetail }) {
         )}
         <Button type="submit" className="self-start" disabled={update.isPending}>
           {update.isPending ? t('suppliers.threshold.saving') : t('suppliers.threshold.save')}
+        </Button>
+      </form>
+    </Card>
+  );
+}
+
+/**
+ * S09 rule AD2: "حصة التحقق اليومية" with today's usage (since 00:00 Damascus, rule PV5). At the
+ * quota, customers confirm their ids themselves until midnight; 0 turns validation off.
+ */
+function ValidationQuotaCard({ supplier }: { supplier: SupplierDetail }) {
+  const { t } = useTranslation();
+  const update = useSetValidationQuota(supplier.code);
+  const [text, setText] = useState(String(supplier.validationQuota));
+  const [invalid, setInvalid] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFailure(null);
+    setSaved(false);
+    const typed = text.trim();
+    const parsed = validationQuotaSchema.safeParse({
+      quota: /^[0-9]+$/.test(typed) ? Number(typed) : Number.NaN,
+    });
+    setInvalid(!parsed.success);
+    if (!parsed.success) return;
+    try {
+      await update.mutateAsync(parsed.data);
+      setSaved(true);
+    } catch (error) {
+      setFailure(errorMessage(t, error));
+    }
+  }
+
+  return (
+    <Card className="gap-4">
+      <div className="flex flex-col gap-1">
+        <CardTitle>{t('suppliers.validationQuota.title')}</CardTitle>
+        <p className="text-sm text-muted-foreground tabular-nums">
+          {supplier.validationQuota === 0
+            ? t('suppliers.validationQuota.off')
+            : t('suppliers.validationQuota.usage', {
+                used: supplier.validationsToday,
+                quota: supplier.validationQuota,
+              })}
+        </p>
+      </div>
+      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+        <Field invalid={invalid}>
+          <FieldLabel>{t('suppliers.validationQuota.label')}</FieldLabel>
+          <Input
+            name="validationQuota"
+            dir="ltr"
+            inputMode="numeric"
+            autoComplete="off"
+            value={text}
+            onChange={(event) => {
+              setText(event.target.value);
+              setSaved(false);
+            }}
+          />
+          <FieldDescription>{t('suppliers.validationQuota.hint')}</FieldDescription>
+          <FieldError match={invalid}>{t('suppliers.validationQuota.error')}</FieldError>
+        </Field>
+        {failure && <FormAlert>{failure}</FormAlert>}
+        {saved && (
+          <p role="status" className="text-sm font-medium text-status-success-foreground">
+            {t('suppliers.validationQuota.saved')}
+          </p>
+        )}
+        <Button type="submit" className="self-start" disabled={update.isPending}>
+          {update.isPending
+            ? t('suppliers.validationQuota.saving')
+            : t('suppliers.validationQuota.save')}
         </Button>
       </form>
     </Card>

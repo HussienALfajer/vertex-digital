@@ -26,3 +26,11 @@ export function revealCode(orderId: string, codeId: string, fetcher: Fetcher = f
     { method: 'POST', fetcher },
   );
 }
+
+/** Rule RS8: cancels an own reservation; any other status answers `ORDER_NOT_CANCELLABLE`. */
+export function cancelOrder(id: string, fetcher: Fetcher = fetch) {
+  return apiRequest<Order>(`/api/orders/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+    fetcher,
+  });
+}
