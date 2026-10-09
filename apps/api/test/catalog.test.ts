@@ -1082,6 +1082,9 @@ describe('store routes (S09 rules SF1, SF5, SS1–SS3, SR2, AD1)', () => {
     expect((await at('320')).width).toBe(320);
     expect((await at('320')).width).toBe(320);
     expect((await at('1280')).width).toBe(800);
+    // Two first requests for one size at once: both get the whole image.
+    const sizes = await Promise.all([at('640'), at('640'), at('640')]);
+    expect(sizes.map((size) => size.width)).toEqual([640, 640, 640]);
     expect(await json(await client.get(`/api/catalog/images/${id}?w=500`), 400)).toMatchObject({
       code: 'VALIDATION_FAILED',
     });

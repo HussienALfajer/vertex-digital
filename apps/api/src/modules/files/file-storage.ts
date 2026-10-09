@@ -1,4 +1,5 @@
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { access, link, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -25,12 +26,22 @@ export class FileStorage {
     await writeFile(path, bytes, { flag: 'wx', mode: 0o640 });
   }
 
-  /** Writes a derived file (an image width, S09) unless another request wrote it first. */
+  /**
+   * Writes a derived file (an image width, S09) unless another request wrote it first. Written
+   * whole under a temporary name, then linked into place: the final path never holds part of a
+   * file, even when two requests race or the process dies mid-write.
+   */
   async putOnce(key: string, bytes: Buffer): Promise<void> {
+    const path = this.path(key);
+    const temporary = `${path}.${randomBytes(6).toString('hex')}.tmp`;
+    await mkdir(dirname(path), { recursive: true, mode: 0o750 });
+    await writeFile(temporary, bytes, { flag: 'wx', mode: 0o640 });
     try {
-      await this.put(key, bytes);
+      await link(temporary, path);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    } finally {
+      await unlink(temporary);
     }
   }
 

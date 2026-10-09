@@ -455,7 +455,8 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
     }
     await setQuota(await callsOfFake());
     try {
-      for (let i = 0; i < 2; i += 1) {
+      // Refusals by the quota call no supplier: they never count toward the limits (PV4).
+      for (let i = 0; i < 12; i += 1) {
         expect(await json(await check(customer, item, fresh()), 200)).toEqual({
           result: 'unavailable',
           reason: 'quota',
@@ -474,7 +475,7 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
     } finally {
       await setQuota(1_000_000);
     }
-    // 10 supplier calls an hour per customer (the two refused by the quota counted too).
+    // 10 supplier calls an hour per customer.
     const limited = await buyer();
     for (let i = 0; i < 10; i += 1) {
       expect((await check(limited, item, fresh())).status).toBe(200);

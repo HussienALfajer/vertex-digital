@@ -94,14 +94,6 @@ export class PlayerChecksService {
     const cached = await this.cached(this.db, state.gameId, fieldsHash);
     if (cached) return cached;
 
-    // Only calls that reach a supplier count (rule PV4).
-    const allowed = await withinLimits(this.db, [
-      { key: `player-check:customer:${customerId}`, max: 10, windowMs: HOUR },
-      { key: `player-check:customer-day:${customerId}`, max: 30, windowMs: 24 * HOUR },
-      { key: `player-check:ip:${meta.ipAddress ?? 'unknown'}`, max: 30, windowMs: HOUR },
-    ]);
-    if (!allowed) throw orderRefusals.rateLimited();
-
     const used = await validationsToday(
       this.db,
       routes.map(({ route }) => route.supplier.id),
@@ -111,7 +103,7 @@ export class PlayerChecksService {
         await this.quotaReached(route, quota);
         continue;
       }
-      return this.ask(route, state.gameId, fieldsHash, fields, customerId);
+      return this.ask(route, state.gameId, fieldsHash, fields, customerId, meta);
     }
     return { result: 'unavailable', reason: 'quota' };
   }
@@ -228,9 +220,17 @@ export class PlayerChecksService {
     fieldsHash: string,
     fields: Record<string, string>,
     customerId: string,
+    meta: RequestMeta,
   ): Promise<PlayerCheck> {
     const adapter = await this.adapters.connect(route.supplier);
     if (!adapter?.capabilities.validatePlayer) return { result: 'not_supported' };
+    // Rule PV4: only a request that is about to call a supplier counts.
+    const allowed = await withinLimits(this.db, [
+      { key: `player-check:customer:${customerId}`, max: 10, windowMs: HOUR },
+      { key: `player-check:customer-day:${customerId}`, max: 30, windowMs: 24 * HOUR },
+      { key: `player-check:ip:${meta.ipAddress ?? 'unknown'}`, max: 30, windowMs: HOUR },
+    ]);
+    if (!allowed) throw orderRefusals.rateLimited();
     const mapped = Object.fromEntries(
       Object.entries(route.fieldMap).map(([supplierField, key]) => [
         supplierField,

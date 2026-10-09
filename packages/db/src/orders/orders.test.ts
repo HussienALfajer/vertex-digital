@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { CURRENCY_SCALE, priceFromCost, QUEUES } from '@vertex-digital/contracts';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Transaction } from '../client.js';
 import { newId } from '../id.js';
@@ -1077,6 +1077,125 @@ describe('reservations (S09 rules RS1–RS9, PV8)', () => {
     expect(await refusal(cancel(buyer, settled.id))).toMatchObject({
       code: 'ORDER_NOT_CANCELLABLE',
     });
+  });
+
+  /** Holds `work`'s transaction open until the returned release is called. */
+  function holding(work: (tx: Transaction) => Promise<unknown>) {
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let ready: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    const done = db.transaction(async (tx) => {
+      await work(tx);
+      ready();
+      await held;
+    });
+    return { started, release, done };
+  }
+  const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it('pays at the price a repricing that held the product commits (RS4 step 3, RS6)', async () => {
+    const item = await product({ cost: usd(2) });
+    const buyer = await customer();
+    const { order } = await reserve(buyer, item);
+    await credit(buyer, usd(10));
+    await pool.query('update supplier_offers set cost_usd_units = $1 where id = $2', [
+      usd(1.8),
+      item.offer,
+    ]);
+    // The repricing holds the product `FOR UPDATE`; the payment waits for it on `FOR SHARE`.
+    const repricing = holding((tx) =>
+      repriceProducts(tx, {
+        productIds: [item.id],
+        cause: 'rule_change',
+        context: { now: new Date(), fakeEnabled: true },
+      }),
+    );
+    await repricing.started;
+    const paying = pay(buyer);
+    await pause(300);
+    repricing.release();
+    await repricing.done;
+    expect((await paying).outcomes).toEqual([{ orderId: order.id, outcome: 'paid' }]);
+    const [current] = await db
+      .select()
+      .from(productPrices)
+      .where(eq(productPrices.productId, item.id))
+      .orderBy(desc(productPrices.createdAt))
+      .limit(1);
+    expect((current?.priceUsdUnits as number) < item.price).toBe(true);
+    expect(await orderRow(order.id)).toMatchObject({
+      unitPriceUsdUnits: current?.priceUsdUnits,
+      priceId: current?.id,
+    });
+    expect(await balance(buyer)).toBe(usd(10) - (current?.priceUsdUnits as number));
+  });
+
+  it('pays nothing when a stop commits while the payment waits on the switches lock (SW7)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const { order } = await reserve(buyer, item);
+    await credit(buyer, usd(10));
+    const stopping = holding(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('settings'))`);
+      await tx.insert(storeSwitchChanges).values({
+        id: newId(),
+        switch: 'purchases_stopped',
+        value: true,
+        adminId: newId(),
+        channel: 'admin',
+      });
+    });
+    await stopping.started;
+    const paying = pay(buyer);
+    await pause(300);
+    stopping.release();
+    await stopping.done;
+    try {
+      expect(await paying).toEqual({ stopped: true, outcomes: [] });
+      expect((await orderRow(order.id)).status).toBe('awaiting_balance');
+      expect(await balance(buyer)).toBe(usd(10));
+    } finally {
+      await db.insert(storeSwitchChanges).values({
+        id: newId(),
+        switch: 'purchases_stopped',
+        value: false,
+        adminId: newId(),
+        channel: 'admin',
+      });
+    }
+  });
+
+  it('settles a payment and an expiry at the deadline with one of them (edge case 7)', async () => {
+    for (let round = 0; round < 3; round += 1) {
+      const item = await product();
+      const buyer = await customer();
+      const { order } = await reserve(buyer, item);
+      await credit(buyer, usd(10));
+      await owner.pool.query('alter table orders disable trigger orders_guard');
+      try {
+        await owner.pool.query(
+          `update orders set expires_at = now() + interval '300 milliseconds' where id = $1`,
+          [order.id],
+        );
+      } finally {
+        await owner.pool.query('alter table orders enable trigger orders_guard');
+      }
+      await pause(250 + round * 40);
+      await Promise.all([pay(buyer), expireReservations(db, context(), 100), pause(100)]);
+      await expireReservations(db, context(), 100);
+      const final = await orderRow(order.id);
+      if (final.status === 'paid') {
+        expect(await balance(buyer)).toBe(usd(10) - item.price);
+      } else {
+        expect(final).toMatchObject({ status: 'cancelled', cancelReason: 'expired', paidAt: null });
+        expect(await balance(buyer)).toBe(usd(10));
+      }
+    }
   });
 
   it('expires reservations past their deadline, and never pays one (RS7, A15)', async () => {

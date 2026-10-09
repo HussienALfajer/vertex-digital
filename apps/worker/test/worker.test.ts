@@ -1,5 +1,6 @@
 import type { INestApplicationContext } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { QUEUE_POLICIES, QUEUES } from '@vertex-digital/contracts';
 import { type Database, workerHeartbeats } from '@vertex-digital/db';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -59,6 +60,15 @@ describe('worker against the test database', () => {
   afterAll(async () => {
     await db.delete(workerHeartbeats).where(eq(workerHeartbeats.worker, worker));
     await app.close();
+  });
+
+  it('has every shared queue, with its policy, before any job sends to it (S09 rule RS4)', async () => {
+    const { boss } = app.get(PgBossService);
+    for (const queue of Object.values(QUEUES)) {
+      expect(await boss.getQueue(queue), queue).toMatchObject({
+        policy: QUEUE_POLICIES[queue] ?? 'standard',
+      });
+    }
   });
 
   it('schedules the heartbeat once however often it boots', async () => {
