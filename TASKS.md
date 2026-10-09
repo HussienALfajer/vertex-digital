@@ -24,6 +24,7 @@ Spec: `docs/specs/S10-convenience.md` (F14, F16; ADRs 0003, 0004, 0011, 0015, 00
 - [ ] Store `/cart` (CT4, CT6) and `/orders?checkout=`; order page: repeat, gift section, receipt sheet, "ضمن سلة"; `/orders` badges and repeat
 - [ ] Store `/account/players`; `/g/[token]`, `/r/[token]` (per request, `noindex`, `no-referrer`, `og:image`); wallet checkout entry; i18n keys
 - [ ] Admin order page: checkout block, gift block, share links with the revoke dialog; list badges; i18n keys
+- [ ] Share pages' server render: the API's 60/min/IP limit on `/api/shares/*` must key on the visitor, not the store's loopback address (forward and trust the visitor's IP from the store, or exempt the internal caller and rely on nginx `vdshare`) — from the PR 1 review
 - [ ] nginx `vdshare`; `robots.txt` disallows `/g/`, `/r/`, `/cart`; `docs/deployment.md`
 - [ ] E2E flows and RTL screenshots (store phone and desktop, dark and light; admin light and dark); budgets for `/cart` and share pages in `apps/store/CLAUDE.md`
 - [ ] Wiring checklist, docs (`docs/ROADMAP.md` S10 done, `apps/store/CLAUDE.md`, `wiring.md` patterns)

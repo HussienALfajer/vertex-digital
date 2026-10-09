@@ -258,7 +258,8 @@ const JOINERS = new Set(['‌', '‍']);
 
 /**
  * Rule GF3: a gift's sender name or message is text only. After NFKC and Arabic-Indic digits to
- * Latin, it is refused with a control, bidi or zero-width character (ZWNJ and ZWJ aside), `://`
+ * Latin (and, for the patterns, without joiners or combining marks and with every full stop a
+ * dot, as the text shows), it is refused with a control, bidi or zero-width character (ZWNJ and ZWJ aside), `://`
  * or `www.`, a domain (a dot then two Latin letters inside a token), a handle (`@` then three
  * letters, digits or underscores) or a phone number (seven digits in a row, spaces, dots and
  * dashes allowed between them).
@@ -272,10 +273,12 @@ export function giftTextAllowed(text: string): boolean {
     if (/\p{Cc}/u.test(character)) return false;
     if (/\p{Cf}/u.test(character) && !JOINERS.has(character)) return false;
   }
-  if (/:\/\/|www\./i.test(normal)) return false;
-  if (/[^\s.]\.[a-z]{2}/i.test(normal)) return false;
-  if (/@[\p{L}\p{N}_]{3}/u.test(normal)) return false;
-  if (/[0-9](?:[\s.-]*[0-9]){6}/.test(normal)) return false;
+  // The patterns read the text as it shows: invisible joiners and marks out, every full stop a dot.
+  const shown = normal.replace(/\u200C|\u200D|\p{M}/gu, '').replace(/[\u3002\uFF61\u06D4]/g, '.');
+  if (/:\/\/|www\./i.test(shown)) return false;
+  if (/[^\s.]\.[a-z]{2}/i.test(shown)) return false;
+  if (/@[\p{L}\p{N}_]{3}/u.test(shown)) return false;
+  if (/[0-9](?:[\s.-]*[0-9]){6}/.test(shown)) return false;
   return true;
 }
 

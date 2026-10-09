@@ -59,6 +59,13 @@ describe('gift texts (rule GF3)', () => {
     ['a zero-width no-break space', 'مرحبا﻿'],
     ['a newline', 'سطر\nآخر'],
     ['a control character', 'a\u0007b'],
+    ['a phone number split by joiners', 'تواصل معي 0933\u200C123\u200D456'],
+    ['a handle after a joiner', 'تابعني @\u200Cscammer'],
+    ['a domain after a joiner', 'زوروا t.\u200Cme/scammer'],
+    ['a combining grapheme joiner', 'scam.\u034Fcom'],
+    ['a variation selector', '@sc\uFE0Fammer'],
+    ['an ideographic full stop', 'scam\u3002com'],
+    ['a halfwidth full stop', 'scam\uFF61com'],
   ])('refuses %s', (_, text) => {
     expect(giftTextAllowed(text)).toBe(false);
   });
