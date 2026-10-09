@@ -27,10 +27,12 @@ import {
   type LucideIcon,
   MenuIcon,
   PercentIcon,
+  ScaleIcon,
   ScrollTextIcon,
   SendIcon,
   SettingsIcon,
   ToggleRightIcon,
+  TruckIcon,
   UserRoundCogIcon,
   UsersRoundIcon,
   WalletIcon,
@@ -38,6 +40,7 @@ import {
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { depositCountsQuery } from '../features/deposits/deposits.queries';
+import { openReviewCountQuery } from '../features/pricing/pricing.queries';
 import { StaleRateBanner } from '../features/rates/stale-rate-banner';
 import { SwitchesBanner } from '../features/settings/switches-banner';
 import { type AdminSession, authClient, leaveSession, useSession } from '../lib/auth';
@@ -51,7 +54,9 @@ interface NavItem {
     | 'nav.usdtTransfers'
     | 'nav.wallets'
     | 'nav.catalog'
+    | 'nav.suppliers'
     | 'nav.pricing'
+    | 'nav.priceReviews'
     | 'nav.rates'
     | 'nav.depositSettings'
     | 'nav.switches'
@@ -78,7 +83,9 @@ const navItems: NavItem[] = [
   { to: '/deposits/transfers', label: 'nav.usdtTransfers', icon: CoinsIcon },
   { to: '/wallets', label: 'nav.wallets', icon: WalletIcon },
   { to: '/catalog', label: 'nav.catalog', icon: Gamepad2Icon },
-  { to: '/pricing', label: 'nav.pricing', icon: PercentIcon },
+  { to: '/suppliers', label: 'nav.suppliers', icon: TruckIcon },
+  { to: '/pricing', label: 'nav.pricing', icon: PercentIcon, except: '/pricing/reviews' },
+  { to: '/pricing/reviews', label: 'nav.priceReviews', icon: ScaleIcon },
   { to: '/rates', label: 'nav.rates', icon: ArrowLeftRightIcon },
   { to: '/settings/deposits', label: 'nav.depositSettings', icon: SettingsIcon },
   { to: '/settings/switches', label: 'nav.switches', icon: ToggleRightIcon },
@@ -155,6 +162,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             {t(label)}
             {to === '/deposits' && <DepositsBadge />}
             {to === '/deposits/transfers' && <TransfersBadge />}
+            {to === '/pricing/reviews' && <ReviewsBadge />}
           </Link>
         ))}
       </nav>
@@ -200,6 +208,23 @@ function TransfersBadge() {
       aria-label={t('nav.usdtTransfersBadge', { unmatched })}
     >
       {unmatched}
+    </Badge>
+  );
+}
+
+/** S07: the open price reviews, read every minute in the background. */
+function ReviewsBadge() {
+  const { t } = useTranslation();
+  const count = useQuery(openReviewCountQuery);
+  const open = count.data ?? 0;
+  if (open === 0) return null;
+  return (
+    <Badge
+      tone="gold"
+      className="ms-auto tabular-nums"
+      aria-label={t('nav.priceReviewsBadge', { open })}
+    >
+      {open}
     </Badge>
   );
 }

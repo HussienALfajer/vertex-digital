@@ -42,13 +42,21 @@ export const switchHistoryQuery = (filter: StoreSwitch | undefined) =>
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
 
-/** Rules SW2, SW3: a change after re-authentication, in both directions. */
+/**
+ * Rules SW2, SW3: a change after re-authentication, in both directions. A supplier's pause
+ * reprices its routed products (S07 rule SP3), so the suppliers, catalog and reviews read again.
+ */
 export function useChangeSwitch() {
   const queryClient = useQueryClient();
   const withReauthentication = useReauthentication();
   return useMutation({
     mutationFn: (body: ChangeSwitch) =>
       withReauthentication(() => call(api.POST('/api/admin/switches', { body }))),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
+    onSuccess: () =>
+      Promise.all(
+        ['settings', 'suppliers', 'catalog', 'pricing'].map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key] }),
+        ),
+      ),
   });
 }

@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '@vertex-digital/ui';
+import type { TFunction } from 'i18next';
 import { ArrowLeftRightIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -138,7 +139,19 @@ type FormField = 'rate' | 'step' | 'confirmation';
 const FIELD_OF_CODE: Partial<Record<string, FormField>> = {
   RATE_CONFIRMATION_REQUIRED: 'confirmation',
   RATE_CONFIRMATION_MISMATCH: 'confirmation',
+  DISPLAY_STEP_TOO_LARGE: 'step',
 };
+
+/** A refusal under its field; S07 rule P9 names the largest step allowed. */
+function refusalText(t: TFunction, error: unknown): string {
+  const max =
+    error instanceof ApiError && error.code === 'DISPLAY_STEP_TOO_LARGE'
+      ? (error.details as { maxStepSypUnits?: unknown } | undefined)?.maxStepSypUnits
+      : undefined;
+  return typeof max === 'number'
+    ? t('rates.form.errors.stepTooLarge', { max: formatSyp(max) })
+    : errorMessage(t, error);
+}
 
 /** The change, in percent of the current rate, once the new rate is valid. */
 function changeOf(current: ExchangeRateRecord | null, rateText: string): string | null {
@@ -187,7 +200,7 @@ function ChangeRateForm({ current }: { current: ExchangeRateRecord | null }) {
       setSaved(true);
     } catch (error) {
       const field = error instanceof ApiError && error.code ? FIELD_OF_CODE[error.code] : undefined;
-      if (field) setErrors({ [field]: errorMessage(t, error) });
+      if (field) setErrors({ [field]: refusalText(t, error) });
       else setFailure(errorMessage(t, error));
     }
   }

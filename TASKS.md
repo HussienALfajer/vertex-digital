@@ -31,10 +31,10 @@ Spec: `docs/specs/S07-suppliers.md` (F09 with F10, CT9; ADRs 0003, 0004, 0005, 0
 - [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (two blocking findings: job lock order and query parameters, fixed with tests), owner acceptance (2026-10-08), PR with auto-merge
 
 ## PR 3 — Admin screens and E2E · Opus 5.5 `high`
-- [ ] Admin `features/suppliers/`: `/suppliers`, `/suppliers/$code` (connection, offers with import dialog, sync, health), `/suppliers/policy`
-- [ ] Admin catalog game page: price, basis, availability; routes drawer (tiers, usability, add route, manual route, priority, enable, archive/restore, price history)
-- [ ] Admin `/pricing/reviews` (bulk accept, adjust margin, pause, `REVIEW_STALE`); `/settings/rates` step error
-- [ ] Navigation "الموردون" and "مراجعة الأسعار" with count; i18n
-- [ ] E2E flows and RTL screenshots (light and dark)
-- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S07 done, `wiring.md` patterns)
+- [x] Admin `features/suppliers/`: `/suppliers`, `/suppliers/$code` (connection, offers with import dialog, sync, health), `/suppliers/policy`
+- [x] Admin catalog game page: price, basis, availability; routes drawer (tiers, usability, add route, manual route, priority, enable, archive/restore, price history)
+- [x] Admin `/pricing/reviews` (bulk accept, adjust margin, pause, `REVIEW_STALE`); `/settings/rates` step error
+- [x] Navigation "الموردون" and "مراجعة الأسعار" with count; i18n
+- [x] E2E flows and RTL screenshots (light and dark)
+- [x] Wiring checklist, docs (`docs/ROADMAP.md` S07 done and the adapters as their own item, `wiring.md` patterns, `apps/admin/CLAUDE.md`, spec "Settled in implementation")
 - [ ] Checks, reviewer, acceptance, PR with auto-merge
