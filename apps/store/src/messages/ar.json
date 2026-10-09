@@ -203,7 +203,8 @@
     },
     "orderKinds": {
       "purchase": "شراء: {product}",
-      "refund": "استرداد: {product}"
+      "refund": "استرداد: {product}",
+      "checkout": "شراء سلة: {count} طلبات"
     }
   },
   "deposits": {

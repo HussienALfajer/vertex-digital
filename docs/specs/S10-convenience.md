@@ -297,6 +297,16 @@ Tests:
 - Store unit: the cart store (merge by key, 10 lines, gift lines apart, sign-out clearing, throwing `localStorage`), the calculator's line split, the checkout refusal mapping, request functions.
 - E2E with RTL screenshots (phone and desktop, dark and light): the buy box with saved chips (complete, rejected, incomplete), the save and gift options with a refused message, the cart (lines, price change, refused lines, short balance, empty), the checkout view, the order page with repeat, gift and receipt sheet, "معرّفاتي" (list and empty), the gift and receipt pages (and not found), the wallet's checkout entry. Admin: the order page's checkout, gift and links with the revoke dialog. Performance: the game page's budget (230 KB) holds with the cart button; `/cart` and the share pages get budgets, measured in PR 2 and recorded in `apps/store/CLAUDE.md`.
 
+## Settled in implementation
+- PR 1 took the `sharp` route of the open question: librsvg's SVG text is not used; Pango (sharp's `text` input) shapes the Arabic with HarfBuzz from TrueType copies of Noto Kufi Arabic and Montserrat in `apps/api/assets/fonts` (the WOFF files decompressed: sharp's FreeType does not read WOFF). Pango has no Unicode isolates, so left-to-right values use LRE/PDF embeddings.
+- `checkouts.idempotency_key` is unique on its own, as `orders.idempotency_key` is (a key is a random UUID; the conventions test asks for a single-column unique). Each order of a checkout gets its own random key and the checkout's request hash.
+- A single order never takes a checkout's journal: the insert guard refuses it, beside the partial unique index for single orders.
+- A checkout order's own notification is written before its status change, so the summary (`checkout_finished`, from the terminal path) is always the last notification of a checkout.
+- `order.share_revoked` keeps the admin's reason in the audit entry's `reason` column, as every admin decision does; its details are `{ linkId, kind }`.
+- `savedPlayerSchema` gains `gameShown` (edge case 11: "اشحن" disabled on a hidden game). `publicShareSchema` gains `deliveredQuantity` (SH4's "تم شحن d من q").
+- A missing product in a checkout line is refused as `PRODUCT_UNAVAILABLE` with `availability: hidden`, one of the four line codes.
+- The player-check cache (PV3) hashes the fields with the contracts' `canonicalFields` (key order by code unit instead of `localeCompare`; existing cache rows expire within a day).
+
 ## Implementation notes
 - Suggested split, each leaving `main` green:
   1. Contracts, db, api:

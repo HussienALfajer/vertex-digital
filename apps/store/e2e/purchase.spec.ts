@@ -59,6 +59,11 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     cancelReason: null,
     playerName: 'Lina_99',
     deliveryStats: product.deliveryStats,
+    checkoutId: null,
+    isGift: false,
+    gift: null,
+    shareLinks: [],
+    repeatable: false,
     createdAt: new Date().toISOString(),
     ...changes,
   };

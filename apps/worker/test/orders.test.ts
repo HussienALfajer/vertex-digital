@@ -12,6 +12,7 @@ import {
   auditEntries,
   bossJobSender,
   catalogCategories,
+  checkoutOrders,
   createDatabase,
   customerNotifications,
   customers,
@@ -1384,6 +1385,86 @@ describe('paying reservations (S09 rules RS4–RS6, A02)', () => {
           queue: QUEUES.ordersPayWaiting,
           data: { customerId: waiting },
           options: expect.objectContaining({ singletonKey: waiting, retryLimit: 3 }),
+        },
+      ]);
+    });
+  });
+});
+
+describe('the orders of a checkout (S10 rules CT7, CT8)', () => {
+  it('tells the center of each order without email, then sends one summary with the counts', async () => {
+    await isolated(async (tx) => {
+      const direct = await product(tx);
+      const code = await product(tx, { code: true });
+      script('fake-gift-10', 'partial:1');
+      const buyer = await customer(tx);
+      const { checkout, orders: paid } = await checkoutOrders(
+        tx,
+        { jobs, now: new Date() },
+        {
+          customerId: buyer,
+          lines: [
+            {
+              productId: direct.id,
+              quantity: 1,
+              fields: { player_id: '5123456789' },
+              expectedUnitPriceUsdUnits: direct.price,
+              confirmPlayer: false,
+            },
+            {
+              productId: code.id,
+              quantity: 2,
+              fields: {},
+              expectedUnitPriceUsdUnits: code.price,
+              confirmPlayer: false,
+            },
+          ],
+          idempotencyKey: newId(),
+          requestHash: createHash('sha256').update(newId()).digest('hex'),
+          fakeEnabled: true,
+          purchasesStopped: false,
+          channel: 'store',
+          playerCheck: async () => null,
+        },
+      );
+      const [first, second] = paid as [typeof orders.$inferSelect, typeof orders.$inferSelect];
+      const emails = () =>
+        tx
+          .select({ template: emailOutbox.template })
+          .from(emailOutbox)
+          .where(eq(emailOutbox.customerId, buyer));
+      const summaries = async () =>
+        (
+          await tx
+            .select({ event: customerNotifications.event, params: customerNotifications.params })
+            .from(customerNotifications)
+            .where(eq(customerNotifications.customerId, buyer))
+        ).filter((row) => row.event === 'checkout_finished');
+
+      await fulfil.fulfil(first.id, tx);
+      expect(await orderOf(tx, first.id)).toMatchObject({ status: 'delivered' });
+      expect(await summaries()).toEqual([]);
+      // Part delivered, the rest refunded once no route is left.
+      await fulfil.fulfil(second.id, tx);
+      expect((await fulfil.fulfil(second.id, tx)).kind).toBe('refunded');
+      expect(await orderOf(tx, second.id)).toMatchObject({ status: 'partially_refunded' });
+
+      expect(await notificationsOf(tx, buyer)).toEqual(
+        expect.arrayContaining([
+          { event: 'order_delivered' },
+          { event: 'order_partially_refunded' },
+          { event: 'checkout_finished' },
+        ]),
+      );
+      expect(await emails()).toEqual([{ template: 'customer_checkout_finished' }]);
+      expect((await summaries()).map((row) => row.params)).toEqual([
+        {
+          checkoutId: checkout.id,
+          orderCount: 2,
+          delivered: 1,
+          partiallyRefunded: 1,
+          refunded: 0,
+          refundedUsdUnits: code.price,
         },
       ]);
     });

@@ -79,6 +79,7 @@ An adjustment has no states: it is written once, with its journal, and never cha
   - `adjustment`: `{ category, customerNote, reversal: boolean }` (and, admin view only, the internal `reason`, the `adminName`, `depositMethod`, `externalReference`, and whether it has been reversed).
   - `deposit` (S03, S04): method, the deposit's reference code, and for SYP deposits the SYP amount and the rate used.
   - `purchase` and `refund` (S08): the order number and product name.
+  - `checkout` (S10 rule M1): a cart's one `purchase` entry names its checkout, the order count and each order's number and product, in line order; `order` is then null.
 - W6. Customer-facing labels come from i18n keys per kind and per adjustment category; a reversal shows "عكس: <category>". The customer never sees the internal reason, the admin's name, journal ids or account codes.
 - W7. Timeline pages are cursor lists (ADR 0011, `lists.ts`): 30 entries by default, "load more".
 - W8. The store header shows a balance chip (USD) for a signed-in customer, linking to the wallet page. It is read in the browser with the session cookie (as the account link is), so every page stays cached; signed-out visitors see no chip (settled in implementation, 2026-10-07: the store's rule for customer-specific parts, `apps/store/CLAUDE.md`).

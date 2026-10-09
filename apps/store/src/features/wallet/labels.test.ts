@@ -11,6 +11,7 @@ const entry = (changes: Partial<WalletEntry>): WalletEntry => ({
   adjustment: null,
   deposit: null,
   order: null,
+  checkout: null,
   ...changes,
 });
 
@@ -24,6 +25,17 @@ describe('entryLabel', () => {
     const adjustment = { category: 'compensation', customerNote: null, reversal: true } as const;
     expect(entryLabel(entry({ adjustment }))).toBe(
       ar.wallet.reversal.replace('{category}', ar.wallet.categories.compensation),
+    );
+  });
+
+  it('names a checkout by its order count (S10 rule M1)', () => {
+    const checkout = {
+      id: '01920000-0000-7000-8000-000000000009',
+      orderCount: 3,
+      orders: [],
+    };
+    expect(entryLabel(entry({ kind: 'purchase', amountUnits: -3_000_000, checkout }))).toBe(
+      'شراء سلة: 3 طلبات',
     );
   });
 
