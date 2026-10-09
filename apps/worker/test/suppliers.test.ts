@@ -1054,6 +1054,8 @@ describe('the supplier registry (rules SP1, SP2)', () => {
         outOfStock: [],
         removed: ['fake-ff-100'],
         failSync: false,
+        orderScripts: {},
+        orders: {},
         errors: false,
       });
       const connected = await real.connect(tx, { id: ids.fake, code: 'fake' });

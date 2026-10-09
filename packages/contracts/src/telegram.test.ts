@@ -134,7 +134,39 @@ describe('Telegram messages', () => {
       marginGuarded: 0,
       suppliersNotHealthy: [],
       balancesLow: [],
+      ordersDelivered: 0,
+      ordersPartiallyRefunded: 0,
+      ordersRefunded: 0,
+      ordersInReview: 0,
+      manualWaiting: 0,
+      medianDeliveryMs: null,
     });
+  });
+
+  it('carry no field values or codes in the order messages (S08)', () => {
+    const orderId = '0199c3a4-0000-7000-8000-000000000001';
+    expect(
+      Object.keys(
+        TELEGRAM_MESSAGE_PARAMS.manual_order.parse({
+          orderId,
+          orderNumber: 'VO-ABC234',
+          gameNameAr: 'ببجي',
+          productNameAr: '60 UC',
+          quantity: 1,
+          sentAt: '2026-10-09T10:00:00.000Z',
+          fields: { player_id: '5123456789' },
+        }),
+      ),
+    ).not.toContain('fields');
+    expect(
+      TELEGRAM_MESSAGE_PARAMS.order_conflict.safeParse({
+        orderId,
+        orderNumber: 'VO-ABC234',
+        supplierNameAr: 'WDGZone',
+        attemptStatus: 'delivered',
+        reported: 'pending',
+      }).success,
+    ).toBe(false);
   });
 
   it('tell a failing sync from stale costs (S07)', () => {

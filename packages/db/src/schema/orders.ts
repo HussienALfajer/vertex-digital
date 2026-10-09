@@ -223,6 +223,12 @@ export const fulfilmentAttempts = pgTable(
       .references(() => supplierOffers.id),
     /** The supplier's own offer id, as sent. */
     supplierOfferId: text('supplier_offer_id').notNull(),
+    /**
+     * The route's field map when the attempt was written (supplier field → input field key; no
+     * values): every re-send with the attempt's key carries the same fields (S08 rules F3, F6),
+     * whatever the route's map became since. Null on attempts written before it existed.
+     */
+    fieldMap: jsonb('field_map').$type<Record<string, string>>(),
     quantity: integer('quantity').notNull(),
     unitCostUsdUnits: amountUnits('unit_cost_usd_units').notNull(),
     status: attemptStatusEnum('status').notNull(),

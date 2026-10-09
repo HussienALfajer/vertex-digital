@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { PlaceOrderRequest } from '../core/adapter.js';
 import { SupplierError } from '../core/errors.js';
 import {
@@ -7,6 +7,7 @@ import {
   FAKE_TIMESTAMP_HEADER,
   FakeSupplierAdapter,
   type FakeSupplierState,
+  fakeOrderScriptSchema,
   fakeSupplierStateSchema,
 } from './adapter.js';
 
@@ -167,7 +168,7 @@ describe('fake supplier', () => {
     expect(placed).toMatchObject({ status: 'pending' });
     expect(await fake.getOrder(request.idempotencyKey)).toEqual(placed);
 
-    const webhook = fake.completePending(request.idempotencyKey);
+    const webhook = await fake.completePending(request.idempotencyKey);
     expect(fake.verifyWebhook(webhook)).toBe(true);
     expect(fake.parseWebhook(webhook)).toEqual({
       eventId: expect.stringMatching(/^evt-/),
@@ -179,7 +180,7 @@ describe('fake supplier', () => {
       },
     });
     expect(await fake.getOrder(request.idempotencyKey)).toMatchObject({ status: 'delivered' });
-    expect(() => fake.completePending(request.idempotencyKey)).toThrow();
+    await expect(fake.completePending(request.idempotencyKey)).rejects.toThrow();
   });
 
   it('resolves an unknown outcome by polling, or by sending again with the same key', async () => {
@@ -195,11 +196,11 @@ describe('fake supplier', () => {
     const fake = adapter();
     const bad = order('badsig-1');
     await fake.placeOrder(bad);
-    expect(fake.verifyWebhook(fake.completePending(bad.idempotencyKey))).toBe(false);
+    expect(fake.verifyWebhook(await fake.completePending(bad.idempotencyKey))).toBe(false);
 
     const good = order('pending-2');
     await fake.placeOrder(good);
-    const webhook = fake.completePending(good.idempotencyKey);
+    const webhook = await fake.completePending(good.idempotencyKey);
     expect(
       fake.verifyWebhook({ ...webhook, rawBody: webhook.rawBody.replace('delivered', 'failed') }),
     ).toBe(false);
@@ -219,6 +220,120 @@ describe('fake supplier', () => {
     expect(() => fake.parseWebhook({ headers: {}, rawBody: '{"eventId":1}' })).toThrow(
       SupplierError,
     );
+  });
+
+  it('answers by the offer script before the player prefix (S08)', async () => {
+    const scripted = (script: string, offerId = 'fake-uc-60') =>
+      adapter({ state: { orderScripts: { [offerId]: script } } as Partial<FakeSupplierState> });
+    expect(await scripted('failed').placeOrder(order('51234567'))).toMatchObject({
+      status: 'failed_definitive',
+      supplierCode: 'FAKE_REFUSED',
+    });
+    expect(await scripted('invalid').placeOrder(order('51234567'))).toMatchObject({
+      status: 'failed_definitive',
+      inputRejected: true,
+    });
+    expect(await scripted('delivered').placeOrder(order('pending-1'))).toMatchObject({
+      status: 'delivered',
+    });
+    const pending = scripted('pending');
+    const held = order('51234567');
+    expect(await pending.placeOrder(held)).toMatchObject({ status: 'pending' });
+    expect(await pending.getOrder(held.idempotencyKey)).toMatchObject({ status: 'pending' });
+    // A scripted `unknown` stays unknown, polled or sent again, until resolved.
+    const silent = scripted('unknown');
+    const lost = order('51234567');
+    expect(await silent.placeOrder(lost)).toMatchObject({ status: 'unknown' });
+    expect(await silent.getOrder(lost.idempotencyKey)).toMatchObject({ status: 'unknown' });
+    expect(await silent.placeOrder(lost)).toMatchObject({ status: 'unknown' });
+    const partial = await scripted('partial:2', 'fake-gift-10').placeOrder(
+      order('', { offerId: 'fake-gift-10', quantity: 3, fields: {} }),
+    );
+    expect(partial).toMatchObject({ status: 'delivered', quantity: 2 });
+    expect((partial as { codes: string[] }).codes).toHaveLength(2);
+    expect(
+      await scripted('partial:9').placeOrder(order('51234567', { quantity: 1 })),
+    ).toMatchObject({ status: 'delivered', quantity: 1 });
+    expect(fakeOrderScriptSchema.safeParse('partial:0').success).toBe(false);
+    expect(fakeOrderScriptSchema.safeParse('slow:5').success).toBe(true);
+  });
+
+  it('takes a code order without a player, and refuses a top-up without one', async () => {
+    const fake = adapter();
+    expect(await fake.placeOrder(order('', { offerId: 'fake-gift-10', fields: {} }))).toMatchObject(
+      { status: 'delivered', codes: [expect.stringMatching(/^FAKE-/)] },
+    );
+    expect(await fake.placeOrder(order('', { fields: {} }))).toMatchObject({
+      status: 'failed_definitive',
+    });
+  });
+
+  it('delivers a scripted slow order late, recorded before it answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const kept: string[] = [];
+      const fake = new FakeSupplierAdapter({
+        webhookSecret,
+        state: fakeSupplierStateSchema.parse({ orderScripts: { 'fake-uc-60': 'slow:2' } }),
+        onOrder: async (key) => {
+          kept.push(key);
+        },
+      });
+      const request = order('51234567');
+      const answer = fake.placeOrder(request);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(kept).toEqual([request.idempotencyKey]);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(await answer).toMatchObject({ status: 'delivered' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps its orders through onOrder, so another instance finds them (S08)', async () => {
+    let stored: FakeSupplierState = fakeSupplierStateSchema.parse({
+      orderScripts: { 'fake-uc-60': 'pending' },
+    });
+    const instance = () =>
+      new FakeSupplierAdapter({
+        webhookSecret,
+        state: fakeSupplierStateSchema.parse(JSON.parse(JSON.stringify(stored))),
+        onOrder: async (key, kept) => {
+          stored = { ...stored, orders: { ...stored.orders, [key]: kept } };
+        },
+      });
+    const request = order('51234567');
+    const placed = await instance().placeOrder(request);
+    expect(await instance().placeOrder(request)).toEqual(placed);
+    expect(await instance().getOrder(request.idempotencyKey)).toEqual(placed);
+    const webhook = await instance().resolve(request.idempotencyKey, 'delivered');
+    expect(instance().verifyWebhook(webhook)).toBe(true);
+    expect(await instance().getOrder(request.idempotencyKey)).toMatchObject({
+      status: 'delivered',
+      supplierOrderId: (placed as { supplierOrderId: string }).supplierOrderId,
+    });
+    await expect(instance().resolve(request.idempotencyKey, 'failed')).rejects.toThrow();
+    await expect(instance().resolve('never-placed', 'failed')).rejects.toThrow();
+  });
+
+  it('resolves an unknown order as failed, or a code order as delivered with codes', async () => {
+    const fake = adapter({
+      state: {
+        orderScripts: { 'fake-uc-60': 'unknown', 'fake-gift-10': 'unknown' },
+      } as Partial<FakeSupplierState>,
+    });
+    const lost = order('51234567');
+    await fake.placeOrder(lost);
+    const failed = await fake.resolve(lost.idempotencyKey, 'failed');
+    expect(fake.parseWebhook(failed).outcome).toMatchObject({ status: 'failed_definitive' });
+    expect(await fake.getOrder(lost.idempotencyKey)).toMatchObject({
+      status: 'failed_definitive',
+    });
+    const codes = order('', { offerId: 'fake-gift-10', quantity: 2, fields: {} });
+    await fake.placeOrder(codes);
+    const delivered = fake.parseWebhook(await fake.resolve(codes.idempotencyKey, 'delivered'));
+    expect(delivered.outcome).toMatchObject({ status: 'delivered', quantity: 2 });
+    expect((delivered.outcome as { codes: string[] }).codes).toHaveLength(2);
   });
 
   it('parses a failed webhook as definitive', () => {

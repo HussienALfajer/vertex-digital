@@ -320,6 +320,54 @@ function supplierText<Kind extends TelegramMessageKind>(
   }
 }
 
+/** A duration in seconds or minutes, Latin digits: "45 ث"، "3 د". */
+function durationText(ms: number): string {
+  const seconds = Math.round(ms / 1_000);
+  return seconds < 60 ? `${seconds} ث` : `${Math.round(seconds / 60)} د`;
+}
+
+/** S08: the order messages (manual card and reminder, review, conflict); no fields or codes. */
+function orderText<Kind extends TelegramMessageKind>(
+  kind: Kind,
+  params: TelegramMessageParams<Kind>,
+  links: TelegramLinks,
+): string {
+  switch (kind) {
+    case 'manual_order': {
+      const order = params as TelegramMessageParams<'manual_order'>;
+      return [
+        `🖐 طلب يدوي ${order.orderNumber} بانتظارك`,
+        `${order.gameNameAr} · ${order.productNameAr} × ${order.quantity}`,
+        `منذ ${atDamascus(new Date(order.sentAt))}`,
+        `${links.admin}/orders/${order.orderId}`,
+      ].join('\n');
+    }
+    case 'manual_order_reminder': {
+      const order = params as TelegramMessageParams<'manual_order_reminder'>;
+      return [
+        `⏰ الطلب اليدوي ${order.orderNumber} ما زال بانتظارك منذ ${waitText(order.waitMinutes)}`,
+        `${order.gameNameAr} · ${order.productNameAr} × ${order.quantity}`,
+        `${links.admin}/orders/${order.orderId}`,
+      ].join('\n');
+    }
+    case 'order_needs_review': {
+      const order = params as TelegramMessageParams<'order_needs_review'>;
+      return [
+        `⏳ الطلب ${order.orderNumber} بحاجة لمراجعة: لا جواب نهائي من ${order.supplierNameAr} منذ ${waitText(order.waitMinutes)}`,
+        `${links.admin}/orders/${order.orderId}`,
+      ].join('\n');
+    }
+    default: {
+      const conflict = params as TelegramMessageParams<'order_conflict'>;
+      const said = (status: 'delivered' | 'failed') => (status === 'delivered' ? 'سُلّم' : 'فشل');
+      return [
+        `⚠️ تعارض في الطلب ${conflict.orderNumber}: أبلغ ${conflict.supplierNameAr} أنه ${said(conflict.reported)} بعد أن سُجّل أنه ${said(conflict.attemptStatus)}. قد يكون سُلّم مرتين: راجعه مع المورد.`,
+        `${links.admin}/orders/${conflict.orderId}`,
+      ].join('\n');
+    }
+  }
+}
+
 /** Rule AL3. */
 function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
   const credited =
@@ -351,6 +399,11 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
       (supplier) =>
         `💰 رصيد ${supplier.supplierNameAr} تحت الحد: ${balanceText(supplier.currency, supplier.amountUnits)}`,
     ),
+    `الطلبات اليوم: ${summary.ordersDelivered} مُسلّمة، ${summary.ordersPartiallyRefunded} جزئية، ${summary.ordersRefunded} مستردة`,
+    `بحاجة لمراجعة: ${summary.ordersInReview} · يدوي بانتظارك: ${summary.manualWaiting}`,
+    ...(summary.medianDeliveryMs === null
+      ? []
+      : [`وسيط وقت التسليم اليوم: ${durationText(summary.medianDeliveryMs)}`]),
     ...(summary.suppressedAlerts > 0
       ? [`تنبيهات حُجبت بحد الإرسال: ${summary.suppressedAlerts}`]
       : []),
@@ -501,6 +554,11 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
     case 'supplier_balance_low':
     case 'supplier_sync_failing':
       return { text: supplierText(kind, params, links) };
+    case 'manual_order':
+    case 'manual_order_reminder':
+    case 'order_needs_review':
+    case 'order_conflict':
+      return { text: orderText(kind, params, links) };
     case 'link_changed':
       return {
         text: 'رُبط البوت بمحادثة أخرى، فلن تصل التنبيهات إلى هنا بعد الآن. إن لم تفعل ذلك بنفسك فألغِ الربط من اللوحة فوراً.',

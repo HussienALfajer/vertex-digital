@@ -122,6 +122,16 @@ export const envSchema = z
         .refine((value) => Buffer.from(value, 'base64').length === 32, 'Expected 32 bytes')
         .optional(),
     ),
+    /**
+     * The AES-256-GCM key of order codes and supplier webhook bodies (S08 rule C1): 32 bytes in
+     * base64, the API's value. Required in production; derived locally exactly as the API does.
+     */
+    ORDER_CODES_SECRET: optional().pipe(
+      z
+        .string()
+        .refine((value) => Buffer.from(value, 'base64').length === 32, 'Expected 32 bytes')
+        .optional(),
+    ),
     /** The fake supplier (S07 rule SP1): development and E2E only, refused in production. */
     SUPPLIER_FAKE_ENABLED: z
       .enum(['true', 'false'])
@@ -151,6 +161,10 @@ export const envSchema = z
   .refine((env) => env.NODE_ENV !== 'production' || env.SUPPLIER_KEYS_SECRET, {
     message: 'SUPPLIER_KEYS_SECRET is required',
     path: ['SUPPLIER_KEYS_SECRET'],
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || env.ORDER_CODES_SECRET, {
+    message: 'ORDER_CODES_SECRET is required',
+    path: ['ORDER_CODES_SECRET'],
   })
   .refine((env) => env.NODE_ENV !== 'production' || !env.SUPPLIER_FAKE_ENABLED, {
     message: 'The fake supplier is never enabled in production',
@@ -184,6 +198,11 @@ export const envSchema = z
       env.SUPPLIER_KEYS_SECRET ??
       createHash('sha256')
         .update(`vertex-digital-dev-supplier-keys:${env.DATABASE_URL}`)
+        .digest('base64'),
+    ORDER_CODES_SECRET:
+      env.ORDER_CODES_SECRET ??
+      createHash('sha256')
+        .update(`vertex-digital-dev-order-codes:${env.DATABASE_URL}`)
         .digest('base64'),
     TELEGRAM_TRANSPORT:
       env.TELEGRAM_TRANSPORT ??

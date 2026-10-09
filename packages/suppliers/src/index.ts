@@ -14,7 +14,10 @@ export {
   FAKE_SUPPLIER_CODE,
   FAKE_TIMESTAMP_HEADER,
   type FakeAdapterOptions,
+  type FakeOrder,
+  type FakeOrderScript,
   FakeSupplierAdapter,
   type FakeSupplierState,
+  fakeOrderScriptSchema,
   fakeSupplierStateSchema,
 } from './fake/adapter.js';
