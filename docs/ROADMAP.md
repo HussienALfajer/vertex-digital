@@ -32,7 +32,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] S07 real adapters: `/supplier-adapter shop2topup`, then `/supplier-adapter wdgzone`, one PR each once its account and API documentation arrive (Q12)
 - [x] S08 Orders and fulfilment: F11 alone (money core); spec `docs/specs/S08-orders-and-fulfilment.md` (three PRs: contracts, db and api with the purchase and webhook routes; worker jobs; store `/orders` and the admin order screens with E2E)
 - [x] S09 Storefront and purchase: F12 Store home and game pages · F13 Purchase flow and live order tracking · F15 Smart search; spec `docs/specs/S09-storefront-and-purchase.md` (three PRs: contracts, db and api with player checks and reservations; worker jobs; store pages, buy box, search and admin additions with E2E)
-- [ ] S10 Convenience: F14 Saved player IDs and one-tap recharge · F16 Cart, gift top-up and shareable receipt
+- [~] S10 Convenience: F14 Saved player IDs and one-tap recharge · F16 Cart, gift top-up and shareable receipt; spec `docs/specs/S10-convenience.md` (two PRs: contracts, db and api with checkouts, saved IDs, share links and images; store cart, buy box additions, share pages and admin additions with E2E)
 - Automations A02–A08, A14, A15 (order notifications through F27): inside the spec they belong to
 - [ ] Production deploy of Phase 2 (registration still closed)
 
