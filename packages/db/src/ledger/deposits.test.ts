@@ -510,6 +510,8 @@ describe('payment references of deposits (rule SC14)', () => {
     expect((refused as LedgerError).details).toEqual({ kind: 'deposit', id: depositId });
   });
 
+  // The reference itself is valid (upper case), so the owner check is the one that refuses: the
+  // order in which PostgreSQL evaluates two failing checks is not guaranteed.
   it('refuses a claim with no owner or two', async () => {
     const depositId = await deposit({ customerId: await customer() });
     const owners = [
@@ -521,7 +523,7 @@ describe('payment references of deposits (rule SC14)', () => {
         await refusal(
           db.execute(
             sql`insert into payment_references (id, method, reference, deposit_id, wallet_adjustment_id)
-              values (${newId()}, 'sham_cash', ${`OWNERS-${index}-${newId().slice(-8)}`}, ${values})`,
+              values (${newId()}, 'sham_cash', ${`OWNERS-${index}-${newId().slice(-8).toUpperCase()}`}, ${values})`,
           ),
         ),
       ).toMatch(/owner_check/);
