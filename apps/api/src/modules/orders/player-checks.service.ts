@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  canonicalFields,
   cleanPlayerName,
   PLAYER_CHECK_TIMEOUT_MS,
   PLAYER_CHECK_TTL_MS,
@@ -175,14 +176,9 @@ export class PlayerChecksService {
     return checked.fields;
   }
 
-  /** HMAC-SHA-256 of the game id and the fields' canonical (key-sorted, trimmed) values. */
+  /** HMAC-SHA-256 of the game id and the fields' canonical values (`canonicalFields`). */
   private fieldsHash(gameId: string, fields: Record<string, string>): string {
-    const canonical = JSON.stringify([
-      gameId,
-      Object.entries(fields)
-        .map(([key, value]) => [key, value.trim()])
-        .sort(([a], [b]) => (a as string).localeCompare(b as string)),
-    ]);
+    const canonical = JSON.stringify([gameId, canonicalFields(fields)]);
     return createHmac('sha256', this.key).update(canonical).digest('hex');
   }
 

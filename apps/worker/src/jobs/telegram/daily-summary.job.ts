@@ -10,6 +10,7 @@ import {
 } from '@vertex-digital/contracts';
 import {
   bossJobSender,
+  checkouts,
   customers,
   type Database,
   depositSettings,
@@ -228,7 +229,20 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       ...(await this.supplierLines(db, now)),
       ...(await this.orderLines(db, dayStart)),
       ...(await this.reservationLines(db, dayStart)),
+      ...(await this.checkoutLines(db, dayStart)),
     };
+  }
+
+  /** S10: real customers' checkouts paid today, and how many orders they made. */
+  private async checkoutLines(db: Database | Transaction, dayStart: SQL) {
+    const [row] = await db
+      .select({
+        checkouts: count(),
+        orders: sql<number>`coalesce(sum(${checkouts.lineCount}), 0)`.mapWith(Number),
+      })
+      .from(checkouts)
+      .where(and(eq(checkouts.isTest, false), gte(checkouts.createdAt, dayStart)));
+    return { checkouts: row?.checkouts ?? 0, checkoutOrders: row?.orders ?? 0 };
   }
 
   /**

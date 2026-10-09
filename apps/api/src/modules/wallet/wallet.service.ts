@@ -92,6 +92,7 @@ export class WalletService {
           syp: entry.deposit.syp,
         },
         order: entry.order,
+        checkout: entry.checkout,
       })),
       nextCursor: page.nextCursor,
     };
@@ -161,6 +162,7 @@ export class WalletService {
         },
         deposit: entry.deposit,
         order: entry.order,
+        checkout: entry.checkout,
       })),
       nextCursor: page.nextCursor,
     };
