@@ -999,7 +999,11 @@
       "supplier_sync_summary": "ملخص مزامنة مورد",
       "supplier_health": "حالة مورد",
       "supplier_balance_low": "رصيد مورد",
-      "supplier_sync_failing": "فشل مزامنة مورد"
+      "supplier_sync_failing": "فشل مزامنة مورد",
+      "manual_order": "طلب يدوي بانتظارك",
+      "manual_order_reminder": "تذكير بطلب يدوي",
+      "order_needs_review": "طلب بحاجة لمراجعة",
+      "order_conflict": "تعارض في طلب"
     }
   },
   "rates": {
