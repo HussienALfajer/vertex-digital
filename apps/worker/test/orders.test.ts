@@ -8,9 +8,9 @@ import {
 } from '@vertex-digital/contracts';
 import {
   accountBalance,
-  catalogCategories,
   applyOutcome,
   bossJobSender,
+  catalogCategories,
   createDatabase,
   customerNotifications,
   customers,
