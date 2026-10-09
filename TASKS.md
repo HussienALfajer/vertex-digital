@@ -16,7 +16,7 @@ Spec: `docs/specs/S08-orders-and-fulfilment.md` (F11 with F26 SW7, F27 and F13's
 - [x] Dev CLI `order:place`; commands table in `AGENTS.md`
 - [x] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow changed shapes
 - [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, `wiring.md` "Order transition" pattern, spec "Settled in implementation")
-- [ ] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (one blocking finding: race and limit tests on the money and public routes, added), owner acceptance (endpoints at `/api/docs`), PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (one blocking finding: race and limit tests on the money and public routes, added), owner acceptance (2026-10-09), PR with auto-merge
 
 ## PR 2 — Worker: routing, sending, polling, webhooks, sweep, manual, notifications · Opus 5.5 `high`
 - [ ] Jobs `orders.fulfil` (R1–R6), `orders.poll` (F3), `suppliers.webhook` (F5), `orders.sweep` (F6, F7, MN2); supplier calls recorded in `supplier_calls`
