@@ -17,7 +17,7 @@ import {
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
 import { notificationEventSchema } from './notifications.js';
-import { orderPolicySchema, refundReasonSchema } from './orders.js';
+import { cancelReasonSchema, orderPolicySchema, refundReasonSchema } from './orders.js';
 import { marginRuleValuesSchema, marginScopeSchema } from './pricing.js';
 import { displayStepSchema } from './rates.js';
 import { storeSwitchSchema } from './settings.js';
@@ -337,7 +337,8 @@ export const AUDIT_DETAILS = {
   'catalog_category.reordered': reordered({}),
   'catalog_game.created': z.strictObject(gameValues),
   /** Status changes included (rule CT4). */
-  'catalog_game.updated': changed(gameValues),
+  /** S09 rule AD1: the search terms change with the game. */
+  'catalog_game.updated': changed({ ...gameValues, searchTerms: z.array(z.string()) }),
   'catalog_game.archived': named({}),
   'catalog_game.restored': named({}),
   'catalog_game.reordered': reordered({ categoryId: z.uuid() }),
@@ -369,6 +370,12 @@ export const AUDIT_DETAILS = {
     ...changed({ lowBalanceUsdUnits: z.int() }).shape,
   }),
   'supplier.sync_requested': z.strictObject({ ...supplier, runId: z.uuid() }),
+  /** S09 rule AD2. */
+  'supplier.validation_quota_set': z.strictObject({
+    ...supplier,
+    before: z.int().nonnegative(),
+    after: z.int().nonnegative(),
+  }),
   /** Rule RT8: with a `catalog_product.created` and a `product_route.created` per row. */
   'supplier.import': z.strictObject({ ...supplier, gameId: z.uuid(), count: z.int().positive() }),
   /** `before` is the policy in force, the seed included. */
@@ -405,7 +412,19 @@ export const AUDIT_DETAILS = {
     quantity: z.int().positive(),
     totalUsdUnits: z.int().positive(),
     journalId: z.uuid(),
+    /** S09 rule RS6, for a reservation paid by the system: which unit price it took. */
+    priceSource: z.enum(['saved', 'current']).optional(),
   }),
+  /** S09 rule RS1: the customer reserved an order; no money moved. */
+  'order.reserved': z.strictObject({
+    number: z.string(),
+    productId: z.uuid(),
+    quantity: z.int().positive(),
+    totalUsdUnits: z.int().positive(),
+    expiresAt: z.iso.datetime(),
+  }),
+  /** S09 rules RS7–RS9: a reservation cancelled by the customer or the system. */
+  'order.cancelled': z.strictObject({ reason: cancelReasonSchema }),
   /** Rule M2, by the system: the cost of one delivered attempt. */
   'order.cost_posted': z.strictObject({
     ...supplier,

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { CURRENCY_SCALE, priceFromCost, QUEUES } from '@vertex-digital/contracts';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Transaction } from '../client.js';
 import { newId } from '../id.js';
@@ -17,7 +17,9 @@ import {
   orderCodes,
   orderEvents,
   orders,
+  playerChecks,
   productPrices,
+  storeSwitchChanges,
 } from '../schema/index.js';
 import { applyOutcome, refundRemaining } from './outcome.js';
 import { OrderError, type PurchaseInput, purchaseOrder } from './purchase.js';
@@ -30,6 +32,7 @@ import {
   productDeliveryStats,
   revealCode,
 } from './reads.js';
+import { cancelOwnReservation, expireReservations, payWaitingOrders } from './reservations.js';
 import { decryptSecret } from './secrets.js';
 import { lockOrder, type OrderContext, type OrderRow, transitionOrder } from './transition.js';
 
@@ -191,6 +194,9 @@ function request(
     fakeEnabled: true,
     purchasesStopped: false,
     channel: 'store',
+    whenBalanceShort: 'refuse',
+    confirmPlayer: false,
+    playerCheck: async () => null,
     ...overrides,
   };
 }
@@ -671,7 +677,7 @@ describe('reads (S08 "API")', () => {
     expect(await customerOrder(db, await customer(), order.id)).toBeNull();
 
     const view = await customerOrder(db, buyer, order.id);
-    expect(view?.timeline.map((entry) => entry.stage)).toEqual(['processing', 'delivered']);
+    expect(view?.timeline.map((entry) => entry.step)).toEqual(['paid', 'sent', 'delivered']);
     expect(view?.codes.map((code) => [code.position, code.masked, code.firstRevealedAt])).toEqual([
       [1, '••••••1111', null],
       [2, '••••••••', null],
@@ -758,5 +764,407 @@ describe('reads (S08 "API")', () => {
     await apply(await send(order, item), { status: 'delivered', quantity: 1 });
     expect((await productDeliveryStats(db, [item.id])).get(item.id)).toMatchObject({ count: 5 });
     expect(await productDeliveryStats(db, [])).toEqual(new Map());
+  });
+});
+
+describe('reservations (S09 rules RS1–RS9, PV8)', () => {
+  const reserve = (
+    customerId: string,
+    item: { id: string; price: number },
+    extra: Partial<PurchaseInput> = {},
+  ) => buy(request(customerId, item, { whenBalanceShort: 'reserve', ...extra }));
+  const payContext = () => ({ jobs: context().jobs, now: () => new Date(), fakeEnabled: true });
+  const pay = (customerId: string) => payWaitingOrders(db, payContext(), customerId);
+  const credit = async (customerId: string, amount: number) =>
+    db.transaction(async (tx) => {
+      await postJournal(tx, {
+        idempotencyKey: `test:${newId()}`,
+        kind: 'adjustment',
+        postings: [
+          { accountId: await ensureCustomerWallet(tx, customerId), amountUnits: amount },
+          {
+            accountId: await ensureSystemAccount(tx, {
+              code: 'adjustments:test_funds',
+              kind: 'adjustments',
+              currency: 'USD',
+            }),
+            amountUnits: -amount,
+          },
+        ],
+      });
+    });
+  const notificationsOf = async (customerId: string) =>
+    (
+      await db
+        .select()
+        .from(customerNotifications)
+        .where(eq(customerNotifications.customerId, customerId))
+    ).map((row) => [row.event, (row.params as { reason?: string }).reason ?? null]);
+  const reprice = (id: string) =>
+    db.transaction((tx) =>
+      repriceProducts(tx, {
+        productIds: [id],
+        cause: 'rule_change',
+        context: { now: new Date(), fakeEnabled: true },
+      }),
+    );
+
+  it('reserves a short order without moving money, pays it in full when the balance covers it', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(0.5) });
+    const before = new Date();
+    const { order } = await reserve(buyer, item);
+    expect(order).toMatchObject({
+      status: 'awaiting_balance',
+      purchaseJournalId: null,
+      paidAt: null,
+      totalUsdUnits: item.price,
+      playerCheck: 'none',
+    });
+    const hours =
+      ((order.expiresAt as Date).getTime() - (order.reservedAt as Date).getTime()) / 3_600_000;
+    expect(hours).toBe(24);
+    expect((order.reservedAt as Date).getTime()).toBeGreaterThanOrEqual(before.getTime() - 1_000);
+    expect(await balance(buyer)).toBe(usd(0.5));
+    const [audit] = await db
+      .select()
+      .from(auditEntries)
+      .where(and(eq(auditEntries.entityId, order.id), eq(auditEntries.action, 'order.reserved')));
+    expect(audit?.details).toMatchObject({ number: order.number, totalUsdUnits: item.price });
+    expect(sent.find((job) => (job.data as { customerId?: string }).customerId === buyer)).toEqual({
+      queue: QUEUES.ordersPayWaiting,
+      data: { customerId: buyer },
+      options: expect.objectContaining({ singletonKey: buyer }),
+    });
+    const [event] = await db.select().from(orderEvents).where(eq(orderEvents.orderId, order.id));
+    expect([event?.fromStatus, event?.toStatus]).toEqual([null, 'awaiting_balance']);
+    // `refuse` keeps S08's refusal; a covered balance pays at once even with `reserve`.
+    expect(await refusal(buy(request(buyer, item)))).toMatchObject({
+      code: 'INSUFFICIENT_BALANCE',
+    });
+    const rich = await customer({ funds: usd(10) });
+    expect((await reserve(rich, item)).order.status).toBe('paid');
+  });
+
+  it('holds at most 3 open reservations, also when asked in parallel (RS2)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const outcomes = await Promise.allSettled(
+      Array.from({ length: 5 }, () => reserve(buyer, item)),
+    );
+    expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(3);
+    for (const failed of outcomes.filter((o) => o.status === 'rejected')) {
+      expect((failed as PromiseRejectedResult).reason).toMatchObject({
+        code: 'RESERVATIONS_LIMIT_REACHED',
+        details: { limit: 3 },
+      });
+    }
+    // One key with `reserve` sent twice at once makes one reservation.
+    const other = await customer();
+    const input = request(other, item, { whenBalanceShort: 'reserve' });
+    const results = await Promise.all([buy(input), buy(input)]);
+    expect(results.map((r) => r.created).sort()).toEqual([false, true]);
+  });
+
+  it('records the player check and asks for a confirmation when the id is not known valid (PV8)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    const valid = await buy(
+      request(buyer, item, { playerCheck: async () => ({ result: 'valid', playerName: 'Hero' }) }),
+    );
+    expect(valid.order).toMatchObject({ playerCheck: 'valid', playerName: 'Hero' });
+    for (const result of ['invalid', 'none'] as const) {
+      const lookup = async () => ({ result });
+      expect(await refusal(buy(request(buyer, item, { playerCheck: lookup })))).toMatchObject({
+        code: 'PLAYER_NOT_CONFIRMED',
+      });
+      const confirmed = await buy(
+        request(buyer, item, { playerCheck: lookup, confirmPlayer: true }),
+      );
+      expect(confirmed.order.playerCheck).toBe(
+        result === 'invalid' ? 'invalid_confirmed' : 'unchecked_confirmed',
+      );
+    }
+    // No check possible: the confirmation is ignored.
+    const none = await buy(request(buyer, item, { confirmPlayer: true }));
+    expect(none.order).toMatchObject({ playerCheck: 'none', playerName: null });
+  });
+
+  it('pays reservations after a credit, oldest first, skipping one the balance cannot cover (RS4)', async () => {
+    const cheap = await product({ cost: usd(0.5) });
+    const dear = await product({ cost: usd(5) });
+    const buyer = await customer();
+    const older = (await reserve(buyer, dear)).order;
+    const newer = (await reserve(buyer, cheap)).order;
+    await credit(buyer, cheap.price + usd(1));
+    const result = await pay(buyer);
+    expect(result).toEqual({
+      stopped: false,
+      outcomes: [
+        { orderId: older.id, outcome: 'skipped_balance' },
+        { orderId: newer.id, outcome: 'paid' },
+      ],
+    });
+    expect(await balance(buyer)).toBe(usd(1));
+    const paid = await orderRow(newer.id);
+    expect(paid).toMatchObject({ status: 'paid', unitPriceUsdUnits: cheap.price });
+    expect(paid.purchaseJournalId).not.toBeNull();
+    expect(paid.paidAt).not.toBeNull();
+    expect((await orderRow(older.id)).status).toBe('awaiting_balance');
+    const [audit] = await db
+      .select()
+      .from(auditEntries)
+      .where(and(eq(auditEntries.entityId, newer.id), eq(auditEntries.action, 'order.paid')));
+    expect(audit).toMatchObject({ actorKind: 'system', channel: 'worker' });
+    expect(audit?.details).toMatchObject({ priceSource: 'saved' });
+    expect(await notificationsOf(buyer)).toEqual([['order_paid', null]]);
+    expect(sent.some((job) => (job.data as { orderId?: string }).orderId === newer.id)).toBe(true);
+    // Run again: nothing more to pay, nothing paid twice.
+    expect((await pay(buyer)).outcomes).toEqual([
+      { orderId: older.id, outcome: 'skipped_balance' },
+    ]);
+    expect(await balance(buyer)).toBe(usd(1));
+  });
+
+  it('pays one reservation once when two runs race (edge case: two credits at once)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const { order } = await reserve(buyer, item);
+    await credit(buyer, item.price * 3);
+    const runs = await Promise.all([pay(buyer), pay(buyer), pay(buyer)]);
+    expect(runs.flatMap((run) => run.outcomes).filter((o) => o.outcome === 'paid')).toHaveLength(1);
+    expect(await balance(buyer)).toBe(item.price * 2);
+    expect((await orderRow(order.id)).status).toBe('paid');
+  });
+
+  it('charges a lower current price, keeps a saved one while it stays profitable (RS6)', async () => {
+    const fell = await product({ cost: usd(2) });
+    const rose = await product({ cost: usd(2) });
+    const buyer = await customer();
+    const a = (await reserve(buyer, fell)).order;
+    const b = (await reserve(buyer, rose)).order;
+    // Fall: a cheaper route. Rise: a bigger markup, the minimum margin unchanged.
+    // 10% exactly applies at once (rule P3).
+    await pool.query('update supplier_offers set cost_usd_units = $1 where id = $2', [
+      usd(1.8),
+      fell.offer,
+    ]);
+    await reprice(fell.id);
+    await pool.query(`update margin_rules set percent_bp = 5000 where target_id = $1`, [rose.id]);
+    await reprice(rose.id);
+    await credit(buyer, usd(20));
+    await pay(buyer);
+    const [current] = await db
+      .select()
+      .from(productPrices)
+      .where(eq(productPrices.productId, fell.id))
+      .orderBy(desc(productPrices.createdAt))
+      .limit(1);
+    expect(await orderRow(a.id)).toMatchObject({
+      status: 'paid',
+      unitPriceUsdUnits: current?.priceUsdUnits,
+      priceId: current?.id,
+    });
+    expect((current?.priceUsdUnits as number) < fell.price).toBe(true);
+    expect(await orderRow(b.id)).toMatchObject({
+      status: 'paid',
+      unitPriceUsdUnits: rose.price,
+      priceId: b.priceId,
+    });
+    expect(await balance(buyer)).toBe(usd(20) - (current?.priceUsdUnits as number) - rose.price);
+    const [audit] = await db
+      .select()
+      .from(auditEntries)
+      .where(and(eq(auditEntries.entityId, a.id), eq(auditEntries.action, 'order.paid')));
+    expect(audit?.details).toMatchObject({ priceSource: 'current' });
+  });
+
+  it('cancels a reservation whose saved price lost its margin, or whose fields changed (RS4, RS9)', async () => {
+    const rose = await product();
+    const changed = await product();
+    const buyer = await customer();
+    const a = (await reserve(buyer, rose)).order;
+    const b = (await reserve(buyer, changed)).order;
+    await pool.query(`update margin_rules set min_margin_usd_units = $1 where target_id = $2`, [
+      usd(1),
+      rose.id,
+    ]);
+    await reprice(rose.id);
+    await pool.query(
+      `insert into catalog_input_fields (id, game_id, key, label_ar, type, required, sort_order)
+       values ($1, $2, 'server', 'الخادم', 'text', true, 2)`,
+      [newId(), changed.game],
+    );
+    await credit(buyer, usd(10));
+    expect((await pay(buyer)).outcomes.map((o) => o.outcome)).toEqual([
+      'cancelled_price_rose',
+      'cancelled_product_changed',
+    ]);
+    expect(await orderRow(a.id)).toMatchObject({ status: 'cancelled', cancelReason: 'price_rose' });
+    expect(await orderRow(b.id)).toMatchObject({
+      status: 'cancelled',
+      cancelReason: 'product_changed',
+    });
+    expect((await orderRow(a.id)).finishedAt).not.toBeNull();
+    expect(await balance(buyer)).toBe(usd(10));
+    expect((await notificationsOf(buyer)).sort()).toEqual([
+      ['order_cancelled', 'price_rose'],
+      ['order_cancelled', 'product_changed'],
+    ]);
+  });
+
+  it('waits while purchases are stopped or the product is unavailable (RS4 steps 1, 3)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const { order } = await reserve(buyer, item);
+    await credit(buyer, usd(10));
+    await db.insert(storeSwitchChanges).values({
+      id: newId(),
+      switch: 'purchases_stopped',
+      value: true,
+      adminId: newId(),
+      channel: 'admin',
+    });
+    try {
+      expect(await pay(buyer)).toEqual({ stopped: true, outcomes: [] });
+    } finally {
+      await db.insert(storeSwitchChanges).values({
+        id: newId(),
+        switch: 'purchases_stopped',
+        value: false,
+        adminId: newId(),
+        channel: 'admin',
+      });
+    }
+    await pool.query(`update catalog_products set status = 'paused' where id = $1`, [item.id]);
+    expect((await pay(buyer)).outcomes).toEqual([
+      { orderId: order.id, outcome: 'skipped_unavailable' },
+    ]);
+    expect((await orderRow(order.id)).status).toBe('awaiting_balance');
+    expect(await balance(buyer)).toBe(usd(10));
+  });
+
+  it('lets the customer cancel an own reservation only, and settles races by the order lock (RS8, edge cases 6, 7)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const stranger = await customer();
+    const { order } = await reserve(buyer, item);
+    const cancel = (customerId: string, orderId = order.id) =>
+      db.transaction((tx) => cancelOwnReservation(tx, context(), { orderId, customerId }));
+    expect(await refusal(cancel(stranger))).toMatchObject({ code: 'NOT_FOUND' });
+    // Cancel and pay at once: exactly one wins.
+    await credit(buyer, usd(10));
+    const [cancelled, paid] = await Promise.allSettled([cancel(buyer), pay(buyer)]);
+    const final = await orderRow(order.id);
+    if (final.status === 'cancelled') {
+      expect(cancelled.status).toBe('fulfilled');
+      expect(final.cancelReason).toBe('customer');
+      expect(await balance(buyer)).toBe(usd(10));
+    } else {
+      expect(final.status).toBe('paid');
+      expect((cancelled as PromiseRejectedResult).reason).toMatchObject({
+        code: 'ORDER_NOT_CANCELLABLE',
+        details: { status: 'paid' },
+      });
+    }
+    expect(paid.status).toBe('fulfilled');
+    // The customer is not notified of their own cancel.
+    expect((await notificationsOf(buyer)).filter(([event]) => event === 'order_cancelled')).toEqual(
+      [],
+    );
+    const settled = (await reserve(buyer, item, {})).order;
+    expect(settled.status).toBe('paid');
+    expect(await refusal(cancel(buyer, settled.id))).toMatchObject({
+      code: 'ORDER_NOT_CANCELLABLE',
+    });
+  });
+
+  it('expires reservations past their deadline, and never pays one (RS7, A15)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const { order } = await reserve(buyer, item);
+    await owner.pool.query('alter table orders disable trigger orders_guard');
+    try {
+      await owner.pool.query(
+        `update orders set reserved_at = reserved_at - interval '25 hours',
+           expires_at = expires_at - interval '25 hours' where id = $1`,
+        [order.id],
+      );
+    } finally {
+      await owner.pool.query('alter table orders enable trigger orders_guard');
+    }
+    await credit(buyer, usd(10));
+    expect((await pay(buyer)).outcomes).toEqual([]);
+    expect(await expireReservations(db, context(), 100)).toBeGreaterThanOrEqual(1);
+    expect(await orderRow(order.id)).toMatchObject({
+      status: 'cancelled',
+      cancelReason: 'expired',
+    });
+    expect(await notificationsOf(buyer)).toEqual([['order_cancelled', 'expired']]);
+    const [audit] = await db
+      .select()
+      .from(auditEntries)
+      .where(and(eq(auditEntries.entityId, order.id), eq(auditEntries.action, 'order.cancelled')));
+    expect(audit).toMatchObject({ actorKind: 'system', details: { reason: 'expired' } });
+  });
+
+  it('keeps the guard: prices change only when a reservation is paid, reservation columns never (migration 0035)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const { order } = await reserve(buyer, item);
+    await expect(
+      pool.query(
+        'update orders set unit_price_usd_units = 10000, total_usd_units = 10000 where id = $1',
+        [order.id],
+      ),
+    ).rejects.toThrow(/fixed once paid/);
+    await expect(
+      pool.query(`update orders set expires_at = now() + interval '9 days' where id = $1`, [
+        order.id,
+      ]),
+    ).rejects.toThrow(/identity and fields are fixed/);
+    await expect(
+      pool.query(`update orders set status = 'cancelled', finished_at = now() where id = $1`, [
+        order.id,
+      ]),
+    ).rejects.toThrow(/orders_reservation_check/);
+    await expect(
+      pool.query(`update orders set status = 'paid' where id = $1`, [order.id]),
+    ).rejects.toThrow(/orders_purchase_journal_check/);
+    await credit(buyer, usd(10));
+    await pay(buyer);
+    await expect(
+      pool.query(
+        'update orders set unit_price_usd_units = 10000, total_usd_units = 10000 where id = $1',
+        [order.id],
+      ),
+    ).rejects.toThrow(/fixed once paid/);
+  });
+
+  it('lets the app role read, add and delete player checks, never change one', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const id = newId();
+    await db.insert(playerChecks).values({
+      id,
+      gameId: item.game,
+      fieldsHash: 'a'.repeat(64),
+      result: 'valid',
+      playerName: 'Hero',
+      supplierId: suppliers.fake,
+      customerId: buyer,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await expect(
+      pool.query(`update player_checks set result = 'invalid' where id = $1`, [id]),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      pool.query(
+        `insert into player_checks (id, game_id, fields_hash, result, player_name, supplier_id, customer_id, expires_at)
+         values ($1, $2, $3, 'invalid', 'X', $4, $5, now() + interval '1 hour')`,
+        [newId(), item.game, 'b'.repeat(64), suppliers.fake, buyer],
+      ),
+    ).rejects.toThrow(/player_checks_player_name_check/);
+    await db.delete(playerChecks).where(eq(playerChecks.id, id));
   });
 });

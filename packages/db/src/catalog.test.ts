@@ -278,3 +278,46 @@ describe('margin rules', () => {
       expect(await insert(client, 'product', newId(), [0, 0, 10_000])).toBeNull();
     }));
 });
+
+describe('search terms and validation quotas (S09)', () => {
+  it('keep at most 20 search terms on a game, none null', () =>
+    rolledBack(async (client) => {
+      const category = newId();
+      await client.query(
+        'insert into catalog_categories (id, slug, name_ar, sort_order) values ($1, $2, $3, 99)',
+        [category, `c-${unique()}`, `فئة ${unique()}`],
+      );
+      const insert = (terms: (string | null)[]) =>
+        violation(
+          client,
+          `insert into catalog_games (id, category_id, slug, name_ar, name_en, sort_order, search_terms)
+           values ($1, $2, $3, $4, 'Game', 1, $5)`,
+          [newId(), category, `g-${unique()}`, `لعبة ${unique()}`, terms],
+        );
+      expect(await insert(['ببجي', 'pubg'])).toBeNull();
+      expect(await insert(Array.from({ length: 21 }, (_, i) => `t${i}`))).toBe(
+        'catalog_games_search_terms_check',
+      );
+      expect(await insert(['ok', null])).toBe('catalog_games_search_terms_check');
+    }));
+
+  it('bound a supplier validation quota to 0–1,000,000, 1,000 by default', () =>
+    rolledBack(async (client) => {
+      const { rows } = await client.query<{ quota: number }>(
+        `select validation_daily_quota as quota from suppliers where code = 'fake'`,
+      );
+      expect(rows[0]?.quota).toBe(1_000);
+      expect(
+        await violation(
+          client,
+          `update suppliers set validation_daily_quota = 0 where code = 'fake'`,
+        ),
+      ).toBeNull();
+      expect(
+        await violation(
+          client,
+          `update suppliers set validation_daily_quota = 1000001 where code = 'fake'`,
+        ),
+      ).toBe('suppliers_validation_daily_quota_check');
+    }));
+});

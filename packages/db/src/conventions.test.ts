@@ -70,6 +70,7 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   order_code_reveals: 'Append-only (S08 C2, C3): every reveal of a code',
   order_policy: 'Append-only (S08): a save is a new version, the newest is in force',
   supplier_webhook_events: 'A delivery record (S08 F4): only its processing changes, once',
+  player_checks: 'A cache of supplier answers (S09 PV3): expired rows are deleted, never archived',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */

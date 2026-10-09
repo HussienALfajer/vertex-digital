@@ -72,6 +72,8 @@ export const catalogGames = pgTable(
     idGuideFileId: uuid('id_guide_file_id').references(() => storedFiles.id),
     accentColor: text('accent_color'),
     regionNotesAr: text('region_notes_ar'),
+    /** S09 rule AD1: normalized (rule SR1), unique, at most 20. */
+    searchTerms: text('search_terms').array().notNull().default(sql`'{}'::text[]`),
     sortOrder: integer('sort_order').notNull(),
     ...timestamps(),
     archivedAt: archivedAt(),
@@ -91,6 +93,10 @@ export const catalogGames = pgTable(
     check(
       'catalog_games_region_notes_ar_check',
       sql`char_length(${table.regionNotesAr}) between 1 and 500`,
+    ),
+    check(
+      'catalog_games_search_terms_check',
+      sql`cardinality(${table.searchTerms}) <= 20 and array_position(${table.searchTerms}, null) is null`,
     ),
   ],
 );

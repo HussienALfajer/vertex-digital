@@ -7,6 +7,7 @@ import {
   type CandidateOrder,
   type CandidateRoute,
   canTransitionOrder,
+  cleanPlayerName,
   codeHint,
   costOfGoods,
   createOrderSchema,
@@ -29,12 +30,15 @@ import {
   orderNumberSchema,
   orderPolicySchema,
   orderStatusSchema,
+  orderTimeline,
   orderTotal,
   pastHardLimit,
+  playerCheckRequestSchema,
+  playerCheckSchema,
   refundAmount,
+  reservationCharge,
   resolveAttemptSchema,
   routeProfitable,
-  stageTimeline,
 } from './orders.js';
 
 /** ADR 0004's transition table, plus `paid → refunded` (ADR 0013), written out independently. */
@@ -102,7 +106,7 @@ describe('order transitions', () => {
 describe('customer stages (rule O13)', () => {
   it('maps every status to a stage, hiding the internal ones', () => {
     expect(Object.fromEntries(ORDER_STATUSES.map((s) => [s, orderCustomerStage(s)]))).toEqual({
-      awaiting_balance: 'processing',
+      awaiting_balance: 'awaiting_balance',
       paid: 'processing',
       sent_to_supplier: 'processing',
       failed: 'processing',
@@ -113,24 +117,127 @@ describe('customer stages (rule O13)', () => {
       cancelled: 'cancelled',
     });
   });
+});
 
-  it('builds the timeline from status changes, one entry per stage change', () => {
-    const at = (minute: number) => new Date(Date.UTC(2026, 9, 9, 10, minute));
+describe('order timeline (S09 rule LT1)', () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 9, 9, 10, minute));
+
+  it('turns a reservation paid and delivered into its steps', () => {
     expect(
-      stageTimeline([
-        { status: 'paid', at: at(0) },
-        { status: 'sent_to_supplier', at: at(1) },
-        { status: 'needs_review', at: at(31) },
-        { status: 'sent_to_supplier', at: at(40) },
-        { status: 'delivered', at: at(41) },
+      orderTimeline([
+        { status: 'awaiting_balance', at: at(0) },
+        { status: 'paid', at: at(5) },
+        { status: 'sent_to_supplier', at: at(6) },
+        { status: 'delivered', at: at(7) },
       ]),
     ).toEqual([
-      { stage: 'processing', at: at(0) },
-      { stage: 'delayed', at: at(31) },
-      { stage: 'processing', at: at(40) },
-      { stage: 'delivered', at: at(41) },
+      { step: 'reserved', at: at(0) },
+      { step: 'paid', at: at(5) },
+      { step: 'sent', at: at(6) },
+      { step: 'delivered', at: at(7) },
     ]);
-    expect(stageTimeline([])).toEqual([]);
+  });
+
+  it('collapses retries to the newest, hides failed and moves a repeated delay', () => {
+    expect(
+      orderTimeline([
+        { status: 'paid', at: at(0) },
+        { status: 'sent_to_supplier', at: at(1) },
+        { status: 'failed', at: at(2) },
+        { status: 'sent_to_supplier', at: at(3) },
+        { status: 'needs_review', at: at(30) },
+        { status: 'sent_to_supplier', at: at(40) },
+        { status: 'needs_review', at: at(70) },
+        { status: 'partially_refunded', at: at(90) },
+      ]),
+    ).toEqual([
+      { step: 'paid', at: at(0) },
+      { step: 'sent', at: at(1) },
+      { step: 'retrying', at: at(40) },
+      { step: 'delayed', at: at(70) },
+      { step: 'partially_refunded', at: at(90) },
+    ]);
+  });
+
+  it('gives each terminal status its own step', () => {
+    expect(
+      orderTimeline([
+        { status: 'awaiting_balance', at: at(0) },
+        { status: 'cancelled', at: at(9) },
+      ]),
+    ).toEqual([
+      { step: 'reserved', at: at(0) },
+      { step: 'cancelled', at: at(9) },
+    ]);
+    expect(
+      orderTimeline([
+        { status: 'paid', at: at(0) },
+        { status: 'refunded', at: at(1) },
+      ]),
+    ).toEqual([
+      { step: 'paid', at: at(0) },
+      { step: 'refunded', at: at(1) },
+    ]);
+    expect(orderTimeline([])).toEqual([]);
+  });
+});
+
+describe('reservations and player checks (S09)', () => {
+  it('charges the lower unit price, the saved one on a tie (rule RS6)', () => {
+    expect(reservationCharge(1_000_000, 900_000)).toEqual({
+      unitPriceUsdUnits: 900_000,
+      source: 'current',
+    });
+    expect(reservationCharge(1_000_000, 1_100_000)).toEqual({
+      unitPriceUsdUnits: 1_000_000,
+      source: 'saved',
+    });
+    expect(reservationCharge(1_000_000, 1_000_000)).toEqual({
+      unitPriceUsdUnits: 1_000_000,
+      source: 'saved',
+    });
+  });
+
+  it('keeps a supplier name printable, trimmed and at most 64 characters', () => {
+    expect(cleanPlayerName('  Hero\u0000 \u200e Ace\n ')).toBe('Hero Ace');
+    expect(cleanPlayerName('ب'.repeat(70))).toBe('ب'.repeat(64));
+    expect(cleanPlayerName('\u0007')).toBeNull();
+    expect(cleanPlayerName(null)).toBeNull();
+    expect(cleanPlayerName(undefined)).toBeNull();
+  });
+
+  it('defaults the purchase to refusing a short balance without a confirmation', () => {
+    const request = {
+      productId: '0199a000-0000-7000-8000-000000000001',
+      quantity: 1,
+      expectedUnitPriceUsdUnits: 1_000_000,
+    };
+    expect(createOrderSchema.parse(request)).toMatchObject({
+      whenBalanceShort: 'refuse',
+      confirmPlayer: false,
+    });
+    expect(
+      createOrderSchema.parse({ ...request, whenBalanceShort: 'reserve', confirmPlayer: true }),
+    ).toMatchObject({
+      whenBalanceShort: 'reserve',
+      confirmPlayer: true,
+    });
+    expect(createOrderSchema.safeParse({ ...request, whenBalanceShort: 'hold' }).success).toBe(
+      false,
+    );
+  });
+
+  it('checks a player with the product and its fields, and answers by result (rule PV6)', () => {
+    expect(
+      playerCheckRequestSchema.parse({ productId: '0199a000-0000-7000-8000-000000000001' }),
+    ).toEqual({ productId: '0199a000-0000-7000-8000-000000000001', fields: {} });
+    expect(playerCheckSchema.safeParse({ result: 'valid', playerName: null }).success).toBe(true);
+    expect(playerCheckSchema.safeParse({ result: 'unavailable', reason: 'quota' }).success).toBe(
+      true,
+    );
+    expect(playerCheckSchema.safeParse({ result: 'unavailable', reason: 'busy' }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -364,7 +471,12 @@ describe('order field values (rule O5, S06 CT7)', () => {
       quantity: 1,
       expectedUnitPriceUsdUnits: 1_230_000,
     };
-    expect(createOrderSchema.parse(request)).toEqual({ ...request, fields: {} });
+    expect(createOrderSchema.parse(request)).toEqual({
+      ...request,
+      fields: {},
+      whenBalanceShort: 'refuse',
+      confirmPlayer: false,
+    });
     expect(createOrderSchema.safeParse({ ...request, quantity: 51 }).success).toBe(false);
     expect(createOrderSchema.safeParse({ ...request, expectedUnitPriceUsdUnits: 1 }).success).toBe(
       false,

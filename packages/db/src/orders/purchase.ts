@@ -8,15 +8,23 @@ import {
   ORDER_NUMBER_PREFIX,
   orderFieldValuesSchema,
   orderTotal,
+  type PlayerCheckState,
+  RESERVATION_HOURS,
+  RESERVATIONS_MAX,
   rateFromNumeric,
   sypDisplayPrice,
 } from '@vertex-digital/contracts';
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Transaction } from '../client.js';
 import { newId } from '../id.js';
-import { ensureCustomerWallet, ensureSystemAccount, postJournal } from '../ledger/index.js';
-import { productRoutingStates } from '../pricing/index.js';
+import {
+  accountBalance,
+  ensureSystemAccount,
+  lockCustomerWallet,
+  postJournal,
+} from '../ledger/index.js';
+import { type ProductRoutingState, productRoutingStates } from '../pricing/index.js';
 import {
   catalogInputFields,
   catalogProducts,
@@ -24,7 +32,13 @@ import {
   exchangeRates,
   orders,
 } from '../schema/index.js';
-import { addOrderEvent, type OrderContext, type OrderRow, queueFulfil } from './transition.js';
+import {
+  addOrderEvent,
+  type OrderContext,
+  type OrderRow,
+  queueFulfil,
+  queuePayWaiting,
+} from './transition.js';
 
 /** A purchase refusal the API answers with its contract code (S08 rules O1–O5). */
 export class OrderError extends Error {
@@ -55,9 +69,27 @@ export interface PurchaseInput {
   purchasesStopped: boolean;
   /** `store` for the customer's request, `cli` for `order:place`. */
   channel: Extract<AuditChannel, 'store' | 'cli'>;
+  /** S09 rule RS1: `reserve` makes a reservation when the balance is short. */
+  whenBalanceShort: 'refuse' | 'reserve';
+  /** S09 rule PV8: the customer confirmed a player id that is not known valid. */
+  confirmPlayer: boolean;
+  /**
+   * S09 rule PV8: the cached player check of the order's fields, read by the API (it holds the
+   * HMAC key and the adapters' capabilities); null when no check is possible for this purchase.
+   */
+  playerCheck: (
+    tx: Transaction,
+    order: { gameId: string; productKind: 'direct' | 'code'; fields: Record<string, string> },
+  ) => Promise<PlayerCheckLookup | null>;
   ipAddress?: string | null;
   userAgent?: string | null;
 }
+
+/** What the cache knows of the order's fields (S09 rule PV8); `none`: no unexpired row. */
+export type PlayerCheckLookup =
+  | { result: 'valid'; playerName: string | null }
+  | { result: 'invalid' }
+  | { result: 'none' };
 
 /** Attempts at a free order number before giving up (6 characters: 887 million numbers). */
 const NUMBER_ATTEMPTS = 5;
@@ -75,6 +107,91 @@ const uniqueViolation = (error: unknown, constraint: string): boolean => {
   const pg = cause as { code?: string; constraint?: string };
   return pg.code === '23505' && pg.constraint === constraint;
 };
+
+/** The product's routing state now; routes of a supplier this build cannot use stay out (SP1). */
+export async function routingNow(
+  tx: Transaction,
+  productId: string,
+  now: Date,
+  fakeEnabled: boolean,
+): Promise<ProductRoutingState | undefined> {
+  return (await productRoutingStates(tx, [productId], { now, fakeEnabled })).get(productId);
+}
+
+/** The product's availability for this customer (S08 rule O3: test routes for test customers). */
+export function availabilityNow(usable: ProductRoutingState, isTest: boolean) {
+  const current = usable.current;
+  return usable.availability === 'hidden' || usable.availability === 'paused'
+    ? usable.availability
+    : availabilityForCustomer(
+        {
+          categoryArchived: false,
+          gameArchived: false,
+          productArchived: false,
+          gameStatus: 'active',
+          productStatus: 'active',
+          price: current
+            ? {
+                priceUsdUnits: current.priceUsdUnits,
+                minMarginUsdUnits: usable.rule.values.minMarginUsdUnits,
+              }
+            : null,
+        },
+        usableRouteCosts(usable),
+        isTest,
+      );
+}
+
+/** The usable routes' suppliers and costs (rule RT4). */
+export function usableRouteCosts(usable: ProductRoutingState) {
+  return usable.routes
+    .filter((route) => route.unusableReason === null)
+    .map((route) => ({
+      supplierCode: route.supplierCode,
+      costUsdUnits: route.costUsdUnits as number,
+    }));
+}
+
+/** The order's fields checked against the game's unarchived fields (rule O5), or the refusals. */
+export async function checkOrderFields(
+  tx: Transaction,
+  gameId: string,
+  values: Record<string, string>,
+): Promise<
+  { ok: true; fields: Record<string, string> } | { ok: false; refusals: Record<string, string> }
+> {
+  const fieldRules = await tx
+    .select()
+    .from(catalogInputFields)
+    .where(and(eq(catalogInputFields.gameId, gameId), isNull(catalogInputFields.archivedAt)))
+    .orderBy(asc(catalogInputFields.sortOrder));
+  const parsed = orderFieldValuesSchema(fieldRules).safeParse(values);
+  if (parsed.success) return { ok: true, fields: parsed.data };
+  const refusals: Record<string, string> = {};
+  for (const issue of parsed.error.issues) {
+    if (issue.code === 'unrecognized_keys') {
+      for (const key of issue.keys) refusals[key] = 'unknown';
+    } else {
+      refusals[String(issue.path[0])] ??= issue.code;
+    }
+  }
+  return { ok: false, refusals };
+}
+
+/** The SYP shown for a USD total at the newest rate (rule O6); nulls without a rate. */
+export async function displayTotal(tx: Transaction, totalUsdUnits: number) {
+  const [rate] = await tx
+    .select()
+    .from(exchangeRates)
+    .orderBy(desc(exchangeRates.createdAt), desc(exchangeRates.id))
+    .limit(1);
+  return {
+    displayRateId: rate?.id ?? null,
+    totalSypUnits: rate
+      ? sypDisplayPrice(totalUsdUnits, rateFromNumeric(rate.sypPerUsd), rate.displayStepSypUnits)
+      : null,
+  };
+}
 
 /**
  * The pay step (rules O1–O6, M1) in the caller's READ COMMITTED transaction, after the caller took
@@ -116,40 +233,10 @@ export async function purchaseOrder(
     .for('share');
   if (!product) throw new OrderError('NOT_FOUND', 'No such product');
 
-  // Routes of a supplier this build cannot use stay out (rule SP1), as in the price itself.
-  const usable = (
-    await productRoutingStates(tx, [product.id], {
-      now: context.now,
-      fakeEnabled: input.fakeEnabled,
-    })
-  ).get(product.id);
+  const usable = await routingNow(tx, product.id, context.now, input.fakeEnabled);
   if (!usable) throw new OrderError('NOT_FOUND', 'No such product');
   const current = usable.current;
-  const availability =
-    usable.availability === 'hidden' || usable.availability === 'paused'
-      ? usable.availability
-      : availabilityForCustomer(
-          {
-            categoryArchived: false,
-            gameArchived: false,
-            productArchived: false,
-            gameStatus: 'active',
-            productStatus: 'active',
-            price: current
-              ? {
-                  priceUsdUnits: current.priceUsdUnits,
-                  minMarginUsdUnits: usable.rule.values.minMarginUsdUnits,
-                }
-              : null,
-          },
-          usable.routes
-            .filter((route) => route.unusableReason === null)
-            .map((route) => ({
-              supplierCode: route.supplierCode,
-              costUsdUnits: route.costUsdUnits as number,
-            })),
-          customer.isTest,
-        );
+  const availability = availabilityNow(usable, customer.isTest);
   if (availability !== 'available' || !current) {
     throw new OrderError('PRODUCT_UNAVAILABLE', 'The product cannot be bought now', {
       availability,
@@ -165,47 +252,68 @@ export async function purchaseOrder(
       fields: { quantity: 'too_big' },
     });
   }
-  const fieldRules = await tx
-    .select()
-    .from(catalogInputFields)
-    .where(
-      and(eq(catalogInputFields.gameId, product.gameId), isNull(catalogInputFields.archivedAt)),
-    )
-    .orderBy(asc(catalogInputFields.sortOrder));
-  const parsed = orderFieldValuesSchema(fieldRules).safeParse(input.fields);
-  if (!parsed.success) {
-    const fields: Record<string, string> = {};
-    for (const issue of parsed.error.issues) {
-      if (issue.code === 'unrecognized_keys') {
-        for (const key of issue.keys) fields[key] = 'unknown';
-      } else {
-        fields[String(issue.path[0])] ??= issue.code;
-      }
+  const checked = await checkOrderFields(tx, product.gameId, input.fields);
+  if (!checked.ok) {
+    throw new OrderError('VALIDATION_FAILED', 'The account fields are not valid', {
+      fields: checked.refusals,
+    });
+  }
+  const fields = checked.fields;
+
+  // S09 rule PV8: a player id not known valid needs the customer's confirmation.
+  let playerCheck: PlayerCheckState = 'none';
+  let playerName: string | null = null;
+  const lookup = await input.playerCheck(tx, {
+    gameId: product.gameId,
+    productKind: product.kind,
+    fields,
+  });
+  if (lookup?.result === 'valid') {
+    playerCheck = 'valid';
+    playerName = lookup.playerName;
+  } else if (lookup) {
+    if (!input.confirmPlayer) {
+      throw new OrderError('PLAYER_NOT_CONFIRMED', 'The player id is not confirmed', {
+        result: lookup.result,
+      });
     }
-    throw new OrderError('VALIDATION_FAILED', 'The account fields are not valid', { fields });
+    playerCheck = lookup.result === 'invalid' ? 'invalid_confirmed' : 'unchecked_confirmed';
   }
 
   const orderId = newId();
   const total = orderTotal(current.priceUsdUnits, input.quantity);
-  const [rate] = await tx
-    .select()
-    .from(exchangeRates)
-    .orderBy(desc(exchangeRates.createdAt), desc(exchangeRates.id))
-    .limit(1);
-  const wallet = await ensureCustomerWallet(tx, input.customerId);
-  const revenue = await ensureSystemAccount(tx, {
-    code: 'sales_revenue:USD',
-    kind: 'sales_revenue',
-    currency: 'USD',
-  });
-  const journal = await postJournal(tx, {
-    idempotencyKey: `order:${orderId}:purchase`,
-    kind: 'purchase',
-    postings: [
-      { accountId: wallet, amountUnits: -total },
-      { accountId: revenue, amountUnits: total },
-    ],
-  });
+  const display = await displayTotal(tx, total);
+  // The wallet lock first (S09 rule RS2): the balance and the reservations count under it.
+  const wallet = await lockCustomerWallet(tx, input.customerId);
+  const reserve =
+    input.whenBalanceShort === 'reserve' && (await accountBalance(tx, wallet)) < total;
+  let journalId: string | null = null;
+  if (reserve) {
+    const [open] = await tx
+      .select({ count: count() })
+      .from(orders)
+      .where(and(eq(orders.customerId, input.customerId), eq(orders.status, 'awaiting_balance')));
+    if ((open?.count ?? 0) >= RESERVATIONS_MAX) {
+      throw new OrderError('RESERVATIONS_LIMIT_REACHED', 'Too many open reservations', {
+        limit: RESERVATIONS_MAX,
+      });
+    }
+  } else {
+    const revenue = await ensureSystemAccount(tx, {
+      code: 'sales_revenue:USD',
+      kind: 'sales_revenue',
+      currency: 'USD',
+    });
+    const journal = await postJournal(tx, {
+      idempotencyKey: `order:${orderId}:purchase`,
+      kind: 'purchase',
+      postings: [
+        { accountId: wallet, amountUnits: -total },
+        { accountId: revenue, amountUnits: total },
+      ],
+    });
+    journalId = journal.journalId;
+  }
 
   let order: OrderRow | undefined;
   for (let attempt = 1; !order; attempt += 1) {
@@ -221,21 +329,22 @@ export async function purchaseOrder(
             productId: product.id,
             gameId: product.gameId,
             kind: product.kind,
-            status: 'paid',
+            status: reserve ? 'awaiting_balance' : 'paid',
             quantity: input.quantity,
             unitPriceUsdUnits: current.priceUsdUnits,
             totalUsdUnits: total,
             priceId: current.id,
             minMarginUsdUnits: current.minMarginUsdUnits,
-            fields: parsed.data,
-            displayRateId: rate?.id ?? null,
-            totalSypUnits: rate
-              ? sypDisplayPrice(total, rateFromNumeric(rate.sypPerUsd), rate.displayStepSypUnits)
-              : null,
+            fields,
+            ...display,
             idempotencyKey: input.idempotencyKey,
             requestHash: input.requestHash,
-            purchaseJournalId: journal.journalId,
-            paidAt: sql`now()`,
+            purchaseJournalId: journalId,
+            paidAt: reserve ? null : sql`now()`,
+            reservedAt: reserve ? sql`now()` : null,
+            expiresAt: reserve ? sql`now() + ${`${RESERVATION_HOURS} hours`}::interval` : null,
+            playerCheck,
+            playerName,
           })
           .returning();
         return row as OrderRow;
@@ -246,30 +355,50 @@ export async function purchaseOrder(
     }
   }
 
+  const actor = input.channel === 'cli' ? 'cli' : 'customer';
+  const audit = {
+    actorKind: actor,
+    actorId: input.channel === 'cli' ? null : input.customerId,
+    channel: input.channel,
+    entityType: 'order',
+    entityId: order.id,
+    ipAddress: input.ipAddress ?? null,
+    userAgent: input.userAgent ?? null,
+  } as const;
   await addOrderEvent(
     tx,
     order.id,
     'status',
     { actor: 'customer', actorId: input.customerId },
-    { from: null, to: 'paid' },
+    { from: null, to: order.status },
   );
-  await recordAudit(tx, {
-    action: 'order.paid',
-    actorKind: input.channel === 'cli' ? 'cli' : 'customer',
-    actorId: input.channel === 'cli' ? null : input.customerId,
-    channel: input.channel,
-    entityType: 'order',
-    entityId: order.id,
-    details: {
-      number: order.number,
-      productId: product.id,
-      quantity: input.quantity,
-      totalUsdUnits: total,
-      journalId: journal.journalId,
-    },
-    ipAddress: input.ipAddress ?? null,
-    userAgent: input.userAgent ?? null,
-  });
-  await queueFulfil(tx, context.jobs, order.id);
+  if (reserve) {
+    await recordAudit(tx, {
+      ...audit,
+      action: 'order.reserved',
+      details: {
+        number: order.number,
+        productId: product.id,
+        quantity: input.quantity,
+        totalUsdUnits: total,
+        expiresAt: (order.expiresAt as Date).toISOString(),
+      },
+    });
+    // Rule RS4: a credit may have landed while the customer decided.
+    await queuePayWaiting(tx, context.jobs, input.customerId);
+  } else {
+    await recordAudit(tx, {
+      ...audit,
+      action: 'order.paid',
+      details: {
+        number: order.number,
+        productId: product.id,
+        quantity: input.quantity,
+        totalUsdUnits: total,
+        journalId: journalId as string,
+      },
+    });
+    await queueFulfil(tx, context.jobs, order.id);
+  }
   return { order, created: true };
 }
