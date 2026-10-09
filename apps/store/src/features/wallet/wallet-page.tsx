@@ -210,6 +210,14 @@ function EntryRow({ entry }: { entry: WalletEntry }) {
             )}
           </p>
         )}
+        {entry.order && (
+          <Link
+            href={`/orders/${entry.order.id}`}
+            className="w-fit text-sm text-primary underline-offset-4 hover:underline"
+          >
+            <bdi dir="ltr">{entry.order.number}</bdi>
+          </Link>
+        )}
         {entry.adjustment?.customerNote && (
           <p className="text-sm break-words text-muted-foreground">
             {entry.adjustment.customerNote}
