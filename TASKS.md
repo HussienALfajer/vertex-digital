@@ -9,21 +9,21 @@ Spec: `docs/specs/S08-orders-and-fulfilment.md` (F11 with F26 SW7, F27 and F13's
 - [x] Db (`/db-migration`): `orders`, `order_events`, `fulfilment_attempts`, `order_codes`, `order_code_reveals`, `supplier_webhook_events`, `order_policy` (seeded); enums, checks, partial unique indexes, triggers, grants; `TABLE_OWNERS`; tests
 - [x] Db: codes and webhook body encryption (AES-256-GCM, row id as associated data, key version, `ORDER_CODES_SECRET`); tests
 - [x] Db: order write path `packages/db/src/orders` (`purchaseOrder`, `transitionOrder`, `applyOutcome`, `refundRemaining`, cost of goods; M1–M3) and its reads (customer and admin views, `revealCode`, delivery stats, orders on the wallet timeline); tests on real PostgreSQL (lost race, one refund, parallel purchases, one key in parallel, purchase against repricing; the stop is the API's switches lock)
-- [ ] Api `orders` module: customer routes (buy, list, read, reveal), admin routes (list, counts, read, poll, resolve, refund, reveal, policy), delivery stats on the admin game page, wallet entries with order number and product; `test/orders.test.ts`
-- [ ] Api `suppliers` webhook intake (`POST /api/webhooks/suppliers/:code`: raw body cap, HMAC and timestamp, stored once, job queued); tests
-- [ ] Rate limits (API and nginx zones in `deploy/`): purchase, reveal, webhook
-- [ ] Env: `ORDER_CODES_SECRET` (api and worker, required in production, derived locally); `.env.example`, `provision.sh`, `docs/deployment.md`
-- [ ] Dev CLI `order:place`; commands table in `AGENTS.md`
-- [ ] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow changed shapes
-- [ ] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, `wiring.md` "Order transition" pattern, spec "Settled in implementation")
-- [ ] Checks (lint, typecheck, test, build, e2e, drift), reviewer, owner acceptance (endpoints at `/api/docs`), PR with auto-merge
+- [x] Api `orders` module: customer routes (buy, list, read, reveal), admin routes (list, counts, read, poll, resolve, refund, reveal, policy), delivery stats on the admin game page, wallet entries with order number and product; `test/orders.test.ts`
+- [x] Api `suppliers` webhook intake (`POST /api/webhooks/suppliers/:code`: raw body cap, HMAC and timestamp, stored once, job queued); tests
+- [x] Rate limits (API and nginx zones in `deploy/`): purchase, reveal, webhook
+- [x] Env: `ORDER_CODES_SECRET` (api and worker, required in production, derived locally); `.env.example`, `provision.sh`, `docs/deployment.md`
+- [x] Dev CLI `order:place`; commands table in `AGENTS.md`
+- [x] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow changed shapes
+- [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, `wiring.md` "Order transition" pattern, spec "Settled in implementation")
+- [ ] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (one blocking finding: race and limit tests on the money and public routes, added), owner acceptance (endpoints at `/api/docs`), PR with auto-merge
 
 ## PR 2 — Worker: routing, sending, polling, webhooks, sweep, manual, notifications · Opus 5.5 `high`
 - [ ] Jobs `orders.fulfil` (R1–R6), `orders.poll` (F3), `suppliers.webhook` (F5), `orders.sweep` (F6, F7, MN2); supplier calls recorded in `supplier_calls`
 - [ ] Telegram kinds and cards (`manual_order`, reminder, `order_needs_review`, `order_conflict`) with dedupe keys; daily summary lines
 - [ ] Customer notifications in the change's transaction; codes never logged (log redaction covers `codes`)
 - [ ] Fake supplier order scripting (`--order`, `--resolve … --via poll|webhook`); commands table
-- [ ] Worker env `ORDER_CODES_SECRET`
+- [ ] Worker env `ORDER_CODES_SECRET` (required in production, derived locally exactly as the API's)
 - [ ] Tests (each tier, guard, balance, already tried, test customers, every outcome, partial, input rejection, schedule and hard limit, review polling, sweep, webhooks applied / same result / unknown key / conflict, manual cards and reminder, dedupe keys, log capture)
 - [ ] Wiring checklist, docs
 - [ ] Checks, reviewer, owner acceptance, PR with auto-merge
