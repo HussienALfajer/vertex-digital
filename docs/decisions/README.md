@@ -25,6 +25,7 @@ Short records of decisions that shape the system. Each has a status: **Accepted*
 | [0019](0019-telegram-bot-switches-notifications.md) | Telegram bot by webhook to the API in the admin's private chat, approval only unflagged Sham Cash up to $100, emergency stop on-only from Telegram; store switches as a pause layer that blocks creation only; one notification write path with SSE (amends 0002, 0006) | Accepted |
 | [0020](0020-pricing-engine.md) | Pricing: margin rules per category, game and product over a 10% / $0.10 default, prices rounded up to whole cents on the cheapest healthy route, the guard at `price − cost ≥ minimum margin`, admin-entered official prices (amends 0005) | Accepted |
 | [0021](0021-supplier-sync-price-review-and-health.md) | Supplier sync every 15 minutes with costs stale after 2 hours, cost changes above 10% held for review, route changes reprice at once, manual supplier as last resort, health and balance thresholds, no supplier funding in the ledger before S13, adapters once documented (amends 0005, 0020) | Accepted |
+| [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) | Orders: polling then held for the admin after 30 minutes, unknown outcomes re-sent with the same key, four re-authenticated admin decisions, delivered is final, manual cards, input rejections refunded at once, test orders on `fake` and `manual` only, logged code reveal, delivery time over 50 orders (amends 0004, 0005) | Accepted |
 
 Template:
 
