@@ -258,12 +258,20 @@ const walletDepositExtras = z.object({
   syp: z.object({ amountUnits: amountUnitsSchema, rate: exchangeRateSchema }).nullable(),
 });
 
+/** The order of a `purchase` or `refund` entry (S08 "Money flows"). */
+const walletOrderExtras = z.object({
+  id: z.uuid(),
+  number: z.string(),
+  productNameAr: z.string(),
+});
+
 /** One timeline entry as the customer sees it: no journal id, account or internal reason. */
 export const walletEntrySchema = z
   .object({
     ...timelineEntry,
     adjustment: walletAdjustmentExtras.nullable(),
     deposit: walletDepositExtras.nullable(),
+    order: walletOrderExtras.nullable(),
   })
   .meta({ id: 'WalletEntry' });
 
@@ -301,6 +309,7 @@ export const adminWalletEntrySchema = z
       .nullable(),
     /** The admin also sees the deposit's id and, for USDT, its TXID (S04). */
     deposit: walletDepositExtras.extend({ id: z.uuid(), txid: z.string().nullable() }).nullable(),
+    order: walletOrderExtras.nullable(),
   })
   .meta({ id: 'AdminWalletEntry' });
 

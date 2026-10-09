@@ -66,7 +66,7 @@ export function DepositPage() {
     if (
       event.type === 'resync' ||
       (event.type === 'notification' &&
-        event.notification.event !== 'wallet_adjusted' &&
+        'depositId' in event.notification.params &&
         event.notification.params.depositId === id)
     )
       void load();

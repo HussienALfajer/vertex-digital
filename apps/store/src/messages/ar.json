@@ -150,7 +150,10 @@
         "deposit_credited": "عند إضافة إيداع إلى رصيدك",
         "deposit_rejected": "عند رفض إيداع",
         "deposit_receipt_requested": "عند طلب إيصال أوضح",
-        "wallet_adjusted": "عند تعديل رصيدك من الإدارة"
+        "wallet_adjusted": "عند تعديل رصيدك من الإدارة",
+        "order_delivered": "عند تسليم طلب",
+        "order_partially_refunded": "عند تسليم جزء من طلب واسترداد الباقي",
+        "order_refunded": "عند استرداد مبلغ طلب"
       },
       "emailLabel": "البريد: {event}",
       "security": "رسائل الأمان (رموز التحقق، تغيير كلمة المرور، تسجيل دخول جديد)",
@@ -195,6 +198,10 @@
       "sham_cash": "إيداع شام كاش",
       "usdt_trc20": "إيداع USDT (TRC20)",
       "usdt_bep20": "إيداع USDT (BEP20)"
+    },
+    "orderKinds": {
+      "purchase": "شراء: {product}",
+      "refund": "استرداد: {product}"
     }
   },
   "deposits": {
@@ -439,7 +446,11 @@
       "deposit_rejected": "رُفض الإيداع {reference}: {reason}.",
       "deposit_receipt_requested": "نحتاج إيصالًا أوضح للإيداع {reference}. افتحه وأرسل صورة جديدة.",
       "wallet_adjusted_credit": "أضافت الإدارة {amount} إلى رصيدك: {category}.",
-      "wallet_adjusted_debit": "خصمت الإدارة {amount} من رصيدك: {category}."
+      "wallet_adjusted_debit": "خصمت الإدارة {amount} من رصيدك: {category}.",
+      "order_delivered": "سُلّم طلبك {product} ({number}).",
+      "order_partially_refunded": "سُلّم جزء من طلبك {product} ({number})، وأُعيد {amount} إلى رصيدك.",
+      "order_refunded": "أُعيد {amount} إلى رصيدك عن طلبك {product} ({number}): {reason}.",
+      "order_delayed": "تأخّر المورد في طلبك {product} ({number}). نتحقق منه وسنعلمك."
     }
   },
   "errors": {
@@ -474,7 +485,12 @@
     "TXID_INVALID": "رقم العملية غير صالح. الصق رقم العملية (TXID) أو رابطها من Tronscan أو BscScan.",
     "TXID_ATTEMPTS_EXCEEDED": "أرسلت رقم العملية 5 مرات لهذا الإيداع. سنواصل البحث عن التحويل تلقائيًا.",
     "DEPOSIT_AMOUNT_BUSY": "هذا المبلغ مطلوب كثيرًا الآن. جرّب سنتًا أكثر أو أقل.",
-    "DEPOSITS_STOPPED": "الإيداع متوقف مؤقتاً. رصيدك وطلباتك بأمان، حاول بعد قليل."
+    "DEPOSITS_STOPPED": "الإيداع متوقف مؤقتاً. رصيدك وطلباتك بأمان، حاول بعد قليل.",
+    "PURCHASES_STOPPED": "الشراء متوقف مؤقتًا. أعد المحاولة بعد قليل.",
+    "PRODUCT_UNAVAILABLE": "هذه الباقة غير متاحة الآن. اختر باقة أخرى أو أعد المحاولة لاحقًا.",
+    "PRICE_CHANGED": "تغيّر سعر الباقة. راجع السعر الجديد ثم أكّد الشراء.",
+    "INSUFFICIENT_BALANCE": "رصيدك لا يكفي لهذا الطلب. اشحن محفظتك ثم أعد المحاولة.",
+    "IDEMPOTENCY_KEY_REUSED": "أُرسل هذا الطلب من قبل ببيانات أخرى. حدّث الصفحة وأعد المحاولة."
   },
   "notFound": {
     "title": "الصفحة غير موجودة",
@@ -488,5 +504,13 @@
   },
   "footer": {
     "rights": "© {year} Vertex Digital"
+  },
+  "orders": {
+    "refundReasons": {
+      "no_route": "لا يتوفّر مورد لهذه الباقة الآن",
+      "routes_exhausted": "لا يتوفّر مورد لهذه الباقة الآن",
+      "input_rejected": "بيانات الحساب مرفوضة",
+      "admin": "قرّرت الإدارة استرداده"
+    }
   }
 }

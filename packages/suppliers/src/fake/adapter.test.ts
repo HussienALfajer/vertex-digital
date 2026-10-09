@@ -151,6 +151,15 @@ describe('fake supplier', () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(15);
   });
 
+  it('refuses an order whose account fields the supplier rejects (S08 rule F1)', async () => {
+    expect(await adapter().placeOrder(order('invalid-1'))).toEqual({
+      status: 'failed_definitive',
+      supplierCode: 'PLAYER_NOT_FOUND',
+      inputRejected: true,
+      reason: 'Player not found at the fake supplier',
+    });
+  });
+
   it('settles a pending order by a signed webhook', async () => {
     const fake = adapter();
     const request = order('pending-1');
@@ -166,17 +175,19 @@ describe('fake supplier', () => {
       outcome: {
         status: 'delivered',
         supplierOrderId: (placed as { supplierOrderId: string }).supplierOrderId,
+        quantity: 1,
       },
     });
     expect(await fake.getOrder(request.idempotencyKey)).toMatchObject({ status: 'delivered' });
     expect(() => fake.completePending(request.idempotencyKey)).toThrow();
   });
 
-  it('resolves an unknown outcome by polling', async () => {
+  it('resolves an unknown outcome by polling, or by sending again with the same key', async () => {
     const fake = adapter();
     const request = order('unknown-1');
     expect(await fake.placeOrder(request)).toMatchObject({ status: 'unknown' });
     expect(await fake.getOrder(request.idempotencyKey)).toMatchObject({ status: 'delivered' });
+    expect(await fake.placeOrder(request)).toMatchObject({ status: 'delivered', quantity: 1 });
     expect(await fake.getOrder('never-placed')).toMatchObject({ status: 'unknown' });
   });
 

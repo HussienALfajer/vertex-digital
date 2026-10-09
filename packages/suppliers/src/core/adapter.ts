@@ -61,20 +61,27 @@ export interface PlaceOrderRequest {
 
 /**
  * The result of an order call, classified for the order state machine (ADR 0004):
- * - `delivered`: done; codes for code products (kept encrypted by the caller);
+ * - `delivered`: done for `quantity` units (1 to the units asked; fewer means the rest failed
+ *   definitively, S08); one code per unit for code products (kept encrypted by the caller);
  * - `pending`: accepted, the result comes later by webhook or poll;
- * - `failed_definitive`: refused, nothing was bought; the next route may be tried;
+ * - `failed_definitive`: refused, nothing was bought; the next route may be tried, unless
+ *   `inputRejected` says the supplier refused the account fields (every route would);
  * - `unknown`: no trustworthy answer (timeout, lost connection, unexpected reply). Never retried
  *   elsewhere until it is resolved by polling, then by the admin.
+ *
+ * A repeated `placeOrder` with the same key answers that order's current outcome, never a
+ * duplicate error (S08).
  */
 export type SupplierOutcome =
-  | { status: 'delivered'; supplierOrderId: string; codes?: string[] }
+  | { status: 'delivered'; supplierOrderId: string; quantity: number; codes?: string[] }
   | { status: 'pending'; supplierOrderId: string }
   | {
       status: 'failed_definitive';
       supplierOrderId?: string;
       /** The supplier's own error code, kept for the admin and the error mapping. */
       supplierCode?: string;
+      /** The supplier refused the account fields (player not found, wrong zone). */
+      inputRejected?: boolean;
       reason: string;
     }
   | { status: 'unknown'; supplierOrderId?: string; reason: string };

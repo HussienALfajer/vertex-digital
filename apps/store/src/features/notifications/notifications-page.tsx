@@ -10,9 +10,13 @@ import {
   BellIcon,
   CircleAlertIcon,
   CircleXIcon,
+  ClockAlertIcon,
   type LucideIcon,
+  PackageCheckIcon,
+  PackageMinusIcon,
   ReceiptTextIcon,
   SlidersHorizontalIcon,
+  Undo2Icon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -36,6 +40,10 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   deposit_rejected: CircleXIcon,
   deposit_receipt_requested: ReceiptTextIcon,
   wallet_adjusted: SlidersHorizontalIcon,
+  order_delivered: PackageCheckIcon,
+  order_partially_refunded: PackageMinusIcon,
+  order_refunded: Undo2Icon,
+  order_delayed: ClockAlertIcon,
 };
 
 /** Marks everything up to the newest shown as read and tells the bell (rule NT5). */

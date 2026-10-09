@@ -17,6 +17,7 @@ import {
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
 import { notificationEventSchema } from './notifications.js';
+import { orderPolicySchema, refundReasonSchema } from './orders.js';
 import { marginRuleValuesSchema, marginScopeSchema } from './pricing.js';
 import { displayStepSchema } from './rates.js';
 import { storeSwitchSchema } from './settings.js';
@@ -64,6 +65,8 @@ export const AUDIT_ENTITY_TYPES = [
   'supplier_offer',
   'product_route',
   'price_review',
+  'order',
+  'order_policy',
 ] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
@@ -395,6 +398,50 @@ export const AUDIT_DETAILS = {
   'price_review.accepted': reviewDecision,
   'price_review.paused': reviewDecision,
   'price_review.margin_adjusted': reviewDecision,
+  /** S08 rule AU1: the customer's purchase (rule O2). */
+  'order.paid': z.strictObject({
+    number: z.string(),
+    productId: z.uuid(),
+    quantity: z.int().positive(),
+    totalUsdUnits: z.int().positive(),
+    journalId: z.uuid(),
+  }),
+  /** Rule M2, by the system: the cost of one delivered attempt. */
+  'order.cost_posted': z.strictObject({
+    ...supplier,
+    attemptId: z.uuid(),
+    units: z.int().positive(),
+    costUsdUnits: z.int().positive(),
+    journalId: z.uuid(),
+  }),
+  /** Rule M3, by the system or the admin. */
+  'order.refunded': z.strictObject({
+    units: z.int().positive(),
+    amountUsdUnits: z.int().positive(),
+    reason: refundReasonSchema,
+    journalId: z.uuid(),
+  }),
+  /** Rules D1–D5: the admin's decisions, with the reason in the entry's `reason`. */
+  'order.poll_requested': z.strictObject({ attemptId: z.uuid() }),
+  /** Rules D2, D3: the units delivered and how many codes were typed, never the codes. */
+  'order.attempt_resolved': z.strictObject({
+    attemptId: z.uuid(),
+    outcome: z.enum(['delivered', 'failed']),
+    units: z.int().nonnegative(),
+    items: z.int().nonnegative(),
+  }),
+  'order.refund_decided': z.strictObject({
+    attemptId: z.uuid().nullable(),
+    units: z.int().positive(),
+    amountUsdUnits: z.int().positive(),
+  }),
+  /** Rule C3: which stored item was shown, never its value. */
+  'order.code_revealed': z.strictObject({ itemId: z.uuid(), position: z.int().positive() }),
+  /** `before` is the policy in force, the seed included. */
+  'order_policy.set': z.strictObject({
+    before: orderPolicySchema.strict(),
+    after: orderPolicySchema.strict(),
+  }),
 } as const satisfies Record<string, z.ZodType>;
 
 export type AuditAction = keyof typeof AUDIT_DETAILS;

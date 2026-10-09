@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { otpCodeSchema } from './auth.js';
 import { depositRejectReasonSchema } from './deposits.js';
 import { cursorQuerySchema } from './lists.js';
+import { refundReasonSchema } from './orders.js';
 import { adjustmentCategorySchema, adjustmentDirectionSchema } from './wallet.js';
 
 /*
@@ -33,6 +34,12 @@ export const EMAIL_TEMPLATES = [
   'customer_deposit_rejected',
   /** The admin asked for a clearer receipt (rule RV8), never the note. */
   'customer_deposit_receipt_requested',
+  /** An order was delivered (S08); never its codes or account fields. */
+  'customer_order_delivered',
+  /** Part of an order was delivered and the rest refunded (S08). */
+  'customer_order_partially_refunded',
+  /** An order was refunded in full, with the reason in plain words (S08). */
+  'customer_order_refunded',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -61,6 +68,10 @@ export const NOTIFICATION_EVENTS = [
   'deposit_rejected',
   'deposit_receipt_requested',
   'wallet_adjusted',
+  'order_delivered',
+  'order_partially_refunded',
+  'order_refunded',
+  'order_delayed',
 ] as const;
 
 export const notificationEventSchema = z
@@ -94,6 +105,33 @@ export const NOTIFICATION_PARAMS = {
     category: adjustmentCategorySchema,
     reversal: z.boolean(),
   }),
+  // S08: the order number and product name, never codes or account field values.
+  order_delivered: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    productNameAr: z.string(),
+    quantity: z.int().positive(),
+  }),
+  order_partially_refunded: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    productNameAr: z.string(),
+    deliveredQuantity: z.int().positive(),
+    refundedQuantity: z.int().positive(),
+    refundedUsdUnits: z.int().positive(),
+  }),
+  order_refunded: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    productNameAr: z.string(),
+    refundedUsdUnits: z.int().positive(),
+    reason: refundReasonSchema,
+  }),
+  order_delayed: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    productNameAr: z.string(),
+  }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
@@ -117,6 +155,9 @@ export const EMAIL_PARAMS = {
   customer_deposit_credited: NOTIFICATION_PARAMS.deposit_credited.extend(at.shape),
   customer_deposit_rejected: NOTIFICATION_PARAMS.deposit_rejected,
   customer_deposit_receipt_requested: NOTIFICATION_PARAMS.deposit_receipt_requested,
+  customer_order_delivered: NOTIFICATION_PARAMS.order_delivered.extend(at.shape),
+  customer_order_partially_refunded: NOTIFICATION_PARAMS.order_partially_refunded.extend(at.shape),
+  customer_order_refunded: NOTIFICATION_PARAMS.order_refunded.extend(at.shape),
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
@@ -135,13 +176,31 @@ export function isCodeEmail(template: EmailTemplate): boolean {
 /** How long an email code is valid (rule C4). */
 export const EMAIL_CODE_TTL_SECONDS = 10 * 60;
 
-/** The email each notification event queues, unless the customer turned it off (rule NT1). */
+/**
+ * The email each notification event queues, unless the customer turned it off (rule NT1); null
+ * for an event that lives in the center only (`order_delayed`, S08).
+ */
 export const NOTIFICATION_EMAIL_TEMPLATE = {
   deposit_credited: 'customer_deposit_credited',
   deposit_rejected: 'customer_deposit_rejected',
   deposit_receipt_requested: 'customer_deposit_receipt_requested',
   wallet_adjusted: 'customer_wallet_adjusted',
-} as const satisfies Record<NotificationEvent, EmailTemplate>;
+  order_delivered: 'customer_order_delivered',
+  order_partially_refunded: 'customer_order_partially_refunded',
+  order_refunded: 'customer_order_refunded',
+  order_delayed: null,
+} as const satisfies Record<NotificationEvent, EmailTemplate | null>;
+
+/** An event that sends an email, which the customer can turn off (rule NT8). */
+export type EmailNotificationEvent = {
+  [Event in NotificationEvent]: (typeof NOTIFICATION_EMAIL_TEMPLATE)[Event] extends null
+    ? never
+    : Event;
+}[NotificationEvent];
+
+export const EMAIL_NOTIFICATION_EVENTS = NOTIFICATION_EVENTS.filter(
+  (event): event is EmailNotificationEvent => NOTIFICATION_EMAIL_TEMPLATE[event] !== null,
+);
 
 const notificationBase = {
   id: z.uuid(),
@@ -159,6 +218,10 @@ export const customerNotificationSchema = z
     notification('deposit_rejected'),
     notification('deposit_receipt_requested'),
     notification('wallet_adjusted'),
+    notification('order_delivered'),
+    notification('order_partially_refunded'),
+    notification('order_refunded'),
+    notification('order_delayed'),
   ])
   .meta({ id: 'CustomerNotification' });
 

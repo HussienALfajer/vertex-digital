@@ -4,6 +4,7 @@ import {
   type EmailParams,
   type EmailTemplate,
   formatUsd,
+  type RefundReason,
 } from '@vertex-digital/contracts';
 
 /*
@@ -59,6 +60,16 @@ const REJECT_REASON_LABELS: Record<DepositRejectReason, string> = {
   transfer_other_customer: 'التحويل يخص طلب إيداع آخر',
   other: 'سبب آخر، موضَّح في صفحة الإيداع',
 };
+
+/** The customer-facing words of the refund reasons (S08 rule O13). */
+const REFUND_REASON_LABELS: Record<RefundReason, string> = {
+  no_route: 'لا يتوفّر مورد لهذه الباقة الآن',
+  routes_exhausted: 'لا يتوفّر مورد لهذه الباقة الآن',
+  input_rejected: 'بيانات الحساب مرفوضة',
+  admin: 'قرّرت الإدارة استرداده',
+};
+
+const orderPage = (orderId: string) => ({ label: 'عرض الطلب', path: `/orders/${orderId}` });
 
 const depositPage = (depositId: string) => ({
   label: 'عرض الإيداع',
@@ -158,6 +169,47 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
       'افتح صفحة الإيداع وأرسل لقطة شاشة كاملة وواضحة للإيصال خلال 24 ساعة.',
     ],
     link: depositPage(depositId),
+  }),
+  // S08: the order number and product, never its codes or account fields; the codes are on the
+  // order page only.
+  customer_order_delivered: ({ at, orderId, orderNumber, productNameAr, quantity }) => ({
+    subject: `سُلّم طلبك ${orderNumber}`,
+    lines: [
+      `سُلّم طلبك ${orderNumber} (${productNameAr}${quantity > 1 ? ` × ${quantity}` : ''}) بتاريخ ${formatTime(at)}.`,
+      'تجد تفاصيل الطلب في صفحته، والأكواد هناك فقط إن كان الطلب أكواداً.',
+    ],
+    link: orderPage(orderId),
+  }),
+  customer_order_partially_refunded: ({
+    at,
+    orderId,
+    orderNumber,
+    productNameAr,
+    deliveredQuantity,
+    refundedQuantity,
+    refundedUsdUnits,
+  }) => ({
+    subject: `سُلّم جزء من طلبك ${orderNumber} واسترد الباقي`,
+    lines: [
+      `سُلّم ${deliveredQuantity} من طلبك ${orderNumber} (${productNameAr}) بتاريخ ${formatTime(at)}، ولم يتوفّر الباقي (${refundedQuantity}).`,
+      `أُعيد ${formatUsd(refundedUsdUnits)} إلى رصيد محفظتك عن الكمية التي لم تُسلَّم.`,
+    ],
+    link: orderPage(orderId),
+  }),
+  customer_order_refunded: ({
+    at,
+    orderId,
+    orderNumber,
+    productNameAr,
+    refundedUsdUnits,
+    reason,
+  }) => ({
+    subject: `أُعيد ${formatUsd(refundedUsdUnits)} إلى رصيدك عن الطلب ${orderNumber}`,
+    lines: [
+      `لم نتمكن من تنفيذ طلبك ${orderNumber} (${productNameAr})، فأُعيد ${formatUsd(refundedUsdUnits)} كاملاً إلى رصيد محفظتك بتاريخ ${formatTime(at)}.`,
+      `السبب: ${REFUND_REASON_LABELS[reason]}.`,
+    ],
+    link: orderPage(orderId),
   }),
 };
 

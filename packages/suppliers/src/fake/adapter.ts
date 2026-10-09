@@ -26,7 +26,8 @@ import { hmacSha256, verifyHmacSignature } from '../core/hmac.js';
  *   fail…                      refused: failed_definitive (`FAKE_REFUSED`)
  *   unknown…                   unknown (as after a timeout); polling finds it delivered
  *   badsig…                    pending; its webhook carries a wrong signature
- *   invalid…                   `validatePlayer` answers invalid
+ *   invalid…                   `validatePlayer` answers invalid; an order is refused with
+ *                              `inputRejected` (`PLAYER_NOT_FOUND`)
  *
  * Its catalog (S07) is about ten offers in three groups, changed by a `FakeSupplierState`: costs,
  * stock, removed offers, a failing sync, every call failing, the balance. The worker reads that
@@ -120,6 +121,8 @@ const webhookBodySchema = z.object({
   idempotencyKey: z.string().min(1),
   supplierOrderId: z.string().min(1),
   status: z.enum(['delivered', 'failed']),
+  /** The units delivered (S08). */
+  quantity: z.int().positive().optional(),
   codes: z.array(z.string()).optional(),
 });
 
@@ -170,14 +173,16 @@ export class FakeSupplierAdapter implements SupplierAdapter {
   async placeOrder(request: PlaceOrderRequest): Promise<SupplierOutcome> {
     const existing = this.orders.get(request.idempotencyKey);
     if (existing) {
-      // A supplier answers a repeated key with the first order, never a second purchase.
-      return sameRequest(existing.request, request)
-        ? existing.outcome
-        : {
-            status: 'failed_definitive',
-            supplierCode: 'IDEMPOTENCY_KEY_REUSED',
-            reason: 'Key reused for another order',
-          };
+      // A supplier answers a repeated key with that order's current outcome, never a second
+      // purchase; an order whose answer was lost is found as it really ended (S08 rule F3).
+      if (!sameRequest(existing.request, request)) {
+        return {
+          status: 'failed_definitive',
+          supplierCode: 'IDEMPOTENCY_KEY_REUSED',
+          reason: 'Key reused for another order',
+        };
+      }
+      return existing.outcome.status === 'unknown' ? existing.settled : existing.outcome;
     }
     const offer = this.catalog().find((candidate) => candidate.offerId === request.offerId);
     const playerId = request.fields.playerId ?? '';
@@ -186,6 +191,14 @@ export class FakeSupplierAdapter implements SupplierAdapter {
         status: 'failed_definitive',
         supplierCode: 'FAKE_REFUSED',
         reason: offer ? 'Refused by the fake supplier' : 'Unknown offer',
+      });
+    }
+    if (playerId.startsWith('invalid')) {
+      return this.record(request, {
+        status: 'failed_definitive',
+        supplierCode: 'PLAYER_NOT_FOUND',
+        inputRejected: true,
+        reason: 'Player not found at the fake supplier',
       });
     }
     if (!offer.inStock) {
@@ -208,6 +221,7 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     const delivered: SupplierOutcome = {
       status: 'delivered',
       supplierOrderId,
+      quantity: request.quantity,
       ...(offer.delivers === 'code' && {
         codes: Array.from(
           { length: request.quantity },
@@ -253,6 +267,7 @@ export class FakeSupplierAdapter implements SupplierAdapter {
       idempotencyKey,
       supplierOrderId: settled.supplierOrderId,
       status: 'delivered',
+      quantity: settled.quantity,
       ...(settled.codes && { codes: settled.codes }),
     });
     const timestamp = Math.floor(now.getTime() / 1000).toString();
@@ -292,6 +307,7 @@ export class FakeSupplierAdapter implements SupplierAdapter {
         ? {
             status: 'delivered',
             supplierOrderId: parsed.supplierOrderId,
+            quantity: parsed.quantity ?? parsed.codes?.length ?? 1,
             ...(parsed.codes && { codes: parsed.codes }),
           }
         : {
