@@ -1,46 +1,30 @@
-# TASKS — S09 Storefront and purchase
+# TASKS — S10 Convenience
 
-Spec: `docs/specs/S09-storefront-and-purchase.md` (F12, F13, F15 with A02, A08's store side, A15, F26 SW7 and F27; ADRs 0002, 0003, 0004, 0005, 0008, 0011, 0012, 0013, 0015, 0019, 0020, 0021, 0022, 0023). Three PRs, as the spec's implementation notes suggest; each leaves `main` green and runs in its own session.
+Spec: `docs/specs/S10-convenience.md` (F14, F16; ADRs 0003, 0004, 0011, 0015, 0019, 0022, 0023, 0024). Two PRs, as the spec's implementation notes suggest; each leaves `main` green.
 
-## PR 1 — Contracts, db, api (public catalog, player checks, reservations, cancel, stream, admin additions), bridge · Opus 5.5 `high`
-- [x] Contracts `catalog.ts`: `searchTermsSchema`, `storefrontSchema`, `storeGameSchema`, `storeProductSchema`, `searchIndexSchema`, service statuses; pure `normalizeSearchText`, `searchCatalog`, `cheapestPackCombination`, `gameServiceStatus`, `storeServiceState`, `CATALOG_IMAGE_WIDTHS`; unit tests (100%)
-- [x] Contracts `orders.ts`: `awaiting_balance` stage, `CANCEL_REASONS`, `PLAYER_CHECK_STATES`, `createOrderSchema` (`whenBalanceShort`, `confirmPlayer`), player-check schemas, `ORDER_TIMELINE_STEPS` and `orderTimeline` (replaces `stageTimeline`), `reservationCharge`, reservation limits; order and admin order shapes extended; unit tests
-- [x] Contracts: `validationQuotaSchema`; notification events `order_paid`, `order_cancelled` and the stream's `order` event; Telegram kind `validation_quota_reached`; error codes (`PLAYER_NOT_CONFIRMED`, `RESERVATIONS_LIMIT_REACHED`, `ORDER_NOT_CANCELLABLE`) with Arabic store and admin text; audit actions with admin labels; queues `orders.pay_waiting`, `orders.waiting_sweep`, `store.revalidate`
-- [x] Db (`/db-migration`): `orders` columns (nullable journal with its check, `expires_at`, `reserved_at`, `cancel_reason`, `player_check`, `player_name`), indexes, guard trigger change (`awaiting_balance → paid` price columns); `player_checks` (grants without `UPDATE`); `suppliers.validation_daily_quota`; `supplier_calls` index; `catalog_games.search_terms`; tests
-- [x] Db: order write path: reserve in `purchaseOrder` (limit of 3 under the wallet lock, PV8 states), `payWaitingOrders` (RS4 steps, RS6 charge, skip and continue), `cancelReservation`, `expireReservations`; `pg_notify('customer_orders', …)` on every status change; reads extended; concurrency tests (two credits on one reservation, pay against cancel and expiry, repricing and stop, one key with `reserve` in parallel, skip-and-continue)
-- [x] Api `catalog`: public `storefront`, `games/:slug`, `search-index` (no cookie, `public, max-age=30`, no supplier data), image widths (`?w=`, WebP variants made once); admin search terms on the game edit; `store.revalidate` queued at the change points (catalog, prices, availability, health, supplier pause, rate)
-- [x] Api `orders`: `POST /api/player-checks` (PV1–PV7: route choice, HMAC cache, limits counting supplier calls only, daily quota with the Telegram alert, 5 s timeout, `supplier_calls`); purchase with `reserve` and `confirmPlayer`; `POST /api/orders/:id/cancel`; responses with `timeline`, `expiresAt`, `cancelReason`, `playerName`; admin list and detail fields and statuses
-- [x] Api: `orders.pay_waiting` queued at the three A02 credit points and after a reservation; the stream's `order` event (LISTEN on `customer_orders`, fan-out by customer); admin `PUT /api/admin/suppliers/:code/validation-quota` with today's usage
-- [x] Rate limits: player checks (API per customer and per IP; nginx zone `vdplayercheck` in `deploy/`)
-- [x] Env: `PLAYER_CHECK_SECRET` (api), `STORE_REVALIDATE_SECRET` (api, worker, store); `.env.example`, `provision.sh`, `docs/deployment.md`
-- [x] Dev CLI `order:place --reserve --confirm-player`; commands table in `AGENTS.md`
-- [x] Tests: `test/catalog.test.ts`, `test/orders.test.ts`, `test/player-checks.test.ts`, `test/notifications.test.ts`, `test/suppliers.test.ts` additions per the spec's API list
-- [x] Bridge: build, OpenAPI export, admin client; admin and store E2E mocks follow changed shapes (`timeline`), the store's stage, step and notification texts
-- [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [x] Review fixes: the worker creates every shared queue at start; player-check limits count only supplier calls; image sizes written whole; concurrent payment races (repricing, stop, expiry); shared test rows kept out of the worker's health and sweep tests
-- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (four blocking findings: a queue the worker never created, missing concurrent races, limits counting non-supplier answers, half-written image sizes; fixed and re-reviewed: no blocking issues), owner acceptance (2026-10-09), PR with auto-merge
+## PR 1 — Contracts, db, api (checkouts, saved IDs, gifts, share links and images, admin additions), bridge · Opus 5.5 `high`
+- [ ] Contracts `orders.ts`: limits, `savedPlayerLabelSchema`, `savedPlayerSchema`, `giftSchema`, `createOrderSchema` (`savePlayer`, `gift`), checkout line/request/response schemas, receipt options, share kinds, token, link and public share schemas; order shapes gain `checkoutId`, `isGift`, `repeatable`, `gift`, `shareLinks`
+- [ ] Contracts pure rules (100% coverage): `giftTextAllowed`, `maskFieldValue`, `canonicalFields`, `shareStage`, `cartLineKey`, `checkoutTotal`
+- [ ] Contracts: notification `checkout_finished` and template `customer_checkout_finished`; wallet `purchase` extras `checkout`; error codes `CHECKOUT_REFUSED`, `ORDER_NOT_SHAREABLE` with Arabic store and admin text; audit `order.share_revoked` with its label, `order.paid` details
+- [ ] Db (`/db-migration`): `checkouts` (trigger: only `finished_at` once), `orders` changes (checkout pair, partial unique journal, journal match on insert, no reserved cart line, gift columns and checks, identity guard), `saved_players`, `order_share_links` (trigger, one live link per kind); grants; tests
+- [ ] Db write path: `checkoutOrders` beside `purchaseOrder` sharing its line checks (switches lock, products `FOR SHARE` in id order, all refusals collected, one journal M1); saved IDs (SP1, SP2, SP4, SP6) and gift link (GF4) in purchase, RS4 payment and checkout; CT7 finishing hook in the terminal path; `notifyCustomer` without email (CT8); concurrency tests (one key in parallel, repricing and stop races, opposite product order, two orders finishing together, checkout vs single purchase on one balance, journal = sum of orders)
+- [ ] Api `orders`: saved-players routes; `POST /api/checkouts` (idempotency, purchase rate limit counted once); order extensions (save, gift, `checkout` filter, `repeatable`, `shareLinks`); receipt/gift link routes and revoke (20 per hour); public `GET /api/shares/:token` and `/image` (sharp + SVG template, bundled Noto Kufi Arabic; verify Arabic shaping and report the choice), 60/min/IP, cache headers, no cookie
+- [ ] Api admin: order detail and list (`checkout`, `gift`, `shareLinks`, badges data, `q` by checkout id); `POST /api/admin/orders/:id/share-links/:linkId/revoke` with audit
+- [ ] Api wallet: `checkout` on the purchase entry extras (customer and admin entries)
+- [ ] Email template `customer_checkout_finished`; Telegram daily summary line "سلال اليوم"
+- [ ] Dev CLI: `order:place --gift-message --gift-sender --save`; new `checkout:place`; commands table in `AGENTS.md`
+- [ ] Tests: `test/orders.test.ts` / new `test/checkouts.test.ts`, `test/saved-players.test.ts`, `test/shares.test.ts`, wallet and admin additions; worker CT8 tests (center rows without email, one `checkout_finished` with the right counts)
+- [ ] Bridge: build, OpenAPI export, admin client; admin and store E2E mocks follow changed shapes
+- [ ] Wiring checklist, docs (`docs/architecture.md`, S02 W5 list, folder `CLAUDE.md` files, spec "Settled in implementation")
+- [ ] Checks (lint, typecheck, test, build, drift), reviewer, owner acceptance, PR with auto-merge
 
-## PR 2 — Worker: paying and expiring reservations, cache cleanup, store revalidation, Telegram · Opus 5.5 `high`
-- [x] Jobs `orders.pay_waiting` (stately per customer, RS4 through the db write path), `orders.waiting_sweep` (every 5 minutes, at most 500)
-- [x] `orders.sweep` steps: RS7 expiry (at most 100, `SKIP LOCKED`) and `player_checks` cleanup
-- [x] `store.revalidate` (singleton, at most once per 10 s, 5 s timeout, 3 retries, warning only)
-- [x] Notifications `order_paid` (center) and `order_cancelled` (center and email with its template); Telegram `validation_quota_reached` sending; daily summary lines (validations per supplier, reservations paid and expired)
-- [x] Worker env `STORE_REVALIDATE_SECRET`, `STORE_PORT`
-- [x] Worker change points queue `store.revalidate`: a successful sync, a health change, a balance crossing an offer's cost, a newly stale cost
-- [x] Tests (each RS4 step and outcome, expiry, cleanup, waiting sweep, revalidate singleton and failure, quota message dedupe, notifications)
-- [x] Wiring checklist, docs
-- [x] Review fix: a balance crossing an offer's cost queues `store.revalidate`
-- [x] Checks (lint, typecheck, test, build, drift: all passed and recorded; no e2e, no front end changed), reviewer (one blocking finding: the balance change point; fixed), owner acceptance (2026-10-09), PR with auto-merge
-
-## PR 3 — Store and admin screens, E2E, nginx · Opus 5.5 `high`
-- [x] Store `features/catalog/`: home (hero search, service line, category chips, game cards), `/games/[slug]` (hero, ID guide, packs, calculator), cached reads with the `catalog` tag and 5-minute life (read at request time after `connection()`, never at build), `POST /_internal/revalidate` (loopback, secret; folder `%5Finternal`), `sitemap.xml`, `robots.txt`, metadata, `srcset`
-- [x] Store buy box: fields with the CT7 schema, sign-in return with session storage, balance and shortfall, player check UI (PV7), slide-to-pay (threshold, keyboard, reduced motion; `packages/ui`), idempotent submit and its error views, reservation
-- [x] Store `features/orders/`: LT1 timeline with the steps ahead, live `order` events (and on `resync` and `visibilitychange`), reservation countdown and cancel, cancel reasons, player name, expected time, success sequence (`SuccessMark`); "طلباتي" live with the reserved countdown; deposit wizard `?amount` and `?order`
-- [x] Store `features/search/`: header button, `Ctrl+K` / `⌘K` / `/`, lazy dialog and index, recent searches (try/catch)
-- [x] Admin: search terms chips on the game form; validation quota and usage on the supplier page; reservation, cancel and player-check fields on the order page; the status filter in the list
-- [x] i18n keys (store and admin)
-- [x] Follow-up from PR 2: `store.revalidate` keeps `singleton` and adds `singletonNextSlot`, so a change inside a used 10-second slot is debounced into the next one (`packages/db/src/store/revalidate.test.ts`)
-- [x] nginx: `/_internal/` denied (`vdplayercheck` came with PR 1); `docs/deployment.md`
-- [x] E2E flows and RTL screenshots (store phone and desktop, dark and light; admin light and dark); game page first-load budget recorded in `apps/store/CLAUDE.md` (223 KB, budget 230; home 206, budget raised to 210)
-- [x] Wiring checklist, docs (`docs/ROADMAP.md` S09 done, `wiring.md` "Store page with cached reads" pattern, `apps/store/CLAUDE.md`, `docs/architecture.md`, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 29b390e; OpenAPI and admin client not stale), reviewer (three blocking findings: secrets in the store process, a purchase key lost on a remount, `PLAYER_NOT_CONFIRMED` without the checkbox; then two rounds on the key: kept after any answer that may follow the payment, and memory first; fixed, last review: none), owner acceptance (2026-10-09), PR with auto-merge
+## PR 2 — Store and admin screens, E2E, nginx · Opus 5.5 `high`
+- [ ] Store cart store (`vd-cart`, versioned, try/catch, merge by key, 10 lines, gift lines apart, cleared at sign-out) with unit tests; header cart button
+- [ ] Store buy box: saved-ID chips (SP3, SP6, SP7), save box, gift box (GF1, GF3), "أضف إلى السلة"; calculator "أضف الكل إلى السلة" (CT3); repeat (`?repeat=`, OT1, OT2); `?player=`
+- [ ] Store `/cart` (CT4, CT6) and `/orders?checkout=`; order page: repeat, gift section, receipt sheet, "ضمن سلة"; `/orders` badges and repeat
+- [ ] Store `/account/players`; `/g/[token]`, `/r/[token]` (per request, `noindex`, `no-referrer`, `og:image`); wallet checkout entry; i18n keys
+- [ ] Admin order page: checkout block, gift block, share links with the revoke dialog; list badges; i18n keys
+- [ ] nginx `vdshare`; `robots.txt` disallows `/g/`, `/r/`, `/cart`; `docs/deployment.md`
+- [ ] E2E flows and RTL screenshots (store phone and desktop, dark and light; admin light and dark); budgets for `/cart` and share pages in `apps/store/CLAUDE.md`
+- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S10 done, `apps/store/CLAUDE.md`, `wiring.md` patterns)
+- [ ] Checks (lint, typecheck, test, build, e2e), reviewer, owner acceptance, PR with auto-merge
