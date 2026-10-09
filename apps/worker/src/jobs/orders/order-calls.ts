@@ -25,7 +25,11 @@ import type { SupplierRegistry } from '../../suppliers/supplier-registry.js';
 type Executor = Database | Transaction;
 
 /** The order context of a job: jobs in the caller's transaction, the codes key, the time. */
-export function orderContext(pgBoss: PgBossService, codesKey: Buffer, now = new Date()): OrderContext {
+export function orderContext(
+  pgBoss: PgBossService,
+  codesKey: Buffer,
+  now = new Date(),
+): OrderContext {
   return { jobs: bossJobSender(pgBoss.boss), codesKey, now };
 }
 
@@ -38,7 +42,10 @@ const callResult = (outcome: SupplierOutcome): SupplierCallResult =>
       : 'ok';
 
 /** The adapter's answer as the write path takes it, reasons cleaned of credentials. */
-export function attemptOutcome(outcome: SupplierOutcome, secrets: readonly string[]): AttemptOutcome {
+export function attemptOutcome(
+  outcome: SupplierOutcome,
+  secrets: readonly string[],
+): AttemptOutcome {
   const clean = (reason: string) => sanitizedMessage(reason, secrets).slice(0, 200);
   switch (outcome.status) {
     case 'delivered':

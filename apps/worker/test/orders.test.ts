@@ -999,32 +999,57 @@ describe('Telegram order messages (rules MN1, MN2, F5, F7)', () => {
 });
 
 describe('races on one attempt (committed: each side has its own connection)', () => {
-  /** The order and its open attempt, committed; the attempt `sending` or `pending`. */
+  /**
+   * The order and its open attempt, committed; the attempt `sending` or `pending`. The product
+   * is sold through a manual route, and the attempt goes to a `shop2topup` offer of its own
+   * (answered by the in-process fake here), so nothing committed touches the fake supplier's
+   * calls, health, credentials or routes, which the supplier tests read.
+   */
   async function committed(offerId: string, status: 'sending' | 'pending', code: boolean) {
     return db.transaction(async (tx) => {
-      await prepare(tx);
-      const item = await product(tx, { code, offerId, ...(code && { fake: usd(24) }) });
+      sent.length = 0;
+      const item = await product(tx, { code, fake: null, manualCost: usd(code ? 24 : 0.9) });
       const order = await buy(tx, item);
+      const [shop] = await tx
+        .select({ id: suppliers.id })
+        .from(suppliers)
+        .where(eq(suppliers.code, 'shop2topup'));
+      const supplierId = shop?.id as string;
+      const offer = newId();
+      await tx.insert(supplierOffers).values({
+        id: offer,
+        supplierId,
+        offerId: `race-${unique()}`,
+        name: 'Race',
+        inStock: true,
+        costUsdUnits: usd(code ? 24 : 0.9),
+        costConfirmedAt: new Date(),
+        lastSeenAt: new Date(),
+      });
+      const route = newId();
+      await tx.insert(productRoutes).values({
+        id: route,
+        productId: item.id,
+        supplierId,
+        offerId: offer,
+        fieldMap: code ? {} : { playerId: 'player_id' },
+      });
       const attemptId = newId();
-      const [offer] = await tx
-        .select({ id: supplierOffers.id })
-        .from(supplierOffers)
-        .where(and(eq(supplierOffers.supplierId, ids.fake), eq(supplierOffers.offerId, offerId)));
       await tx.insert(fulfilmentAttempts).values({
         id: attemptId,
         orderId: order.id,
-        routeId: item.fakeRoute as string,
-        supplierId: ids.fake,
-        offerId: offer?.id as string,
+        routeId: route,
+        supplierId,
+        offerId: offer,
         supplierOfferId: offerId,
         quantity: 1,
-        unitCostUsdUnits: usd(24),
+        unitCostUsdUnits: usd(code ? 24 : 0.9),
         status,
         candidates: [],
         sentAt: new Date(Date.now() - 2 * 60_000),
       });
       await tx.execute(sql`update orders set status = 'sent_to_supplier' where id = ${order.id}`);
-      return { order, attemptId };
+      return { order, attemptId, supplierId };
     });
   }
 
@@ -1035,7 +1060,7 @@ describe('races on one attempt (committed: each side has its own connection)', (
       .where(sql`${ledgerJournals.idempotencyKey} like ${`order:${orderId}:cost:%`}`);
 
   it('applies a webhook and a poll of one result once (edge case 7)', async () => {
-    const { order, attemptId } = await committed('fake-itunes-25', 'pending', true);
+    const { order, attemptId, supplierId } = await committed('fake-itunes-25', 'pending', true);
     fakeState = fakeSupplierStateSchema.parse({ orderScripts: { 'fake-itunes-25': 'pending' } });
     const fake = new FakeSupplierAdapter({
       webhookSecret: WEBHOOK_SECRET,
@@ -1054,7 +1079,7 @@ describe('races on one attempt (committed: each side has its own connection)', (
     const eventId = newId();
     await db.insert(supplierWebhookEvents).values({
       id: eventId,
-      supplierId: ids.fake,
+      supplierId,
       eventId: `evt-${unique()}`,
       bodyCiphertext: encryptSecret(codesKey, eventId, webhook.rawBody),
     });

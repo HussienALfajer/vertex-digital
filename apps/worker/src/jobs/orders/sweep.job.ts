@@ -1,10 +1,5 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
-import {
-  isOpenAttempt,
-  type OrderPolicy,
-  pastHardLimit,
-  QUEUES,
-} from '@vertex-digital/contracts';
+import { isOpenAttempt, type OrderPolicy, pastHardLimit, QUEUES } from '@vertex-digital/contracts';
 import {
   bossJobSender,
   catalogGames,

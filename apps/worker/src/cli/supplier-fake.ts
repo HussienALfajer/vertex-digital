@@ -96,7 +96,8 @@ if (values.cost !== undefined) {
   next = { ...state, balanceUsdUnits: dollars(values.balance) };
 } else if (values.order !== undefined) {
   const script = fakeOrderScriptSchema.safeParse(positionals[0]);
-  if (!script.success) fail('Expected delivered, pending, failed, invalid, unknown, partial:<n> or slow:<s>');
+  if (!script.success)
+    fail('Expected delivered, pending, failed, invalid, unknown, partial:<n> or slow:<s>');
   next = { ...state, orderScripts: { ...state.orderScripts, [values.order]: script.data } };
 } else {
   next = fakeSupplierStateSchema.parse({});
@@ -118,7 +119,7 @@ async function resolve(number: string, outcome: string | undefined, how: string 
       .from(orders)
       .where(eq(orders.number, parsed.data));
     const open = order && (await openAttempt(connection.db, order.id));
-    if (!open || open.supplierCode !== 'fake') fail(`${parsed.data} has no open fake attempt`);
+    if (open?.supplierCode !== 'fake') fail(`${parsed.data} has no open fake attempt`);
     const connected = await new SupplierRegistry(env).connect(connection.db, {
       id: open.attempt.supplierId,
       code: 'fake',
@@ -148,7 +149,9 @@ async function resolve(number: string, outcome: string | undefined, how: string 
         body: webhook.rawBody,
       },
     );
-    process.stdout.write(`${parsed.data}: ${outcome} by webhook, the API answered ${response.status}\n`);
+    process.stdout.write(
+      `${parsed.data}: ${outcome} by webhook, the API answered ${response.status}\n`,
+    );
   } finally {
     await connection.close();
   }

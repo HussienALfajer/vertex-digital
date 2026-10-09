@@ -87,11 +87,7 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
   }
 
   /** Rules R1–R5 in one transaction: the attempt and its status, or the refund. */
-  private async route(
-    tx: Transaction,
-    orderId: string,
-    now: Date,
-  ): Promise<FulfilResult> {
+  private async route(tx: Transaction, orderId: string, now: Date): Promise<FulfilResult> {
     const order = await lockOrder(tx, orderId);
     if (!order) return { kind: 'skipped' };
     const routable =
