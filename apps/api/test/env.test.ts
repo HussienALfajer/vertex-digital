@@ -13,6 +13,7 @@ const production = {
   ADMIN_AUTH_SECRET: secret('admin'),
   ALTCHA_HMAC_KEY: secret('altcha'),
   SUPPLIER_KEYS_SECRET: Buffer.alloc(32, 7).toString('base64'),
+  ORDER_CODES_SECRET: Buffer.alloc(32, 9).toString('base64'),
 };
 
 describe('API environment', () => {
@@ -72,15 +73,27 @@ describe('API environment', () => {
     );
   });
 
-  it.each(['CUSTOMER_AUTH_SECRET', 'ADMIN_AUTH_SECRET', 'ALTCHA_HMAC_KEY', 'SUPPLIER_KEYS_SECRET'])(
-    'refuses production without %s, or with its placeholder',
-    (key) => {
-      expect(() => parseEnv({ ...production, [key]: undefined })).toThrow(key);
-      expect(() => parseEnv({ ...production, [key]: 'replace-with-a-long-random-value' })).toThrow(
-        key,
-      );
-    },
-  );
+  it('derives a 32-byte order codes key locally, apart from the supplier key (S08 rule C1)', () => {
+    const local = parseEnv({ DATABASE_URL });
+    expect(Buffer.from(local.ORDER_CODES_SECRET as string, 'base64')).toHaveLength(32);
+    expect(local.ORDER_CODES_SECRET).not.toBe(local.SUPPLIER_KEYS_SECRET);
+    expect(() => parseEnv({ DATABASE_URL, ORDER_CODES_SECRET: 'c2hvcnQ=' })).toThrow(
+      'ORDER_CODES_SECRET',
+    );
+  });
+
+  it.each([
+    'CUSTOMER_AUTH_SECRET',
+    'ADMIN_AUTH_SECRET',
+    'ALTCHA_HMAC_KEY',
+    'SUPPLIER_KEYS_SECRET',
+    'ORDER_CODES_SECRET',
+  ])('refuses production without %s, or with its placeholder', (key) => {
+    expect(() => parseEnv({ ...production, [key]: undefined })).toThrow(key);
+    expect(() => parseEnv({ ...production, [key]: 'replace-with-a-long-random-value' })).toThrow(
+      key,
+    );
+  });
 
   it('refuses http origins and a shared auth secret in production', () => {
     expect(() =>

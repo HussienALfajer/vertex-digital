@@ -6,6 +6,7 @@ export { currencyEnum } from './columns.js';
 export * from './deposits.js';
 export * from './files.js';
 export * from './notifications.js';
+export * from './orders.js';
 export * from './pricing.js';
 export * from './rates.js';
 export * from './settings.js';

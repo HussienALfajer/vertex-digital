@@ -146,6 +146,42 @@ describe('the deposit emails (S03)', () => {
   });
 });
 
+describe('the order emails (S08)', () => {
+  const orderId = '01890000-0000-7000-8000-0000000000e1';
+  const store = 'https://digital.example';
+  const link = `https://digital.example/orders/${orderId}`;
+  const order = {
+    at: '2026-10-09T09:30:00.000Z',
+    orderId,
+    orderNumber: 'VO-7KQ2MX',
+    productNameAr: '60 UC',
+  };
+
+  it('says the order was delivered, with a link to it and no codes', () => {
+    const email = renderEmail('customer_order_delivered', { ...order, quantity: 2 }, store);
+    expect(email.subject).toBe('سُلّم طلبك VO-7KQ2MX');
+    expect(email.text).toContain('60 UC × 2');
+    expect(email.text).toContain(`عرض الطلب: ${link}`);
+  });
+
+  it('says how much was refunded and why', () => {
+    const partial = renderEmail(
+      'customer_order_partially_refunded',
+      { ...order, deliveredQuantity: 2, refundedQuantity: 1, refundedUsdUnits: 9_600_000 },
+      store,
+    );
+    expect(partial.text).toContain('أُعيد $9.60 إلى رصيد محفظتك');
+    const full = renderEmail(
+      'customer_order_refunded',
+      { ...order, refundedUsdUnits: 1_230_000, reason: 'input_rejected' },
+      store,
+    );
+    expect(full.subject).toBe('أُعيد $1.23 إلى رصيدك عن الطلب VO-7KQ2MX');
+    expect(full.text).toContain('السبب: بيانات الحساب مرفوضة.');
+    expect(full.html).toContain(`href="${link}"`);
+  });
+});
+
 describe('email.send', () => {
   it('writes a code email to a file in Arabic, right to left, and clears the code', async () => {
     const id = await queue(

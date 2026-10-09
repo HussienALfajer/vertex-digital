@@ -6,6 +6,7 @@ import {
   type CatalogMissingItem,
   type Category,
   catalogImagePath,
+  type DeliveryStats,
   type InputField,
   missingForActivation,
   type Product,
@@ -87,6 +88,7 @@ export interface ProductPricing {
   priceSypUnits: number | null;
   basisSupplierNameAr: string | null;
   reviewOpen: boolean;
+  deliveryStats: DeliveryStats | null;
 }
 
 export function toProduct(row: ProductRow, pricing: ProductPricing): Product {

@@ -3,6 +3,7 @@ import { QUEUES } from './jobs.js';
 import {
   CODE_EMAIL_TEMPLATES,
   customerNotificationSchema,
+  EMAIL_NOTIFICATION_EVENTS,
   EMAIL_PARAMS,
   EMAIL_TEMPLATES,
   isCodeEmail,
@@ -37,8 +38,14 @@ describe('notifications (S05 F27)', () => {
 
   it('each event has its params and its email template', () => {
     expect(Object.keys(NOTIFICATION_PARAMS).sort()).toEqual([...NOTIFICATION_EVENTS].sort());
-    for (const event of NOTIFICATION_EVENTS)
+    for (const event of EMAIL_NOTIFICATION_EVENTS)
       expect(EMAIL_TEMPLATES).toContain(NOTIFICATION_EMAIL_TEMPLATE[event]);
+    // S08: a delay lives in the center only, never by email.
+    expect(
+      NOTIFICATION_EVENTS.filter(
+        (event) => !(EMAIL_NOTIFICATION_EVENTS as readonly string[]).includes(event),
+      ),
+    ).toEqual(['order_delayed']);
   });
 
   it('carry no notes, transaction numbers, TXIDs or flags (rule NT3)', () => {

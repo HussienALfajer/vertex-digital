@@ -30,14 +30,45 @@ export function notificationText(notification: CustomerNotification): string {
         category: params.reversal ? t('wallet.reversal', { category }) : category,
       });
     }
+    // S08: the order number and product, never codes or account fields.
+    case 'order_delivered':
+      return t('notifications.events.order_delivered', {
+        product: notification.params.productNameAr,
+        number: reference(notification.params.orderNumber),
+      });
+    case 'order_partially_refunded':
+      return t('notifications.events.order_partially_refunded', {
+        product: notification.params.productNameAr,
+        number: reference(notification.params.orderNumber),
+        amount: ltr(formatUsd(notification.params.refundedUsdUnits)),
+      });
+    case 'order_refunded':
+      return t('notifications.events.order_refunded', {
+        product: notification.params.productNameAr,
+        number: reference(notification.params.orderNumber),
+        amount: ltr(formatUsd(notification.params.refundedUsdUnits)),
+        reason: t(`orders.refundReasons.${notification.params.reason}`),
+      });
+    case 'order_delayed':
+      return t('notifications.events.order_delayed', {
+        product: notification.params.productNameAr,
+        number: reference(notification.params.orderNumber),
+      });
   }
 }
 
 /** Where a notification leads (rule NT4). */
 export function notificationHref(notification: CustomerNotification): string {
-  return notification.event === 'wallet_adjusted'
-    ? '/wallet'
-    : `/wallet/deposits/${notification.params.depositId}`;
+  switch (notification.event) {
+    case 'wallet_adjusted':
+      return '/wallet';
+    case 'deposit_credited':
+    case 'deposit_rejected':
+    case 'deposit_receipt_requested':
+      return `/wallet/deposits/${notification.params.depositId}`;
+    default:
+      return `/orders/${notification.params.orderId}`;
+  }
 }
 
 /** The bell's badge: nothing at 0, "9+" above 9. */

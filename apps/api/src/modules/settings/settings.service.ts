@@ -55,7 +55,7 @@ interface SwitchState {
 /**
  * The store switches (S05 F26, rules SW1–SW8): the only writer of `store_switch_changes`. Other
  * modules read them through `values()`, per request and never cached (rule SW1), or through
- * `valuesForDepositCreation(tx)` inside a deposit creation (rule SW5).
+ * `valuesForCreation(tx)` inside a deposit creation (rule SW5).
  */
 @Injectable()
 export class SettingsService {
@@ -73,8 +73,11 @@ export class SettingsService {
     ) as StoreSwitchValues;
   }
 
-  /** Inside a deposit creation's transaction: the shared lock, then the values (rule SW5). */
-  async valuesForDepositCreation(tx: Transaction): Promise<StoreSwitchValues> {
+  /**
+   * Inside a deposit creation's or a purchase's transaction: the shared lock, then the values (rule
+   * SW5, S08 rule O2), so a creation commits before a stop or sees it.
+   */
+  async valuesForCreation(tx: Transaction): Promise<StoreSwitchValues> {
     await tx.execute(sql`select pg_advisory_xact_lock_shared(${SWITCHES_KEY})`);
     return this.values(tx);
   }

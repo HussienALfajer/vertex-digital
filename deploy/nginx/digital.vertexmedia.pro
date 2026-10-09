@@ -76,6 +76,34 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # Supplier webhooks (S08 rule F4): signed by HMAC with a timestamp, bodies up to 64 KB, the
+    # API's own limit too. Suppliers publish no fixed ranges, so no allow list here. Regex, so any
+    # letter case or a trailing slash cannot step around it.
+    location ~* ^/api/webhooks/suppliers/[a-z0-9]+/?$ {
+        client_max_body_size 64k;
+        limit_req zone=vdwebhook burst=30 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # Purchases (S08 rule O1): POST is limited (the zone's key is empty for GET), on top of the
+    # API's per-customer counters.
+    location ~* ^/api/orders/?$ {
+        limit_req zone=vdpurchase burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # Code reveals (S08 rule C2), on top of the API's per-customer counter.
+    location ~* ^/api/orders/[0-9a-f-]{36}/codes/[0-9a-f-]{36}/reveal/?$ {
+        limit_req zone=vdreveal burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Password guessing: a tight limit on the sign-in endpoint on top of Better Auth's own.
     # Regex, so any letter case or a trailing slash cannot step around it.
     # The same for the routes that send or check an email code or a password (S01): sign-up,

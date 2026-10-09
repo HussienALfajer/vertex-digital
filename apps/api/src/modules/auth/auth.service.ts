@@ -124,6 +124,15 @@ export class AuthService {
     return rows.map((row) => row.id);
   }
 
+  /** The customer's id by their email, case-insensitive (S08 `order:place`); null when none. */
+  async customerIdByEmail(email: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(eq(customers.email, email.trim().toLowerCase()));
+    return row?.id ?? null;
+  }
+
   /** Ids of customers whose email starts with `prefix`, case-insensitive (S03 deposit queue). */
   async idsByEmailPrefix(prefix: string): Promise<string[]> {
     const literal = prefix.replace(/[\\%_]/g, (char) => `\\${char}`);

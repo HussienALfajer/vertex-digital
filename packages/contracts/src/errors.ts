@@ -141,6 +141,20 @@ export const ERROR_CODES = [
   'REVIEW_STALE',
   /** The display step adds more than 2% to the cheapest product; `details.maxStepSypUnits` (rule P9). */
   'DISPLAY_STEP_TOO_LARGE',
+  /** The purchase stop is on (S05 SW5, S08 rule O2). */
+  'PURCHASES_STOPPED',
+  /** The product cannot be bought now; `details.availability` (S08 rule O3). */
+  'PRODUCT_UNAVAILABLE',
+  /** The price is not the one the customer saw; `details.unitPriceUsdUnits` (S08 rule O4). */
+  'PRICE_CHANGED',
+  /** The order is not in a state the admin can decide on (S08 rule D1). */
+  'ORDER_NOT_DECIDABLE',
+  /** The attempt is closed, or not one the admin can resolve or poll (S08 rule D1). */
+  'ATTEMPT_NOT_RESOLVABLE',
+  /** A code product needs exactly one code per unit delivered (S08 rule D2). */
+  'CODES_COUNT_MISMATCH',
+  /** A supplier webhook's signature or timestamp is wrong (S08 rule F4). */
+  'WEBHOOK_SIGNATURE_INVALID',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

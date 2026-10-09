@@ -214,8 +214,16 @@ describe('append-only trigger', () => {
       // Its TRUNCATE trigger: rows are guarded by `deposits_guard` (deposits.test.ts).
       'deposits',
       'exchange_rates',
+      'fulfilment_attempts',
       'ledger_journals',
       'ledger_postings',
+      'order_code_reveals',
+      'order_codes',
+      'order_events',
+      'order_policy',
+      // Their TRUNCATE triggers: rows are guarded by `orders_guard` and
+      // `fulfilment_attempts_guard` (orders/orders.test.ts).
+      'orders',
       'payment_references',
       'product_prices',
       'store_switch_changes',
@@ -226,6 +234,8 @@ describe('append-only trigger', () => {
       'supplier_credentials',
       'supplier_health_changes',
       'supplier_policy',
+      // Its TRUNCATE trigger: rows are guarded by `supplier_webhook_events_guard`.
+      'supplier_webhook_events',
       // Its TRUNCATE trigger: rows are guarded by `usdt_deposits_guard` (deposits.test.ts).
       'usdt_deposits',
       'usdt_transfers',

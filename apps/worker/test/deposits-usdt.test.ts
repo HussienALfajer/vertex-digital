@@ -22,6 +22,7 @@ import {
   ledgerPostings,
   newId,
   telegramMessages,
+  usdtCandidateMatch,
   usdtDeposits,
   usdtScanCursors,
   usdtTransfers,
@@ -155,6 +156,21 @@ beforeEach(() => {
 });
 
 const txid = () => randomBytes(32).toString('hex');
+
+/**
+ * The reserved BEP20 deposits a transfer of `amountUnits` matches (rule U13), the expired one of
+ * the test included: the tail has 99 values, and the shared test database keeps the deposits of
+ * earlier runs, so other deposits may hold the same tail.
+ */
+async function candidatesOf(amountUnits: number): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(usdtDeposits)
+    .innerJoin(deposits, eq(deposits.id, usdtDeposits.depositId))
+    .where(usdtCandidateMatch('usdt_bep20', amountUnits));
+  expect(row?.count).toBeGreaterThanOrEqual(1);
+  return row?.count ?? 0;
+}
 
 /** A random free amount: whole dollars from $10 and a tail (rule U3). */
 const amounts = () => {
@@ -706,7 +722,7 @@ describe('the scanner (rules U12–U14)', () => {
       )?.params,
     ).toMatchObject({
       method: 'usdt_bep20',
-      candidates: 1,
+      candidates: await candidatesOf(expired.pay),
     });
     await scan.scan('usdt_bep20');
     expect(

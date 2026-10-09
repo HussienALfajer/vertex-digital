@@ -154,7 +154,7 @@ export async function checkNotStopped(
   tx: Transaction,
   method: DepositMethod,
 ): Promise<void> {
-  const reason = depositStopReason(await switches.valuesForDepositCreation(tx), method);
+  const reason = depositStopReason(await switches.valuesForCreation(tx), method);
   if (reason) {
     throw new CodedException(409, 'DEPOSITS_STOPPED', 'New deposits are stopped', { reason });
   }

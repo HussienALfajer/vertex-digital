@@ -91,6 +91,7 @@ export class WalletService {
           referenceCode: entry.deposit.referenceCode,
           syp: entry.deposit.syp,
         },
+        order: entry.order,
       })),
       nextCursor: page.nextCursor,
     };
@@ -159,6 +160,7 @@ export class WalletService {
           reversedByAdjustmentId: entry.adjustment.reversedByAdjustmentId,
         },
         deposit: entry.deposit,
+        order: entry.order,
       })),
       nextCursor: page.nextCursor,
     };

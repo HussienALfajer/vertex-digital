@@ -10,6 +10,7 @@ const entry = (changes: Partial<WalletEntry>): WalletEntry => ({
   balanceAfterUnits: 25_000_000,
   adjustment: null,
   deposit: null,
+  order: null,
   ...changes,
 });
 
@@ -23,6 +24,20 @@ describe('entryLabel', () => {
     const adjustment = { category: 'compensation', customerNote: null, reversal: true } as const;
     expect(entryLabel(entry({ adjustment }))).toBe(
       ar.wallet.reversal.replace('{category}', ar.wallet.categories.compensation),
+    );
+  });
+
+  it('names a purchase and its refund by the product (S08)', () => {
+    const order = {
+      id: '0199a000-0000-7000-8000-000000000001',
+      number: 'VO-7KQ2MX',
+      productNameAr: '60 UC',
+    };
+    expect(entryLabel(entry({ kind: 'purchase', order }))).toBe(
+      ar.wallet.orderKinds.purchase.replace('{product}', '60 UC'),
+    );
+    expect(entryLabel(entry({ kind: 'refund', order }))).toBe(
+      ar.wallet.orderKinds.refund.replace('{product}', '60 UC'),
     );
   });
 

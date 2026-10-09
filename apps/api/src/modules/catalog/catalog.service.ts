@@ -26,6 +26,7 @@ import {
   type Database,
   newId,
   type ProductRoutingState,
+  productDeliveryStats,
   productRoutingStates,
   type Transaction,
 } from '@vertex-digital/db';
@@ -518,13 +519,11 @@ export class CatalogService {
    * from the routing state; inside a change, pass its transaction so the change is seen.
    */
   async products(executor: Database | Transaction, rows: ProductRow[]): Promise<Product[]> {
-    const [states, rate] = await Promise.all([
-      productRoutingStates(
-        executor,
-        rows.map((row) => row.id),
-        routingContext(this.env),
-      ),
+    const ids = rows.map((row) => row.id);
+    const [states, rate, delivery] = await Promise.all([
+      productRoutingStates(executor, ids, routingContext(this.env)),
       this.rates.current(),
+      productDeliveryStats(executor, ids),
     ]);
     return rows.map((row) => {
       const state = states.get(row.id) as ProductRoutingState;
@@ -538,6 +537,7 @@ export class CatalogService {
             : null,
         basisSupplierNameAr: state.basis?.supplier.nameAr ?? null,
         reviewOpen: state.openReview !== null,
+        deliveryStats: delivery.get(row.id) ?? null,
       });
     });
   }

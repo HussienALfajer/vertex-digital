@@ -1,5 +1,6 @@
 import {
   type EmailParams,
+  type EmailTemplate,
   NOTIFICATION_EMAIL_TEMPLATE,
   NOTIFICATION_PARAMS,
   type NotificationEvent,
@@ -38,6 +39,9 @@ export async function notifyCustomer<Event extends NotificationEvent>(
     .returning({ id: customerNotifications.id, createdAt: customerNotifications.createdAt });
   if (!row) throw new Error('The notification was not written');
   await tx.execute(sql`select pg_notify(${CUSTOMER_NOTIFICATIONS_CHANNEL}, ${row.id})`);
+  // An event of the center only (`order_delayed`, S08) sends no email.
+  const template: EmailTemplate | null = NOTIFICATION_EMAIL_TEMPLATE[input.event];
+  if (template === null) return { notificationId: row.id, emailId: null };
 
   const [customer] = await tx
     .select({ email: customers.email, emailOn: notificationPreferences.email })
@@ -55,12 +59,10 @@ export async function notifyCustomer<Event extends NotificationEvent>(
   if (customer.emailOn === false) return { notificationId: row.id, emailId: null };
   const emailId = await queueEmail(tx, jobs, {
     to: customer.email,
-    template: NOTIFICATION_EMAIL_TEMPLATE[input.event],
+    template,
     // The email's `at`, where its template shows one, is the time of the notification.
     // `queueEmail` checks them against the template; TypeScript cannot pair event and template.
-    params: { ...params, at: row.createdAt.toISOString() } as EmailParams<
-      (typeof NOTIFICATION_EMAIL_TEMPLATE)[Event]
-    >,
+    params: { ...params, at: row.createdAt.toISOString() } as EmailParams<typeof template>,
     customerId: input.customerId,
   });
   return { notificationId: row.id, emailId };

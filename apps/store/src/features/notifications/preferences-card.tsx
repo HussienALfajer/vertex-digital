@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  NOTIFICATION_EVENTS,
+  EMAIL_NOTIFICATION_EVENTS,
   type NotificationEvent,
   type NotificationPreferences,
 } from '@vertex-digital/contracts';
@@ -57,7 +57,7 @@ export function NotificationPreferencesCard() {
           <CardDescription>{t('account.notifications.description')}</CardDescription>
         </CardHeader>
         <ul className="flex flex-col divide-y divide-border">
-          {NOTIFICATION_EVENTS.map((event) => {
+          {EMAIL_NOTIFICATION_EVENTS.map((event) => {
             const label = t(`account.notifications.events.${event}`);
             return (
               <li key={event} className="flex min-h-14 items-center justify-between gap-4 py-2">

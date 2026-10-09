@@ -1652,6 +1652,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersController_list"];
+        put?: never;
+        post: operations["OrdersController_purchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersController_order"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orders/{id}/codes/{codeId}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OrdersController_reveal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersAdminController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orders/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersAdminController_counts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orders/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersAdminController_policy"];
+        put: operations["OrdersAdminController_setPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersAdminController_order"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orders/{id}/attempts/{attemptId}/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OrdersAdminController_poll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orders/{id}/attempts/{attemptId}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OrdersAdminController_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orders/{id}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OrdersAdminController_refund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orders/{id}/codes/{codeId}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OrdersAdminController_reveal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/telegram": {
         parameters: {
             query?: never;
@@ -1805,6 +1981,72 @@ export interface components {
                 category: components["schemas"]["AdjustmentCategory"];
                 reversal: boolean;
             };
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "order_delivered";
+            params: {
+                /** Format: uuid */
+                orderId: string;
+                orderNumber: string;
+                productNameAr: string;
+                quantity: number;
+            };
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "order_partially_refunded";
+            params: {
+                /** Format: uuid */
+                orderId: string;
+                orderNumber: string;
+                productNameAr: string;
+                deliveredQuantity: number;
+                refundedQuantity: number;
+                refundedUsdUnits: number;
+            };
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "order_refunded";
+            params: {
+                /** Format: uuid */
+                orderId: string;
+                orderNumber: string;
+                productNameAr: string;
+                refundedUsdUnits: number;
+                reason: components["schemas"]["RefundReason"];
+            };
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "order_delayed";
+            params: {
+                /** Format: uuid */
+                orderId: string;
+                orderNumber: string;
+                productNameAr: string;
+            };
         };
         /** @enum {string} */
         DepositRejectReason: "not_received" | "receipt_invalid" | "receipt_used" | "reference_other_customer" | "wrong_account" | "wrong_network" | "transfer_other_customer" | "other";
@@ -1812,6 +2054,8 @@ export interface components {
         AdjustmentDirection: "credit" | "debit";
         /** @enum {string} */
         AdjustmentCategory: "compensation" | "correction" | "cash_refund" | "manual_deposit" | "test_funds";
+        /** @enum {string} */
+        RefundReason: "no_route" | "routes_exhausted" | "input_rejected" | "admin";
         MarkNotificationsRead: {
             /** Format: uuid */
             upToId: string;
@@ -1829,7 +2073,7 @@ export interface components {
             email: boolean;
         };
         /** @enum {string} */
-        NotificationEvent: "deposit_credited" | "deposit_rejected" | "deposit_receipt_requested" | "wallet_adjusted";
+        NotificationEvent: "deposit_credited" | "deposit_rejected" | "deposit_receipt_requested" | "wallet_adjusted" | "order_delivered" | "order_partially_refunded" | "order_refunded" | "order_delayed";
         StoreStatus: {
             registrationOpen: boolean;
             purchasesStopped: boolean;
@@ -2015,9 +2259,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.code_revealed" | "order_policy.set";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review" | "order" | "order_policy";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -2105,6 +2349,12 @@ export interface components {
                     rate: components["schemas"]["ExchangeRate"];
                 } | null;
             } | null;
+            order: {
+                /** Format: uuid */
+                id: string;
+                number: string;
+                productNameAr: string;
+            } | null;
         };
         /** @enum {string} */
         JournalKind: "deposit" | "purchase" | "refund" | "cost_of_goods" | "adjustment";
@@ -2184,6 +2434,12 @@ export interface components {
                 /** Format: uuid */
                 id: string;
                 txid: string | null;
+            } | null;
+            order: {
+                /** Format: uuid */
+                id: string;
+                number: string;
+                productNameAr: string;
             } | null;
         };
         /** @enum {string} */
@@ -2909,6 +3165,11 @@ export interface components {
             priceSypUnits: number | null;
             basisSupplierNameAr: string | null;
             reviewOpen: boolean;
+            deliveryStats: {
+                medianMs: number;
+                p90Ms: number;
+                count: number;
+            } | null;
         };
         /** @enum {string} */
         ProductKind: "direct" | "code";
@@ -3466,6 +3727,358 @@ export interface components {
             fieldMap?: components["schemas"]["FieldMap"];
         };
         SetManualCost: components["schemas"]["CreateManualRoute"];
+        CreateOrder: {
+            /** Format: uuid */
+            productId: string;
+            quantity: number;
+            /** @default {} */
+            fields: {
+                [key: string]: string;
+            };
+            expectedUnitPriceUsdUnits: number;
+        };
+        Order: {
+            /** Format: uuid */
+            id: string;
+            number: string;
+            stage: components["schemas"]["OrderStage"];
+            product: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+                kind: components["schemas"]["ProductKind"];
+                regionAr: string | null;
+                redemptionAr: string | null;
+            };
+            game: {
+                /** Format: uuid */
+                id: string;
+                slug: string;
+                nameAr: string;
+                cover: components["schemas"]["CatalogImage"] | null;
+            };
+            fields: {
+                key: string;
+                labelAr: string;
+                value: string;
+            }[];
+            quantity: number;
+            deliveredQuantity: number;
+            refundedQuantity: number;
+            unitPriceUsdUnits: number;
+            totalUsdUnits: number;
+            totalSypUnits: number | null;
+            refundedUsdUnits: number;
+            refundReason: components["schemas"]["RefundReason"] | null;
+            timeline: {
+                stage: components["schemas"]["OrderStage"];
+                /** Format: date-time */
+                at: string;
+            }[];
+            codes: components["schemas"]["OrderCode"][];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        OrderStage: "processing" | "delayed" | "delivered" | "partially_refunded" | "refunded" | "cancelled";
+        OrderCode: {
+            /** Format: uuid */
+            id: string;
+            position: number;
+            masked: string;
+            /** Format: date-time */
+            firstRevealedAt: string | null;
+        };
+        OrderListQuery: {
+            cursor?: string;
+            /** @default 20 */
+            limit: number;
+        };
+        OrderPage: {
+            items: components["schemas"]["OrderSummary"][];
+            nextCursor: string | null;
+        };
+        OrderSummary: {
+            /** Format: uuid */
+            id: string;
+            number: string;
+            stage: components["schemas"]["OrderStage"];
+            productNameAr: string;
+            game: {
+                /** Format: uuid */
+                id: string;
+                slug: string;
+                nameAr: string;
+                cover: components["schemas"]["CatalogImage"] | null;
+            };
+            quantity: number;
+            totalUsdUnits: number;
+            totalSypUnits: number | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RevealedCode: {
+            code: string;
+            /** Format: date-time */
+            firstRevealedAt: string;
+        };
+        AdminOrderListQuery: {
+            /** @default 1 */
+            page: number;
+            /** @default 50 */
+            pageSize: number;
+            /** @default all */
+            tab: components["schemas"]["AdminOrderTab"];
+            status?: components["schemas"]["OrderStatus"];
+            q?: string;
+            /** Format: uuid */
+            productId?: string;
+            supplier?: components["schemas"]["SupplierCode"];
+            /** @enum {string} */
+            test?: "true" | "false";
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+        };
+        /** @enum {string} */
+        AdminOrderTab: "all" | "review" | "manual" | "active" | "delivered" | "refunded";
+        /** @enum {string} */
+        OrderStatus: "awaiting_balance" | "paid" | "sent_to_supplier" | "failed" | "needs_review" | "delivered" | "partially_refunded" | "refunded" | "cancelled";
+        AdminOrderPage: {
+            items: components["schemas"]["AdminOrderSummary"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        AdminOrderSummary: {
+            /** Format: uuid */
+            id: string;
+            number: string;
+            status: components["schemas"]["OrderStatus"];
+            customer: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                email: string;
+                isTest: boolean;
+            };
+            product: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+            };
+            game: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+            };
+            quantity: number;
+            totalUsdUnits: number;
+            supplierCode: components["schemas"]["SupplierCode"] | null;
+            manualWaiting: boolean;
+            /** Format: date-time */
+            since: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AdminOrderCounts: {
+            needsReview: number;
+            manualWaiting: number;
+        };
+        OrderPolicy: {
+            firstPollSeconds: number;
+            fastPollSeconds: number;
+            fastPollMinutes: number;
+            slowPollSeconds: number;
+            hardLimitMinutes: number;
+            reviewPollMinutes: number;
+            reviewPollHours: number;
+            manualReminderMinutes: number;
+        };
+        AdminOrder: {
+            /** Format: uuid */
+            id: string;
+            number: string;
+            status: components["schemas"]["OrderStatus"];
+            customer: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                email: string;
+                isTest: boolean;
+            };
+            product: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+                kind: components["schemas"]["ProductKind"];
+            };
+            game: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+            };
+            fields: {
+                key: string;
+                labelAr: string;
+                value: string;
+            }[];
+            quantity: number;
+            deliveredQuantity: number;
+            refundedQuantity: number;
+            unitPriceUsdUnits: number;
+            totalUsdUnits: number;
+            totalSypUnits: number | null;
+            minMarginUsdUnits: number;
+            refundedUsdUnits: number;
+            refundReason: components["schemas"]["RefundReason"] | null;
+            /** Format: date-time */
+            paidAt: string | null;
+            /** Format: date-time */
+            deliveredAt: string | null;
+            /** Format: date-time */
+            finishedAt: string | null;
+            /** Format: date-time */
+            reviewSince: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            decisions: components["schemas"]["OrderDecisions"];
+            attempts: components["schemas"]["FulfilmentAttempt"][];
+            events: components["schemas"]["OrderEvent"][];
+            journals: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                kind: "purchase" | "refund" | "cost_of_goods";
+                amountUsdUnits: number;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+            codes: components["schemas"]["AdminOrderCode"][];
+        };
+        OrderDecisions: {
+            /** Format: uuid */
+            attemptId: string | null;
+            poll: boolean;
+            resolve: boolean;
+            refund: boolean;
+        };
+        FulfilmentAttempt: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            routeId: string;
+            supplierCode: components["schemas"]["SupplierCode"];
+            supplierNameAr: string;
+            offerId: string;
+            offerName: string;
+            quantity: number;
+            deliveredQuantity: number;
+            unitCostUsdUnits: number;
+            status: components["schemas"]["AttemptStatus"];
+            supplierOrderId: string | null;
+            failureReason: string | null;
+            inputRejected: boolean;
+            supplierErrorCode: string | null;
+            candidates: components["schemas"]["RouteCandidate"][];
+            resolvedBy: components["schemas"]["AttemptResolver"] | null;
+            adminReason: string | null;
+            pollCount: number;
+            /** Format: date-time */
+            sentAt: string | null;
+            /** Format: date-time */
+            nextPollAt: string | null;
+            /** Format: date-time */
+            resolvedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            webhookEvents: {
+                /** Format: uuid */
+                id: string;
+                eventId: string;
+                result: components["schemas"]["WebhookEventResult"] | null;
+                /** Format: date-time */
+                processedAt: string | null;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+        };
+        /** @enum {string} */
+        AttemptStatus: "sending" | "pending" | "unknown" | "delivered" | "failed";
+        RouteCandidate: {
+            /** Format: uuid */
+            routeId: string;
+            supplierCode: components["schemas"]["SupplierCode"];
+            tier: components["schemas"]["RouteTier"] | null;
+            costUsdUnits: number | null;
+            rank: number | null;
+            skipReason: components["schemas"]["RouteSkipReason"] | null;
+        };
+        /** @enum {string} */
+        RouteSkipReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low" | "test_customer" | "already_tried" | "unprofitable" | "balance_below_order";
+        /** @enum {string} */
+        AttemptResolver: "supplier" | "poll" | "webhook" | "admin";
+        /** @enum {string} */
+        WebhookEventResult: "applied" | "same_result" | "unknown_key" | "conflict" | "malformed";
+        OrderEvent: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["OrderEventKind"];
+            fromStatus: components["schemas"]["OrderStatus"] | null;
+            toStatus: components["schemas"]["OrderStatus"] | null;
+            actor: components["schemas"]["OrderEventActor"];
+            /** Format: uuid */
+            attemptId: string | null;
+            reason: string | null;
+            details: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        OrderEventKind: "status" | "attempt" | "note";
+        /** @enum {string} */
+        OrderEventActor: "customer" | "system" | "supplier" | "admin";
+        AdminOrderCode: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            attemptId: string;
+            position: number;
+            masked: string;
+            reveals: {
+                actor: components["schemas"]["CodeRevealActor"];
+                ipAddress: string | null;
+                userAgent: string | null;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+        };
+        /** @enum {string} */
+        CodeRevealActor: "customer" | "admin";
+        PollAttempt: {
+            reason: string;
+        };
+        ResolveAttempt: {
+            /** @enum {string} */
+            outcome: "delivered";
+            quantity: number;
+            /** @default [] */
+            codes: string[];
+            reason: string;
+        } | {
+            /** @enum {string} */
+            outcome: "failed";
+            reason: string;
+        };
+        RefundOrder: {
+            reason: string;
+        };
+        AdminRevealedCode: {
+            code: string;
+        };
         TelegramLinkStatus: {
             configured: boolean;
             link: {
@@ -4167,8 +4780,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted";
-                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.code_revealed" | "order_policy.set";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review" | "order" | "order_policy";
                 entityId?: string;
                 from?: string;
                 to?: string;
@@ -6245,6 +6858,327 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProductRouting"];
+                };
+            };
+        };
+    };
+    OrdersController_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderPage"];
+                };
+            };
+        };
+    };
+    OrdersController_purchase: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrder"];
+            };
+        };
+        responses: {
+            /** @description Paid (200: a replay) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Order"];
+                };
+            };
+        };
+    };
+    OrdersController_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The order, codes masked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Order"];
+                };
+            };
+        };
+    };
+    OrdersController_reveal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                codeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The code; the reveal is logged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevealedCode"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_list: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                tab?: "all" | "review" | "manual" | "active" | "delivered" | "refunded";
+                status?: "awaiting_balance" | "paid" | "sent_to_supplier" | "failed" | "needs_review" | "delivered" | "partially_refunded" | "refunded" | "cancelled";
+                q?: string;
+                productId?: string;
+                supplier?: "shop2topup" | "wdgzone" | "manual" | "fake";
+                test?: "true" | "false";
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrderPage"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_counts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The navigation badge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrderCounts"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy in force */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderPolicy"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_setPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderPolicy"];
+            };
+        };
+        responses: {
+            /** @description The new policy, in force */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderPolicy"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The order, codes masked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrder"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_poll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PollAttempt"];
+            };
+        };
+        responses: {
+            /** @description The poll is queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrder"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_resolve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveAttempt"];
+            };
+        };
+        responses: {
+            /** @description The order after the decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrder"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_refund: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundOrder"];
+            };
+        };
+        responses: {
+            /** @description The refunded order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrder"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_reveal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                codeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The code; the reveal is logged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRevealedCode"];
                 };
             };
         };

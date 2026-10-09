@@ -32,7 +32,7 @@ describe('parseAuditSearch', () => {
         actorKind: 'owner',
         actorId: ID,
         action: 'customer.deleted',
-        entityType: 'order',
+        entityType: 'shipment',
         entityId: 'not-a-uuid',
         from: '08/10/2026',
         to: 42,

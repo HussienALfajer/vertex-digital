@@ -156,6 +156,7 @@ async function checkWallets(tx: Transaction, lines: readonly Line[]): Promise<vo
       throw new LedgerError(
         'INSUFFICIENT_BALANCE',
         `Wallet ${accountId} holds ${balance} units; the journal takes ${-change}`,
+        { balanceUnits: Number(balance) },
       );
     }
   }

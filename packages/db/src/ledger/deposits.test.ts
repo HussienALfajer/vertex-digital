@@ -16,12 +16,19 @@ import {
   storedFiles,
   usdtDeposits,
   usdtTransfers,
+  walletAdjustments,
 } from '../schema/index.js';
 import { accountBalance } from './balance.js';
 import { postDepositCredit, postUsdtDepositCredit } from './deposits.js';
 import { LedgerError } from './errors.js';
 import { claimPaymentReference, paymentReferenceOwner } from './payment-references.js';
-import { findCustomerWallet, walletTimeline } from './wallet.js';
+import { postJournal } from './post-journal.js';
+import {
+  ensureCustomerWallet,
+  ensureSystemAccount,
+  findCustomerWallet,
+  walletTimeline,
+} from './wallet.js';
 
 /*
  * Deposits in the database (S03): the deposit guard, the checks, one pending deposit per
@@ -510,18 +517,51 @@ describe('payment references of deposits (rule SC14)', () => {
     expect((refused as LedgerError).details).toEqual({ kind: 'deposit', id: depositId });
   });
 
+  // The reference itself is valid (upper case), so the owner check is the one that refuses: the
+  // order in which PostgreSQL evaluates two failing checks is not guaranteed.
   it('refuses a claim with no owner or two', async () => {
-    const depositId = await deposit({ customerId: await customer() });
-    const owners = [
-      sql`null, null`,
-      sql`${depositId}, (select id from wallet_adjustments order by created_at limit 1)`,
-    ];
+    const customerId = await customer();
+    const depositId = await deposit({ customerId });
+    const adjustmentId = await db.transaction(async (tx) => {
+      const { journalId } = await postJournal(tx, {
+        idempotencyKey: `test:${newId()}`,
+        kind: 'adjustment',
+        postings: [
+          { accountId: await ensureCustomerWallet(tx, customerId), amountUnits: USD },
+          {
+            accountId: await ensureSystemAccount(tx, {
+              code: 'adjustments:manual_deposit',
+              kind: 'adjustments',
+              currency: 'USD',
+            }),
+            amountUnits: -USD,
+          },
+        ],
+      });
+      const id = newId();
+      await tx.insert(walletAdjustments).values({
+        id,
+        customerId,
+        direction: 'credit',
+        amountUsdUnits: USD,
+        category: 'manual_deposit',
+        reason: 'A test adjustment',
+        depositMethod: 'sham_cash',
+        externalReference: `ADJ-${id.slice(-12).toUpperCase()}`,
+        journalId,
+        idempotencyKey: newId(),
+        adminId: newId(),
+      });
+      return id;
+    });
+    // Both owners are real rows, so the owner check is the only one that can refuse them.
+    const owners = [sql`null, null`, sql`${depositId}, ${adjustmentId}`];
     for (const [index, values] of owners.entries()) {
       expect(
         await refusal(
           db.execute(
             sql`insert into payment_references (id, method, reference, deposit_id, wallet_adjustment_id)
-              values (${newId()}, 'sham_cash', ${`OWNERS-${index}-${newId().slice(-8)}`}, ${values})`,
+              values (${newId()}, 'sham_cash', ${`OWNERS-${index}-${newId().slice(-8).toUpperCase()}`}, ${values})`,
           ),
         ),
       ).toMatch(/owner_check/);

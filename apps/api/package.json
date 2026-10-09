@@ -13,7 +13,8 @@
     "admin:create": "node dist/cli/create-admin.js",
     "admin:reset-password": "node dist/cli/reset-password.js",
     "admin:reset-two-factor": "node dist/cli/reset-two-factor.js",
-    "telegram:fake-update": "node dist/cli/telegram-fake-update.js"
+    "telegram:fake-update": "node dist/cli/telegram-fake-update.js",
+    "order:place": "node dist/cli/place-order.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",
@@ -24,6 +25,7 @@
     "@sentry/nestjs": "^11.4.0",
     "@vertex-digital/contracts": "workspace:*",
     "@vertex-digital/db": "workspace:*",
+    "@vertex-digital/suppliers": "workspace:*",
     "altcha-lib": "^2.6.0",
     "better-auth": "^1.7.7",
     "drizzle-orm": "^0.45.3",

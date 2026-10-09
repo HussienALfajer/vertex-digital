@@ -129,6 +129,21 @@ export const envSchema = z
           .refine((value) => Buffer.from(value, 'base64').length === 32, 'Expected 32 bytes')
           .optional(),
       ),
+    /**
+     * The AES-256-GCM key of order codes and supplier webhook bodies (S08 rule C1): 32 bytes in
+     * base64, the same in the worker, separate from `SUPPLIER_KEYS_SECRET`. Required in
+     * production; derived locally.
+     */
+    ORDER_CODES_SECRET: z
+      .string()
+      .optional()
+      .transform((value) => (value && !isPlaceholder(value) ? value : undefined))
+      .pipe(
+        z
+          .string()
+          .refine((value) => Buffer.from(value, 'base64').length === 32, 'Expected 32 bytes')
+          .optional(),
+      ),
     /** Empty disables Sentry. */
     SENTRY_DSN: z
       .string()
@@ -150,6 +165,7 @@ export const envSchema = z
       'ADMIN_AUTH_SECRET',
       'ALTCHA_HMAC_KEY',
       'SUPPLIER_KEYS_SECRET',
+      'ORDER_CODES_SECRET',
     ] as const) {
       if (!env[key]) {
         context.addIssue({ code: 'custom', path: [key], message: `${key} is required` });
@@ -189,6 +205,8 @@ export const envSchema = z
       ALTCHA_HMAC_KEY: env.ALTCHA_HMAC_KEY ?? derive('altcha'),
       SUPPLIER_KEYS_SECRET:
         env.SUPPLIER_KEYS_SECRET ?? Buffer.from(derive('supplier-keys'), 'hex').toString('base64'),
+      ORDER_CODES_SECRET:
+        env.ORDER_CODES_SECRET ?? Buffer.from(derive('order-codes'), 'hex').toString('base64'),
       TELEGRAM_WEBHOOK_SECRET:
         env.TELEGRAM_WEBHOOK_SECRET ??
         (env.NODE_ENV === 'production' ? undefined : derive('telegram-webhook')),

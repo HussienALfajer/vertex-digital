@@ -196,7 +196,14 @@
       "OFFER_MISSING": "لم يعد المورد يعرض هذا العرض.",
       "REVIEW_CLOSED": "قُرِّر في هذه المراجعة من قبل.",
       "REVIEW_STALE": "تغيّر السعر المقترح منذ عرضه. راجع الرقم الجديد ثم أعد المحاولة.",
-      "DISPLAY_STEP_TOO_LARGE": "خطوة العرض تزيد أرخص باقة متوفرة بأكثر من 2%. اختر خطوة أصغر."
+      "DISPLAY_STEP_TOO_LARGE": "خطوة العرض تزيد أرخص باقة متوفرة بأكثر من 2%. اختر خطوة أصغر.",
+      "PURCHASES_STOPPED": "الشراء متوقف بمفتاح الطوارئ. أوقفه من صفحة المفاتيح ثم أعد المحاولة.",
+      "PRODUCT_UNAVAILABLE": "الباقة غير متاحة الآن. راجع مساراتها وسعرها ثم أعد المحاولة.",
+      "PRICE_CHANGED": "تغيّر سعر الباقة. حدّث الصفحة ثم أعد المحاولة.",
+      "ORDER_NOT_DECIDABLE": "حالة الطلب تغيّرت ولم يعد هذا القرار متاحاً. حدّث الصفحة.",
+      "ATTEMPT_NOT_RESOLVABLE": "هذه المحاولة أُغلقت أو لا تقبل هذا القرار. حدّث الصفحة.",
+      "CODES_COUNT_MISMATCH": "عدد الأكواد لا يساوي عدد الوحدات المسلّمة. أدخل كوداً لكل وحدة.",
+      "WEBHOOK_SIGNATURE_INVALID": "توقيع إشعار المورد غير صحيح."
     }
   },
   "changePassword": {
@@ -337,7 +344,9 @@
       "supplier_policy": "سياسة الموردين",
       "supplier_offer": "عرض مورد",
       "product_route": "مسار باقة",
-      "price_review": "مراجعة سعر"
+      "price_review": "مراجعة سعر",
+      "order": "طلب",
+      "order_policy": "سياسة الطلبات"
     },
     "fields": {
       "name": "الاسم",
@@ -431,7 +440,27 @@
       "degradedP90Ms": "زمن p90 أعلى من (متراجع)",
       "downSuccessBp": "نجاح أدنى من (متوقف)",
       "downConsecutiveErrors": "أخطاء متتالية (متوقف)",
-      "probeAfterMinutes": "الفحص بعد (دقائق)"
+      "probeAfterMinutes": "الفحص بعد (دقائق)",
+      "number": "رقم الطلب",
+      "quantity": "الكمية",
+      "totalUsdUnits": "الإجمالي",
+      "attemptId": "المحاولة",
+      "units": "الوحدات",
+      "costUsdUnits": "التكلفة",
+      "amountUsdUnits": "المبلغ",
+      "reason": "السبب",
+      "outcome": "النتيجة",
+      "items": "عدد الأكواد",
+      "itemId": "الكود",
+      "position": "الترتيب",
+      "firstPollSeconds": "أول سؤال (ثوانٍ)",
+      "fastPollSeconds": "السؤال السريع (ثوانٍ)",
+      "fastPollMinutes": "مدة السؤال السريع (دقائق)",
+      "slowPollSeconds": "السؤال البطيء (ثوانٍ)",
+      "hardLimitMinutes": "الحد الأقصى (دقائق)",
+      "reviewPollMinutes": "السؤال أثناء المراجعة (دقائق)",
+      "reviewPollHours": "مدة السؤال أثناء المراجعة (ساعات)",
+      "manualReminderMinutes": "تذكير الطلب اليدوي (دقائق)"
     },
     "actions": {
       "admin.created": "إنشاء حساب المدير",
@@ -506,7 +535,15 @@
       "product_route.restored": "استعادة مسار",
       "price_review.accepted": "قبول سعر",
       "price_review.paused": "إيقاف باقة من المراجعة",
-      "price_review.margin_adjusted": "تعديل الهامش من المراجعة"
+      "price_review.margin_adjusted": "تعديل الهامش من المراجعة",
+      "order.paid": "شراء طلب",
+      "order.cost_posted": "تسجيل تكلفة طلب",
+      "order.refunded": "استرداد طلب",
+      "order.poll_requested": "سؤال المورد مجدداً",
+      "order.attempt_resolved": "حسم محاولة تنفيذ",
+      "order.refund_decided": "قرار استرداد طلب",
+      "order.code_revealed": "كشف كود",
+      "order_policy.set": "تعديل سياسة الطلبات"
     }
   },
   "testCustomers": {
@@ -688,6 +725,10 @@
       "sham_cash": "إيداع شام كاش",
       "usdt_trc20": "إيداع USDT (TRC20)",
       "usdt_bep20": "إيداع USDT (BEP20)"
+    },
+    "orderKinds": {
+      "purchase": "شراء: {{product}} ({{number}})",
+      "refund": "استرداد: {{product}} ({{number}})"
     }
   },
   "switches": {

@@ -34,18 +34,29 @@ export const QUEUES = {
   suppliersBalances: 'suppliers.balances',
   /** The suppliers' health, its probes and stale costs, every minute (rules H1–H4, SY5). */
   suppliersHealth: 'suppliers.health',
+  /** Routes and sends one paid order's remaining units (S08 rules R1–R6). */
+  ordersFulfil: 'orders.fulfil',
+  /** Polls one open attempt, or sends it again with the same key (S08 rule F3). */
+  ordersPoll: 'orders.poll',
+  /** Re-sends, re-polls, holds and reminds what was missed, every minute (S08 rules F6, MN2). */
+  ordersSweep: 'orders.sweep',
+  /** Applies one stored supplier webhook (S08 rule F5). */
+  suppliersWebhook: 'suppliers.webhook',
 } as const;
 
 /**
  * Queues that keep one job per `singletonKey` queued and one active (pg-boss `stately`): a USDT
  * deposit's verification and a network's scan run one at a time, and a running job can queue its
  * successor (S04 rules U9, U12); a deposit's card is sent or edited by one job at a time, which
- * loads the deposit fresh (S05). The API and the worker create queues with these policies.
+ * loads the deposit fresh (S05); an order is routed, and an attempt polled, by one job at a time
+ * (S08 rules R1, F3). The API and the worker create queues with these policies.
  */
 export const QUEUE_POLICIES: Readonly<Record<string, 'stately'>> = {
   [QUEUES.depositsUsdtScan]: 'stately',
   [QUEUES.depositsUsdtVerify]: 'stately',
   [QUEUES.telegramDepositCard]: 'stately',
+  [QUEUES.ordersFulfil]: 'stately',
+  [QUEUES.ordersPoll]: 'stately',
 };
 
 export const emailSendPayloadSchema = z.object({ outboxId: z.uuid() });
@@ -89,3 +100,18 @@ export const suppliersSyncPayloadSchema = z.object({
 });
 
 export type SuppliersSyncPayload = z.infer<typeof suppliersSyncPayloadSchema>;
+
+/** `singletonKey` is the order id: one routing run queued and one active per order (rule R1). */
+export const ordersFulfilPayloadSchema = z.object({ orderId: z.uuid() });
+
+export type OrdersFulfilPayload = z.infer<typeof ordersFulfilPayloadSchema>;
+
+/** `singletonKey` is the attempt id, sent with `startAfter` = its `next_poll_at` (rule F3). */
+export const ordersPollPayloadSchema = z.object({ attemptId: z.uuid() });
+
+export type OrdersPollPayload = z.infer<typeof ordersPollPayloadSchema>;
+
+/** The stored `supplier_webhook_events` row (rule F5). */
+export const suppliersWebhookPayloadSchema = z.object({ eventId: z.uuid() });
+
+export type SuppliersWebhookPayload = z.infer<typeof suppliersWebhookPayloadSchema>;
