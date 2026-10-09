@@ -1,7 +1,11 @@
 import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
-import type { NotificationStreamEvent } from '@vertex-digital/contracts';
-import { CUSTOMER_NOTIFICATIONS_CHANNEL } from '@vertex-digital/db';
+import {
+  type NotificationStreamEvent,
+  orderCustomerStage,
+  orderStatusSchema,
+} from '@vertex-digital/contracts';
+import { CUSTOMER_NOTIFICATIONS_CHANNEL, CUSTOMER_ORDERS_CHANNEL } from '@vertex-digital/db';
 import type { Request, Response } from 'express';
 import pg from 'pg';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -27,7 +31,8 @@ interface Stream {
  * process (ADR 0009: one API process), fanned out to the open SSE streams by customer. Opened on
  * the first stream, so a process that serves none holds no connection. When the connection drops
  * it reconnects with backoff, then every stream gets `resync`: notifications are read from the
- * table, so none is lost.
+ * table, so none is lost. S09 rule LT2: the same connection listens on `customer_orders` and sends
+ * the customer's streams an `order` event (ids and status only).
  */
 @Injectable()
 export class NotificationStreamService implements OnApplicationShutdown {
@@ -143,12 +148,15 @@ export class NotificationStreamService implements OnApplicationShutdown {
     client.on('notification', (message) => {
       if (message.channel === CUSTOMER_NOTIFICATIONS_CHANNEL && message.payload)
         void this.deliver(message.payload);
+      if (message.channel === CUSTOMER_ORDERS_CHANNEL && message.payload)
+        this.deliverOrder(message.payload);
     });
     client.on('error', (error) => this.lost(client, error));
     client.on('end', () => this.lost(client, new Error('Connection ended')));
     try {
       await client.connect();
       await client.query(`LISTEN ${CUSTOMER_NOTIFICATIONS_CHANNEL}`);
+      await client.query(`LISTEN ${CUSTOMER_ORDERS_CHANNEL}`);
     } catch (error) {
       await client.end().catch(() => {});
       throw error;
@@ -180,6 +188,16 @@ export class NotificationStreamService implements OnApplicationShutdown {
         },
       );
     }, this.reconnectDelay);
+  }
+
+  /** Rule LT2: `<customer id>:<order id>:<status>` from the `orders_notify` trigger. */
+  private deliverOrder(payload: string): void {
+    const [customerId, orderId, status] = payload.split(':');
+    const parsed = orderStatusSchema.safeParse(status);
+    const streams = customerId ? this.streams.get(customerId) : undefined;
+    if (!streams || !orderId || !parsed.success) return;
+    const item = { orderId, status: parsed.data, stage: orderCustomerStage(parsed.data) };
+    for (const stream of streams) send(stream.response, 'order', item);
   }
 
   private async deliver(notificationId: string): Promise<void> {

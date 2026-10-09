@@ -246,6 +246,7 @@ describe('access', () => {
     ['GET', '/api/admin/suppliers/fake'],
     ['PUT', '/api/admin/suppliers/fake/credentials'],
     ['PATCH', '/api/admin/suppliers/fake'],
+    ['PUT', '/api/admin/suppliers/fake/validation-quota'],
     ['POST', '/api/admin/suppliers/fake/sync'],
     ['GET', '/api/admin/suppliers/fake/runs'],
     ['GET', '/api/admin/suppliers/fake/offers'],
@@ -462,6 +463,39 @@ describe('suppliers (rules SP1–SP3)', () => {
       before: { lowBalanceUsdUnits: usd(50) },
       after: { lowBalanceUsdUnits: usd(75) },
     });
+  });
+  it("sets the daily validation quota with today's usage, audited (S09 rule AD2)", async () => {
+    const list = await json<
+      {
+        code: string;
+        canValidatePlayer: boolean;
+        validationQuota: number;
+        validationsToday: number;
+      }[]
+    >(await get('/api/admin/suppliers'), 200);
+    const fake = list.find((row) => row.code === 'fake');
+    expect(fake).toMatchObject({ canValidatePlayer: true, validationsToday: expect.any(Number) });
+    expect(list.find((row) => row.code === 'manual')?.canValidatePlayer).toBe(false);
+    const before = fake?.validationQuota as number;
+    try {
+      const detail = await json<{ validationQuota: number }>(
+        await put('/api/admin/suppliers/fake/validation-quota', { quota: 250 }),
+        200,
+      );
+      expect(detail.validationQuota).toBe(250);
+      expect(
+        await body(await put('/api/admin/suppliers/fake/validation-quota', { quota: 1_000_001 })),
+      ).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
+      expect(
+        await body(await put('/api/admin/suppliers/nobody/validation-quota', { quota: 5 })),
+      ).toMatchObject({ status: 404, code: 'NOT_FOUND' });
+      const [entry] = (await auditOf(test.db, ids.fake))
+        .filter((row) => row.action === 'supplier.validation_quota_set')
+        .slice(-1);
+      expect(entry?.details).toEqual({ supplier: 'fake', before, after: 250 });
+    } finally {
+      await json(await put('/api/admin/suppliers/fake/validation-quota', { quota: before }), 200);
+    }
   });
 });
 

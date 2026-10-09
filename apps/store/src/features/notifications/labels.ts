@@ -54,6 +54,18 @@ export function notificationText(notification: CustomerNotification): string {
         product: notification.params.productNameAr,
         number: reference(notification.params.orderNumber),
       });
+    // S09: a reservation paid after a deposit, or cancelled by the system.
+    case 'order_paid':
+      return t('notifications.events.order_paid', {
+        product: notification.params.productNameAr,
+        number: reference(notification.params.orderNumber),
+      });
+    case 'order_cancelled':
+      return t('notifications.events.order_cancelled', {
+        product: notification.params.productNameAr,
+        number: reference(notification.params.orderNumber),
+        reason: t(`orders.cancelReasons.${notification.params.reason}`),
+      });
   }
 }
 

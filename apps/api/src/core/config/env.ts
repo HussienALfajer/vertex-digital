@@ -144,6 +144,25 @@ export const envSchema = z
           .refine((value) => Buffer.from(value, 'base64').length === 32, 'Expected 32 bytes')
           .optional(),
       ),
+    /**
+     * The HMAC-SHA-256 key of `player_checks.fields_hash` (S09 rule PV3): 32 bytes in base64, API
+     * only. Required in production; derived locally.
+     */
+    PLAYER_CHECK_SECRET: z
+      .string()
+      .optional()
+      .transform((value) => (value && !isPlaceholder(value) ? value : undefined))
+      .pipe(
+        z
+          .string()
+          .refine((value) => Buffer.from(value, 'base64').length === 32, 'Expected 32 bytes')
+          .optional(),
+      ),
+    /**
+     * The fake supplier's scripted state the worker's `supplier:fake` writes (S09: player checks
+     * read `--errors`); a relative path resolves from `apps/worker`, where the worker runs.
+     */
+    FAKE_SUPPLIER_STATE_FILE: z.string().min(1).default('./.data/fake-supplier.json'),
     /** Empty disables Sentry. */
     SENTRY_DSN: z
       .string()
@@ -166,6 +185,7 @@ export const envSchema = z
       'ALTCHA_HMAC_KEY',
       'SUPPLIER_KEYS_SECRET',
       'ORDER_CODES_SECRET',
+      'PLAYER_CHECK_SECRET',
     ] as const) {
       if (!env[key]) {
         context.addIssue({ code: 'custom', path: [key], message: `${key} is required` });
@@ -207,6 +227,8 @@ export const envSchema = z
         env.SUPPLIER_KEYS_SECRET ?? Buffer.from(derive('supplier-keys'), 'hex').toString('base64'),
       ORDER_CODES_SECRET:
         env.ORDER_CODES_SECRET ?? Buffer.from(derive('order-codes'), 'hex').toString('base64'),
+      PLAYER_CHECK_SECRET:
+        env.PLAYER_CHECK_SECRET ?? Buffer.from(derive('player-check'), 'hex').toString('base64'),
       TELEGRAM_WEBHOOK_SECRET:
         env.TELEGRAM_WEBHOOK_SECRET ??
         (env.NODE_ENV === 'production' ? undefined : derive('telegram-webhook')),

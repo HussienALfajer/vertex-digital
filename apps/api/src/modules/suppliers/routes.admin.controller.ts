@@ -11,6 +11,7 @@ import {
   Put,
   Req,
   SerializeOptions,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
@@ -26,6 +27,7 @@ import type { Request } from 'express';
 import type { z } from 'zod';
 import { AdminRoute, CurrentAdmin, Sensitive } from '../../core/access/index.js';
 import { requestMeta } from '../../core/http/request-meta.js';
+import { StoreRevalidateInterceptor } from '../../core/jobs/index.js';
 import type { AdminIdentity } from '../admin/index.js';
 import type { Actor } from '../catalog/index.js';
 import { RoutesService } from './routes.service.js';
@@ -37,6 +39,7 @@ const actor = (admin: AdminIdentity, request: Request): Actor => ({
 
 /** A product's routes in the panel (S07 rules RT1–RT7): each answer is the product's routing. */
 @ApiTags('suppliers')
+@UseInterceptors(StoreRevalidateInterceptor)
 @Controller('admin')
 export class RoutesAdminController {
   constructor(private readonly routes: RoutesService) {}

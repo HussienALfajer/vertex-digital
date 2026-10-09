@@ -8,7 +8,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { NotificationStreamService } from '../src/modules/notifications/notification-stream.service.js';
 import { NotificationsService } from '../src/modules/notifications/notifications.service.js';
-import { api, body, removeAccounts, seedCustomer } from './helpers.js';
+import { api, body, openCustomerStream, removeAccounts, seedCustomer } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
 
 /*
@@ -62,71 +62,7 @@ async function newest(customerId: string): Promise<string> {
   return row?.id as string;
 }
 
-interface StreamEvent {
-  event: string;
-  data: Record<string, unknown>;
-}
-
-/** An open SSE stream: its events in order, and whether the server ended it. */
-async function openStream(cookie: string) {
-  const response = await client.get('/api/notifications/stream', { cookie });
-  const events: StreamEvent[] = [];
-  const waiters: (() => void)[] = [];
-  let ended = false;
-  let comments = 0;
-  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
-  const decoder = new TextDecoder();
-  void (async () => {
-    let buffer = '';
-    try {
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let end = buffer.indexOf('\n\n');
-        while (end >= 0) {
-          const block = buffer.slice(0, end);
-          buffer = buffer.slice(end + 2);
-          if (block.startsWith(':')) comments += 1;
-          else {
-            const event = /^event: (.*)$/m.exec(block)?.[1] ?? '';
-            const data = JSON.parse(/^data: (.*)$/m.exec(block)?.[1] ?? '{}');
-            events.push({ event, data });
-          }
-          end = buffer.indexOf('\n\n');
-        }
-        for (const wake of waiters.splice(0)) wake();
-      }
-    } catch {
-      // Cancelled by the test.
-    }
-    ended = true;
-    for (const wake of waiters.splice(0)) wake();
-  })();
-  const until = async (done: () => boolean) => {
-    const deadline = Date.now() + 5_000;
-    while (!done()) {
-      if (Date.now() > deadline) throw new Error(`Timed out; events: ${JSON.stringify(events)}`);
-      await new Promise<void>((resolve) => {
-        waiters.push(resolve);
-        setTimeout(resolve, 100);
-      });
-    }
-  };
-  return {
-    response,
-    events,
-    ended: () => ended,
-    comments: () => comments,
-    /** Waits for the `count`th event (1-based). */
-    event: async (count: number) => {
-      await until(() => events.length >= count);
-      return events[count - 1] as StreamEvent;
-    },
-    waitEnded: () => until(() => ended),
-    close: () => reader.cancel().catch(() => {}),
-  };
-}
+const openStream = (cookie: string) => openCustomerStream(client, cookie);
 
 describe('access', () => {
   it('answers 401 without a customer session, and to the admin', async () => {
@@ -421,7 +357,7 @@ describe('the live stream (rule NT6)', () => {
     await stream.event(1);
     await test.db.execute(
       sql`select pg_terminate_backend(pid) from pg_stat_activity
-          where usename = current_user and query = 'LISTEN customer_notifications'`,
+          where usename = current_user and query like 'LISTEN customer_%'`,
     );
     expect(await stream.event(2)).toEqual({ event: 'resync', data: {} });
     // Listening again: a new notification arrives.

@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Header, Post, Query, Req, SerializeOptions } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Post,
+  Query,
+  Req,
+  SerializeOptions,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
   type ChangeRate,
@@ -12,11 +22,13 @@ import type { Request } from 'express';
 import { AdminRoute, CurrentAdmin, Sensitive } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
 import { requestMeta } from '../../core/http/request-meta.js';
+import { StoreRevalidateInterceptor } from '../../core/jobs/index.js';
 import type { AdminIdentity } from '../admin/index.js';
 import { RatesService } from './rates.service.js';
 
 /** The admin's exchange rate (S03, F04): history, and a change with re-authentication (FX1). */
 @ApiTags('rates')
+@UseInterceptors(StoreRevalidateInterceptor)
 @Controller('admin')
 export class RatesAdminController {
   constructor(private readonly rates: RatesService) {}

@@ -17,6 +17,7 @@ import {
   ledgerAccounts,
   newId,
   notificationPreferences,
+  playerChecks,
   storeSwitchChanges,
 } from '@vertex-digital/db';
 import { type Challenge, solveChallenge } from 'altcha-lib';
@@ -133,6 +134,8 @@ export async function removeAccounts(db: Database, ids: string[]): Promise<void>
   if (ids.length === 0) return;
   await db.delete(emailOutbox).where(inArray(emailOutbox.customerId, ids));
   await db.delete(notificationPreferences).where(inArray(notificationPreferences.customerId, ids));
+  // S09: the player-check cache is not a record.
+  await db.delete(playerChecks).where(inArray(playerChecks.customerId, ids));
   await db.delete(customers).where(and(inArray(customers.id, ids), withoutWallet(db)));
   await db.delete(adminUsers).where(inArray(adminUsers.id, ids));
 }
@@ -154,6 +157,7 @@ export async function removeLeftovers(db: Database): Promise<void> {
   await db
     .delete(notificationPreferences)
     .where(inArray(notificationPreferences.customerId, leftovers));
+  await db.delete(playerChecks).where(inArray(playerChecks.customerId, leftovers));
   await db
     .delete(customers)
     .where(and(like(customers.email, `%${TEST_EMAIL_DOMAIN}`), withoutWallet(db)));
@@ -389,4 +393,70 @@ export async function setSwitches(
     channel: 'admin' as const,
   }));
   if (changes.length > 0) await db.insert(storeSwitchChanges).values(changes);
+}
+
+export interface StreamEvent {
+  event: string;
+  data: Record<string, unknown>;
+}
+
+/** An open SSE stream (S05 rule NT6): its events in order, and whether the server ended it. */
+export async function openCustomerStream(client: ReturnType<typeof api>, cookie: string) {
+  const response = await client.get('/api/notifications/stream', { cookie });
+  const events: StreamEvent[] = [];
+  const waiters: (() => void)[] = [];
+  let ended = false;
+  let comments = 0;
+  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+  const decoder = new TextDecoder();
+  void (async () => {
+    let buffer = '';
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let end = buffer.indexOf('\n\n');
+        while (end >= 0) {
+          const block = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          if (block.startsWith(':')) comments += 1;
+          else {
+            const event = /^event: (.*)$/m.exec(block)?.[1] ?? '';
+            const data = JSON.parse(/^data: (.*)$/m.exec(block)?.[1] ?? '{}');
+            events.push({ event, data });
+          }
+          end = buffer.indexOf('\n\n');
+        }
+        for (const wake of waiters.splice(0)) wake();
+      }
+    } catch {
+      // Cancelled by the test.
+    }
+    ended = true;
+    for (const wake of waiters.splice(0)) wake();
+  })();
+  const until = async (done: () => boolean) => {
+    const deadline = Date.now() + 5_000;
+    while (!done()) {
+      if (Date.now() > deadline) throw new Error(`Timed out; events: ${JSON.stringify(events)}`);
+      await new Promise<void>((resolve) => {
+        waiters.push(resolve);
+        setTimeout(resolve, 100);
+      });
+    }
+  };
+  return {
+    response,
+    events,
+    ended: () => ended,
+    comments: () => comments,
+    /** Waits for the `count`th event (1-based). */
+    event: async (count: number) => {
+      await until(() => events.length >= count);
+      return events[count - 1] as StreamEvent;
+    },
+    waitEnded: () => until(() => ended),
+    close: () => reader.cancel().catch(() => {}),
+  };
 }

@@ -167,6 +167,36 @@ export class FilesService {
     };
   }
 
+  /**
+   * A catalog image fitted to `width` (S09 rule SF5), as WebP, never upscaled: made once from the
+   * stored image with the same decoder limit, kept beside it, then served like it. Null when the
+   * file is not a catalog image.
+   */
+  async catalogVariant(fileId: string, width: number): Promise<ServedFile | null> {
+    const [row] = await this.db
+      .select({ storageKey: storedFiles.storageKey, width: storedFiles.width })
+      .from(storedFiles)
+      .where(and(eq(storedFiles.id, fileId), eq(storedFiles.kind, 'catalog_image')));
+    if (!row) return null;
+    if (row.width !== null && row.width <= width) return this.serve(fileId, 'catalog_image');
+    const key = row.storageKey.replace(/\.webp$/, `.w${width}.webp`);
+    if (!(await this.storage.exists(key))) {
+      const resized = await sharp(await this.storage.read(row.storageKey), {
+        limitInputPixels: CATALOG_IMAGE_MAX_INPUT_PIXELS,
+        failOn: 'error',
+      })
+        .resize({ width, withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toBuffer();
+      await this.storage.putOnce(key, resized);
+    }
+    return {
+      contentType: 'image/webp',
+      accelPath: this.storage.accelPath(key),
+      read: () => this.storage.read(key),
+    };
+  }
+
   /** The size of each of `fileIds` that is a stored file of `kind`. */
   async dimensions(
     fileIds: readonly string[],

@@ -180,6 +180,8 @@ const purchase = (
       quantity: 1,
       fields: { player_id: '5123456789' },
       expectedUnitPriceUsdUnits: item.price,
+      // The fake checks player ids (S09 rule PV8): these tests confirm the id themselves.
+      confirmPlayer: true,
       ...overrides,
     },
   });
@@ -390,7 +392,13 @@ describe('POST /api/orders (rules O1–O6)', () => {
     });
     const missing = await client.post('/api/orders', {
       cookie: customer.cookie,
-      body: { productId: item.id, quantity: 1, fields: {}, expectedUnitPriceUsdUnits: item.price },
+      body: {
+        productId: item.id,
+        quantity: 1,
+        fields: {},
+        expectedUnitPriceUsdUnits: item.price,
+        confirmPlayer: true,
+      },
     });
     expect(await body(missing)).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
     expect(await balance(customer)).toBe(usd(10));

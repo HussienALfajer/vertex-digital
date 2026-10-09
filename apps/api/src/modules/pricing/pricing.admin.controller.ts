@@ -11,6 +11,7 @@ import {
   Query,
   Req,
   SerializeOptions,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
@@ -34,6 +35,7 @@ import type { z } from 'zod';
 import { AdminRoute, CurrentAdmin, Sensitive } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
 import { requestMeta } from '../../core/http/request-meta.js';
+import { StoreRevalidateInterceptor } from '../../core/jobs/index.js';
 import type { AdminIdentity } from '../admin/index.js';
 import { PricingService } from './pricing.service.js';
 
@@ -42,6 +44,7 @@ import { PricingService } from './pricing.service.js';
  * changes and margin adjustments re-authenticate.
  */
 @ApiTags('pricing')
+@UseInterceptors(StoreRevalidateInterceptor)
 @Controller('admin/pricing')
 export class PricingAdminController {
   constructor(private readonly pricing: PricingService) {}

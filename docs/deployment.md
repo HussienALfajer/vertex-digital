@@ -155,7 +155,7 @@ ssh vertex vertexdigital-deploy
 ssh vertex "systemctl enable --now vertexdigital-health.timer"
 ```
 
-`provision.sh` creates the owner and app roles with the app role's default privileges before the first migration, the `pgboss` schema owned by the owner, revokes `CONNECT` and `TEMPORARY` from `PUBLIC`, and generates the database passwords and app secrets (`CUSTOMER_AUTH_SECRET`, `ADMIN_AUTH_SECRET`, `ALTCHA_HMAC_KEY`, `SUPPLIER_KEYS_SECRET`, `ORDER_CODES_SECRET`, `STORE_REVALIDATE_SECRET`) into `shared/.env`, and the owner role's URL into `/etc/vertexdigital/owner.env`, without printing them. It issues each certificate through a temporary HTTP-only site, so a missing certificate can never break nginx for the other sites. Re-running it reinstalls the configuration files from `origin/main` (pass another ref as an argument) and leaves the database and secrets alone.
+`provision.sh` creates the owner and app roles with the app role's default privileges before the first migration, the `pgboss` schema owned by the owner, revokes `CONNECT` and `TEMPORARY` from `PUBLIC`, and generates the database passwords and app secrets (`CUSTOMER_AUTH_SECRET`, `ADMIN_AUTH_SECRET`, `ALTCHA_HMAC_KEY`, `SUPPLIER_KEYS_SECRET`, `ORDER_CODES_SECRET`, `PLAYER_CHECK_SECRET`, `STORE_REVALIDATE_SECRET`) into `shared/.env`, and the owner role's URL into `/etc/vertexdigital/owner.env`, without printing them. It issues each certificate through a temporary HTTP-only site, so a missing certificate can never break nginx for the other sites. Re-running it reinstalls the configuration files from `origin/main` (pass another ref as an argument) and leaves the database and secrets alone.
 
 ## Changing configuration
 
@@ -174,6 +174,10 @@ ssh vertex "systemctl enable --now vertexdigital-health.timer"
 1. Before the first deploy that contains S08, add `ORDER_CODES_SECRET=$(openssl rand -base64 32)` to `shared/.env`: a key of its own, not `SUPPLIER_KEYS_SECRET` (read by the API and the worker; both refuse to start in production without it). `provision.sh` generates it on a new server; an existing `shared/.env` needs it added by hand.
 2. Never change it once an order code is stored: it is the only way to show the codes customers bought, and the stored supplier webhooks. Back it up with the database backups' credentials, never in the repository.
 3. nginx limits purchases (`vdpurchase`), code reveals (`vdreveal`) and supplier webhooks (`vdwebhook`, 64 KB bodies): re-run `provision.sh` after the merge so the new zones and locations are installed.
+
+### Player checks (S09)
+1. Before the first deploy that contains S09, add `PLAYER_CHECK_SECRET=$(openssl rand -base64 32)` to `shared/.env`: a key of its own (read by the API only; it refuses to start in production without it). `provision.sh` generates it on a new server; an existing `shared/.env` needs it added by hand. Changing it only empties the player-check cache (24 hours at most).
+2. nginx limits player checks (`vdplayercheck`, POST only): re-run `provision.sh` after the merge so the zone and its location are installed.
 
 ### Telegram admin bot (S05, ADR 0019)
 1. The owner creates the bot with BotFather (`/newbot`) and keeps its token private.

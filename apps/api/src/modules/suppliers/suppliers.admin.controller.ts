@@ -12,6 +12,7 @@ import {
   Query,
   Req,
   SerializeOptions,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
@@ -33,12 +34,15 @@ import {
   syncRunSchema,
   type UpdateSupplier,
   updateSupplierSchema,
+  type ValidationQuota,
+  validationQuotaSchema,
 } from '@vertex-digital/contracts';
 import type { Request } from 'express';
 import type { z } from 'zod';
 import { AdminRoute, CurrentAdmin, Sensitive } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
 import { requestMeta } from '../../core/http/request-meta.js';
+import { StoreRevalidateInterceptor } from '../../core/jobs/index.js';
 import type { AdminIdentity } from '../admin/index.js';
 import type { Actor } from '../catalog/index.js';
 import { SuppliersService } from './suppliers.service.js';
@@ -53,6 +57,7 @@ const actor = (admin: AdminIdentity, request: Request): Actor => ({
  * re-authenticate; "sync now" is limited to one a minute per supplier in the service.
  */
 @ApiTags('suppliers')
+@UseInterceptors(StoreRevalidateInterceptor)
 @Controller('admin/suppliers')
 export class SuppliersAdminController {
   constructor(private readonly suppliers: SuppliersService) {}
@@ -141,6 +146,21 @@ export class SuppliersAdminController {
     @Req() request: Request,
   ) {
     return this.suppliers.update(actor(admin, request), code, body);
+  }
+
+  /** S09 rule AD2: 0 turns player checks off for this supplier. */
+  @Put(':code/validation-quota')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: supplierDetailSchema })
+  @ApiOkResponse({ description: 'The supplier', standardSchema: supplierDetailSchema })
+  setValidationQuota(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('code') code: string,
+    @Body({ schema: validationQuotaSchema }) body: ValidationQuota,
+    @Req() request: Request,
+  ) {
+    return this.suppliers.setValidationQuota(actor(admin, request), code, body);
   }
 
   /** Rule SY1: the new run, or the one already running. */

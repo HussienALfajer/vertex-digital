@@ -6,15 +6,18 @@ import {
   ParseUUIDPipe,
   Query,
   SerializeOptions,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { type PageQuery, pageQuerySchema, productPricePageSchema } from '@vertex-digital/contracts';
 import { AdminRoute } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
+import { StoreRevalidateInterceptor } from '../../core/jobs/index.js';
 import { PricingService } from './pricing.service.js';
 
 /** A product's stored prices (S07 rule P2), for the routes drawer. */
 @ApiTags('pricing')
+@UseInterceptors(StoreRevalidateInterceptor)
 @Controller('admin/catalog/products')
 export class ProductPricesAdminController {
   constructor(private readonly pricing: PricingService) {}

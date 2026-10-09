@@ -7,6 +7,7 @@ export {
   refundRemaining,
 } from './outcome.js';
 export {
+  checkOrderFields,
   OrderError,
   type PlayerCheckLookup,
   type PurchaseInput,

@@ -987,3 +987,103 @@ describe('concurrency', () => {
     expect(required.filter((row) => row.archivedAt === null)).toHaveLength(1);
   });
 });
+
+describe('store routes (S09 rules SF1, SF5, SS1–SS3, SR2, AD1)', () => {
+  it('serve the storefront, a game page and the search index publicly, cacheable, without cookies', async () => {
+    const category = await newCategory();
+    const shown = await activeGame(category.id);
+    const paused = await newGame(category.id);
+    for (const path of ['/api/catalog/storefront', '/api/catalog/search-index']) {
+      const response = await client.get(path, { cookie: customerCookie });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('public, max-age=30');
+      expect(response.headers.getSetCookie()).toEqual([]);
+    }
+    const storefront = await json<{
+      service: string;
+      categories: { slug: string; games: { id: string; status: string }[] }[];
+    }>(await client.get('/api/catalog/storefront'), 200);
+    expect(['normal', 'slow']).toContain(storefront.service);
+    const section = storefront.categories.find((entry) => entry.slug === category.slug);
+    // A product with no route is out of stock: the game shows as unavailable (rule SS1).
+    expect(section?.games).toEqual([
+      expect.objectContaining({ id: shown.id, status: 'unavailable' }),
+    ]);
+    expect(JSON.stringify(storefront)).not.toContain(paused.id);
+
+    const [row] = await test.db.select().from(catalogGames).where(eq(catalogGames.id, shown.id));
+    const page = await json<{
+      game: { id: string; status: string };
+      fields: { key: string }[];
+      products: { available: boolean; priceUsdUnits: number | null; playerCheck: boolean }[];
+    }>(await client.get(`/api/catalog/games/${row?.slug}`), 200);
+    expect(page.game).toMatchObject({ id: shown.id, status: 'unavailable' });
+    expect(page.fields.map((field) => field.key)).toEqual(['player_id']);
+    expect(page.products).toEqual([
+      expect.objectContaining({ available: false, priceUsdUnits: null, playerCheck: false }),
+    ]);
+    const [pausedRow] = await test.db
+      .select()
+      .from(catalogGames)
+      .where(eq(catalogGames.id, paused.id));
+    expect(
+      await json(await client.get(`/api/catalog/games/${pausedRow?.slug}`), 404),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    expect((await client.get('/api/catalog/games/no-such-game')).status).toBe(404);
+    await json(await post(`/games/${shown.id}/archive`), 200);
+    expect((await client.get(`/api/catalog/games/${row?.slug}`)).status).toBe(404);
+  });
+
+  it('stores search terms normalized and unique, audited with the game, in the index', async () => {
+    const category = await newCategory();
+    const game = await activeGame(category.id);
+    expect(
+      await json(await patch(`/games/${game.id}`, { searchTerms: ['ببجي', ' بَبجي '] }), 400),
+    ).toMatchObject({ code: 'VALIDATION_FAILED' });
+    const updated = await json<{ searchTerms: string[] }>(
+      await patch(`/games/${game.id}`, { searchTerms: ['PUBG', 'بوبجي', 'أبجي'] }),
+      200,
+    );
+    expect(updated.searchTerms).toEqual(['pubg', 'بوبجي', 'ابجي']);
+    const entries = await auditOf(test.db, game.id);
+    const termsEntry = entries.find(
+      (entry) =>
+        entry.action === 'catalog_game.updated' &&
+        'searchTerms' in ((entry.details as { after?: object }).after ?? {}),
+    );
+    expect(termsEntry?.details).toMatchObject({
+      before: { searchTerms: [] },
+      after: { searchTerms: ['pubg', 'بوبجي', 'ابجي'] },
+    });
+    const index = await json<{ games: { id: string; searchTerms: string[] }[] }>(
+      await client.get('/api/catalog/search-index'),
+      200,
+    );
+    expect(index.games.find((entry) => entry.id === game.id)?.searchTerms).toEqual([
+      'pubg',
+      'بوبجي',
+      'ابجي',
+    ]);
+  });
+
+  it('serves a catalog image at the store widths, made once, never upscaled (rule SF5)', async () => {
+    const response = await client.post('/api/admin/catalog/images', {
+      cookie: admin.cookie,
+      form: form(await image('png', 800)),
+    });
+    const { id } = await json<{ id: string }>(response, 201);
+    const at = async (width: string) => {
+      const served = await client.get(`/api/catalog/images/${id}?w=${width}`);
+      expect(served.status).toBe(200);
+      expect(served.headers.get('content-type')).toBe('image/webp');
+      expect(served.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+      return sharp(Buffer.from(await served.arrayBuffer())).metadata();
+    };
+    expect((await at('320')).width).toBe(320);
+    expect((await at('320')).width).toBe(320);
+    expect((await at('1280')).width).toBe(800);
+    expect(await json(await client.get(`/api/catalog/images/${id}?w=500`), 400)).toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+  });
+});

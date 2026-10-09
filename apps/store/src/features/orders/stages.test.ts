@@ -1,6 +1,6 @@
-import { ORDER_STAGES } from '@vertex-digital/contracts';
+import { ORDER_STAGES, ORDER_TIMELINE_STEPS } from '@vertex-digital/contracts';
 import { describe, expect, it } from 'vitest';
-import { STAGE_TONES, stageSentence, stageText } from './stages';
+import { STAGE_TONES, stageSentence, stageText, stepText } from './stages';
 
 describe('order stages (rule O13)', () => {
   it('names every stage with a sentence and a tone', () => {
@@ -9,6 +9,14 @@ describe('order stages (rule O13)', () => {
       expect(stageSentence({ stage, refundReason: null })).not.toContain('orders.');
       expect(STAGE_TONES[stage]).toBeTruthy();
     }
+    for (const step of ORDER_TIMELINE_STEPS) expect(stepText(step)).not.toContain('orders.');
+  });
+
+  it('says why a reservation was cancelled (S09 rule RS9)', () => {
+    expect(stageSentence({ stage: 'cancelled', refundReason: null, cancelReason: 'expired' })).toBe(
+      'انتهت مدة الحجز (24 ساعة)',
+    );
+    expect(stageSentence({ stage: 'cancelled', refundReason: null })).toBe('أُلغي هذا الطلب');
   });
 
   it('says why an order was refunded, in plain words', () => {

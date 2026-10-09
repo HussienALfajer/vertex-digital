@@ -42,6 +42,7 @@ import type { z } from 'zod';
 import { AdminRoute, CurrentAdmin } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
 import { requestMeta } from '../../core/http/request-meta.js';
+import { StoreRevalidateInterceptor } from '../../core/jobs/index.js';
 import { RateLimit } from '../../core/rate-limit/rate-limit.js';
 import type { AdminIdentity } from '../admin/index.js';
 import { uploadBody } from '../files/index.js';
@@ -59,6 +60,7 @@ const actor = (admin: AdminIdentity, request: Request): Actor => ({
 
 /** The catalog in the panel (S06, F08): images, categories and games. Never cached. */
 @ApiTags('catalog')
+@UseInterceptors(StoreRevalidateInterceptor)
 @Controller('admin/catalog')
 export class CatalogAdminController {
   constructor(private readonly catalog: CatalogService) {}

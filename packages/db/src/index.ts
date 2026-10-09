@@ -9,5 +9,6 @@ export * from './notifications/index.js';
 export * from './orders/index.js';
 export * from './pricing/index.js';
 export * from './schema/index.js';
+export * from './store/index.js';
 export * from './suppliers/index.js';
 export * from './telegram/index.js';

@@ -16,6 +16,7 @@ import {
   LedgerError,
   type PaymentReferenceOwner,
   queueDepositCard,
+  queuePayWaiting,
   recordAudit,
   txidHolders,
   usdtDeposits,
@@ -126,6 +127,8 @@ export class UsdtReviewService {
             creditedUsdUnits,
           });
           await queueDepositCard(tx, this.jobs, deposit.id);
+          // A02 (S09 rule RS4): the customer's reservations are paid by the worker.
+          await queuePayWaiting(tx, this.jobs, deposit.customerId);
           return credited.deposit;
         } catch (error) {
           if (error instanceof LedgerError && error.code === 'EXTERNAL_REFERENCE_TAKEN') {
@@ -139,7 +142,6 @@ export class UsdtReviewService {
           throw error;
         }
       });
-      // A02: paying `awaiting_balance` orders after a credit hooks in here (S08/S09).
       return { deposit: await this.review.view(row), created: true };
     } catch (error) {
       if (error instanceof AlreadyDecided || isUniqueViolation(error)) {

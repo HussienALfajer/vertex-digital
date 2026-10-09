@@ -96,6 +96,15 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # Player checks (S09 rule PV4): POST only (the zone's key is empty otherwise), on top of the
+    # API's per-customer and per-address counters.
+    location ~* ^/api/player-checks/?$ {
+        limit_req zone=vdplayercheck burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Code reveals (S08 rule C2), on top of the API's per-customer counter.
     location ~* ^/api/orders/[0-9a-f-]{36}/codes/[0-9a-f-]{36}/reveal/?$ {
         limit_req zone=vdreveal burst=10 nodelay;

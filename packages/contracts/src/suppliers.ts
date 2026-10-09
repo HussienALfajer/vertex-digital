@@ -66,6 +66,17 @@ export function supplierAvailable(code: SupplierCode, options: { fakeEnabled: bo
 }
 
 /** Suppliers that list offers (rule SY1); `manual` offers are the admin's. */
+/**
+ * S09 rule PV1: this build has an adapter for the supplier that checks player ids. Each real
+ * adapter's PR adds its code (Q12).
+ */
+export function supplierChecksPlayers(
+  code: SupplierCode,
+  options: { fakeEnabled: boolean },
+): boolean {
+  return code === 'fake' && supplierAvailable(code, options);
+}
+
 export function supplierHasCatalog(code: SupplierCode): boolean {
   return code !== 'manual';
 }

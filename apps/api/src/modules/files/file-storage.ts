@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -23,6 +23,24 @@ export class FileStorage {
     const path = this.path(key);
     await mkdir(dirname(path), { recursive: true, mode: 0o750 });
     await writeFile(path, bytes, { flag: 'wx', mode: 0o640 });
+  }
+
+  /** Writes a derived file (an image width, S09) unless another request wrote it first. */
+  async putOnce(key: string, bytes: Buffer): Promise<void> {
+    try {
+      await this.put(key, bytes);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+  }
+
+  async exists(key: string): Promise<boolean> {
+    try {
+      await access(this.path(key));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   read(key: string): Promise<Buffer> {

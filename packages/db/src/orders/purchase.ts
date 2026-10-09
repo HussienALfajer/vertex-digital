@@ -79,7 +79,13 @@ export interface PurchaseInput {
    */
   playerCheck: (
     tx: Transaction,
-    order: { gameId: string; productKind: 'direct' | 'code'; fields: Record<string, string> },
+    order: {
+      productId: string;
+      gameId: string;
+      productKind: 'direct' | 'code';
+      isTest: boolean;
+      fields: Record<string, string>;
+    },
   ) => Promise<PlayerCheckLookup | null>;
   ipAddress?: string | null;
   userAgent?: string | null;
@@ -264,8 +270,10 @@ export async function purchaseOrder(
   let playerCheck: PlayerCheckState = 'none';
   let playerName: string | null = null;
   const lookup = await input.playerCheck(tx, {
+    productId: product.id,
     gameId: product.gameId,
     productKind: product.kind,
+    isTest: customer.isTest,
     fields,
   });
   if (lookup?.result === 'valid') {

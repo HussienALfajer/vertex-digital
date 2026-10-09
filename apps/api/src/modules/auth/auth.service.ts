@@ -133,6 +133,15 @@ export class AuthService {
     return row?.id ?? null;
   }
 
+  /** The customer's test flag (S08 rule R4, S09 rule PV2); false for an unknown id. */
+  async isTestCustomer(customerId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ isTest: customers.isTest })
+      .from(customers)
+      .where(eq(customers.id, customerId));
+    return row?.isTest ?? false;
+  }
+
   /** Ids of customers whose email starts with `prefix`, case-insensitive (S03 deposit queue). */
   async idsByEmailPrefix(prefix: string): Promise<string[]> {
     const literal = prefix.replace(/[\\%_]/g, (char) => `\\${char}`);

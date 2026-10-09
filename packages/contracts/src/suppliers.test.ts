@@ -17,6 +17,7 @@ import {
   SUPPLIER_CREDENTIAL_FIELDS,
   SUPPLIER_POLICY_DEFAULTS,
   supplierAvailable,
+  supplierChecksPlayers,
   supplierHasCatalog,
   supplierHealth,
   supplierPolicySchema,
@@ -383,5 +384,13 @@ describe('probes (rule H3)', () => {
         P,
       ),
     ).toEqual(window);
+  });
+});
+
+describe('supplierChecksPlayers (S09 rule PV1)', () => {
+  it('knows the adapters that check player ids in this build', () => {
+    expect(supplierChecksPlayers('fake', { fakeEnabled: true })).toBe(true);
+    expect(supplierChecksPlayers('fake', { fakeEnabled: false })).toBe(false);
+    expect(supplierChecksPlayers('shop2topup', { fakeEnabled: true })).toBe(false);
   });
 });

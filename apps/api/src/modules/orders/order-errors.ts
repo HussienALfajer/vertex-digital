@@ -14,6 +14,9 @@ const STATUS: Partial<Record<ErrorCode, 400 | 404 | 409>> = {
   IDEMPOTENCY_KEY_REUSED: 409,
   ORDER_NOT_DECIDABLE: 409,
   ATTEMPT_NOT_RESOLVABLE: 409,
+  PLAYER_NOT_CONFIRMED: 409,
+  RESERVATIONS_LIMIT_REACHED: 409,
+  ORDER_NOT_CANCELLABLE: 409,
 };
 
 /** An `OrderError` or `LedgerError` as the API answers it; anything else is rethrown as is. */

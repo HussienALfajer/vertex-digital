@@ -1,5 +1,6 @@
 import {
   type AdjustmentCategory,
+  type CancelReason,
   type DepositRejectReason,
   type EmailParams,
   type EmailTemplate,
@@ -67,6 +68,13 @@ const REFUND_REASON_LABELS: Record<RefundReason, string> = {
   routes_exhausted: 'لا يتوفّر مورد لهذه الباقة الآن',
   input_rejected: 'بيانات الحساب مرفوضة',
   admin: 'قرّرت الإدارة استرداده',
+};
+
+/** The words of a reservation cancelled by the system (S09 rule RS9). */
+const CANCEL_REASON_LABELS: Record<Exclude<CancelReason, 'customer'>, string> = {
+  expired: 'انتهت مدة الحجز (24 ساعة)',
+  price_rose: 'تغيّر سعر الباقة',
+  product_changed: 'تغيّرت بيانات الباقة',
 };
 
 const orderPage = (orderId: string) => ({ label: 'عرض الطلب', path: `/orders/${orderId}` });
@@ -208,6 +216,14 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     lines: [
       `لم نتمكن من تنفيذ طلبك ${orderNumber} (${productNameAr})، فأُعيد ${formatUsd(refundedUsdUnits)} كاملاً إلى رصيد محفظتك بتاريخ ${formatTime(at)}.`,
       `السبب: ${REFUND_REASON_LABELS[reason]}.`,
+    ],
+    link: orderPage(orderId),
+  }),
+  customer_order_cancelled: ({ at, orderId, orderNumber, productNameAr, reason }) => ({
+    subject: `أُلغي طلبك المحجوز ${orderNumber}`,
+    lines: [
+      `أُلغي طلبك المحجوز ${orderNumber} (${productNameAr}) بتاريخ ${formatTime(at)}، ولم يُخصم من رصيدك شيء.`,
+      `السبب: ${CANCEL_REASON_LABELS[reason]}.`,
     ],
     link: orderPage(orderId),
   }),

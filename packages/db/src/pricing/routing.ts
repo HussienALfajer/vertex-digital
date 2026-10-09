@@ -58,6 +58,8 @@ export interface SupplierState {
   code: SupplierCode;
   nameAr: string;
   lowBalanceUsdUnits: number;
+  /** S09 rule PV5: player checks a Damascus day. */
+  validationDailyQuota: number;
   available: boolean;
   configured: boolean;
   paused: boolean;
@@ -175,6 +177,7 @@ export async function supplierStates(
       code: row.code,
       nameAr: row.nameAr,
       lowBalanceUsdUnits: row.lowBalanceUsdUnits,
+      validationDailyQuota: row.validationDailyQuota,
       available: supplierAvailable(row.code, context),
       configured: row.code === 'manual' || configured.has(row.id),
       paused: switchValue.get(pause) ?? STORE_SWITCH_DEFAULTS[pause],

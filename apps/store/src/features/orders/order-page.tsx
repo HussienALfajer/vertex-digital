@@ -19,7 +19,7 @@ import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { GameCover } from './orders-list';
 import { getOrder, revealCode } from './requests';
-import { STAGE_TONES, stageSentence, stageText } from './stages';
+import { STAGE_TONES, stageSentence, stageText, stepText } from './stages';
 
 type State =
   | { status: 'loading' }
@@ -106,11 +106,8 @@ export function OrderPage() {
         <p className="text-lg font-bold">{stageSentence(order)}</p>
         <ol className="flex flex-col gap-2" aria-label={t('orders.detail.timeline')}>
           {order.timeline.map((step) => (
-            <li
-              key={`${step.stage}:${step.at}`}
-              className="flex items-center justify-between gap-3"
-            >
-              <span className="text-sm">{stageText(step.stage)}</span>
+            <li key={`${step.step}:${step.at}`} className="flex items-center justify-between gap-3">
+              <span className="text-sm">{stepText(step.step)}</span>
               <span className="text-xs text-muted-foreground">{formatDateTime(step.at)}</span>
             </li>
           ))}

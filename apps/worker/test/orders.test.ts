@@ -361,6 +361,9 @@ async function buy(
       fakeEnabled: true,
       purchasesStopped: false,
       channel: 'store',
+      whenBalanceShort: 'refuse',
+      confirmPlayer: false,
+      playerCheck: async () => null,
     },
   );
   return order;
@@ -1064,6 +1067,16 @@ describe('Telegram order messages (rules MN1, MN2, F5, F7)', () => {
       links,
     ).text;
     expect(conflict).toContain('أبلغ WDGZone أنه سُلّم بعد أن سُجّل أنه فشل');
+    // S09 rule PV5: the daily validation quota, once a day per supplier.
+    expect(
+      renderTelegramMessage(
+        'validation_quota_reached',
+        { supplier: 'shop2topup', supplierNameAr: 'SHOP2TOPUP', quota: 1000 },
+        links,
+      ).text,
+    ).toBe(
+      `⚠️ بلغت حصة التحقق اليومية لدى SHOP2TOPUP (1000). العملاء يؤكدون المعرّف بأنفسهم حتى منتصف الليل.\n${links.admin}/suppliers/shop2topup`,
+    );
     expect(
       renderTelegramMessage(
         'order_conflict',
