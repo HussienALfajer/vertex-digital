@@ -11,7 +11,15 @@ import { expect, type MockApi, screenshot, test } from './test';
 const o = ar.orders;
 
 const id = (n: number) => `0199c000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
-const IDS = { topUp: id(1), codes: id(2), partial: id(3), delayed: id(4), other: id(9) };
+const IDS = {
+  topUp: id(1),
+  codes: id(2),
+  partial: id(3),
+  delayed: id(4),
+  reserved: id(5),
+  cancelled: id(6),
+  other: id(9),
+};
 const CODE_ID = id(50);
 
 function signedIn(api: MockApi): MockApi {
@@ -99,6 +107,31 @@ const ORDERS: Record<Exclude<keyof typeof IDS, 'other'>, Order> = {
       { id: id(51), position: 1, masked: '•••• 1A2B', firstRevealedAt: '2026-10-09T09:05:00.000Z' },
       { id: id(52), position: 2, masked: '•••• 3C4D', firstRevealedAt: null },
     ],
+  }),
+  reserved: order({
+    id: IDS.reserved,
+    number: 'VO-WAIT23',
+    stage: 'awaiting_balance',
+    deliveredQuantity: 0,
+    product: { id: id(72), nameAr: '660 UC', kind: 'direct', regionAr: null, redemptionAr: null },
+    unitPriceUsdUnits: 9_990_000,
+    totalUsdUnits: 9_990_000,
+    totalSypUnits: 12_987_000,
+    timeline: [{ step: 'reserved', at: '2026-10-09T11:00:00.000Z' }],
+    expiresAt: new Date(Date.now() + 23 * 3_600_000).toISOString(),
+    playerName: 'Lina_99',
+  }),
+  cancelled: order({
+    id: IDS.cancelled,
+    number: 'VO-GONE45',
+    stage: 'cancelled',
+    deliveredQuantity: 0,
+    timeline: [
+      { step: 'reserved', at: '2026-10-08T11:00:00.000Z' },
+      { step: 'cancelled', at: '2026-10-09T11:00:00.000Z' },
+    ],
+    expiresAt: '2026-10-09T11:00:00.000Z',
+    cancelReason: 'expired',
   }),
   delayed: order({
     id: IDS.delayed,
@@ -211,6 +244,84 @@ test.describe('orders', () => {
     await expect(page.getByText(ar.notFound.title)).toBeVisible();
   });
 
+  test('a reservation counts down, prefills the deposit and can be cancelled (steps 6, 8)', async ({
+    page,
+    api,
+  }) => {
+    withOrders(api).on('GET /api/wallet', 200, { balanceUnits: 5_000_000, syp: null });
+    await page.goto(`/orders/${IDS.reserved}`);
+    await expect(page.getByRole('heading', { name: o.reservation.title })).toBeVisible();
+    await expect(page.getByRole('timer')).toHaveText(/^2[23]:\d\d:\d\d$/);
+    await expect(page.getByText('Lina_99')).toBeVisible();
+    await expect(page.getByRole('link', { name: o.reservation.deposit })).toHaveAttribute(
+      'href',
+      `/wallet/deposit?amount=499&order=${IDS.reserved}`,
+    );
+    // The steps ahead are listed, greyed.
+    await expect(
+      page.getByRole('list', { name: o.detail.timeline }).getByRole('listitem'),
+    ).toHaveText(
+      [o.steps.reserved, o.steps.paid, o.steps.sent, o.steps.delivered].map(
+        (step) => new RegExp(step),
+      ),
+    );
+    await page.getByRole('button', { name: o.reservation.cancel }).click();
+    const cancelled = { ...ORDERS.reserved, stage: 'cancelled', cancelReason: 'customer' };
+    api
+      .on(`POST /api/orders/${IDS.reserved}/cancel`, 200, cancelled)
+      .on(`GET /api/orders/${IDS.reserved}`, 200, cancelled);
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: o.reservation.cancelConfirm })
+      .click();
+    await expect(page.getByText(o.cancelReasons.customer)).toBeVisible();
+    await expect(page.getByText(o.stages.cancelled, { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: o.reservation.title })).toBeHidden();
+  });
+
+  test('a paid order moves to delivered live over the stream, with the success mark (step 5)', async ({
+    page,
+    api,
+  }) => {
+    const processing = order({
+      id: IDS.topUp,
+      stage: 'processing',
+      deliveredQuantity: 0,
+      timeline: [{ step: 'paid', at: '2026-10-09T10:00:00.000Z' }],
+      deliveryStats: { medianMs: 40_000, p90Ms: 95_000, count: 20 },
+    });
+    signedIn(api)
+      .on(`GET /api/orders/${IDS.topUp}`, 200, processing)
+      .stream(
+        'GET /api/notifications/stream',
+        [
+          { event: 'unread', data: { unreadCount: 0 } },
+          {
+            event: 'order',
+            data: { orderId: IDS.topUp, status: 'delivered', stage: 'delivered' },
+          },
+        ],
+        2_000,
+      );
+    await page.goto(`/orders/${IDS.topUp}`);
+    await expect(page.getByText(o.sentences.processing)).toBeVisible();
+    await expect(
+      page.getByText(ar.catalog.delivery.p90.replace('{duration}', 'دقيقتين')),
+    ).toBeVisible();
+    // The next read, when the event arrives, finds the order delivered.
+    api.on(`GET /api/orders/${IDS.topUp}`, 200, ORDERS.topUp);
+    await expect(page.getByText(o.sentences.delivered).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-slot="success-mark"]')).toBeVisible();
+  });
+
+  test('"طلباتي" shows the time a reservation has left', async ({ page, api }) => {
+    withOrders(api);
+    await page.goto('/orders');
+    const card = page.getByRole('link', { name: /VO-WAIT23/ });
+    await expect(card).toContainText(o.stages.awaiting_balance);
+    await expect(card).toContainText(o.reservation.leftShort);
+  });
+
   test('without a session the list sends to sign-in and back', async ({ page, api }) => {
     api.on('GET /api/orders', 401, { statusCode: 401, code: 'UNAUTHORIZED' });
     await page.goto('/orders');
@@ -239,6 +350,8 @@ for (const theme of ['dark', 'light'] as const) {
       ['delivered', IDS.topUp],
       ['partial', IDS.partial],
       ['delayed', IDS.delayed],
+      ['reserved', IDS.reserved],
+      ['cancelled', IDS.cancelled],
     ] as const) {
       await page.goto(`/orders/${orderId}`);
       await expect(page.getByRole('list', { name: o.detail.timeline })).toBeVisible();

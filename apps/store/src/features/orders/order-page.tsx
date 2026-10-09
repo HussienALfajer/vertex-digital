@@ -1,25 +1,46 @@
 'use client';
 
 import { formatSyp, formatUsd, type Order, type OrderCode } from '@vertex-digital/contracts';
+import { SuccessMark } from '@vertex-digital/ui/brand/success-mark';
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@vertex-digital/ui/components/alert-dialog';
 import { Badge } from '@vertex-digital/ui/components/badge';
 import { Button } from '@vertex-digital/ui/components/button';
 import { Card } from '@vertex-digital/ui/components/card';
 import { EmptyState } from '@vertex-digital/ui/components/empty-state';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
-import { CircleAlertIcon, EyeIcon } from 'lucide-react';
+import {
+  CircleAlertIcon,
+  ClockIcon,
+  EyeIcon,
+  HourglassIcon,
+  UserRoundCheckIcon,
+} from 'lucide-react';
+import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { deliveryDetailText } from '@/features/catalog/delivery';
+import { centsParam } from '@/features/deposits/amounts';
 import { CopyButton } from '@/features/deposits/copy-button';
 import { Line } from '@/features/deposits/panel';
-import { useNotificationEvents } from '@/features/notifications/live';
+import { formatClock, useTimeLeft } from '@/features/deposits/use-time-left';
+import { useNotificationEvents, useVisibleAgain } from '@/features/notifications/live';
+import { useBalance } from '@/features/purchase/customer';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { GameCover } from './orders-list';
-import { getOrder, revealCode } from './requests';
-import { STAGE_TONES, stageSentence, stageText, stepText } from './stages';
+import { cancelOrder, getOrder, revealCode } from './requests';
+import { STAGE_TONES, stageSentence, stageText, stepText, timelineEntries } from './stages';
 
 type State =
   | { status: 'loading' }
@@ -28,10 +49,13 @@ type State =
   | { status: 'ready'; order: Order };
 
 /**
- * One order (S08 screens): the number with copy, the stage and its sentence, the stages with
- * their times, the product, the account fields, the money, and for a code product each code
- * masked until "إظهار" (rule C2). Read in the browser with the session, never cached; another
- * customer's order is the 404 page; a notification about this order reads it again (NT7).
+ * One order (S08 screens, S09 rules LT1–LT3): the number with copy, the stage and its sentence,
+ * the timeline with the steps still ahead greyed, the expected time while open, a reservation's
+ * countdown with "اشحن رصيدك" and "إلغاء الطلب", the in-game name of a validated order, the
+ * product, the account fields, the money, and for a code product each code masked until "إظهار"
+ * (rule C2). Read in the browser with the session, never cached; another customer's order is the
+ * 404 page. Live: an `order` event or a notification about this order, a `resync`, or the tab
+ * coming back into view reads it again (rule LT2); the delivery plays the success sequence once.
  */
 export function OrderPage() {
   const router = useRouter();
@@ -57,12 +81,14 @@ export function OrderPage() {
   useNotificationEvents((event) => {
     if (
       event.type === 'resync' ||
+      (event.type === 'order' && event.order.orderId === id) ||
       (event.type === 'notification' &&
         'orderId' in event.notification.params &&
         event.notification.params.orderId === id)
     )
       void load();
   });
+  useVisibleAgain(() => void load());
 
   if (state.status === 'missing') notFound();
   if (state.status === 'loading') return <OrderSkeleton />;
@@ -103,22 +129,39 @@ export function OrderPage() {
           </div>
           <Badge tone={STAGE_TONES[order.stage]}>{stageText(order.stage)}</Badge>
         </div>
-        <p className="text-lg font-bold">{stageSentence(order)}</p>
-        <ol className="flex flex-col gap-2" aria-label={t('orders.detail.timeline')}>
-          {order.timeline.map((step) => (
-            <li key={`${step.step}:${step.at}`} className="flex items-center justify-between gap-3">
-              <span className="text-sm">{stepText(step.step)}</span>
-              <span className="text-xs text-muted-foreground">{formatDateTime(step.at)}</span>
-            </li>
-          ))}
-        </ol>
+        <div className="flex items-center gap-3">
+          {order.stage === 'delivered' && <Celebration orderId={order.id} />}
+          <p className="text-lg font-bold">{stageSentence(order)}</p>
+        </div>
+        {(order.stage === 'processing' || order.stage === 'delayed') && (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <ClockIcon className="size-4 shrink-0" aria-hidden="true" />
+            {deliveryDetailText(order.deliveryStats)}
+          </p>
+        )}
+        {order.playerName && (
+          <p className="flex items-center gap-2 text-sm">
+            <UserRoundCheckIcon
+              className="size-4 shrink-0 text-status-success-foreground"
+              aria-hidden="true"
+            />
+            <span>
+              {t('orders.detail.playerName')} <bdi className="font-bold">{order.playerName}</bdi>
+            </span>
+          </p>
+        )}
+        <Timeline order={order} />
       </Card>
+
+      {order.stage === 'awaiting_balance' && <Reservation order={order} onChange={load} />}
 
       <Card className="gap-4">
         <div className="flex items-center gap-3">
           <GameCover order={order} />
           <div className="flex min-w-0 flex-col">
-            <h2 className="font-bold break-words">{order.product.nameAr}</h2>
+            <h2 className="font-bold break-words">
+              <bdi>{order.product.nameAr}</bdi>
+            </h2>
             <p className="text-sm text-muted-foreground">{order.game.nameAr}</p>
           </div>
         </div>
@@ -179,6 +222,148 @@ export function OrderPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Rule LT1: the steps reached with their times, the newest one marked while the order is open,
+ * and the path's steps still ahead greyed. Each step's marker is a 60° parallelogram (§5).
+ */
+function Timeline({ order }: { order: Order }) {
+  return (
+    <ol className="flex flex-col gap-2" aria-label={t('orders.detail.timeline')}>
+      {timelineEntries(order).map((entry) => (
+        <li
+          key={`${entry.step}:${entry.at ?? 'next'}`}
+          aria-current={entry.state === 'current' ? 'step' : undefined}
+          className={`flex items-center justify-between gap-3 ${entry.state === 'upcoming' ? 'text-muted-foreground' : ''}`}
+        >
+          <span className="flex items-center gap-3">
+            <span
+              aria-hidden="true"
+              className={`inline-block h-4 w-2 -skew-x-30 ${
+                entry.state === 'upcoming'
+                  ? 'border border-border'
+                  : entry.state === 'current'
+                    ? 'bg-accent'
+                    : 'bg-status-success-foreground'
+              }`}
+            />
+            <span className={`text-sm ${entry.state === 'current' ? 'font-bold' : ''}`}>
+              {stepText(entry.step)}
+            </span>
+          </span>
+          {entry.at && (
+            <span className="text-xs text-muted-foreground">{formatDateTime(entry.at)}</span>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * Rule LT3 for a reservation: "بانتظار رصيدك" with the time left until it expires, what the
+ * balance lacks (read in the browser), "اشحن رصيدك" into the deposit wizard with the shortfall and
+ * a link back (rule BB8), and "إلغاء الطلب" after a confirmation (rule RS8).
+ */
+function Reservation({ order, onChange }: { order: Order; onChange: () => Promise<void> }) {
+  const left = useTimeLeft(order.expiresAt);
+  const { balance } = useBalance(true);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const shortfall =
+    balance.status === 'ready' && order.totalUsdUnits > balance.units
+      ? order.totalUsdUnits - balance.units
+      : null;
+  const deposit = `/wallet/deposit?${new URLSearchParams({
+    ...(shortfall !== null && { amount: centsParam(shortfall) }),
+    order: order.id,
+  })}`;
+
+  const cancel = async () => {
+    setFailure(null);
+    setBusy(true);
+    const result = await cancelOrder(order.id);
+    setBusy(false);
+    setConfirming(false);
+    if (!result.ok) setFailure(result.reason);
+    await onChange();
+  };
+
+  return (
+    <Card className="gap-4 border-status-warning">
+      <div className="flex items-center gap-3">
+        <HourglassIcon
+          className="size-5 shrink-0 text-status-warning-foreground"
+          aria-hidden="true"
+        />
+        <h2 className="text-lg font-bold">{t('orders.reservation.title')}</h2>
+      </div>
+      <p className="text-base">
+        {t('orders.reservation.expiresIn')}{' '}
+        <bdi dir="ltr" className="font-bold tabular-nums" role="timer">
+          {formatClock(left)}
+        </bdi>
+      </p>
+      {shortfall !== null && balance.status === 'ready' && (
+        <p className="text-sm text-muted-foreground">
+          {t('orders.reservation.shortfall', {
+            balance: ltr(formatUsd(balance.units)),
+            missing: ltr(formatUsd(shortfall)),
+          })}
+        </p>
+      )}
+      <p className="text-sm text-muted-foreground">{t('orders.reservation.howItPays')}</p>
+      {failure && <FormAlert>{errorText(failure)}</FormAlert>}
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button size="xl" render={<Link href={deposit} />}>
+          {t('orders.reservation.deposit')}
+        </Button>
+        <Button variant="outline" size="xl" disabled={busy} onClick={() => setConfirming(true)}>
+          {t('orders.reservation.cancel')}
+        </Button>
+      </div>
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('orders.reservation.cancelTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('orders.reservation.cancelBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" size="xl" />}>
+              {t('orders.reservation.keep')}
+            </AlertDialogClose>
+            <Button variant="destructive" size="xl" disabled={busy} onClick={() => void cancel()}>
+              {t('orders.reservation.cancelConfirm')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
+
+/**
+ * The success sequence (brand/identity.md §6): the mark's strokes rise once per order in this
+ * tab, not on every visit.
+ */
+function Celebration({ orderId }: { orderId: string }) {
+  const [play, setPlay] = useState(false);
+  const checked = useRef(false);
+  useEffect(() => {
+    if (checked.current) return;
+    checked.current = true;
+    const key = `vd:celebrated:${orderId}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+    } catch {
+      // Without storage it plays on each visit: harmless.
+    }
+    setPlay(true);
+  }, [orderId]);
+  return play ? <SuccessMark className="w-12 text-status-success-foreground" /> : null;
 }
 
 /** One code: masked with "إظهار", then the code with "نسخ" and its first reveal (rule C2). */

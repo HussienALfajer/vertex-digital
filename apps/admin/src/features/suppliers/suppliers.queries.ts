@@ -15,6 +15,7 @@ import type {
   SupplierSummary,
   UpdateRoute,
   UpdateSupplier,
+  ValidationQuota,
 } from '@vertex-digital/contracts';
 import { api, BACKGROUND_REQUEST, call } from '../../lib/api/client';
 import { useReauthentication } from '../account/reauthentication';
@@ -191,6 +192,14 @@ export const useSetCredentials = (code: SupplierCode) =>
 export const useUpdateSupplier = (code: SupplierCode) =>
   useSuppliersMutation((body: UpdateSupplier) =>
     call(api.PATCH('/api/admin/suppliers/{code}', { params: { path: { code } }, body })),
+  );
+
+/** S09 rule AD2: the daily player-validation quota; 0 turns validation off for this supplier. */
+export const useSetValidationQuota = (code: SupplierCode) =>
+  useSuppliersMutation((body: ValidationQuota) =>
+    call(
+      api.PUT('/api/admin/suppliers/{code}/validation-quota', { params: { path: { code } }, body }),
+    ),
   );
 
 /** Rule SY1: a sync now (1 a minute per supplier); answers the running run when there is one. */

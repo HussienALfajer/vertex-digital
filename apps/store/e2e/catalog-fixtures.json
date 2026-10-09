@@ -1,0 +1,353 @@
+{
+  "storefront": {
+    "service": "slow",
+    "categories": [
+      {
+        "slug": "games",
+        "nameAr": "ألعاب",
+        "games": [
+          {
+            "id": "0199d000-0000-7000-8000-000000000001",
+            "slug": "pubg-mobile",
+            "nameAr": "ببجي موبايل",
+            "nameEn": "PUBG Mobile",
+            "cover": {
+              "id": "0199d000-0000-7000-8000-000000000065",
+              "url": "/api/catalog/images/0199d000-0000-7000-8000-000000000065",
+              "width": 640,
+              "height": 640
+            },
+            "accentColor": "#F2A900",
+            "status": "normal"
+          },
+          {
+            "id": "0199d000-0000-7000-8000-000000000002",
+            "slug": "free-fire",
+            "nameAr": "فري فاير",
+            "nameEn": "Free Fire",
+            "cover": {
+              "id": "0199d000-0000-7000-8000-000000000067",
+              "url": "/api/catalog/images/0199d000-0000-7000-8000-000000000067",
+              "width": 640,
+              "height": 640
+            },
+            "accentColor": "#E8572A",
+            "status": "slow"
+          },
+          {
+            "id": "0199d000-0000-7000-8000-000000000003",
+            "slug": "mobile-legends",
+            "nameAr": "موبايل ليجندز",
+            "nameEn": "Mobile Legends",
+            "cover": null,
+            "accentColor": null,
+            "status": "unavailable"
+          }
+        ]
+      },
+      {
+        "slug": "gift-cards",
+        "nameAr": "بطاقات الهدايا",
+        "games": [
+          {
+            "id": "0199d000-0000-7000-8000-000000000004",
+            "slug": "itunes",
+            "nameAr": "آيتونز",
+            "nameEn": "iTunes",
+            "cover": {
+              "id": "0199d000-0000-7000-8000-000000000068",
+              "url": "/api/catalog/images/0199d000-0000-7000-8000-000000000068",
+              "width": 640,
+              "height": 640
+            },
+            "accentColor": "#5AB0F2",
+            "status": "normal"
+          }
+        ]
+      },
+      {
+        "slug": "apps",
+        "nameAr": "تطبيقات الدردشة",
+        "games": []
+      }
+    ]
+  },
+  "games": {
+    "pubg-mobile": {
+      "game": {
+        "id": "0199d000-0000-7000-8000-000000000001",
+        "slug": "pubg-mobile",
+        "nameAr": "ببجي موبايل",
+        "nameEn": "PUBG Mobile",
+        "cover": {
+          "id": "0199d000-0000-7000-8000-000000000065",
+          "url": "/api/catalog/images/0199d000-0000-7000-8000-000000000065",
+          "width": 640,
+          "height": 640
+        },
+        "accentColor": "#F2A900",
+        "status": "normal",
+        "idGuide": {
+          "id": "0199d000-0000-7000-8000-000000000066",
+          "url": "/api/catalog/images/0199d000-0000-7000-8000-000000000066",
+          "width": 960,
+          "height": 540
+        },
+        "regionNotesAr": "يعمل على الحسابات العالمية فقط."
+      },
+      "fields": [
+        {
+          "key": "player_id",
+          "labelAr": "معرّف اللاعب (ID)",
+          "helpAr": "تجده في ملفك الشخصي داخل اللعبة.",
+          "type": "digits",
+          "required": true,
+          "minLength": 5,
+          "maxLength": 12,
+          "options": null
+        }
+      ],
+      "products": [
+        {
+          "id": "0199d000-0000-7000-8000-00000000000b",
+          "kind": "direct",
+          "nameAr": "60 UC",
+          "gameAmount": 60,
+          "maxQuantity": 1,
+          "available": true,
+          "priceUsdUnits": 990000,
+          "priceSypUnits": 1300000,
+          "savings": {
+            "amountUsdUnits": 10000,
+            "percent": 1
+          },
+          "deliveryStats": {
+            "medianMs": 40000,
+            "p90Ms": 95000,
+            "count": 24
+          },
+          "playerCheck": true,
+          "regionAr": null,
+          "redemptionAr": null
+        },
+        {
+          "id": "0199d000-0000-7000-8000-00000000000c",
+          "kind": "direct",
+          "nameAr": "325 UC",
+          "gameAmount": 325,
+          "maxQuantity": 1,
+          "available": true,
+          "priceUsdUnits": 4990000,
+          "priceSypUnits": 6500000,
+          "savings": {
+            "amountUsdUnits": 500000,
+            "percent": 9
+          },
+          "deliveryStats": {
+            "medianMs": 40000,
+            "p90Ms": 95000,
+            "count": 24
+          },
+          "playerCheck": true,
+          "regionAr": null,
+          "redemptionAr": null
+        },
+        {
+          "id": "0199d000-0000-7000-8000-00000000000d",
+          "kind": "direct",
+          "nameAr": "660 UC",
+          "gameAmount": 660,
+          "maxQuantity": 1,
+          "available": true,
+          "priceUsdUnits": 9990000,
+          "priceSypUnits": 13000000,
+          "savings": {
+            "amountUsdUnits": 1400000,
+            "percent": 12
+          },
+          "deliveryStats": {
+            "medianMs": 40000,
+            "p90Ms": 95000,
+            "count": 24
+          },
+          "playerCheck": true,
+          "regionAr": null,
+          "redemptionAr": null
+        },
+        {
+          "id": "0199d000-0000-7000-8000-00000000000e",
+          "kind": "direct",
+          "nameAr": "1800 UC",
+          "gameAmount": 1800,
+          "maxQuantity": 1,
+          "available": false,
+          "priceUsdUnits": null,
+          "priceSypUnits": null,
+          "savings": null,
+          "deliveryStats": null,
+          "playerCheck": false,
+          "regionAr": null,
+          "redemptionAr": null
+        }
+      ],
+      "rateId": "0199d000-0000-7000-8000-000000000384"
+    },
+    "free-fire": {
+      "game": {
+        "id": "0199d000-0000-7000-8000-000000000002",
+        "slug": "free-fire",
+        "nameAr": "فري فاير",
+        "nameEn": "Free Fire",
+        "cover": {
+          "id": "0199d000-0000-7000-8000-000000000067",
+          "url": "/api/catalog/images/0199d000-0000-7000-8000-000000000067",
+          "width": 640,
+          "height": 640
+        },
+        "accentColor": "#E8572A",
+        "status": "slow",
+        "idGuide": null,
+        "regionNotesAr": null
+      },
+      "fields": [
+        {
+          "key": "player_id",
+          "labelAr": "معرّف اللاعب (ID)",
+          "helpAr": "تجده في ملفك الشخصي داخل اللعبة.",
+          "type": "digits",
+          "required": true,
+          "minLength": 5,
+          "maxLength": 12,
+          "options": null
+        }
+      ],
+      "products": [
+        {
+          "id": "0199d000-0000-7000-8000-000000000015",
+          "kind": "direct",
+          "nameAr": "100 جوهرة",
+          "gameAmount": 100,
+          "maxQuantity": 1,
+          "available": true,
+          "priceUsdUnits": 1000000,
+          "priceSypUnits": 1300000,
+          "savings": null,
+          "deliveryStats": null,
+          "playerCheck": true,
+          "regionAr": null,
+          "redemptionAr": null
+        },
+        {
+          "id": "0199d000-0000-7000-8000-000000000016",
+          "kind": "direct",
+          "nameAr": "520 جوهرة",
+          "gameAmount": 520,
+          "maxQuantity": 1,
+          "available": true,
+          "priceUsdUnits": 4800000,
+          "priceSypUnits": 6250000,
+          "savings": null,
+          "deliveryStats": null,
+          "playerCheck": true,
+          "regionAr": null,
+          "redemptionAr": null
+        }
+      ],
+      "rateId": "0199d000-0000-7000-8000-000000000384"
+    },
+    "mobile-legends": {
+      "game": {
+        "id": "0199d000-0000-7000-8000-000000000003",
+        "slug": "mobile-legends",
+        "nameAr": "موبايل ليجندز",
+        "nameEn": "Mobile Legends",
+        "cover": null,
+        "accentColor": null,
+        "status": "unavailable",
+        "idGuide": null,
+        "regionNotesAr": null
+      },
+      "fields": [
+        {
+          "key": "player_id",
+          "labelAr": "معرّف اللاعب (ID)",
+          "helpAr": "تجده في ملفك الشخصي داخل اللعبة.",
+          "type": "digits",
+          "required": true,
+          "minLength": 5,
+          "maxLength": 12,
+          "options": null
+        },
+        {
+          "key": "zone_id",
+          "labelAr": "رقم المنطقة",
+          "helpAr": null,
+          "type": "digits",
+          "required": true,
+          "minLength": 4,
+          "maxLength": 5,
+          "options": null
+        }
+      ],
+      "products": [
+        {
+          "id": "0199d000-0000-7000-8000-00000000001f",
+          "kind": "direct",
+          "nameAr": "86 ماسة",
+          "gameAmount": 86,
+          "maxQuantity": 1,
+          "available": false,
+          "priceUsdUnits": null,
+          "priceSypUnits": null,
+          "savings": null,
+          "deliveryStats": null,
+          "playerCheck": false,
+          "regionAr": null,
+          "redemptionAr": null
+        }
+      ],
+      "rateId": "0199d000-0000-7000-8000-000000000384"
+    },
+    "itunes": {
+      "game": {
+        "id": "0199d000-0000-7000-8000-000000000004",
+        "slug": "itunes",
+        "nameAr": "آيتونز",
+        "nameEn": "iTunes",
+        "cover": {
+          "id": "0199d000-0000-7000-8000-000000000068",
+          "url": "/api/catalog/images/0199d000-0000-7000-8000-000000000068",
+          "width": 640,
+          "height": 640
+        },
+        "accentColor": "#5AB0F2",
+        "status": "normal",
+        "idGuide": null,
+        "regionNotesAr": "بطاقات المتجر الأمريكي."
+      },
+      "fields": [],
+      "products": [
+        {
+          "id": "0199d000-0000-7000-8000-000000000029",
+          "kind": "code",
+          "nameAr": "بطاقة آيتونز 10$",
+          "gameAmount": null,
+          "maxQuantity": 10,
+          "available": true,
+          "priceUsdUnits": 10600000,
+          "priceSypUnits": 13780000,
+          "savings": null,
+          "deliveryStats": {
+            "medianMs": 40000,
+            "p90Ms": 95000,
+            "count": 24
+          },
+          "playerCheck": false,
+          "regionAr": "الولايات المتحدة",
+          "redemptionAr": "افتح App Store، ثم الحساب، ثم استرداد بطاقة هدية."
+        }
+      ],
+      "rateId": "0199d000-0000-7000-8000-000000000384"
+    }
+  }
+}

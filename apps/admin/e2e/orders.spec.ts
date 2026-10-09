@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import type { AdminOrder } from '@vertex-digital/contracts';
 import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
 import { ORDER_IDS } from './orders-mock';
 import { type AdminApi, expect, PASSWORD, screenshot, TOTP_CODE, test } from './test';
@@ -30,6 +31,73 @@ async function reauthenticate(page: Page) {
 }
 
 const rows = (page: Page) => page.getByRole('row').filter({ has: page.getByRole('cell') });
+
+/** S09 rule AD3: a reservation waiting for its balance and one cancelled when its price rose. */
+function reservations(admin: AdminApi) {
+  const base = admin.orders.orders.find((row) => row.id === ORDER_IDS.held) as AdminOrder;
+  const reserved = new Date(Date.now() - 2 * 3_600_000).toISOString();
+  const expires = new Date(Date.now() + 22 * 3_600_000).toISOString();
+  const shared = {
+    ...base,
+    reservedAt: reserved,
+    expiresAt: expires,
+    paidAt: null,
+    reviewSince: null,
+    attempts: [],
+    journals: [],
+    events: [],
+    decisions: { attemptId: null, poll: false, resolve: false, refund: false },
+  };
+  admin.orders.orders.push(
+    {
+      ...shared,
+      id: RESERVED_ID,
+      number: 'VO-WAIT23',
+      status: 'awaiting_balance',
+      playerCheck: 'valid',
+      playerName: 'Lina_99',
+    },
+    {
+      ...shared,
+      id: CANCELLED_ID,
+      number: 'VO-GONE45',
+      status: 'cancelled',
+      cancelReason: 'price_rose',
+      playerCheck: 'unchecked_confirmed',
+      finishedAt: new Date().toISOString(),
+    },
+  );
+}
+
+const RESERVED_ID = '0199b000-0000-7000-8000-0000000000aa';
+const CANCELLED_ID = '0199b000-0000-7000-8000-0000000000ab';
+
+test.describe('reservations (S09 rule AD3)', () => {
+  test('filters by status and shows the reservation, cancel and player-check fields', async ({
+    page,
+    admin,
+  }) => {
+    reservations(admin);
+    await open(page, admin, '/orders');
+    await expect(rows(page)).toHaveCount(6);
+    await page.getByRole('combobox', { name: o.filters.status }).click();
+    await page.getByRole('option', { name: o.statuses.awaiting_balance }).click();
+    await page.getByRole('button', { name: o.filters.apply }).click();
+    await expect(page).toHaveURL(/status=awaiting_balance/);
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page).first()).toContainText('VO-WAIT23');
+    await expect(rows(page).first()).toContainText(o.statuses.awaiting_balance);
+
+    await page.goto(`/orders/${RESERVED_ID}`);
+    await expect(page.getByText(o.detail.reservedAt, { exact: true })).toBeVisible();
+    await expect(page.getByText(o.detail.expiresAt)).toBeVisible();
+    await expect(page.getByText(fill(o.playerChecks.valid, { name: 'Lina_99' }))).toBeVisible();
+
+    await page.goto(`/orders/${CANCELLED_ID}`);
+    await expect(page.getByText(o.cancelReasons.price_rose).first()).toBeVisible();
+    await expect(page.getByText(o.playerChecks.unchecked_confirmed)).toBeVisible();
+  });
+});
 
 test.describe('orders', () => {
   test('lists every order, then the held and manual tabs; the badge counts both', async ({
@@ -178,6 +246,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/orders/policy');
       await expect(page.getByRole('button', { name: o.policy.save })).toBeVisible();
       await screenshot(page, testInfo, `order-policy-${colorScheme}`, { fullPage: true });
+    });
+
+    test('S09 screenshots: a reservation and the status filter', async ({
+      page,
+      admin,
+    }, testInfo) => {
+      reservations(admin);
+      await open(page, admin, `/orders/${RESERVED_ID}`);
+      await expect(page.getByText(o.detail.expiresAt, { exact: true })).toBeVisible();
+      await screenshot(page, testInfo, `order-reserved-${colorScheme}`, { fullPage: true });
+      await page.goto('/orders?status=cancelled');
+      await expect(rows(page)).toHaveCount(1);
+      await screenshot(page, testInfo, `orders-cancelled-${colorScheme}`);
     });
   });
 }

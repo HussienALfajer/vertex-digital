@@ -18,18 +18,21 @@ import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/fie
 import { Input } from '@vertex-digital/ui/components/input';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@vertex-digital/ui/components/toggle-group';
-import { CircleAlertIcon, ClockIcon, LockIcon, WalletIcon } from 'lucide-react';
+import { ArrowRightIcon, CircleAlertIcon, ClockIcon, LockIcon, WalletIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
+import { useSearchParam } from '@/lib/use-search-param';
 import {
+  amountFromCentsParam,
   amountText,
   limitText,
   PRESETS_USD,
   parseDepositAmount,
+  prefillText,
   presetUnits,
   previewUsd,
   usdText,
@@ -73,6 +76,10 @@ function unavailableReason(
  */
 export function DepositFormPage() {
   const router = useRouter();
+  // Opened from a reservation (S09 rule BB8): the shortfall to prefill and the way back.
+  const prefill = amountFromCentsParam(useSearchParam('amount'));
+  const orderParam = useSearchParam('order');
+  const orderId = orderParam && UUID.test(orderParam) ? orderParam : null;
   const [state, setState] = useState<State>({ status: 'loading' });
 
   const load = useCallback(async () => {
@@ -135,14 +142,43 @@ export function DepositFormPage() {
       />
     );
   }
-  return <MethodPicker shamCash={shamCash} usdt={usdt} />;
+  return (
+    <div className="flex flex-col gap-6">
+      {orderId && (
+        <Button
+          variant="link"
+          size="xl"
+          className="self-start px-0"
+          render={<Link href={`/orders/${orderId}`} />}
+        >
+          <ArrowRightIcon className="ltr:rotate-180" aria-hidden="true" />
+          {t('deposits.form.backToReservation')}
+        </Button>
+      )}
+      <MethodPicker key={prefill ?? 'none'} shamCash={shamCash} usdt={usdt} prefill={prefill} />
+    </div>
+  );
 }
 
-function MethodPicker({ shamCash, usdt }: { shamCash: ShamCashOptions; usdt: UsdtOptions }) {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function MethodPicker({
+  shamCash,
+  usdt,
+  prefill,
+}: {
+  shamCash: ShamCashOptions;
+  usdt: UsdtOptions;
+  prefill: number | null;
+}) {
   const [method, setMethod] = useState<DepositMethod>(
     () => METHODS.find((item) => !unavailableReason(item, shamCash, usdt)) ?? 'sham_cash',
   );
-  const firstCurrency = CURRENCY_ORDER.find((currency) => shamCash.currencies[currency].available);
+  // A shortfall is in dollars: the dollar form when it is open (S09 rule BB8).
+  const firstCurrency =
+    prefill !== null && shamCash.currencies.USD.available
+      ? 'USD'
+      : CURRENCY_ORDER.find((currency) => shamCash.currencies[currency].available);
   return (
     <div className="flex flex-col gap-6">
       <Field>
@@ -174,9 +210,15 @@ function MethodPicker({ shamCash, usdt }: { shamCash: ShamCashOptions; usdt: Usd
         </ToggleGroup>
       </Field>
       {method === 'sham_cash' ? (
-        firstCurrency && <ShamCashForm options={shamCash} initialCurrency={firstCurrency} />
+        firstCurrency && (
+          <ShamCashForm
+            options={shamCash}
+            initialCurrency={firstCurrency}
+            prefillUnits={firstCurrency === 'USD' ? prefill : null}
+          />
+        )
       ) : (
-        <UsdtForm key={method} options={usdt} method={method} />
+        <UsdtForm key={method} options={usdt} method={method} prefillUnits={prefill} />
       )}
     </div>
   );
@@ -185,13 +227,15 @@ function MethodPicker({ shamCash, usdt }: { shamCash: ShamCashOptions; usdt: Usd
 function ShamCashForm({
   options,
   initialCurrency,
+  prefillUnits,
 }: {
   options: ShamCashOptions;
   initialCurrency: Currency;
+  prefillUnits: number | null;
 }) {
   const router = useRouter();
   const [currency, setCurrency] = useState<Currency>(initialCurrency);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => prefillText(prefillUnits, options.limits?.minUnits));
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // One `Idempotency-Key` per request body: a retry of the same amount after a lost answer

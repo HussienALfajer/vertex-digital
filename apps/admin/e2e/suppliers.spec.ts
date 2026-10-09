@@ -310,6 +310,33 @@ test.describe('suppliers', () => {
   });
 });
 
+test.describe('validation quota (S09 rule AD2)', () => {
+  test("shows today's usage and saves a new quota", async ({ page, admin }) => {
+    admin.signedIn = true;
+    admin.suppliers.connectFake();
+    await page.goto('/suppliers/fake');
+    const quota = s.validationQuota;
+    await expect(page.getByText(quota.title)).toBeVisible();
+    await expect(page.getByText(fill(quota.usage, { used: 312, quota: 1000 }))).toBeVisible();
+    const input = page.getByLabel(quota.label, { exact: true });
+    await input.fill('-1');
+    await page.getByRole('button', { name: quota.save }).click();
+    await expect(page.getByText(quota.error)).toBeVisible();
+    await input.fill('1');
+    await page.getByRole('button', { name: quota.save }).click();
+    await expect(page.getByText(quota.saved)).toBeVisible();
+    await expect(page.getByText(fill(quota.usage, { used: 312, quota: 1 }))).toBeVisible();
+    expect(admin.lastBody('PUT /api/admin/suppliers/fake/validation-quota')).toEqual({ quota: 1 });
+  });
+
+  test('a supplier that cannot check player ids has no quota', async ({ page, admin }) => {
+    admin.signedIn = true;
+    await page.goto('/suppliers/manual');
+    await expect(page.getByText(s.tabs.connection).first()).toBeVisible();
+    await expect(page.getByText(s.validationQuota.title)).toHaveCount(0);
+  });
+});
+
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`${colorScheme} theme`, () => {
     test.use({ colorScheme });

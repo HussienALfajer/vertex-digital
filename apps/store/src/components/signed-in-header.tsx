@@ -10,7 +10,7 @@ import { AccountMenu } from './account-menu';
  */
 export function SignedInHeader({ name, email }: { name: string; email: string }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center sm:gap-1">
       <BalanceChip />
       <NotificationBell />
       <AccountMenu name={name} email={email} />

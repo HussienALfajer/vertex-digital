@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import ar from '@/messages/ar.json';
 import {
   addressGroups,
+  amountFromCentsParam,
   amountText,
+  centsParam,
   limitText,
   parseDepositAmount,
+  prefillText,
   presetUnits,
   previewUsd,
   splitPayAmount,
@@ -60,5 +63,30 @@ describe('the deposit amounts', () => {
     expect(splitPayAmount('25.0037')).toEqual({ head: '25.00', tail: '37' });
     expect(addressGroups('TXYZabcd1234ef')).toEqual(['TXYZ', 'abcd', '1234', 'ef']);
     expect(addressGroups('')).toEqual([]);
+  });
+});
+
+describe('the ?amount= of the wizard (S09 rule BB8)', () => {
+  it('writes whole cents as digits and reads them back', () => {
+    expect(centsParam(12_050_000)).toBe('1205');
+    expect(centsParam(5_000_000)).toBe('500');
+    expect(centsParam(10_000)).toBe('1');
+    expect(amountFromCentsParam('1205')).toBe(12_050_000);
+    expect(amountFromCentsParam('1')).toBe(10_000);
+    expect(amountFromCentsParam('007')).toBe(70_000);
+  });
+
+  it('ignores anything else', () => {
+    for (const param of [null, '', '0', '12.5', '-3', 'abc', '123456789012'])
+      expect(amountFromCentsParam(param)).toBeNull();
+  });
+});
+
+describe('prefillText (S09 rule BB8)', () => {
+  it('takes the larger of the shortfall and the minimum', () => {
+    expect(prefillText(null, 5_000_000)).toBe('');
+    expect(prefillText(3_500_000, 5_000_000)).toBe('5');
+    expect(prefillText(12_050_000, 5_000_000)).toBe('12.05');
+    expect(prefillText(12_050_000, undefined)).toBe('12.05');
   });
 });

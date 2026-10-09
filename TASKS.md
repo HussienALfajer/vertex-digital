@@ -33,14 +33,14 @@ Spec: `docs/specs/S09-storefront-and-purchase.md` (F12, F13, F15 with A02, A08's
 - [x] Checks (lint, typecheck, test, build, drift: all passed and recorded; no e2e, no front end changed), reviewer (one blocking finding: the balance change point; fixed), owner acceptance (2026-10-09), PR with auto-merge
 
 ## PR 3 — Store and admin screens, E2E, nginx · Opus 5.5 `high`
-- [ ] Store `features/catalog/`: home (hero search, service line, category chips, game cards), `/games/[slug]` (hero, ID guide, packs, calculator), cached reads with the `catalog` tag and 5-minute life, `POST /_internal/revalidate` (loopback, secret), `sitemap.xml`, `robots.txt`, metadata, `srcset`
-- [ ] Store buy box: fields with the CT7 schema, sign-in return with session storage, balance and shortfall, player check UI (PV7), slide-to-pay (threshold, keyboard, reduced motion), idempotent submit and its error views, reservation
-- [ ] Store `features/orders/`: LT1 timeline, live `order` events, reservation countdown and cancel, cancel reasons, player name, expected time, success sequence; "طلباتي" live; deposit wizard `?amount` and `?order`
-- [ ] Store `features/search/`: header button, `Ctrl+K` / `⌘K` / `/`, lazy dialog and index, recent searches (try/catch)
-- [ ] Admin: search terms chips on the game form; validation quota and usage on the supplier page; reservation, cancel and player-check fields on the order page; statuses in the list filter
-- [ ] i18n keys (store and admin)
-- [ ] Follow-up from PR 2: a second `store.revalidate` sent within 10 s of one that already ran is dropped (`singleton` + `singletonSeconds`), so that change waits for the 5-minute cache life; decide with the store's route whether to make the queue `stately` with a 10 s `startAfter` (one refresh queued at a time, no change lost)
-- [ ] nginx: `/_internal/` denied, `vdplayercheck` zone
-- [ ] E2E flows and RTL screenshots (store phone and desktop, dark and light; admin light and dark); game page first-load budget recorded in `apps/store/CLAUDE.md`
-- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S09 done, `wiring.md` "Store page with cached reads" pattern, `apps/store/CLAUDE.md`)
+- [x] Store `features/catalog/`: home (hero search, service line, category chips, game cards), `/games/[slug]` (hero, ID guide, packs, calculator), cached reads with the `catalog` tag and 5-minute life (read at request time after `connection()`, never at build), `POST /_internal/revalidate` (loopback, secret; folder `%5Finternal`), `sitemap.xml`, `robots.txt`, metadata, `srcset`
+- [x] Store buy box: fields with the CT7 schema, sign-in return with session storage, balance and shortfall, player check UI (PV7), slide-to-pay (threshold, keyboard, reduced motion; `packages/ui`), idempotent submit and its error views, reservation
+- [x] Store `features/orders/`: LT1 timeline with the steps ahead, live `order` events (and on `resync` and `visibilitychange`), reservation countdown and cancel, cancel reasons, player name, expected time, success sequence (`SuccessMark`); "طلباتي" live with the reserved countdown; deposit wizard `?amount` and `?order`
+- [x] Store `features/search/`: header button, `Ctrl+K` / `⌘K` / `/`, lazy dialog and index, recent searches (try/catch)
+- [x] Admin: search terms chips on the game form; validation quota and usage on the supplier page; reservation, cancel and player-check fields on the order page; the status filter in the list
+- [x] i18n keys (store and admin)
+- [x] Follow-up from PR 2: `store.revalidate` keeps `singleton` and adds `singletonNextSlot`, so a change inside a used 10-second slot is debounced into the next one (`packages/db/src/store/revalidate.test.ts`)
+- [x] nginx: `/_internal/` denied (`vdplayercheck` came with PR 1); `docs/deployment.md`
+- [x] E2E flows and RTL screenshots (store phone and desktop, dark and light; admin light and dark); game page first-load budget recorded in `apps/store/CLAUDE.md` (223 KB, budget 230; home 206, budget raised to 210)
+- [x] Wiring checklist, docs (`docs/ROADMAP.md` S09 done, `wiring.md` "Store page with cached reads" pattern, `apps/store/CLAUDE.md`, `docs/architecture.md`, folder `CLAUDE.md` files, spec "Settled in implementation")
 - [ ] Checks (lint, typecheck, test, build, e2e, drift, OpenAPI drift), reviewer, owner acceptance (the spec's 13 browser steps), PR with auto-merge

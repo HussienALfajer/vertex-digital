@@ -1,6 +1,8 @@
 import {
   ADMIN_ORDER_TABS,
   type AdminOrderTab,
+  ORDER_STATUSES,
+  type OrderStatus,
   SUPPLIER_CODES,
   type SupplierCode,
 } from '@vertex-digital/contracts';
@@ -15,6 +17,8 @@ export interface OrderSearch {
   tab?: Exclude<AdminOrderTab, 'all'>;
   /** An order number or part of the customer's email. */
   q?: string;
+  /** One status (S09 rule AD3 adds `awaiting_balance` and `cancelled`). */
+  status?: OrderStatus;
   productId?: string;
   supplier?: SupplierCode;
   test?: 'true' | 'false';
@@ -37,6 +41,9 @@ export function parseOrderSearch(search: Record<string, unknown>): OrderSearch {
   }
   const q = typeof search.q === 'string' ? search.q.trim() : '';
   if (q.length >= 1 && q.length <= 100) parsed.q = q;
+  if ((ORDER_STATUSES as readonly unknown[]).includes(search.status)) {
+    parsed.status = search.status as OrderStatus;
+  }
   if (typeof search.productId === 'string' && UUID.test(search.productId)) {
     parsed.productId = search.productId;
   }
@@ -74,6 +81,7 @@ export function listQuery(search: OrderSearch) {
   return {
     tab: tabOf(search),
     ...(search.q && { q: search.q }),
+    ...(search.status && { status: search.status }),
     ...(search.productId && { productId: search.productId }),
     ...(search.supplier && { supplier: search.supplier }),
     ...(search.test && { test: search.test }),

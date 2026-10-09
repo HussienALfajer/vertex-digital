@@ -231,6 +231,22 @@ test.describe('deposits', () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('VD-7KQ2M');
   });
 
+  test('opened from a reservation, prefills the shortfall in dollars and links back (S09 BB8)', async ({
+    page,
+    api,
+  }) => {
+    const orderId = '0199e000-0000-7000-8000-000000000002';
+    signedIn(api).on('GET /api/deposits/sham-cash/options', 200, OPTIONS);
+    await page.goto(`/wallet/deposit?amount=499&order=${orderId}`);
+    await expect(page.getByLabel(ar.deposits.form.amountUsd)).toHaveValue('4.99');
+    await expect(
+      page.getByRole('link', { name: ar.deposits.form.backToReservation }),
+    ).toHaveAttribute('href', `/orders/${orderId}`);
+    // Below the minimum ($2), the minimum is prefilled.
+    await page.goto('/wallet/deposit?amount=150');
+    await expect(page.getByLabel(ar.deposits.form.amountUsd)).toHaveValue('2');
+  });
+
   test('limits, an open deposit and no method are handled before sending', async ({
     page,
     api,

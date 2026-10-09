@@ -311,6 +311,18 @@ export function orderTotal(unitPriceUsdUnits: number, quantity: number): number 
   return safeProduct(unitPriceUsdUnits, quantity, 'unit price');
 }
 
+/**
+ * The pounds shown beside a total built from packs' display prices (S09 rules BB1, CL3): each
+ * pack's SYP display price times its count, summed. Display only, after "≈": the order stores the
+ * SYP of its own total (rule O6).
+ */
+export function displaySypTotal(lines: readonly { sypUnits: number; count: number }[]): number {
+  return lines.reduce(
+    (total, line) => total + safeProduct(line.sypUnits, line.count, 'SYP price'),
+    0,
+  );
+}
+
 /** The refund of undelivered units (rule M3): the unit price paid times the units. */
 export function refundAmount(unitPriceUsdUnits: number, units: number): number {
   return safeProduct(unitPriceUsdUnits, units, 'unit price');

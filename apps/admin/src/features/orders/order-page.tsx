@@ -25,7 +25,7 @@ import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, ltr } from '../../lib/format';
 import { DecisionDialog, type OrderDecision } from './decision-dialogs';
-import { ATTEMPT_TONES, STATUS_TONES } from './order-labels';
+import { ATTEMPT_TONES, playerCheckText, STATUS_TONES } from './order-labels';
 import { orderQuery, useRevealCode } from './orders.queries';
 
 /** A revealed code is hidden again after this long (rule C3). */
@@ -110,6 +110,9 @@ function Header({ order }: { order: AdminOrder }) {
         {order.refundReason && (
           <Badge tone="neutral">{t(`orders.refundReasons.${order.refundReason}`)}</Badge>
         )}
+        {order.cancelReason && (
+          <Badge tone="neutral">{t(`orders.cancelReasons.${order.cancelReason}`)}</Badge>
+        )}
       </div>
       <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Fact label={t('orders.detail.customer')}>
@@ -151,6 +154,20 @@ function Header({ order }: { order: AdminOrder }) {
         )}
         <Fact label={t('orders.detail.minMargin')}>
           <bdi dir="ltr">{formatUsd(order.minMarginUsdUnits)}</bdi>
+        </Fact>
+        {order.reservedAt && (
+          <Fact label={t('orders.detail.reservedAt')}>{formatDateTime(order.reservedAt)}</Fact>
+        )}
+        {order.expiresAt && (
+          <Fact label={t('orders.detail.expiresAt')}>{formatDateTime(order.expiresAt)}</Fact>
+        )}
+        {order.cancelReason && (
+          <Fact label={t('orders.detail.cancelReason')}>
+            {t(`orders.cancelReasons.${order.cancelReason}`)}
+          </Fact>
+        )}
+        <Fact label={t('orders.detail.playerCheck')}>
+          <bdi>{playerCheckText(t, order)}</bdi>
         </Fact>
       </dl>
     </Card>

@@ -1,11 +1,12 @@
 'use client';
 
-import type { CustomerNotification } from '@vertex-digital/contracts';
+import type { CustomerNotification, OrderStreamItem } from '@vertex-digital/contracts';
 import { useEffect, useRef } from 'react';
 
 /*
  * The live notification stream (S05 rules NT6, NT7): one `EventSource` per tab, shared by the
- * bell, the wallet and the deposit page, opened while one of them is mounted. `EventSource`
+ * bell, the wallet, the deposit page and the orders (S09 rule LT2: an `order` event names an order
+ * whose status changed), opened while one of them is mounted. `EventSource`
  * reconnects on its own after a network drop, but closes for good on any answer other than 200 (a
  * 502 while the API restarts, a 429): then it is opened again after 5 seconds, doubling up to a
  * minute, with a `resync` so the listeners refetch what they show.
@@ -14,6 +15,7 @@ import { useEffect, useRef } from 'react';
 export type LiveEvent =
   | { type: 'unread'; unreadCount: number }
   | { type: 'notification'; notification: CustomerNotification; unreadCount: number }
+  | { type: 'order'; order: OrderStreamItem }
   | { type: 'resync' };
 
 type Listener = (event: LiveEvent) => void;
@@ -59,6 +61,9 @@ function open(reopened = false) {
       }),
     }),
   );
+  current.addEventListener('order', (message) =>
+    emit({ type: 'order', order: JSON.parse(message.data) as OrderStreamItem }),
+  );
   current.addEventListener('resync', () => emit({ type: 'resync' }));
 }
 
@@ -96,4 +101,20 @@ export function isMoneyEvent(event: LiveEvent): boolean {
       (event.notification.event === 'deposit_credited' ||
         event.notification.event === 'wallet_adjusted'))
   );
+}
+
+/**
+ * Calls `onVisible` when the tab comes back into view (S09 rule LT2): a page that shows live state
+ * reads it again, in case an event was missed while the stream was down.
+ */
+export function useVisibleAgain(onVisible: () => void) {
+  const latest = useRef(onVisible);
+  latest.current = onVisible;
+  useEffect(() => {
+    const listener = () => {
+      if (document.visibilityState === 'visible') latest.current();
+    };
+    document.addEventListener('visibilitychange', listener);
+    return () => document.removeEventListener('visibilitychange', listener);
+  }, []);
 }

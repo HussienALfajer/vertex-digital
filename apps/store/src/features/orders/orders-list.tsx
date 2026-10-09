@@ -11,7 +11,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
-import { useNotificationEvents } from '@/features/notifications/live';
+import { formatClock, useTimeLeft } from '@/features/deposits/use-time-left';
+import { useNotificationEvents, useVisibleAgain } from '@/features/notifications/live';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
@@ -27,7 +28,9 @@ type State =
 /**
  * "طلباتي" (S08 screens): the customer's orders newest first, 20 at a time, each a card with the
  * game cover, product, quantity, total (USD, with the pounds shown at purchase), stage and time.
- * Read in the browser with the session, never cached; an order event reads the list again.
+ * Read in the browser with the session, never cached. Live (S09 rule LT2): an `order` event, an
+ * order notification, a `resync` or the tab coming back reads the newest page again and updates
+ * the cards on screen; a reservation shows the time it has left.
  */
 export function OrdersList() {
   const router = useRouter();
@@ -49,13 +52,31 @@ export function OrdersList() {
     void load();
   }, [load]);
 
+  /** The newest page again, merged over the cards already loaded. */
+  const refresh = useCallback(async () => {
+    const page = await listOrders();
+    if (!page.ok) return;
+    setState((previous) => {
+      if (previous.status !== 'ready') {
+        return { status: 'ready', orders: page.data.items, nextCursor: page.data.nextCursor };
+      }
+      const fresh = new Set(page.data.items.map((order) => order.id));
+      return {
+        ...previous,
+        orders: [...page.data.items, ...previous.orders.filter((order) => !fresh.has(order.id))],
+      };
+    });
+  }, []);
+
   useNotificationEvents((event) => {
     if (
       event.type === 'resync' ||
+      event.type === 'order' ||
       (event.type === 'notification' && 'orderId' in event.notification.params)
     )
-      void load();
+      void refresh();
   });
+  useVisibleAgain(() => void refresh());
 
   const loadMore = async (cursor: string) => {
     setMoreFailure(null);
@@ -144,7 +165,7 @@ function OrderCard({ order }: { order: OrderSummary }) {
       <GameCover order={order} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="font-medium break-words">
-          {order.productNameAr}
+          <bdi>{order.productNameAr}</bdi>
           {order.quantity > 1 && (
             <span className="text-muted-foreground">
               {' '}
@@ -159,6 +180,9 @@ function OrderCard({ order }: { order: OrderSummary }) {
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1 text-end">
         <Badge tone={STAGE_TONES[order.stage]}>{stageText(order.stage)}</Badge>
+        {order.stage === 'awaiting_balance' && order.expiresAt && (
+          <ReservedLeft expiresAt={order.expiresAt} />
+        )}
         <p className="font-bold tabular-nums">
           <bdi dir="ltr">{formatUsd(order.totalUsdUnits)}</bdi>
         </p>
@@ -169,6 +193,19 @@ function OrderCard({ order }: { order: OrderSummary }) {
         )}
       </div>
     </Link>
+  );
+}
+
+/** A reservation's time left (rule RS1), in the card. */
+function ReservedLeft({ expiresAt }: { expiresAt: string }) {
+  const left = useTimeLeft(expiresAt);
+  return (
+    <p className="text-xs text-muted-foreground">
+      {t('orders.reservation.leftShort')}{' '}
+      <bdi dir="ltr" className="tabular-nums">
+        {formatClock(left)}
+      </bdi>
+    </p>
   );
 }
 
@@ -185,7 +222,7 @@ export function GameCover({ order }: { order: Pick<OrderSummary, 'game'> }) {
   return (
     // biome-ignore lint/performance/noImgElement: catalog images are stored re-encoded and served immutable by the API (S06).
     <img
-      src={cover.url}
+      src={`${cover.url}?w=160`}
       alt=""
       width={cover.width}
       height={cover.height}

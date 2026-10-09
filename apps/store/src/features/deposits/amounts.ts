@@ -4,6 +4,7 @@ import {
   type Deposit,
   type DepositLimitBreach,
   type DepositStatus,
+  formatAmountInput,
   formatSyp,
   formatUsd,
   parseUsd,
@@ -111,4 +112,33 @@ export function statusText(deposit: Pick<Deposit, 'status' | 'usdt'>): string {
     return t('deposits.usdt.statuses.checking');
   }
   return t(`deposits.statuses.${deposit.status}`);
+}
+
+/*
+ * The wizard's `?amount=` (S09 rule BB8): a USD amount in whole cents, as digits, so a link from
+ * the buy box can prefill the shortfall. Strings only: the money math stays the contracts'.
+ */
+
+/** `$12.05` as `1205`. */
+export function centsParam(usdUnits: number): string {
+  const [whole = '0', cents = ''] = formatAmountInput('USD', usdUnits).split('.');
+  return `${whole}${cents.padEnd(2, '0')}`.replace(/^0+(?=\d)/, '');
+}
+
+/** `1205` as `$12.05` in units; null for anything but 1 to 11 digits above zero. */
+export function amountFromCentsParam(param: string | null): number | null {
+  if (!param || !/^\d{1,11}$/.test(param)) return null;
+  const digits = param.padStart(3, '0');
+  const units = parseUsd(`${digits.slice(0, -2)}.${digits.slice(-2)}`);
+  return units === 0 ? null : units;
+}
+
+/**
+ * The amount field's first text when the wizard was opened from a reservation (rule BB8): the
+ * larger of the shortfall and the method's minimum, in dollars; empty without a shortfall.
+ */
+export function prefillText(prefillUnits: number | null, minUnits: number | undefined): string {
+  if (prefillUnits === null) return '';
+  const units = minUnits !== undefined && minUnits > prefillUnits ? minUnits : prefillUnits;
+  return formatAmountInput('USD', units);
 }

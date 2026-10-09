@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getOrder, listOrders, revealCode } from './requests';
+import { cancelOrder, getOrder, listOrders, revealCode } from './requests';
 
 /** A fetch that answers with one response and records what was asked. */
 function fetcher(status: number, body: unknown) {
@@ -56,6 +56,23 @@ describe('revealCode', () => {
     await expect(revealCode('o1', 'c1', fetch)).resolves.toEqual({
       ok: false,
       reason: 'RATE_LIMITED',
+    });
+  });
+});
+
+describe('cancelOrder (rule RS8)', () => {
+  it('posts the cancel, and answers a paid order with its code', async () => {
+    const ok = fetcher(200, { id: 'o1', stage: 'cancelled' });
+    await expect(cancelOrder('o1', ok.fetch)).resolves.toEqual({
+      ok: true,
+      data: { id: 'o1', stage: 'cancelled' },
+    });
+    expect(ok.calls).toEqual([{ url: '/api/orders/o1/cancel', method: 'POST' }]);
+    const paid = fetcher(409, { code: 'ORDER_NOT_CANCELLABLE', details: { status: 'paid' } });
+    await expect(cancelOrder('o1', paid.fetch)).resolves.toEqual({
+      ok: false,
+      reason: 'ORDER_NOT_CANCELLABLE',
+      details: { status: 'paid' },
     });
   });
 });

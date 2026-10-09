@@ -9,6 +9,7 @@ describe('parseOrderSearch', () => {
       parseOrderSearch({
         tab: 'review',
         q: ' VO-ABC234 ',
+        status: 'awaiting_balance',
         productId: id,
         supplier: 'fake',
         test: 'true',
@@ -19,6 +20,7 @@ describe('parseOrderSearch', () => {
     ).toEqual({
       tab: 'review',
       q: 'VO-ABC234',
+      status: 'awaiting_balance',
       productId: id,
       supplier: 'fake',
       test: 'true',
@@ -33,6 +35,7 @@ describe('parseOrderSearch', () => {
       parseOrderSearch({
         tab: 'all',
         q: '',
+        status: 'lost',
         productId: 'x',
         supplier: 'acme',
         test: 'yes',

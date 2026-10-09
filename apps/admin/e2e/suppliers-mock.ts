@@ -68,6 +68,8 @@ interface StoredSupplier {
   code: SupplierCode;
   credentials: { hints: Record<string, string>; setAt: string } | null;
   lowBalanceUsdUnits: number;
+  /** S09 rule AD2. */
+  validationQuota?: number;
   healthHistory: SupplierHealthChange[];
   balanceHistory: SupplierBalance[];
   runs: SyncRun[];
@@ -537,10 +539,10 @@ export class SuppliersMock {
           offer.supplierCode === row.code &&
           this.routes.some((route) => route.offerId === offer.id && !route.archivedAt),
       ).length,
-      // S09 rule AD2 (its panel arrives with S09's screens).
+      // S09 rule AD2: the fake supplier checks player ids; 312 checks so far today.
       canValidatePlayer: row.code === 'fake',
-      validationQuota: 1_000,
-      validationsToday: 0,
+      validationQuota: row.validationQuota ?? 1_000,
+      validationsToday: row.code === 'fake' ? 312 : 0,
     };
   }
 
@@ -728,7 +730,7 @@ export class SuppliersMock {
       if (!this.offers.some((offer) => offer.id === costs[1])) return notFound();
       return { status: 200, json: page([], url) };
     }
-    const supplierPath = match(/^\/api\/admin\/suppliers\/([^/]+)(?:\/([a-z]+))?$/);
+    const supplierPath = match(/^\/api\/admin\/suppliers\/([^/]+)(?:\/([a-z-]+))?$/);
     if (supplierPath) {
       const code = supplierPath[1] as SupplierCode;
       const row = this.suppliers.find((item) => item.code === code);
@@ -747,6 +749,14 @@ export class SuppliersMock {
         const refusal = sensitive();
         if (refusal) return refusal;
         row.lowBalanceUsdUnits = Number(body?.lowBalanceUsdUnits);
+        return { status: 200, json: this.detail(row) };
+      }
+      if (action === 'validation-quota' && method === 'PUT') {
+        const quota = Number(body?.quota);
+        if (!Number.isInteger(quota) || quota < 0 || quota > 1_000_000) {
+          return error(400, 'VALIDATION_FAILED');
+        }
+        row.validationQuota = quota;
         return { status: 200, json: this.detail(row) };
       }
       if (action === 'credentials' && method === 'PUT') {

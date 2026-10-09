@@ -35,6 +35,7 @@ import { ltr } from '../../lib/format';
 import { categoriesQuery, useCreateGame, useUpdateGame } from './catalog.queries';
 import { catalogFailure } from './catalog-parts';
 import { ImageUpload } from './image-upload';
+import { SearchTermsField } from './search-terms-field';
 
 const GAME_FIELDS = [
   'nameAr',
@@ -47,7 +48,7 @@ const GAME_FIELDS = [
 
 type GameField = (typeof GAME_FIELDS)[number];
 
-type GameErrors = Partial<Record<GameField | 'cover' | 'idGuide', string>>;
+type GameErrors = Partial<Record<GameField | 'cover' | 'idGuide' | 'searchTerms', string>>;
 
 const FIELD_OF_CODE: Partial<Record<string, GameField>> = {
   SLUG_TAKEN: 'slug',
@@ -61,7 +62,7 @@ const HEX = /^#[0-9A-Fa-f]{6}$/;
 /**
  * "البيانات" (S06 screens): names, slug (fixed once created: the page address), category, the
  * cover and ID guide images, the accent color with both contrast ratios live (rule CT6), the
- * region notes and, for a saved game, its status (rule CT3).
+ * region notes and, for a saved game, its search terms (S09 rule AD1) and status (rule CT3).
  */
 export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?: string }) {
   const { t } = useTranslation();
@@ -73,6 +74,7 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
   const [cover, setCover] = useState<CatalogImage | null>(game?.cover ?? null);
   const [idGuide, setIdGuide] = useState<CatalogImage | null>(game?.idGuide ?? null);
   const [accent, setAccent] = useState(game?.accentColor ?? '');
+  const [searchTerms, setSearchTerms] = useState<string[]>(game?.searchTerms ?? []);
   const [errors, setErrors] = useState<GameErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -100,7 +102,7 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
       regionNotesAr: text('regionNotesAr') || null,
     };
     const parsed = game
-      ? updateGameSchema.safeParse(values)
+      ? updateGameSchema.safeParse({ ...values, searchTerms })
       : createGameSchema.safeParse({ ...values, slug: text('slug') });
     const found: GameErrors = {};
     for (const issue of parsed.error?.issues ?? []) {
@@ -108,6 +110,7 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
       if ((GAME_FIELDS as readonly string[]).includes(field)) {
         found[field as GameField] = t(`catalog.game.errors.${field as GameField}`);
       }
+      if (field === 'searchTerms') found.searchTerms = t('catalog.searchTerms.invalid');
     }
     setErrors(found);
     if (!parsed.success) return;
@@ -131,6 +134,8 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
         });
       } else if (field) {
         setErrors({ [field]: errorMessage(t, error) });
+      } else if (code === 'VALIDATION_FAILED' && refusesSearchTerms(error)) {
+        setErrors({ searchTerms: t('catalog.searchTerms.invalid') });
       } else {
         setFailure(errorMessage(t, error));
       }
@@ -218,6 +223,13 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
             <FieldDescription>{t('catalog.fields.regionNotesHint')}</FieldDescription>
             <FieldError match={!!errors.regionNotesAr}>{errors.regionNotesAr}</FieldError>
           </Field>
+          {game && (
+            <SearchTermsField
+              terms={searchTerms}
+              onChange={setSearchTerms}
+              error={errors.searchTerms}
+            />
+          )}
           {failure && <FormAlert>{failure}</FormAlert>}
           {saved && (
             <p role="status" className="text-sm text-muted-foreground">
@@ -239,6 +251,17 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
         )}
       </div>
     </div>
+  );
+}
+
+/** A `VALIDATION_FAILED` whose issues name the search terms (rule AD1). */
+function refusesSearchTerms(error: unknown): boolean {
+  const details = error instanceof ApiError ? error.details : undefined;
+  return (
+    Array.isArray(details) &&
+    details.some(
+      (issue: { path?: unknown }) => Array.isArray(issue.path) && issue.path[0] === 'searchTerms',
+    )
   );
 }
 

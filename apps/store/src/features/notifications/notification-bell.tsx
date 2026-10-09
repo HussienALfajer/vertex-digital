@@ -19,7 +19,7 @@ export function NotificationBell() {
   useNotificationEvents((event) => {
     if (event.type === 'resync')
       void getUnreadCount().then((value) => value !== null && setCount(value));
-    else setCount(event.unreadCount);
+    else if (event.type !== 'order') setCount(event.unreadCount);
   });
 
   useEffect(() => {

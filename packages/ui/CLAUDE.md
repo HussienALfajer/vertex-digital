@@ -6,7 +6,8 @@ The Vertex design system, shared by the store and the admin panel: shadcn/ui pat
 - `src/styles/theme.css`: the only place colors and design tokens are defined (light and `.dark`). Tailwind's default palette, fonts, radii and shadows are reset, so an off-brand utility generates no CSS.
 - `src/styles/fonts.css` (Montserrat and Noto Kufi Arabic from `@fontsource`), `base.css`, `index.css` (what apps import after Tailwind), `madani.css` (the licensed faces, imported by an app only when the files exist).
 - `src/components/<name>.tsx`: one component family per file, exported from `src/index.ts`. Pattern to copy: `src/components/button.tsx` (Base UI primitive + `cva` variants + `cn`).
-- `src/brand/`: `VertexLogo`, `VertexMark` (path data in `logo-shapes.ts`, checked against `brand/logo/svg` by `logo-shapes.test.ts`: change the SVG file first, then copy its `viewBox` and `d`), and `AscentLines`, the 60° motif.
+- `src/brand/`: `VertexLogo`, `VertexMark` (path data in `logo-shapes.ts`, checked against `brand/logo/svg` by `logo-shapes.test.ts`: change the SVG file first, then copy its `viewBox` and `d`), `AscentLines`, the 60° motif, and `SuccessMark` (S09: the three 60° strokes rising once, keyframes `vd-stroke-rise` in `base.css`).
+- S09 store components: `slide-to-pay.tsx` (`role="slider"`, 85% release threshold, `End` and the arrows confirm; `slideConfirms` and `slideKey` tested), `command-dialog.tsx` (`CommandDialogContent`: full screen on phones, a dialog from `sm`), and `SheetContent side="bottom"` (the buy box on phones).
 - Shipped as TypeScript source (`exports` point at `src/`): the store transpiles it (`transpilePackages`), Vite reads it directly. No build step.
 
 ## Rules the tests enforce (`src/conventions.test.ts`, `src/tokens.test.ts`)
