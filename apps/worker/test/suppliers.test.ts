@@ -929,7 +929,11 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
         supplierId: ids.fake,
         state: 'down',
         reason: '3 consecutive errors',
-        createdAt: new Date(Date.now() - 11 * 60_000),
+        // The probe is due two seconds ago: calls other test files committed before that (they
+        // stay, append-only) fall inside the wait and count for nothing (rule H3).
+        createdAt: new Date(
+          Date.now() - SUPPLIER_POLICY_DEFAULTS.probeAfterMinutes * 60_000 - 2_000,
+        ),
       });
       let probes = 0;
       current = {
