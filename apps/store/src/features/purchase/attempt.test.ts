@@ -40,6 +40,16 @@ describe('attemptKey (rule BB6)', () => {
       throw new Error('QuotaExceededError');
     };
     vi.stubGlobal('sessionStorage', storage);
+    const storage2 = memoryStorage();
+    vi.stubGlobal('sessionStorage', storage2);
+    attemptKey('p5', 'older body');
+    storage2.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    const newer = attemptKey('p5', 'newer body');
+    // Storage still holds the older attempt; the newer one's retry keeps its key.
+    expect(attemptKey('p5', 'newer body')).toBe(newer);
+    vi.stubGlobal('sessionStorage', storage);
     const key = attemptKey('p4', 'body');
     expect(attemptKey('p4', 'body')).toBe(key);
   });

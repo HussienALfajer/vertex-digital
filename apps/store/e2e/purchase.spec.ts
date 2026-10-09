@@ -293,6 +293,32 @@ test.describe('buy box', () => {
     expect(second?.headers['idempotency-key']).toBe(first?.headers['idempotency-key']);
   });
 
+  test('a rate limit after a lost answer keeps the key for the next slide (rule BB6)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on('POST /api/player-checks', 200, { result: 'not_supported' })
+      .on('POST /api/orders', 500, { statusCode: 500, code: 'INTERNAL_ERROR' });
+    await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
+    await idField(page).fill('51234567');
+    await buyBox(page).getByRole('button', { name: p.continue }).click();
+    await buyBox(page).getByRole('slider').focus();
+    await page.keyboard.press('End');
+    const first = api.last('POST /api/orders');
+    api.on('POST /api/orders', 429, { statusCode: 429, code: 'RATE_LIMITED' });
+    await buyBox(page).getByRole('button', { name: p.retry }).click();
+    await expect(buyBox(page).getByText(ar.errors.RATE_LIMITED)).toBeVisible();
+    api.on('POST /api/orders', 200, order(p60)).on(`GET /api/orders/${ORDER_ID}`, 200, order(p60));
+    await buyBox(page).getByRole('slider').focus();
+    await page.keyboard.press('End');
+    await expect(page).toHaveURL(`/orders/${ORDER_ID}`);
+    const keys = api.requests
+      .filter((request) => request.key === 'POST /api/orders')
+      .map((request) => request.headers['idempotency-key']);
+    expect(new Set(keys)).toEqual(new Set([first?.headers['idempotency-key']]));
+  });
+
   test('a slide released before the end springs back and sends nothing', async ({ page, api }) => {
     signedIn(api).on('POST /api/player-checks', 200, { result: 'not_supported' });
     await page.goto(`/games/pubg-mobile?pack=${p60.id}`);

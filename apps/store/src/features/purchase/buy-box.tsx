@@ -49,8 +49,10 @@ import type { Customer } from './session';
 type Mode = 'buy' | 'reserve';
 
 /**
- * The purchase's refusals that happen before anything is written (rules O1–O6, PV8, RS2): after
- * one of them the same body may be sent with a new key. Anything else keeps the key.
+ * The purchase's refusals decided after the API looked the key up and before anything is written
+ * (rules O1–O6, PV8, RS2): no order holds the key, so the same body may go with a new one.
+ * Anything else keeps the key, including a rate limit or a lost session: those are answered before
+ * the key is looked up, so the first request may still have paid.
  */
 const REFUSED_BEFORE_PAYMENT: ReadonlySet<Failure> = new Set<Failure>([
   'PRICE_CHANGED',
@@ -58,13 +60,10 @@ const REFUSED_BEFORE_PAYMENT: ReadonlySet<Failure> = new Set<Failure>([
   'INSUFFICIENT_BALANCE',
   'PLAYER_NOT_CONFIRMED',
   'VALIDATION_FAILED',
-  'RATE_LIMITED',
   'PURCHASES_STOPPED',
   'RESERVATIONS_LIMIT_REACHED',
   'IDEMPOTENCY_KEY_REUSED',
   'NOT_FOUND',
-  'UNAUTHORIZED',
-  'EMAIL_NOT_VERIFIED',
 ]);
 
 type Sending =
