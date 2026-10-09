@@ -71,6 +71,9 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   order_policy: 'Append-only (S08): a save is a new version, the newest is in force',
   supplier_webhook_events: 'A delivery record (S08 F4): only its processing changes, once',
   player_checks: 'A cache of supplier answers (S09 PV3): expired rows are deleted, never archived',
+  checkouts: 'A payment record (S10 CT5): never deleted or archived, only finished once',
+  saved_players: 'The customer’s own data (S10 F14): deleted for real, nothing references it',
+  order_share_links: 'A link record (S10 SH1): revoked, never deleted or archived',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */

@@ -66,6 +66,27 @@ export function notificationText(notification: CustomerNotification): string {
         number: reference(notification.params.orderNumber),
         reason: t(`orders.cancelReasons.${notification.params.reason}`),
       });
+    // S10 rule CT8: once per checkout, the counts that are not zero.
+    case 'checkout_finished': {
+      const { params } = notification;
+      const parts = [
+        params.delivered > 0 &&
+          t('notifications.events.checkout_finished_delivered', { count: params.delivered }),
+        params.partiallyRefunded > 0 &&
+          t('notifications.events.checkout_finished_partial', { count: params.partiallyRefunded }),
+        params.refunded > 0 &&
+          t('notifications.events.checkout_finished_refunded', { count: params.refunded }),
+      ].filter((part) => part !== false);
+      const amount =
+        params.refundedUsdUnits > 0
+          ? ` ${t('notifications.events.checkout_finished_amount', {
+              amount: ltr(formatUsd(params.refundedUsdUnits)),
+            })}`
+          : '';
+      return t('notifications.events.checkout_finished', {
+        summary: `${parts.join('، ')}${amount}`,
+      });
+    }
   }
 }
 
@@ -78,6 +99,8 @@ export function notificationHref(notification: CustomerNotification): string {
     case 'deposit_rejected':
     case 'deposit_receipt_requested':
       return `/wallet/deposits/${notification.params.depositId}`;
+    case 'checkout_finished':
+      return `/orders?checkout=${notification.params.checkoutId}`;
     default:
       return `/orders/${notification.params.orderId}`;
   }

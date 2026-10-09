@@ -27,13 +27,15 @@ export interface CustomerNotificationInput<Event extends NotificationEvent> {
 /**
  * The only writer of `customer_notifications` (S05 rule NT1), in the transaction of the change,
  * for the API and the worker: the row, the matching email unless the customer turned it off
- * (rule NT8), and a `pg_notify` that PostgreSQL delivers only at commit. A rolled-back change
+ * (rule NT8) or the caller writes the center row only (`email: false`, S10 rule CT8: the orders
+ * of a checkout), and a `pg_notify` that PostgreSQL delivers only at commit. A rolled-back change
  * leaves no row, no email and no event.
  */
 export async function notifyCustomer<Event extends NotificationEvent>(
   tx: Transaction,
   jobs: JobSender,
   input: CustomerNotificationInput<Event>,
+  options: { email?: boolean } = {},
 ): Promise<{ notificationId: string; emailId: string | null }> {
   const params = NOTIFICATION_PARAMS[input.event].parse(input.params);
   const [row] = await tx
@@ -44,7 +46,8 @@ export async function notifyCustomer<Event extends NotificationEvent>(
   await tx.execute(sql`select pg_notify(${CUSTOMER_NOTIFICATIONS_CHANNEL}, ${row.id})`);
   // An event of the center only (`order_delayed`, S08) sends no email.
   const template: EmailTemplate | null = NOTIFICATION_EMAIL_TEMPLATE[input.event];
-  if (template === null) return { notificationId: row.id, emailId: null };
+  if (template === null || options.email === false)
+    return { notificationId: row.id, emailId: null };
 
   const [customer] = await tx
     .select({ email: customers.email, emailOn: notificationPreferences.email })

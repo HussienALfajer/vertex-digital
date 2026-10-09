@@ -11,28 +11,40 @@ import { walletTimeline } from '../ledger/wallet.js';
 import { repriceProducts } from '../pricing/index.js';
 import {
   auditEntries,
+  checkouts,
   customerNotifications,
   customers,
+  emailOutbox,
   fulfilmentAttempts,
   orderCodes,
   orderEvents,
+  orderShareLinks,
   orders,
   playerChecks,
   productPrices,
+  savedPlayers,
   storeSwitchChanges,
 } from '../schema/index.js';
+import { type CheckoutInput, checkoutOrders } from './checkout.js';
 import { applyOutcome, refundRemaining } from './outcome.js';
 import { OrderError, type PurchaseInput, purchaseOrder } from './purchase.js';
 import {
   adminOrder,
   adminOrderCounts,
   adminOrderPage,
+  customerCheckout,
   customerOrder,
   customerOrderPage,
   productDeliveryStats,
   revealCode,
 } from './reads.js';
-import { cancelOwnReservation, expireReservations, payWaitingOrders } from './reservations.js';
+import {
+  cancelOwnReservation,
+  expireReservations,
+  payWaitingOrders,
+  purchasesStoppedLocked,
+} from './reservations.js';
+import { savedPlayerHash } from './saved-players.js';
 import { decryptSecret } from './secrets.js';
 import { lockOrder, type OrderContext, type OrderRow, transitionOrder } from './transition.js';
 
@@ -290,7 +302,7 @@ describe('purchase (rules O1–O6, M1)', () => {
     const input = request(buyer, item);
     const first = await buy(input);
     const again = await buy(input);
-    expect(again).toEqual({ order: first.order, created: false });
+    expect(again).toEqual({ order: first.order, created: false, savedPlayer: null });
     expect(await balance(buyer)).toBe(usd(10) - item.price);
     expect(await refusal(buy({ ...input, requestHash: hash({ other: 1 }) }))).toMatchObject({
       code: 'IDEMPOTENCY_KEY_REUSED',
@@ -1285,5 +1297,649 @@ describe('reservations (S09 rules RS1–RS9, PV8)', () => {
       ),
     ).rejects.toThrow(/player_checks_player_name_check/);
     await db.delete(playerChecks).where(eq(playerChecks.id, id));
+  });
+});
+
+describe('checkouts, saved ids, gifts and share links (S10)', () => {
+  const credit = async (customerId: string, amount: number) =>
+    db.transaction(async (tx) => {
+      await postJournal(tx, {
+        idempotencyKey: `test:${newId()}`,
+        kind: 'adjustment',
+        postings: [
+          { accountId: await ensureCustomerWallet(tx, customerId), amountUnits: amount },
+          {
+            accountId: await ensureSystemAccount(tx, {
+              code: 'adjustments:test_funds',
+              kind: 'adjustments',
+              currency: 'USD',
+            }),
+            amountUnits: -amount,
+          },
+        ],
+      });
+    });
+  const line = (item: { id: string; price: number }, overrides: object = {}) => ({
+    productId: item.id,
+    quantity: 1,
+    fields: { player_id: '5123456789' },
+    expectedUnitPriceUsdUnits: item.price,
+    confirmPlayer: false,
+    ...overrides,
+  });
+  const cart = (
+    customerId: string,
+    lines: CheckoutInput['lines'],
+    overrides: Partial<CheckoutInput> = {},
+  ): CheckoutInput => ({
+    customerId,
+    lines,
+    idempotencyKey: newId(),
+    requestHash: hash({ lines }),
+    fakeEnabled: true,
+    purchasesStopped: false,
+    channel: 'store',
+    playerCheck: async () => null,
+    ...overrides,
+  });
+  const pay = (input: CheckoutInput) =>
+    db.transaction((tx) => checkoutOrders(tx, context(), input));
+  const journalAmount = async (journalId: string) => {
+    const { rows } = await pool.query<{ amount: string }>(
+      'select sum(amount_units) filter (where amount_units > 0) as amount from ledger_postings where journal_id = $1',
+      [journalId],
+    );
+    return Number(rows[0]?.amount);
+  };
+  const deliver = async (order: OrderRow, item: Awaited<ReturnType<typeof product>>) =>
+    apply(await send(order, item), { status: 'delivered', quantity: order.quantity });
+  const refund = async (order: OrderRow, item: Awaited<ReturnType<typeof product>>) =>
+    apply(await send(order, item), { status: 'failed', reason: 'bad id', inputRejected: true });
+  const notifications = async (customerId: string) =>
+    db
+      .select({ event: customerNotifications.event, params: customerNotifications.params })
+      .from(customerNotifications)
+      .where(eq(customerNotifications.customerId, customerId))
+      .orderBy(customerNotifications.createdAt, customerNotifications.id);
+  const emails = async (customerId: string) =>
+    (
+      await db
+        .select({ template: emailOutbox.template })
+        .from(emailOutbox)
+        .where(eq(emailOutbox.customerId, customerId))
+    ).map((row) => row.template);
+
+  it('pays every line with one journal, one order per line, in line order (CT5, M1)', async () => {
+    const [first, second] = [await product(), await product({ kind: 'code' })];
+    const buyer = await customer({ funds: usd(10) });
+    sent.length = 0;
+    const input = cart(buyer, [
+      line(first, { gift: { senderName: 'أحمد', message: 'كل عام وأنت بخير' } }),
+      line(second, { fields: {}, quantity: 2 }),
+    ]);
+    const { checkout, orders: paid, created } = await pay(input);
+    expect(created).toBe(true);
+    const total = first.price + second.price * 2;
+    expect(checkout).toMatchObject({
+      customerId: buyer,
+      isTest: false,
+      lineCount: 2,
+      totalUsdUnits: total,
+      finishedAt: null,
+    });
+    expect(paid.map((order) => [order.checkoutLine, order.status, order.productId])).toEqual([
+      [1, 'paid', first.id],
+      [2, 'paid', second.id],
+    ]);
+    expect(paid.every((order) => order.purchaseJournalId === checkout.purchaseJournalId)).toBe(
+      true,
+    );
+    expect(paid[0]).toMatchObject({
+      isGift: true,
+      giftSenderName: 'أحمد',
+      giftMessage: 'كل عام وأنت بخير',
+    });
+    expect(await journalAmount(checkout.purchaseJournalId)).toBe(total);
+    expect(await balance(buyer)).toBe(usd(10) - total);
+    // The journal equals the sum of its orders (S13's nightly check).
+    const { rows } = await pool.query<{ sum: string }>(
+      'select sum(total_usd_units) as sum from orders where checkout_id = $1',
+      [checkout.id],
+    );
+    expect(Number(rows[0]?.sum)).toBe(total);
+    expect(sent.filter((job) => job.queue === QUEUES.ordersFulfil)).toHaveLength(2);
+    const audits = await db
+      .select({ details: auditEntries.details })
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, paid[0]?.id as string));
+    expect(audits[0]?.details).toMatchObject({ checkoutId: checkout.id, gift: true });
+    const links = await db
+      .select()
+      .from(orderShareLinks)
+      .where(eq(orderShareLinks.orderId, paid[0]?.id as string));
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({ kind: 'gift', showPrice: false, playerDisplay: 'masked' });
+    expect(links[0]?.token).toMatch(/^[A-Za-z0-9_-]{22}$/);
+
+    // One wallet entry names the checkout and its orders (W5).
+    const timeline = await walletTimeline(db, (await findCustomerWallet(db, buyer)) as string, {
+      limit: 5,
+    });
+    expect(timeline.entries[0]).toMatchObject({
+      kind: 'purchase',
+      amountUnits: -total,
+      order: null,
+      checkout: {
+        id: checkout.id,
+        orderCount: 2,
+        orders: paid
+          .map((order) => ({ id: order.id, number: order.number }))
+          .map((o) => expect.objectContaining(o)),
+      },
+    });
+
+    // The same key and body replays; another body is refused.
+    const replay = await pay(input);
+    expect(replay.created).toBe(false);
+    expect(replay.checkout.id).toBe(checkout.id);
+    expect(replay.orders.map((order) => order.id)).toEqual(paid.map((order) => order.id));
+    expect(await refusal(pay({ ...input, requestHash: hash({ other: true }) }))).toMatchObject({
+      code: 'IDEMPOTENCY_KEY_REUSED',
+    });
+    expect(await customerCheckout(db, buyer, checkout.id)).toMatchObject({
+      checkout: { id: checkout.id, orderCount: 2, totalUsdUnits: total, finishedAt: null },
+      items: [
+        { id: paid[0]?.id, isGift: true },
+        { id: paid[1]?.id, isGift: false },
+      ],
+    });
+    expect(await customerCheckout(db, await customer(), checkout.id)).toBeNull();
+  });
+
+  it('refuses the whole cart with every line’s reason, writing nothing (CT5 step 3)', async () => {
+    const [ok, dear, code, checked] = [
+      await product(),
+      await product(),
+      await product({ kind: 'code' }),
+      await product(),
+    ];
+    const buyer = await customer({ funds: usd(20) });
+    const failure = await refusal(
+      pay(
+        cart(
+          buyer,
+          [
+            line(ok),
+            line(dear, { expectedUnitPriceUsdUnits: dear.price - 10_000 }),
+            line({ id: newId(), price: usd(1) }),
+            line(code, { fields: {}, gift: {} }),
+            line(ok, { fields: { player_id: 'abc' } }),
+            line(checked),
+          ],
+          {
+            playerCheck: async (_tx, order) =>
+              order.productId === checked.id ? { result: 'invalid' } : null,
+          },
+        ),
+      ),
+    );
+    expect(failure).toEqual({
+      code: 'CHECKOUT_REFUSED',
+      details: {
+        lines: [
+          { index: 1, code: 'PRICE_CHANGED', details: { unitPriceUsdUnits: dear.price } },
+          { index: 2, code: 'PRODUCT_UNAVAILABLE', details: { availability: 'hidden' } },
+          { index: 3, code: 'VALIDATION_FAILED', details: { gift: 'code_product' } },
+          {
+            index: 4,
+            code: 'VALIDATION_FAILED',
+            details: { fields: { player_id: expect.any(String) } },
+          },
+          { index: 5, code: 'PLAYER_NOT_CONFIRMED', details: { result: 'invalid' } },
+        ],
+      },
+    });
+    expect(await balance(buyer)).toBe(usd(20));
+    expect(await db.select().from(checkouts).where(eq(checkouts.customerId, buyer))).toEqual([]);
+  });
+
+  it('refuses a short balance with the shortfall, and a stop (edge cases 3, 4)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(0.5) });
+    expect(await refusal(pay(cart(buyer, [line(item)])))).toEqual({
+      code: 'INSUFFICIENT_BALANCE',
+      details: { balanceUnits: usd(0.5), totalUnits: item.price },
+    });
+    expect(await refusal(pay(cart(buyer, [line(item)], { purchasesStopped: true })))).toMatchObject(
+      { code: 'PURCHASES_STOPPED' },
+    );
+    expect(await balance(buyer)).toBe(usd(0.5));
+  });
+
+  it('pays one key once in parallel (edge case 5)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    const input = cart(buyer, [line(item)]);
+    const results = await Promise.all([pay(input), pay(input), pay(input)]);
+    expect(new Set(results.map((result) => result.checkout.id)).size).toBe(1);
+    expect(results.filter((result) => result.created)).toHaveLength(1);
+    expect(await balance(buyer)).toBe(usd(10) - item.price);
+  });
+
+  it('never deadlocks two checkouts that share products in opposite order', async () => {
+    const [a, b] = [await product(), await product()];
+    const buyers = [await customer({ funds: usd(10) }), await customer({ funds: usd(10) })];
+    const results = await Promise.all(
+      Array.from({ length: 6 }, (_, index) =>
+        pay(cart(buyers[index % 2] as string, index % 2 ? [line(a), line(b)] : [line(b), line(a)])),
+      ),
+    );
+    expect(results.every((result) => result.created)).toBe(true);
+  });
+
+  it('never takes the balance below zero when a checkout and a purchase race for it', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: item.price * 2 });
+    const settled = await Promise.allSettled([
+      pay(cart(buyer, [line(item), line(item)])),
+      buy(request(buyer, item)),
+    ]);
+    expect(settled.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(await balance(buyer)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('pays at the price a repricing that held a product commits, or refuses it (CT5 step 2)', async () => {
+    const item = await product({ cost: usd(2) });
+    const buyer = await customer({ funds: usd(10) });
+    await pool.query('update supplier_offers set cost_usd_units = $1 where id = $2', [
+      usd(1.8),
+      item.offer,
+    ]);
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let ready: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    const repricing = db.transaction(async (tx) => {
+      await repriceProducts(tx, {
+        productIds: [item.id],
+        cause: 'rule_change',
+        context: { now: new Date(), fakeEnabled: true },
+      });
+      ready();
+      await held;
+    });
+    await started;
+    const paying = refusal(pay(cart(buyer, [line(item)])));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    release();
+    await repricing;
+    const failure = await paying;
+    expect(failure.code).toBe('CHECKOUT_REFUSED');
+    expect(await balance(buyer)).toBe(usd(10));
+  });
+
+  it('refuses a checkout once a stop commits while it waits on the switches lock', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    const stop = (value: boolean) =>
+      db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('settings'))`);
+        await tx.insert(storeSwitchChanges).values({
+          id: newId(),
+          switch: 'purchases_stopped',
+          value,
+          adminId: newId(),
+          channel: 'admin',
+        });
+      });
+    await stop(true);
+    try {
+      const failure = await refusal(
+        db.transaction(async (tx) =>
+          checkoutOrders(
+            tx,
+            context(),
+            cart(buyer, [line(item)], { purchasesStopped: await purchasesStoppedLocked(tx) }),
+          ),
+        ),
+      );
+      expect(failure.code).toBe('PURCHASES_STOPPED');
+    } finally {
+      await stop(false);
+    }
+  });
+
+  it('tells the center of each order without email, then sends one summary (CT7, CT8)', async () => {
+    const [first, second, third] = [await product(), await product(), await product()];
+    const buyer = await customer({ funds: usd(10) });
+    const { checkout, orders: paid } = await pay(
+      cart(buyer, [line(first), line(second), line(third)]),
+    );
+    const [one, two, three] = paid as [OrderRow, OrderRow, OrderRow];
+    await deliver(one, first);
+    await refund(two, second);
+    const held = await send(three, third);
+    await apply(held, { status: 'unknown', reason: 'timeout' });
+    expect((await notifications(buyer)).map((row) => row.event)).toEqual([
+      'order_delivered',
+      'order_refunded',
+    ]);
+    expect(await emails(buyer)).toEqual([]);
+    expect(
+      (await db.select().from(checkouts).where(eq(checkouts.id, checkout.id)))[0]?.finishedAt,
+    ).toBeNull();
+    await apply(held, { status: 'delivered', quantity: 1 });
+    const rows = await notifications(buyer);
+    expect(rows.map((row) => row.event)).toEqual([
+      'order_delivered',
+      'order_refunded',
+      'order_delivered',
+      'checkout_finished',
+    ]);
+    expect(rows.at(-1)?.params).toEqual({
+      checkoutId: checkout.id,
+      orderCount: 3,
+      delivered: 2,
+      partiallyRefunded: 0,
+      refunded: 1,
+      refundedUsdUnits: second.price,
+    });
+    expect(await emails(buyer)).toEqual(['customer_checkout_finished']);
+    expect(
+      (await db.select().from(checkouts).where(eq(checkouts.id, checkout.id)))[0]?.finishedAt,
+    ).not.toBeNull();
+  });
+
+  it('sends the summary once when two orders finish together (edge case 7)', async () => {
+    for (let round = 0; round < 3; round += 1) {
+      const [first, second] = [await product(), await product()];
+      const buyer = await customer({ funds: usd(10) });
+      const { orders: paid } = await pay(cart(buyer, [line(first), line(second)]));
+      const [one, two] = paid as [OrderRow, OrderRow];
+      const attempts = [await send(one, first), await send(two, second)];
+      await Promise.all(
+        attempts.map((attemptId) => apply(attemptId, { status: 'delivered', quantity: 1 })),
+      );
+      const finished = (await notifications(buyer)).filter(
+        (row) => row.event === 'checkout_finished',
+      );
+      expect(finished).toHaveLength(1);
+    }
+  });
+
+  it('saves an id under its limits, refreshes it and marks a supplier refusal (SP1–SP6)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(20) });
+    const fields = { player_id: '5123456789' };
+    const valid = async () => ({ result: 'valid' as const, playerName: 'Hero' });
+    const first = await buy(
+      request(buyer, item, { savePlayer: { label: 'حسابي' }, playerCheck: valid }),
+    );
+    expect(first.savedPlayer).toMatchObject({
+      label: 'حسابي',
+      fields,
+      fieldsHash: savedPlayerHash(item.game, fields),
+      playerName: 'Hero',
+      rejectedAt: null,
+    });
+    expect(first.savedPlayer?.lastUsedAt).not.toBeNull();
+    // Saving again keeps the old label (edge case 9); a replay answers the saved row.
+    const again = await buy(request(buyer, item, { savePlayer: { label: 'أخي' } }));
+    expect(again.savedPlayer?.id).toBe(first.savedPlayer?.id);
+    expect(again.savedPlayer?.label).toBe('حسابي');
+    // A refusal by the supplier marks it (SP6); a delivery clears the mark.
+    await refund(again.order, item);
+    const [marked] = await db.select().from(savedPlayers).where(eq(savedPlayers.customerId, buyer));
+    expect(marked?.rejectedAt).not.toBeNull();
+    const third = await buy(request(buyer, item));
+    expect(third.savedPlayer).toBeNull();
+    await deliver(third.order, item);
+    const [cleared] = await db
+      .select()
+      .from(savedPlayers)
+      .where(eq(savedPlayers.customerId, buyer));
+    expect(cleared?.rejectedAt).toBeNull();
+    expect(cleared?.playerName).toBe('Hero');
+
+    // At the game's limit the purchase goes on without saving (SP1, edge case 24).
+    for (let index = 1; index < 10; index += 1) {
+      await db.insert(savedPlayers).values({
+        id: newId(),
+        customerId: buyer,
+        gameId: item.game,
+        label: `id ${index}`,
+        fields: { player_id: `90000000${index}` },
+        fieldsHash: savedPlayerHash(item.game, { player_id: `90000000${index}` }),
+      });
+    }
+    const full = await buy(
+      request(buyer, item, { fields: { player_id: '777777777' }, savePlayer: { label: 'جديد' } }),
+    );
+    expect(full.created).toBe(true);
+    expect(full.savedPlayer).toBeNull();
+    // The unique hash keeps one row per id (edge case 9).
+    await expect(
+      db.insert(savedPlayers).values({
+        id: newId(),
+        customerId: buyer,
+        gameId: item.game,
+        label: 'نسخة',
+        fields,
+        fieldsHash: savedPlayerHash(item.game, fields),
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('makes a gift link when a reserved gift is paid, never for a cancelled one (GF2)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const reserve = (gift: object) =>
+      buy(request(buyer, item, { whenBalanceShort: 'reserve', gift }));
+    const { order: kept } = await reserve({ message: 'مبروك' });
+    const { order: dropped } = await reserve({});
+    await db.transaction((tx) =>
+      cancelOwnReservation(tx, context(), { customerId: buyer, orderId: dropped.id }),
+    );
+    expect(
+      await db.select().from(orderShareLinks).where(eq(orderShareLinks.orderId, kept.id)),
+    ).toEqual([]);
+    await credit(buyer, usd(10));
+    await payWaitingOrders(db, { ...context(), now: () => new Date(), fakeEnabled: true }, buyer);
+    expect(
+      await db.select().from(orderShareLinks).where(eq(orderShareLinks.orderId, kept.id)),
+    ).toHaveLength(1);
+    expect(
+      await db.select().from(orderShareLinks).where(eq(orderShareLinks.orderId, dropped.id)),
+    ).toEqual([]);
+    expect(
+      await refusal(buy(request(buyer, await product({ kind: 'code' }), { fields: {}, gift: {} }))),
+    ).toMatchObject({ code: 'VALIDATION_FAILED', details: { gift: 'code_product' } });
+  });
+
+  it('reads the checkout, the gift, the links and rule OT3 for the customer and the admin', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    const { checkout, orders: paid } = await pay(
+      cart(buyer, [line(item, { gift: { message: 'مبروك' } })]),
+    );
+    const order = paid[0] as OrderRow;
+    const view = await customerOrder(db, buyer, order.id, 'https://store.test');
+    expect(view).toMatchObject({
+      checkoutId: checkout.id,
+      isGift: true,
+      gift: { senderName: null, message: 'مبروك' },
+      repeatable: false,
+      shareLinks: [{ kind: 'gift', showPrice: false, playerDisplay: 'masked' }],
+    });
+    expect(view?.shareLinks[0]?.url).toMatch(/^https:\/\/store\.test\/g\/[A-Za-z0-9_-]{22}$/);
+    await deliver(order, item);
+    expect((await customerOrder(db, buyer, order.id))?.repeatable).toBe(true);
+    const page = await customerOrderPage(db, buyer, { after: null, limit: 5 });
+    expect(page.items[0]).toMatchObject({
+      checkoutId: checkout.id,
+      isGift: true,
+      repeatable: true,
+    });
+    // A paused game is not shown: no repeat (OT3).
+    await pool.query(`update catalog_games set status = 'paused' where id = $1`, [item.game]);
+    expect((await customerOrder(db, buyer, order.id))?.repeatable).toBe(false);
+
+    const admin = await adminOrder(db, order.id);
+    expect(admin).toMatchObject({
+      checkout: {
+        id: checkout.id,
+        orderCount: 1,
+        totalUsdUnits: item.price,
+        orders: [{ id: order.id, number: order.number, line: 1, status: 'delivered' }],
+      },
+      gift: { senderName: null, message: 'مبروك' },
+      shareLinks: [{ kind: 'gift', revokedAt: null, revokedBy: null, revokeReason: null }],
+    });
+    expect(admin?.checkout?.finishedAt).not.toBeNull();
+    const found = await adminOrderPage(db, {
+      page: 1,
+      pageSize: 10,
+      tab: 'all',
+      q: checkout.id.toUpperCase(),
+    });
+    expect(found.items.map((row) => [row.id, row.checkoutId, row.isGift])).toEqual([
+      [order.id, checkout.id, true],
+    ]);
+  });
+
+  it('guards checkouts, checkout orders, gifts and share links', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    const { checkout, orders: paid } = await pay(
+      cart(buyer, [line(item, { gift: { senderName: 'أحمد' } })]),
+    );
+    const order = paid[0] as OrderRow;
+    // Only `finished_at`, once (CT7), and never deleted.
+    await expect(
+      pool.query('update checkouts set total_usd_units = 10000 where id = $1', [checkout.id]),
+    ).rejects.toThrow(/only finished_at changes/);
+    await expect(pool.query('delete from checkouts where id = $1', [checkout.id])).rejects.toThrow(
+      /permission denied/,
+    );
+    await expect(
+      owner.pool.query('delete from checkouts where id = $1', [checkout.id]),
+    ).rejects.toThrow(/never deleted/);
+    // The checkout and the gift are fixed on the order.
+    await expect(
+      pool.query(`update orders set gift_message = 'x' where id = $1`, [order.id]),
+    ).rejects.toThrow(/identity and fields are fixed/);
+    await expect(
+      pool.query('update orders set checkout_line = 2 where id = $1', [order.id]),
+    ).rejects.toThrow(/identity and fields are fixed/);
+    // A checkout order carries its checkout's journal; a single order its own.
+    const { rows } = await pool.query<{ id: string }>(
+      'select id from ledger_journals where id <> $1 limit 1',
+      [checkout.purchaseJournalId],
+    );
+    const insert = (values: Record<string, unknown>) =>
+      pool.query(
+        `insert into orders (id, number, customer_id, is_test, product_id, game_id, kind, status,
+           quantity, unit_price_usd_units, total_usd_units, price_id, min_margin_usd_units, fields,
+           idempotency_key, request_hash, purchase_journal_id, paid_at, checkout_id,
+           checkout_line, reserved_at, expires_at, is_gift, gift_message)
+         values ($1, $2, $3, false, $4, $5, $6, 'paid', 1, $7, $7, $8, 0, '{}', $9, $10, $11,
+           now(), $12, $13, $14, $15, $16, $17)`,
+        [
+          newId(),
+          `VO-${'23456789ABCDEFGHJKMNPQRSTUVWXYZ'.charAt(Math.floor(Math.random() * 31))}2345${Math.floor(Math.random() * 8) + 2}`,
+          buyer,
+          item.id,
+          item.game,
+          values.kind ?? 'direct',
+          item.price,
+          order.priceId,
+          newId(),
+          'a'.repeat(64),
+          values.journal,
+          values.checkoutId ?? null,
+          values.line ?? null,
+          values.reservedAt ?? null,
+          values.reservedAt ? new Date(Date.now() + 3_600_000) : null,
+          values.isGift ?? false,
+          values.giftMessage ?? null,
+        ],
+      );
+    await expect(
+      insert({ journal: rows[0]?.id, checkoutId: checkout.id, line: 2 }),
+    ).rejects.toThrow(/its checkout's journal/);
+    await expect(insert({ journal: checkout.purchaseJournalId })).rejects.toThrow(
+      /pays only its checkout's orders/,
+    );
+    const single = await buy(request(buyer, item));
+    await expect(insert({ journal: single.order.purchaseJournalId })).rejects.toThrow(
+      /orders_purchase_journal_id_single_idx/,
+    );
+    await expect(
+      insert({ journal: checkout.purchaseJournalId, checkoutId: checkout.id }),
+    ).rejects.toThrow(/orders_checkout_check/);
+    await expect(
+      insert({
+        journal: checkout.purchaseJournalId,
+        checkoutId: checkout.id,
+        line: 3,
+        reservedAt: new Date(),
+      }),
+    ).rejects.toThrow(/orders_checkout_check/);
+    await expect(
+      insert({
+        journal: checkout.purchaseJournalId,
+        checkoutId: checkout.id,
+        line: 4,
+        kind: 'code',
+        isGift: true,
+      }),
+    ).rejects.toThrow(/orders_gift_check/);
+    await expect(
+      insert({
+        journal: checkout.purchaseJournalId,
+        checkoutId: checkout.id,
+        line: 5,
+        giftMessage: 'hi',
+      }),
+    ).rejects.toThrow(/orders_gift_check/);
+
+    // One live link per kind; a revoked link never changes; none is deleted.
+    const [gift] = await db
+      .select()
+      .from(orderShareLinks)
+      .where(eq(orderShareLinks.orderId, order.id));
+    const link = gift as typeof orderShareLinks.$inferSelect;
+    await expect(
+      db.insert(orderShareLinks).values({
+        id: newId(),
+        orderId: order.id,
+        kind: 'gift',
+        token: 'A'.repeat(22),
+        showPrice: false,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      pool.query(`update order_share_links set token = $2 where id = $1`, [
+        link.id,
+        'B'.repeat(22),
+      ]),
+    ).rejects.toThrow(/order, kind and token are fixed/);
+    await pool.query(
+      `update order_share_links set revoked_at = now(), revoked_by = 'customer' where id = $1`,
+      [link.id],
+    );
+    await expect(
+      pool.query(`update order_share_links set show_price = true where id = $1`, [link.id]),
+    ).rejects.toThrow(/revoked and never changes/);
+    await expect(
+      pool.query('delete from order_share_links where id = $1', [link.id]),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      owner.pool.query('delete from order_share_links where id = $1', [link.id]),
+    ).rejects.toThrow(/never deleted/);
   });
 });

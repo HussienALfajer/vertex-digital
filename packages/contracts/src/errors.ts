@@ -161,6 +161,10 @@ export const ERROR_CODES = [
   'RESERVATIONS_LIMIT_REACHED',
   /** Only a reservation can be cancelled; `details.status` (S09 rule RS8). */
   'ORDER_NOT_CANCELLABLE',
+  /** A cart was refused as a whole; `details.lines: [{ index, code, details }]` (S10 rule CT5). */
+  'CHECKOUT_REFUSED',
+  /** No share link for this order; `details.reason`: `status`, `not_gift`, `link_exists` (S10). */
+  'ORDER_NOT_SHAREABLE',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

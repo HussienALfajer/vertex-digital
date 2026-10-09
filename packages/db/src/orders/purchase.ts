@@ -15,6 +15,7 @@ import {
   sypDisplayPrice,
 } from '@vertex-digital/contracts';
 import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
+import type { PgInsertValue } from 'drizzle-orm/pg-core';
 import { recordAudit } from '../audit/index.js';
 import type { Transaction } from '../client.js';
 import { newId } from '../id.js';
@@ -32,6 +33,8 @@ import {
   exchangeRates,
   orders,
 } from '../schema/index.js';
+import { findSavedPlayer, type SavedPlayerRow, touchSavedPlayer } from './saved-players.js';
+import { createShareLink } from './share-links.js';
 import {
   addOrderEvent,
   type OrderContext,
@@ -53,13 +56,24 @@ export class OrderError extends Error {
   }
 }
 
-export interface PurchaseInput {
-  customerId: string;
+/** One pack to buy: a purchase, or a line of a checkout (S10 rule CT5). */
+export interface LineInput {
   productId: string;
   quantity: number;
   /** Input field key → value, as typed (rule O5). */
   fields: Record<string, string>;
   expectedUnitPriceUsdUnits: number;
+  /** S09 rule PV8: the customer confirmed a player id that is not known valid. */
+  confirmPlayer: boolean;
+  /** S10 rule SP1: save the player id with this label. */
+  savePlayer?: { label: string } | undefined;
+  /** S10 rule GF1: a direct top-up for someone else; empty texts are none. */
+  gift?: { senderName?: string | undefined; message?: string | undefined } | undefined;
+}
+
+/** What a purchase or a checkout knows beyond its lines. */
+export interface PurchaseCommon {
+  customerId: string;
   /** The customer's `Idempotency-Key` and the SHA-256 hex of the canonical body (rule O1). */
   idempotencyKey: string;
   requestHash: string;
@@ -69,10 +83,6 @@ export interface PurchaseInput {
   purchasesStopped: boolean;
   /** `store` for the customer's request, `cli` for `order:place`. */
   channel: Extract<AuditChannel, 'store' | 'cli'>;
-  /** S09 rule RS1: `reserve` makes a reservation when the balance is short. */
-  whenBalanceShort: 'refuse' | 'reserve';
-  /** S09 rule PV8: the customer confirmed a player id that is not known valid. */
-  confirmPlayer: boolean;
   /**
    * S09 rule PV8: the cached player check of the order's fields, read by the API (it holds the
    * HMAC key and the adapters' capabilities); null when no check is possible for this purchase.
@@ -89,6 +99,11 @@ export interface PurchaseInput {
   ) => Promise<PlayerCheckLookup | null>;
   ipAddress?: string | null;
   userAgent?: string | null;
+}
+
+export interface PurchaseInput extends PurchaseCommon, LineInput {
+  /** S09 rule RS1: `reserve` makes a reservation when the balance is short. */
+  whenBalanceShort: 'refuse' | 'reserve';
 }
 
 /** What the cache knows of the order's fields (S09 rule PV8); `none`: no unexpired row. */
@@ -199,20 +214,161 @@ export async function displayTotal(tx: Transaction, totalUsdUnits: number) {
   };
 }
 
+type ProductRow = typeof catalogProducts.$inferSelect;
+
+/** A line that passed its checks: the price in force, the fields as stored, the player check. */
+export interface PreparedLine {
+  product: ProductRow;
+  price: { id: string; priceUsdUnits: number; minMarginUsdUnits: number };
+  quantity: number;
+  total: number;
+  fields: Record<string, string>;
+  playerCheck: PlayerCheckState;
+  playerName: string | null;
+  gift: { senderName: string | null; message: string | null } | null;
+  savePlayer: { label: string } | null;
+}
+
+/**
+ * The checks of one line on its product, locked `FOR SHARE` by the caller (repricing takes it
+ * `FOR UPDATE`, so the price read is the one in force): availability for this customer (O3), the
+ * expected price (O4), the quantity and the fields (O5), the gift on a direct product (S10 GF1)
+ * and the player confirmation (S09 PV8). A refusal throws its `OrderError`.
+ */
+export async function prepareLine(
+  tx: Transaction,
+  context: Pick<OrderContext, 'now'>,
+  common: Pick<PurchaseCommon, 'fakeEnabled' | 'playerCheck'> & { isTest: boolean },
+  line: LineInput,
+  product: ProductRow,
+): Promise<PreparedLine> {
+  const usable = await routingNow(tx, product.id, context.now, common.fakeEnabled);
+  if (!usable) throw new OrderError('NOT_FOUND', 'No such product');
+  const current = usable.current;
+  const availability = availabilityNow(usable, common.isTest);
+  if (availability !== 'available' || !current) {
+    throw new OrderError('PRODUCT_UNAVAILABLE', 'The product cannot be bought now', {
+      availability,
+    });
+  }
+  if (current.priceUsdUnits !== line.expectedUnitPriceUsdUnits) {
+    throw new OrderError('PRICE_CHANGED', 'The price is not the one expected', {
+      unitPriceUsdUnits: current.priceUsdUnits,
+    });
+  }
+  if (line.quantity > product.maxQuantity) {
+    throw new OrderError('VALIDATION_FAILED', 'Quantity above the product maximum', {
+      fields: { quantity: 'too_big' },
+    });
+  }
+  if (line.gift && product.kind !== 'direct') {
+    throw new OrderError('VALIDATION_FAILED', 'Only a direct top-up can be a gift', {
+      gift: 'code_product',
+    });
+  }
+  const checked = await checkOrderFields(tx, product.gameId, line.fields);
+  if (!checked.ok) {
+    throw new OrderError('VALIDATION_FAILED', 'The account fields are not valid', {
+      fields: checked.refusals,
+    });
+  }
+  const fields = checked.fields;
+
+  // S09 rule PV8: a player id not known valid needs the customer's confirmation.
+  let playerCheck: PlayerCheckState = 'none';
+  let playerName: string | null = null;
+  const lookup = await common.playerCheck(tx, {
+    productId: product.id,
+    gameId: product.gameId,
+    productKind: product.kind,
+    isTest: common.isTest,
+    fields,
+  });
+  if (lookup?.result === 'valid') {
+    playerCheck = 'valid';
+    playerName = lookup.playerName;
+  } else if (lookup) {
+    if (!line.confirmPlayer) {
+      throw new OrderError('PLAYER_NOT_CONFIRMED', 'The player id is not confirmed', {
+        result: lookup.result,
+      });
+    }
+    playerCheck = lookup.result === 'invalid' ? 'invalid_confirmed' : 'unchecked_confirmed';
+  }
+  return {
+    product,
+    price: {
+      id: current.id,
+      priceUsdUnits: current.priceUsdUnits,
+      minMarginUsdUnits: current.minMarginUsdUnits,
+    },
+    quantity: line.quantity,
+    total: orderTotal(current.priceUsdUnits, line.quantity),
+    fields,
+    playerCheck,
+    playerName,
+    gift: line.gift
+      ? { senderName: line.gift.senderName || null, message: line.gift.message || null }
+      : null,
+    savePlayer: product.kind === 'direct' && line.savePlayer ? line.savePlayer : null,
+  };
+}
+
+/** Inserts an order with a free number (a taken one is drawn again). */
+export async function insertOrder(
+  tx: Transaction,
+  values: Omit<PgInsertValue<typeof orders>, 'number'>,
+): Promise<OrderRow> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await tx.transaction(async (step) => {
+        const [row] = await step
+          .insert(orders)
+          .values({ ...values, number: orderNumber() })
+          .returning();
+        return row as OrderRow;
+      });
+    } catch (error) {
+      if (!uniqueViolation(error, 'orders_number_unique') || attempt >= NUMBER_ATTEMPTS)
+        throw error;
+    }
+  }
+}
+
+/** The order columns a prepared line fixes (identity, price, fields, player check, gift). */
+export function lineValues(line: PreparedLine) {
+  return {
+    productId: line.product.id,
+    gameId: line.product.gameId,
+    kind: line.product.kind,
+    quantity: line.quantity,
+    unitPriceUsdUnits: line.price.priceUsdUnits,
+    totalUsdUnits: line.total,
+    priceId: line.price.id,
+    minMarginUsdUnits: line.price.minMarginUsdUnits,
+    fields: line.fields,
+    playerCheck: line.playerCheck,
+    playerName: line.playerName,
+    isGift: line.gift !== null,
+    giftSenderName: line.gift?.senderName ?? null,
+    giftMessage: line.gift?.message ?? null,
+  };
+}
+
 /**
  * The pay step (rules O1–O6, M1) in the caller's READ COMMITTED transaction, after the caller took
  * the switches lock shared and read the purchase stop (rule O2): replays the same key and body
- * (even while stopped), refuses a new purchase while stopped, locks the product `FOR SHARE` (repricing takes it `FOR UPDATE`, so the price read is the
- * one in force), checks availability for this customer, the price, the quantity and the fields,
- * then posts the purchase journal (which locks the wallet and refuses `INSUFFICIENT_BALANCE`),
- * inserts the `paid` order, its event, the audit entry and the `orders.fulfil` job. Any refusal
- * throws, and the caller's transaction rolls everything back.
+ * (even while stopped), refuses a new purchase while stopped, locks the product `FOR SHARE`,
+ * checks the line (`prepareLine`), then posts the purchase journal (which locks the wallet and
+ * refuses `INSUFFICIENT_BALANCE`), inserts the `paid` order, its event, the audit entry, the saved
+ * id (S10 SP1, SP4), the gift link (GF4) and the `orders.fulfil` job. Any refusal throws, and the
+ * caller's transaction rolls everything back.
  */
 export async function purchaseOrder(
   tx: Transaction,
   context: Pick<OrderContext, 'jobs' | 'now'>,
   input: PurchaseInput,
-): Promise<{ order: OrderRow; created: boolean }> {
+): Promise<{ order: OrderRow; created: boolean; savedPlayer: SavedPlayerRow | null }> {
   // The same key waits here for its first request, then reads what it committed.
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`order:${input.idempotencyKey}`}))`);
   const [existing] = await tx
@@ -223,7 +379,10 @@ export async function purchaseOrder(
     if (existing.customerId !== input.customerId || existing.requestHash !== input.requestHash) {
       throw new OrderError('IDEMPOTENCY_KEY_REUSED', 'The key was used for another purchase');
     }
-    return { order: existing, created: false };
+    const savedPlayer = input.savePlayer
+      ? await findSavedPlayer(tx, existing.customerId, existing.gameId, existing.fields)
+      : null;
+    return { order: existing, created: false, savedPlayer };
   }
   if (input.purchasesStopped) throw new OrderError('PURCHASES_STOPPED', 'Purchases are stopped');
 
@@ -238,58 +397,16 @@ export async function purchaseOrder(
     .where(eq(catalogProducts.id, input.productId))
     .for('share');
   if (!product) throw new OrderError('NOT_FOUND', 'No such product');
-
-  const usable = await routingNow(tx, product.id, context.now, input.fakeEnabled);
-  if (!usable) throw new OrderError('NOT_FOUND', 'No such product');
-  const current = usable.current;
-  const availability = availabilityNow(usable, customer.isTest);
-  if (availability !== 'available' || !current) {
-    throw new OrderError('PRODUCT_UNAVAILABLE', 'The product cannot be bought now', {
-      availability,
-    });
-  }
-  if (current.priceUsdUnits !== input.expectedUnitPriceUsdUnits) {
-    throw new OrderError('PRICE_CHANGED', 'The price is not the one expected', {
-      unitPriceUsdUnits: current.priceUsdUnits,
-    });
-  }
-  if (input.quantity > product.maxQuantity) {
-    throw new OrderError('VALIDATION_FAILED', 'Quantity above the product maximum', {
-      fields: { quantity: 'too_big' },
-    });
-  }
-  const checked = await checkOrderFields(tx, product.gameId, input.fields);
-  if (!checked.ok) {
-    throw new OrderError('VALIDATION_FAILED', 'The account fields are not valid', {
-      fields: checked.refusals,
-    });
-  }
-  const fields = checked.fields;
-
-  // S09 rule PV8: a player id not known valid needs the customer's confirmation.
-  let playerCheck: PlayerCheckState = 'none';
-  let playerName: string | null = null;
-  const lookup = await input.playerCheck(tx, {
-    productId: product.id,
-    gameId: product.gameId,
-    productKind: product.kind,
-    isTest: customer.isTest,
-    fields,
-  });
-  if (lookup?.result === 'valid') {
-    playerCheck = 'valid';
-    playerName = lookup.playerName;
-  } else if (lookup) {
-    if (!input.confirmPlayer) {
-      throw new OrderError('PLAYER_NOT_CONFIRMED', 'The player id is not confirmed', {
-        result: lookup.result,
-      });
-    }
-    playerCheck = lookup.result === 'invalid' ? 'invalid_confirmed' : 'unchecked_confirmed';
-  }
+  const line = await prepareLine(
+    tx,
+    context,
+    { ...input, isTest: customer.isTest },
+    input,
+    product,
+  );
 
   const orderId = newId();
-  const total = orderTotal(current.priceUsdUnits, input.quantity);
+  const total = line.total;
   const display = await displayTotal(tx, total);
   // The wallet lock first (S09 rule RS2): the balance and the reservations count under it.
   const wallet = await lockCustomerWallet(tx, input.customerId);
@@ -307,72 +424,33 @@ export async function purchaseOrder(
       });
     }
   } else {
-    const revenue = await ensureSystemAccount(tx, {
-      code: 'sales_revenue:USD',
-      kind: 'sales_revenue',
-      currency: 'USD',
-    });
     const journal = await postJournal(tx, {
       idempotencyKey: `order:${orderId}:purchase`,
       kind: 'purchase',
       postings: [
         { accountId: wallet, amountUnits: -total },
-        { accountId: revenue, amountUnits: total },
+        { accountId: await salesRevenue(tx), amountUnits: total },
       ],
     });
     journalId = journal.journalId;
   }
 
-  let order: OrderRow | undefined;
-  for (let attempt = 1; !order; attempt += 1) {
-    try {
-      order = await tx.transaction(async (step) => {
-        const [row] = await step
-          .insert(orders)
-          .values({
-            id: orderId,
-            number: orderNumber(),
-            customerId: input.customerId,
-            isTest: customer.isTest,
-            productId: product.id,
-            gameId: product.gameId,
-            kind: product.kind,
-            status: reserve ? 'awaiting_balance' : 'paid',
-            quantity: input.quantity,
-            unitPriceUsdUnits: current.priceUsdUnits,
-            totalUsdUnits: total,
-            priceId: current.id,
-            minMarginUsdUnits: current.minMarginUsdUnits,
-            fields,
-            ...display,
-            idempotencyKey: input.idempotencyKey,
-            requestHash: input.requestHash,
-            purchaseJournalId: journalId,
-            paidAt: reserve ? null : sql`now()`,
-            reservedAt: reserve ? sql`now()` : null,
-            expiresAt: reserve ? sql`now() + ${`${RESERVATION_HOURS} hours`}::interval` : null,
-            playerCheck,
-            playerName,
-          })
-          .returning();
-        return row as OrderRow;
-      });
-    } catch (error) {
-      if (!uniqueViolation(error, 'orders_number_unique') || attempt >= NUMBER_ATTEMPTS)
-        throw error;
-    }
-  }
+  const order = await insertOrder(tx, {
+    id: orderId,
+    customerId: input.customerId,
+    isTest: customer.isTest,
+    ...lineValues(line),
+    ...display,
+    status: reserve ? 'awaiting_balance' : 'paid',
+    idempotencyKey: input.idempotencyKey,
+    requestHash: input.requestHash,
+    purchaseJournalId: journalId,
+    paidAt: reserve ? null : sql`now()`,
+    reservedAt: reserve ? sql`now()` : null,
+    expiresAt: reserve ? sql`now() + ${`${RESERVATION_HOURS} hours`}::interval` : null,
+  });
 
-  const actor = input.channel === 'cli' ? 'cli' : 'customer';
-  const audit = {
-    actorKind: actor,
-    actorId: input.channel === 'cli' ? null : input.customerId,
-    channel: input.channel,
-    entityType: 'order',
-    entityId: order.id,
-    ipAddress: input.ipAddress ?? null,
-    userAgent: input.userAgent ?? null,
-  } as const;
+  const audit = purchaseAudit(input, order.id);
   await addOrderEvent(
     tx,
     order.id,
@@ -380,6 +458,7 @@ export async function purchaseOrder(
     { actor: 'customer', actorId: input.customerId },
     { from: null, to: order.status },
   );
+  const savedPlayer = await touchSavedPlayer(tx, order, line.savePlayer);
   if (reserve) {
     await recordAudit(tx, {
       ...audit,
@@ -404,9 +483,36 @@ export async function purchaseOrder(
         quantity: input.quantity,
         totalUsdUnits: total,
         journalId: journalId as string,
+        ...(order.isGift && { gift: true }),
       },
     });
+    if (order.isGift) await createShareLink(tx, { orderId: order.id, kind: 'gift' });
     await queueFulfil(tx, context.jobs, order.id);
   }
-  return { order, created: true };
+  return { order, created: true, savedPlayer };
+}
+
+/** The system account every purchase credits (S08 rule M1). */
+export function salesRevenue(tx: Transaction) {
+  return ensureSystemAccount(tx, {
+    code: 'sales_revenue:USD',
+    kind: 'sales_revenue',
+    currency: 'USD',
+  });
+}
+
+/** The audit entry's actor of a purchase or a checkout. */
+export function purchaseAudit(
+  input: Pick<PurchaseCommon, 'channel' | 'customerId' | 'ipAddress' | 'userAgent'>,
+  orderId: string,
+) {
+  return {
+    actorKind: input.channel === 'cli' ? 'cli' : 'customer',
+    actorId: input.channel === 'cli' ? null : input.customerId,
+    channel: input.channel,
+    entityType: 'order',
+    entityId: orderId,
+    ipAddress: input.ipAddress ?? null,
+    userAgent: input.userAgent ?? null,
+  } as const;
 }

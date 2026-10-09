@@ -5,6 +5,7 @@ import {
   type AdminOrderListQuery,
   type AdminOrderSummary,
   type CatalogImage,
+  type CheckoutInfo,
   catalogImagePath,
   DELIVERY_STATS_SAMPLE_DAYS,
   DELIVERY_STATS_SAMPLE_SIZE,
@@ -14,12 +15,14 @@ import {
   isOpenAttempt,
   maskCode,
   type Order,
+  type OrderStatus,
   type OrderSummary,
   orderCustomerStage,
   orderDecisions,
   orderNumberSchema,
   orderTimeline,
   type RouteCandidate,
+  type ShareLink,
 } from '@vertex-digital/contracts';
 import {
   and,
@@ -30,6 +33,7 @@ import {
   gte,
   ilike,
   inArray,
+  isNull,
   lt,
   lte,
   or,
@@ -39,9 +43,11 @@ import {
 import type { Database, Transaction } from '../client.js';
 import { newId } from '../id.js';
 import {
+  catalogCategories,
   catalogGames,
   catalogInputFields,
   catalogProducts,
+  checkouts,
   customers,
   fulfilmentAttempts,
   ledgerJournals,
@@ -49,6 +55,7 @@ import {
   orderCodeReveals,
   orderCodes,
   orderEvents,
+  orderShareLinks,
   orders,
   storedFiles,
   supplierOffers,
@@ -102,28 +109,89 @@ async function fieldsWithLabels(db: Executor, order: OrderRow) {
 
 // Customer ----------------------------------------------------------------------------------------
 
+/** S09 rule SF1 for the order's pack: an unarchived product of a shown game. */
+const packShown = sql<boolean>`(${catalogProducts.archivedAt} is null
+  and ${catalogGames.status} = 'active' and ${catalogGames.archivedAt} is null
+  and ${catalogCategories.archivedAt} is null)`;
+
+/** S10 rule OT3: a delivered (or partly delivered) order of a pack still shown. */
+function repeatable(status: OrderStatus, shown: boolean): boolean {
+  return shown && (status === 'delivered' || status === 'partially_refunded');
+}
+
+/** The path of a share link on the store (rules GF5, RC2). */
+export function sharePath(kind: 'gift' | 'receipt', token: string): string {
+  return `/${kind === 'gift' ? 'g' : 'r'}/${token}`;
+}
+
+const giftOf = (order: OrderRow) =>
+  order.isGift ? { senderName: order.giftSenderName, message: order.giftMessage } : null;
+
+const summaryColumns = {
+  order: orders,
+  /** The database's own text, microseconds kept (the API's cursor). */
+  at: sql<string>`${orders.createdAt}::text`,
+  productNameAr: catalogProducts.nameAr,
+  shown: packShown,
+  game: {
+    id: catalogGames.id,
+    slug: catalogGames.slug,
+    nameAr: catalogGames.nameAr,
+    coverFileId: catalogGames.coverFileId,
+  },
+};
+
+/** The customer's orders as "طلباتي" cards. */
+async function summaries(
+  db: Executor,
+  rows: {
+    order: OrderRow;
+    productNameAr: string;
+    shown: boolean;
+    game: { id: string; slug: string; nameAr: string; coverFileId: string | null };
+  }[],
+): Promise<OrderSummary[]> {
+  const images = await covers(
+    db,
+    rows.map((row) => row.game.coverFileId),
+  );
+  return rows.map(({ order, productNameAr, shown, game }) => ({
+    id: order.id,
+    number: order.number,
+    stage: orderCustomerStage(order.status),
+    productNameAr,
+    game: {
+      id: game.id,
+      slug: game.slug,
+      nameAr: game.nameAr,
+      cover: (game.coverFileId && images.get(game.coverFileId)) || null,
+    },
+    quantity: order.quantity,
+    totalUsdUnits: order.totalUsdUnits,
+    totalSypUnits: order.totalSypUnits,
+    expiresAt: iso(order.expiresAt),
+    checkoutId: order.checkoutId,
+    isGift: order.isGift,
+    repeatable: repeatable(order.status, shown),
+    createdAt: order.createdAt.toISOString(),
+  }));
+}
+
+const summaryFrom = (db: Executor) =>
+  db
+    .select(summaryColumns)
+    .from(orders)
+    .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
+    .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+    .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId));
+
 /** One page of the customer's orders, newest first (`GET /api/orders`). */
 export async function customerOrderPage(
   db: Executor,
   customerId: string,
   page: { after: { at: string; id: string } | null; limit: number },
 ): Promise<{ items: OrderSummary[]; more: boolean; last: { at: string; id: string } | null }> {
-  const rows = await db
-    .select({
-      order: orders,
-      /** The database's own text, microseconds kept (the API's cursor). */
-      at: sql<string>`${orders.createdAt}::text`,
-      productNameAr: catalogProducts.nameAr,
-      game: {
-        id: catalogGames.id,
-        slug: catalogGames.slug,
-        nameAr: catalogGames.nameAr,
-        coverFileId: catalogGames.coverFileId,
-      },
-    })
-    .from(orders)
-    .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
-    .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+  const rows = await summaryFrom(db)
     .where(
       and(
         eq(orders.customerId, customerId),
@@ -141,32 +209,59 @@ export async function customerOrderPage(
     .orderBy(desc(orders.createdAt), desc(orders.id))
     .limit(page.limit + 1);
   const shown = rows.slice(0, page.limit);
-  const images = await covers(
-    db,
-    shown.map((row) => row.game.coverFileId),
-  );
   const lastRow = shown.at(-1);
   return {
-    items: shown.map(({ order, productNameAr, game }) => ({
-      id: order.id,
-      number: order.number,
-      stage: orderCustomerStage(order.status),
-      productNameAr,
-      game: {
-        id: game.id,
-        slug: game.slug,
-        nameAr: game.nameAr,
-        cover: (game.coverFileId && images.get(game.coverFileId)) || null,
-      },
-      quantity: order.quantity,
-      totalUsdUnits: order.totalUsdUnits,
-      totalSypUnits: order.totalSypUnits,
-      expiresAt: iso(order.expiresAt),
-      createdAt: order.createdAt.toISOString(),
-    })),
+    items: await summaries(db, shown),
     more: rows.length > page.limit,
     last: lastRow ? { at: lastRow.at, id: lastRow.order.id } : null,
   };
+}
+
+/**
+ * S10 rule CT6: the customer's checkout and its orders in line order (`GET /api/orders?checkout=`),
+ * or null when the checkout is not theirs.
+ */
+export async function customerCheckout(
+  db: Executor,
+  customerId: string,
+  checkoutId: string,
+): Promise<{ checkout: CheckoutInfo; items: OrderSummary[] } | null> {
+  const [checkout] = await db
+    .select()
+    .from(checkouts)
+    .where(and(eq(checkouts.id, checkoutId), eq(checkouts.customerId, customerId)));
+  if (!checkout) return null;
+  const rows = await summaryFrom(db)
+    .where(eq(orders.checkoutId, checkoutId))
+    .orderBy(asc(orders.checkoutLine));
+  return {
+    checkout: {
+      id: checkout.id,
+      totalUsdUnits: checkout.totalUsdUnits,
+      orderCount: checkout.lineCount,
+      finishedAt: iso(checkout.finishedAt),
+    },
+    items: await summaries(db, rows),
+  };
+}
+
+/** The order's live share links as its owner sees them (S10 rules GF4, RC1). */
+async function liveShareLinks(db: Executor, orderId: string, storeUrl: string) {
+  const rows = await db
+    .select()
+    .from(orderShareLinks)
+    .where(and(eq(orderShareLinks.orderId, orderId), isNull(orderShareLinks.revokedAt)))
+    .orderBy(asc(orderShareLinks.createdAt));
+  return rows.map(
+    (link): ShareLink => ({
+      id: link.id,
+      kind: link.kind,
+      url: `${storeUrl}${sharePath(link.kind, link.token)}`,
+      showPrice: link.showPrice,
+      playerDisplay: link.playerDisplay,
+      createdAt: link.createdAt.toISOString(),
+    }),
+  );
 }
 
 /** The customer's order (`GET /api/orders/:id`), or null when it is not theirs. */
@@ -174,16 +269,19 @@ export async function customerOrder(
   db: Executor,
   customerId: string,
   orderId: string,
+  /** The store's origin, for the share links' URLs. */
+  storeUrl = '',
 ): Promise<Order | null> {
   const [row] = await db
-    .select({ order: orders, product: catalogProducts, game: catalogGames })
+    .select({ order: orders, product: catalogProducts, game: catalogGames, shown: packShown })
     .from(orders)
     .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
     .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+    .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
     .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)));
   if (!row) return null;
   const { order, product, game } = row;
-  const [fields, statusEvents, codes, images, stats] = await Promise.all([
+  const [fields, statusEvents, codes, images, stats, shareLinks] = await Promise.all([
     fieldsWithLabels(db, order),
     db
       .select({ status: orderEvents.toStatus, at: orderEvents.createdAt })
@@ -193,6 +291,7 @@ export async function customerOrder(
     orderCodeList(db, order.id),
     covers(db, [game.coverFileId]),
     productDeliveryStats(db, [product.id]),
+    liveShareLinks(db, order.id, storeUrl),
   ]);
   return {
     id: order.id,
@@ -235,6 +334,11 @@ export async function customerOrder(
     cancelReason: order.cancelReason,
     playerName: order.playerName,
     deliveryStats: stats.get(product.id) ?? null,
+    checkoutId: order.checkoutId,
+    isGift: order.isGift,
+    gift: giftOf(order),
+    shareLinks,
+    repeatable: repeatable(order.status, row.shown),
     createdAt: order.createdAt.toISOString(),
   };
 }
@@ -319,6 +423,8 @@ const manualWaiting = sql`exists (select 1 from ${fulfilmentAttempts}
   join ${suppliers} on ${suppliers.id} = ${fulfilmentAttempts.supplierId}
   where ${fulfilmentAttempts.orderId} = ${orders.id} and ${OPEN} and ${suppliers.code} = 'manual')`;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function adminFilters(query: AdminOrderListQuery): SQL | undefined {
   const conditions: (SQL | undefined)[] = [];
   if (query.tab === 'manual') conditions.push(manualWaiting);
@@ -328,10 +434,13 @@ function adminFilters(query: AdminOrderListQuery): SQL | undefined {
   if (query.status) conditions.push(eq(orders.status, query.status));
   if (query.q) {
     const number = orderNumberSchema.safeParse(query.q);
+    const checkout = UUID.test(query.q);
     conditions.push(
       number.success
         ? eq(orders.number, number.data)
-        : ilike(customers.email, `%${query.q.replace(/[\\%_]/g, '\\$&')}%`),
+        : checkout
+          ? eq(orders.checkoutId, query.q.toLowerCase())
+          : ilike(customers.email, `%${query.q.replace(/[\\%_]/g, '\\$&')}%`),
     );
   }
   if (query.productId) conditions.push(eq(orders.productId, query.productId));
@@ -406,6 +515,8 @@ export async function adminOrderPage(
           attempt !== undefined &&
           attempt.supplierCode === 'manual' &&
           isOpenAttempt(attempt.status),
+        checkoutId: order.checkoutId,
+        isGift: order.isGift,
         since: order.updatedAt.toISOString(),
         createdAt: order.createdAt.toISOString(),
       };
@@ -458,7 +569,7 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
     .where(eq(orders.id, orderId));
   if (!row) return null;
   const { order } = row;
-  const [fields, attempts, events, codes, webhooks] = await Promise.all([
+  const [fields, attempts, events, codes, webhooks, checkout, shareLinks] = await Promise.all([
     fieldsWithLabels(db, order),
     db
       .select({
@@ -484,6 +595,12 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
       .innerJoin(fulfilmentAttempts, eq(fulfilmentAttempts.id, supplierWebhookEvents.attemptId))
       .where(eq(fulfilmentAttempts.orderId, order.id))
       .orderBy(asc(supplierWebhookEvents.createdAt)),
+    order.checkoutId ? adminCheckout(db, order.checkoutId) : null,
+    db
+      .select()
+      .from(orderShareLinks)
+      .where(eq(orderShareLinks.orderId, order.id))
+      .orderBy(asc(orderShareLinks.createdAt)),
   ]);
   const journalIds = [
     ...(order.purchaseJournalId ? [order.purchaseJournalId] : []),
@@ -614,6 +731,41 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
           createdAt: reveal.createdAt.toISOString(),
         })),
     })),
+    checkout,
+    gift: giftOf(order),
+    shareLinks: shareLinks.map((link) => ({
+      id: link.id,
+      kind: link.kind,
+      showPrice: link.showPrice,
+      playerDisplay: link.playerDisplay,
+      createdAt: link.createdAt.toISOString(),
+      revokedAt: iso(link.revokedAt),
+      revokedBy: link.revokedBy,
+      revokeReason: link.revokeReason,
+    })),
+  };
+}
+
+/** S10 rule AD1: the checkout of an order, with its orders in line order. */
+async function adminCheckout(db: Executor, checkoutId: string): Promise<AdminOrder['checkout']> {
+  const [checkout] = await db.select().from(checkouts).where(eq(checkouts.id, checkoutId));
+  if (!checkout) return null;
+  const rows = await db
+    .select({
+      id: orders.id,
+      number: orders.number,
+      line: orders.checkoutLine,
+      status: orders.status,
+    })
+    .from(orders)
+    .where(eq(orders.checkoutId, checkoutId))
+    .orderBy(asc(orders.checkoutLine));
+  return {
+    id: checkout.id,
+    totalUsdUnits: checkout.totalUsdUnits,
+    orderCount: checkout.lineCount,
+    finishedAt: iso(checkout.finishedAt),
+    orders: rows.map((row) => ({ ...row, line: row.line as number })),
   };
 }
 

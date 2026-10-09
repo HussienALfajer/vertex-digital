@@ -222,10 +222,16 @@ export async function applyOutcome(
       const delivered = order.deliveredQuantity + units;
       let changed: OrderRow;
       if (delivered === order.quantity) {
-        changed = (await transitionOrder(tx, order, 'delivered', event, {
-          deliveredQuantity: delivered,
-        })) as OrderRow;
-        await notifyDelivered(tx, context, changed);
+        // The order's own notification first: a checkout's summary follows it (S10 CT7).
+        await notifyDelivered(tx, context, order);
+        changed = (await transitionOrder(
+          tx,
+          order,
+          'delivered',
+          event,
+          { deliveredQuantity: delivered },
+          context.jobs,
+        )) as OrderRow;
       } else {
         // Partial delivery (ADR 0004): the rest goes to the next route, or is refunded.
         changed =
@@ -370,6 +376,45 @@ export async function refundRemaining(
       },
     ],
   });
+  const productNameAr = await productName(tx, order.productId);
+  // S10 rule CT8: a checkout's orders tell the center only; its summary is the one email.
+  const email = { email: order.checkoutId === null };
+  if (partial) {
+    await notifyCustomer(
+      tx,
+      context.jobs,
+      {
+        customerId: order.customerId,
+        event: 'order_partially_refunded',
+        params: {
+          orderId: order.id,
+          orderNumber: order.number,
+          productNameAr,
+          deliveredQuantity: order.deliveredQuantity,
+          refundedQuantity: units,
+          refundedUsdUnits: amount,
+        },
+      },
+      email,
+    );
+  } else {
+    await notifyCustomer(
+      tx,
+      context.jobs,
+      {
+        customerId: order.customerId,
+        event: 'order_refunded',
+        params: {
+          orderId: order.id,
+          orderNumber: order.number,
+          productNameAr,
+          refundedUsdUnits: amount,
+          reason,
+        },
+      },
+      email,
+    );
+  }
   const changed = await transitionOrder(
     tx,
     order,
@@ -382,6 +427,7 @@ export async function refundRemaining(
       refundJournalId: journal.journalId,
       refundIdempotencyKey: by.idempotencyKey ?? null,
     },
+    context.jobs,
   );
   if (!changed) throw new Error(`Order ${order.id} changed while it was refunded`);
   const channel: AuditChannel = by.actor === 'admin' ? 'admin' : 'worker';
@@ -395,33 +441,6 @@ export async function refundRemaining(
     reason: by.reason ?? null,
     details: { units, amountUsdUnits: amount, reason, journalId: journal.journalId },
   });
-  const productNameAr = await productName(tx, order.productId);
-  if (partial) {
-    await notifyCustomer(tx, context.jobs, {
-      customerId: order.customerId,
-      event: 'order_partially_refunded',
-      params: {
-        orderId: order.id,
-        orderNumber: order.number,
-        productNameAr,
-        deliveredQuantity: order.deliveredQuantity,
-        refundedQuantity: units,
-        refundedUsdUnits: amount,
-      },
-    });
-  } else {
-    await notifyCustomer(tx, context.jobs, {
-      customerId: order.customerId,
-      event: 'order_refunded',
-      params: {
-        orderId: order.id,
-        orderNumber: order.number,
-        productNameAr,
-        refundedUsdUnits: amount,
-        reason,
-      },
-    });
-  }
   return changed;
 }
 
@@ -434,14 +453,19 @@ async function productName(tx: Transaction, productId: string): Promise<string> 
 }
 
 async function notifyDelivered(tx: Transaction, context: OrderContext, order: OrderRow) {
-  await notifyCustomer(tx, context.jobs, {
-    customerId: order.customerId,
-    event: 'order_delivered',
-    params: {
-      orderId: order.id,
-      orderNumber: order.number,
-      productNameAr: await productName(tx, order.productId),
-      quantity: order.quantity,
+  await notifyCustomer(
+    tx,
+    context.jobs,
+    {
+      customerId: order.customerId,
+      event: 'order_delivered',
+      params: {
+        orderId: order.id,
+        orderNumber: order.number,
+        productNameAr: await productName(tx, order.productId),
+        quantity: order.quantity,
+      },
     },
-  });
+    { email: order.checkoutId === null },
+  );
 }

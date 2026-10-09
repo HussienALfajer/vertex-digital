@@ -208,7 +208,9 @@
       "WEBHOOK_SIGNATURE_INVALID": "توقيع إشعار المورد غير صحيح.",
       "PLAYER_NOT_CONFIRMED": "المعرّف غير مؤكد ولم يؤكده العميل.",
       "RESERVATIONS_LIMIT_REACHED": "بلغ العميل الحد الأقصى من الطلبات المحجوزة.",
-      "ORDER_NOT_CANCELLABLE": "لا يمكن إلغاء هذا الطلب في حالته الحالية."
+      "ORDER_NOT_CANCELLABLE": "لا يمكن إلغاء هذا الطلب في حالته الحالية.",
+      "CHECKOUT_REFUSED": "رُفضت السلة كاملة لأن بعض بنودها لم تعد صالحة.",
+      "ORDER_NOT_SHAREABLE": "لا يمكن إنشاء رابط مشاركة لهذا الطلب."
     }
   },
   "changePassword": {
@@ -551,6 +553,7 @@
       "order.attempt_resolved": "حسم محاولة تنفيذ",
       "order.refund_decided": "قرار استرداد طلب",
       "order.code_revealed": "كشف كود",
+      "order.share_revoked": "إلغاء رابط مشاركة",
       "order_policy.set": "تعديل سياسة الطلبات"
     }
   },

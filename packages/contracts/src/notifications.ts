@@ -42,6 +42,8 @@ export const EMAIL_TEMPLATES = [
   'customer_order_refunded',
   /** A reservation was cancelled by the system, with the reason in plain words (S09 RS9). */
   'customer_order_cancelled',
+  /** Every order of a checkout finished: the counts and the refund (S10 CT8), never fields. */
+  'customer_checkout_finished',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -76,6 +78,7 @@ export const NOTIFICATION_EVENTS = [
   'order_delayed',
   'order_paid',
   'order_cancelled',
+  'checkout_finished',
 ] as const;
 
 export const notificationEventSchema = z
@@ -148,6 +151,15 @@ export const NOTIFICATION_PARAMS = {
     productNameAr: z.string(),
     reason: cancelReasonSchema.exclude(['customer']),
   }),
+  // S10 rule CT8: once, when the last order of a checkout finished.
+  checkout_finished: z.object({
+    checkoutId: z.uuid(),
+    orderCount: z.int().positive(),
+    delivered: z.int().nonnegative(),
+    partiallyRefunded: z.int().nonnegative(),
+    refunded: z.int().nonnegative(),
+    refundedUsdUnits: z.int().nonnegative(),
+  }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
@@ -175,6 +187,7 @@ export const EMAIL_PARAMS = {
   customer_order_partially_refunded: NOTIFICATION_PARAMS.order_partially_refunded.extend(at.shape),
   customer_order_refunded: NOTIFICATION_PARAMS.order_refunded.extend(at.shape),
   customer_order_cancelled: NOTIFICATION_PARAMS.order_cancelled.extend(at.shape),
+  customer_checkout_finished: NOTIFICATION_PARAMS.checkout_finished.extend(at.shape),
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
@@ -208,6 +221,7 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   order_delayed: null,
   order_paid: null,
   order_cancelled: 'customer_order_cancelled',
+  checkout_finished: 'customer_checkout_finished',
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -243,6 +257,7 @@ export const customerNotificationSchema = z
     notification('order_delayed'),
     notification('order_paid'),
     notification('order_cancelled'),
+    notification('checkout_finished'),
   ])
   .meta({ id: 'CustomerNotification' });
 

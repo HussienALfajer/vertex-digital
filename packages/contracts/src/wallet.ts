@@ -265,6 +265,14 @@ const walletOrderExtras = z.object({
   productNameAr: z.string(),
 });
 
+/** The checkout of a `purchase` entry that paid several orders (S10 rule M1, W5). */
+const walletCheckoutExtras = z.object({
+  id: z.uuid(),
+  orderCount: z.int().positive(),
+  /** In line order. */
+  orders: z.array(walletOrderExtras),
+});
+
 /** One timeline entry as the customer sees it: no journal id, account or internal reason. */
 export const walletEntrySchema = z
   .object({
@@ -272,6 +280,7 @@ export const walletEntrySchema = z
     adjustment: walletAdjustmentExtras.nullable(),
     deposit: walletDepositExtras.nullable(),
     order: walletOrderExtras.nullable(),
+    checkout: walletCheckoutExtras.nullable(),
   })
   .meta({ id: 'WalletEntry' });
 
@@ -310,6 +319,7 @@ export const adminWalletEntrySchema = z
     /** The admin also sees the deposit's id and, for USDT, its TXID (S04). */
     deposit: walletDepositExtras.extend({ id: z.uuid(), txid: z.string().nullable() }).nullable(),
     order: walletOrderExtras.nullable(),
+    checkout: walletCheckoutExtras.nullable(),
   })
   .meta({ id: 'AdminWalletEntry' });
 

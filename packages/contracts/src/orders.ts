@@ -12,7 +12,7 @@ import {
   productSchema,
 } from './catalog.js';
 import { REFERENCE_CODE_ALPHABET } from './deposits.js';
-import { cursorPageSchema, cursorQuerySchema, pagedListSchema, pageQuerySchema } from './lists.js';
+import { cursorQuerySchema, pagedListSchema, pageQuerySchema } from './lists.js';
 import { usdCentsSchema } from './money.js';
 import {
   orderRoutes,
@@ -227,6 +227,233 @@ export function cleanPlayerName(name: string | null | undefined): string | null 
     .trim();
   return clean === '' ? null : clean;
 }
+
+// Convenience (S10): saved player ids, gifts, the cart, share links ------------------------------
+
+/** Rule SP1: at most 10 saved ids per game and 50 per account; rule CT2: at most 10 cart lines. */
+export const SAVED_PLAYERS_PER_GAME = 10;
+export const SAVED_PLAYERS_MAX = 50;
+export const CART_LINES_MAX = 10;
+
+/** A saved id's label ("حسابي"): 1–30 printable characters, trimmed, no bidi or format controls. */
+export const savedPlayerLabelSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(30)
+  .regex(/^[^\p{C}]+$/u, 'Expected printable characters only');
+
+/**
+ * The trimmed values of an order's fields in key order (code-unit order of the keys): what rule
+ * PV3 hashes for the player-check cache, `saved_players.fields_hash` and `cartLineKey`.
+ */
+export function canonicalFields(fields: Readonly<Record<string, string>>): [string, string][] {
+  return Object.entries(fields)
+    .map(([key, value]): [string, string] => [key, value.trim()])
+    .sort(([a], [b]) => (a < b ? -1 : 1));
+}
+
+/** Format characters a gift text may hold: ZWNJ and ZWJ, which Arabic and Persian words use. */
+const JOINERS = new Set(['‌', '‍']);
+
+/**
+ * Rule GF3: a gift's sender name or message is text only. After NFKC and Arabic-Indic digits to
+ * Latin, it is refused with a control, bidi or zero-width character (ZWNJ and ZWJ aside), `://`
+ * or `www.`, a domain (a dot then two Latin letters inside a token), a handle (`@` then three
+ * letters, digits or underscores) or a phone number (seven digits in a row, spaces, dots and
+ * dashes allowed between them).
+ */
+export function giftTextAllowed(text: string): boolean {
+  const normal = text
+    .normalize('NFKC')
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0));
+  for (const character of normal) {
+    if (/\p{Cc}/u.test(character)) return false;
+    if (/\p{Cf}/u.test(character) && !JOINERS.has(character)) return false;
+  }
+  if (/:\/\/|www\./i.test(normal)) return false;
+  if (/[^\s.]\.[a-z]{2}/i.test(normal)) return false;
+  if (/@[\p{L}\p{N}_]{3}/u.test(normal)) return false;
+  if (/[0-9](?:[\s.-]*[0-9]){6}/.test(normal)) return false;
+  return true;
+}
+
+export const GIFT_TEXT_REFUSED = 'Gift texts cannot hold links, phone numbers or account handles';
+
+const giftText = (max: number) =>
+  z.string().trim().max(max).refine(giftTextAllowed, GIFT_TEXT_REFUSED);
+
+/** Rule GF1: a gift's sender name (0–30) and message (0–140), both through `giftTextAllowed`. */
+export const giftSchema = z
+  .object({ senderName: giftText(30).optional(), message: giftText(140).optional() })
+  .meta({ id: 'Gift' });
+
+export type Gift = z.input<typeof giftSchema>;
+
+/** Rule SH3: a value of 6 characters or more shows its last 4 after "••••"; a shorter one none. */
+export function maskFieldValue(value: string): string {
+  const characters = [...value];
+  return characters.length >= 6 ? `••••${characters.slice(-4).join('')}` : '••••';
+}
+
+/** What a shared order shows of its state (rule SH4). */
+export const SHARE_STAGES = [
+  'processing',
+  'delivered',
+  'partially_delivered',
+  'not_delivered',
+] as const;
+
+export const shareStageSchema = z.enum(SHARE_STAGES).meta({ id: 'ShareStage' });
+
+export type ShareStage = z.infer<typeof shareStageSchema>;
+
+const SHARE_STAGE_OF: Readonly<Partial<Record<OrderStatus, ShareStage>>> = {
+  paid: 'processing',
+  sent_to_supplier: 'processing',
+  failed: 'processing',
+  needs_review: 'processing',
+  delivered: 'delivered',
+  partially_refunded: 'partially_delivered',
+  refunded: 'not_delivered',
+};
+
+/** Rule RC1: the statuses a receipt or gift link may show; never a reservation or a cancel. */
+export const SHAREABLE_ORDER_STATUSES = Object.keys(SHARE_STAGE_OF) as OrderStatus[];
+
+/**
+ * Rule SH4: the shared state of an order ("تم شحن <d> من <q>" for a partial delivery), or null
+ * for a status that is never shared (`awaiting_balance`, `cancelled`).
+ */
+export function shareStage(
+  status: OrderStatus,
+  deliveredQuantity: number,
+  quantity: number,
+): { stage: ShareStage; deliveredQuantity: number; quantity: number } | null {
+  const stage = SHARE_STAGE_OF[status];
+  return stage === undefined ? null : { stage, deliveredQuantity, quantity };
+}
+
+/**
+ * Rule CT2: lines with the same key merge in the cart: the product and the canonical fields. A
+ * gift line has no key (null): it is always its own line.
+ */
+export function cartLineKey(line: {
+  productId: string;
+  fields: Readonly<Record<string, string>>;
+  gift?: unknown;
+}): string | null {
+  if (line.gift !== undefined && line.gift !== null) return null;
+  return JSON.stringify([line.productId, canonicalFields(line.fields)]);
+}
+
+/** Rule M1 (S10): a checkout's total, the sum of its lines' `orderTotal`. */
+export function checkoutTotal(
+  lines: readonly { unitPriceUsdUnits: number; quantity: number }[],
+): number {
+  const total = lines.reduce(
+    (sum, line) => sum + BigInt(orderTotal(line.unitPriceUsdUnits, line.quantity)),
+    0n,
+  );
+  if (total > BigInt(Number.MAX_SAFE_INTEGER)) throw new RangeError('checkout total overflows');
+  return Number(total);
+}
+
+export const RECEIPT_PLAYER_DISPLAYS = ['masked', 'full'] as const;
+
+export const receiptPlayerDisplaySchema = z
+  .enum(RECEIPT_PLAYER_DISPLAYS)
+  .meta({ id: 'ReceiptPlayerDisplay' });
+
+export type ReceiptPlayerDisplay = z.infer<typeof receiptPlayerDisplaySchema>;
+
+/** `PUT /api/orders/:id/receipt-link` (rule RC1): the price on, the id masked by default. */
+export const receiptOptionsSchema = z
+  .object({
+    showPrice: z.boolean().default(true),
+    playerDisplay: receiptPlayerDisplaySchema.default('masked'),
+  })
+  .meta({ id: 'ReceiptOptions' });
+
+export type ReceiptOptions = z.input<typeof receiptOptionsSchema>;
+
+export const SHARE_KINDS = ['gift', 'receipt'] as const;
+
+export const shareKindSchema = z.enum(SHARE_KINDS).meta({ id: 'ShareKind' });
+
+export type ShareKind = z.infer<typeof shareKindSchema>;
+
+/** A share link's token: 22 base64url characters (16 CSPRNG bytes). */
+export const shareTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
+
+/** Who revoked a share link. */
+export const SHARE_REVOKERS = ['customer', 'admin'] as const;
+
+export const shareRevokerSchema = z.enum(SHARE_REVOKERS).meta({ id: 'ShareRevoker' });
+
+/** A live share link as its owner sees it. */
+export const shareLinkSchema = z
+  .object({
+    id: z.uuid(),
+    kind: shareKindSchema,
+    url: z.string(),
+    showPrice: z.boolean(),
+    playerDisplay: receiptPlayerDisplaySchema,
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: 'ShareLink' });
+
+export type ShareLink = z.infer<typeof shareLinkSchema>;
+
+/** `GET /api/shares/:token` (rules GF5, RC2, SH1): only what the owner chose to show. */
+export const publicShareSchema = z
+  .object({
+    kind: shareKindSchema,
+    /** Receipts only. */
+    orderNumber: z.string().nullable(),
+    game: z.object({
+      nameAr: z.string(),
+      nameEn: z.string(),
+      cover: catalogImageSchema.nullable(),
+      accentColor: z.string().nullable(),
+    }),
+    product: z.object({
+      nameAr: z.string(),
+      kind: productKindSchema,
+      gameAmount: z.int().nullable(),
+    }),
+    quantity: z.int().positive(),
+    deliveredQuantity: z.int().nonnegative(),
+    stage: shareStageSchema,
+    paidAt: z.iso.datetime(),
+    finishedAt: z.iso.datetime().nullable(),
+    /** Receipts with `showPrice` only; never SYP. */
+    price: z
+      .object({ totalUsdUnits: z.int().positive(), refundedUsdUnits: z.int().nonnegative() })
+      .nullable(),
+    /** Masked (rule SH3) unless a receipt chose `full`; `select` fields show their option label. */
+    fields: z.array(z.object({ label: z.string(), value: z.string() })),
+    gift: z
+      .object({ senderName: z.string().nullable(), message: z.string().nullable() })
+      .nullable(),
+  })
+  .meta({ id: 'PublicShare' });
+
+export type PublicShare = z.infer<typeof publicShareSchema>;
+
+/** `GET /api/shares/:token/image` (rule SH2): 1200 × 630 for link previews, 1080 × 1080 to post. */
+export const SHARE_IMAGE_FORMATS = ['og', 'square'] as const;
+
+export const SHARE_IMAGE_SIZES: Readonly<
+  Record<(typeof SHARE_IMAGE_FORMATS)[number], { width: number; height: number }>
+> = { og: { width: 1200, height: 630 }, square: { width: 1080, height: 1080 } };
+
+export const shareImageQuerySchema = z
+  .object({ format: z.enum(SHARE_IMAGE_FORMATS).default('og') })
+  .meta({ id: 'ShareImageQuery' });
+
+export type ShareImageQuery = z.infer<typeof shareImageQuerySchema>;
 
 // Attempts, events, refunds ---------------------------------------------------------------------
 
@@ -671,6 +898,10 @@ export const createOrderSchema = z
     whenBalanceShort: z.enum(['refuse', 'reserve']).default('refuse'),
     /** S09 rule PV8: the customer confirmed the player id that is not known `valid`. */
     confirmPlayer: z.boolean().default(false),
+    /** S10 rule SP1: save the player id with this label in the same transaction. */
+    savePlayer: z.object({ label: savedPlayerLabelSchema }).optional(),
+    /** S10 rule GF1: a direct top-up for someone else, with its texts. */
+    gift: giftSchema.optional(),
   })
   .meta({ id: 'CreateOrder' });
 
@@ -704,6 +935,52 @@ export type OrderStreamItem = z.infer<typeof orderStreamItemSchema>;
 
 const orderGame = z.object({ id: z.uuid(), slug: z.string(), nameAr: z.string() });
 
+/** A saved player id (S10 F14) as the buy box and "معرّفاتي" show it. */
+export const savedPlayerSchema = z
+  .object({
+    id: z.uuid(),
+    gameId: z.uuid(),
+    gameSlug: z.string(),
+    gameNameAr: z.string(),
+    cover: catalogImageSchema.nullable(),
+    /** The game is shown on the store now (edge case 11: "اشحن" is disabled otherwise). */
+    gameShown: z.boolean(),
+    label: z.string(),
+    fields: z.record(z.string(), z.string()),
+    /** The labels of the game's fields, by key, for the fields still on the game. */
+    fieldLabels: z.record(z.string(), z.string()),
+    /** The name of the newest `valid` order with these fields (rule SP2). */
+    playerName: z.string().nullable(),
+    /** A supplier refused this id in an earlier order (rule SP6). */
+    rejected: z.boolean(),
+    /** The saved values still validate against the game's fields (rule SP7). */
+    complete: z.boolean(),
+    lastUsedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: 'SavedPlayer' });
+
+export type SavedPlayer = z.infer<typeof savedPlayerSchema>;
+
+/** `GET /api/saved-players`: the customer's saved ids, newest used first, at most 50. */
+export const savedPlayerListQuerySchema = z
+  .object({ gameId: z.uuid().optional() })
+  .meta({ id: 'SavedPlayerListQuery' });
+
+export type SavedPlayerListQuery = z.infer<typeof savedPlayerListQuerySchema>;
+
+export const savedPlayerListSchema = z
+  .object({ items: z.array(savedPlayerSchema) })
+  .meta({ id: 'SavedPlayerList' });
+
+export type SavedPlayerList = z.infer<typeof savedPlayerListSchema>;
+
+/** `PATCH /api/saved-players/:id` (rule SP5). */
+export const updateSavedPlayerSchema = z
+  .object({ label: savedPlayerLabelSchema })
+  .meta({ id: 'UpdateSavedPlayer' });
+
+export type UpdateSavedPlayer = z.infer<typeof updateSavedPlayerSchema>;
+
 /** One order in "طلباتي". */
 export const orderSummarySchema = z
   .object({
@@ -718,20 +995,46 @@ export const orderSummarySchema = z
     totalSypUnits: z.int().nullable(),
     /** A reservation's deadline (rule RS1); null for an order created paid. */
     expiresAt: z.iso.datetime().nullable(),
+    /** S10: the checkout the order was paid in, a gift, and rule OT3's "اشترِ مجدداً". */
+    checkoutId: z.uuid().nullable(),
+    isGift: z.boolean(),
+    repeatable: z.boolean(),
     createdAt: z.iso.datetime(),
   })
   .meta({ id: 'OrderSummary' });
 
 export type OrderSummary = z.infer<typeof orderSummarySchema>;
 
-/** `GET /api/orders`: newest first, 20 a page. */
+/** `GET /api/orders`: newest first, 20 a page; with `checkout`, that checkout's orders (S10 CT6). */
 export const orderListQuerySchema = cursorQuerySchema
-  .extend({ limit: z.coerce.number().int().min(1).max(50).default(20) })
+  .extend({
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    checkout: z.uuid().optional(),
+  })
   .meta({ id: 'OrderListQuery' });
 
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>;
 
-export const orderPageSchema = cursorPageSchema(orderSummarySchema, 'OrderPage');
+/** A checkout as its orders' view shows it (S10 CT6). */
+export const checkoutInfoSchema = z
+  .object({
+    id: z.uuid(),
+    totalUsdUnits: z.int().positive(),
+    orderCount: z.int().positive(),
+    finishedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: 'CheckoutInfo' });
+
+export type CheckoutInfo = z.infer<typeof checkoutInfoSchema>;
+
+/** One page of "طلباتي"; `checkout` only with the `checkout` filter, in line order. */
+export const orderPageSchema = z
+  .object({
+    items: z.array(orderSummarySchema),
+    nextCursor: z.string().nullable(),
+    checkout: checkoutInfoSchema.nullable(),
+  })
+  .meta({ id: 'OrderPage' });
 
 export type OrderPage = z.infer<typeof orderPageSchema>;
 
@@ -782,11 +1085,72 @@ export const orderSchema = z
     playerName: z.string().nullable(),
     /** The product's delivery time (S08 rule T1), shown while the order is open (rule LT3). */
     deliveryStats: deliveryStatsSchema.nullable(),
+    /** S10: the checkout, the gift's texts, the live share links and rule OT3. */
+    checkoutId: z.uuid().nullable(),
+    isGift: z.boolean(),
+    gift: z
+      .object({ senderName: z.string().nullable(), message: z.string().nullable() })
+      .nullable(),
+    shareLinks: z.array(shareLinkSchema),
+    repeatable: z.boolean(),
     createdAt: z.iso.datetime(),
   })
   .meta({ id: 'Order' });
 
 export type Order = z.infer<typeof orderSchema>;
+
+/** `POST /api/orders` answers the order and the saved id (rule SP1; null when not saved). */
+export const createdOrderSchema = orderSchema
+  .extend({ savedPlayer: savedPlayerSchema.nullable() })
+  .meta({ id: 'CreatedOrder' });
+
+export type CreatedOrder = z.infer<typeof createdOrderSchema>;
+
+/** One cart line at checkout (rule CT5): a purchase without the reservation choice. */
+export const checkoutLineSchema = createOrderSchema
+  .omit({ whenBalanceShort: true })
+  .meta({ id: 'CheckoutLine' });
+
+export type CheckoutLine = z.input<typeof checkoutLineSchema>;
+
+/** `POST /api/checkouts` (rule CT5): 1–10 lines, all or nothing. */
+export const checkoutRequestSchema = z
+  .object({ lines: z.array(checkoutLineSchema).min(1).max(CART_LINES_MAX) })
+  .meta({ id: 'CheckoutRequest' });
+
+export type CheckoutRequest = z.input<typeof checkoutRequestSchema>;
+
+export const checkoutSchema = z
+  .object({
+    id: z.uuid(),
+    totalUsdUnits: z.int().positive(),
+    /** Display only (rule O6); null without a rate. */
+    totalSypUnits: z.int().nullable(),
+    /** In line order. */
+    orders: z.array(orderSummarySchema),
+  })
+  .meta({ id: 'Checkout' });
+
+export type Checkout = z.infer<typeof checkoutSchema>;
+
+/** Why a checkout line was refused (rule CT5 step 3), in `CHECKOUT_REFUSED`'s `details.lines`. */
+export const CHECKOUT_LINE_REFUSALS = [
+  'PRODUCT_UNAVAILABLE',
+  'PRICE_CHANGED',
+  'VALIDATION_FAILED',
+  'PLAYER_NOT_CONFIRMED',
+] as const;
+
+export const checkoutLineRefusalSchema = z
+  .object({
+    /** The line's index in the request, from 0. */
+    index: z.int().nonnegative(),
+    code: z.enum(CHECKOUT_LINE_REFUSALS),
+    details: z.record(z.string(), z.unknown()),
+  })
+  .meta({ id: 'CheckoutLineRefusal' });
+
+export type CheckoutLineRefusal = z.infer<typeof checkoutLineRefusalSchema>;
 
 /** `POST /api/orders/:id/codes/:codeId/reveal` (rule C2). */
 export const revealedCodeSchema = z
@@ -828,7 +1192,10 @@ export const adminOrderListQuerySchema = pageQuerySchema
   .extend({
     tab: adminOrderTabSchema.default('all'),
     status: orderStatusSchema.optional(),
-    /** An order number (any case, with or without the dash) or part of the customer's email. */
+    /**
+     * An order number (any case, with or without the dash), part of the customer's email, or a
+     * checkout's id (S10 rule AD2).
+     */
     q: z.string().trim().min(1).max(100).optional(),
     productId: z.uuid().optional(),
     supplier: supplierCodeSchema.optional(),
@@ -861,6 +1228,9 @@ export const adminOrderSummarySchema = z
     supplierCode: supplierCodeSchema.nullable(),
     /** The open attempt is the manual supplier's (rule MN1). */
     manualWaiting: z.boolean(),
+    /** S10 rule AD2: the "سلة" and "هدية" badges. */
+    checkoutId: z.uuid().nullable(),
+    isGift: z.boolean(),
     /** Since the last status change. */
     since: z.iso.datetime(),
     createdAt: z.iso.datetime(),
@@ -1043,6 +1413,29 @@ export const adminOrderSchema = z
       }),
     ),
     codes: z.array(adminOrderCodeSchema),
+    /** S10 rule AD1: the checkout with its orders, the gift's texts, every share link. */
+    checkout: checkoutInfoSchema
+      .extend({
+        orders: z.array(
+          z.object({
+            id: z.uuid(),
+            number: z.string(),
+            line: z.int().positive(),
+            status: orderStatusSchema,
+          }),
+        ),
+      })
+      .nullable(),
+    gift: z
+      .object({ senderName: z.string().nullable(), message: z.string().nullable() })
+      .nullable(),
+    shareLinks: z.array(
+      shareLinkSchema.omit({ url: true }).extend({
+        revokedAt: z.iso.datetime().nullable(),
+        revokedBy: shareRevokerSchema.nullable(),
+        revokeReason: z.string().nullable(),
+      }),
+    ),
   })
   .meta({ id: 'AdminOrder' });
 
@@ -1081,6 +1474,13 @@ export type ResolveAttempt = z.input<typeof resolveAttemptSchema>;
 export const refundOrderSchema = z.object({ reason: decisionReason }).meta({ id: 'RefundOrder' });
 
 export type RefundOrder = z.infer<typeof refundOrderSchema>;
+
+/** `POST /api/admin/orders/:id/share-links/:linkId/revoke` (S10 rule AD1). */
+export const revokeShareLinkSchema = z
+  .object({ reason: decisionReason })
+  .meta({ id: 'RevokeShareLink' });
+
+export type RevokeShareLink = z.infer<typeof revokeShareLinkSchema>;
 
 /** `POST /api/admin/orders/:id/codes/:codeId/reveal` (rule C3). */
 export const adminRevealedCodeSchema = z
