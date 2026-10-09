@@ -1,6 +1,6 @@
 # S10 — Convenience (F14, F16)
 
-Status: Draft · Date: 2026-10-09 · Scope: `docs/product/v1-scope.md` §F14, §F16 (with §F13's buy box, §F12's calculator, §F27) · ADRs: 0003, 0004, 0011, 0015, 0019, 0022, 0023, 0024
+Status: Approved · Date: 2026-10-09 · Scope: `docs/product/v1-scope.md` §F14, §F16 (with §F13's buy box, §F12's calculator, §F27) · ADRs: 0003, 0004, 0011, 0015, 0019, 0022, 0023, 0024
 
 ## Summary
 S09 sells one pack at a time, and a returning customer types the same player ID every time. S10 makes repeat buying fast and social. A customer **saves player IDs** per game with a label from the buy box ("حسابي", "أخي"), with the validated in-game name, and buys for one again in one step (**one-tap recharge**, still slide-to-pay, at today's price). The same one step **repeats a delivered order**. A **cart** on the device holds up to 10 packs for one or more player IDs and pays them **all or nothing in one wallet debit**, with one wallet entry. Each line is its own order, and one summary email arrives when every line has finished. A **gift top-up** is a direct top-up for someone else's ID with a sender name and a short message, shared as a public gift page and image. Any paid order can have a **shareable receipt**: a public, non-guessable link and image that shows only what the customer chose, never a code. The customer or the admin can revoke a link (owner, 2026-10-09).

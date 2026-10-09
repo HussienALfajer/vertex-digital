@@ -1,6 +1,6 @@
 # 0024 — Cart checkout in one journal, saved player IDs, and public share links
 
-Status: Proposed · Date: 2026-10-09 · Amends [0003](0003-money-currencies-and-ledger.md) (one purchase journal may pay several orders), [0004](0004-orders-and-fulfilment-state-machine.md) (an order's purchase journal may be its checkout's)
+Status: Accepted · Date: 2026-10-09 · Amends [0003](0003-money-currencies-and-ledger.md) (one purchase journal may pay several orders), [0004](0004-orders-and-fulfilment-state-machine.md) (an order's purchase journal may be its checkout's)
 
 ## Context
 F16 asks for a cart "paid in one wallet debit; each line is its own order", a gift top-up with a shareable card, and a shareable receipt. F14 asks for saved player IDs and one-tap recharge. ADR 0004 gives each order its own purchase journal and refund, and codes must never reach a public page. The owner settled the open choices in the S10 interview (2026-10-09).
