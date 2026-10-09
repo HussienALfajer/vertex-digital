@@ -32,6 +32,13 @@ import { hmacSha256, verifyHmacSignature } from '../core/hmac.js';
  * Its catalog (S07) is about ten offers in three groups, changed by a `FakeSupplierState`: costs,
  * stock, removed offers, a failing sync, every call failing, the balance. The worker reads that
  * state from a git-ignored file the `supplier:fake` CLI writes (development and E2E only).
+ *
+ * S08: an offer's script (`orderScripts`, `supplier:fake --order`) decides its next orders before
+ * the `playerId` prefix does (a code offer has no player): `delivered`, `pending` (until
+ * resolved), `failed`, `invalid` (input rejected), `unknown` (no answer until resolved),
+ * `partial:<n>` (n units delivered, the rest failed), `slow:<seconds>`. Orders are kept in the
+ * state (`orders`): each change is handed to `onOrder`, which the worker persists, so a poll, a
+ * repeated key and `supplier:fake --resolve` find them across calls and processes.
  */
 
 export const FAKE_SUPPLIER_CODE = 'fake';
@@ -39,6 +46,57 @@ export const FAKE_SUPPLIER_CODE = 'fake';
 /** The headers of a fake webhook: Unix seconds, and HMAC-SHA256 hex of `${timestamp}.${body}`. */
 export const FAKE_TIMESTAMP_HEADER = 'x-fake-timestamp';
 export const FAKE_SIGNATURE_HEADER = 'x-fake-signature';
+
+/** How an offer's next orders answer (S08, `supplier:fake --order`). */
+export const fakeOrderScriptSchema = z.union([
+  z.enum(['delivered', 'pending', 'failed', 'invalid', 'unknown']),
+  /** 1 to 50 units. */
+  z
+    .templateLiteral(['partial:', z.int()])
+    .refine((value) => /^partial:([1-9]|[1-4]\d|50)$/.test(value)),
+  /** 1 to 600 seconds. */
+  z
+    .templateLiteral(['slow:', z.int()])
+    .refine((value) => /^slow:([1-9]\d{0,2})$/.test(value) && Number(value.slice(5)) <= 600),
+]);
+
+export type FakeOrderScript = z.infer<typeof fakeOrderScriptSchema>;
+
+const outcomeSchema: z.ZodType<SupplierOutcome> = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('delivered'),
+    supplierOrderId: z.string(),
+    quantity: z.int().positive(),
+    codes: z.array(z.string()).optional(),
+  }),
+  z.object({ status: z.literal('pending'), supplierOrderId: z.string() }),
+  z.object({
+    status: z.literal('failed_definitive'),
+    supplierOrderId: z.string().optional(),
+    supplierCode: z.string().optional(),
+    inputRejected: z.boolean().optional(),
+    reason: z.string(),
+  }),
+  z.object({
+    status: z.literal('unknown'),
+    supplierOrderId: z.string().optional(),
+    reason: z.string(),
+  }),
+]);
+
+/** A placed order: the request, its answer, and what polling finds once it settles. */
+const fakeOrderSchema = z.object({
+  request: z.object({
+    idempotencyKey: z.string(),
+    offerId: z.string(),
+    quantity: z.int().positive(),
+    fields: z.record(z.string(), z.string()),
+  }),
+  outcome: outcomeSchema,
+  settled: outcomeSchema,
+});
+
+export type FakeOrder = z.infer<typeof fakeOrderSchema>;
 
 /** What the `supplier:fake` CLI scripts (S07): changes to the catalog and to the calls. */
 export const fakeSupplierStateSchema = z.object({
@@ -52,6 +110,10 @@ export const fakeSupplierStateSchema = z.object({
   /** Every catalog, balance and validation call fails, as a supplier that is down. */
   errors: z.boolean().default(false),
   balanceUsdUnits: z.int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).optional(),
+  /** S08: offer id → how its next orders answer. */
+  orderScripts: z.record(z.string(), fakeOrderScriptSchema).default({}),
+  /** S08: the orders placed so far, by idempotency key. */
+  orders: z.record(z.string(), fakeOrderSchema).default({}),
 });
 
 export type FakeSupplierState = z.infer<typeof fakeSupplierStateSchema>;
@@ -67,6 +129,8 @@ export interface FakeAdapterOptions {
   state?: FakeSupplierState;
   /** Delay of `slow…` orders. Default 3 seconds. */
   slowMs?: number;
+  /** Called with every new or changed order, for the caller to keep (S08). */
+  onOrder?: (idempotencyKey: string, order: FakeOrder) => Promise<void>;
 }
 
 const usd = (cents: number): SupplierMoney => ({ currency: 'USD', amountUnits: cents * USD_CENT });
@@ -109,13 +173,6 @@ const OFFERS: readonly FakeOffer[] = [
   giftCard('fake-itunes-25', 'Fake iTunes 25', 2_400),
 ];
 
-interface FakeOrder {
-  request: PlaceOrderRequest;
-  outcome: SupplierOutcome;
-  /** What polling finds once the order settles (pending and unknown orders). */
-  settled: SupplierOutcome;
-}
-
 const webhookBodySchema = z.object({
   eventId: z.string().min(1),
   idempotencyKey: z.string().min(1),
@@ -125,6 +182,25 @@ const webhookBodySchema = z.object({
   quantity: z.int().positive().optional(),
   codes: z.array(z.string()).optional(),
 });
+
+/** A delivery of `units`, with one generated code per unit for a code offer. */
+function deliveredOutcome(
+  delivers: FakeOffer['delivers'],
+  supplierOrderId: string,
+  units: number,
+): SupplierOutcome {
+  return {
+    status: 'delivered',
+    supplierOrderId,
+    quantity: units,
+    ...(delivers === 'code' && {
+      codes: Array.from(
+        { length: units },
+        () => `FAKE-${randomBytes(6).toString('hex').toUpperCase()}`,
+      ),
+    }),
+  };
+}
 
 const sameRequest = (a: PlaceOrderRequest, b: PlaceOrderRequest) =>
   a.offerId === b.offerId &&
@@ -141,12 +217,13 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     catalog: true,
   };
 
-  private readonly orders = new Map<string, FakeOrder>();
+  private readonly orders: Map<string, FakeOrder>;
   private readonly state: FakeSupplierState;
   private balanceUnits: number;
 
   constructor(private readonly options: FakeAdapterOptions) {
     this.state = options.state ?? fakeSupplierStateSchema.parse({});
+    this.orders = new Map(Object.entries(this.state.orders));
     this.balanceUnits =
       options.balanceUsdUnits ?? this.state.balanceUsdUnits ?? 1_000 * 100 * USD_CENT;
   }
@@ -186,14 +263,24 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     }
     const offer = this.catalog().find((candidate) => candidate.offerId === request.offerId);
     const playerId = request.fields.playerId ?? '';
-    if (!offer || !playerId || playerId.startsWith('fail')) {
+    const script: FakeOrderScript | null = offer
+      ? (this.state.orderScripts[offer.offerId] ?? null)
+      : null;
+    const as = (prefix: string, scripted: FakeOrderScript) =>
+      script === null ? playerId.startsWith(prefix) : script === scripted;
+    if (
+      !offer ||
+      (offer.delivers === 'topup' && !playerId) ||
+      (script === null && playerId.startsWith('fail')) ||
+      script === 'failed'
+    ) {
       return this.record(request, {
         status: 'failed_definitive',
         supplierCode: 'FAKE_REFUSED',
         reason: offer ? 'Refused by the fake supplier' : 'Unknown offer',
       });
     }
-    if (playerId.startsWith('invalid')) {
+    if (as('invalid', 'invalid')) {
       return this.record(request, {
         status: 'failed_definitive',
         supplierCode: 'PLAYER_NOT_FOUND',
@@ -208,7 +295,10 @@ export class FakeSupplierAdapter implements SupplierAdapter {
         reason: 'Out of stock at the fake supplier',
       });
     }
-    const cost = offer.cost.amountUnits * request.quantity;
+    const units = script?.startsWith('partial:')
+      ? Math.min(request.quantity, Number(script.slice('partial:'.length)))
+      : request.quantity;
+    const cost = offer.cost.amountUnits * units;
     if (cost > this.balanceUnits) {
       return this.record(request, {
         status: 'failed_definitive',
@@ -218,32 +308,31 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     }
     this.balanceUnits -= cost;
     const supplierOrderId = `fake-${randomUUID()}`;
-    const delivered: SupplierOutcome = {
-      status: 'delivered',
-      supplierOrderId,
-      quantity: request.quantity,
-      ...(offer.delivers === 'code' && {
-        codes: Array.from(
-          { length: request.quantity },
-          () => `FAKE-${randomBytes(6).toString('hex').toUpperCase()}`,
-        ),
-      }),
-    };
+    const delivered = deliveredOutcome(offer.delivers, supplierOrderId, units);
 
-    if (playerId.startsWith('slow')) {
-      await new Promise((resolve) => setTimeout(resolve, this.options.slowMs ?? 3_000));
-    }
-    if (playerId.startsWith('pending') || playerId.startsWith('badsig')) {
+    if (as('pending', 'pending') || (script === null && playerId.startsWith('badsig'))) {
       return this.record(request, { status: 'pending', supplierOrderId }, delivered);
     }
-    if (playerId.startsWith('unknown')) {
+    if (as('unknown', 'unknown')) {
+      // A scripted `unknown` never answers until resolved (the hard limit, rule F7); the
+      // `unknown…` player is found delivered by the first poll.
       return this.record(
         request,
         { status: 'unknown', reason: 'Fake supplier timed out' },
-        delivered,
+        script === 'unknown'
+          ? { status: 'unknown', reason: 'Fake supplier has no answer' }
+          : delivered,
       );
     }
-    return this.record(request, delivered);
+    // Recorded before the delay, as a supplier that took the order and answers late.
+    const recorded = await this.record(request, delivered);
+    const slowMs = script?.startsWith('slow:')
+      ? Number(script.slice('slow:'.length)) * 1_000
+      : script === null && playerId.startsWith('slow')
+        ? (this.options.slowMs ?? 3_000)
+        : 0;
+    if (slowMs > 0) await new Promise((resolve) => setTimeout(resolve, slowMs));
+    return recorded;
   }
 
   async getOrder(idempotencyKey: string): Promise<SupplierOutcome> {
@@ -257,18 +346,46 @@ export class FakeSupplierAdapter implements SupplierAdapter {
    * Settles a pending order as delivered and returns the webhook the supplier would send, signed
    * (or, for `badsig…` orders, signed wrongly). For tests, development and E2E.
    */
-  completePending(idempotencyKey: string, now = new Date()): WebhookRequest {
+  async completePending(idempotencyKey: string, now = new Date()): Promise<WebhookRequest> {
+    if (this.orders.get(idempotencyKey)?.outcome.status !== 'pending') {
+      throw new Error('No pending fake order with this key');
+    }
+    return this.resolve(idempotencyKey, 'delivered', now);
+  }
+
+  /**
+   * S08 `supplier:fake --resolve`: settles a pending or unknown order as delivered or failed, so
+   * the next poll finds it, and returns the signed webhook that reports it.
+   */
+  async resolve(
+    idempotencyKey: string,
+    status: 'delivered' | 'failed',
+    now = new Date(),
+  ): Promise<WebhookRequest> {
     const order = this.orders.get(idempotencyKey);
-    if (order?.outcome.status !== 'pending') throw new Error('No pending fake order with this key');
-    order.outcome = order.settled;
-    const settled = order.settled as Extract<SupplierOutcome, { status: 'delivered' }>;
+    const open = order?.outcome.status === 'pending' || order?.outcome.status === 'unknown';
+    if (!order || !open) throw new Error('No open fake order with this key');
+    const supplierOrderId =
+      ('supplierOrderId' in order.outcome && order.outcome.supplierOrderId) ||
+      `fake-${randomUUID()}`;
+    const delivers =
+      OFFERS.find((offer) => offer.offerId === order.request.offerId)?.delivers ?? 'topup';
+    const result: SupplierOutcome =
+      status === 'failed'
+        ? { status: 'failed_definitive', supplierOrderId, reason: 'Failed by the fake supplier' }
+        : order.settled.status === 'delivered'
+          ? order.settled
+          : deliveredOutcome(delivers, supplierOrderId, order.request.quantity);
+    await this.keep(idempotencyKey, { ...order, outcome: result, settled: result });
     const rawBody = JSON.stringify({
       eventId: `evt-${randomUUID()}`,
       idempotencyKey,
-      supplierOrderId: settled.supplierOrderId,
-      status: 'delivered',
-      quantity: settled.quantity,
-      ...(settled.codes && { codes: settled.codes }),
+      supplierOrderId,
+      status,
+      ...(result.status === 'delivered' && {
+        quantity: result.quantity,
+        ...(result.codes && { codes: result.codes }),
+      }),
     });
     const timestamp = Math.floor(now.getTime() / 1000).toString();
     const secret = order.request.fields.playerId?.startsWith('badsig')
@@ -333,12 +450,17 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     if (this.state.errors) throw new SupplierError('retryable', 'Fake supplier timed out');
   }
 
-  private record(
+  private async record(
     request: PlaceOrderRequest,
     outcome: SupplierOutcome,
     settled: SupplierOutcome = outcome,
-  ): SupplierOutcome {
-    this.orders.set(request.idempotencyKey, { request, outcome, settled });
+  ): Promise<SupplierOutcome> {
+    await this.keep(request.idempotencyKey, { request, outcome, settled });
     return outcome;
+  }
+
+  private async keep(idempotencyKey: string, order: FakeOrder): Promise<void> {
+    this.orders.set(idempotencyKey, order);
+    await this.options.onOrder?.(idempotencyKey, order);
   }
 }

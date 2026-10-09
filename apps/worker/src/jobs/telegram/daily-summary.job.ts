@@ -14,18 +14,21 @@ import {
   type Database,
   depositSettings,
   deposits,
+  fulfilmentAttempts,
   ledgerSummary,
+  orders,
   priceReviews,
   productRoutingStates,
   queueTelegramMessage,
   storeSwitchChanges,
   supplierStates,
+  suppliers,
   type Transaction,
   telegramPrompts,
   usdtTransferState,
   usdtTransfers,
 } from '@vertex-digital/db';
-import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, type SQL, sql } from 'drizzle-orm';
 import { TelegramAlerts } from '../../core/alerts/telegram-alerts.js';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -222,6 +225,51 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       })),
       suppressedAlerts: this.alerts.suppressedOn(date),
       ...(await this.supplierLines(db, now)),
+      ...(await this.orderLines(db, dayStart)),
+    };
+  }
+
+  /**
+   * S08: real customers' orders that ended today by how they ended, and the median delivery time
+   * of today's deliveries; the orders held for review and the manual attempts waiting, now.
+   */
+  private async orderLines(db: Database | Transaction, dayStart: SQL) {
+    const endedToday = and(eq(orders.isTest, false), gte(orders.finishedAt, dayStart));
+    const [ended, [review], [manual], [median]] = await Promise.all([
+      db
+        .select({ status: orders.status, count: count() })
+        .from(orders)
+        .where(
+          and(endedToday, inArray(orders.status, ['delivered', 'partially_refunded', 'refunded'])),
+        )
+        .groupBy(orders.status),
+      db.select({ count: count() }).from(orders).where(eq(orders.status, 'needs_review')),
+      db
+        .select({ count: count() })
+        .from(fulfilmentAttempts)
+        .innerJoin(suppliers, eq(suppliers.id, fulfilmentAttempts.supplierId))
+        .where(
+          and(
+            eq(suppliers.code, 'manual'),
+            inArray(fulfilmentAttempts.status, ['sending', 'pending', 'unknown']),
+          ),
+        ),
+      db
+        .select({
+          ms: sql<string | null>`(percentile_disc(0.5) within group (order by
+            extract(epoch from ${orders.deliveredAt} - ${orders.paidAt}) * 1000))::bigint::text`,
+        })
+        .from(orders)
+        .where(and(endedToday, eq(orders.status, 'delivered'))),
+    ]);
+    const ofStatus = (status: string) => ended.find((row) => row.status === status)?.count ?? 0;
+    return {
+      ordersDelivered: ofStatus('delivered'),
+      ordersPartiallyRefunded: ofStatus('partially_refunded'),
+      ordersRefunded: ofStatus('refunded'),
+      ordersInReview: review?.count ?? 0,
+      manualWaiting: manual?.count ?? 0,
+      medianDeliveryMs: median?.ms == null ? null : Math.max(0, Number(median.ms)),
     };
   }
 

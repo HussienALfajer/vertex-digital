@@ -10,7 +10,7 @@ import {
 import { FakeSupplierAdapter, type SupplierAdapter } from '@vertex-digital/suppliers';
 import { desc, eq } from 'drizzle-orm';
 import { ENV, type Env } from '../core/config/env.js';
-import { readFakeSupplierState } from './fake-state-file.js';
+import { keepFakeOrder, readFakeSupplierState } from './fake-state-file.js';
 
 /** A supplier's adapter with its credentials, and the values to keep out of every message. */
 export interface ConnectedSupplier {
@@ -42,9 +42,12 @@ export class SupplierRegistry {
   ): Promise<SupplierAdapter | null> {
     if (!supplierAvailable(code, { fakeEnabled: this.fakeEnabled })) return null;
     if (code !== 'fake') return null;
+    const file = this.env.FAKE_SUPPLIER_STATE_FILE;
     return new FakeSupplierAdapter({
       webhookSecret: credentials.webhookSecret ?? '',
-      state: await readFakeSupplierState(this.env.FAKE_SUPPLIER_STATE_FILE),
+      state: await readFakeSupplierState(file),
+      // The fake's orders outlive this adapter (S08): polls and `--resolve` read them back.
+      onOrder: (key, order) => keepFakeOrder(file, key, order),
     });
   }
 

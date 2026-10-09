@@ -78,6 +78,7 @@ describe('worker environment', () => {
       SMTP_USER: 'mailbox@example.com',
       SMTP_PASSWORD: 'secret',
       SUPPLIER_KEYS_SECRET: Buffer.alloc(32, 7).toString('base64'),
+      ORDER_CODES_SECRET: Buffer.alloc(32, 8).toString('base64'),
     };
     expect(() => parseEnv(production)).toThrow('CHAIN_READER');
     // Production sends through the Bot API unless told otherwise, and never writes files.
@@ -122,6 +123,7 @@ describe('worker environment', () => {
       SMTP_USER: 'mailbox@example.com',
       SMTP_PASSWORD: 'secret',
       CHAIN_READER: 'live',
+      ORDER_CODES_SECRET: Buffer.alloc(32, 8).toString('base64'),
     };
     expect(() => parseEnv(production)).toThrow('SUPPLIER_KEYS_SECRET');
     const key = Buffer.alloc(32, 9).toString('base64');
@@ -129,5 +131,29 @@ describe('worker environment', () => {
     expect(() =>
       parseEnv({ ...production, SUPPLIER_KEYS_SECRET: key, SUPPLIER_FAKE_ENABLED: 'true' }),
     ).toThrow('SUPPLIER_FAKE_ENABLED');
+  });
+
+  it('reads the order codes key as the API does, required in production (S08)', () => {
+    const apiKey = Buffer.from(
+      createHash('sha256').update(`vertex-digital-dev-order-codes:${DATABASE_URL}`).digest('hex'),
+      'hex',
+    ).toString('base64');
+    expect(parseEnv({ DATABASE_URL }).ORDER_CODES_SECRET).toBe(apiKey);
+    expect(() => parseEnv({ DATABASE_URL, ORDER_CODES_SECRET: 'c2hvcnQ=' })).toThrow(
+      'ORDER_CODES_SECRET',
+    );
+    const production = {
+      DATABASE_URL,
+      NODE_ENV: 'production',
+      EMAIL_TRANSPORT: 'smtp',
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_USER: 'mailbox@example.com',
+      SMTP_PASSWORD: 'secret',
+      CHAIN_READER: 'live',
+      SUPPLIER_KEYS_SECRET: Buffer.alloc(32, 9).toString('base64'),
+    };
+    expect(() => parseEnv(production)).toThrow('ORDER_CODES_SECRET');
+    const key = Buffer.alloc(32, 3).toString('base64');
+    expect(parseEnv({ ...production, ORDER_CODES_SECRET: key }).ORDER_CODES_SECRET).toBe(key);
   });
 });

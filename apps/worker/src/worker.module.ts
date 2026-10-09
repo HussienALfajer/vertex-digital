@@ -3,6 +3,7 @@ import type { Database } from '@vertex-digital/db';
 import { LoggerModule } from 'nestjs-pino';
 import { TelegramAlerts } from './core/alerts/telegram-alerts.js';
 import { ConfigModule } from './core/config/config.module.js';
+import { LOG_REDACT_PATHS } from './core/config/log-redact.js';
 import { ENV, type Env } from './core/config/env.js';
 import { DATABASE, DatabaseModule } from './core/database/database.module.js';
 import { Mailer } from './core/email/mailer.js';
@@ -14,9 +15,13 @@ import { UsdtVerifyJob } from './jobs/deposits/usdt-verify.job.js';
 import { PurgeCodesJob } from './jobs/email/purge-codes.job.js';
 import { SendEmailJob } from './jobs/email/send-email.job.js';
 import { SupplierBalancesJob } from './jobs/suppliers/balances.job.js';
+import { OrdersFulfilJob } from './jobs/orders/fulfil.job.js';
+import { OrdersPollJob } from './jobs/orders/poll.job.js';
+import { OrdersSweepJob } from './jobs/orders/sweep.job.js';
 import { SupplierHealthJob } from './jobs/suppliers/health.job.js';
 import { SupplierSyncJob } from './jobs/suppliers/sync.job.js';
 import { SupplierSyncScheduleJob } from './jobs/suppliers/sync-schedule.job.js';
+import { SupplierWebhookJob } from './jobs/suppliers/webhook.job.js';
 import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
 import { DailySummaryJob } from './jobs/telegram/daily-summary.job.js';
 import { DepositCardJob } from './jobs/telegram/deposit-card.job.js';
@@ -35,6 +40,7 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
       useFactory: (env: Env) => ({
         pinoHttp: {
           level: env.LOG_LEVEL,
+          redact: LOG_REDACT_PATHS,
           ...(env.NODE_ENV === 'development' && { transport: { target: 'pino-pretty' } }),
         },
       }),
@@ -79,6 +85,10 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     SupplierSyncScheduleJob,
     SupplierBalancesJob,
     SupplierHealthJob,
+    OrdersFulfilJob,
+    OrdersPollJob,
+    OrdersSweepJob,
+    SupplierWebhookJob,
   ],
 })
 export class WorkerModule implements OnApplicationBootstrap {

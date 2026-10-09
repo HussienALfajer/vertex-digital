@@ -19,12 +19,12 @@ Spec: `docs/specs/S08-orders-and-fulfilment.md` (F11 with F26 SW7, F27 and F13's
 - [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (one blocking finding: race and limit tests on the money and public routes, added), owner acceptance (2026-10-09), PR with auto-merge
 
 ## PR 2 — Worker: routing, sending, polling, webhooks, sweep, manual, notifications · Opus 5.5 `high`
-- [ ] Jobs `orders.fulfil` (R1–R6), `orders.poll` (F3), `suppliers.webhook` (F5), `orders.sweep` (F6, F7, MN2); supplier calls recorded in `supplier_calls`
-- [ ] Telegram kinds and cards (`manual_order`, reminder, `order_needs_review`, `order_conflict`) with dedupe keys; daily summary lines
-- [ ] Customer notifications in the change's transaction; codes never logged (log redaction covers `codes`)
-- [ ] Fake supplier order scripting (`--order`, `--resolve … --via poll|webhook`); commands table
-- [ ] Worker env `ORDER_CODES_SECRET` (required in production, derived locally exactly as the API's)
-- [ ] Tests (each tier, guard, balance, already tried, test customers, every outcome, partial, input rejection, schedule and hard limit, review polling, sweep, webhooks applied / same result / unknown key / conflict, manual cards and reminder, dedupe keys, log capture)
+- [x] Jobs `orders.fulfil` (R1–R6), `orders.poll` (F3), `suppliers.webhook` (F5), `orders.sweep` (F6, F7, MN2); supplier calls recorded in `supplier_calls`
+- [x] Telegram kinds and cards (`manual_order`, reminder, `order_needs_review`, `order_conflict`) with dedupe keys; daily summary lines
+- [x] Customer notifications in the change's transaction; codes never logged (log redaction covers `codes`)
+- [x] Fake supplier order scripting (`--order`, `--resolve … --via poll|webhook`); commands table
+- [x] Worker env `ORDER_CODES_SECRET` (required in production, derived locally exactly as the API's)
+- [x] Tests (each tier, guard, balance, already tried, test customers, every outcome, partial, input rejection, schedule and hard limit, review polling, sweep, webhooks applied / same result / unknown key / conflict, manual cards and reminder, dedupe keys, log capture)
 - [ ] Wiring checklist, docs
 - [ ] Checks, reviewer, owner acceptance, PR with auto-merge
 

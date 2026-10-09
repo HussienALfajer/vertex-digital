@@ -75,6 +75,10 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'supplier_health',
   'supplier_balance_low',
   'supplier_sync_failing',
+  'manual_order',
+  'manual_order_reminder',
+  'order_needs_review',
+  'order_conflict',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -237,6 +241,15 @@ export const TELEGRAM_MESSAGE_PARAMS = {
         z.object({ supplierNameAr: z.string(), currency: currencySchema, amountUnits: z.int() }),
       )
       .default([]),
+    /** S08: orders of real customers that ended today, by how they ended. */
+    ordersDelivered: z.int().nonnegative().default(0),
+    ordersPartiallyRefunded: z.int().nonnegative().default(0),
+    ordersRefunded: z.int().nonnegative().default(0),
+    /** S08: orders in `needs_review` and open manual attempts, now. */
+    ordersInReview: z.int().nonnegative().default(0),
+    manualWaiting: z.int().nonnegative().default(0),
+    /** S08: the median of today's delivery times of real customers' orders (null with none). */
+    medianDeliveryMs: z.int().nonnegative().nullable().default(null),
   }),
   bot_reply: telegramBotReplySchema,
   /** To the previous chat when another chat was linked (rule TG3). */
@@ -285,6 +298,45 @@ export const TELEGRAM_MESSAGE_PARAMS = {
       unavailableProducts: z.int().nonnegative(),
     }),
   ]),
+  /**
+   * S08 rule MN1: a manual attempt waits for the admin. Never field values or codes; the link
+   * opens the order in the panel.
+   */
+  manual_order: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    gameNameAr: z.string(),
+    productNameAr: z.string(),
+    quantity: z.int().positive(),
+    sentAt: z.iso.datetime(),
+  }),
+  /** S08 rule MN2: the one reminder of a manual attempt still open. */
+  manual_order_reminder: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    gameNameAr: z.string(),
+    productNameAr: z.string(),
+    quantity: z.int().positive(),
+    waitMinutes: z.int().nonnegative(),
+  }),
+  /** S08 rule F7: an automatic attempt past the hard limit; the order is held for the admin. */
+  order_needs_review: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    supplierNameAr: z.string(),
+    waitMinutes: z.int().nonnegative(),
+  }),
+  /**
+   * S08 rule F5: a webhook reported another result for a closed attempt (delivered after failed,
+   * or failed after delivered): a possible double delivery, for the admin and reconciliation.
+   */
+  order_conflict: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    supplierNameAr: z.string(),
+    attemptStatus: z.enum(['delivered', 'failed']),
+    reported: z.enum(['delivered', 'failed']),
+  }),
 } as const satisfies Record<TelegramMessageKind, z.ZodType>;
 
 export type TelegramMessageParams<Kind extends TelegramMessageKind> = z.infer<

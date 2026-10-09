@@ -296,3 +296,12 @@ PR 1 (contracts, db, api, 2026-10-09):
 - `awaiting_balance` reads as `processing` for the customer until S09 defines its stage.
 - A webhook the adapter cannot parse is stored under `malformed:<SHA-256 of the body>` for the worker to mark `malformed`.
 - The purchase rate limits count in `customer_rate_limits` (every request, refused or not, as S01's counters); nginx adds `vdpurchase` (POST only), `vdreveal` and `vdwebhook`.
+
+PR 2 (worker, 2026-10-09):
+- A manual attempt is written `pending` in the routing transaction (no `sending` step: there is no call), with its `manual_order` card; it is never polled and has no hard limit.
+- The sweep calls no supplier itself: it queues `orders.poll` for a `sending` attempt older than a minute (the poll sends it again with its key) and for a poll a minute late, and `orders.fulfil` for a `paid` or `failed` order with no open attempt untouched for a minute; both queues are `stately`, so a job already queued makes these no-ops. At most 100 rows per step and run.
+- Order calls count for health (S07 H1) by their outcome: `delivered` and `pending` are `ok`, `failed_definitive` is `refused`, `unknown` is `error`. A supplier with no adapter or credentials when an attempt is sent or polled gives `unknown` (`supplier_unavailable`) and keeps its schedule (rule F8).
+- A webhook whose key is not a UUID or names no attempt of that supplier is `unknown_key`; a webhook whose adapter is gone by the time the worker reads it fails the job (retried, then alerted), since the API verified it with that adapter. A `pending` or `unknown` report on a closed attempt counts as `same_result`.
+- The fake supplier's scripted `unknown` stays unknown, polled or sent again, until `--resolve` (so the hard limit can be seen, acceptance step 7); the `unknown…` player prefix still settles delivered at the first poll. A code offer orders without a `playerId`. `--resolve --via webhook` posts to `API_HOST:API_PORT` (default `127.0.0.1:3000`).
+- The daily summary counts real customers' orders by the day they ended (`finished_at`); the review and manual counts and nothing else include test customers' orders, since the admin acts on those too. The day's median delivery time is the nearest-rank median of the day's deliveries (one is enough).
+- The worker's logs redact `codes` up to four levels deep (`apps/worker/src/core/config/log-redact.ts`), under the rule that outcomes are never logged.

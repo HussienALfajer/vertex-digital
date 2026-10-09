@@ -429,6 +429,12 @@ describe('the messages of PR 4', () => {
       marginGuarded: 1,
       suppliersNotHealthy: [{ supplierNameAr: 'WDGZone', state: 'degraded' }],
       balancesLow: [{ supplierNameAr: 'SHOP2TOPUP', currency: 'USD', amountUnits: 20 * USD }],
+      ordersDelivered: 7,
+      ordersPartiallyRefunded: 1,
+      ordersRefunded: 2,
+      ordersInReview: 1,
+      manualWaiting: 3,
+      medianDeliveryMs: 45_000,
     };
     const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
     for (const line of [
@@ -438,6 +444,9 @@ describe('the messages of PR 4', () => {
       '⛔ الإيداع متوقف منذ 01/01 13:00',
       'تنبيهات حُجبت بحد الإرسال: 3',
       'مراجعات أسعار مفتوحة: 2',
+      'الطلبات اليوم: 7 مُسلّمة، 1 جزئية، 2 مستردة',
+      'بحاجة لمراجعة: 1 · يدوي بانتظارك: 3',
+      'وسيط وقت التسليم اليوم: 45 ث',
       'باقات أوقفها حارس الهامش: 1',
       '⚠️ المورد WDGZone: متراجع',
       '💰 رصيد SHOP2TOPUP تحت الحد: $20.00',
