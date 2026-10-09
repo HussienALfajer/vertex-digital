@@ -205,6 +205,7 @@ describe('the customer wallet (rules W1–W10)', () => {
         adjustment: { category: 'compensation', customerNote: 'تعويض عن التأخير', reversal: false },
         deposit: null,
         order: null,
+        checkout: null,
       },
     ]);
     expect(JSON.stringify(page)).not.toMatch(/Internal|journal|admin/i);

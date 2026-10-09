@@ -973,6 +973,7 @@
                 "order.poll_requested",
                 "order.attempt_resolved",
                 "order.refund_decided",
+                "order.share_revoked",
                 "order.code_revealed",
                 "order_policy.set"
               ]
@@ -4505,11 +4506,11 @@
         },
         "responses": {
           "201": {
-            "description": "Paid, or reserved with `whenBalanceShort: reserve` (200: a replay)",
+            "description": "Paid, or reserved with `whenBalanceShort: reserve` (200: a replay); `savedPlayer` (S10 SP1)",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Order"
+                  "$ref": "#/components/schemas/CreatedOrder"
                 }
               }
             }
@@ -4542,6 +4543,16 @@
               "minimum": 1,
               "maximum": 50
             }
+          },
+          {
+            "name": "checkout",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
           }
         ],
         "responses": {
@@ -4554,6 +4565,141 @@
                 }
               }
             }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/checkouts": {
+      "post": {
+        "operationId": "OrdersController_checkout",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Every line paid, one order each (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Checkout"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/saved-players": {
+      "get": {
+        "operationId": "OrdersController_savedPlayerList",
+        "parameters": [
+          {
+            "name": "gameId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "At most 50, no paging",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPlayerList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/saved-players/{id}": {
+      "patch": {
+        "operationId": "OrdersController_renameSavedPlayer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSavedPlayer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The renamed id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPlayer"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      },
+      "delete": {
+        "operationId": "OrdersController_deleteSavedPlayer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted for good"
           }
         },
         "tags": [
@@ -4621,6 +4767,107 @@
         ]
       }
     },
+    "/api/orders/{id}/receipt-link": {
+      "put": {
+        "operationId": "OrdersController_receiptLink",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptOptions"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The live receipt link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLink"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/orders/{id}/gift-link": {
+      "post": {
+        "operationId": "OrdersController_giftLink",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The new gift link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLink"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/orders/{id}/share-links/{linkId}/revoke": {
+      "post": {
+        "operationId": "OrdersController_revokeShareLink",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "linkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The link answers not found from now on"
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/api/orders/{id}/codes/{codeId}/reveal": {
       "post": {
         "operationId": "OrdersController_reveal",
@@ -4649,6 +4896,54 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RevealedCode"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/admin/orders/{id}/share-links/{linkId}/revoke": {
+      "post": {
+        "operationId": "OrdersAdminController_revokeShareLink",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "linkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeShareLink"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The order with the link revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOrder"
                 }
               }
             }
@@ -5093,6 +5388,72 @@
                 }
               }
             }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/shares/{token}": {
+      "get": {
+        "operationId": "SharesController_share",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What the owner chose to show",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicShare"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/shares/{token}/image": {
+      "get": {
+        "operationId": "SharesController_image",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "og",
+              "type": "string",
+              "enum": [
+                "og",
+                "square"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "1200 × 630 (`og`) or 1080 × 1080 (`square`), PNG"
           }
         },
         "tags": [
@@ -5884,6 +6245,86 @@
               "params"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "checkout_finished"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "checkoutId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "orderCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  },
+                  "delivered": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "partiallyRefunded": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "refunded": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "refundedUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "checkoutId",
+                  "orderCount",
+                  "delivered",
+                  "partiallyRefunded",
+                  "refunded",
+                  "refundedUsdUnits"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -5971,7 +6412,8 @@
               "order_refunded",
               "order_delayed",
               "order_paid",
-              "order_cancelled"
+              "order_cancelled",
+              "checkout_finished"
             ]
           }
         },
@@ -6007,7 +6449,8 @@
           "order_refunded",
           "order_delayed",
           "order_paid",
-          "order_cancelled"
+          "order_cancelled",
+          "checkout_finished"
         ]
       },
       "StoreStatus": {
@@ -6818,6 +7261,7 @@
           "order.poll_requested",
           "order.attempt_resolved",
           "order.refund_decided",
+          "order.share_revoked",
           "order.code_revealed",
           "order_policy.set"
         ]
@@ -7232,6 +7676,54 @@
               "productNameAr"
             ],
             "additionalProperties": false
+          },
+          "checkout": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "orderCount": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "orders": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "number": {
+                      "type": "string"
+                    },
+                    "productNameAr": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "number",
+                    "productNameAr"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id",
+              "orderCount",
+              "orders"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -7241,7 +7733,8 @@
           "balanceAfterUnits",
           "adjustment",
           "deposit",
-          "order"
+          "order",
+          "checkout"
         ],
         "additionalProperties": false
       },
@@ -7602,6 +8095,54 @@
               "productNameAr"
             ],
             "additionalProperties": false
+          },
+          "checkout": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "orderCount": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "orders": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "number": {
+                      "type": "string"
+                    },
+                    "productNameAr": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "number",
+                    "productNameAr"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id",
+              "orderCount",
+              "orders"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -7612,7 +8153,8 @@
           "journalId",
           "adjustment",
           "deposit",
-          "order"
+          "order",
+          "checkout"
         ],
         "additionalProperties": false
       },
@@ -13992,6 +14534,27 @@
           "confirmPlayer": {
             "default": false,
             "type": "boolean"
+          },
+          "savePlayer": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 30,
+                "pattern": "^[^\\p{C}]+$"
+              }
+            },
+            "required": [
+              "label"
+            ]
+          },
+          "gift": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Gift"
+              }
+            ]
           }
         },
         "required": [
@@ -13999,6 +14562,863 @@
           "quantity",
           "expectedUnitPriceUsdUnits"
         ]
+      },
+      "Gift": {
+        "type": "object",
+        "properties": {
+          "senderName": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 140
+          }
+        }
+      },
+      "CreatedOrder": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "number": {
+            "type": "string"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/OrderStage"
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "nameAr": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/components/schemas/ProductKind"
+              },
+              "regionAr": {
+                "nullable": true,
+                "type": "string"
+              },
+              "redemptionAr": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "nameAr",
+              "kind",
+              "regionAr",
+              "redemptionAr"
+            ],
+            "additionalProperties": false
+          },
+          "game": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "nameAr": {
+                "type": "string"
+              },
+              "cover": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CatalogImage"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "slug",
+              "nameAr",
+              "cover"
+            ],
+            "additionalProperties": false
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "labelAr": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "labelAr",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "deliveredQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "refundedQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "unitPriceUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "totalUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "totalSypUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "refundedUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "refundReason": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RefundReason"
+              }
+            ]
+          },
+          "timeline": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "step": {
+                  "$ref": "#/components/schemas/OrderTimelineStep"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": [
+                "step",
+                "at"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "codes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderCode"
+            }
+          },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "cancelReason": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CancelReason"
+              }
+            ]
+          },
+          "playerName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "deliveryStats": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryStats"
+              }
+            ]
+          },
+          "checkoutId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "isGift": {
+            "type": "boolean"
+          },
+          "gift": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "senderName": {
+                "nullable": true,
+                "type": "string"
+              },
+              "message": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "senderName",
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "shareLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShareLink"
+            }
+          },
+          "repeatable": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "savedPlayer": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SavedPlayer"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "stage",
+          "product",
+          "game",
+          "fields",
+          "quantity",
+          "deliveredQuantity",
+          "refundedQuantity",
+          "unitPriceUsdUnits",
+          "totalUsdUnits",
+          "totalSypUnits",
+          "refundedUsdUnits",
+          "refundReason",
+          "timeline",
+          "codes",
+          "expiresAt",
+          "cancelReason",
+          "playerName",
+          "deliveryStats",
+          "checkoutId",
+          "isGift",
+          "gift",
+          "shareLinks",
+          "repeatable",
+          "createdAt",
+          "savedPlayer"
+        ],
+        "additionalProperties": false
+      },
+      "OrderStage": {
+        "type": "string",
+        "enum": [
+          "awaiting_balance",
+          "processing",
+          "delayed",
+          "delivered",
+          "partially_refunded",
+          "refunded",
+          "cancelled"
+        ]
+      },
+      "OrderTimelineStep": {
+        "type": "string",
+        "enum": [
+          "reserved",
+          "paid",
+          "sent",
+          "retrying",
+          "delayed",
+          "delivered",
+          "partially_refunded",
+          "refunded",
+          "cancelled"
+        ]
+      },
+      "OrderCode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "masked": {
+            "type": "string"
+          },
+          "firstRevealedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "masked",
+          "firstRevealedAt"
+        ],
+        "additionalProperties": false
+      },
+      "CancelReason": {
+        "type": "string",
+        "enum": [
+          "expired",
+          "customer",
+          "price_rose",
+          "product_changed"
+        ]
+      },
+      "DeliveryStats": {
+        "type": "object",
+        "properties": {
+          "medianMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "p90Ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "count": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "medianMs",
+          "p90Ms",
+          "count"
+        ],
+        "additionalProperties": false
+      },
+      "ShareLink": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ShareKind"
+          },
+          "url": {
+            "type": "string"
+          },
+          "showPrice": {
+            "type": "boolean"
+          },
+          "playerDisplay": {
+            "$ref": "#/components/schemas/ReceiptPlayerDisplay"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "url",
+          "showPrice",
+          "playerDisplay",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ShareKind": {
+        "type": "string",
+        "enum": [
+          "gift",
+          "receipt"
+        ]
+      },
+      "ReceiptPlayerDisplay": {
+        "type": "string",
+        "enum": [
+          "masked",
+          "full"
+        ]
+      },
+      "SavedPlayer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "gameId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "gameSlug": {
+            "type": "string"
+          },
+          "gameNameAr": {
+            "type": "string"
+          },
+          "cover": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CatalogImage"
+              }
+            ]
+          },
+          "gameShown": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "fieldLabels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "playerName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "rejected": {
+            "type": "boolean"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "lastUsedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "gameId",
+          "gameSlug",
+          "gameNameAr",
+          "cover",
+          "gameShown",
+          "label",
+          "fields",
+          "fieldLabels",
+          "playerName",
+          "rejected",
+          "complete",
+          "lastUsedAt"
+        ],
+        "additionalProperties": false
+      },
+      "CheckoutRequest": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckoutLine"
+            }
+          }
+        },
+        "required": [
+          "lines"
+        ]
+      },
+      "CheckoutLine": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "fields": {
+            "default": {},
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "expectedUnitPriceUsdUnits": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "confirmPlayer": {
+            "default": false,
+            "type": "boolean"
+          },
+          "savePlayer": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 30,
+                "pattern": "^[^\\p{C}]+$"
+              }
+            },
+            "required": [
+              "label"
+            ]
+          },
+          "gift": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Gift"
+              }
+            ]
+          }
+        },
+        "required": [
+          "productId",
+          "quantity",
+          "expectedUnitPriceUsdUnits"
+        ]
+      },
+      "Checkout": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "totalUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "totalSypUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "orders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderSummary"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "totalUsdUnits",
+          "totalSypUnits",
+          "orders"
+        ],
+        "additionalProperties": false
+      },
+      "OrderSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "number": {
+            "type": "string"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/OrderStage"
+          },
+          "productNameAr": {
+            "type": "string"
+          },
+          "game": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "nameAr": {
+                "type": "string"
+              },
+              "cover": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CatalogImage"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "slug",
+              "nameAr",
+              "cover"
+            ],
+            "additionalProperties": false
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "totalUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "totalSypUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "checkoutId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "isGift": {
+            "type": "boolean"
+          },
+          "repeatable": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "stage",
+          "productNameAr",
+          "game",
+          "quantity",
+          "totalUsdUnits",
+          "totalSypUnits",
+          "expiresAt",
+          "checkoutId",
+          "isGift",
+          "repeatable",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "SavedPlayerListQuery": {
+        "type": "object",
+        "properties": {
+          "gameId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        }
+      },
+      "SavedPlayerList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedPlayer"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateSavedPlayer": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30,
+            "pattern": "^[^\\p{C}]+$"
+          }
+        },
+        "required": [
+          "label"
+        ]
+      },
+      "OrderListQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "checkout": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        }
+      },
+      "OrderPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderSummary"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          },
+          "checkout": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CheckoutInfo"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "checkout"
+        ],
+        "additionalProperties": false
+      },
+      "CheckoutInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "totalUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "orderCount": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "finishedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "totalUsdUnits",
+          "orderCount",
+          "finishedAt"
+        ],
+        "additionalProperties": false
       },
       "Order": {
         "type": "object",
@@ -14200,6 +15620,43 @@
               }
             ]
           },
+          "checkoutId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "isGift": {
+            "type": "boolean"
+          },
+          "gift": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "senderName": {
+                "nullable": true,
+                "type": "string"
+              },
+              "message": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "senderName",
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "shareLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShareLink"
+            }
+          },
+          "repeatable": {
+            "type": "boolean"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -14227,230 +15684,31 @@
           "cancelReason",
           "playerName",
           "deliveryStats",
+          "checkoutId",
+          "isGift",
+          "gift",
+          "shareLinks",
+          "repeatable",
           "createdAt"
         ],
         "additionalProperties": false
       },
-      "OrderStage": {
-        "type": "string",
-        "enum": [
-          "awaiting_balance",
-          "processing",
-          "delayed",
-          "delivered",
-          "partially_refunded",
-          "refunded",
-          "cancelled"
-        ]
-      },
-      "OrderTimelineStep": {
-        "type": "string",
-        "enum": [
-          "reserved",
-          "paid",
-          "sent",
-          "retrying",
-          "delayed",
-          "delivered",
-          "partially_refunded",
-          "refunded",
-          "cancelled"
-        ]
-      },
-      "OrderCode": {
+      "ReceiptOptions": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          "showPrice": {
+            "default": true,
+            "type": "boolean"
           },
-          "position": {
-            "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true,
-            "maximum": 9007199254740991
-          },
-          "masked": {
-            "type": "string"
-          },
-          "firstRevealedAt": {
-            "nullable": true,
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          }
-        },
-        "required": [
-          "id",
-          "position",
-          "masked",
-          "firstRevealedAt"
-        ],
-        "additionalProperties": false
-      },
-      "CancelReason": {
-        "type": "string",
-        "enum": [
-          "expired",
-          "customer",
-          "price_rose",
-          "product_changed"
-        ]
-      },
-      "DeliveryStats": {
-        "type": "object",
-        "properties": {
-          "medianMs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "p90Ms": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "count": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": [
-          "medianMs",
-          "p90Ms",
-          "count"
-        ],
-        "additionalProperties": false
-      },
-      "OrderListQuery": {
-        "type": "object",
-        "properties": {
-          "cursor": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200
-          },
-          "limit": {
-            "default": 20,
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 50
+          "playerDisplay": {
+            "default": "masked",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReceiptPlayerDisplay"
+              }
+            ]
           }
         }
-      },
-      "OrderPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OrderSummary"
-            }
-          },
-          "nextCursor": {
-            "nullable": true,
-            "type": "string"
-          }
-        },
-        "required": [
-          "items",
-          "nextCursor"
-        ],
-        "additionalProperties": false
-      },
-      "OrderSummary": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "number": {
-            "type": "string"
-          },
-          "stage": {
-            "$ref": "#/components/schemas/OrderStage"
-          },
-          "productNameAr": {
-            "type": "string"
-          },
-          "game": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              "slug": {
-                "type": "string"
-              },
-              "nameAr": {
-                "type": "string"
-              },
-              "cover": {
-                "nullable": true,
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CatalogImage"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "id",
-              "slug",
-              "nameAr",
-              "cover"
-            ],
-            "additionalProperties": false
-          },
-          "quantity": {
-            "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true,
-            "maximum": 9007199254740991
-          },
-          "totalUsdUnits": {
-            "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true,
-            "maximum": 9007199254740991
-          },
-          "totalSypUnits": {
-            "nullable": true,
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "expiresAt": {
-            "nullable": true,
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          }
-        },
-        "required": [
-          "id",
-          "number",
-          "stage",
-          "productNameAr",
-          "game",
-          "quantity",
-          "totalUsdUnits",
-          "totalSypUnits",
-          "expiresAt",
-          "createdAt"
-        ],
-        "additionalProperties": false
       },
       "RevealedCode": {
         "type": "object",
@@ -14470,331 +15728,19 @@
         ],
         "additionalProperties": false
       },
-      "AdminOrderListQuery": {
+      "RevokeShareLink": {
         "type": "object",
         "properties": {
-          "page": {
-            "default": 1,
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 10000
-          },
-          "pageSize": {
-            "default": 50,
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          },
-          "tab": {
-            "default": "all",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AdminOrderTab"
-              }
-            ]
-          },
-          "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OrderStatus"
-              }
-            ]
-          },
-          "q": {
+          "reason": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 100
-          },
-          "productId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "supplier": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SupplierCode"
-              }
-            ]
-          },
-          "test": {
-            "type": "string",
-            "enum": [
-              "true",
-              "false"
-            ]
-          },
-          "from": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-          },
-          "to": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            "minLength": 5,
+            "maxLength": 500,
+            "pattern": "^[^\\p{Cc}]+$"
           }
-        }
-      },
-      "AdminOrderTab": {
-        "type": "string",
-        "enum": [
-          "all",
-          "review",
-          "manual",
-          "active",
-          "delivered",
-          "refunded"
+        },
+        "required": [
+          "reason"
         ]
-      },
-      "OrderStatus": {
-        "type": "string",
-        "enum": [
-          "awaiting_balance",
-          "paid",
-          "sent_to_supplier",
-          "failed",
-          "needs_review",
-          "delivered",
-          "partially_refunded",
-          "refunded",
-          "cancelled"
-        ]
-      },
-      "AdminOrderPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AdminOrderSummary"
-            }
-          },
-          "total": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "page": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 9007199254740991
-          },
-          "pageSize": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "page",
-          "pageSize"
-        ],
-        "additionalProperties": false
-      },
-      "AdminOrderSummary": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "number": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/OrderStatus"
-          },
-          "customer": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              "name": {
-                "type": "string"
-              },
-              "email": {
-                "type": "string"
-              },
-              "isTest": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "id",
-              "name",
-              "email",
-              "isTest"
-            ],
-            "additionalProperties": false
-          },
-          "product": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              "nameAr": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "nameAr"
-            ],
-            "additionalProperties": false
-          },
-          "game": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              "nameAr": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "nameAr"
-            ],
-            "additionalProperties": false
-          },
-          "quantity": {
-            "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true,
-            "maximum": 9007199254740991
-          },
-          "totalUsdUnits": {
-            "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true,
-            "maximum": 9007199254740991
-          },
-          "supplierCode": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SupplierCode"
-              }
-            ]
-          },
-          "manualWaiting": {
-            "type": "boolean"
-          },
-          "since": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          }
-        },
-        "required": [
-          "id",
-          "number",
-          "status",
-          "customer",
-          "product",
-          "game",
-          "quantity",
-          "totalUsdUnits",
-          "supplierCode",
-          "manualWaiting",
-          "since",
-          "createdAt"
-        ],
-        "additionalProperties": false
-      },
-      "AdminOrderCounts": {
-        "type": "object",
-        "properties": {
-          "needsReview": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "manualWaiting": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": [
-          "needsReview",
-          "manualWaiting"
-        ],
-        "additionalProperties": false
-      },
-      "OrderPolicy": {
-        "type": "object",
-        "properties": {
-          "firstPollSeconds": {
-            "type": "integer",
-            "minimum": 15,
-            "maximum": 600
-          },
-          "fastPollSeconds": {
-            "type": "integer",
-            "minimum": 15,
-            "maximum": 600
-          },
-          "fastPollMinutes": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 60
-          },
-          "slowPollSeconds": {
-            "type": "integer",
-            "minimum": 60,
-            "maximum": 3600
-          },
-          "hardLimitMinutes": {
-            "type": "integer",
-            "minimum": 5,
-            "maximum": 240
-          },
-          "reviewPollMinutes": {
-            "type": "integer",
-            "minimum": 5,
-            "maximum": 240
-          },
-          "reviewPollHours": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 72
-          },
-          "manualReminderMinutes": {
-            "type": "integer",
-            "minimum": 5,
-            "maximum": 240
-          }
-        },
-        "required": [
-          "firstPollSeconds",
-          "fastPollSeconds",
-          "fastPollMinutes",
-          "slowPollSeconds",
-          "hardLimitMinutes",
-          "reviewPollMinutes",
-          "reviewPollHours",
-          "manualReminderMinutes"
-        ],
-        "additionalProperties": false
       },
       "AdminOrder": {
         "type": "object",
@@ -15065,6 +16011,150 @@
             "items": {
               "$ref": "#/components/schemas/AdminOrderCode"
             }
+          },
+          "checkout": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "totalUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "orderCount": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "finishedAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "orders": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "number": {
+                      "type": "string"
+                    },
+                    "line": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "$ref": "#/components/schemas/OrderStatus"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "number",
+                    "line",
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id",
+              "totalUsdUnits",
+              "orderCount",
+              "finishedAt",
+              "orders"
+            ],
+            "additionalProperties": false
+          },
+          "gift": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "senderName": {
+                "nullable": true,
+                "type": "string"
+              },
+              "message": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "senderName",
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "shareLinks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/ShareKind"
+                },
+                "showPrice": {
+                  "type": "boolean"
+                },
+                "playerDisplay": {
+                  "$ref": "#/components/schemas/ReceiptPlayerDisplay"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "revokedAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "revokedBy": {
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ShareRevoker"
+                    }
+                  ]
+                },
+                "revokeReason": {
+                  "nullable": true,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "showPrice",
+                "playerDisplay",
+                "createdAt",
+                "revokedAt",
+                "revokedBy",
+                "revokeReason"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -15098,9 +16188,26 @@
           "attempts",
           "events",
           "journals",
-          "codes"
+          "codes",
+          "checkout",
+          "gift",
+          "shareLinks"
         ],
         "additionalProperties": false
+      },
+      "OrderStatus": {
+        "type": "string",
+        "enum": [
+          "awaiting_balance",
+          "paid",
+          "sent_to_supplier",
+          "failed",
+          "needs_review",
+          "delivered",
+          "partially_refunded",
+          "refunded",
+          "cancelled"
+        ]
       },
       "PlayerCheckState": {
         "type": "string",
@@ -15566,6 +16673,336 @@
           "admin"
         ]
       },
+      "ShareRevoker": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "admin"
+        ]
+      },
+      "AdminOrderListQuery": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "default": 1,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "pageSize": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "tab": {
+            "default": "all",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminOrderTab"
+              }
+            ]
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderStatus"
+              }
+            ]
+          },
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "supplier": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SupplierCode"
+              }
+            ]
+          },
+          "test": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        }
+      },
+      "AdminOrderTab": {
+        "type": "string",
+        "enum": [
+          "all",
+          "review",
+          "manual",
+          "active",
+          "delivered",
+          "refunded"
+        ]
+      },
+      "AdminOrderPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminOrderSummary"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "additionalProperties": false
+      },
+      "AdminOrderSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "number": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "isTest": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "isTest"
+            ],
+            "additionalProperties": false
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "nameAr": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "nameAr"
+            ],
+            "additionalProperties": false
+          },
+          "game": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "nameAr": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "nameAr"
+            ],
+            "additionalProperties": false
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "totalUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "supplierCode": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SupplierCode"
+              }
+            ]
+          },
+          "manualWaiting": {
+            "type": "boolean"
+          },
+          "checkoutId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "isGift": {
+            "type": "boolean"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "customer",
+          "product",
+          "game",
+          "quantity",
+          "totalUsdUnits",
+          "supplierCode",
+          "manualWaiting",
+          "checkoutId",
+          "isGift",
+          "since",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "AdminOrderCounts": {
+        "type": "object",
+        "properties": {
+          "needsReview": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "manualWaiting": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "needsReview",
+          "manualWaiting"
+        ],
+        "additionalProperties": false
+      },
+      "OrderPolicy": {
+        "type": "object",
+        "properties": {
+          "firstPollSeconds": {
+            "type": "integer",
+            "minimum": 15,
+            "maximum": 600
+          },
+          "fastPollSeconds": {
+            "type": "integer",
+            "minimum": 15,
+            "maximum": 600
+          },
+          "fastPollMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "slowPollSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 3600
+          },
+          "hardLimitMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 240
+          },
+          "reviewPollMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 240
+          },
+          "reviewPollHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 72
+          },
+          "manualReminderMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 240
+          }
+        },
+        "required": [
+          "firstPollSeconds",
+          "fastPollSeconds",
+          "fastPollMinutes",
+          "slowPollSeconds",
+          "hardLimitMinutes",
+          "reviewPollMinutes",
+          "reviewPollHours",
+          "manualReminderMinutes"
+        ],
+        "additionalProperties": false
+      },
       "PollAttempt": {
         "type": "object",
         "properties": {
@@ -15668,6 +17105,193 @@
           "code"
         ],
         "additionalProperties": false
+      },
+      "PublicShare": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ShareKind"
+          },
+          "orderNumber": {
+            "nullable": true,
+            "type": "string"
+          },
+          "game": {
+            "type": "object",
+            "properties": {
+              "nameAr": {
+                "type": "string"
+              },
+              "nameEn": {
+                "type": "string"
+              },
+              "cover": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CatalogImage"
+                  }
+                ]
+              },
+              "accentColor": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "nameAr",
+              "nameEn",
+              "cover",
+              "accentColor"
+            ],
+            "additionalProperties": false
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "nameAr": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/components/schemas/ProductKind"
+              },
+              "gameAmount": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "nameAr",
+              "kind",
+              "gameAmount"
+            ],
+            "additionalProperties": false
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "deliveredQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "stage": {
+            "$ref": "#/components/schemas/ShareStage"
+          },
+          "paidAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "finishedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "price": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "totalUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "refundedUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "totalUsdUnits",
+              "refundedUsdUnits"
+            ],
+            "additionalProperties": false
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "gift": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "senderName": {
+                "nullable": true,
+                "type": "string"
+              },
+              "message": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "senderName",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "kind",
+          "orderNumber",
+          "game",
+          "product",
+          "quantity",
+          "deliveredQuantity",
+          "stage",
+          "paidAt",
+          "finishedAt",
+          "price",
+          "fields",
+          "gift"
+        ],
+        "additionalProperties": false
+      },
+      "ShareStage": {
+        "type": "string",
+        "enum": [
+          "processing",
+          "delivered",
+          "partially_delivered",
+          "not_delivered"
+        ]
+      },
+      "ShareImageQuery": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "default": "og",
+            "type": "string",
+            "enum": [
+              "og",
+              "square"
+            ]
+          }
+        }
       },
       "TelegramLinkStatus": {
         "type": "object",

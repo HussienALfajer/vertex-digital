@@ -133,6 +133,9 @@ function order(n: keyof typeof ORDER_IDS, number: string, fields: Partial<AdminO
     ],
     journals: [{ id: id(500), kind: 'purchase', amountUsdUnits: 990_000, createdAt: at(46) }],
     codes: [],
+    checkout: null,
+    gift: null,
+    shareLinks: [],
     ...fields,
   };
   return withDecisions(base);
@@ -249,6 +252,8 @@ function summary(row: AdminOrder): AdminOrderSummary {
     totalUsdUnits: row.totalUsdUnits,
     supplierCode: latest?.supplierCode ?? null,
     manualWaiting: open?.supplierCode === 'manual',
+    checkoutId: row.checkout?.id ?? null,
+    isGift: row.gift !== null,
     since: row.reviewSince ?? row.finishedAt ?? row.paidAt ?? row.createdAt,
     createdAt: row.createdAt,
   };
