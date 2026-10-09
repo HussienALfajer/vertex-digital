@@ -210,6 +210,7 @@ describe('module boundaries', () => {
     deposits: 'deposits',
     files: 'files',
     notifications: 'notifications',
+    orders: 'orders',
     pricing: 'pricing',
     rates: 'rates',
     settings: 'settings',

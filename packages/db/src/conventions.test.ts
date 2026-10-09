@@ -63,6 +63,13 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   supplier_policy: 'Append-only (S07): a save is a new version, the newest is in force',
   product_prices: 'Append-only (S07 P2): the newest row per product is its price',
   price_reviews: 'A decision record (S07 P4): closed by its decision, never archived',
+  orders: 'Never archived (S08): an order ends in a terminal status, which is its record',
+  order_events: 'Append-only (S08 AU1): every change of an order',
+  fulfilment_attempts: 'A call record (S08 R3): closed by its result, never archived',
+  order_codes: 'Append-only (S08 C1): one encrypted code per delivered unit',
+  order_code_reveals: 'Append-only (S08 C2, C3): every reveal of a code',
+  order_policy: 'Append-only (S08): a save is a new version, the newest is in force',
+  supplier_webhook_events: 'A delivery record (S08 F4): only its processing changes, once',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -99,6 +106,10 @@ const APPEND_ONLY_TABLES = [
   'supplier_balance_reads',
   'supplier_policy',
   'product_prices',
+  'order_events',
+  'order_codes',
+  'order_code_reveals',
+  'order_policy',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

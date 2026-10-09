@@ -5,6 +5,7 @@ import {
   SUPPLIER_HEALTH_STATES,
   SYNC_RUN_STATUSES,
   SYNC_RUN_TRIGGERS,
+  WEBHOOK_EVENT_RESULTS,
 } from '@vertex-digital/contracts';
 import { isNull, sql } from 'drizzle-orm';
 import {
@@ -22,6 +23,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { catalogProducts, productKindEnum } from './catalog.js';
 import { amountUnits, archivedAt, bytea, currencyEnum, id, timestamps } from './columns.js';
+import { fulfilmentAttempts } from './orders.js';
 
 /*
  * Suppliers, their offers and the routes that map products to offers (S07, F09; ADR 0005, 0021),
@@ -45,6 +47,8 @@ export const supplierCallResultEnum = pgEnum('supplier_call_result', SUPPLIER_CA
 export const syncRunTriggerEnum = pgEnum('sync_run_trigger', SYNC_RUN_TRIGGERS);
 
 export const syncRunStatusEnum = pgEnum('sync_run_status', SYNC_RUN_STATUSES);
+
+export const webhookEventResultEnum = pgEnum('webhook_event_result', WEBHOOK_EVENT_RESULTS);
 
 /** The time of the insert, not of its transaction's start. */
 const insertedAt = () =>
@@ -339,5 +343,42 @@ export const productRoutes = pgTable(
     index('product_routes_supplier_id_idx').on(table.supplierId),
     check('product_routes_priority_check', sql`${table.priority} between 1 and 9`),
     check('product_routes_field_map_check', sql`jsonb_typeof(${table.fieldMap}) = 'object'`),
+  ],
+);
+
+/**
+ * Every verified supplier webhook, stored once per event id (S08 rule F4, ADR 0005). The body is
+ * encrypted with `ORDER_CODES_SECRET` (it may carry codes). Only the processing columns change,
+ * once (migration 0031).
+ */
+export const supplierWebhookEvents = pgTable(
+  'supplier_webhook_events',
+  {
+    id: id(),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id),
+    eventId: text('event_id').notNull(),
+    bodyCiphertext: bytea('body_ciphertext').notNull(),
+    /** Set when processed: the attempt the event named, if any (rule F5). */
+    attemptId: uuid('attempt_id').references(() => fulfilmentAttempts.id),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    result: webhookEventResultEnum('result'),
+    createdAt: insertedAt(),
+  },
+  (table) => [
+    uniqueIndex('supplier_webhook_events_supplier_id_event_id_idx').on(
+      table.supplierId,
+      table.eventId,
+    ),
+    index('supplier_webhook_events_attempt_id_idx').on(table.attemptId),
+    check(
+      'supplier_webhook_events_event_id_check',
+      sql`char_length(${table.eventId}) between 1 and 128`,
+    ),
+    check(
+      'supplier_webhook_events_processed_check',
+      sql`(${table.processedAt} is null) = (${table.result} is null)`,
+    ),
   ],
 );
