@@ -8,6 +8,7 @@ import {
 } from '@vertex-digital/contracts';
 import {
   accountBalance,
+  catalogCategories,
   applyOutcome,
   bossJobSender,
   createDatabase,
@@ -125,6 +126,8 @@ const sweep = new OrdersSweepJob(pgBoss, db);
 const webhooks = new SupplierWebhookJob(pgBoss, registry, db, env);
 
 const ids = { fake: '', manual: '' };
+/** Every category made here; the race tests commit theirs, archived after all. */
+const categories: string[] = [];
 
 beforeAll(async () => {
   for (const row of await db.select({ id: suppliers.id, code: suppliers.code }).from(suppliers)) {
@@ -133,6 +136,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Committed products stay out of the store (the rate tests read the cheapest available one).
+  await db
+    .update(catalogCategories)
+    .set({ archivedAt: new Date() })
+    .where(inArray(catalogCategories.id, categories));
   await connection.close();
 });
 
@@ -237,6 +245,7 @@ async function product(
   options: { code?: boolean; fake?: number | null; manualCost?: number; offerId?: string } = {},
 ): Promise<Product> {
   const [category, game, id] = [newId(), newId(), newId()];
+  categories.push(category);
   const code = options.code ?? false;
   await tx.execute(sql`insert into catalog_categories (id, slug, name_ar, sort_order)
     values (${category}, ${`c-${unique()}`}, ${`فئة ${unique()}`}, 99)`);
