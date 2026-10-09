@@ -13,7 +13,8 @@
     "menu": "قائمة الحساب",
     "balance": "رصيد المحفظة {balance}",
     "notifications": "الإشعارات",
-    "notificationsUnread": "الإشعارات، {count} غير مقروءة"
+    "notificationsUnread": "الإشعارات، {count} غير مقروءة",
+    "orders": "طلباتي"
   },
   "stopBanner": {
     "deposits": "نجري صيانة قصيرة. الإيداع متوقف مؤقتاً، ورصيدك وطلباتك بأمان.",
@@ -511,6 +512,57 @@
       "routes_exhausted": "لا يتوفّر مورد لهذه الباقة الآن",
       "input_rejected": "بيانات الحساب مرفوضة",
       "admin": "قرّرت الإدارة استرداده"
+    },
+    "title": "طلباتي",
+    "subtitle": "كل ما اشتريته وحالة تسليمه",
+    "loadFailed": "تعذّر تحميل طلباتك. حاول مرة أخرى",
+    "retry": "إعادة المحاولة",
+    "emptyTitle": "لا طلبات بعد",
+    "emptyBody": "اختر لعبة واشحن رصيدك منها، وستظهر طلباتك هنا",
+    "browseGames": "تصفّح الألعاب",
+    "loadMore": "تحميل المزيد",
+    "loadingMore": "جارٍ التحميل…",
+    "times": "× {count}",
+    "syp": "≈ {amount} ل.س عند الشراء",
+    "stages": {
+      "processing": "قيد التنفيذ",
+      "delayed": "متأخر، نتحقق منه",
+      "delivered": "تم التسليم",
+      "partially_refunded": "سُلّم جزئياً واسترد الباقي",
+      "refunded": "مُسترد",
+      "cancelled": "ملغى"
+    },
+    "sentences": {
+      "processing": "نشحن طلبك الآن",
+      "delayed": "تأخّر المورد، نتحقق منه وسنعلمك",
+      "delivered": "تم التسليم",
+      "partially_refunded": "سلّمنا جزءاً من طلبك وأعدنا ثمن الباقي إلى محفظتك",
+      "refunded": "أعدنا ثمن طلبك إلى محفظتك",
+      "refundedBecause": "أعدنا ثمن طلبك إلى محفظتك: {reason}",
+      "cancelled": "أُلغي هذا الطلب"
+    },
+    "detail": {
+      "title": "تفاصيل الطلب",
+      "loadFailed": "تعذّر تحميل الطلب. حاول مرة أخرى",
+      "number": "رقم الطلب",
+      "copyNumber": "نسخ رقم الطلب",
+      "timeline": "مراحل الطلب",
+      "emptyField": "—",
+      "quantity": "الكمية",
+      "unitPrice": "سعر الوحدة",
+      "total": "الإجمالي",
+      "totalSyp": "بالليرة عند الشراء",
+      "refunded": "المبلغ المُسترد",
+      "refundReason": "سبب الاسترداد",
+      "totalSypValue": "{amount} ل.س"
+    },
+    "codes": {
+      "title": "الأكواد",
+      "reveal": "إظهار",
+      "copy": "نسخ الكود",
+      "firstRevealed": "كُشف أول مرة في {date}",
+      "region": "المنطقة:",
+      "redemption": "طريقة الاستخدام"
     }
   }
 }

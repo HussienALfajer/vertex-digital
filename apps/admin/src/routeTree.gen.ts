@@ -22,6 +22,9 @@ import { Route as AppCatalogIndexRouteImport } from './routes/_app/catalog.index
 import { Route as AppDepositsIndexRouteImport } from './routes/_app/deposits.index'
 import { Route as AppDepositsIdRouteImport } from './routes/_app/deposits.$id'
 import { Route as AppDepositsTransfersRouteImport } from './routes/_app/deposits.transfers'
+import { Route as AppOrdersIndexRouteImport } from './routes/_app/orders.index'
+import { Route as AppOrdersIdRouteImport } from './routes/_app/orders.$id'
+import { Route as AppOrdersPolicyRouteImport } from './routes/_app/orders.policy'
 import { Route as AppPricingIndexRouteImport } from './routes/_app/pricing.index'
 import { Route as AppPricingReviewsRouteImport } from './routes/_app/pricing.reviews'
 import { Route as AppSettingsDepositsRouteImport } from './routes/_app/settings.deposits'
@@ -99,6 +102,21 @@ const AppDepositsTransfersRoute = AppDepositsTransfersRouteImport.update({
   path: '/deposits/transfers',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrdersIndexRoute = AppOrdersIndexRouteImport.update({
+  id: '/orders/',
+  path: '/orders/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrdersIdRoute = AppOrdersIdRouteImport.update({
+  id: '/orders/$id',
+  path: '/orders/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrdersPolicyRoute = AppOrdersPolicyRouteImport.update({
+  id: '/orders/policy',
+  path: '/orders/policy',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPricingIndexRoute = AppPricingIndexRouteImport.update({
   id: '/pricing/',
   path: '/pricing/',
@@ -171,6 +189,8 @@ export interface FileRoutesByFullPath {
   '/test-customers': typeof AppTestCustomersRoute
   '/deposits/$id': typeof AppDepositsIdRoute
   '/deposits/transfers': typeof AppDepositsTransfersRoute
+  '/orders/$id': typeof AppOrdersIdRoute
+  '/orders/policy': typeof AppOrdersPolicyRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
   '/settings/switches': typeof AppSettingsSwitchesRoute
@@ -180,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/catalog/': typeof AppCatalogIndexRoute
   '/deposits/': typeof AppDepositsIndexRoute
+  '/orders/': typeof AppOrdersIndexRoute
   '/pricing/': typeof AppPricingIndexRoute
   '/suppliers/': typeof AppSuppliersIndexRoute
   '/wallets/': typeof AppWalletsIndexRoute
@@ -197,6 +218,8 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/deposits/$id': typeof AppDepositsIdRoute
   '/deposits/transfers': typeof AppDepositsTransfersRoute
+  '/orders/$id': typeof AppOrdersIdRoute
+  '/orders/policy': typeof AppOrdersPolicyRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
   '/settings/switches': typeof AppSettingsSwitchesRoute
@@ -206,6 +229,7 @@ export interface FileRoutesByTo {
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/catalog': typeof AppCatalogIndexRoute
   '/deposits': typeof AppDepositsIndexRoute
+  '/orders': typeof AppOrdersIndexRoute
   '/pricing': typeof AppPricingIndexRoute
   '/suppliers': typeof AppSuppliersIndexRoute
   '/wallets': typeof AppWalletsIndexRoute
@@ -225,6 +249,8 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/deposits/$id': typeof AppDepositsIdRoute
   '/_app/deposits/transfers': typeof AppDepositsTransfersRoute
+  '/_app/orders/$id': typeof AppOrdersIdRoute
+  '/_app/orders/policy': typeof AppOrdersPolicyRoute
   '/_app/pricing/reviews': typeof AppPricingReviewsRoute
   '/_app/settings/deposits': typeof AppSettingsDepositsRoute
   '/_app/settings/switches': typeof AppSettingsSwitchesRoute
@@ -234,6 +260,7 @@ export interface FileRoutesById {
   '/_app/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/_app/catalog/': typeof AppCatalogIndexRoute
   '/_app/deposits/': typeof AppDepositsIndexRoute
+  '/_app/orders/': typeof AppOrdersIndexRoute
   '/_app/pricing/': typeof AppPricingIndexRoute
   '/_app/suppliers/': typeof AppSuppliersIndexRoute
   '/_app/wallets/': typeof AppWalletsIndexRoute
@@ -253,6 +280,8 @@ export interface FileRouteTypes {
     | '/test-customers'
     | '/deposits/$id'
     | '/deposits/transfers'
+    | '/orders/$id'
+    | '/orders/policy'
     | '/pricing/reviews'
     | '/settings/deposits'
     | '/settings/switches'
@@ -262,6 +291,7 @@ export interface FileRouteTypes {
     | '/wallets/$customerId'
     | '/catalog/'
     | '/deposits/'
+    | '/orders/'
     | '/pricing/'
     | '/suppliers/'
     | '/wallets/'
@@ -279,6 +309,8 @@ export interface FileRouteTypes {
     | '/'
     | '/deposits/$id'
     | '/deposits/transfers'
+    | '/orders/$id'
+    | '/orders/policy'
     | '/pricing/reviews'
     | '/settings/deposits'
     | '/settings/switches'
@@ -288,6 +320,7 @@ export interface FileRouteTypes {
     | '/wallets/$customerId'
     | '/catalog'
     | '/deposits'
+    | '/orders'
     | '/pricing'
     | '/suppliers'
     | '/wallets'
@@ -306,6 +339,8 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/deposits/$id'
     | '/_app/deposits/transfers'
+    | '/_app/orders/$id'
+    | '/_app/orders/policy'
     | '/_app/pricing/reviews'
     | '/_app/settings/deposits'
     | '/_app/settings/switches'
@@ -315,6 +350,7 @@ export interface FileRouteTypes {
     | '/_app/wallets/$customerId'
     | '/_app/catalog/'
     | '/_app/deposits/'
+    | '/_app/orders/'
     | '/_app/pricing/'
     | '/_app/suppliers/'
     | '/_app/wallets/'
@@ -422,6 +458,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDepositsTransfersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/orders/': {
+      id: '/_app/orders/'
+      path: '/orders'
+      fullPath: '/orders/'
+      preLoaderRoute: typeof AppOrdersIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/orders/$id': {
+      id: '/_app/orders/$id'
+      path: '/orders/$id'
+      fullPath: '/orders/$id'
+      preLoaderRoute: typeof AppOrdersIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/orders/policy': {
+      id: '/_app/orders/policy'
+      path: '/orders/policy'
+      fullPath: '/orders/policy'
+      preLoaderRoute: typeof AppOrdersPolicyRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/pricing/': {
       id: '/_app/pricing/'
       path: '/pricing'
@@ -517,6 +574,8 @@ interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
   AppDepositsIdRoute: typeof AppDepositsIdRoute
   AppDepositsTransfersRoute: typeof AppDepositsTransfersRoute
+  AppOrdersIdRoute: typeof AppOrdersIdRoute
+  AppOrdersPolicyRoute: typeof AppOrdersPolicyRoute
   AppPricingReviewsRoute: typeof AppPricingReviewsRoute
   AppSettingsDepositsRoute: typeof AppSettingsDepositsRoute
   AppSettingsSwitchesRoute: typeof AppSettingsSwitchesRoute
@@ -526,6 +585,7 @@ interface AppRouteChildren {
   AppWalletsCustomerIdRoute: typeof AppWalletsCustomerIdRoute
   AppCatalogIndexRoute: typeof AppCatalogIndexRoute
   AppDepositsIndexRoute: typeof AppDepositsIndexRoute
+  AppOrdersIndexRoute: typeof AppOrdersIndexRoute
   AppPricingIndexRoute: typeof AppPricingIndexRoute
   AppSuppliersIndexRoute: typeof AppSuppliersIndexRoute
   AppWalletsIndexRoute: typeof AppWalletsIndexRoute
@@ -541,6 +601,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
   AppDepositsIdRoute: AppDepositsIdRoute,
   AppDepositsTransfersRoute: AppDepositsTransfersRoute,
+  AppOrdersIdRoute: AppOrdersIdRoute,
+  AppOrdersPolicyRoute: AppOrdersPolicyRoute,
   AppPricingReviewsRoute: AppPricingReviewsRoute,
   AppSettingsDepositsRoute: AppSettingsDepositsRoute,
   AppSettingsSwitchesRoute: AppSettingsSwitchesRoute,
@@ -550,6 +612,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppWalletsCustomerIdRoute: AppWalletsCustomerIdRoute,
   AppCatalogIndexRoute: AppCatalogIndexRoute,
   AppDepositsIndexRoute: AppDepositsIndexRoute,
+  AppOrdersIndexRoute: AppOrdersIndexRoute,
   AppPricingIndexRoute: AppPricingIndexRoute,
   AppSuppliersIndexRoute: AppSuppliersIndexRoute,
   AppWalletsIndexRoute: AppWalletsIndexRoute,

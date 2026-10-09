@@ -52,7 +52,9 @@
     "pricing": "التسعير",
     "suppliers": "الموردون",
     "priceReviews": "مراجعة الأسعار",
-    "priceReviewsBadge": "تغييرات أسعار بانتظار المراجعة: {{open}}"
+    "priceReviewsBadge": "تغييرات أسعار بانتظار المراجعة: {{open}}",
+    "orders": "الطلبات",
+    "ordersBadge": "{{needsReview}} بحاجة لمراجعة، {{manualWaiting}} يدوي بانتظارك"
   },
   "user": {
     "menu": "قائمة الحساب",
@@ -1671,7 +1673,8 @@
         "maxQuantity": "أقصى كمية",
         "status": "الحالة",
         "availability": "التوفر",
-        "price": "السعر"
+        "price": "السعر",
+        "deliveryTime": "وقت التسليم"
       },
       "kind": "النوع",
       "kinds": {
@@ -1706,7 +1709,10 @@
       "syp": "{{amount}} ل.س",
       "basis": "يتبع {{supplier}}",
       "reviewOpen": "بانتظار مراجعة السعر",
-      "routes": "المسارات"
+      "routes": "المسارات",
+      "deliveryTime": "الوسيط {{median}} · 90% خلال {{p90}}",
+      "noDeliveryData": "لا بيانات بعد",
+      "orders": "طلبات الباقة"
     }
   },
   "pricing": {
@@ -2234,6 +2240,280 @@
           "label": "الفحص بعد التوقف (دقائق)",
           "hint": "من 1 إلى 120.",
           "error": "عدد دقائق من 1 إلى 120."
+        }
+      }
+    }
+  },
+  "orders": {
+    "title": "الطلبات",
+    "subtitle": "كل طلبات المتجر ومحاولات تنفيذها، وما ينتظر قرارك",
+    "back": "الطلبات",
+    "total": "{{total}} طلب",
+    "manualWaiting": "يدوي بانتظارك",
+    "tabs": {
+      "all": "الكل",
+      "review": "بحاجة لمراجعة",
+      "manual": "يدوي بانتظارك",
+      "active": "قيد التنفيذ",
+      "delivered": "مكتملة",
+      "refunded": "مستردة"
+    },
+    "empty": {
+      "all": "لا طلبات بعد",
+      "review": "لا طلبات بحاجة لمراجعة",
+      "manual": "لا طلبات يدوية بانتظارك",
+      "active": "لا طلبات قيد التنفيذ",
+      "delivered": "لا طلبات مكتملة",
+      "refunded": "لا طلبات مستردة"
+    },
+    "filters": {
+      "search": "بحث",
+      "searchPlaceholder": "رقم الطلب أو بريد العميل",
+      "supplier": "المورد",
+      "test": "العملاء",
+      "all": "الكل",
+      "realOnly": "الحقيقيون فقط",
+      "testOnly": "التجريبيون فقط",
+      "from": "من تاريخ",
+      "to": "إلى تاريخ",
+      "apply": "تطبيق",
+      "clear": "مسح الفلاتر",
+      "oneProduct": "طلبات باقة واحدة",
+      "clearProduct": "كل الباقات"
+    },
+    "columns": {
+      "number": "رقم الطلب",
+      "customer": "العميل",
+      "product": "الباقة",
+      "quantity": "الكمية",
+      "total": "الإجمالي",
+      "status": "الحالة",
+      "supplier": "المورد",
+      "since": "منذ"
+    },
+    "statuses": {
+      "awaiting_balance": "بانتظار الرصيد",
+      "paid": "مدفوع",
+      "sent_to_supplier": "عند المورد",
+      "failed": "فشل، يُعاد التوجيه",
+      "needs_review": "بحاجة لمراجعة",
+      "delivered": "مُسلّم",
+      "partially_refunded": "سُلّم جزئياً واسترد الباقي",
+      "refunded": "مُسترد",
+      "cancelled": "ملغى"
+    },
+    "suppliers": {
+      "shop2topup": "SHOP2TOPUP",
+      "wdgzone": "WDGZone",
+      "manual": "يدوي",
+      "fake": "مورد تجريبي"
+    },
+    "refundReasons": {
+      "no_route": "لا مورد متاح",
+      "routes_exhausted": "فشلت كل المسارات",
+      "input_rejected": "بيانات الحساب مرفوضة",
+      "admin": "قرار الإدارة"
+    },
+    "skipReasons": {
+      "archived": "مؤرشف",
+      "disabled": "معطّل",
+      "supplier_unavailable": "المحوّل غير جاهز",
+      "supplier_not_configured": "المورد غير مهيّأ",
+      "supplier_paused": "المورد موقوف",
+      "supplier_down": "المورد متوقف",
+      "offer_missing": "العرض اختفى من المورد",
+      "out_of_stock": "العرض نافد",
+      "cost_unknown": "التكلفة غير صالحة",
+      "cost_stale": "السعر قديم",
+      "fields_incomplete": "الحقول ناقصة",
+      "balance_low": "رصيد المورد أقل من التكلفة",
+      "test_customer": "عميل تجريبي: هذا المورد ممنوع",
+      "already_tried": "جُرّب لهذا الطلب",
+      "unprofitable": "دون الهامش الأدنى للسعر المدفوع",
+      "balance_below_order": "رصيد المورد أقل من الطلب"
+    },
+    "webhookResults": {
+      "applied": "طُبّق",
+      "same_result": "النتيجة نفسها",
+      "unknown_key": "مفتاح غير معروف",
+      "conflict": "تعارض",
+      "malformed": "غير مقروء"
+    },
+    "detail": {
+      "title": "الطلب",
+      "customer": "العميل",
+      "total": "الإجمالي",
+      "unitPrice": "سعر الوحدة {{price}}",
+      "units": "الوحدات",
+      "unitsValue": "{{quantity}} مطلوبة · {{delivered}} سُلّمت · {{refunded}} استُردت",
+      "refunded": "المُسترد",
+      "paidAt": "الدفع",
+      "finishedAt": "الانتهاء",
+      "reviewSince": "بحاجة لمراجعة منذ",
+      "minMargin": "الهامش الأدنى لكل محاولة",
+      "fields": "بيانات الحساب",
+      "copyField": "نسخ {{field}}"
+    },
+    "decisions": {
+      "title": "قرارك",
+      "heldHelp": "لا جواب نهائي من المورد. اسأله مجدداً، أو أكّد النتيجة إن عرفتها منه، أو استرد المبلغ.",
+      "manualHelp": "طلب يدوي ينتظرك: نفّذه ثم أكّد التسليم، أو أكّد فشله ليذهب إلى المسار التالي أو يُسترد.",
+      "reason": "السبب",
+      "reasonError": "اكتب سبباً من 5 إلى 500 حرف",
+      "submitting": "جارٍ الحفظ…",
+      "poll": {
+        "open": "اسأل المورد مجدداً",
+        "title": "سؤال المورد مجدداً",
+        "description": "يُسأل المورد عن الطلب {{number}} الآن. لا يتغير شيء حتى تصل نتيجة.",
+        "submit": "اسأل الآن"
+      },
+      "delivered": {
+        "open": "تأكّدت: تمّ التسليم",
+        "title": "تأكيد التسليم",
+        "description": "سجّل ما سُلّم فعلاً من الطلب {{number}}. تُسجَّل التكلفة ويُبلَّغ العميل.",
+        "submit": "تأكيد التسليم",
+        "quantity": "الوحدات المُسلّمة",
+        "quantityHint": "من 1 إلى {{units}}. ما لم يُسلّم يذهب إلى المسار التالي أو يُسترد.",
+        "quantityError": "أدخل عدداً صحيحاً من 1 إلى {{units}}",
+        "codes": "الأكواد",
+        "codesHint": "كود في كل سطر، بعدد الوحدات المُسلّمة",
+        "codesError": "أدخل كوداً واحداً لكل وحدة مُسلّمة، من 1 إلى 200 حرف"
+      },
+      "failed": {
+        "open": "تأكّدت: فشل",
+        "title": "تأكيد الفشل",
+        "description": "لم يُنفَّذ الطلب {{number}} عند هذا المورد. تذهب الوحدات الباقية إلى المسار التالي أو تُسترد.",
+        "submit": "تأكيد الفشل"
+      },
+      "refund": {
+        "open": "استرداد",
+        "title": "استرداد الطلب",
+        "description": "تُعاد الوحدات غير المُسلّمة من الطلب {{number}} إلى محفظة العميل، دون تجربة مورد آخر.",
+        "submit": "استرداد المبلغ",
+        "warning": "قد يسلّم المورد الطلب لاحقاً رغم ذلك: يظهر عندها تنبيه تعارض لتسويته مع المورد."
+      }
+    },
+    "codes": {
+      "title": "الأكواد",
+      "reveal": "كشف",
+      "hide": "إخفاء",
+      "copy": "نسخ الكود",
+      "revealedBy": {
+        "customer": "كشفه العميل في {{date}}",
+        "admin": "كشفته الإدارة في {{date}}"
+      }
+    },
+    "attempts": {
+      "title": "المحاولات",
+      "none": "لم يُرسل الطلب إلى أي مورد بعد",
+      "statuses": {
+        "sending": "يُرسل",
+        "pending": "بانتظار المورد",
+        "unknown": "نتيجة غير معروفة",
+        "delivered": "سُلّم",
+        "failed": "فشل"
+      },
+      "inputRejected": "بيانات الحساب مرفوضة",
+      "offer": "العرض",
+      "units": "الوحدات",
+      "unitsValue": "{{quantity}} مطلوبة · {{delivered}} سُلّمت",
+      "unitCost": "تكلفة الوحدة",
+      "key": "مفتاح التكرار",
+      "supplierRef": "مرجع المورد",
+      "resolvedBy": "حُسم بواسطة",
+      "polls": "مرات السؤال",
+      "nextPoll": "التالي {{date}}",
+      "failure": "سبب الفشل",
+      "adminReason": "سبب القرار",
+      "resolvers": {
+        "supplier": "المورد",
+        "poll": "السؤال الدوري",
+        "webhook": "إشعار المورد",
+        "admin": "الإدارة"
+      },
+      "candidates": "المسارات التي رآها التوجيه",
+      "candidate": {
+        "supplier": "المورد",
+        "tier": "الفئة",
+        "cost": "التكلفة",
+        "result": "النتيجة",
+        "rank": "الترتيب {{rank}}"
+      },
+      "tiers": {
+        "healthy": "آلي سليم",
+        "degraded": "آلي متراجع",
+        "manual": "يدوي"
+      },
+      "webhooks": "إشعارات المورد"
+    },
+    "events": {
+      "title": "سجل الطلب",
+      "status": "الحالة: {{to}}",
+      "attempt": "محاولة: {{status}}",
+      "note": "ملاحظة",
+      "actors": {
+        "customer": "العميل",
+        "system": "النظام",
+        "supplier": "المورد",
+        "admin": "الإدارة"
+      }
+    },
+    "journals": {
+      "title": "القيود",
+      "kinds": {
+        "purchase": "الشراء",
+        "refund": "الاسترداد",
+        "cost_of_goods": "تكلفة البضاعة"
+      }
+    },
+    "policy": {
+      "link": "سياسة الطلبات",
+      "title": "سياسة الطلبات",
+      "subtitle": "مواعيد سؤال الموردين، والحد الذي يُحال بعده الطلب إليك، وتذكير الطلبات اليدوية",
+      "default": "الافتراضي {{value}}",
+      "save": "حفظ السياسة",
+      "saving": "جارٍ الحفظ…",
+      "saved": "حُفظت السياسة",
+      "sections": {
+        "polling": "السؤال الدوري",
+        "pollingHelp": "متى يُسأل المورد عن طلب لم تصل نتيجته",
+        "review": "الإحالة للمراجعة",
+        "reviewHelp": "بعد الحد يُحال الطلب إليك ويُبلَّغ العميل بالتأخير، ويستمر السؤال على مهل",
+        "manual": "المورد اليدوي",
+        "manualHelp": "تذكير واحد بالطلب اليدوي المفتوح"
+      },
+      "fields": {
+        "firstPollSeconds": {
+          "label": "أول سؤال بعد (ثانية)",
+          "error": "من 15 إلى 600 ثانية"
+        },
+        "fastPollSeconds": {
+          "label": "السؤال السريع كل (ثانية)",
+          "error": "من 15 إلى 600 ثانية"
+        },
+        "fastPollMinutes": {
+          "label": "السؤال السريع لمدة (دقيقة)",
+          "error": "من 1 إلى 60 دقيقة"
+        },
+        "slowPollSeconds": {
+          "label": "ثم كل (ثانية)",
+          "error": "من 60 إلى 3600 ثانية"
+        },
+        "hardLimitMinutes": {
+          "label": "الإحالة للمراجعة بعد (دقيقة)",
+          "error": "من 5 إلى 240 دقيقة"
+        },
+        "reviewPollMinutes": {
+          "label": "السؤال أثناء المراجعة كل (دقيقة)",
+          "error": "من 5 إلى 240 دقيقة"
+        },
+        "reviewPollHours": {
+          "label": "لمدة (ساعة)",
+          "error": "من 1 إلى 72 ساعة"
+        },
+        "manualReminderMinutes": {
+          "label": "التذكير بعد (دقيقة)",
+          "error": "من 5 إلى 240 دقيقة"
         }
       }
     }

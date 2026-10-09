@@ -34,3 +34,24 @@ export function formatSince(iso: string, now: Date = new Date()): string {
  * in an LTR isolate (U+2066 … U+2069), so the bidi algorithm never splits it.
  */
 export const ltr = (text: string) => `⁦${text}⁩`;
+
+const units = Object.fromEntries(
+  (['second', 'minute', 'hour'] as const).map((unit) => [
+    unit,
+    new Intl.NumberFormat(LOCALE, {
+      style: 'unit',
+      unit,
+      unitDisplay: 'short',
+      maximumFractionDigits: 1,
+    }),
+  ]),
+) as Record<'second' | 'minute' | 'hour', Intl.NumberFormat>;
+
+/** A delivery time (S08 rule T1), in seconds under a minute, minutes under an hour, else hours. */
+export function formatDuration(ms: number): string {
+  const seconds = Math.round(ms / 1_000);
+  if (seconds < 60) return units.second.format(seconds);
+  const minutes = seconds / 60;
+  if (minutes < 60) return units.minute.format(minutes);
+  return units.hour.format(minutes / 60);
+}

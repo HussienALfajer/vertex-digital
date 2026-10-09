@@ -9,11 +9,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@vertex-digital/ui/components/dropdown-menu';
-import { LogOutIcon, UserRoundIcon } from 'lucide-react';
+import { LogOutIcon, ShoppingBagIcon, UserRoundIcon } from 'lucide-react';
 import Link from 'next/link';
 import { t } from '@/lib/i18n';
 
-/** The signed-in customer's menu in the header: the account page and sign-out. */
+/** The signed-in customer's menu in the header: the account page, the orders (S08), sign-out. */
 export function AccountMenu({ name, email }: { name: string; email: string }) {
   const signOut = async () => {
     await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin' }).catch(
@@ -40,6 +40,10 @@ export function AccountMenu({ name, email }: { name: string; email: string }) {
         <DropdownMenuItem className="min-h-11" render={<Link href="/account" />}>
           <UserRoundIcon />
           {t('header.account')}
+        </DropdownMenuItem>
+        <DropdownMenuItem className="min-h-11" render={<Link href="/orders" />}>
+          <ShoppingBagIcon />
+          {t('header.orders')}
         </DropdownMenuItem>
         <DropdownMenuItem className="min-h-11" onClick={signOut}>
           <LogOutIcon className="rtl:-scale-x-100" />
