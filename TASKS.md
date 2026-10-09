@@ -25,8 +25,9 @@ Spec: `docs/specs/S08-orders-and-fulfilment.md` (F11 with F26 SW7, F27 and F13's
 - [x] Fake supplier order scripting (`--order`, `--resolve … --via poll|webhook`); commands table
 - [x] Worker env `ORDER_CODES_SECRET` (required in production, derived locally exactly as the API's)
 - [x] Tests (each tier, guard, balance, already tried, test customers, every outcome, partial, input rejection, schedule and hard limit, review polling, sweep, webhooks applied / same result / unknown key / conflict, manual cards and reminder, dedupe keys, log capture)
-- [ ] Wiring checklist, docs
-- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
+- [x] Migration 0033: `fulfilment_attempts.field_map` (reviewer finding: a re-send keeps the fields of the first send); late results of polls and first calls reported as conflicts (reviewer finding)
+- [x] Wiring checklist, docs
+- [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (two blocking findings, fixed and re-reviewed: no blocking issues), owner acceptance waived by the owner for this PR, PR with auto-merge
 
 ## PR 3 — Store and admin screens, E2E · Opus 5.5 `high`
 - [ ] Store `features/orders/`: `/orders` and `/orders/[id]` (stages, fields, code reveal, refetch on notification); account menu and wallet entry links; i18n
