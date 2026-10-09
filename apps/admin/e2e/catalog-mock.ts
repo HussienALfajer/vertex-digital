@@ -46,6 +46,7 @@ type Row<T> = Omit<
   | 'priceSypUnits'
   | 'basisSupplierNameAr'
   | 'reviewOpen'
+  | 'deliveryStats'
 >;
 
 type StoredGame = Omit<Row<Game>, 'cover' | 'idGuide'> & {
@@ -278,6 +279,8 @@ export class CatalogMock {
           : null,
       basisSupplierNameAr: pricing?.basisSupplierNameAr ?? null,
       reviewOpen: pricing?.reviewOpen ?? false,
+      // S08: no delivered orders in the mock.
+      deliveryStats: null,
     };
   }
 

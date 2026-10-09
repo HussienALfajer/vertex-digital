@@ -370,6 +370,7 @@ export class AdminApi {
           this.adjustments.find((other) => other.reversesAdjustmentId === item.id)?.id ?? null,
       },
       deposit: null,
+      order: null,
     }));
   }
 

@@ -271,10 +271,7 @@ async function adjustmentsOf(
   return new Map(rows.map(({ journalId, ...adjustment }) => [journalId, adjustment]));
 }
 
-async function ordersOf(
-  db: Executor,
-  journalIds: string[],
-): Promise<Map<string, TimelineOrder>> {
+async function ordersOf(db: Executor, journalIds: string[]): Promise<Map<string, TimelineOrder>> {
   const rows = await db
     .select({
       id: orders.id,
@@ -286,7 +283,10 @@ async function ordersOf(
     .from(orders)
     .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
     .where(
-      or(inArray(orders.purchaseJournalId, journalIds), inArray(orders.refundJournalId, journalIds)),
+      or(
+        inArray(orders.purchaseJournalId, journalIds),
+        inArray(orders.refundJournalId, journalIds),
+      ),
     );
   const byJournal = new Map<string, TimelineOrder>();
   for (const { purchaseJournalId, refundJournalId, ...order } of rows) {

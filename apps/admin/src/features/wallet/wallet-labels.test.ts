@@ -28,10 +28,25 @@ const entry = (changes: Partial<AdminWalletEntry>): AdminWalletEntry => ({
   journalId: '0199a000-0000-7000-8000-0000000000c1',
   adjustment,
   deposit: null,
+  order: null,
   ...changes,
 });
 
 describe('entryLabel', () => {
+  it('names a purchase and its refund by the product and order number (S08)', () => {
+    const order = {
+      id: '0199a000-0000-7000-8000-0000000000d1',
+      number: 'VO-7KQ2MX',
+      productNameAr: '60 UC',
+    };
+    expect(entryLabel(t, entry({ kind: 'purchase', adjustment: null, order }))).toBe(
+      'شراء: 60 UC (VO-7KQ2MX)',
+    );
+    expect(entryLabel(t, entry({ kind: 'refund', adjustment: null, order }))).toBe(
+      'استرداد: 60 UC (VO-7KQ2MX)',
+    );
+  });
+
   it('names an adjustment by its category, and a reversal after it', () => {
     expect(entryLabel(t, entry({}))).toBe(ar.wallets.categories.compensation);
     expect(entryLabel(t, entry({ adjustment: { ...adjustment, reversal: true } }))).toBe(

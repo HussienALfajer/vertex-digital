@@ -725,6 +725,10 @@
       "sham_cash": "إيداع شام كاش",
       "usdt_trc20": "إيداع USDT (TRC20)",
       "usdt_bep20": "إيداع USDT (BEP20)"
+    },
+    "orderKinds": {
+      "purchase": "شراء: {{product}} ({{number}})",
+      "refund": "استرداد: {{product}} ({{number}})"
     }
   },
   "switches": {

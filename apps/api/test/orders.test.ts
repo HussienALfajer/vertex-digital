@@ -10,6 +10,7 @@ import {
   postJournal,
   supplierBalanceReads,
   supplierOffers,
+  supplierSyncRuns,
   suppliers,
   supplierWebhookEvents,
   transitionOrder,
@@ -238,6 +239,12 @@ beforeAll(async () => {
     }),
     200,
   );
+  // New keys start a sync (S07 rule SP2) that no worker runs here: end it, so the suppliers
+  // tests' one-a-minute check (rule SY1) never meets it.
+  await test.db
+    .update(supplierSyncRuns)
+    .set({ status: 'failed', finishedAt: new Date(), errorCode: 'TEST' })
+    .where(and(eq(supplierSyncRuns.supplierId, ids.fake), eq(supplierSyncRuns.status, 'running')));
   const category = await json<{ id: string }>(
     await adminPost('/api/admin/catalog/categories', {
       slug: `ord-${run}`,

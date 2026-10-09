@@ -88,15 +88,12 @@ describe('API environment', () => {
     'ALTCHA_HMAC_KEY',
     'SUPPLIER_KEYS_SECRET',
     'ORDER_CODES_SECRET',
-  ])(
-    'refuses production without %s, or with its placeholder',
-    (key) => {
-      expect(() => parseEnv({ ...production, [key]: undefined })).toThrow(key);
-      expect(() => parseEnv({ ...production, [key]: 'replace-with-a-long-random-value' })).toThrow(
-        key,
-      );
-    },
-  );
+  ])('refuses production without %s, or with its placeholder', (key) => {
+    expect(() => parseEnv({ ...production, [key]: undefined })).toThrow(key);
+    expect(() => parseEnv({ ...production, [key]: 'replace-with-a-long-random-value' })).toThrow(
+      key,
+    );
+  });
 
   it('refuses http origins and a shared auth secret in production', () => {
     expect(() =>
