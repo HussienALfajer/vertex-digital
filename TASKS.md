@@ -8,16 +8,17 @@ Spec: `docs/specs/S09-storefront-and-purchase.md` (F12, F13, F15 with A02, A08's
 - [x] Contracts: `validationQuotaSchema`; notification events `order_paid`, `order_cancelled` and the stream's `order` event; Telegram kind `validation_quota_reached`; error codes (`PLAYER_NOT_CONFIRMED`, `RESERVATIONS_LIMIT_REACHED`, `ORDER_NOT_CANCELLABLE`) with Arabic store and admin text; audit actions with admin labels; queues `orders.pay_waiting`, `orders.waiting_sweep`, `store.revalidate`
 - [x] Db (`/db-migration`): `orders` columns (nullable journal with its check, `expires_at`, `reserved_at`, `cancel_reason`, `player_check`, `player_name`), indexes, guard trigger change (`awaiting_balance → paid` price columns); `player_checks` (grants without `UPDATE`); `suppliers.validation_daily_quota`; `supplier_calls` index; `catalog_games.search_terms`; tests
 - [x] Db: order write path: reserve in `purchaseOrder` (limit of 3 under the wallet lock, PV8 states), `payWaitingOrders` (RS4 steps, RS6 charge, skip and continue), `cancelReservation`, `expireReservations`; `pg_notify('customer_orders', …)` on every status change; reads extended; concurrency tests (two credits on one reservation, pay against cancel and expiry, repricing and stop, one key with `reserve` in parallel, skip-and-continue)
-- [ ] Api `catalog`: public `storefront`, `games/:slug`, `search-index` (no cookie, `public, max-age=30`, no supplier data), image widths (`?w=`, WebP variants made once); admin search terms on the game edit; `store.revalidate` queued at the change points (catalog, prices, availability, health, supplier pause, rate)
-- [ ] Api `orders`: `POST /api/player-checks` (PV1–PV7: route choice, HMAC cache, limits counting supplier calls only, daily quota with the Telegram alert, 5 s timeout, `supplier_calls`); purchase with `reserve` and `confirmPlayer`; `POST /api/orders/:id/cancel`; responses with `timeline`, `expiresAt`, `cancelReason`, `playerName`; admin list and detail fields and statuses
-- [ ] Api: `orders.pay_waiting` queued at the three A02 credit points and after a reservation; the stream's `order` event (LISTEN on `customer_orders`, fan-out by customer); admin `PUT /api/admin/suppliers/:code/validation-quota` with today's usage
-- [ ] Rate limits: player checks (API per customer and per IP; nginx zone `vdplayercheck` in `deploy/`)
-- [ ] Env: `PLAYER_CHECK_SECRET` (api), `STORE_REVALIDATE_SECRET` (api, worker, store); `.env.example`, `provision.sh`, `docs/deployment.md`
-- [ ] Dev CLI `order:place --reserve --confirm-player`; commands table in `AGENTS.md`
-- [ ] Tests: `test/catalog.test.ts`, `test/orders.test.ts`, `test/player-checks.test.ts`, `test/notifications.test.ts`, `test/suppliers.test.ts` additions per the spec's API list
-- [ ] Bridge: build, OpenAPI export, admin client; admin and store E2E mocks follow changed shapes (`timeline`)
-- [ ] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [ ] Checks (lint, typecheck, test, build, e2e, drift), reviewer, owner acceptance (endpoints at `/api/docs`), PR with auto-merge
+- [x] Api `catalog`: public `storefront`, `games/:slug`, `search-index` (no cookie, `public, max-age=30`, no supplier data), image widths (`?w=`, WebP variants made once); admin search terms on the game edit; `store.revalidate` queued at the change points (catalog, prices, availability, health, supplier pause, rate)
+- [x] Api `orders`: `POST /api/player-checks` (PV1–PV7: route choice, HMAC cache, limits counting supplier calls only, daily quota with the Telegram alert, 5 s timeout, `supplier_calls`); purchase with `reserve` and `confirmPlayer`; `POST /api/orders/:id/cancel`; responses with `timeline`, `expiresAt`, `cancelReason`, `playerName`; admin list and detail fields and statuses
+- [x] Api: `orders.pay_waiting` queued at the three A02 credit points and after a reservation; the stream's `order` event (LISTEN on `customer_orders`, fan-out by customer); admin `PUT /api/admin/suppliers/:code/validation-quota` with today's usage
+- [x] Rate limits: player checks (API per customer and per IP; nginx zone `vdplayercheck` in `deploy/`)
+- [x] Env: `PLAYER_CHECK_SECRET` (api), `STORE_REVALIDATE_SECRET` (api, worker, store); `.env.example`, `provision.sh`, `docs/deployment.md`
+- [x] Dev CLI `order:place --reserve --confirm-player`; commands table in `AGENTS.md`
+- [x] Tests: `test/catalog.test.ts`, `test/orders.test.ts`, `test/player-checks.test.ts`, `test/notifications.test.ts`, `test/suppliers.test.ts` additions per the spec's API list
+- [x] Bridge: build, OpenAPI export, admin client; admin and store E2E mocks follow changed shapes (`timeline`), the store's stage, step and notification texts
+- [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, spec "Settled in implementation")
+- [x] Review fixes: the worker creates every shared queue at start; player-check limits count only supplier calls; image sizes written whole; concurrent payment races (repricing, stop, expiry); shared test rows kept out of the worker's health and sweep tests
+- [ ] Checks (lint, typecheck, test, build, e2e, drift), reviewer (four blocking findings, fixed; re-review pending), owner acceptance (endpoints at `/api/docs`), PR with auto-merge
 
 ## PR 2 — Worker: paying and expiring reservations, cache cleanup, store revalidation, Telegram · Opus 5.5 `high`
 - [ ] Jobs `orders.pay_waiting` (stately per customer, RS4 through the db write path), `orders.waiting_sweep` (every 5 minutes, at most 500)
