@@ -1162,6 +1162,14 @@ describe('approving (rules RV1–RV5, RV7, RV9, M1–M3)', () => {
       (await actionsOf(deposit.id)).filter((action) => action === 'deposit.credited'),
     ).toHaveLength(1);
     expect((await depositEmails(someone.email)).length).toBe(1);
+    // A02 (S09 rule RS4): the credit queued the customer's reservation payment run, once.
+    const [payRuns] = (
+      await test.db.execute<{ count: number }>(
+        sql`select count(*)::int as count from pgboss.job where name = 'orders.pay-waiting'
+          and data->>'customerId' = (select customer_id::text from deposits where id = ${deposit.id})`,
+      )
+    ).rows;
+    expect(payRuns?.count).toBe(1);
   });
 
   it('credits one of two deposits approved at once with one transaction number (edge case 7)', async () => {

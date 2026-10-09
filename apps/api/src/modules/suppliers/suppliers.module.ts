@@ -3,6 +3,7 @@ import { AdminModule } from '../admin/index.js';
 import { CatalogModule } from '../catalog/index.js';
 import { RoutesAdminController } from './routes.admin.controller.js';
 import { RoutesService } from './routes.service.js';
+import { SupplierAdaptersService } from './supplier-adapters.service.js';
 import { SupplierWebhooksController } from './supplier-webhooks.controller.js';
 import { SupplierWebhooksService } from './supplier-webhooks.service.js';
 import { SuppliersAdminController } from './suppliers.admin.controller.js';
@@ -17,6 +18,7 @@ import { SuppliersService } from './suppliers.service.js';
 @Module({
   imports: [AdminModule, CatalogModule],
   controllers: [SuppliersAdminController, RoutesAdminController, SupplierWebhooksController],
-  providers: [SuppliersService, RoutesService, SupplierWebhooksService],
+  providers: [SuppliersService, RoutesService, SupplierWebhooksService, SupplierAdaptersService],
+  exports: [SupplierAdaptersService],
 })
 export class SuppliersModule {}

@@ -13,6 +13,7 @@ import {
   notifyCustomer,
   paymentReferenceOwner,
   queueDepositCard,
+  queuePayWaiting,
   queueTelegramMessage,
   recordAudit,
   type Transaction,
@@ -203,7 +204,8 @@ export async function bindAndSettle(
       creditedUsdUnits: credited.deposit.creditedUsdUnits as number,
     },
   });
-  // A02: paying `awaiting_balance` orders after a credit hooks in here (S08/S09).
+  // A02 (S09 rule RS4): the customer's reservations are paid by `orders.pay-waiting`.
+  await queuePayWaiting(tx, bossJobSender(boss), deposit.customerId);
   return 'credited';
 }
 

@@ -1,10 +1,11 @@
 /**
  * Buys a product for a customer at its current price (S08, development only: refused in
- * production), through the same service as `POST /api/orders`, until S09's buy box exists.
- * Prints the order number and status.
+ * production), through the same service as `POST /api/orders`. S09: `--reserve` reserves the
+ * order when the balance is short (`whenBalanceShort: 'reserve'`), `--confirm-player` confirms a
+ * player id that is not known valid. Prints the order number and stage.
  *
  *   pnpm --filter @vertex-digital/api order:place --email <customer> --product <id>
- *     [--quantity <n>] [--field <key>=<value>]…
+ *     [--quantity <n>] [--field <key>=<value>]… [--reserve] [--confirm-player]
  */
 import { parseArgs } from 'node:util';
 import { NestFactory } from '@nestjs/core';
@@ -22,6 +23,8 @@ const argsSchema = z.object({
   field: z
     .array(z.string().regex(/^[a-z][a-z0-9_]{1,31}=.*$/, 'Expected <key>=<value>'))
     .default([]),
+  reserve: z.boolean().default(false),
+  'confirm-player': z.boolean().default(false),
 });
 
 loadRootEnv();
@@ -31,11 +34,13 @@ const { values } = parseArgs({
     product: { type: 'string' },
     quantity: { type: 'string' },
     field: { type: 'string', multiple: true },
+    reserve: { type: 'boolean' },
+    'confirm-player': { type: 'boolean' },
   },
 });
 const parsed = argsSchema.safeParse(values);
 if (!parsed.success) {
-  console.error(`Usage: order:place --email <customer> --product <id> [--quantity <n>] [--field <key>=<value>]…\n
+  console.error(`Usage: order:place --email <customer> --product <id> [--quantity <n>] [--field <key>=<value>]… [--reserve] [--confirm-player]\n
 ${z.prettifyError(parsed.error)}`);
   process.exit(1);
 }
@@ -57,8 +62,11 @@ try {
         return [pair.slice(0, at), pair.slice(at + 1)];
       }),
     ),
+    reserve: args.reserve,
+    confirmPlayer: args['confirm-player'],
   });
-  process.stdout.write(`Paid ${order.number} (${order.stage}): ${order.id}\n`);
+  const verb = order.stage === 'awaiting_balance' ? 'Reserved' : 'Paid';
+  process.stdout.write(`${verb} ${order.number} (${order.stage}): ${order.id}\n`);
 } catch (error) {
   if (!(error instanceof CodedException)) throw error;
   const { details } = error.getResponse() as { details?: unknown };

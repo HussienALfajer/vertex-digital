@@ -8,6 +8,7 @@ import type {
   RevealedCode,
 } from '@vertex-digital/contracts';
 import {
+  cancelOwnReservation,
   customerOrder,
   customerOrderPage,
   type Database,
@@ -26,6 +27,7 @@ import { decodeCursor, encodeCursor } from '../../core/lists/cursor.js';
 import { AuthService, withinLimits } from '../auth/index.js';
 import { SettingsService } from '../settings/index.js';
 import { asCodedException, orderRefusals } from './order-errors.js';
+import { PlayerChecksService } from './player-checks.service.js';
 
 const TEN_MINUTES = 10 * 60 * 1000;
 
@@ -44,14 +46,17 @@ export function requestHash(body: PurchaseBody) {
     body.quantity,
     fields,
     body.expectedUnitPriceUsdUnits,
+    body.whenBalanceShort,
+    body.confirmPlayer,
   ]);
   return createHash('sha256').update(canonical).digest('hex');
 }
 
 /**
  * The customer's orders (S08): the purchase (rules O1–O6) through `purchaseOrder` in
- * `packages/db` under the switches' shared lock, the customer's own list and order, and code
- * reveals (rule C2). Every read filters by the customer: another customer's order is not found.
+ * `packages/db` under the switches' shared lock, with S09's reservation (RS1, RS2) and player
+ * check (PV8), the customer's own list and order, code reveals (rule C2) and the cancel of a
+ * reservation (RS8). Every read filters by the customer: another customer's order is not found.
  */
 @Injectable()
 export class OrdersService {
@@ -63,6 +68,7 @@ export class OrdersService {
     private readonly jobs: JobsService,
     private readonly settings: SettingsService,
     private readonly customers: AuthService,
+    private readonly playerChecks: PlayerChecksService,
   ) {
     this.codesKey = orderCodesKey(env.ORDER_CODES_SECRET as string);
   }
@@ -97,6 +103,9 @@ export class OrdersService {
             quantity: body.quantity,
             fields: body.fields,
             expectedUnitPriceUsdUnits: body.expectedUnitPriceUsdUnits,
+            whenBalanceShort: body.whenBalanceShort,
+            confirmPlayer: body.confirmPlayer,
+            playerCheck: (step, order) => this.playerChecks.lookup(step, order),
             idempotencyKey,
             requestHash: requestHash(body),
             fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED,
@@ -113,15 +122,35 @@ export class OrdersService {
     }
   }
 
+  /** Rule RS8: the customer cancels an own reservation. */
+  async cancel(customerId: string, orderId: string, meta: RequestMeta): Promise<Order> {
+    if (!isUuid(orderId)) throw orderRefusals.notFound();
+    try {
+      await this.db.transaction((tx) =>
+        cancelOwnReservation(
+          tx,
+          { jobs: this.jobs },
+          { orderId, customerId, ipAddress: meta.ipAddress, userAgent: meta.userAgent },
+        ),
+      );
+    } catch (error) {
+      throw asCodedException(error);
+    }
+    return (await customerOrder(this.db, customerId, orderId)) as Order;
+  }
+
   /**
-   * `order:place` (development, until S09's buy box): buys for the customer with this email at the
-   * product's current price, through `purchase` with the channel `cli`.
+   * `order:place` (development): buys for the customer with this email at the product's current
+   * price, through `purchase` with the channel `cli`; `reserve` and `confirmPlayer` as the buy box
+   * sends them (S09).
    */
   async placeForCli(input: {
     email: string;
     productId: string;
     quantity: number;
     fields: Record<string, string>;
+    reserve?: boolean;
+    confirmPlayer?: boolean;
   }): Promise<Order> {
     const customerId = await this.customers.customerIdByEmail(input.email);
     if (!customerId) throw orderRefusals.notFound();
@@ -139,6 +168,8 @@ export class OrdersService {
         quantity: input.quantity,
         fields: input.fields,
         expectedUnitPriceUsdUnits: state.current?.priceUsdUnits ?? 0,
+        whenBalanceShort: input.reserve ? 'reserve' : 'refuse',
+        confirmPlayer: input.confirmPlayer ?? false,
       },
       { ipAddress: null, userAgent: 'order:place' },
       'cli',

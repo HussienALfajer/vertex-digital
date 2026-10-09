@@ -17,6 +17,7 @@ import {
 import {
   type Database,
   newId,
+  queueStoreRevalidate,
   queueTelegramMessage,
   recordAudit,
   repriceProducts,
@@ -163,6 +164,8 @@ export class SettingsService {
         cause: 'route_change',
         context: routingContext(this.env),
       });
+      // S09 rule SF4: the store shows the products' new availability.
+      await queueStoreRevalidate(tx, this.jobs);
     }
     return true;
   }

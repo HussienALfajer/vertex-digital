@@ -24,6 +24,7 @@ import {
   supplierHasCatalog,
   type UpdateSupplier,
   unmappedFields,
+  type ValidationQuota,
 } from '@vertex-digital/contracts';
 import {
   credentialHints,
@@ -47,6 +48,7 @@ import {
   supplierSyncRuns,
   suppliers,
   type Transaction,
+  validationsToday,
 } from '@vertex-digital/db';
 import {
   and,
@@ -68,6 +70,7 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { type Actor, CatalogItemsService, CatalogService } from '../catalog/index.js';
+import { SupplierAdaptersService } from './supplier-adapters.service.js';
 import {
   auditSuppliers,
   type OfferRow,
@@ -101,6 +104,7 @@ export class SuppliersService {
     private readonly jobs: JobsService,
     private readonly catalog: CatalogService,
     private readonly items: CatalogItemsService,
+    private readonly adapters: SupplierAdaptersService,
   ) {}
 
   /** `GET /api/admin/suppliers`: `fake` only where it is enabled. */
@@ -220,6 +224,34 @@ export class SuppliersService {
         supplier: state.code,
         before: { lowBalanceUsdUnits: before },
         after: { lowBalanceUsdUnits: input.lowBalanceUsdUnits },
+      });
+    });
+    return this.detail(code);
+  }
+
+  /** S09 rule AD2: the supplier's daily validation quota, audited with before and after. */
+  async setValidationQuota(
+    actor: Actor,
+    code: string,
+    input: ValidationQuota,
+  ): Promise<SupplierDetail> {
+    const state = await this.state(code);
+    await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(suppliers)
+        .where(eq(suppliers.id, state.id))
+        .for('update');
+      const before = (row as SupplierRow).validationDailyQuota;
+      if (before === input.quota) return;
+      await tx
+        .update(suppliers)
+        .set({ validationDailyQuota: input.quota })
+        .where(eq(suppliers.id, state.id));
+      await auditSuppliers(tx, actor, 'supplier.validation_quota_set', supplierEntity(state.id), {
+        supplier: state.code,
+        before,
+        after: input.quota,
       });
     });
     return this.detail(code);
@@ -596,7 +628,7 @@ export class SuppliersService {
   private async summaries(states: SupplierState[]): Promise<SupplierSummary[]> {
     if (states.length === 0) return [];
     const ids = states.map((state) => state.id);
-    const [runs, offers, mappedCounts] = await Promise.all([
+    const [runs, offers, mappedCounts, validations] = await Promise.all([
       this.db
         .selectDistinctOn([supplierSyncRuns.supplierId])
         .from(supplierSyncRuns)
@@ -616,6 +648,7 @@ export class SuppliersService {
         .from(productRoutes)
         .where(and(inArray(productRoutes.supplierId, ids), isNull(productRoutes.archivedAt)))
         .groupBy(productRoutes.supplierId),
+      validationsToday(this.db, ids),
     ]);
     const runOf = new Map(runs.map((run) => [run.supplierId, run]));
     const offersOf = new Map(offers.map((row) => [row.supplierId, row.total]));
@@ -647,6 +680,9 @@ export class SuppliersService {
         lastRun: run ? toSyncRun(run, state.code) : null,
         offerCount: offersOf.get(state.id) ?? 0,
         mappedCount: mappedOf.get(state.id) ?? 0,
+        canValidatePlayer: this.adapters.canValidatePlayer(state.code),
+        validationQuota: state.validationDailyQuota,
+        validationsToday: validations.get(state.id) ?? 0,
       };
     });
   }

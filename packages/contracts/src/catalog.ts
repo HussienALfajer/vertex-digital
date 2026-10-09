@@ -407,6 +407,44 @@ export function productAvailability(facts: AvailabilityFacts): ProductAvailabili
   return profitable ? 'available' : 'paused_by_margin_guard';
 }
 
+// Search text (S09, F15) ------------------------------------------------------------------------
+
+const ARABIC_LETTER_FOLDS: Readonly<Record<string, string>> = {
+  أ: 'ا',
+  إ: 'ا',
+  آ: 'ا',
+  ٱ: 'ا',
+  ة: 'ه',
+  ى: 'ي',
+  ؤ: 'و',
+  ئ: 'ي',
+};
+
+/**
+ * Rule SR1: lower case and NFKC; Arabic diacritics and tatweel removed; hamza and alef forms,
+ * taa marbuta and alef maqsura folded; Arabic-Indic and Persian digits to Latin; anything but
+ * letters and digits to one space; trimmed. Search terms are stored in this form.
+ */
+export function normalizeSearchText(text: string): string {
+  return text
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآٱةىؤئ]/g, (letter) => ARABIC_LETTER_FOLDS[letter] as string)
+    .replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0))
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/** A game's search terms (rule AD1): 0–20, each 1–40 characters once normalized, unique. */
+export const MAX_SEARCH_TERMS = 20;
+
+export const searchTermsSchema = z
+  .array(z.string().max(200).transform(normalizeSearchText).pipe(z.string().min(1).max(40)))
+  .max(MAX_SEARCH_TERMS)
+  .refine((terms) => new Set(terms).size === terms.length, 'Expected unique search terms');
+
 // Games -----------------------------------------------------------------------------------------
 
 export const gameSchema = z
@@ -432,6 +470,8 @@ export type Game = z.infer<typeof gameSchema>;
 export const gameDetailSchema = gameSchema
   .extend({
     categoryArchived: z.boolean(),
+    /** Normalized search terms (S09 rule SR1, AD1). */
+    searchTerms: z.array(z.string()),
     fields: z.array(inputFieldSchema),
     products: z.array(productSchema),
   })
@@ -456,9 +496,9 @@ export const createGameSchema = z
 
 export type CreateGame = z.input<typeof createGameSchema>;
 
-/** Everything but the slug (immutable: URLs are never reused), and the status. */
+/** Everything but the slug (immutable: URLs are never reused), the status and search terms. */
 export const updateGameSchema = z
-  .object({ ...gameValues, status: catalogStatusSchema })
+  .object({ ...gameValues, status: catalogStatusSchema, searchTerms: searchTermsSchema })
   .partial()
   .meta({ id: 'UpdateGame' });
 
@@ -490,4 +530,395 @@ export function missingForActivation(game: {
   if (!game.hasCover) missing.push('cover');
   if (game.hasDirectProduct && !game.hasRequiredField) missing.push('input_fields');
   return missing;
+}
+
+// Store (S09, F12, F15): public, cached, never a supplier, cost or health number (rule SS3) ------
+
+/** A game's service status on the store (rule SS1). */
+export const GAME_SERVICE_STATUSES = ['normal', 'slow', 'unavailable'] as const;
+
+export const gameServiceStatusSchema = z
+  .enum(GAME_SERVICE_STATUSES)
+  .meta({ id: 'GameServiceStatus' });
+
+export type GameServiceStatus = z.infer<typeof gameServiceStatusSchema>;
+
+/** The home page's service line (rule SS2). */
+export const STORE_SERVICE_STATES = ['normal', 'slow'] as const;
+
+export const storeServiceStateSchema = z
+  .enum(STORE_SERVICE_STATES)
+  .meta({ id: 'StoreServiceState' });
+
+export type StoreServiceState = z.infer<typeof storeServiceStateSchema>;
+
+/** What rule SS1 reads of one unarchived product. */
+export interface ProductServiceFacts {
+  available: boolean;
+  /** The product's basis route (S07 P1, RT5) is an automatic route on a healthy supplier. */
+  healthyAutomaticBasis: boolean;
+}
+
+/**
+ * Rule SS1: `normal` when an available product's basis route is a healthy automatic route,
+ * `slow` when products are available but none is, `unavailable` when none is available.
+ */
+export function gameServiceStatus(products: readonly ProductServiceFacts[]): GameServiceStatus {
+  const available = products.filter((product) => product.available);
+  if (available.length === 0) return 'unavailable';
+  return available.some((product) => product.healthyAutomaticBasis) ? 'normal' : 'slow';
+}
+
+/** Rule SS2: `slow` when a shown game is `slow`; an `unavailable` game does not change the line. */
+export function storeServiceState(games: readonly GameServiceStatus[]): StoreServiceState {
+  return games.includes('slow') ? 'slow' : 'normal';
+}
+
+/** The widths the public image route serves (rule SF5); the store's `srcset` uses them. */
+export const CATALOG_IMAGE_WIDTHS = [160, 320, 640, 1280] as const;
+
+export type CatalogImageWidth = (typeof CATALOG_IMAGE_WIDTHS)[number];
+
+/** `GET /api/catalog/images/:id?w=`: one of the widths, or the stored original. */
+export const catalogImageQuerySchema = z
+  .object({
+    w: z
+      .enum(CATALOG_IMAGE_WIDTHS.map(String) as [string, ...string[]])
+      .transform((width) => Number(width) as CatalogImageWidth)
+      .optional(),
+  })
+  .meta({ id: 'CatalogImageQuery' });
+
+export type CatalogImageQuery = z.infer<typeof catalogImageQuerySchema>;
+
+const storeDeliveryStats = productSchema.shape.deliveryStats;
+
+/** A pack on a game page (rule SF2): no price while unavailable. */
+export const storeProductSchema = z
+  .object({
+    id: z.uuid(),
+    kind: productKindSchema,
+    nameAr: z.string(),
+    gameAmount: z.int().nullable(),
+    maxQuantity: z.int().positive(),
+    available: z.boolean(),
+    priceUsdUnits: z.int().positive().nullable(),
+    priceSypUnits: z.int().nullable(),
+    /** S06 rule PR7, when the official price is above the price. */
+    savings: z
+      .object({ amountUsdUnits: z.int().positive(), percent: z.int().positive().nullable() })
+      .nullable(),
+    deliveryStats: storeDeliveryStats,
+    /** Rule PV1 says the player id can be checked for this pack (quota aside). */
+    playerCheck: z.boolean(),
+    regionAr: z.string().nullable(),
+    redemptionAr: z.string().nullable(),
+  })
+  .meta({ id: 'StoreProduct' });
+
+export type StoreProduct = z.infer<typeof storeProductSchema>;
+
+/** One input field of a game's buy box (rule BB1). */
+export const storeFieldSchema = inputFieldSchema
+  .pick({
+    key: true,
+    labelAr: true,
+    helpAr: true,
+    type: true,
+    required: true,
+    minLength: true,
+    maxLength: true,
+    options: true,
+  })
+  .meta({ id: 'StoreField' });
+
+export type StoreField = z.infer<typeof storeFieldSchema>;
+
+const storeGameCard = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  nameAr: z.string(),
+  nameEn: z.string(),
+  cover: catalogImageSchema.nullable(),
+  accentColor: z.string().nullable(),
+  status: gameServiceStatusSchema,
+});
+
+/** `GET /api/catalog/storefront` (rules SF1, SS2). */
+export const storefrontSchema = z
+  .object({
+    service: storeServiceStateSchema,
+    categories: z.array(
+      z.object({ slug: z.string(), nameAr: z.string(), games: z.array(storeGameCard) }),
+    ),
+  })
+  .meta({ id: 'Storefront' });
+
+export type Storefront = z.infer<typeof storefrontSchema>;
+
+/** `GET /api/catalog/games/:slug` (rules SF1–SF3, BB1). */
+export const storeGameSchema = z
+  .object({
+    game: storeGameCard.extend({
+      idGuide: catalogImageSchema.nullable(),
+      regionNotesAr: z.string().nullable(),
+    }),
+    fields: z.array(storeFieldSchema),
+    products: z.array(storeProductSchema),
+    /** The rate the SYP prices use; null without one (SYP hidden). */
+    rateId: z.uuid().nullable(),
+  })
+  .meta({ id: 'StoreGame' });
+
+export type StoreGame = z.infer<typeof storeGameSchema>;
+
+/** `GET /api/catalog/search-index` (rule SR2): shown games and their unarchived products. */
+export const searchIndexSchema = z
+  .object({
+    games: z.array(
+      storeGameCard
+        .pick({ id: true, slug: true, nameAr: true, nameEn: true, cover: true, status: true })
+        .extend({ searchTerms: z.array(z.string()), categoryNameAr: z.string() }),
+    ),
+    products: z.array(
+      storeProductSchema
+        .pick({
+          id: true,
+          nameAr: true,
+          gameAmount: true,
+          available: true,
+          priceUsdUnits: true,
+          priceSypUnits: true,
+        })
+        .extend({ gameSlug: z.string() }),
+    ),
+  })
+  .meta({ id: 'SearchIndex' });
+
+export type SearchIndex = z.infer<typeof searchIndexSchema>;
+
+export type SearchIndexGame = SearchIndex['games'][number];
+
+export type SearchIndexProduct = SearchIndex['products'][number];
+
+// Search matching (rules SR3, SR4) ---------------------------------------------------------------
+
+/** A token's match: exact, prefix or fuzzy, best first. */
+type MatchQuality = 0 | 1 | 2;
+
+const NO_MATCH = 3;
+
+export const SEARCH_MAX_GAMES = 6;
+export const SEARCH_MAX_PRODUCTS = 8;
+
+/** Damerau–Levenshtein distance (optimal string alignment), or `limit + 1` once above `limit`. */
+function editDistance(a: string, b: string, limit: number): number {
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+  let before: number[] = [];
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let value = Math.min(
+        (previous[j] as number) + 1,
+        (current[j - 1] as number) + 1,
+        (previous[j - 1] as number) + cost,
+      );
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        value = Math.min(value, (before[j - 2] as number) + 1);
+      }
+      current.push(value);
+      rowMin = Math.min(rowMin, value);
+    }
+    if (rowMin > limit) return limit + 1;
+    before = previous;
+    previous = current;
+  }
+  return previous[b.length] as number;
+}
+
+/** Rule SR3 for one query token against one target token. */
+function tokenMatch(query: string, target: string): MatchQuality | typeof NO_MATCH {
+  if (query === target) return 0;
+  if (query.length >= 2 && target.startsWith(query)) return 1;
+  if (/\d/.test(query)) return NO_MATCH;
+  const limit = query.length >= 8 ? 2 : query.length >= 4 ? 1 : 0;
+  if (limit === 0) return NO_MATCH;
+  return editDistance(query, target, limit) <= limit ? 2 : NO_MATCH;
+}
+
+/** The worst of the query tokens' best matches, or `NO_MATCH` when a token matches nothing. */
+function textMatch(queryTokens: readonly string[], targetTokens: readonly string[]): number {
+  let worst = 0;
+  for (const query of queryTokens) {
+    let best: number = NO_MATCH;
+    for (const target of targetTokens) best = Math.min(best, tokenMatch(query, target));
+    if (best === NO_MATCH) return NO_MATCH;
+    worst = Math.max(worst, best);
+  }
+  return worst;
+}
+
+const tokens = (texts: readonly string[]) =>
+  texts.flatMap((text) => normalizeSearchText(text).split(' ')).filter((token) => token !== '');
+
+export interface SearchResults {
+  games: SearchIndexGame[];
+  products: SearchIndexProduct[];
+}
+
+/**
+ * Rules SR3–SR4: every query token must match a name or term token; a pack also matches through
+ * its game's names and terms. Ranked exact over prefix over fuzzy, available first, then catalog
+ * order; at most 6 games and 8 packs. An empty query finds nothing.
+ */
+export function searchCatalog(index: SearchIndex, query: string): SearchResults {
+  const queryTokens = tokens([query]);
+  if (queryTokens.length === 0) return { games: [], products: [] };
+  const gameTokens = new Map(
+    index.games.map((game) => [game.slug, tokens([game.nameAr, game.nameEn, ...game.searchTerms])]),
+  );
+  const rank = <Item>(
+    items: readonly Item[],
+    quality: (item: Item) => number,
+    available: (item: Item) => boolean,
+    limit: number,
+  ) =>
+    items
+      .map((item, order) => ({
+        item,
+        order,
+        quality: quality(item),
+        unavailable: available(item) ? 0 : 1,
+      }))
+      .filter((entry) => entry.quality !== NO_MATCH)
+      .sort((a, b) => a.quality - b.quality || a.unavailable - b.unavailable || a.order - b.order)
+      .slice(0, limit)
+      .map((entry) => entry.item);
+  return {
+    games: rank(
+      index.games,
+      (game) => textMatch(queryTokens, gameTokens.get(game.slug) as string[]),
+      (game) => game.status !== 'unavailable',
+      SEARCH_MAX_GAMES,
+    ),
+    products: rank(
+      index.products,
+      (product) =>
+        textMatch(queryTokens, [
+          ...tokens([product.nameAr]),
+          ...(gameTokens.get(product.gameSlug) ?? []),
+        ]),
+      (product) => product.available,
+      SEARCH_MAX_PRODUCTS,
+    ),
+  };
+}
+
+// "كم أحتاج؟" (rules CL1–CL3) ------------------------------------------------------------------
+
+/** The calculator's target amount (rule CL1). */
+export const CALCULATOR_MAX_TARGET = 100_000;
+
+export interface CalculatorPack {
+  id: string;
+  gameAmount: number;
+  priceUsdUnits: number;
+}
+
+export interface PackCombination {
+  lines: { packId: string; count: number }[];
+  totalAmount: number;
+  totalUsdUnits: number;
+  /** How far the total amount is above the target. */
+  overshoot: number;
+}
+
+/**
+ * Rule CL2: the counts of packs whose amounts reach at least `target` at the lowest USD price;
+ * ties go to fewer packs, then to the smaller overshoot. A pack whose amount reaches the target on
+ * its own is only ever bought alone (anything added to it costs more), so the dynamic programming
+ * runs over the smaller packs up to `target + their largest amount`. Null without packs.
+ */
+export function cheapestPackCombination(
+  packs: readonly CalculatorPack[],
+  target: number,
+): PackCombination | null {
+  if (!Number.isInteger(target) || target < 1 || target > CALCULATOR_MAX_TARGET) {
+    throw new RangeError(`Target out of range: ${target}`);
+  }
+  type Candidate = { cost: number; count: number; amount: number; counts: Map<number, number> };
+  const better = (a: Candidate, b: Candidate | null) =>
+    b === null ||
+    a.cost < b.cost ||
+    (a.cost === b.cost && (a.count < b.count || (a.count === b.count && a.amount < b.amount)));
+  let best: Candidate | null = null;
+
+  packs.forEach((pack, index) => {
+    if (pack.gameAmount < target) return;
+    const alone = {
+      cost: pack.priceUsdUnits,
+      count: 1,
+      amount: pack.gameAmount,
+      counts: new Map([[index, 1]]),
+    };
+    if (better(alone, best)) best = alone;
+  });
+
+  const small = packs.flatMap((pack, index) => (pack.gameAmount < target ? [{ pack, index }] : []));
+  if (small.length > 0) {
+    const limit = target - 1 + Math.max(...small.map(({ pack }) => pack.gameAmount));
+    const cost = new Array<number>(limit + 1).fill(Number.POSITIVE_INFINITY);
+    const count = new Array<number>(limit + 1).fill(0);
+    const via = new Int32Array(limit + 1).fill(-1);
+    cost[0] = 0;
+    for (let amount = 0; amount < target; amount += 1) {
+      const here = cost[amount] as number;
+      if (here === Number.POSITIVE_INFINITY) continue;
+      for (const { pack, index } of small) {
+        const next = amount + pack.gameAmount;
+        const nextCost = here + pack.priceUsdUnits;
+        const nextCount = (count[amount] as number) + 1;
+        const known = cost[next] as number;
+        if (nextCost < known || (nextCost === known && nextCount < (count[next] as number))) {
+          cost[next] = nextCost;
+          count[next] = nextCount;
+          via[next] = index;
+        }
+      }
+    }
+    for (let amount = target; amount <= limit; amount += 1) {
+      const total = cost[amount] as number;
+      if (total === Number.POSITIVE_INFINITY) continue;
+      const candidate = {
+        cost: total,
+        count: count[amount] as number,
+        amount,
+        counts: new Map<number, number>(),
+      };
+      if (!better(candidate, best)) continue;
+      for (let at = amount; at > 0; ) {
+        const index = via[at] as number;
+        candidate.counts.set(index, (candidate.counts.get(index) ?? 0) + 1);
+        at -= (packs[index] as CalculatorPack).gameAmount;
+      }
+      best = candidate;
+    }
+  }
+
+  const found = best as Candidate | null;
+  if (found === null) return null;
+  return {
+    lines: [...found.counts.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([index, packCount]) => ({
+        packId: (packs[index] as CalculatorPack).id,
+        count: packCount,
+      })),
+    totalAmount: found.amount,
+    totalUsdUnits: found.cost,
+    overshoot: found.amount - target,
+  };
 }

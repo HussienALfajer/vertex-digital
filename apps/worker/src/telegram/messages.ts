@@ -559,6 +559,16 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
     case 'order_needs_review':
     case 'order_conflict':
       return { text: orderText(kind, params, links) };
+    case 'validation_quota_reached': {
+      // S09 rule PV5: once a day per supplier.
+      const quota = params as TelegramMessageParams<'validation_quota_reached'>;
+      return {
+        text: [
+          `⚠️ بلغت حصة التحقق اليومية لدى ${quota.supplierNameAr} (${quota.quota}). العملاء يؤكدون المعرّف بأنفسهم حتى منتصف الليل.`,
+          `${links.admin}/suppliers/${quota.supplier}`,
+        ].join('\n'),
+      };
+    }
     case 'link_changed':
       return {
         text: 'رُبط البوت بمحادثة أخرى، فلن تصل التنبيهات إلى هنا بعد الآن. إن لم تفعل ذلك بنفسك فألغِ الربط من اللوحة فوراً.',

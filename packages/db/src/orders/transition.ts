@@ -102,6 +102,7 @@ export type OrderChanges = Partial<
     | 'refundReason'
     | 'refundJournalId'
     | 'refundIdempotencyKey'
+    | 'cancelReason'
   >
 >;
 
@@ -154,5 +155,18 @@ export async function queuePoll(tx: Transaction, jobs: JobSender, attemptId: str
     QUEUES.ordersPoll,
     { attemptId },
     { singletonKey: attemptId, startAfter: at, retryLimit: 3, retryDelay: 10, retryBackoff: true },
+  );
+}
+
+/**
+ * Queues the paying of a customer's reservations (S09 rule RS4): one queued and one running per
+ * customer, so a credit, the sweep and a new reservation never pay one order twice at once.
+ */
+export async function queuePayWaiting(tx: Transaction, jobs: JobSender, customerId: string) {
+  await jobs.send(
+    tx,
+    QUEUES.ordersPayWaiting,
+    { customerId },
+    { singletonKey: customerId, retryLimit: 3, retryDelay: 10, retryBackoff: true },
   );
 }

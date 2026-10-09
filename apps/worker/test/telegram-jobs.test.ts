@@ -23,7 +23,7 @@ import {
   telegramPrompts,
   telegramUpdates,
 } from '@vertex-digital/db';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, describe, expect, it } from 'vitest';
 import { TelegramAlerts } from '../src/core/alerts/telegram-alerts.js';
@@ -323,7 +323,8 @@ describe('the review reminder (rules RM1–RM4)', () => {
         .select()
         .from(telegramMessages)
         .where(eq(telegramMessages.kind, 'review_reminder'))
-        .orderBy(telegramMessages.createdAt)
+        // The one this transaction wrote: a reminder another run committed is older.
+        .orderBy(desc(telegramMessages.createdAt))
         .limit(1);
       const params = TELEGRAM_MESSAGE_PARAMS.review_reminder.parse(message?.params);
       expect(params.count).toBeGreaterThanOrEqual(1);

@@ -48,7 +48,7 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
-import { FilesService, type ServedFile } from '../files/index.js';
+import { FilesService } from '../files/index.js';
 import { RatesService } from '../rates/index.js';
 import {
   type Actor,
@@ -141,13 +141,6 @@ export class CatalogService {
       width: prepared.row.width as number,
       height: prepared.row.height as number,
     });
-  }
-
-  /** The public image route: catalog images only, never receipts or QR images. */
-  async image(id: string): Promise<ServedFile> {
-    const file = isUuid(id) ? await this.files.serve(id, 'catalog_image') : null;
-    if (!file) throw refusals.notFound('catalog image');
-    return file;
   }
 
   // Categories ------------------------------------------------------------------------------------
@@ -344,6 +337,7 @@ export class CatalogService {
     return {
       ...toGame(row, images, products.filter((product) => !product.archivedAt).length),
       categoryArchived: found.categoryArchivedAt !== null,
+      searchTerms: row.searchTerms,
       fields: fields.map(toInputField),
       products: await this.products(executor, products),
     };
@@ -394,8 +388,10 @@ export class CatalogService {
         const moving = input.categoryId !== undefined && input.categoryId !== current.categoryId;
         if (moving) await this.lockLiveCategory(tx, input.categoryId as string);
         const before = await this.lockGame(tx, id);
-        const after: GameValues = {
-          ...gameValues(before),
+        // S09 rule AD1: the search terms change with the game, audited in the same entry.
+        const beforeValues = { ...gameValues(before), searchTerms: before.searchTerms };
+        const after: GameValues & { searchTerms: string[] } = {
+          ...beforeValues,
           ...definedOnly({
             categoryId: input.categoryId,
             nameAr: input.nameAr,
@@ -405,9 +401,10 @@ export class CatalogService {
             idGuideFileId: input.idGuideFileId,
             accentColor: input.accentColor,
             regionNotesAr: input.regionNotesAr,
+            searchTerms: input.searchTerms,
           }),
         };
-        const changed = changes(gameValues(before), after);
+        const changed = changes(beforeValues, after);
         if (!changed) return this.game(id, tx);
         await this.checkImages(changed.after);
         if (changed.after.accentColor !== undefined) checkAccent(after.accentColor);

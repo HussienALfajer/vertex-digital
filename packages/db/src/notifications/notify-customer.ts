@@ -15,6 +15,9 @@ import { type JobSender, queueEmail } from './email-outbox.js';
 /** The `LISTEN` channel of new notifications; the payload is the notification id (rule NT6). */
 export const CUSTOMER_NOTIFICATIONS_CHANNEL = 'customer_notifications';
 
+/** S09 rule LT2: every order status change, from the `orders_notify` trigger (migration 0035). */
+export const CUSTOMER_ORDERS_CHANNEL = 'customer_orders';
+
 export interface CustomerNotificationInput<Event extends NotificationEvent> {
   customerId: string;
   event: Event;

@@ -18,8 +18,8 @@ import {
   orderCustomerStage,
   orderDecisions,
   orderNumberSchema,
+  orderTimeline,
   type RouteCandidate,
-  stageTimeline,
 } from '@vertex-digital/contracts';
 import {
   and,
@@ -161,6 +161,7 @@ export async function customerOrderPage(
       quantity: order.quantity,
       totalUsdUnits: order.totalUsdUnits,
       totalSypUnits: order.totalSypUnits,
+      expiresAt: iso(order.expiresAt),
       createdAt: order.createdAt.toISOString(),
     })),
     more: rows.length > page.limit,
@@ -182,7 +183,7 @@ export async function customerOrder(
     .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)));
   if (!row) return null;
   const { order, product, game } = row;
-  const [fields, statusEvents, codes, images] = await Promise.all([
+  const [fields, statusEvents, codes, images, stats] = await Promise.all([
     fieldsWithLabels(db, order),
     db
       .select({ status: orderEvents.toStatus, at: orderEvents.createdAt })
@@ -191,6 +192,7 @@ export async function customerOrder(
       .orderBy(asc(orderEvents.createdAt), asc(orderEvents.id)),
     orderCodeList(db, order.id),
     covers(db, [game.coverFileId]),
+    productDeliveryStats(db, [product.id]),
   ]);
   return {
     id: order.id,
@@ -218,17 +220,21 @@ export async function customerOrder(
     totalSypUnits: order.totalSypUnits,
     refundedUsdUnits: order.refundedUsdUnits,
     refundReason: order.refundReason,
-    timeline: stageTimeline(
+    timeline: orderTimeline(
       statusEvents.flatMap((event) =>
         event.status ? [{ status: event.status, at: event.at }] : [],
       ),
-    ).map((entry) => ({ stage: entry.stage, at: entry.at.toISOString() })),
+    ).map((entry) => ({ step: entry.step, at: entry.at.toISOString() })),
     codes: codes.map((code) => ({
       id: code.id,
       position: code.index,
       masked: maskCode(code.hint),
       firstRevealedAt: iso(code.firstCustomerReveal),
     })),
+    expiresAt: iso(order.expiresAt),
+    cancelReason: order.cancelReason,
+    playerName: order.playerName,
+    deliveryStats: stats.get(product.id) ?? null,
     createdAt: order.createdAt.toISOString(),
   };
 }
@@ -480,7 +486,7 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
       .orderBy(asc(supplierWebhookEvents.createdAt)),
   ]);
   const journalIds = [
-    order.purchaseJournalId,
+    ...(order.purchaseJournalId ? [order.purchaseJournalId] : []),
     ...(order.refundJournalId ? [order.refundJournalId] : []),
     ...attempts.flatMap(({ attempt }) => (attempt.costJournalId ? [attempt.costJournalId] : [])),
   ];
@@ -528,6 +534,11 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
     minMarginUsdUnits: order.minMarginUsdUnits,
     refundedUsdUnits: order.refundedUsdUnits,
     refundReason: order.refundReason,
+    reservedAt: iso(order.reservedAt),
+    expiresAt: iso(order.expiresAt),
+    cancelReason: order.cancelReason,
+    playerCheck: order.playerCheck,
+    playerName: order.playerName,
     paidAt: iso(order.paidAt),
     deliveredAt: iso(order.deliveredAt),
     finishedAt: iso(order.finishedAt),

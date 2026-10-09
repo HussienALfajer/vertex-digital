@@ -9,6 +9,7 @@ import {
   ArrowDownToLineIcon,
   BellIcon,
   CircleAlertIcon,
+  CircleSlashIcon,
   CircleXIcon,
   ClockAlertIcon,
   type LucideIcon,
@@ -17,6 +18,7 @@ import {
   ReceiptTextIcon,
   SlidersHorizontalIcon,
   Undo2Icon,
+  WalletIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -44,6 +46,8 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   order_partially_refunded: PackageMinusIcon,
   order_refunded: Undo2Icon,
   order_delayed: ClockAlertIcon,
+  order_paid: WalletIcon,
+  order_cancelled: CircleSlashIcon,
 };
 
 /** Marks everything up to the newest shown as read and tells the bell (rule NT5). */

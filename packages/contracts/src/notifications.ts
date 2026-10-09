@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { otpCodeSchema } from './auth.js';
 import { depositRejectReasonSchema } from './deposits.js';
 import { cursorQuerySchema } from './lists.js';
-import { refundReasonSchema } from './orders.js';
+import { cancelReasonSchema, refundReasonSchema } from './orders.js';
 import { adjustmentCategorySchema, adjustmentDirectionSchema } from './wallet.js';
 
 /*
@@ -40,6 +40,8 @@ export const EMAIL_TEMPLATES = [
   'customer_order_partially_refunded',
   /** An order was refunded in full, with the reason in plain words (S08). */
   'customer_order_refunded',
+  /** A reservation was cancelled by the system, with the reason in plain words (S09 RS9). */
+  'customer_order_cancelled',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -72,6 +74,8 @@ export const NOTIFICATION_EVENTS = [
   'order_partially_refunded',
   'order_refunded',
   'order_delayed',
+  'order_paid',
+  'order_cancelled',
 ] as const;
 
 export const notificationEventSchema = z
@@ -132,6 +136,18 @@ export const NOTIFICATION_PARAMS = {
     orderNumber: z.string(),
     productNameAr: z.string(),
   }),
+  // S09: a reservation paid after a deposit (rule RS4), or cancelled by the system (rule RS9).
+  order_paid: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    productNameAr: z.string(),
+  }),
+  order_cancelled: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    productNameAr: z.string(),
+    reason: cancelReasonSchema.exclude(['customer']),
+  }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
@@ -158,6 +174,7 @@ export const EMAIL_PARAMS = {
   customer_order_delivered: NOTIFICATION_PARAMS.order_delivered.extend(at.shape),
   customer_order_partially_refunded: NOTIFICATION_PARAMS.order_partially_refunded.extend(at.shape),
   customer_order_refunded: NOTIFICATION_PARAMS.order_refunded.extend(at.shape),
+  customer_order_cancelled: NOTIFICATION_PARAMS.order_cancelled.extend(at.shape),
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
@@ -178,7 +195,7 @@ export const EMAIL_CODE_TTL_SECONDS = 10 * 60;
 
 /**
  * The email each notification event queues, unless the customer turned it off (rule NT1); null
- * for an event that lives in the center only (`order_delayed`, S08).
+ * for an event that lives in the center only (`order_delayed`, S08; `order_paid`, S09).
  */
 export const NOTIFICATION_EMAIL_TEMPLATE = {
   deposit_credited: 'customer_deposit_credited',
@@ -189,6 +206,8 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   order_partially_refunded: 'customer_order_partially_refunded',
   order_refunded: 'customer_order_refunded',
   order_delayed: null,
+  order_paid: null,
+  order_cancelled: 'customer_order_cancelled',
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -222,6 +241,8 @@ export const customerNotificationSchema = z
     notification('order_partially_refunded'),
     notification('order_refunded'),
     notification('order_delayed'),
+    notification('order_paid'),
+    notification('order_cancelled'),
   ])
   .meta({ id: 'CustomerNotification' });
 
@@ -258,7 +279,7 @@ export const unreadCountSchema = z.object(unreadCount).meta({ id: 'UnreadCount' 
 export type UnreadCount = z.infer<typeof unreadCountSchema>;
 
 /** The live stream's events (rule NT6), sent as SSE `event:` names with JSON `data:`. */
-export const NOTIFICATION_STREAM_EVENTS = ['unread', 'notification', 'resync'] as const;
+export const NOTIFICATION_STREAM_EVENTS = ['unread', 'notification', 'order', 'resync'] as const;
 
 export type NotificationStreamEvent = (typeof NOTIFICATION_STREAM_EVENTS)[number];
 

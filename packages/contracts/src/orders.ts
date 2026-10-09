@@ -75,8 +75,9 @@ export function isTerminalOrderStatus(status: OrderStatus): boolean {
   return ORDER_TRANSITIONS[status].length === 0;
 }
 
-/** What the customer sees instead of the internal status (rule O13). */
+/** What the customer sees instead of the internal status (rule O13; S09 adds the reservation). */
 export const ORDER_STAGES = [
+  'awaiting_balance',
   'processing',
   'delayed',
   'delivered',
@@ -90,8 +91,7 @@ export const orderStageSchema = z.enum(ORDER_STAGES).meta({ id: 'OrderStage' });
 export type OrderStage = z.infer<typeof orderStageSchema>;
 
 const STAGE_OF: Readonly<Record<OrderStatus, OrderStage>> = {
-  // No S08 order waits for a balance (S09); until then it reads as being processed.
-  awaiting_balance: 'processing',
+  awaiting_balance: 'awaiting_balance',
   paid: 'processing',
   sent_to_supplier: 'processing',
   failed: 'processing',
@@ -107,19 +107,125 @@ export function orderCustomerStage(status: OrderStatus): OrderStage {
   return STAGE_OF[status];
 }
 
+/** The steps of the customer's order timeline (S09 rule LT1). */
+export const ORDER_TIMELINE_STEPS = [
+  'reserved',
+  'paid',
+  'sent',
+  'retrying',
+  'delayed',
+  'delivered',
+  'partially_refunded',
+  'refunded',
+  'cancelled',
+] as const;
+
+export const orderTimelineStepSchema = z
+  .enum(ORDER_TIMELINE_STEPS)
+  .meta({ id: 'OrderTimelineStep' });
+
+export type OrderTimelineStep = z.infer<typeof orderTimelineStepSchema>;
+
+const STEP_OF: Readonly<Record<OrderStatus, OrderTimelineStep | null>> = {
+  awaiting_balance: 'reserved',
+  paid: 'paid',
+  sent_to_supplier: 'sent',
+  // Short-lived: the next attempt or the refund follows at once.
+  failed: null,
+  needs_review: 'delayed',
+  delivered: 'delivered',
+  partially_refunded: 'partially_refunded',
+  refunded: 'refunded',
+  cancelled: 'cancelled',
+};
+
 /**
- * The stages the customer went through with their times, from the order's status changes oldest
- * first: a status that keeps the stage (`paid → sent_to_supplier`) adds nothing.
+ * Rule LT1: the order's status changes, oldest first, as the customer's steps. The first
+ * `sent_to_supplier` is `sent` and a later one `retrying`; a step that comes again keeps only its
+ * newest time, in its new place; `failed` adds nothing.
  */
-export function stageTimeline(
+export function orderTimeline(
   changes: readonly { status: OrderStatus; at: Date }[],
-): { stage: OrderStage; at: Date }[] {
-  const timeline: { stage: OrderStage; at: Date }[] = [];
+): { step: OrderTimelineStep; at: Date }[] {
+  const timeline: { step: OrderTimelineStep; at: Date }[] = [];
   for (const change of changes) {
-    const stage = orderCustomerStage(change.status);
-    if (timeline.at(-1)?.stage !== stage) timeline.push({ stage, at: change.at });
+    let step = STEP_OF[change.status];
+    if (step === null) continue;
+    if (step === 'sent' && timeline.some((entry) => entry.step === 'sent')) step = 'retrying';
+    const seen = timeline.findIndex((entry) => entry.step === step);
+    if (seen !== -1) timeline.splice(seen, 1);
+    timeline.push({ step, at: change.at });
   }
   return timeline;
+}
+
+// Reservations and player checks (S09) ----------------------------------------------------------
+
+/** A reservation waits this long for a balance (rule RS1, A15), and a customer holds at most 3. */
+export const RESERVATION_HOURS = 24;
+export const RESERVATIONS_MAX = 3;
+
+/** Why an order was cancelled (rules RS7–RS9); set only on `cancelled` orders. */
+export const CANCEL_REASONS = ['expired', 'customer', 'price_rose', 'product_changed'] as const;
+
+export const cancelReasonSchema = z.enum(CANCEL_REASONS).meta({ id: 'CancelReason' });
+
+export type CancelReason = z.infer<typeof cancelReasonSchema>;
+
+/** Rule RS6: the reservation pays the lower unit price, and says which one it took. */
+export function reservationCharge(
+  savedUnitPriceUsdUnits: number,
+  currentUnitPriceUsdUnits: number,
+): { unitPriceUsdUnits: number; source: 'saved' | 'current' } {
+  return currentUnitPriceUsdUnits < savedUnitPriceUsdUnits
+    ? { unitPriceUsdUnits: currentUnitPriceUsdUnits, source: 'current' }
+    : { unitPriceUsdUnits: savedUnitPriceUsdUnits, source: 'saved' };
+}
+
+/** What the order recorded of the player check (rule PV8). */
+export const PLAYER_CHECK_STATES = [
+  'valid',
+  'invalid_confirmed',
+  'unchecked_confirmed',
+  'none',
+] as const;
+
+export const playerCheckStateSchema = z.enum(PLAYER_CHECK_STATES).meta({ id: 'PlayerCheckState' });
+
+export type PlayerCheckState = z.infer<typeof playerCheckStateSchema>;
+
+/** A cached supplier answer (`player_checks.result`, rule PV3). */
+export const PLAYER_CHECK_RESULTS = ['valid', 'invalid'] as const;
+
+export type PlayerCheckResult = (typeof PLAYER_CHECK_RESULTS)[number];
+
+/** A cached answer lasts 24 hours when valid and 1 hour when invalid (rule PV3). */
+export const PLAYER_CHECK_TTL_MS: Readonly<Record<PlayerCheckResult, number>> = {
+  valid: 24 * 60 * 60 * 1_000,
+  invalid: 60 * 60 * 1_000,
+};
+
+/** The supplier call of a player check gives up after this long (rule PV6). */
+export const PLAYER_CHECK_TIMEOUT_MS = 5_000;
+
+export const PLAYER_NAME_MAX_LENGTH = 64;
+
+/**
+ * A supplier's in-game name as the store may show it: printable characters only, spaces
+ * collapsed, trimmed, at most 64 characters; null when nothing is left.
+ */
+export function cleanPlayerName(name: string | null | undefined): string | null {
+  if (typeof name !== 'string') return null;
+  const clean = [
+    ...name
+      .replace(/[\p{C}\p{Zl}\p{Zp}]/gu, '')
+      .replace(/\s+/gu, ' ')
+      .trim(),
+  ]
+    .slice(0, PLAYER_NAME_MAX_LENGTH)
+    .join('')
+    .trim();
+  return clean === '' ? null : clean;
 }
 
 // Attempts, events, refunds ---------------------------------------------------------------------
@@ -549,10 +655,40 @@ export const createOrderSchema = z
       })
       .default({}),
     expectedUnitPriceUsdUnits: usdCentsSchema.min(1),
+    /** S09 rule RS1: reserve the order when the balance is short instead of refusing it. */
+    whenBalanceShort: z.enum(['refuse', 'reserve']).default('refuse'),
+    /** S09 rule PV8: the customer confirmed the player id that is not known `valid`. */
+    confirmPlayer: z.boolean().default(false),
   })
   .meta({ id: 'CreateOrder' });
 
 export type CreateOrder = z.input<typeof createOrderSchema>;
+
+/** `POST /api/player-checks` (rules PV1, PV2). */
+export const playerCheckRequestSchema = createOrderSchema
+  .pick({ productId: true, fields: true })
+  .meta({ id: 'PlayerCheckRequest' });
+
+export type PlayerCheckRequest = z.input<typeof playerCheckRequestSchema>;
+
+/** Rule PV6: the answer of a player check. */
+export const playerCheckSchema = z
+  .discriminatedUnion('result', [
+    z.object({ result: z.literal('valid'), playerName: z.string().nullable() }),
+    z.object({ result: z.literal('invalid') }),
+    z.object({ result: z.literal('unavailable'), reason: z.enum(['quota', 'supplier']) }),
+    z.object({ result: z.literal('not_supported') }),
+  ])
+  .meta({ id: 'PlayerCheck' });
+
+export type PlayerCheck = z.infer<typeof playerCheckSchema>;
+
+/** The stream's `order` event (rule LT2): ids and status only, never fields or amounts. */
+export const orderStreamItemSchema = z
+  .object({ orderId: z.uuid(), status: orderStatusSchema, stage: orderStageSchema })
+  .meta({ id: 'OrderStreamItem' });
+
+export type OrderStreamItem = z.infer<typeof orderStreamItemSchema>;
 
 const orderGame = z.object({ id: z.uuid(), slug: z.string(), nameAr: z.string() });
 
@@ -568,6 +704,8 @@ export const orderSummarySchema = z
     totalUsdUnits: z.int().positive(),
     /** The pounds shown at purchase (rule O6), display only; null without a rate then. */
     totalSypUnits: z.int().nullable(),
+    /** A reservation's deadline (rule RS1); null for an order created paid. */
+    expiresAt: z.iso.datetime().nullable(),
     createdAt: z.iso.datetime(),
   })
   .meta({ id: 'OrderSummary' });
@@ -622,8 +760,16 @@ export const orderSchema = z
     totalSypUnits: z.int().nullable(),
     refundedUsdUnits: z.int().nonnegative(),
     refundReason: refundReasonSchema.nullable(),
-    timeline: z.array(z.object({ stage: orderStageSchema, at: z.iso.datetime() })),
+    /** Rule LT1, oldest first. */
+    timeline: z.array(z.object({ step: orderTimelineStepSchema, at: z.iso.datetime() })),
     codes: z.array(orderCodeSchema),
+    /** A reservation's deadline (rule RS1), kept after payment. */
+    expiresAt: z.iso.datetime().nullable(),
+    cancelReason: cancelReasonSchema.nullable(),
+    /** The in-game name of a validated order (rule LT3). */
+    playerName: z.string().nullable(),
+    /** The product's delivery time (S08 rule T1), shown while the order is open (rule LT3). */
+    deliveryStats: deliveryStatsSchema.nullable(),
     createdAt: z.iso.datetime(),
   })
   .meta({ id: 'Order' });
@@ -859,6 +1005,12 @@ export const adminOrderSchema = z
     minMarginUsdUnits: z.int().nonnegative(),
     refundedUsdUnits: z.int().nonnegative(),
     refundReason: refundReasonSchema.nullable(),
+    /** Rule AD3: the reservation, the cancel reason and the player check. */
+    reservedAt: z.iso.datetime().nullable(),
+    expiresAt: z.iso.datetime().nullable(),
+    cancelReason: cancelReasonSchema.nullable(),
+    playerCheck: playerCheckStateSchema,
+    playerName: z.string().nullable(),
     paidAt: z.iso.datetime().nullable(),
     deliveredAt: z.iso.datetime().nullable(),
     finishedAt: z.iso.datetime().nullable(),

@@ -180,6 +180,14 @@ describe('the order emails (S08)', () => {
     expect(full.text).toContain('السبب: بيانات الحساب مرفوضة.');
     expect(full.html).toContain(`href="${link}"`);
   });
+
+  it('says why a reservation was cancelled, with nothing taken (S09 rule RS9)', () => {
+    const email = renderEmail('customer_order_cancelled', { ...order, reason: 'expired' }, store);
+    expect(email.subject).toBe('أُلغي طلبك المحجوز VO-7KQ2MX');
+    expect(email.text).toContain('السبب: انتهت مدة الحجز (24 ساعة).');
+    expect(email.text).toContain('لم يُخصم من رصيدك شيء');
+    expect(email.html).toContain(`href="${link}"`);
+  });
 });
 
 describe('email.send', () => {

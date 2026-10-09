@@ -537,6 +537,10 @@ export class SuppliersMock {
           offer.supplierCode === row.code &&
           this.routes.some((route) => route.offerId === offer.id && !route.archivedAt),
       ).length,
+      // S09 rule AD2 (its panel arrives with S09's screens).
+      canValidatePlayer: row.code === 'fake',
+      validationQuota: 1_000,
+      validationsToday: 0,
     };
   }
 

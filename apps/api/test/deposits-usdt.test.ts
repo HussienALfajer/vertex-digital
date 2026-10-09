@@ -932,6 +932,14 @@ describe('the review of a USDT deposit (rules U11, U15)', () => {
       .from(ledgerJournals)
       .where(eq(ledgerJournals.idempotencyKey, `deposit:${deposit.id}`));
     expect(journals).toHaveLength(1);
+    // A02 (S09 rule RS4): the credit queued the customer's reservation payment run, once.
+    const [payRuns] = (
+      await test.db.execute<{ count: number }>(
+        sql`select count(*)::int as count from pgboss.job where name = 'orders.pay-waiting'
+          and data->>'customerId' = (select customer_id::text from deposits where id = ${deposit.id})`,
+      )
+    ).rows;
+    expect(payRuns?.count).toBe(1);
   });
 
   it('lets one of an approval and an S02 manual deposit with the TXID as 0x claim the transfer', async () => {

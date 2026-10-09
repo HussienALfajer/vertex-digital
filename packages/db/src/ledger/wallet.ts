@@ -290,7 +290,7 @@ async function ordersOf(db: Executor, journalIds: string[]): Promise<Map<string,
     );
   const byJournal = new Map<string, TimelineOrder>();
   for (const { purchaseJournalId, refundJournalId, ...order } of rows) {
-    byJournal.set(purchaseJournalId, order);
+    if (purchaseJournalId) byJournal.set(purchaseJournalId, order);
     if (refundJournalId) byJournal.set(refundJournalId, order);
   }
   return byJournal;

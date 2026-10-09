@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { testDatabaseUrl } from '@vertex-digital/db/testing';
 import { defineConfig } from 'vitest/config';
 
@@ -25,6 +26,10 @@ export default defineConfig({
       TELEGRAM_WEBHOOK_SECRET: 'test-webhook-secret-0123456789abcdef',
       // S07: suppliers are tested with the fake supplier.
       SUPPLIER_FAKE_ENABLED: 'true',
+      // S09: the fake's scripted state the player checks read, the tests' own (git-ignored).
+      FAKE_SUPPLIER_STATE_FILE: fileURLToPath(
+        new URL('./.data/test-fake-supplier.json', import.meta.url),
+      ),
     },
     testTimeout: 30_000,
     hookTimeout: 30_000,

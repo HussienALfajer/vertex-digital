@@ -63,6 +63,8 @@ export const suppliers = pgTable(
     nameAr: text('name_ar').notNull(),
     /** A07: whole cents, $0–$100,000; ignored for `manual`. */
     lowBalanceUsdUnits: amountUnits('low_balance_usd_units').notNull().default(50_000_000),
+    /** S09 rule PV5: player checks a Damascus day; 0 turns them off for this supplier. */
+    validationDailyQuota: integer('validation_daily_quota').notNull().default(1_000),
     ...timestamps(),
   },
   (table) => [
@@ -70,6 +72,10 @@ export const suppliers = pgTable(
     check(
       'suppliers_low_balance_check',
       sql`${table.lowBalanceUsdUnits} between 0 and 100000000000 and ${table.lowBalanceUsdUnits} % 10000 = 0`,
+    ),
+    check(
+      'suppliers_validation_daily_quota_check',
+      sql`${table.validationDailyQuota} between 0 and 1000000`,
     ),
   ],
 );
@@ -220,6 +226,12 @@ export const supplierCalls = pgTable(
   },
   (table) => [
     index('supplier_calls_supplier_id_created_at_idx').on(table.supplierId, table.createdAt.desc()),
+    /** S09 rule PV5: today's player checks per supplier. */
+    index('supplier_calls_supplier_id_operation_created_at_idx').on(
+      table.supplierId,
+      table.operation,
+      table.createdAt.desc(),
+    ),
     check('supplier_calls_latency_check', sql`${table.latencyMs} >= 0`),
     check('supplier_calls_supplier_code_check', sql`char_length(${table.supplierCode}) <= 64`),
   ],

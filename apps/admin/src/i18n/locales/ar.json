@@ -205,7 +205,10 @@
       "ORDER_NOT_DECIDABLE": "حالة الطلب تغيّرت ولم يعد هذا القرار متاحاً. حدّث الصفحة.",
       "ATTEMPT_NOT_RESOLVABLE": "هذه المحاولة أُغلقت أو لا تقبل هذا القرار. حدّث الصفحة.",
       "CODES_COUNT_MISMATCH": "عدد الأكواد لا يساوي عدد الوحدات المسلّمة. أدخل كوداً لكل وحدة.",
-      "WEBHOOK_SIGNATURE_INVALID": "توقيع إشعار المورد غير صحيح."
+      "WEBHOOK_SIGNATURE_INVALID": "توقيع إشعار المورد غير صحيح.",
+      "PLAYER_NOT_CONFIRMED": "المعرّف غير مؤكد ولم يؤكده العميل.",
+      "RESERVATIONS_LIMIT_REACHED": "بلغ العميل الحد الأقصى من الطلبات المحجوزة.",
+      "ORDER_NOT_CANCELLABLE": "لا يمكن إلغاء هذا الطلب في حالته الحالية."
     }
   },
   "changePassword": {
@@ -528,6 +531,7 @@
       "supplier.credentials_set": "تعيين مفاتيح مورد",
       "supplier.updated": "تعديل مورد",
       "supplier.sync_requested": "طلب مزامنة مورد",
+      "supplier.validation_quota_set": "تعديل حصة التحقق اليومية",
       "supplier.import": "استيراد عروض مورد",
       "supplier_policy.set": "تعديل سياسة الموردين",
       "supplier_offer.manual_cost_set": "تعيين تكلفة يدوية",
@@ -539,6 +543,8 @@
       "price_review.paused": "إيقاف باقة من المراجعة",
       "price_review.margin_adjusted": "تعديل الهامش من المراجعة",
       "order.paid": "شراء طلب",
+      "order.reserved": "حجز طلب",
+      "order.cancelled": "إلغاء طلب محجوز",
       "order.cost_posted": "تسجيل تكلفة طلب",
       "order.refunded": "استرداد طلب",
       "order.poll_requested": "سؤال المورد مجدداً",
@@ -1005,7 +1011,8 @@
       "manual_order": "طلب يدوي بانتظارك",
       "manual_order_reminder": "تذكير بطلب يدوي",
       "order_needs_review": "طلب بحاجة لمراجعة",
-      "order_conflict": "تعارض في طلب"
+      "order_conflict": "تعارض في طلب",
+      "validation_quota_reached": "بلوغ حصة التحقق اليومية"
     }
   },
   "rates": {

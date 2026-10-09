@@ -45,7 +45,7 @@ describe('notifications (S05 F27)', () => {
       NOTIFICATION_EVENTS.filter(
         (event) => !(EMAIL_NOTIFICATION_EVENTS as readonly string[]).includes(event),
       ),
-    ).toEqual(['order_delayed']);
+    ).toEqual(['order_delayed', 'order_paid']);
   });
 
   it('carry no notes, transaction numbers, TXIDs or flags (rule NT3)', () => {

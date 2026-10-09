@@ -42,6 +42,12 @@ export const QUEUES = {
   ordersSweep: 'orders.sweep',
   /** Applies one stored supplier webhook (S08 rule F5). */
   suppliersWebhook: 'suppliers.webhook',
+  /** Pays one customer's reservations after a credit, a reservation or the sweep (S09 rule RS4). */
+  ordersPayWaiting: 'orders.pay-waiting',
+  /** Queues `orders.pay_waiting` for customers with open reservations, every 5 minutes (RS4). */
+  ordersWaitingSweep: 'orders.waiting-sweep',
+  /** Refreshes the store's cached catalog pages (S09 rule SF4). */
+  storeRevalidate: 'store.revalidate',
 } as const;
 
 /**
@@ -49,15 +55,22 @@ export const QUEUES = {
  * deposit's verification and a network's scan run one at a time, and a running job can queue its
  * successor (S04 rules U9, U12); a deposit's card is sent or edited by one job at a time, which
  * loads the deposit fresh (S05); an order is routed, and an attempt polled, by one job at a time
- * (S08 rules R1, F3). The API and the worker create queues with these policies.
+ * (S08 rules R1, F3); a customer's reservations are paid by one job at a time (S09 rule RS4).
+ * `singleton`: one store refresh runs at a time (S09 rule SF4). The API and the worker create
+ * queues with these policies.
  */
-export const QUEUE_POLICIES: Readonly<Record<string, 'stately'>> = {
+export const QUEUE_POLICIES: Readonly<Record<string, 'stately' | 'singleton'>> = {
   [QUEUES.depositsUsdtScan]: 'stately',
   [QUEUES.depositsUsdtVerify]: 'stately',
   [QUEUES.telegramDepositCard]: 'stately',
   [QUEUES.ordersFulfil]: 'stately',
   [QUEUES.ordersPoll]: 'stately',
+  [QUEUES.ordersPayWaiting]: 'stately',
+  [QUEUES.storeRevalidate]: 'singleton',
 };
+
+/** A store refresh is queued at most once per this many seconds (S09 rule SF4). */
+export const STORE_REVALIDATE_THROTTLE_SECONDS = 10;
 
 export const emailSendPayloadSchema = z.object({ outboxId: z.uuid() });
 
@@ -115,3 +128,8 @@ export type OrdersPollPayload = z.infer<typeof ordersPollPayloadSchema>;
 export const suppliersWebhookPayloadSchema = z.object({ eventId: z.uuid() });
 
 export type SuppliersWebhookPayload = z.infer<typeof suppliersWebhookPayloadSchema>;
+
+/** `singletonKey` is the customer id: one paying run queued and one active per customer (RS4). */
+export const ordersPayWaitingPayloadSchema = z.object({ customerId: z.uuid() });
+
+export type OrdersPayWaitingPayload = z.infer<typeof ordersPayWaitingPayloadSchema>;

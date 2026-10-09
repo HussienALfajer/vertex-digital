@@ -361,6 +361,9 @@ async function buy(
       fakeEnabled: true,
       purchasesStopped: false,
       channel: 'store',
+      whenBalanceShort: 'refuse',
+      confirmPlayer: false,
+      playerCheck: async () => null,
     },
   );
   return order;
@@ -811,6 +814,11 @@ describe('polling, the hard limit and the sweep (rules F3, F6, F7)', () => {
         .set({ nextPollAt: new Date(now.getTime() - 2 * 60_000) })
         .where(eq(fulfilmentAttempts.id, pending?.id as string));
 
+      // Other tests' paid orders (the api's, never routed there) wait behind this one, so the
+      // sweep's batch of 100 always reaches it.
+      await tx.execute(
+        sql`update orders set updated_at = now() where status in ('paid', 'failed') and id <> ${lost.id}`,
+      );
       sent.length = 0;
       const result = await sweep.sweep(now, tx);
       expect(result.resent).toContain(sendingId);
@@ -1064,6 +1072,16 @@ describe('Telegram order messages (rules MN1, MN2, F5, F7)', () => {
       links,
     ).text;
     expect(conflict).toContain('أبلغ WDGZone أنه سُلّم بعد أن سُجّل أنه فشل');
+    // S09 rule PV5: the daily validation quota, once a day per supplier.
+    expect(
+      renderTelegramMessage(
+        'validation_quota_reached',
+        { supplier: 'shop2topup', supplierNameAr: 'SHOP2TOPUP', quota: 1000 },
+        links,
+      ).text,
+    ).toBe(
+      `⚠️ بلغت حصة التحقق اليومية لدى SHOP2TOPUP (1000). العملاء يؤكدون المعرّف بأنفسهم حتى منتصف الليل.\n${links.admin}/suppliers/shop2topup`,
+    );
     expect(
       renderTelegramMessage(
         'order_conflict',

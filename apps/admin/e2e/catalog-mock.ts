@@ -296,6 +296,8 @@ export class CatalogMock {
     return {
       ...this.game(row),
       categoryArchived: !!this.categories.find((item) => item.id === row.categoryId)?.archivedAt,
+      // S09 rule AD1 (edited with S09's screens).
+      searchTerms: [] as string[],
       fields: bySort(this.fields.filter((item) => item.gameId === row.id)),
       products: bySort(this.products.filter((item) => item.gameId === row.id)).map((item) =>
         this.product(item),

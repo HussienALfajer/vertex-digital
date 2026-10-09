@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common';
 import { AdminModule } from '../admin/index.js';
 import { AuthModule } from '../auth/index.js';
 import { SettingsModule } from '../settings/index.js';
+import { SuppliersModule } from '../suppliers/index.js';
 import { OrderDecisionsService } from './order-decisions.service.js';
 import { OrdersAdminController } from './orders.admin.controller.js';
 import { OrdersController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
+import { PlayerChecksService } from './player-checks.service.js';
 
 /**
  * Orders (S08, F11): `orders`, their events, fulfilment attempts, codes and reveals, and the
@@ -14,9 +16,9 @@ import { OrdersService } from './orders.service.js';
  * Routing, sending, polling and webhook processing are worker jobs.
  */
 @Module({
-  imports: [AdminModule, AuthModule, SettingsModule],
+  imports: [AdminModule, AuthModule, SettingsModule, SuppliersModule],
   controllers: [OrdersController, OrdersAdminController],
-  providers: [OrdersService, OrderDecisionsService],
+  providers: [OrdersService, OrderDecisionsService, PlayerChecksService],
   exports: [OrdersService],
 })
 export class OrdersModule {}

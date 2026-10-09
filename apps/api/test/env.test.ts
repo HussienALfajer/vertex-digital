@@ -14,6 +14,7 @@ const production = {
   ALTCHA_HMAC_KEY: secret('altcha'),
   SUPPLIER_KEYS_SECRET: Buffer.alloc(32, 7).toString('base64'),
   ORDER_CODES_SECRET: Buffer.alloc(32, 9).toString('base64'),
+  PLAYER_CHECK_SECRET: Buffer.alloc(32, 11).toString('base64'),
 };
 
 describe('API environment', () => {
@@ -82,12 +83,22 @@ describe('API environment', () => {
     );
   });
 
+  it('derives a 32-byte player check key locally, apart from the others (S09 rule PV3)', () => {
+    const local = parseEnv({ DATABASE_URL });
+    expect(Buffer.from(local.PLAYER_CHECK_SECRET as string, 'base64')).toHaveLength(32);
+    expect(local.PLAYER_CHECK_SECRET).not.toBe(local.ORDER_CODES_SECRET);
+    expect(() => parseEnv({ DATABASE_URL, PLAYER_CHECK_SECRET: 'c2hvcnQ=' })).toThrow(
+      'PLAYER_CHECK_SECRET',
+    );
+  });
+
   it.each([
     'CUSTOMER_AUTH_SECRET',
     'ADMIN_AUTH_SECRET',
     'ALTCHA_HMAC_KEY',
     'SUPPLIER_KEYS_SECRET',
     'ORDER_CODES_SECRET',
+    'PLAYER_CHECK_SECRET',
   ])('refuses production without %s, or with its placeholder', (key) => {
     expect(() => parseEnv({ ...production, [key]: undefined })).toThrow(key);
     expect(() => parseEnv({ ...production, [key]: 'replace-with-a-long-random-value' })).toThrow(

@@ -369,3 +369,18 @@ Tests:
   3. Store: home, game page, buy box, validation UI, slide-to-pay, reservation UI, live timeline, search dialog, the deposit prefill, the `/_internal/revalidate` route, sitemap and robots. Admin: search terms, quota, order fields. E2E and screenshots; nginx (`/_internal/` denied, `vdplayercheck`).
 - Module layering: the public catalog routes live in `catalog` and read prices and availability through `PricingService` and `SuppliersService` (as the admin product responses do); `orders` owns player checks and reservations and reads `catalog`, `pricing`, `suppliers`, `wallet`, `settings`.
 - Update `docs/architecture.md` (catalog public routes, the store's cache and revalidation, `player_checks`, worker jobs), `.env.example` and `docs/deployment.md` (`PLAYER_CHECK_SECRET`, `STORE_REVALIDATE_SECRET`, the nginx `/_internal/` rule and zone), the commands table (`order:place --reserve --confirm-player`), `apps/store/CLAUDE.md` (the catalog cache pattern, the buy box, the budgets), and S05's stream events.
+
+## Settled in implementation
+PR 1 (contracts, db, api, 2026-10-09):
+- Queue names follow the `<area>.<action>` convention with dashes: `orders.pay-waiting` and `orders.waiting-sweep`; `store.revalidate` is a `singleton` queue, sent with `singletonSeconds: 10`.
+- LT2's `pg_notify('customer_orders', …)` is sent by a trigger on `orders` (`orders_notify`, migration 0035) on every insert and status change, so no writer (the API, the worker, a CLI) can forget it.
+- SF4's change points in the API: an interceptor on the admin controllers whose data the store shows (catalog, catalog items, pricing, product prices, suppliers, routes, rates) queues `store.revalidate` right after a change succeeds, in a transaction of its own; a supplier pause from the panel or Telegram queues it in the switch change's transaction. The worker's change points (syncs, health, stale costs) come with PR 2. The API never reads `STORE_REVALIDATE_SECRET`: only the worker and the store do.
+- PV1's capability is `supplierChecksPlayers(code)` in the contracts (only `fake` until Q12's adapters), shared by the player checks, the store's `playerCheck` flag and the panel's `canValidatePlayer`.
+- PV8 is read by the API (`PlayerChecksService.lookup`, which holds the HMAC key) and handed to `purchaseOrder` as a callback, inside the purchase transaction; the purchase never calls a supplier.
+- A reservation paid at its saved price stores the current rule's minimum margin (the one RS6 checked) as the order's guard.
+- A player check's refused fields answer `VALIDATION_FAILED` with `details.fields`, as the purchase does. A paused or unknown product is `NOT_FOUND`; an out-of-stock one `PRODUCT_UNAVAILABLE`.
+- The order response also carries `deliveryStats` (LT3's expected time) and "طلباتي" carries `expiresAt` (the reserved chip's countdown), so the store needs no other read. The supplier responses carry `canValidatePlayer`, `validationQuota` and `validationsToday`.
+- `order.paid` gains an optional `priceSource` (`saved` or `current`) for a reservation paid by the system.
+- The API reads the fake supplier's state file (`FAKE_SUPPLIER_STATE_FILE`, relative to `apps/worker`) so `supplier:fake --errors on` fails player checks too.
+- `POST /api/orders/:id/cancel` answers `200` with the order.
+

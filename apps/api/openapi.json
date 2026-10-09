@@ -954,6 +954,7 @@
                 "supplier.credentials_set",
                 "supplier.updated",
                 "supplier.sync_requested",
+                "supplier.validation_quota_set",
                 "supplier.import",
                 "supplier_policy.set",
                 "supplier_offer.manual_cost_set",
@@ -965,6 +966,8 @@
                 "price_review.paused",
                 "price_review.margin_adjusted",
                 "order.paid",
+                "order.reserved",
+                "order.cancelled",
                 "order.cost_posted",
                 "order.refunded",
                 "order.poll_requested",
@@ -2385,6 +2388,78 @@
         ]
       }
     },
+    "/api/catalog/storefront": {
+      "get": {
+        "operationId": "CatalogController_storefront",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The storefront",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Storefront"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/games/{slug}": {
+      "get": {
+        "operationId": "CatalogController_game",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A game page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreGame"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/search-index": {
+      "get": {
+        "operationId": "CatalogController_searchIndex",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The search index",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchIndex"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/catalog/images/{id}": {
       "get": {
         "operationId": "CatalogController_image",
@@ -2395,6 +2470,20 @@
             "in": "path",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "w",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "160",
+                "320",
+                "640",
+                "1280"
+              ]
             }
           }
         ],
@@ -3840,6 +3929,46 @@
         ]
       }
     },
+    "/api/admin/suppliers/{code}/validation-quota": {
+      "put": {
+        "operationId": "SuppliersAdminController_setValidationQuota",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidationQuota"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The supplier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      }
+    },
     "/api/admin/suppliers/{code}/sync": {
       "post": {
         "operationId": "SuppliersAdminController_sync",
@@ -4318,6 +4447,37 @@
         ]
       }
     },
+    "/api/player-checks": {
+      "post": {
+        "operationId": "OrdersController_checkPlayer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayerCheckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The check, from the cache or a supplier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerCheck"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/api/orders": {
       "post": {
         "operationId": "OrdersController_purchase",
@@ -4345,7 +4505,7 @@
         },
         "responses": {
           "201": {
-            "description": "Paid (200: a replay)",
+            "description": "Paid, or reserved with `whenBalanceShort: reserve` (200: a replay)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4417,6 +4577,36 @@
         "responses": {
           "200": {
             "description": "The order, codes masked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/orders/{id}/cancel": {
+      "post": {
+        "operationId": "OrdersController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The cancelled reservation",
             "content": {
               "application/json": {
                 "schema": {
@@ -5571,6 +5761,129 @@
               "params"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "order_paid"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "orderId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "orderNumber": {
+                    "type": "string"
+                  },
+                  "productNameAr": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "orderId",
+                  "orderNumber",
+                  "productNameAr"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "order_cancelled"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "orderId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "orderNumber": {
+                    "type": "string"
+                  },
+                  "productNameAr": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "expired",
+                      "price_rose",
+                      "product_changed"
+                    ]
+                  }
+                },
+                "required": [
+                  "orderId",
+                  "orderNumber",
+                  "productNameAr",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -5656,7 +5969,9 @@
               "order_delivered",
               "order_partially_refunded",
               "order_refunded",
-              "order_delayed"
+              "order_delayed",
+              "order_paid",
+              "order_cancelled"
             ]
           }
         },
@@ -5690,7 +6005,9 @@
           "order_delivered",
           "order_partially_refunded",
           "order_refunded",
-          "order_delayed"
+          "order_delayed",
+          "order_paid",
+          "order_cancelled"
         ]
       },
       "StoreStatus": {
@@ -6482,6 +6799,7 @@
           "supplier.credentials_set",
           "supplier.updated",
           "supplier.sync_requested",
+          "supplier.validation_quota_set",
           "supplier.import",
           "supplier_policy.set",
           "supplier_offer.manual_cost_set",
@@ -6493,6 +6811,8 @@
           "price_review.paused",
           "price_review.margin_adjusted",
           "order.paid",
+          "order.reserved",
+          "order.cancelled",
           "order.cost_posted",
           "order.refunded",
           "order.poll_requested",
@@ -9785,6 +10105,93 @@
           "unmatched"
         ]
       },
+      "Storefront": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "$ref": "#/components/schemas/StoreServiceState"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "slug": {
+                  "type": "string"
+                },
+                "nameAr": {
+                  "type": "string"
+                },
+                "games": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "slug": {
+                        "type": "string"
+                      },
+                      "nameAr": {
+                        "type": "string"
+                      },
+                      "nameEn": {
+                        "type": "string"
+                      },
+                      "cover": {
+                        "nullable": true,
+                        "allOf": [
+                          {
+                            "$ref": "#/components/schemas/CatalogImage"
+                          }
+                        ]
+                      },
+                      "accentColor": {
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "status": {
+                        "$ref": "#/components/schemas/GameServiceStatus"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "slug",
+                      "nameAr",
+                      "nameEn",
+                      "cover",
+                      "accentColor",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "slug",
+                "nameAr",
+                "games"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "service",
+          "categories"
+        ],
+        "additionalProperties": false
+      },
+      "StoreServiceState": {
+        "type": "string",
+        "enum": [
+          "normal",
+          "slow"
+        ]
+      },
       "CatalogImage": {
         "type": "object",
         "properties": {
@@ -9816,6 +10223,439 @@
           "height"
         ],
         "additionalProperties": false
+      },
+      "GameServiceStatus": {
+        "type": "string",
+        "enum": [
+          "normal",
+          "slow",
+          "unavailable"
+        ]
+      },
+      "StoreGame": {
+        "type": "object",
+        "properties": {
+          "game": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "nameAr": {
+                "type": "string"
+              },
+              "nameEn": {
+                "type": "string"
+              },
+              "cover": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CatalogImage"
+                  }
+                ]
+              },
+              "accentColor": {
+                "nullable": true,
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/GameServiceStatus"
+              },
+              "idGuide": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CatalogImage"
+                  }
+                ]
+              },
+              "regionNotesAr": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "slug",
+              "nameAr",
+              "nameEn",
+              "cover",
+              "accentColor",
+              "status",
+              "idGuide",
+              "regionNotesAr"
+            ],
+            "additionalProperties": false
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoreField"
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoreProduct"
+            }
+          },
+          "rateId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "game",
+          "fields",
+          "products",
+          "rateId"
+        ],
+        "additionalProperties": false
+      },
+      "StoreField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "labelAr": {
+            "type": "string"
+          },
+          "helpAr": {
+            "nullable": true,
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/InputFieldType"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "minLength": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maxLength": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "options": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SelectOption"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "labelAr",
+          "helpAr",
+          "type",
+          "required",
+          "minLength",
+          "maxLength",
+          "options"
+        ],
+        "additionalProperties": false
+      },
+      "InputFieldType": {
+        "type": "string",
+        "enum": [
+          "digits",
+          "text",
+          "select",
+          "phone"
+        ]
+      },
+      "SelectOption": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "pattern": "^[a-z0-9_-]{1,32}$"
+          },
+          "labelAr": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[^\\p{Cc}]+$"
+          }
+        },
+        "required": [
+          "value",
+          "labelAr"
+        ],
+        "additionalProperties": false
+      },
+      "StoreProduct": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProductKind"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "gameAmount": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maxQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "priceUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "priceSypUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "savings": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "amountUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "percent": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "amountUsdUnits",
+              "percent"
+            ],
+            "additionalProperties": false
+          },
+          "deliveryStats": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "medianMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "p90Ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "count": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "medianMs",
+              "p90Ms",
+              "count"
+            ],
+            "additionalProperties": false
+          },
+          "playerCheck": {
+            "type": "boolean"
+          },
+          "regionAr": {
+            "nullable": true,
+            "type": "string"
+          },
+          "redemptionAr": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "nameAr",
+          "gameAmount",
+          "maxQuantity",
+          "available",
+          "priceUsdUnits",
+          "priceSypUnits",
+          "savings",
+          "deliveryStats",
+          "playerCheck",
+          "regionAr",
+          "redemptionAr"
+        ],
+        "additionalProperties": false
+      },
+      "ProductKind": {
+        "type": "string",
+        "enum": [
+          "direct",
+          "code"
+        ]
+      },
+      "SearchIndex": {
+        "type": "object",
+        "properties": {
+          "games": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "nameAr": {
+                  "type": "string"
+                },
+                "nameEn": {
+                  "type": "string"
+                },
+                "cover": {
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogImage"
+                    }
+                  ]
+                },
+                "status": {
+                  "$ref": "#/components/schemas/GameServiceStatus"
+                },
+                "searchTerms": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "categoryNameAr": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "slug",
+                "nameAr",
+                "nameEn",
+                "cover",
+                "status",
+                "searchTerms",
+                "categoryNameAr"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "nameAr": {
+                  "type": "string"
+                },
+                "gameAmount": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "priceUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "priceSypUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "gameSlug": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "nameAr",
+                "gameAmount",
+                "available",
+                "priceUsdUnits",
+                "priceSypUnits",
+                "gameSlug"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "games",
+          "products"
+        ],
+        "additionalProperties": false
+      },
+      "CatalogImageQuery": {
+        "type": "object",
+        "properties": {
+          "w": {
+            "type": "string",
+            "enum": [
+              "160",
+              "320",
+              "640",
+              "1280"
+            ]
+          }
+        }
       },
       "CategoryListQuery": {
         "type": "object",
@@ -10256,6 +11096,12 @@
           "categoryArchived": {
             "type": "boolean"
           },
+          "searchTerms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "fields": {
             "type": "array",
             "items": {
@@ -10286,6 +11132,7 @@
           "regionNotesAr",
           "productCount",
           "categoryArchived",
+          "searchTerms",
           "fields",
           "products"
         ],
@@ -10376,35 +11223,6 @@
           "minLength",
           "maxLength",
           "options"
-        ],
-        "additionalProperties": false
-      },
-      "InputFieldType": {
-        "type": "string",
-        "enum": [
-          "digits",
-          "text",
-          "select",
-          "phone"
-        ]
-      },
-      "SelectOption": {
-        "type": "object",
-        "properties": {
-          "value": {
-            "type": "string",
-            "pattern": "^[a-z0-9_-]{1,32}$"
-          },
-          "labelAr": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 40,
-            "pattern": "^[^\\p{Cc}]+$"
-          }
-        },
-        "required": [
-          "value",
-          "labelAr"
         ],
         "additionalProperties": false
       },
@@ -10550,13 +11368,6 @@
         ],
         "additionalProperties": false
       },
-      "ProductKind": {
-        "type": "string",
-        "enum": [
-          "direct",
-          "code"
-        ]
-      },
       "ProductAvailability": {
         "type": "string",
         "enum": [
@@ -10626,6 +11437,14 @@
                 "$ref": "#/components/schemas/CatalogStatus"
               }
             ]
+          },
+          "searchTerms": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            }
           }
         }
       },
@@ -11811,6 +12630,19 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "canValidatePlayer": {
+            "type": "boolean"
+          },
+          "validationQuota": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "validationsToday": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -11826,7 +12658,10 @@
           "lowBalanceUsdUnits",
           "lastRun",
           "offerCount",
-          "mappedCount"
+          "mappedCount",
+          "canValidatePlayer",
+          "validationQuota",
+          "validationsToday"
         ],
         "additionalProperties": false
       },
@@ -12169,6 +13004,19 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "canValidatePlayer": {
+            "type": "boolean"
+          },
+          "validationQuota": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "validationsToday": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "credentialFields": {
             "type": "array",
             "items": {
@@ -12224,6 +13072,9 @@
           "lastRun",
           "offerCount",
           "mappedCount",
+          "canValidatePlayer",
+          "validationQuota",
+          "validationsToday",
           "credentialFields",
           "credentials",
           "healthHistory",
@@ -12307,6 +13158,19 @@
         },
         "required": [
           "lowBalanceUsdUnits"
+        ]
+      },
+      "ValidationQuota": {
+        "type": "object",
+        "properties": {
+          "quota": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          }
+        },
+        "required": [
+          "quota"
         ]
       },
       "SyncRunPage": {
@@ -12993,6 +13857,104 @@
           }
         ]
       },
+      "PlayerCheckRequest": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "fields": {
+            "default": {},
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        },
+        "required": [
+          "productId"
+        ]
+      },
+      "PlayerCheck": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "string",
+                "enum": [
+                  "valid"
+                ]
+              },
+              "playerName": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "result",
+              "playerName"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "string",
+                "enum": [
+                  "invalid"
+                ]
+              }
+            },
+            "required": [
+              "result"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "string",
+                "enum": [
+                  "unavailable"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "quota",
+                  "supplier"
+                ]
+              }
+            },
+            "required": [
+              "result",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "string",
+                "enum": [
+                  "not_supported"
+                ]
+              }
+            },
+            "required": [
+              "result"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
       "CreateOrder": {
         "type": "object",
         "properties": {
@@ -13018,6 +13980,18 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 9007199254740991
+          },
+          "whenBalanceShort": {
+            "default": "refuse",
+            "type": "string",
+            "enum": [
+              "refuse",
+              "reserve"
+            ]
+          },
+          "confirmPlayer": {
+            "default": false,
+            "type": "boolean"
           }
         },
         "required": [
@@ -13178,8 +14152,8 @@
             "items": {
               "type": "object",
               "properties": {
-                "stage": {
-                  "$ref": "#/components/schemas/OrderStage"
+                "step": {
+                  "$ref": "#/components/schemas/OrderTimelineStep"
                 },
                 "at": {
                   "type": "string",
@@ -13188,7 +14162,7 @@
                 }
               },
               "required": [
-                "stage",
+                "step",
                 "at"
               ],
               "additionalProperties": false
@@ -13199,6 +14173,32 @@
             "items": {
               "$ref": "#/components/schemas/OrderCode"
             }
+          },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "cancelReason": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CancelReason"
+              }
+            ]
+          },
+          "playerName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "deliveryStats": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryStats"
+              }
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -13223,6 +14223,10 @@
           "refundReason",
           "timeline",
           "codes",
+          "expiresAt",
+          "cancelReason",
+          "playerName",
+          "deliveryStats",
           "createdAt"
         ],
         "additionalProperties": false
@@ -13230,7 +14234,22 @@
       "OrderStage": {
         "type": "string",
         "enum": [
+          "awaiting_balance",
           "processing",
+          "delayed",
+          "delivered",
+          "partially_refunded",
+          "refunded",
+          "cancelled"
+        ]
+      },
+      "OrderTimelineStep": {
+        "type": "string",
+        "enum": [
+          "reserved",
+          "paid",
+          "sent",
+          "retrying",
           "delayed",
           "delivered",
           "partially_refunded",
@@ -13267,6 +14286,41 @@
           "position",
           "masked",
           "firstRevealedAt"
+        ],
+        "additionalProperties": false
+      },
+      "CancelReason": {
+        "type": "string",
+        "enum": [
+          "expired",
+          "customer",
+          "price_rose",
+          "product_changed"
+        ]
+      },
+      "DeliveryStats": {
+        "type": "object",
+        "properties": {
+          "medianMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "p90Ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "count": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "medianMs",
+          "p90Ms",
+          "count"
         ],
         "additionalProperties": false
       },
@@ -13372,6 +14426,12 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -13387,6 +14447,7 @@
           "quantity",
           "totalUsdUnits",
           "totalSypUnits",
+          "expiresAt",
           "createdAt"
         ],
         "additionalProperties": false
@@ -13890,6 +14951,33 @@
               }
             ]
           },
+          "reservedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "cancelReason": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CancelReason"
+              }
+            ]
+          },
+          "playerCheck": {
+            "$ref": "#/components/schemas/PlayerCheckState"
+          },
+          "playerName": {
+            "nullable": true,
+            "type": "string"
+          },
           "paidAt": {
             "nullable": true,
             "type": "string",
@@ -13996,6 +15084,11 @@
           "minMarginUsdUnits",
           "refundedUsdUnits",
           "refundReason",
+          "reservedAt",
+          "expiresAt",
+          "cancelReason",
+          "playerCheck",
+          "playerName",
           "paidAt",
           "deliveredAt",
           "finishedAt",
@@ -14008,6 +15101,15 @@
           "codes"
         ],
         "additionalProperties": false
+      },
+      "PlayerCheckState": {
+        "type": "string",
+        "enum": [
+          "valid",
+          "invalid_confirmed",
+          "unchecked_confirmed",
+          "none"
+        ]
       },
       "OrderDecisions": {
         "type": "object",
@@ -14653,7 +15755,8 @@
           "manual_order",
           "manual_order_reminder",
           "order_needs_review",
-          "order_conflict"
+          "order_conflict",
+          "validation_quota_reached"
         ]
       },
       "TelegramMessageStatus": {

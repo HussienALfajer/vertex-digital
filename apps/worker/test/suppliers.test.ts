@@ -867,8 +867,24 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
       expect(await latestPrice(tx, p)).toMatchObject({ routeId: fakeRoute });
 
       await calls(tx, 'error', 'error', 'error');
-      await health.check(new Date(), tx);
+      const checkedAt = new Date();
+      await health.check(checkedAt, tx);
       const down = await standing(tx);
+      // The rate over the window's calls: this test's sync call and three errors, and the calls
+      // other test files committed within the health window (append-only, so they stay).
+      const window = await tx
+        .select({ result: supplierCalls.result })
+        .from(supplierCalls)
+        .where(
+          and(
+            eq(supplierCalls.supplierId, ids.fake),
+            gte(
+              supplierCalls.createdAt,
+              new Date(checkedAt.getTime() - SUPPLIER_POLICY_DEFAULTS.healthWindowMinutes * 60_000),
+            ),
+          ),
+        );
+      const answered = window.filter((call) => call.result !== 'error').length;
       expect(down).toMatchObject({ state: 'down', reason: '3 consecutive errors' });
       expect(await latestPrice(tx, p)).toMatchObject({
         routeId: manual,
@@ -880,8 +896,8 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
         supplierNameAr: 'مورد تجريبي',
         state: 'down',
         previous: 'healthy',
-        // The sync's catalog call answered; three errors followed.
-        successBp: 2_500,
+        // Alone: the sync's catalog call answered and three errors followed, 2,500.
+        successBp: Math.floor((answered * 10_000) / window.length),
       });
       // Safe twice: no change, no row.
       await health.check(new Date(), tx);
@@ -913,7 +929,11 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
         supplierId: ids.fake,
         state: 'down',
         reason: '3 consecutive errors',
-        createdAt: new Date(Date.now() - 11 * 60_000),
+        // The probe is due two seconds ago: calls other test files committed before that (they
+        // stay, append-only) fall inside the wait and count for nothing (rule H3).
+        createdAt: new Date(
+          Date.now() - SUPPLIER_POLICY_DEFAULTS.probeAfterMinutes * 60_000 - 2_000,
+        ),
       });
       let probes = 0;
       current = {

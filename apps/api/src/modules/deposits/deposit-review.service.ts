@@ -34,6 +34,7 @@ import {
   type PaymentReferenceOwner,
   postDepositCredit,
   queueDepositCard,
+  queuePayWaiting,
   recordAudit,
   type Transaction,
   usdtDeposits,
@@ -594,10 +595,10 @@ export class DepositReviewService {
         });
         // The card in Telegram shows the outcome (S05 rule TC6).
         await queueDepositCard(tx, this.jobs, deposit.id);
+        // A02 (S09 rule RS4): the customer's reservations are paid by the worker.
+        await queuePayWaiting(tx, this.jobs, deposit.customerId);
         return updated;
       });
-      // A02: paying `awaiting_balance` orders after a credit hooks in here, after the commit
-      // (S08/S09). Nothing to do in S03.
       return { deposit: await this.view(row), created: true };
     } catch (error) {
       if (error instanceof AlreadyDecided || isUniqueViolation(error)) {

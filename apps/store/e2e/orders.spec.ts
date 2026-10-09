@@ -40,10 +40,15 @@ function order(changes: Partial<Order> & { id: string }): Order {
     refundedUsdUnits: 0,
     refundReason: null,
     timeline: [
-      { stage: 'processing', at: '2026-10-09T10:00:00.000Z' },
-      { stage: 'delivered', at: '2026-10-09T10:00:12.000Z' },
+      { step: 'paid', at: '2026-10-09T10:00:00.000Z' },
+      { step: 'sent', at: '2026-10-09T10:00:01.000Z' },
+      { step: 'delivered', at: '2026-10-09T10:00:12.000Z' },
     ],
     codes: [],
+    expiresAt: null,
+    cancelReason: null,
+    playerName: null,
+    deliveryStats: null,
     createdAt: '2026-10-09T10:00:00.000Z',
     ...changes,
   };
@@ -86,8 +91,9 @@ const ORDERS: Record<Exclude<keyof typeof IDS, 'other'>, Order> = {
     refundedUsdUnits: 10_600_000,
     refundReason: 'routes_exhausted',
     timeline: [
-      { stage: 'processing', at: '2026-10-09T09:00:00.000Z' },
-      { stage: 'partially_refunded', at: '2026-10-09T09:01:00.000Z' },
+      { step: 'paid', at: '2026-10-09T09:00:00.000Z' },
+      { step: 'sent', at: '2026-10-09T09:00:01.000Z' },
+      { step: 'partially_refunded', at: '2026-10-09T09:01:00.000Z' },
     ],
     codes: [
       { id: id(51), position: 1, masked: '•••• 1A2B', firstRevealedAt: '2026-10-09T09:05:00.000Z' },
@@ -100,8 +106,9 @@ const ORDERS: Record<Exclude<keyof typeof IDS, 'other'>, Order> = {
     stage: 'delayed',
     deliveredQuantity: 0,
     timeline: [
-      { stage: 'processing', at: '2026-10-09T08:00:00.000Z' },
-      { stage: 'delayed', at: '2026-10-09T08:30:00.000Z' },
+      { step: 'paid', at: '2026-10-09T08:00:00.000Z' },
+      { step: 'sent', at: '2026-10-09T08:00:01.000Z' },
+      { step: 'delayed', at: '2026-10-09T08:30:00.000Z' },
     ],
   }),
 };
@@ -115,6 +122,7 @@ const summary = (item: Order): OrderSummary => ({
   quantity: item.quantity,
   totalUsdUnits: item.totalUsdUnits,
   totalSypUnits: item.totalSypUnits,
+  expiresAt: item.expiresAt,
   createdAt: item.createdAt,
 });
 
@@ -158,9 +166,7 @@ test.describe('orders', () => {
     await expect(page.getByText(o.sentences.delivered).first()).toBeVisible();
     await expect(page.getByText('5123456789')).toBeVisible();
     await expect(page.getByText('$0.99').first()).toBeVisible();
-    await expect(page.getByRole('list', { name: o.detail.timeline })).toContainText(
-      o.stages.processing,
-    );
+    await expect(page.getByRole('list', { name: o.detail.timeline })).toContainText(o.steps.sent);
   });
 
   test('a code is masked until revealed, then copied with its first reveal time (rule C2)', async ({

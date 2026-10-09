@@ -6,7 +6,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
-import { QUEUE_POLICIES } from '@vertex-digital/contracts';
+import { QUEUE_POLICIES, QUEUES } from '@vertex-digital/contracts';
 import { createPgBoss, withoutQueryParameters } from '@vertex-digital/db';
 import type { PgBoss } from 'pg-boss';
 import { TelegramAlerts } from '../alerts/telegram-alerts.js';
@@ -36,6 +36,12 @@ export class PgBossService implements OnModuleInit, OnApplicationShutdown {
 
   async onModuleInit(): Promise<void> {
     await this.boss.start();
+    // Every shared queue exists before any job sends to it, worked here or not yet (a job in a
+    // credit's transaction must never fail on a missing queue, S09 rule RS4). Creating an
+    // existing queue changes nothing.
+    for (const queue of Object.values(QUEUES)) {
+      await this.boss.createQueue(queue, { policy: QUEUE_POLICIES[queue] ?? 'standard' });
+    }
     this.logger.log('pg-boss started');
   }
 

@@ -66,6 +66,17 @@ export function supplierAvailable(code: SupplierCode, options: { fakeEnabled: bo
 }
 
 /** Suppliers that list offers (rule SY1); `manual` offers are the admin's. */
+/**
+ * S09 rule PV1: this build has an adapter for the supplier that checks player ids. Each real
+ * adapter's PR adds its code (Q12).
+ */
+export function supplierChecksPlayers(
+  code: SupplierCode,
+  options: { fakeEnabled: boolean },
+): boolean {
+  return code === 'fake' && supplierAvailable(code, options);
+}
+
 export function supplierHasCatalog(code: SupplierCode): boolean {
   return code !== 'manual';
 }
@@ -481,6 +492,11 @@ export const supplierSummarySchema = z
     lastRun: syncRunSchema.nullable(),
     offerCount: z.int().nonnegative(),
     mappedCount: z.int().nonnegative(),
+    /** The adapter can check a player id (S09 rule PV1). */
+    canValidatePlayer: z.boolean(),
+    /** S09 rule AD2: the daily validation quota and today's calls (since 00:00 Damascus). */
+    validationQuota: z.int().nonnegative(),
+    validationsToday: z.int().nonnegative(),
   })
   .meta({ id: 'SupplierSummary' });
 
@@ -517,6 +533,17 @@ export const updateSupplierSchema = z
   .meta({ id: 'UpdateSupplier' });
 
 export type UpdateSupplier = z.infer<typeof updateSupplierSchema>;
+
+/** A supplier's daily player-validation quota (S09 rule PV5): 0 turns validation off for it. */
+export const VALIDATION_QUOTA_MAX = 1_000_000;
+export const VALIDATION_QUOTA_DEFAULT = 1_000;
+
+/** `PUT /api/admin/suppliers/:code/validation-quota` (rule AD2). */
+export const validationQuotaSchema = z
+  .object({ quota: z.int().min(0).max(VALIDATION_QUOTA_MAX) })
+  .meta({ id: 'ValidationQuota' });
+
+export type ValidationQuota = z.infer<typeof validationQuotaSchema>;
 
 const booleanFilter = z.enum(['true', 'false']).optional();
 

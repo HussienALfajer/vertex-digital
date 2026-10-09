@@ -1,10 +1,13 @@
 import {
   ATTEMPT_RESOLVERS,
   ATTEMPT_STATUSES,
+  CANCEL_REASONS,
   CODE_REVEAL_ACTORS,
   ORDER_EVENT_ACTORS,
   ORDER_EVENT_KINDS,
   ORDER_STATUSES,
+  PLAYER_CHECK_RESULTS,
+  PLAYER_CHECK_STATES,
   REFUND_REASONS,
   type RouteCandidate,
 } from '@vertex-digital/contracts';
@@ -52,6 +55,12 @@ export const refundReasonEnum = pgEnum('refund_reason', REFUND_REASONS);
 
 export const codeRevealActorEnum = pgEnum('code_reveal_actor', CODE_REVEAL_ACTORS);
 
+export const orderCancelReasonEnum = pgEnum('order_cancel_reason', CANCEL_REASONS);
+
+export const orderPlayerCheckEnum = pgEnum('order_player_check', PLAYER_CHECK_STATES);
+
+export const playerCheckResultEnum = pgEnum('player_check_result', PLAYER_CHECK_RESULTS);
+
 /** The time of the insert, not of its transaction's start. */
 const insertedAt = () =>
   timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`);
@@ -98,8 +107,8 @@ export const orders = pgTable(
     /** The customer's `Idempotency-Key` and the SHA-256 of the canonical body (rule O1). */
     idempotencyKey: uuid('idempotency_key').notNull().unique(),
     requestHash: text('request_hash').notNull(),
+    /** Null only while reserved, or once a reservation is cancelled unpaid (S09 rule RS1). */
     purchaseJournalId: uuid('purchase_journal_id')
-      .notNull()
       .unique()
       .references(() => ledgerJournals.id),
     refundJournalId: uuid('refund_journal_id')
@@ -111,6 +120,13 @@ export const orders = pgTable(
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
     reviewSince: timestamp('review_since', { withTimezone: true }),
+    /** S09 rule RS1: a reservation's creation and deadline, kept after payment. */
+    reservedAt: timestamp('reserved_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    cancelReason: orderCancelReasonEnum('cancel_reason'),
+    /** S09 rule PV8: what the purchase knew of the player id, and the in-game name when valid. */
+    playerCheck: orderPlayerCheckEnum('player_check').notNull().default('none'),
+    playerName: text('player_name'),
     ...timestamps(),
   },
   (table) => [
@@ -121,6 +137,13 @@ export const orders = pgTable(
     index('orders_game_id_idx').on(table.gameId),
     index('orders_price_id_idx').on(table.priceId),
     index('orders_display_rate_id_idx').on(table.displayRateId),
+    /** S09 rules RS2, RS4 (by customer) and RS7 (by deadline): open reservations. */
+    index('orders_awaiting_customer_id_idx')
+      .on(table.customerId)
+      .where(sql`${table.status} = 'awaiting_balance'`),
+    index('orders_awaiting_expires_at_idx')
+      .on(table.expiresAt)
+      .where(sql`${table.status} = 'awaiting_balance'`),
     /** Delivery time (rule T1). */
     index('orders_delivery_stats_idx')
       .on(table.productId, table.deliveredAt.desc())
@@ -166,6 +189,24 @@ export const orders = pgTable(
         and (${table.status} = 'needs_review') = (${table.reviewSince} is not null)`,
     ),
     check('orders_request_hash_check', sql`${table.requestHash} ~ '^[0-9a-f]{64}$'`),
+    check(
+      'orders_purchase_journal_check',
+      sql`(${table.purchaseJournalId} is not null) = (${table.paidAt} is not null)
+        and (${table.purchaseJournalId} is not null
+          or ${table.status} = 'awaiting_balance'
+          or (${table.status} = 'cancelled' and ${table.paidAt} is null))`,
+    ),
+    check(
+      'orders_reservation_check',
+      sql`(${table.reservedAt} is null) = (${table.expiresAt} is null)
+        and (${table.status} <> 'awaiting_balance' or ${table.reservedAt} is not null)
+        and (${table.status} = 'cancelled') = (${table.cancelReason} is not null)`,
+    ),
+    check(
+      'orders_player_name_check',
+      sql`${table.playerName} is null
+        or (${table.playerCheck} = 'valid' and char_length(${table.playerName}) between 1 and 64)`,
+    ),
   ],
 );
 
@@ -378,5 +419,49 @@ export const orderPolicy = pgTable(
         and ${table.reviewPollHours} between 1 and 72
         and ${table.manualReminderMinutes} between 5 and 240`,
     ),
+  ],
+);
+
+/**
+ * A supplier's answer to a player check (S09 rules PV3, PV6), a cache: no audit, no trigger; the
+ * sweep deletes rows a day after they expire. Only an HMAC of the fields, never a player id.
+ */
+export const playerChecks = pgTable(
+  'player_checks',
+  {
+    id: id(),
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => catalogGames.id),
+    /** HMAC-SHA-256 under `PLAYER_CHECK_SECRET` of the game id and its canonical field values. */
+    fieldsHash: text('fields_hash').notNull(),
+    result: playerCheckResultEnum('result').notNull(),
+    playerName: text('player_name'),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id),
+    /** Whose request made the supplier call. */
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    createdAt: insertedAt(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('player_checks_game_id_fields_hash_created_at_idx').on(
+      table.gameId,
+      table.fieldsHash,
+      table.createdAt.desc(),
+    ),
+    index('player_checks_expires_at_idx').on(table.expiresAt),
+    index('player_checks_supplier_id_idx').on(table.supplierId),
+    index('player_checks_customer_id_idx').on(table.customerId),
+    check('player_checks_fields_hash_check', sql`${table.fieldsHash} ~ '^[0-9a-f]{64}$'`),
+    check(
+      'player_checks_player_name_check',
+      sql`${table.playerName} is null
+        or (${table.result} = 'valid' and char_length(${table.playerName}) between 1 and 64)`,
+    ),
+    check('player_checks_expires_at_check', sql`${table.expiresAt} > ${table.createdAt}`),
   ],
 );

@@ -79,6 +79,7 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'manual_order_reminder',
   'order_needs_review',
   'order_conflict',
+  'validation_quota_reached',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -336,6 +337,12 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     supplierNameAr: z.string(),
     attemptStatus: z.enum(['delivered', 'failed']),
     reported: z.enum(['delivered', 'failed']),
+  }),
+  /** S09 rule PV5: the first validation refused by a supplier's daily quota, once a day. */
+  validation_quota_reached: z.object({
+    supplier: supplierCodeSchema,
+    supplierNameAr: z.string(),
+    quota: z.int().nonnegative(),
   }),
 } as const satisfies Record<TelegramMessageKind, z.ZodType>;
 

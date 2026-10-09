@@ -155,6 +155,12 @@ export const ERROR_CODES = [
   'CODES_COUNT_MISMATCH',
   /** A supplier webhook's signature or timestamp is wrong (S08 rule F4). */
   'WEBHOOK_SIGNATURE_INVALID',
+  /** The player id is not known valid and the customer did not confirm it (S09 rule PV8). */
+  'PLAYER_NOT_CONFIRMED',
+  /** The customer already holds the most open reservations; `details.limit` (S09 rule RS2). */
+  'RESERVATIONS_LIMIT_REACHED',
+  /** Only a reservation can be cancelled; `details.status` (S09 rule RS8). */
+  'ORDER_NOT_CANCELLABLE',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });
