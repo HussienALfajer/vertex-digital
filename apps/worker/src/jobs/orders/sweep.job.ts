@@ -6,10 +6,12 @@ import {
   catalogProducts,
   currentOrderPolicy,
   type Database,
+  expireReservations,
   fulfilmentAttempts,
   lockOrder,
   notifyCustomer,
   orders,
+  playerChecks,
   queueFulfil,
   queuePoll,
   queueTelegramMessage,
@@ -32,6 +34,9 @@ export const SWEEP_GRACE_MS = 60_000;
 /** At most this many rows per step and run; the next minute takes the rest. */
 const BATCH = 100;
 
+/** A player check is deleted this long after it expired (S09 "Data", `player_checks`). */
+export const PLAYER_CHECK_KEEP_MS = 24 * 60 * 60_000;
+
 const OPEN = ['sending', 'pending', 'unknown'] as const;
 
 export interface SweepResult {
@@ -40,6 +45,8 @@ export interface SweepResult {
   held: string[];
   reminded: string[];
   fulfilled: string[];
+  expired: string[];
+  checksDeleted: string[];
 }
 
 /**
@@ -47,7 +54,9 @@ export interface SweepResult {
  * queued again, all through the jobs that own it (`orders.poll` re-sends a `sending` attempt with
  * its key; `orders.fulfil` routes); automatic attempts past the hard limit put their order in
  * `needs_review` (the admin's Telegram alert, the customer's "delayed"); open manual attempts get
- * their one reminder. Every change is made under the order lock, after reading it again.
+ * their one reminder. Every change is made under the order lock, after reading it again. S09:
+ * reservations past their deadline are cancelled (rule RS7, `FOR UPDATE SKIP LOCKED`, so a
+ * payment in progress keeps its order), and player checks expired for a day are deleted.
  */
 @Injectable()
 export class OrdersSweepJob implements OnApplicationBootstrap {
@@ -91,7 +100,22 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
       held: await this.hold(db, now, policy),
       reminded: await this.remind(db, now, policy),
       fulfilled: await this.queueFulfils(db, late),
+      expired: await expireReservations(
+        db as Database,
+        { jobs: bossJobSender(this.pgBoss.boss) },
+        BATCH,
+      ),
+      checksDeleted: await this.deleteChecks(db, now),
     };
+  }
+
+  /** The player-check cache keeps no row a day past its expiry (S09 "Data"). */
+  private async deleteChecks(db: Executor, now: Date): Promise<string[]> {
+    const rows = await db
+      .delete(playerChecks)
+      .where(lt(playerChecks.expiresAt, new Date(now.getTime() - PLAYER_CHECK_KEEP_MS)))
+      .returning({ id: playerChecks.id });
+    return rows.map((row) => row.id);
   }
 
   /** Rule F6: a poll for automatic attempts that match (a lost send or a lost poll). */

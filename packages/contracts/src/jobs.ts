@@ -72,6 +72,9 @@ export const QUEUE_POLICIES: Readonly<Record<string, 'stately' | 'singleton'>> =
 /** A store refresh is queued at most once per this many seconds (S09 rule SF4). */
 export const STORE_REVALIDATE_THROTTLE_SECONDS = 10;
 
+/** A failed store refresh is retried this many times, then only logged (S09 rule SF4). */
+export const STORE_REVALIDATE_RETRIES = 3;
+
 export const emailSendPayloadSchema = z.object({ outboxId: z.uuid() });
 
 export type EmailSendPayload = z.infer<typeof emailSendPayloadSchema>;

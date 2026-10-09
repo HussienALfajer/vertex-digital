@@ -15,8 +15,11 @@ import { UsdtVerifyJob } from './jobs/deposits/usdt-verify.job.js';
 import { PurgeCodesJob } from './jobs/email/purge-codes.job.js';
 import { SendEmailJob } from './jobs/email/send-email.job.js';
 import { OrdersFulfilJob } from './jobs/orders/fulfil.job.js';
+import { OrdersPayWaitingJob } from './jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from './jobs/orders/poll.job.js';
 import { OrdersSweepJob } from './jobs/orders/sweep.job.js';
+import { OrdersWaitingSweepJob } from './jobs/orders/waiting-sweep.job.js';
+import { StoreRevalidateJob } from './jobs/store/revalidate.job.js';
 import { SupplierBalancesJob } from './jobs/suppliers/balances.job.js';
 import { SupplierHealthJob } from './jobs/suppliers/health.job.js';
 import { SupplierSyncJob } from './jobs/suppliers/sync.job.js';
@@ -88,7 +91,10 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     OrdersFulfilJob,
     OrdersPollJob,
     OrdersSweepJob,
+    OrdersPayWaitingJob,
+    OrdersWaitingSweepJob,
     SupplierWebhookJob,
+    StoreRevalidateJob,
   ],
 })
 export class WorkerModule implements OnApplicationBootstrap {

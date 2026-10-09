@@ -384,3 +384,8 @@ PR 1 (contracts, db, api, 2026-10-09):
 - The API reads the fake supplier's state file (`FAKE_SUPPLIER_STATE_FILE`, relative to `apps/worker`) so `supplier:fake --errors on` fails player checks too.
 - `POST /api/orders/:id/cancel` answers `200` with the order.
 
+PR 2 (worker, 2026-10-09):
+- The worker's SF4 change points: every successful sync (in its closing transaction), every health change, a balance read that crosses a mapped offer's cost, and the stale-cost repricing when a cost went stale within the last two minutes past its limit or a price changed, so a failing sync does not refresh the store every minute.
+- `store.revalidate` counts any answer but `204` as a failure; pg-boss retries it (`STORE_REVALIDATE_RETRIES` = 3, backoff), and the last attempt only logs a warning. `PgBossService.work` takes `{ alert: false }` for it: failures go to the logs as warnings, never to Sentry or Telegram.
+- `STORE_REVALIDATE_SECRET` (worker): at least 32 characters, required in production; outside production, unset or the `.env.example` placeholder, it is derived from `DATABASE_URL` (`sha256("vertex-digital-dev-store-revalidate:" + DATABASE_URL)`, base64), the derivation the store uses in PR 3. `STORE_PORT` defaults to 3001.
+- The daily summary's S09 lines: today's player checks per supplier (every call counts, as for the quota) and real customers' reservations paid and expired today; no validation line on a day without checks.

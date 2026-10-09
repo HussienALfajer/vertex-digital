@@ -333,13 +333,14 @@ async function payOne(
 
 /**
  * Rule RS7 (A15): cancels up to `limit` reservations past their deadline, `FOR UPDATE SKIP
- * LOCKED` so a payment in progress keeps its order; each notifies `order_cancelled`.
+ * LOCKED` so a payment in progress keeps its order; each notifies `order_cancelled`. Answers the
+ * ids of the orders it cancelled.
  */
 export async function expireReservations(
   db: Database,
   context: Pick<OrderContext, 'jobs'>,
   limit: number,
-): Promise<number> {
+): Promise<string[]> {
   return db.transaction(async (tx) => {
     const due = await tx
       .select()
@@ -348,9 +349,11 @@ export async function expireReservations(
       .orderBy(asc(orders.expiresAt), asc(orders.id))
       .limit(limit)
       .for('update', { skipLocked: true });
-    let expired = 0;
+    const expired: string[] = [];
     for (const order of due) {
-      if (await cancelReservation(tx, context, order, 'expired', { kind: 'system' })) expired += 1;
+      if (await cancelReservation(tx, context, order, 'expired', { kind: 'system' })) {
+        expired.push(order.id);
+      }
     }
     return expired;
   });

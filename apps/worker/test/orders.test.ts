@@ -9,6 +9,7 @@ import {
 import {
   accountBalance,
   applyOutcome,
+  auditEntries,
   bossJobSender,
   catalogCategories,
   createDatabase,
@@ -28,6 +29,7 @@ import {
   orderEvents,
   orderPolicy,
   orders,
+  playerChecks,
   postJournal,
   productPrices,
   productRoutes,
@@ -53,13 +55,17 @@ import {
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { TelegramAlerts } from '../src/core/alerts/telegram-alerts.js';
 import { parseEnv } from '../src/core/config/env.js';
 import { LOG_REDACT_PATHS } from '../src/core/config/log-redact.js';
 import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { OrdersFulfilJob } from '../src/jobs/orders/fulfil.job.js';
+import { OrdersPayWaitingJob } from '../src/jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from '../src/jobs/orders/poll.job.js';
 import { OrdersSweepJob } from '../src/jobs/orders/sweep.job.js';
+import { OrdersWaitingSweepJob } from '../src/jobs/orders/waiting-sweep.job.js';
 import { SupplierWebhookJob } from '../src/jobs/suppliers/webhook.job.js';
+import { DailySummaryJob, damascusDate } from '../src/jobs/telegram/daily-summary.job.js';
 import type { SupplierRegistry } from '../src/suppliers/supplier-registry.js';
 import { renderTelegramMessage } from '../src/telegram/messages.js';
 
@@ -124,6 +130,8 @@ const fulfil = new OrdersFulfilJob(pgBoss, registry, db, env);
 const poll = new OrdersPollJob(pgBoss, registry, db, env);
 const sweep = new OrdersSweepJob(pgBoss, db);
 const webhooks = new SupplierWebhookJob(pgBoss, registry, db, env);
+const payWaiting = new OrdersPayWaitingJob(pgBoss, db, { ...env, SUPPLIER_FAKE_ENABLED: true });
+const waitingSweep = new OrdersWaitingSweepJob(pgBoss, db);
 
 const ids = { fake: '', manual: '' };
 /** Every category made here; the race tests commit theirs, archived after all. */
@@ -312,7 +320,7 @@ async function product(
   return { id, code, price: price?.units as number, fakeRoute, manualRoute };
 }
 
-async function customer(tx: Transaction, options: { isTest?: boolean } = {}) {
+async function customer(tx: Transaction, options: { isTest?: boolean; funds?: number } = {}) {
   const id = newId();
   await tx.insert(customers).values({
     id,
@@ -322,22 +330,28 @@ async function customer(tx: Transaction, options: { isTest?: boolean } = {}) {
     emailVerified: true,
     isTest: options.isTest ?? false,
   });
+  const funds = options.funds ?? usd(100);
+  if (funds > 0) await credit(tx, id, funds);
+  return id;
+}
+
+/** Test funds to a customer's wallet (a manual adjustment). */
+async function credit(tx: Transaction, customerId: string, units: number) {
   await postJournal(tx, {
     idempotencyKey: `test:${newId()}`,
     kind: 'adjustment',
     postings: [
-      { accountId: await ensureCustomerWallet(tx, id), amountUnits: usd(100) },
+      { accountId: await ensureCustomerWallet(tx, customerId), amountUnits: units },
       {
         accountId: await ensureSystemAccount(tx, {
           code: 'adjustments:test_funds',
           kind: 'adjustments',
           currency: 'USD',
         }),
-        amountUnits: -usd(100),
+        amountUnits: -units,
       },
     ],
   });
-  return id;
 }
 
 /** A paid order, through the pay step (rule O2). */
@@ -1095,6 +1109,372 @@ describe('Telegram order messages (rules MN1, MN2, F5, F7)', () => {
         links,
       ).text,
     ).toContain('أنه فشل بعد أن سُجّل أنه سُلّم');
+  });
+});
+
+/** A reservation (S09 rule RS1): the customer's balance does not cover the price. */
+async function reserve(tx: Transaction, item: Product, buyer: string) {
+  const { order } = await purchaseOrder(
+    tx,
+    { jobs, now: new Date() },
+    {
+      customerId: buyer,
+      productId: item.id,
+      quantity: 1,
+      fields: item.code ? {} : { player_id: '5123456789' },
+      expectedUnitPriceUsdUnits: item.price,
+      idempotencyKey: newId(),
+      requestHash: createHash('sha256').update(newId()).digest('hex'),
+      fakeEnabled: true,
+      purchasesStopped: false,
+      channel: 'store',
+      whenBalanceShort: 'reserve',
+      confirmPlayer: true,
+      playerCheck: async () => null,
+    },
+  );
+  expect(order.status).toBe('awaiting_balance');
+  return order;
+}
+
+const ORDER_NUMBER_LETTERS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
+/**
+ * A copy of `reservation` reserved 25 hours ago, past its deadline: the guard keeps an order's
+ * times fixed, and the transaction's `now()` cannot move, so the copy is inserted as it would
+ * stand a day later.
+ */
+async function pastReservation(tx: Transaction, reservation: { id: string }): Promise<string> {
+  const id = newId();
+  const number = `VO-${Array.from({ length: 6 }, () => ORDER_NUMBER_LETTERS[Math.floor(Math.random() * ORDER_NUMBER_LETTERS.length)]).join('')}`;
+  const reservedAt = new Date(Date.now() - 25 * 3_600_000);
+  const changes = {
+    id,
+    number,
+    idempotency_key: newId(),
+    reserved_at: reservedAt.toISOString(),
+    expires_at: new Date(reservedAt.getTime() + 24 * 3_600_000).toISOString(),
+    created_at: reservedAt.toISOString(),
+    updated_at: reservedAt.toISOString(),
+  };
+  await tx.execute(sql`insert into orders select (jsonb_populate_record(null::orders,
+    to_jsonb(o) || ${JSON.stringify(changes)}::jsonb)).* from orders o where o.id = ${reservation.id}`);
+  return id;
+}
+
+async function stopPurchases(tx: Transaction, value: boolean) {
+  await tx.insert(storeSwitchChanges).values({
+    id: newId(),
+    switch: 'purchases_stopped',
+    value,
+    channel: 'admin',
+    adminId: newId(),
+  });
+}
+
+describe('paying reservations (S09 rules RS4–RS6, A02)', () => {
+  it('pays a reservation once the balance covers it, with its event, audit, notice and job', async () => {
+    await isolated(async (tx) => {
+      await stopPurchases(tx, false);
+      const item = await product(tx);
+      const buyer = await customer(tx, { funds: 0 });
+      const order = await reserve(tx, item, buyer);
+      // Nothing to pay with: skipped, still reserved.
+      expect((await payWaiting.pay(buyer, tx as never)).outcomes).toEqual([
+        { orderId: order.id, outcome: 'skipped_balance' },
+      ]);
+      expect((await orderOf(tx, order.id)).status).toBe('awaiting_balance');
+
+      await credit(tx, buyer, usd(5));
+      sent.length = 0;
+      expect(await payWaiting.pay(buyer, tx as never)).toEqual({
+        stopped: false,
+        outcomes: [{ orderId: order.id, outcome: 'paid' }],
+      });
+      const paid = await orderOf(tx, order.id);
+      expect(paid).toMatchObject({
+        status: 'paid',
+        totalUsdUnits: item.price,
+        // The lookup knew no check (`none`), and the reservation's own value stands at pay (RS5).
+        playerCheck: 'none',
+      });
+      expect(paid.purchaseJournalId).not.toBeNull();
+      expect(await walletOf(tx, buyer)).toBe(usd(5) - item.price);
+      expect(queued(QUEUES.ordersFulfil, 'orderId', order.id)).toHaveLength(1);
+      // `order_paid` lives in the center only (rule RS9): no email.
+      expect(await notificationsOf(tx, buyer)).toEqual([{ event: 'order_paid' }]);
+      expect(await tx.select().from(emailOutbox).where(eq(emailOutbox.customerId, buyer))).toEqual(
+        [],
+      );
+      const [audit] = await tx
+        .select()
+        .from(auditEntries)
+        .where(and(eq(auditEntries.entityId, order.id), eq(auditEntries.action, 'order.paid')));
+      expect(audit).toMatchObject({ actorKind: 'system', channel: 'worker' });
+      expect(audit?.details).toMatchObject({ priceSource: 'saved', totalUsdUnits: item.price });
+
+      // Safe twice: nothing left to pay, no second journal.
+      expect((await payWaiting.pay(buyer, tx as never)).outcomes).toEqual([]);
+      expect(await walletOf(tx, buyer)).toBe(usd(5) - item.price);
+    });
+  });
+
+  it('skips the older order the balance cannot pay and pays the newer one (RS4 step 6)', async () => {
+    await isolated(async (tx) => {
+      await stopPurchases(tx, false);
+      const dear = await product(tx, { offerId: 'fake-uc-660', fake: usd(9) });
+      const cheap = await product(tx);
+      const buyer = await customer(tx, { funds: 0 });
+      const older = await reserve(tx, dear, buyer);
+      const newer = await reserve(tx, cheap, buyer);
+      await credit(tx, buyer, usd(2));
+      expect((await payWaiting.pay(buyer, tx as never)).outcomes).toEqual([
+        { orderId: older.id, outcome: 'skipped_balance' },
+        { orderId: newer.id, outcome: 'paid' },
+      ]);
+      expect((await orderOf(tx, older.id)).status).toBe('awaiting_balance');
+      expect(await walletOf(tx, buyer)).toBe(usd(2) - cheap.price);
+    });
+  });
+
+  it('charges the lower current price with its row and margin (RS6)', async () => {
+    await isolated(async (tx) => {
+      await stopPurchases(tx, false);
+      const item = await product(tx);
+      const buyer = await customer(tx, { funds: 0 });
+      const order = await reserve(tx, item, buyer);
+      await tx
+        .update(supplierOffers)
+        .set({ costUsdUnits: usd(0.5) })
+        .where(
+          and(eq(supplierOffers.supplierId, ids.fake), eq(supplierOffers.offerId, 'fake-uc-60')),
+        );
+      await repriceProducts(tx, {
+        productIds: [item.id],
+        cause: 'review_accepted',
+        context: { now: new Date(), fakeEnabled: true },
+      });
+      const [current] = await tx
+        .select()
+        .from(productPrices)
+        .where(eq(productPrices.productId, item.id))
+        .orderBy(desc(productPrices.createdAt), desc(productPrices.id))
+        .limit(1);
+      expect(current?.priceUsdUnits).toBeLessThan(item.price);
+      await credit(tx, buyer, usd(5));
+      expect((await payWaiting.pay(buyer, tx as never)).outcomes[0]?.outcome).toBe('paid');
+      expect(await orderOf(tx, order.id)).toMatchObject({
+        status: 'paid',
+        priceId: current?.id,
+        unitPriceUsdUnits: current?.priceUsdUnits,
+        totalUsdUnits: current?.priceUsdUnits,
+        minMarginUsdUnits: current?.minMarginUsdUnits,
+      });
+    });
+  });
+
+  it('cancels when the price rose past every profitable route, with an email (RS6, RS9)', async () => {
+    await isolated(async (tx) => {
+      await stopPurchases(tx, false);
+      const item = await product(tx);
+      const buyer = await customer(tx, { funds: 0 });
+      const order = await reserve(tx, item, buyer);
+      await tx
+        .update(supplierOffers)
+        .set({ costUsdUnits: item.price })
+        .where(
+          and(eq(supplierOffers.supplierId, ids.fake), eq(supplierOffers.offerId, 'fake-uc-60')),
+        );
+      await repriceProducts(tx, {
+        productIds: [item.id],
+        cause: 'review_accepted',
+        context: { now: new Date(), fakeEnabled: true },
+      });
+      await credit(tx, buyer, usd(5));
+      expect((await payWaiting.pay(buyer, tx as never)).outcomes).toEqual([
+        { orderId: order.id, outcome: 'cancelled_price_rose' },
+      ]);
+      expect(await orderOf(tx, order.id)).toMatchObject({
+        status: 'cancelled',
+        cancelReason: 'price_rose',
+        purchaseJournalId: null,
+      });
+      expect(await walletOf(tx, buyer)).toBe(usd(5));
+      expect(await notificationsOf(tx, buyer)).toEqual([{ event: 'order_cancelled' }]);
+      const [email] = await tx.select().from(emailOutbox).where(eq(emailOutbox.customerId, buyer));
+      expect(email).toMatchObject({ template: 'customer_order_cancelled' });
+      expect(email?.params).toMatchObject({ orderNumber: order.number, reason: 'price_rose' });
+      // No field value in the email (S09 "Jobs and integrations").
+      expect(JSON.stringify(email?.params)).not.toContain('5123456789');
+    });
+  });
+
+  it('cancels when the game gained a required field (RS4 step 4)', async () => {
+    await isolated(async (tx) => {
+      await stopPurchases(tx, false);
+      const item = await product(tx);
+      const buyer = await customer(tx, { funds: 0 });
+      const order = await reserve(tx, item, buyer);
+      await tx.execute(sql`insert into catalog_input_fields (id, game_id, key, label_ar, type,
+        required, sort_order, min_length, max_length) values (${newId()}, ${order.gameId}, 'server',
+        'الخادم', 'digits', true, 2, 1, 4)`);
+      await credit(tx, buyer, usd(5));
+      expect((await payWaiting.pay(buyer, tx as never)).outcomes).toEqual([
+        { orderId: order.id, outcome: 'cancelled_product_changed' },
+      ]);
+      expect(await orderOf(tx, order.id)).toMatchObject({
+        status: 'cancelled',
+        cancelReason: 'product_changed',
+      });
+    });
+  });
+
+  it('keeps a reservation whose product is unavailable, and stops while purchases are stopped', async () => {
+    await isolated(async (tx) => {
+      await stopPurchases(tx, false);
+      const item = await product(tx);
+      const buyer = await customer(tx, { funds: 0 });
+      const order = await reserve(tx, item, buyer);
+      await credit(tx, buyer, usd(5));
+      // Edge case 11: out of stock when the money arrives; it stays reserved.
+      await tx
+        .update(supplierOffers)
+        .set({ inStock: false })
+        .where(
+          and(eq(supplierOffers.supplierId, ids.fake), eq(supplierOffers.offerId, 'fake-uc-60')),
+        );
+      expect((await payWaiting.pay(buyer, tx as never)).outcomes).toEqual([
+        { orderId: order.id, outcome: 'skipped_unavailable' },
+      ]);
+      await tx
+        .update(supplierOffers)
+        .set({ inStock: true })
+        .where(
+          and(eq(supplierOffers.supplierId, ids.fake), eq(supplierOffers.offerId, 'fake-uc-60')),
+        );
+      // Edge case 12 (SW7): purchases stopped, the run ends and nothing is paid.
+      await stopPurchases(tx, true);
+      expect(await payWaiting.pay(buyer, tx as never)).toEqual({ stopped: true, outcomes: [] });
+      expect((await orderOf(tx, order.id)).status).toBe('awaiting_balance');
+      await stopPurchases(tx, false);
+      expect((await payWaiting.pay(buyer, tx as never)).outcomes[0]?.outcome).toBe('paid');
+    });
+  });
+
+  it('queues a paying run for each customer with an open reservation, every 5 minutes', async () => {
+    await isolated(async (tx) => {
+      await stopPurchases(tx, false);
+      const item = await product(tx);
+      const [waiting, paidUp] = [
+        await customer(tx, { funds: 0 }),
+        await customer(tx, { funds: 0 }),
+      ];
+      await reserve(tx, item, waiting);
+      const done = await reserve(tx, item, paidUp);
+      await credit(tx, paidUp, usd(5));
+      await payWaiting.pay(paidUp, tx as never);
+      expect((await orderOf(tx, done.id)).status).toBe('paid');
+      sent.length = 0;
+      const swept = await waitingSweep.sweep(tx);
+      expect(swept).toContain(waiting);
+      expect(swept).not.toContain(paidUp);
+      // `stately` per customer: one queued run makes the next a no-op.
+      expect(queued(QUEUES.ordersPayWaiting, 'customerId', waiting)).toEqual([
+        {
+          queue: QUEUES.ordersPayWaiting,
+          data: { customerId: waiting },
+          options: expect.objectContaining({ singletonKey: waiting, retryLimit: 3 }),
+        },
+      ]);
+    });
+  });
+});
+
+describe('expiry and the player-check cache (S09 rule RS7, "Data")', () => {
+  it('cancels a reservation past its deadline with an email, never one still open', async () => {
+    await isolated(async (tx) => {
+      await stopPurchases(tx, false);
+      const item = await product(tx);
+      const buyer = await customer(tx, { funds: 0 });
+      const open = await reserve(tx, item, buyer);
+      const past = await pastReservation(tx, open);
+      const result = await sweep.sweep(new Date(), tx);
+      expect(result.expired).toContain(past);
+      expect(result.expired).not.toContain(open.id);
+      expect(await orderOf(tx, past)).toMatchObject({
+        status: 'cancelled',
+        cancelReason: 'expired',
+      });
+      expect((await orderOf(tx, open.id)).status).toBe('awaiting_balance');
+      expect(await notificationsOf(tx, buyer)).toEqual([{ event: 'order_cancelled' }]);
+      const [email] = await tx.select().from(emailOutbox).where(eq(emailOutbox.customerId, buyer));
+      expect(email?.params).toMatchObject({ reason: 'expired' });
+      // An expired reservation is never paid (rule RS4 step 2).
+      await credit(tx, buyer, usd(5));
+      expect((await payWaiting.pay(buyer, tx as never)).outcomes).toEqual([
+        { orderId: open.id, outcome: 'paid' },
+      ]);
+      expect((await sweep.sweep(new Date(), tx)).expired).not.toContain(past);
+
+      // The summary counts today's reservations paid and expired, and the checks per supplier.
+      await tx.insert(supplierCalls).values({
+        id: newId(),
+        supplierId: ids.fake,
+        operation: 'validate_player',
+        result: 'ok',
+        latencyMs: 12,
+      });
+      const summary = new DailySummaryJob(
+        pgBoss,
+        new TelegramAlerts(
+          { source: 'test' },
+          { configured: false, call: async () => null },
+          async () => null,
+        ),
+        db,
+        { ...env, SUPPLIER_FAKE_ENABLED: true },
+      );
+      const now = new Date();
+      const lines = await summary.contents(tx, now, damascusDate(now));
+      expect(lines.reservationsPaid).toBeGreaterThanOrEqual(1);
+      expect(lines.reservationsExpired).toBeGreaterThanOrEqual(1);
+      const [fake] = await tx.select().from(suppliers).where(eq(suppliers.id, ids.fake));
+      expect(
+        lines.validations.find((row) => row.supplierNameAr === fake?.nameAr)?.count,
+      ).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('deletes player checks a day past their expiry', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      const buyer = await customer(tx);
+      const [order] = await tx
+        .select()
+        .from(orders)
+        .where(eq(orders.id, (await buy(tx, item)).id));
+      const check = (expiresAt: Date) => ({
+        id: newId(),
+        gameId: order?.gameId as string,
+        fieldsHash: createHash('sha256').update(newId()).digest('hex'),
+        result: 'invalid' as const,
+        supplierId: ids.fake,
+        customerId: buyer,
+        createdAt: new Date(expiresAt.getTime() - 3_600_000),
+        expiresAt,
+      });
+      const old = check(new Date(Date.now() - 25 * 3_600_000));
+      const recent = check(new Date(Date.now() - 23 * 3_600_000));
+      await tx.insert(playerChecks).values([old, recent]);
+      const result = await sweep.sweep(new Date(), tx);
+      expect(result.checksDeleted).toContain(old.id);
+      expect(result.checksDeleted).not.toContain(recent.id);
+      const left = await tx
+        .select({ id: playerChecks.id })
+        .from(playerChecks)
+        .where(inArray(playerChecks.id, [old.id, recent.id]));
+      expect(left).toEqual([{ id: recent.id }]);
+    });
   });
 });
 

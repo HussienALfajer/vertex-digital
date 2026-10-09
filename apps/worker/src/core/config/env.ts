@@ -76,6 +76,13 @@ export const envSchema = z
      */
     /** The store's origin, for links in emails (S02: the wallet page). */
     STORE_URL: z.url({ protocol: /^https?$/ }).default('http://127.0.0.1:3001'),
+    /** The store's local port: `store.revalidate` calls it on `127.0.0.1` (S09 rule SF4). */
+    STORE_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+    /**
+     * The bearer secret of the store's `/_internal/revalidate` route (S09 rule SF4), the store's
+     * value. Required in production; derived locally exactly as the store derives it.
+     */
+    STORE_REVALIDATE_SECRET: optional().pipe(z.string().min(32).optional()),
     /** The panel's origin, for links in Telegram messages (S05: deposit cards, reminders). */
     ADMIN_URL: z.url({ protocol: /^https?$/ }).default('http://127.0.0.1:5173'),
     /**
@@ -166,6 +173,10 @@ export const envSchema = z
     message: 'ORDER_CODES_SECRET is required',
     path: ['ORDER_CODES_SECRET'],
   })
+  .refine((env) => env.NODE_ENV !== 'production' || env.STORE_REVALIDATE_SECRET, {
+    message: 'STORE_REVALIDATE_SECRET is required',
+    path: ['STORE_REVALIDATE_SECRET'],
+  })
   .refine((env) => env.NODE_ENV !== 'production' || !env.SUPPLIER_FAKE_ENABLED, {
     message: 'The fake supplier is never enabled in production',
     path: ['SUPPLIER_FAKE_ENABLED'],
@@ -203,6 +214,11 @@ export const envSchema = z
       env.ORDER_CODES_SECRET ??
       createHash('sha256')
         .update(`vertex-digital-dev-order-codes:${env.DATABASE_URL}`)
+        .digest('base64'),
+    STORE_REVALIDATE_SECRET:
+      env.STORE_REVALIDATE_SECRET ??
+      createHash('sha256')
+        .update(`vertex-digital-dev-store-revalidate:${env.DATABASE_URL}`)
         .digest('base64'),
     TELEGRAM_TRANSPORT:
       env.TELEGRAM_TRANSPORT ??

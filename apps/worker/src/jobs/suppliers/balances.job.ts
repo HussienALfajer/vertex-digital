@@ -5,6 +5,7 @@ import {
   type Database,
   newId,
   productRoutes,
+  queueStoreRevalidate,
   queueTelegramMessage,
   repriceProducts,
   routedProductIds,
@@ -109,6 +110,8 @@ export class SupplierBalancesJob implements OnApplicationBootstrap {
           cause: 'route_change',
           context: { now: new Date(), fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED },
         });
+        // S09 rule SF4: routes the balance no longer pays (or pays again) change the store's prices.
+        await queueStoreRevalidate(tx, bossJobSender(this.pgBoss.boss));
       }
       await this.notify(tx, supplier, read, previous, now);
     });

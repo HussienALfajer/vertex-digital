@@ -10,8 +10,11 @@ import { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { UsdtScanJob } from '../src/jobs/deposits/usdt-scan.job.js';
 import { UsdtVerifyJob } from '../src/jobs/deposits/usdt-verify.job.js';
 import { OrdersFulfilJob } from '../src/jobs/orders/fulfil.job.js';
+import { OrdersPayWaitingJob } from '../src/jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from '../src/jobs/orders/poll.job.js';
 import { OrdersSweepJob } from '../src/jobs/orders/sweep.job.js';
+import { OrdersWaitingSweepJob } from '../src/jobs/orders/waiting-sweep.job.js';
+import { StoreRevalidateJob } from '../src/jobs/store/revalidate.job.js';
 import { SupplierBalancesJob } from '../src/jobs/suppliers/balances.job.js';
 import { SupplierHealthJob } from '../src/jobs/suppliers/health.job.js';
 import { SupplierSyncJob } from '../src/jobs/suppliers/sync.job.js';
@@ -23,7 +26,7 @@ import { WorkerModule } from '../src/worker.module.js';
 // WORKER_NAME is unique per run (vitest.config.ts), so rows never collide between runs.
 
 /**
- * Jobs that call a supplier or a chain, or move orders and deposits, stay idle here: the queues
+ * Jobs that call a supplier, a chain or the store, or move orders and deposits, stay idle here: the queues
  * hold what the api tests left (orders to fulfil, syncs, verifications), and working them would
  * commit supplier calls and cursors that the order, supplier and USDT tests read. Those jobs have
  * their own tests; this file proves the module boots and works a queue.
@@ -32,6 +35,9 @@ const IDLE_JOBS = [
   OrdersFulfilJob,
   OrdersPollJob,
   OrdersSweepJob,
+  OrdersPayWaitingJob,
+  OrdersWaitingSweepJob,
+  StoreRevalidateJob,
   SupplierWebhookJob,
   SupplierSyncJob,
   SupplierSyncScheduleJob,
