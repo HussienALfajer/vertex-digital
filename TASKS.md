@@ -30,8 +30,8 @@ Spec: `docs/specs/S08-orders-and-fulfilment.md` (F11 with F26 SW7, F27 and F13's
 - [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (two blocking findings, fixed and re-reviewed: no blocking issues), owner acceptance waived by the owner for this PR, PR with auto-merge
 
 ## PR 3 — Store and admin screens, E2E · Opus 5.5 `high`
-- [ ] Store `features/orders/`: `/orders` and `/orders/[id]` (stages, fields, code reveal, refetch on notification); account menu and wallet entry links; i18n
-- [ ] Admin `features/orders/`: `/orders` (tabs, filters, search), `/orders/$id` (decision panel, attempts with candidates, events, journals, codes and reveals, webhook events), `/orders/policy`; navigation with the badge; "وقت التسليم" column on the game page; i18n
-- [ ] E2E flows and RTL screenshots (store phone width dark and light; admin light and dark)
-- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S08 done, `wiring.md` patterns, folder `CLAUDE.md` files)
+- [x] Store `features/orders/`: `/orders` and `/orders/[id]` (stages, fields, code reveal, refetch on notification); account menu and wallet entry links; i18n
+- [x] Admin `features/orders/`: `/orders` (tabs, filters, search), `/orders/$id` (decision panel, attempts with candidates, events, journals, codes and reveals, webhook events), `/orders/policy`; navigation with the badge; "وقت التسليم" column on the game page; i18n
+- [x] E2E flows and RTL screenshots (store phone width dark and light; admin light and dark)
+- [x] Wiring checklist, docs (`docs/ROADMAP.md` S08 done, `wiring.md` patterns, folder `CLAUDE.md` files)
 - [ ] Checks, reviewer, owner acceptance (the spec's ten browser steps), PR with auto-merge

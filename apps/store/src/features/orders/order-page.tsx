@@ -139,7 +139,9 @@ export function OrderPage() {
             <bdi dir="ltr">{formatUsd(order.totalUsdUnits)}</bdi>
           </Line>
           {order.totalSypUnits !== null && (
-            <Line label={t('orders.detail.totalSyp')}>{formatSyp(order.totalSypUnits)}</Line>
+            <Line label={t('orders.detail.totalSyp')}>
+              {t('orders.detail.totalSypValue', { amount: formatSyp(order.totalSypUnits) })}
+            </Line>
           )}
           {order.refundedUsdUnits > 0 && (
             <Line label={t('orders.detail.refunded')}>

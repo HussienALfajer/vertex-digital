@@ -523,7 +523,7 @@
     "loadMore": "تحميل المزيد",
     "loadingMore": "جارٍ التحميل…",
     "times": "× {count}",
-    "syp": "≈ {amount} عند الشراء",
+    "syp": "≈ {amount} ل.س عند الشراء",
     "stages": {
       "processing": "قيد التنفيذ",
       "delayed": "متأخر، نتحقق منه",
@@ -553,7 +553,8 @@
       "total": "الإجمالي",
       "totalSyp": "بالليرة عند الشراء",
       "refunded": "المبلغ المُسترد",
-      "refundReason": "سبب الاسترداد"
+      "refundReason": "سبب الاسترداد",
+      "totalSypValue": "{amount} ل.س"
     },
     "codes": {
       "title": "الأكواد",

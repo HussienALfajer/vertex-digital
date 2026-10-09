@@ -18,6 +18,7 @@ import {
 } from '@vertex-digital/contracts';
 import openapi from '../../api/openapi.json' with { type: 'json' };
 import { CatalogMock } from './catalog-mock';
+import { OrdersMock } from './orders-mock';
 import { SuppliersMock } from './suppliers-mock';
 
 /*
@@ -287,6 +288,8 @@ export class AdminApi {
       this.switches().switches.find((item) => item.switch === `${code}_paused`)?.value ?? false,
     () => this.reauthenticationRequired,
   );
+  /** S08: the orders, their decisions, code reveals and the policy. */
+  readonly orders = new OrdersMock(() => this.reauthenticationRequired);
   /** S04: the recorded USDT transfers, newest first, with their holder and candidates. */
   usdtTransfers: (Record<string, unknown> & { id: string; txid: string; method: string })[] = [];
   /** The transaction numbers already claimed (rule SC14). */
@@ -852,6 +855,11 @@ export class AdminApi {
         .filter((transfer) => state === 'all' || transfer.state === 'unmatched')
         .filter((transfer) => !byMethod || transfer.method === byMethod);
       return json(200, { items, nextCursor: null });
+    }
+    if (path.startsWith('/api/admin/orders')) {
+      this.orders.idempotencyKey = request.headers()['idempotency-key'] ?? null;
+      const answer = this.orders.answer(request.method(), url, body);
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
     }
     if (
       path.startsWith('/api/admin/suppliers') ||

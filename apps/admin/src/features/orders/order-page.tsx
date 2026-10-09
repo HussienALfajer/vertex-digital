@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { CopyButton } from '../../components/copy-button';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { formatDateTime } from '../../lib/format';
+import { formatDateTime, ltr } from '../../lib/format';
 import { DecisionDialog, type OrderDecision } from './decision-dialogs';
 import { ATTEMPT_TONES, STATUS_TONES } from './order-labels';
 import { orderQuery, useRevealCode } from './orders.queries';
@@ -127,7 +127,7 @@ function Header({ order }: { order: AdminOrder }) {
         <Fact label={t('orders.detail.total')}>
           <bdi dir="ltr">{formatUsd(order.totalUsdUnits)}</bdi>
           <span className="block text-sm font-normal text-muted-foreground">
-            {t('orders.detail.unitPrice', { price: formatUsd(order.unitPriceUsdUnits) })}
+            {t('orders.detail.unitPrice', { price: ltr(formatUsd(order.unitPriceUsdUnits)) })}
           </span>
         </Fact>
         <Fact label={t('orders.detail.units')}>
