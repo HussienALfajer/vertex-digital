@@ -436,6 +436,12 @@ describe('the messages of PR 4', () => {
       ordersInReview: 1,
       manualWaiting: 3,
       medianDeliveryMs: 45_000,
+      validations: [
+        { supplierNameAr: 'SHOP2TOPUP', count: 12 },
+        { supplierNameAr: 'WDGZone', count: 3 },
+      ],
+      reservationsPaid: 4,
+      reservationsExpired: 1,
     };
     const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
     for (const line of [
@@ -451,9 +457,15 @@ describe('the messages of PR 4', () => {
       'باقات أوقفها حارس الهامش: 1',
       '⚠️ المورد WDGZone: متراجع',
       '💰 رصيد SHOP2TOPUP تحت الحد: $20.00',
+      'الحجوزات اليوم: 4 دُفعت، 1 انتهت',
+      'التحقق من المعرّف اليوم: SHOP2TOPUP 12، WDGZone 3',
     ]) {
       expect(text).toContain(line);
     }
+    // No player check today: no validation line (S09).
+    expect(
+      renderTelegramMessage('daily_summary', { ...summary, validations: [] }, LINKS).text,
+    ).not.toContain('التحقق من المعرّف');
   });
 
   it('render the decision questions and answers (rules TC4, TC5)', () => {

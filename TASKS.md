@@ -21,13 +21,14 @@ Spec: `docs/specs/S09-storefront-and-purchase.md` (F12, F13, F15 with A02, A08's
 - [x] Checks (lint, typecheck, test, build, e2e, drift: all passed and recorded), reviewer (four blocking findings: a queue the worker never created, missing concurrent races, limits counting non-supplier answers, half-written image sizes; fixed and re-reviewed: no blocking issues), owner acceptance (2026-10-09), PR with auto-merge
 
 ## PR 2 — Worker: paying and expiring reservations, cache cleanup, store revalidation, Telegram · Opus 5.5 `high`
-- [ ] Jobs `orders.pay_waiting` (stately per customer, RS4 through the db write path), `orders.waiting_sweep` (every 5 minutes, at most 500)
-- [ ] `orders.sweep` steps: RS7 expiry (at most 100, `SKIP LOCKED`) and `player_checks` cleanup
-- [ ] `store.revalidate` (singleton, at most once per 10 s, 5 s timeout, 3 retries, warning only)
-- [ ] Notifications `order_paid` (center) and `order_cancelled` (center and email with its template); Telegram `validation_quota_reached` sending; daily summary lines (validations per supplier, reservations paid and expired)
-- [ ] Worker env `STORE_REVALIDATE_SECRET`, `STORE_PORT`
-- [ ] Tests (each RS4 step and outcome, expiry, cleanup, waiting sweep, revalidate singleton and failure, quota message dedupe, notifications)
-- [ ] Wiring checklist, docs
+- [x] Jobs `orders.pay_waiting` (stately per customer, RS4 through the db write path), `orders.waiting_sweep` (every 5 minutes, at most 500)
+- [x] `orders.sweep` steps: RS7 expiry (at most 100, `SKIP LOCKED`) and `player_checks` cleanup
+- [x] `store.revalidate` (singleton, at most once per 10 s, 5 s timeout, 3 retries, warning only)
+- [x] Notifications `order_paid` (center) and `order_cancelled` (center and email with its template); Telegram `validation_quota_reached` sending; daily summary lines (validations per supplier, reservations paid and expired)
+- [x] Worker env `STORE_REVALIDATE_SECRET`, `STORE_PORT`
+- [x] Worker change points queue `store.revalidate`: a successful sync, a health change, a newly stale cost
+- [x] Tests (each RS4 step and outcome, expiry, cleanup, waiting sweep, revalidate singleton and failure, quota message dedupe, notifications)
+- [x] Wiring checklist, docs
 - [ ] Checks (lint, typecheck, test, build, e2e, drift), reviewer, owner acceptance, PR with auto-merge
 
 ## PR 3 — Store and admin screens, E2E, nginx · Opus 5.5 `high`

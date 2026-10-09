@@ -404,6 +404,12 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
     ...(summary.medianDeliveryMs === null
       ? []
       : [`وسيط وقت التسليم اليوم: ${durationText(summary.medianDeliveryMs)}`]),
+    `الحجوزات اليوم: ${summary.reservationsPaid} دُفعت، ${summary.reservationsExpired} انتهت`,
+    ...(summary.validations.length > 0
+      ? [
+          `التحقق من المعرّف اليوم: ${summary.validations.map((row) => `${row.supplierNameAr} ${row.count}`).join('، ')}`,
+        ]
+      : []),
     ...(summary.suppressedAlerts > 0
       ? [`تنبيهات حُجبت بحد الإرسال: ${summary.suppressedAlerts}`]
       : []),

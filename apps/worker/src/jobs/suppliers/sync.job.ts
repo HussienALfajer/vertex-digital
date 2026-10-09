@@ -19,6 +19,7 @@ import {
   productPrices,
   productRoutes,
   productRoutingStates,
+  queueStoreRevalidate,
   queueTelegramMessage,
   repriceProducts,
   type SupplierState,
@@ -156,8 +157,8 @@ class SuspiciousCatalog extends Error {}
  * `suppliers.sync` (S07 rules SY1–SY4): one run at a time per supplier (the partial unique index on
  * running runs), one `listOffers` call recorded in `supplier_calls`, then, in one transaction, the
  * offers mirrored, their cost changes appended, the products on changed offers repriced (P2) and
- * the run closed with its counts. A failed run changes nothing but itself. No retries: the next
- * schedule tries again.
+ * the run closed with its counts and the store's refresh queued (S09 rule SF4). A failed run
+ * changes nothing but itself. No retries: the next schedule tries again.
  */
 @Injectable()
 export class SupplierSyncJob implements OnApplicationBootstrap {
@@ -473,6 +474,8 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
         .where(and(eq(supplierSyncRuns.id, run.id), eq(supplierSyncRuns.status, 'running')))
         .returning();
       if (!closed) throw new Error(`Sync run ${run.id} is no longer running`);
+      // S09 rule SF4: costs, stock and prices the store shows may have changed.
+      await queueStoreRevalidate(tx, bossJobSender(this.pgBoss.boss));
       if (repriced.reviewsOpened > 0 || marginGuarded > 0 || counts.mappedMissing > 0) {
         await queueTelegramMessage(tx, bossJobSender(this.pgBoss.boss), {
           kind: 'supplier_sync_summary',

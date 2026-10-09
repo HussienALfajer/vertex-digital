@@ -21,6 +21,7 @@ import {
   productRoutingStates,
   queueTelegramMessage,
   storeSwitchChanges,
+  supplierCalls,
   supplierStates,
   suppliers,
   type Transaction,
@@ -28,7 +29,7 @@ import {
   usdtTransferState,
   usdtTransfers,
 } from '@vertex-digital/db';
-import { and, count, desc, eq, gte, inArray, type SQL, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNotNull, type SQL, sql } from 'drizzle-orm';
 import { TelegramAlerts } from '../../core/alerts/telegram-alerts.js';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -226,6 +227,49 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       suppressedAlerts: this.alerts.suppressedOn(date),
       ...(await this.supplierLines(db, now)),
       ...(await this.orderLines(db, dayStart)),
+      ...(await this.reservationLines(db, dayStart)),
+    };
+  }
+
+  /**
+   * S09: today's player checks per supplier (all of them count toward its quota, rule PV5), and
+   * real customers' reservations paid (A02) and expired (A15) today.
+   */
+  private async reservationLines(db: Database | Transaction, dayStart: SQL) {
+    const real = eq(orders.isTest, false);
+    const [validations, [paid], [expired]] = await Promise.all([
+      db
+        .select({ supplierNameAr: suppliers.nameAr, count: count() })
+        .from(supplierCalls)
+        .innerJoin(suppliers, eq(suppliers.id, supplierCalls.supplierId))
+        .where(
+          and(
+            eq(supplierCalls.operation, 'validate_player'),
+            gte(supplierCalls.createdAt, dayStart),
+          ),
+        )
+        .groupBy(suppliers.nameAr)
+        .orderBy(suppliers.nameAr),
+      db
+        .select({ count: count() })
+        .from(orders)
+        .where(and(real, isNotNull(orders.reservedAt), gte(orders.paidAt, dayStart))),
+      db
+        .select({ count: count() })
+        .from(orders)
+        .where(
+          and(
+            real,
+            eq(orders.status, 'cancelled'),
+            eq(orders.cancelReason, 'expired'),
+            gte(orders.finishedAt, dayStart),
+          ),
+        ),
+    ]);
+    return {
+      validations,
+      reservationsPaid: paid?.count ?? 0,
+      reservationsExpired: expired?.count ?? 0,
     };
   }
 

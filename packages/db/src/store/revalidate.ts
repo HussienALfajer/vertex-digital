@@ -1,4 +1,8 @@
-import { QUEUES, STORE_REVALIDATE_THROTTLE_SECONDS } from '@vertex-digital/contracts';
+import {
+  QUEUES,
+  STORE_REVALIDATE_RETRIES,
+  STORE_REVALIDATE_THROTTLE_SECONDS,
+} from '@vertex-digital/contracts';
 import type { Transaction } from '../client.js';
 import type { JobSender } from '../notifications/index.js';
 
@@ -15,7 +19,7 @@ export async function queueStoreRevalidate(tx: Transaction, jobs: JobSender): Pr
     {
       singletonKey: 'catalog',
       singletonSeconds: STORE_REVALIDATE_THROTTLE_SECONDS,
-      retryLimit: 3,
+      retryLimit: STORE_REVALIDATE_RETRIES,
       retryDelay: 5,
       retryBackoff: true,
     },

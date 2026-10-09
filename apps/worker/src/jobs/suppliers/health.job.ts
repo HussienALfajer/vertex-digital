@@ -18,6 +18,7 @@ import {
   productPrices,
   productRoutes,
   productRoutingStates,
+  queueStoreRevalidate,
   queueTelegramMessage,
   repriceProducts,
   routedProductIds,
@@ -46,13 +47,17 @@ export const SUPPLIERS_HEALTH_CRON = '* * * * *';
 /** No row yet: `healthy` since ever (rule H4). */
 const NEVER = new Date(0);
 
+/** A cost stale for less than this past its limit counts as newly stale (S09 rule SF4). */
+const STALE_NEWS_MS = 2 * 60_000;
+
 /**
  * `suppliers.health` (S07 rules H1–H4, SY5), every minute: each available supplier but `manual`
  * (always healthy) is judged on its recorded calls; a `down` one is probed after its wait. A change
  * appends a `supplier_health_changes` row, reprices the supplier's products and tells the admin.
  * Then the products whose price follows a stale cost are repriced, and a failing sync whose costs
  * went stale is reported once. Safe twice: a state is written only when it differs from the newest
- * row, read again under the supplier's row lock.
+ * row, read again under the supplier's row lock. A health change, and a cost newly stale, queue the
+ * store's refresh (S09 rule SF4).
  */
 @Injectable()
 export class SupplierHealthJob implements OnApplicationBootstrap {
@@ -215,6 +220,8 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
         },
         dedupeKey: `health:${row?.id}`,
       });
+      // S09 rule SF4: the store shows each game's service status and availability.
+      await queueStoreRevalidate(tx, bossJobSender(this.pgBoss.boss));
       this.logger.log(`${supplier.code} is ${verdict.state}: ${verdict.reason}`);
     });
   }
@@ -234,7 +241,7 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
       .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id))
       .as('latest');
     const stale = await db
-      .select({ productId: latest.productId })
+      .select({ productId: latest.productId, confirmedAt: supplierOffers.costConfirmedAt })
       .from(latest)
       .innerJoin(productRoutes, eq(productRoutes.id, latest.routeId))
       .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
@@ -246,13 +253,21 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
         ),
       );
     if (stale.length === 0) return;
-    await db.transaction((tx) =>
-      repriceProducts(tx, {
+    // A cost that went stale since the last runs changes what the store shows; one stale for longer
+    // was already refreshed (S09 rule SF4), so a failing sync does not refresh the store every minute.
+    const newlyStale = stale.some(
+      (row) => row.confirmedAt && row.confirmedAt.getTime() >= cutoff.getTime() - STALE_NEWS_MS,
+    );
+    await db.transaction(async (tx) => {
+      const repriced = await repriceProducts(tx, {
         productIds: stale.map((row) => row.productId),
         cause: 'route_change',
         context: { now, fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED },
-      }),
-    );
+      });
+      if (newlyStale || repriced.repriced > 0) {
+        await queueStoreRevalidate(tx, bossJobSender(this.pgBoss.boss));
+      }
+    });
   }
 
   /**

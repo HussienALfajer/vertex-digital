@@ -1214,7 +1214,7 @@ describe('reservations (S09 rules RS1–RS9, PV8)', () => {
     }
     await credit(buyer, usd(10));
     expect((await pay(buyer)).outcomes).toEqual([]);
-    expect(await expireReservations(db, context(), 100)).toBeGreaterThanOrEqual(1);
+    expect((await expireReservations(db, context(), 100)).length).toBeGreaterThanOrEqual(1);
     expect(await orderRow(order.id)).toMatchObject({
       status: 'cancelled',
       cancelReason: 'expired',

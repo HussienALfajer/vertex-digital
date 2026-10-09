@@ -455,6 +455,8 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
         mappedMissing: 0,
       });
       expect(sent.some((job) => job.queue === QUEUES.telegramSend)).toBe(true);
+      // S09 rule SF4: each successful sync refreshes the store's catalog pages.
+      expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
     }));
 
   it('refuses a suspicious catalog and changes nothing (SY3), and marks missing offers', () =>
@@ -868,8 +870,11 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
 
       await calls(tx, 'error', 'error', 'error');
       const checkedAt = new Date();
+      sent.length = 0;
       await health.check(checkedAt, tx);
       const down = await standing(tx);
+      // S09 rule SF4: the store shows each game's service status.
+      expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
       // The rate over the window's calls: this test's sync call and three errors, and the calls
       // other test files committed within the health window (append-only, so they stay).
       const window = await tx
@@ -978,8 +983,25 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
         supplierNameAr: 'مورد تجريبي',
         unavailableProducts: 1,
       });
+      expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
+      sent.length = 0;
       await health.check(new Date(), tx);
       expect(await messages(tx, 'supplier_sync_failing')).toHaveLength(1);
+      // S09 rule SF4: costs stale for long and nothing repriced: the store is not refreshed again,
+      // until a cost goes stale anew.
+      expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(false);
+      await tx
+        .update(supplierOffers)
+        .set({
+          costConfirmedAt: new Date(
+            Date.now() - SUPPLIER_POLICY_DEFAULTS.costStaleMinutes * 60_000 - 30_000,
+          ),
+        })
+        .where(
+          and(eq(supplierOffers.supplierId, ids.fake), eq(supplierOffers.offerId, offerKey('b'))),
+        );
+      await health.check(new Date(), tx);
+      expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
     }));
 });
 

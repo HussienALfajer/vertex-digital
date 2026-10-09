@@ -251,6 +251,13 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     manualWaiting: z.int().nonnegative().default(0),
     /** S08: the median of today's delivery times of real customers' orders (null with none). */
     medianDeliveryMs: z.int().nonnegative().nullable().default(null),
+    /** S09: today's player checks per supplier (rule PV5's count), suppliers with none left out. */
+    validations: z
+      .array(z.object({ supplierNameAr: z.string(), count: z.int().positive() }))
+      .default([]),
+    /** S09: real customers' reservations paid (A02) and expired (A15) today. */
+    reservationsPaid: z.int().nonnegative().default(0),
+    reservationsExpired: z.int().nonnegative().default(0),
   }),
   bot_reply: telegramBotReplySchema,
   /** To the previous chat when another chat was linked (rule TG3). */

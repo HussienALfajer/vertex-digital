@@ -77,6 +77,7 @@ describe('worker environment', () => {
       SMTP_HOST: 'smtp.example.com',
       SMTP_USER: 'mailbox@example.com',
       SMTP_PASSWORD: 'secret',
+      STORE_REVALIDATE_SECRET: 'r'.repeat(64),
       SUPPLIER_KEYS_SECRET: Buffer.alloc(32, 7).toString('base64'),
       ORDER_CODES_SECRET: Buffer.alloc(32, 8).toString('base64'),
     };
@@ -122,6 +123,7 @@ describe('worker environment', () => {
       SMTP_HOST: 'smtp.example.com',
       SMTP_USER: 'mailbox@example.com',
       SMTP_PASSWORD: 'secret',
+      STORE_REVALIDATE_SECRET: 'r'.repeat(64),
       CHAIN_READER: 'live',
       ORDER_CODES_SECRET: Buffer.alloc(32, 8).toString('base64'),
     };
@@ -149,11 +151,47 @@ describe('worker environment', () => {
       SMTP_HOST: 'smtp.example.com',
       SMTP_USER: 'mailbox@example.com',
       SMTP_PASSWORD: 'secret',
+      STORE_REVALIDATE_SECRET: 'r'.repeat(64),
       CHAIN_READER: 'live',
       SUPPLIER_KEYS_SECRET: Buffer.alloc(32, 9).toString('base64'),
     };
     expect(() => parseEnv(production)).toThrow('ORDER_CODES_SECRET');
     const key = Buffer.alloc(32, 3).toString('base64');
     expect(parseEnv({ ...production, ORDER_CODES_SECRET: key }).ORDER_CODES_SECRET).toBe(key);
+  });
+
+  it('reads the store refresh secret, required in production (S09 rule SF4)', () => {
+    // Derived locally from the same label the store uses, so both agree without a value.
+    const local = createHash('sha256')
+      .update(`vertex-digital-dev-store-revalidate:${DATABASE_URL}`)
+      .digest('base64');
+    expect(parseEnv({ DATABASE_URL })).toMatchObject({
+      STORE_REVALIDATE_SECRET: local,
+      STORE_PORT: 3001,
+    });
+    expect(
+      parseEnv({ DATABASE_URL, STORE_REVALIDATE_SECRET: 'replace-with-a-long-random-value' })
+        .STORE_REVALIDATE_SECRET,
+    ).toBe(local);
+    expect(() => parseEnv({ DATABASE_URL, STORE_REVALIDATE_SECRET: 'short' })).toThrow(
+      'STORE_REVALIDATE_SECRET',
+    );
+    expect(parseEnv({ DATABASE_URL, STORE_PORT: '3061' }).STORE_PORT).toBe(3061);
+    const production = {
+      DATABASE_URL,
+      NODE_ENV: 'production',
+      EMAIL_TRANSPORT: 'smtp',
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_USER: 'mailbox@example.com',
+      SMTP_PASSWORD: 'secret',
+      CHAIN_READER: 'live',
+      SUPPLIER_KEYS_SECRET: Buffer.alloc(32, 9).toString('base64'),
+      ORDER_CODES_SECRET: Buffer.alloc(32, 3).toString('base64'),
+    };
+    expect(() => parseEnv(production)).toThrow('STORE_REVALIDATE_SECRET');
+    const secret = 'a'.repeat(64);
+    expect(
+      parseEnv({ ...production, STORE_REVALIDATE_SECRET: secret }).STORE_REVALIDATE_SECRET,
+    ).toBe(secret);
   });
 });
