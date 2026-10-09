@@ -17,6 +17,8 @@ const STATUS: Partial<Record<ErrorCode, 400 | 404 | 409>> = {
   PLAYER_NOT_CONFIRMED: 409,
   RESERVATIONS_LIMIT_REACHED: 409,
   ORDER_NOT_CANCELLABLE: 409,
+  CHECKOUT_REFUSED: 409,
+  ORDER_NOT_SHAREABLE: 409,
 };
 
 /** An `OrderError` or `LedgerError` as the API answers it; anything else is rethrown as is. */
@@ -45,6 +47,8 @@ export const orderRefusals = {
     new CodedException(400, 'VALIDATION_FAILED', `At most ${max} units were asked`, [
       { path: ['quantity'], message: `Expected at most ${max}` },
     ]),
+  notShareable: (reason: 'status' | 'not_gift' | 'link_exists') =>
+    new CodedException(409, 'ORDER_NOT_SHAREABLE', 'The order cannot have this link', { reason }),
   codesCount: () =>
     new CodedException(400, 'CODES_COUNT_MISMATCH', 'Expected one code per unit delivered'),
 };

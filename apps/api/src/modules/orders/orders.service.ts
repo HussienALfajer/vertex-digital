@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  Checkout,
+  CreatedOrder,
+  checkoutRequestSchema,
   createOrderSchema,
   Order,
   OrderListQuery,
@@ -9,13 +12,18 @@ import type {
 } from '@vertex-digital/contracts';
 import {
   cancelOwnReservation,
+  checkoutOrders,
+  customerCheckout,
   customerOrder,
   customerOrderPage,
+  customerSavedPlayers,
   type Database,
   orderCodesKey,
+  type PlayerCheckLookup,
   productRoutingStates,
   purchaseOrder,
   revealCode,
+  type Transaction,
 } from '@vertex-digital/db';
 import { z } from 'zod';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -34,21 +42,45 @@ const TEN_MINUTES = 10 * 60 * 1000;
 /** A purchase request as the controller parsed it. */
 export type PurchaseBody = z.output<typeof createOrderSchema>;
 
+/** A checkout request as the controller parsed it (S10 rule CT5). */
+export type CheckoutBody = z.output<typeof checkoutRequestSchema>;
+
+/** S10: a body's save and gift choices, only when sent, so older bodies keep their hash. */
+const convenience = (body: Pick<PurchaseBody, 'savePlayer' | 'gift'>) =>
+  body.savePlayer || body.gift ? [body.savePlayer ?? null, body.gift ?? null] : [];
+
+const sortedFields = (fields: Record<string, string>) =>
+  Object.fromEntries(Object.entries(fields).sort(([a], [b]) => a.localeCompare(b)));
+
 const isUuid = (value: string) => z.uuid().safeParse(value).success;
 
 /** The body a key replays (rule O1): the same fields in any order are the same request. */
 export function requestHash(body: PurchaseBody) {
-  const fields = Object.fromEntries(
-    Object.entries(body.fields).sort(([a], [b]) => a.localeCompare(b)),
-  );
   const canonical = JSON.stringify([
     body.productId,
     body.quantity,
-    fields,
+    sortedFields(body.fields),
     body.expectedUnitPriceUsdUnits,
     body.whenBalanceShort,
     body.confirmPlayer,
+    ...convenience(body),
   ]);
+  return createHash('sha256').update(canonical).digest('hex');
+}
+
+/** The body a checkout key replays (S10 rule CT5): every line, in order. */
+export function checkoutHash(body: CheckoutBody) {
+  const canonical = JSON.stringify(
+    body.lines.map((line) => [
+      line.productId,
+      line.quantity,
+      sortedFields(line.fields),
+      line.expectedUnitPriceUsdUnits,
+      line.confirmPlayer,
+      line.savePlayer ?? null,
+      line.gift ?? null,
+    ]),
+  );
   return createHash('sha256').update(canonical).digest('hex');
 }
 
@@ -83,16 +115,10 @@ export class OrdersService {
     body: PurchaseBody,
     meta: RequestMeta,
     channel: 'store' | 'cli' = 'store',
-  ): Promise<{ order: Order; created: boolean }> {
-    if (channel === 'store') {
-      const allowed = await withinLimits(this.db, [
-        { key: `order:customer:${customerId}`, max: 10, windowMs: TEN_MINUTES },
-        { key: `order:ip:${meta.ipAddress ?? 'unknown'}`, max: 30, windowMs: TEN_MINUTES },
-      ]);
-      if (!allowed) throw orderRefusals.rateLimited();
-    }
+  ): Promise<{ order: CreatedOrder; created: boolean }> {
+    if (channel === 'store') await this.purchaseLimits(customerId, meta);
     try {
-      const { order, created } = await this.db.transaction(async (tx) => {
+      const { order, created, savedPlayer } = await this.db.transaction(async (tx) => {
         const switches = await this.settings.valuesForCreation(tx);
         return purchaseOrder(
           tx,
@@ -105,7 +131,9 @@ export class OrdersService {
             expectedUnitPriceUsdUnits: body.expectedUnitPriceUsdUnits,
             whenBalanceShort: body.whenBalanceShort,
             confirmPlayer: body.confirmPlayer,
-            playerCheck: (step, order) => this.playerChecks.lookup(step, order),
+            savePlayer: body.savePlayer,
+            gift: body.gift,
+            playerCheck: this.playerCheck,
             idempotencyKey,
             requestHash: requestHash(body),
             fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED,
@@ -116,11 +144,84 @@ export class OrdersService {
           },
         );
       });
-      return { order: (await customerOrder(this.db, customerId, order.id)) as Order, created };
+      const view = (await customerOrder(
+        this.db,
+        customerId,
+        order.id,
+        this.env.STORE_URL,
+      )) as Order;
+      const [saved] = savedPlayer
+        ? await customerSavedPlayers(this.db, customerId, { id: savedPlayer.id })
+        : [];
+      return { order: { ...view, savedPlayer: saved ?? null }, created };
     } catch (error) {
       throw asCodedException(error);
     }
   }
+
+  /**
+   * S10 rules CT5, CT9: one checkout counts once in the purchase limits; `created` is false when
+   * the key replayed an earlier checkout of the same body.
+   */
+  async checkout(
+    customerId: string,
+    idempotencyKey: string,
+    body: CheckoutBody,
+    meta: RequestMeta,
+    channel: 'store' | 'cli' = 'store',
+  ): Promise<{ checkout: Checkout; created: boolean }> {
+    if (channel === 'store') await this.purchaseLimits(customerId, meta);
+    try {
+      const { checkout, created } = await this.db.transaction(async (tx) => {
+        const switches = await this.settings.valuesForCreation(tx);
+        return checkoutOrders(
+          tx,
+          { jobs: this.jobs, now: new Date() },
+          {
+            customerId,
+            lines: body.lines,
+            playerCheck: this.playerCheck,
+            idempotencyKey,
+            requestHash: checkoutHash(body),
+            fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED,
+            purchasesStopped: switches.purchases_stopped,
+            channel,
+            ipAddress: meta.ipAddress,
+            userAgent: meta.userAgent,
+          },
+        );
+      });
+      const view = (await customerCheckout(this.db, customerId, checkout.id)) as NonNullable<
+        Awaited<ReturnType<typeof customerCheckout>>
+      >;
+      return {
+        checkout: {
+          id: checkout.id,
+          totalUsdUnits: checkout.totalUsdUnits,
+          totalSypUnits: checkout.totalSypUnits,
+          orders: view.items,
+        },
+        created,
+      };
+    } catch (error) {
+      throw asCodedException(error);
+    }
+  }
+
+  /** S08 rule O1's limits: 10 purchases per 10 minutes per customer, 30 per address. */
+  private async purchaseLimits(customerId: string, meta: RequestMeta) {
+    const allowed = await withinLimits(this.db, [
+      { key: `order:customer:${customerId}`, max: 10, windowMs: TEN_MINUTES },
+      { key: `order:ip:${meta.ipAddress ?? 'unknown'}`, max: 30, windowMs: TEN_MINUTES },
+    ]);
+    if (!allowed) throw orderRefusals.rateLimited();
+  }
+
+  /** S09 rule PV8: the cached check of an order's fields. */
+  private readonly playerCheck = (
+    tx: Transaction,
+    order: Parameters<PlayerChecksService['lookup']>[1],
+  ): Promise<PlayerCheckLookup | null> => this.playerChecks.lookup(tx, order);
 
   /** Rule RS8: the customer cancels an own reservation. */
   async cancel(customerId: string, orderId: string, meta: RequestMeta): Promise<Order> {
@@ -136,7 +237,7 @@ export class OrdersService {
     } catch (error) {
       throw asCodedException(error);
     }
-    return (await customerOrder(this.db, customerId, orderId)) as Order;
+    return (await customerOrder(this.db, customerId, orderId, this.env.STORE_URL)) as Order;
   }
 
   /**
@@ -151,15 +252,11 @@ export class OrdersService {
     fields: Record<string, string>;
     reserve?: boolean;
     confirmPlayer?: boolean;
-  }): Promise<Order> {
-    const customerId = await this.customers.customerIdByEmail(input.email);
-    if (!customerId) throw orderRefusals.notFound();
-    const state = isUuid(input.productId)
-      ? (await productRoutingStates(this.db, [input.productId], routingContext(this.env))).get(
-          input.productId,
-        )
-      : undefined;
-    if (!state) throw orderRefusals.notFound();
+    /** S10: `--save <label>`, `--gift-sender`, `--gift-message`. */
+    saveLabel?: string;
+    gift?: { senderName?: string; message?: string };
+  }): Promise<CreatedOrder> {
+    const customerId = await this.cliCustomer(input.email);
     const { order } = await this.purchase(
       customerId,
       randomUUID(),
@@ -167,9 +264,11 @@ export class OrdersService {
         productId: input.productId,
         quantity: input.quantity,
         fields: input.fields,
-        expectedUnitPriceUsdUnits: state.current?.priceUsdUnits ?? 0,
+        expectedUnitPriceUsdUnits: await this.cliPrice(input.productId),
         whenBalanceShort: input.reserve ? 'reserve' : 'refuse',
         confirmPlayer: input.confirmPlayer ?? false,
+        ...(input.saveLabel && { savePlayer: { label: input.saveLabel } }),
+        ...(input.gift && { gift: input.gift }),
       },
       { ipAddress: null, userAgent: 'order:place' },
       'cli',
@@ -177,7 +276,54 @@ export class OrdersService {
     return order;
   }
 
+  /**
+   * `checkout:place` (S10, development): pays these lines for the customer with this email at
+   * each product's current price, the player ids confirmed.
+   */
+  async checkoutForCli(input: {
+    email: string;
+    lines: { productId: string; quantity: number; fields: Record<string, string> }[];
+  }): Promise<Checkout> {
+    const customerId = await this.cliCustomer(input.email);
+    const lines = [];
+    for (const line of input.lines) {
+      lines.push({
+        ...line,
+        expectedUnitPriceUsdUnits: await this.cliPrice(line.productId),
+        confirmPlayer: true,
+      });
+    }
+    const { checkout } = await this.checkout(
+      customerId,
+      randomUUID(),
+      { lines },
+      { ipAddress: null, userAgent: 'checkout:place' },
+      'cli',
+    );
+    return checkout;
+  }
+
+  private async cliCustomer(email: string): Promise<string> {
+    const customerId = await this.customers.customerIdByEmail(email);
+    if (!customerId) throw orderRefusals.notFound();
+    return customerId;
+  }
+
+  /** The product's current price, for the development CLIs. */
+  private async cliPrice(productId: string): Promise<number> {
+    const state = isUuid(productId)
+      ? (await productRoutingStates(this.db, [productId], routingContext(this.env))).get(productId)
+      : undefined;
+    if (!state) throw orderRefusals.notFound();
+    return state.current?.priceUsdUnits ?? 0;
+  }
+
   async list(customerId: string, query: OrderListQuery): Promise<OrderPage> {
+    if (query.checkout) {
+      const checkout = await customerCheckout(this.db, customerId, query.checkout);
+      if (!checkout) throw orderRefusals.notFound();
+      return { items: checkout.items, nextCursor: null, checkout: checkout.checkout };
+    }
     const page = await customerOrderPage(this.db, customerId, {
       after: query.cursor ? decodeCursor(query.cursor) : null,
       limit: query.limit,
@@ -185,11 +331,14 @@ export class OrdersService {
     return {
       items: page.items,
       nextCursor: page.more && page.last ? encodeCursor(page.last) : null,
+      checkout: null,
     };
   }
 
   async order(customerId: string, orderId: string): Promise<Order> {
-    const order = isUuid(orderId) ? await customerOrder(this.db, customerId, orderId) : null;
+    const order = isUuid(orderId)
+      ? await customerOrder(this.db, customerId, orderId, this.env.STORE_URL)
+      : null;
     if (!order) throw orderRefusals.notFound();
     return order;
   }

@@ -14,15 +14,20 @@ import {
   type FulfilmentAttempt,
   isOpenAttempt,
   maskCode,
+  maskFieldValue,
   type Order,
   type OrderStatus,
   type OrderSummary,
   orderCustomerStage,
   orderDecisions,
+  orderFieldValuesSchema,
   orderNumberSchema,
   orderTimeline,
+  type PublicShare,
   type RouteCandidate,
+  type SavedPlayer,
   type ShareLink,
+  shareStage,
 } from '@vertex-digital/contracts';
 import {
   and,
@@ -57,6 +62,7 @@ import {
   orderEvents,
   orderShareLinks,
   orders,
+  savedPlayers,
   storedFiles,
   supplierOffers,
   suppliers,
@@ -810,4 +816,146 @@ export async function productDeliveryStats(
   }
   for (const [productId, list] of durations) stats.set(productId, deliveryStats(list));
   return stats;
+}
+
+// Saved player ids and share pages (S10) ---------------------------------------------------------
+
+/**
+ * Rules SP3, SP5, SP7: the customer's saved ids (all, or one game's), newest used first, with the
+ * game, the labels of its unarchived fields, and whether the values still validate against them.
+ */
+export async function customerSavedPlayers(
+  db: Executor,
+  customerId: string,
+  filter: { gameId?: string; id?: string } = {},
+): Promise<SavedPlayer[]> {
+  const rows = await db
+    .select({
+      saved: savedPlayers,
+      game: {
+        id: catalogGames.id,
+        slug: catalogGames.slug,
+        nameAr: catalogGames.nameAr,
+        coverFileId: catalogGames.coverFileId,
+      },
+      shown: sql<boolean>`(${catalogGames.status} = 'active' and ${catalogGames.archivedAt} is null
+        and ${catalogCategories.archivedAt} is null)`,
+    })
+    .from(savedPlayers)
+    .innerJoin(catalogGames, eq(catalogGames.id, savedPlayers.gameId))
+    .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
+    .where(
+      and(
+        eq(savedPlayers.customerId, customerId),
+        filter.gameId ? eq(savedPlayers.gameId, filter.gameId) : undefined,
+        filter.id ? eq(savedPlayers.id, filter.id) : undefined,
+      ),
+    )
+    .orderBy(
+      sql`${savedPlayers.lastUsedAt} desc nulls last`,
+      desc(savedPlayers.createdAt),
+      desc(savedPlayers.id),
+    );
+  const gameIds = [...new Set(rows.map((row) => row.game.id))];
+  const [images, fields] = await Promise.all([
+    covers(
+      db,
+      rows.map((row) => row.game.coverFileId),
+    ),
+    gameIds.length === 0
+      ? []
+      : db
+          .select()
+          .from(catalogInputFields)
+          .where(
+            and(inArray(catalogInputFields.gameId, gameIds), isNull(catalogInputFields.archivedAt)),
+          )
+          .orderBy(asc(catalogInputFields.sortOrder)),
+  ]);
+  return rows.map(({ saved, game, shown }) => {
+    const rules = fields.filter((field) => field.gameId === game.id);
+    return {
+      id: saved.id,
+      gameId: game.id,
+      gameSlug: game.slug,
+      gameNameAr: game.nameAr,
+      cover: (game.coverFileId && images.get(game.coverFileId)) || null,
+      gameShown: shown,
+      label: saved.label,
+      fields: saved.fields,
+      fieldLabels: Object.fromEntries(rules.map((rule) => [rule.key, rule.labelAr])),
+      playerName: saved.playerName,
+      rejected: saved.rejectedAt !== null,
+      complete: orderFieldValuesSchema(rules).safeParse(saved.fields).success,
+      lastUsedAt: iso(saved.lastUsedAt),
+    };
+  });
+}
+
+/**
+ * Rules GF5, RC2, SH1, SH3, SH4: what a live share link shows, and the game's cover file for the
+ * image; null for an unknown or revoked token, or an order no longer in a shared status. Never a
+ * code, the customer, the in-game name or SYP.
+ */
+export async function publicShare(
+  db: Executor,
+  token: string,
+): Promise<{ share: PublicShare; coverFileId: string | null } | null> {
+  const [row] = await db
+    .select({ link: orderShareLinks, order: orders, product: catalogProducts, game: catalogGames })
+    .from(orderShareLinks)
+    .innerJoin(orders, eq(orders.id, orderShareLinks.orderId))
+    .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
+    .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+    .where(and(eq(orderShareLinks.token, token), isNull(orderShareLinks.revokedAt)));
+  if (!row) return null;
+  const { link, order, product, game } = row;
+  const stage = shareStage(order.status, order.deliveredQuantity, order.quantity);
+  if (!stage || !order.paidAt) return null;
+  const rules = await db
+    .select()
+    .from(catalogInputFields)
+    .where(eq(catalogInputFields.gameId, order.gameId))
+    .orderBy(asc(catalogInputFields.sortOrder));
+  const full = link.kind === 'receipt' && link.playerDisplay === 'full';
+  const keys = rules.map((rule) => rule.key);
+  const [cover] = (await covers(db, [game.coverFileId])).values();
+  return {
+    coverFileId: game.coverFileId,
+    share: {
+      kind: link.kind,
+      orderNumber: link.kind === 'receipt' ? order.number : null,
+      game: {
+        nameAr: game.nameAr,
+        nameEn: game.nameEn,
+        cover: cover ?? null,
+        accentColor: game.accentColor,
+      },
+      product: { nameAr: product.nameAr, kind: product.kind, gameAmount: product.gameAmount },
+      quantity: order.quantity,
+      deliveredQuantity: stage.deliveredQuantity,
+      stage: stage.stage,
+      paidAt: order.paidAt.toISOString(),
+      finishedAt: iso(order.finishedAt),
+      price:
+        link.kind === 'receipt' && link.showPrice
+          ? { totalUsdUnits: order.totalUsdUnits, refundedUsdUnits: order.refundedUsdUnits }
+          : null,
+      fields: Object.entries(order.fields)
+        .sort(([a], [b]) => keys.indexOf(a) - keys.indexOf(b))
+        .map(([key, value]) => {
+          const rule = rules.find((candidate) => candidate.key === key);
+          const option =
+            rule?.type === 'select' ? rule.options?.find((o) => o.value === value) : null;
+          return {
+            label: rule?.labelAr ?? key,
+            value: option ? option.labelAr : full ? value : maskFieldValue(value),
+          };
+        }),
+      gift:
+        link.kind === 'gift'
+          ? { senderName: order.giftSenderName, message: order.giftMessage }
+          : null,
+    },
+  };
 }
