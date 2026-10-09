@@ -31,6 +31,7 @@ import {
   ScrollTextIcon,
   SendIcon,
   SettingsIcon,
+  ShoppingBagIcon,
   ToggleRightIcon,
   TruckIcon,
   UserRoundCogIcon,
@@ -40,6 +41,7 @@ import {
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { depositCountsQuery } from '../features/deposits/deposits.queries';
+import { orderCountsQuery } from '../features/orders/orders.queries';
 import { openReviewCountQuery } from '../features/pricing/pricing.queries';
 import { StaleRateBanner } from '../features/rates/stale-rate-banner';
 import { SwitchesBanner } from '../features/settings/switches-banner';
@@ -50,6 +52,7 @@ interface NavItem {
   to: LinkProps['to'];
   label:
     | 'nav.home'
+    | 'nav.orders'
     | 'nav.deposits'
     | 'nav.usdtTransfers'
     | 'nav.wallets'
@@ -74,6 +77,7 @@ interface NavItem {
 /** Each feature adds its section here. One admin, full access: no permission checks (ADR 0016). */
 const navItems: NavItem[] = [
   { to: '/', label: 'nav.home', icon: HouseIcon, exact: true },
+  { to: '/orders', label: 'nav.orders', icon: ShoppingBagIcon },
   {
     to: '/deposits',
     label: 'nav.deposits',
@@ -160,6 +164,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           >
             <Icon className="size-5" />
             {t(label)}
+            {to === '/orders' && <OrdersBadge />}
             {to === '/deposits' && <DepositsBadge />}
             {to === '/deposits/transfers' && <TransfersBadge />}
             {to === '/pricing/reviews' && <ReviewsBadge />}
@@ -208,6 +213,28 @@ function TransfersBadge() {
       aria-label={t('nav.usdtTransfersBadge', { unmatched })}
     >
       {unmatched}
+    </Badge>
+  );
+}
+
+/**
+ * S08: the orders held for review and the manual orders waiting, read every minute in the
+ * background; red while any order is held.
+ */
+function OrdersBadge() {
+  const { t } = useTranslation();
+  const counts = useQuery(orderCountsQuery);
+  const needsReview = counts.data?.needsReview ?? 0;
+  const manualWaiting = counts.data?.manualWaiting ?? 0;
+  const total = needsReview + manualWaiting;
+  if (total === 0) return null;
+  return (
+    <Badge
+      tone={needsReview > 0 ? 'danger' : 'gold'}
+      className="ms-auto tabular-nums"
+      aria-label={t('nav.ordersBadge', { needsReview, manualWaiting })}
+    >
+      {total}
     </Badge>
   );
 }

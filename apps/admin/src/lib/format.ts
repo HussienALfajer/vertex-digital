@@ -34,3 +34,12 @@ export function formatSince(iso: string, now: Date = new Date()): string {
  * in an LTR isolate (U+2066 … U+2069), so the bidi algorithm never splits it.
  */
 export const ltr = (text: string) => `⁦${text}⁩`;
+
+/** A delivery time (S08 rule T1): "45 ث" under a minute, "3.5 د" under an hour, else "2 س". */
+export function formatDuration(ms: number): string {
+  const seconds = Math.round(ms / 1_000);
+  if (seconds < 60) return `${seconds} ث`;
+  const minutes = seconds / 60;
+  if (minutes < 60) return `${Number(minutes.toFixed(1))} د`;
+  return `${Number((minutes / 60).toFixed(1))} س`;
+}

@@ -18,6 +18,7 @@ import { ArrowDownIcon, ArrowUpIcon, PackageIcon, PlusIcon, RouteIcon } from 'lu
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
+import { formatDuration } from '../../lib/format';
 import { RoutesDrawer } from '../suppliers/routes-drawer';
 import { useArchiveProduct, useReorderProducts, useUpdateProduct } from './catalog.queries';
 import { AvailabilityBadge, catalogFailure, MoveButton, StatusBadge } from './catalog-parts';
@@ -98,6 +99,7 @@ export function ProductsTab({ game }: { game: GameDetail }) {
               <TableHead>{t('catalog.products.columns.maxQuantity')}</TableHead>
               <TableHead>{t('catalog.products.columns.status')}</TableHead>
               <TableHead>{t('catalog.products.columns.availability')}</TableHead>
+              <TableHead>{t('catalog.products.columns.deliveryTime')}</TableHead>
               <TableHead>
                 <span className="sr-only">{t('catalog.columns.actions')}</span>
               </TableHead>
@@ -136,6 +138,18 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                       <Badge tone="warning">{t('catalog.products.reviewOpen')}</Badge>
                     )}
                   </span>
+                </TableCell>
+                <TableCell className="whitespace-nowrap tabular-nums">
+                  {product.deliveryStats ? (
+                    t('catalog.products.deliveryTime', {
+                      median: formatDuration(product.deliveryStats.medianMs),
+                      p90: formatDuration(product.deliveryStats.p90Ms),
+                    })
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {t('catalog.products.noDeliveryData')}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <span className="flex items-center justify-end gap-1">
