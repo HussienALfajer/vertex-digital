@@ -33,4 +33,14 @@ describe('attemptKey (rule BB6)', () => {
     expect(attemptKey('p3', 'body')).toBe(key);
     expect(() => clearAttempt('p3')).not.toThrow();
   });
+
+  it('keeps the key in memory when storage reads but refuses writes', () => {
+    const storage = memoryStorage();
+    storage.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    vi.stubGlobal('sessionStorage', storage);
+    const key = attemptKey('p4', 'body');
+    expect(attemptKey('p4', 'body')).toBe(key);
+  });
 });

@@ -265,6 +265,34 @@ test.describe('buy box', () => {
     expect(second?.headers['idempotency-key']).not.toBe(first?.headers['idempotency-key']);
   });
 
+  test('a server error keeps the key: the retry replays the same body and key (rule BB6)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on('POST /api/player-checks', 200, { result: 'not_supported' })
+      .on('POST /api/orders', 500, { statusCode: 500, code: 'INTERNAL_ERROR' });
+    await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
+    await idField(page).fill('51234567');
+    await buyBox(page).getByRole('button', { name: p.continue }).click();
+    await buyBox(page).getByRole('slider').focus();
+    await page.keyboard.press('End');
+    const retry = buyBox(page).getByRole('button', { name: p.retry });
+    await expect(retry).toBeVisible();
+    const first = api.last('POST /api/orders');
+    // Closing and reopening the box keeps the key too.
+    await page.reload();
+    await idField(page).fill('51234567');
+    await buyBox(page).getByRole('button', { name: p.continue }).click();
+    api.on('POST /api/orders', 200, order(p60)).on(`GET /api/orders/${ORDER_ID}`, 200, order(p60));
+    await buyBox(page).getByRole('slider').focus();
+    await page.keyboard.press('End');
+    await expect(page).toHaveURL(`/orders/${ORDER_ID}`);
+    const second = api.last('POST /api/orders');
+    expect(second?.body).toEqual(first?.body);
+    expect(second?.headers['idempotency-key']).toBe(first?.headers['idempotency-key']);
+  });
+
   test('a slide released before the end springs back and sends nothing', async ({ page, api }) => {
     signedIn(api).on('POST /api/player-checks', 200, { result: 'not_supported' });
     await page.goto(`/games/pubg-mobile?pack=${p60.id}`);

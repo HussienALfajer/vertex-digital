@@ -48,6 +48,25 @@ import type { Customer } from './session';
 
 type Mode = 'buy' | 'reserve';
 
+/**
+ * The purchase's refusals that happen before anything is written (rules O1–O6, PV8, RS2): after
+ * one of them the same body may be sent with a new key. Anything else keeps the key.
+ */
+const REFUSED_BEFORE_PAYMENT: ReadonlySet<Failure> = new Set<Failure>([
+  'PRICE_CHANGED',
+  'PRODUCT_UNAVAILABLE',
+  'INSUFFICIENT_BALANCE',
+  'PLAYER_NOT_CONFIRMED',
+  'VALIDATION_FAILED',
+  'RATE_LIMITED',
+  'PURCHASES_STOPPED',
+  'RESERVATIONS_LIMIT_REACHED',
+  'IDEMPOTENCY_KEY_REUSED',
+  'NOT_FOUND',
+  'UNAUTHORIZED',
+  'EMAIL_NOT_VERIFIED',
+]);
+
 type Sending =
   | { status: 'idle' }
   | { status: 'sending' }
@@ -180,8 +199,9 @@ export function BuyBox({
       router.push(`/orders/${result.data.id}`);
       return;
     }
-    // A refusal is definitive; a lost answer keeps the key for the retry.
-    if (result.reason !== 'NETWORK' && result.reason !== 'UNKNOWN') clearAttempt(product.id);
+    // Only a refusal known to come before the commit frees the key; any other answer (a lost
+    // one, a server error) may follow a paid order, so its retry must replay that order.
+    if (REFUSED_BEFORE_PAYMENT.has(result.reason)) clearAttempt(product.id);
     refused(result.reason, result.details);
   }
 
@@ -227,6 +247,7 @@ export function BuyBox({
         return signIn();
       case 'NETWORK':
       case 'UNKNOWN':
+      case 'INTERNAL_ERROR':
         return setSending({ status: 'failed', message: errorText(reason), retry: true });
       default:
         again();

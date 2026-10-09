@@ -11,7 +11,11 @@ const memory = new Map<string, { body: string; key: string }>();
 export function attemptKey(productId: string, body: string): string {
   let saved: { body?: unknown; key?: unknown } | null = null;
   try {
-    saved = JSON.parse(sessionStorage.getItem(PREFIX + productId) ?? 'null');
+    // Storage that refused the write holds nothing: the key in memory then answers.
+    saved =
+      JSON.parse(sessionStorage.getItem(PREFIX + productId) ?? 'null') ??
+      memory.get(productId) ??
+      null;
   } catch {
     saved = memory.get(productId) ?? null;
   }
