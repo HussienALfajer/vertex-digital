@@ -1,12 +1,15 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { ORDER_POLICY_DEFAULTS, priceFromCost, QUEUES } from '@vertex-digital/contracts';
 import {
+  applyOutcome,
   catalogCategories,
   ensureCustomerWallet,
   ensureSystemAccount,
   fulfilmentAttempts,
+  ledgerJournals,
   lockOrder,
   newId,
+  orderCodesKey,
   postJournal,
   supplierBalanceReads,
   supplierOffers,
@@ -20,8 +23,9 @@ import {
   FAKE_TIMESTAMP_HEADER,
   hmacSha256,
 } from '@vertex-digital/suppliers';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { parseEnv } from '../src/core/config/env.js';
 import {
   api,
   auditOf,
@@ -763,5 +767,144 @@ describe('supplier webhooks (rule F4)', () => {
       .from(supplierWebhookEvents)
       .where(eq(supplierWebhookEvents.eventId, payload.eventId));
     expect(stored).toEqual([]);
+  });
+});
+
+describe('races and limits (spec "Tests": concurrency and idempotency)', () => {
+  /** A late supplier result, applied as the worker's webhook job will (rule F5). */
+  const lateDelivery = (attemptId: string) =>
+    test.db.transaction((tx) =>
+      applyOutcome(
+        tx,
+        {
+          jobs: { send: async () => null },
+          codesKey: orderCodesKey(parseEnv().ORDER_CODES_SECRET as string),
+          now: new Date(),
+        },
+        attemptId,
+        { status: 'delivered', quantity: 1 },
+        { by: 'webhook' },
+      ),
+    );
+  const costJournals = async (orderId: string) =>
+    test.db
+      .select({ id: ledgerJournals.id })
+      .from(ledgerJournals)
+      .where(like(ledgerJournals.idempotencyKey, `order:${orderId}:cost:%`));
+
+  it('applies one of an admin refund and a late delivery on one held order (edge case 12)', async () => {
+    const item = await product(ids.gameId, 'direct', 0.88);
+    for (let round = 0; round < 3; round += 1) {
+      const customer = await buyer(usd(10));
+      const order = await json<{ id: string }>(await purchase(customer, item), 201);
+      const attemptId = await send(order.id, item);
+      await hold(order.id);
+      await reauthenticate();
+      const [refund] = await Promise.all([
+        adminPost(
+          `/api/admin/orders/${order.id}/refund`,
+          { reason: 'لا جواب من المورد' },
+          { 'idempotency-key': randomUUID() },
+        ),
+        lateDelivery(attemptId),
+      ]);
+      const view = await json<{
+        status: string;
+        refundedQuantity: number;
+        deliveredQuantity: number;
+      }>(await adminGet(`/api/admin/orders/${order.id}`), 200);
+      const costs = await costJournals(order.id);
+      if (refund.status === 200) {
+        // The refund won: the late result met a closed attempt and changed nothing.
+        expect(view).toMatchObject({
+          status: 'refunded',
+          deliveredQuantity: 0,
+          refundedQuantity: 1,
+        });
+        expect(costs).toEqual([]);
+        expect(await balance(customer)).toBe(usd(10));
+      } else {
+        // The delivery won: the refund found the order delivered.
+        expect(await body(refund)).toMatchObject({ code: 'ORDER_NOT_DECIDABLE' });
+        expect(view).toMatchObject({
+          status: 'delivered',
+          deliveredQuantity: 1,
+          refundedQuantity: 0,
+        });
+        expect(costs).toHaveLength(1);
+        expect(await balance(customer)).toBe(usd(10) - item.price);
+      }
+    }
+  });
+
+  it('resolves once for one key sent twice at once', async () => {
+    const item = await product(ids.gameId, 'direct', 0.88);
+    const customer = await buyer();
+    const order = await json<{ id: string }>(await purchase(customer, item), 201);
+    const attemptId = await send(order.id, item);
+    await hold(order.id);
+    await reauthenticate();
+    const key = randomUUID();
+    const resolve = () =>
+      adminPost(
+        `/api/admin/orders/${order.id}/attempts/${attemptId}/resolve`,
+        { outcome: 'delivered', quantity: 1, reason: 'سلّمت يدوياً' },
+        { 'idempotency-key': key },
+      );
+    const responses = await Promise.all([resolve(), resolve()]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(await costJournals(order.id)).toHaveLength(1);
+    const resolved = (await auditOf(test.db, order.id)).filter(
+      (entry) => entry.action === 'order.attempt_resolved',
+    );
+    expect(resolved).toHaveLength(1);
+  });
+
+  it('commits a purchase before a stop, or refuses it after (rule O2, edge case 3)', async () => {
+    const item = await product(ids.gameId, 'direct', 0.88);
+    await reauthenticate();
+    for (let round = 0; round < 3; round += 1) {
+      const customer = await buyer(usd(10));
+      const [bought, stopped] = await Promise.all([
+        purchase(customer, item),
+        adminPost('/api/admin/switches', { switch: 'purchases_stopped', value: true }),
+      ]);
+      expect(stopped.status).toBe(200);
+      if (bought.status === 201) {
+        expect(await balance(customer)).toBe(usd(10) - item.price);
+      } else {
+        expect(await body(bought)).toMatchObject({ status: 409, code: 'PURCHASES_STOPPED' });
+        expect(await balance(customer)).toBe(usd(10));
+      }
+      // After the stop, nothing is bought.
+      expect(await body(await purchase(customer, item))).toMatchObject({
+        code: 'PURCHASES_STOPPED',
+      });
+      await setSwitches(test.db);
+    }
+  });
+
+  it('limits reveals to 30 per 10 minutes per customer', async () => {
+    const customer = await buyer();
+    const path = `/api/orders/${randomUUID()}/codes/${randomUUID()}/reveal`;
+    for (let index = 0; index < 30; index += 1) {
+      expect((await client.post(path, { cookie: customer.cookie })).status).toBe(404);
+    }
+    expect(await body(await client.post(path, { cookie: customer.cookie }))).toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+    });
+  });
+
+  it('limits supplier webhooks to 120 a minute per address', async () => {
+    const ip = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
+    const send = () =>
+      fetch(`${test.url}/api/webhooks/suppliers/fake`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
+        body: '{}',
+      });
+    for (let index = 0; index < 120; index += 1) expect((await send()).status).toBe(401);
+    expect((await send()).status).toBe(429);
   });
 });
