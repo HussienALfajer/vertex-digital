@@ -12,6 +12,7 @@ import type {
   SupplierCode,
   SupplierDetail,
   SupplierPolicy,
+  SupplierSummary,
   UpdateRoute,
   UpdateSupplier,
 } from '@vertex-digital/contracts';
@@ -35,12 +36,27 @@ export const LIST_PAGE_SIZE = 50;
 /** A product's price history in the routes drawer: the newest 20 (S07 screens). */
 const PRICE_HISTORY_SIZE = 20;
 
+const running = (detail: Pick<SupplierSummary, 'lastRun'> | undefined) =>
+  detail?.lastRun?.status === 'running';
+
+const anyRunning = (list: SupplierSummary[] | undefined) => !!list?.some(running);
+
+/**
+ * The supplier cards; read again in the background while a run is `running` (after "مزامنة
+ * الآن"), so each card shows its result and counts when the run ends.
+ */
 export const suppliersQuery = queryOptions({
   queryKey: ['suppliers', 'list'],
-  queryFn: () => call(api.GET('/api/admin/suppliers')),
+  queryFn: ({ client, queryKey }) =>
+    call(
+      api.GET('/api/admin/suppliers', {
+        headers: anyRunning(client.getQueryData<SupplierSummary[]>(queryKey))
+          ? BACKGROUND_REQUEST
+          : undefined,
+      }),
+    ),
+  refetchInterval: (query) => (anyRunning(query.state.data) ? RUNNING_REFRESH_MS : false),
 });
-
-const running = (detail: SupplierDetail | undefined) => detail?.lastRun?.status === 'running';
 
 /**
  * A supplier with its hints, health and balances; read again in the background while its last
@@ -143,21 +159,32 @@ const invalidateRouting = (queryClient: QueryClient) =>
   );
 
 /** A suppliers change through the re-authentication wrapper (rule D5), then everything it reprices. */
-function useSuppliersMutation<Input, Output>(request: (input: Input) => Promise<Output>) {
+function useSuppliersMutation<Input, Output>(
+  request: (input: Input) => Promise<Output>,
+  options: { gcTime?: number } = {},
+) {
   const queryClient = useQueryClient();
   const withReauthentication = useReauthentication();
   return useMutation({
     mutationFn: (input: Input) => withReauthentication(() => request(input)),
     onSettled: () => invalidateRouting(queryClient),
+    ...options,
   });
 }
 
 // Suppliers -------------------------------------------------------------------------------------
 
-/** Rule SP2: every field, after re-authentication; the API then runs the connection test. */
+/**
+ * Rule SP2: every field, after re-authentication; the API then runs the connection test. The
+ * values leave the mutation cache as soon as it settles.
+ */
 export const useSetCredentials = (code: SupplierCode) =>
-  useSuppliersMutation((body: SetSupplierCredentials) =>
-    call(api.PUT('/api/admin/suppliers/{code}/credentials', { params: { path: { code } }, body })),
+  useSuppliersMutation(
+    (body: SetSupplierCredentials) =>
+      call(
+        api.PUT('/api/admin/suppliers/{code}/credentials', { params: { path: { code } }, body }),
+      ),
+    { gcTime: 0 },
   );
 
 /** The low-balance threshold (A07), after re-authentication. */

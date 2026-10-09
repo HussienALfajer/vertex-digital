@@ -2119,7 +2119,16 @@
       "time": "الوقت",
       "stateColumn": "الحالة",
       "reasonColumn": "السبب",
-      "amount": "الرصيد"
+      "amount": "الرصيد",
+      "reasons": {
+        "consecutive": "آخر {{count}} طلبات فشلت متتالية",
+        "fewCalls": "طلبات قليلة ({{calls}} من {{min}} على الأقل): بقيت الحالة كما كانت",
+        "successBelow": "النجاح {{success}} أقل من {{threshold}}",
+        "slow": "زمن الاستجابة p90 {{p90}} ms أعلى من {{max}} ms",
+        "success": "النجاح {{success}}",
+        "probe": "نجح الفحص بعد التوقف",
+        "unknown": "{{reason}}"
+      }
     },
     "policy": {
       "link": "سياسة الموردين",

@@ -10,10 +10,12 @@ import {
   TableHeader,
   TableRow,
 } from '@vertex-digital/ui';
+import type { TFunction } from 'i18next';
 import { ActivityIcon, WalletIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime, formatSince, ltr } from '../../lib/format';
 import { formatPercentBp } from '../pricing/pricing-format';
+import { healthReason } from './health-reason';
 import { BalanceLine, balanceText, HealthBadge } from './supplier-parts';
 
 /**
@@ -55,7 +57,7 @@ export function HealthTab({ supplier }: { supplier: SupplierDetail }) {
           )}
           {latest && (
             <p className="text-sm text-muted-foreground">
-              {t('suppliers.healthTab.reason', { reason: ltr(latest.reason) })}
+              {t('suppliers.healthTab.reason', { reason: reasonText(t, latest.reason) })}
             </p>
           )}
         </Card>
@@ -93,9 +95,7 @@ export function HealthTab({ supplier }: { supplier: SupplierDetail }) {
                   <TableCell>
                     <HealthBadge health={change.state} />
                   </TableCell>
-                  <TableCell>
-                    <bdi dir="ltr">{change.reason}</bdi>
-                  </TableCell>
+                  <TableCell>{reasonText(t, change.reason)}</TableCell>
                   <TableCell className="tabular-nums">{change.calls ?? '—'}</TableCell>
                   <TableCell className="tabular-nums">
                     {change.successBp === null ? '—' : `${formatPercentBp(change.successBp)}%`}
@@ -155,4 +155,13 @@ function Figure({ label, value }: { label: string; value: string | number | null
       </dd>
     </div>
   );
+}
+
+/** A health change's reason in Arabic, its figures kept whole (rules H1–H3). */
+function reasonText(t: TFunction, reason: string): string {
+  const { key, values } = healthReason(reason);
+  const wrapped: Record<string, string> = Object.fromEntries(
+    Object.entries(values).map(([name, value]) => [name, ltr(value)]),
+  );
+  return t(`suppliers.healthTab.reasons.${key}`, { ...wrapped, defaultValue: '' });
 }

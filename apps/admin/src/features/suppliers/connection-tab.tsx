@@ -164,7 +164,10 @@ function CredentialsDialog({ supplier, onDone }: { supplier: SupplierDetail; onD
             <PasswordInput
               name={field}
               dir="ltr"
-              autoComplete="off"
+              // A supplier key is not the panel's password: keep password managers away from it.
+              autoComplete="new-password"
+              data-1p-ignore
+              data-lpignore="true"
               showLabel={t('suppliers.credentials.show')}
               hideLabel={t('suppliers.credentials.hide')}
               value={values[field] ?? ''}

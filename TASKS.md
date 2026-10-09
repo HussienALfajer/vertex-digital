@@ -37,4 +37,4 @@ Spec: `docs/specs/S07-suppliers.md` (F09 with F10, CT9; ADRs 0003, 0004, 0005, 0
 - [x] Navigation "الموردون" and "مراجعة الأسعار" with count; i18n
 - [x] E2E flows and RTL screenshots (light and dark)
 - [x] Wiring checklist, docs (`docs/ROADMAP.md` S07 done and the adapters as their own item, `wiring.md` patterns, `apps/admin/CLAUDE.md`, spec "Settled in implementation")
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+- [ ] Checks, reviewer (four blocking findings: credential fields and password managers, Arabic health reasons, cards stuck on a running sync, bulk accept beyond the page; fixed), acceptance, PR with auto-merge

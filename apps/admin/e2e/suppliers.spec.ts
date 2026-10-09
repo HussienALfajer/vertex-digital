@@ -337,7 +337,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(page.getByText(s.runs.errors.CATALOG_SUSPICIOUS)).toBeVisible();
       await screenshot(page, testInfo, `supplier-runs-${colorScheme}`, { fullPage: true });
       await page.getByRole('tab', { name: s.tabs.health }).click();
-      await expect(page.getByText('success 82% < 90%').first()).toBeVisible();
+      // The worker's English reason is shown in Arabic (rules H1–H3).
+      await expect(
+        page.getByText(
+          fill(s.healthTab.reasons.successBelow, {
+            success: '\u206682%\u2069',
+            threshold: '\u206690%\u2069',
+          }),
+        ),
+      ).toHaveCount(2);
+      await expect(page.getByText('success 82%')).toHaveCount(0);
       await screenshot(page, testInfo, `supplier-health-${colorScheme}`, { fullPage: true });
 
       await page.getByRole('tab', { name: s.tabs.offers }).click();

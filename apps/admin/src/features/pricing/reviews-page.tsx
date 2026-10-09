@@ -82,6 +82,13 @@ export function ReviewsPage({
   const page = search.page ?? 1;
   const pageCount = Math.max(1, Math.ceil((reviews.data?.total ?? 0) / REVIEWS_PAGE_SIZE));
 
+  /** A page or filter change: the selection and the results are the shown page's only. */
+  function go(next: ReviewSearch) {
+    setSelected(new Set());
+    setOutcomes(new Map());
+    onSearch(next);
+  }
+
   async function run(decisions: DecideReviews['decisions']) {
     setFailure(null);
     try {
@@ -124,15 +131,13 @@ export function ReviewsPage({
           <Select
             items={statusItems}
             value={search.status ?? 'open'}
-            onValueChange={(value) => {
-              setSelected(new Set());
-              setOutcomes(new Map());
-              onSearch({
+            onValueChange={(value) =>
+              go({
                 ...search,
                 status: value && value !== 'open' ? (value as ReviewSearch['status']) : undefined,
                 page: undefined,
-              });
-            }}
+              })
+            }
           >
             <SelectTrigger>
               <SelectValue />
@@ -152,7 +157,7 @@ export function ReviewsPage({
             items={supplierItems}
             value={search.supplier ?? ALL}
             onValueChange={(value) =>
-              onSearch({
+              go({
                 ...search,
                 supplier: value && value !== ALL ? (value as ReviewSearch['supplier']) : undefined,
                 page: undefined,
@@ -340,7 +345,7 @@ export function ReviewsPage({
             <Pagination
               page={page}
               pageCount={pageCount}
-              onPageChange={(next) => onSearch({ ...search, page: next > 1 ? next : undefined })}
+              onPageChange={(next) => go({ ...search, page: next > 1 ? next : undefined })}
               summary={t('pricing.reviews.total', { total: reviews.data.total })}
               previousLabel={t('common.previous')}
               nextLabel={t('common.next')}
