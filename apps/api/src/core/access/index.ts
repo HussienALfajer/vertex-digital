@@ -4,6 +4,7 @@ export {
   AdminSetupRoute,
   CustomerRoute,
   isRecentlyReauthenticated,
+  NoActivity,
   Public,
   type RouteAccess,
   Sensitive,

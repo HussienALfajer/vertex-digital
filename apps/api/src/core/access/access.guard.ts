@@ -8,6 +8,7 @@ import { CodedException } from '../errors/index.js';
 import {
   ACCESS,
   isRecentlyReauthenticated,
+  NO_ACTIVITY,
   type RouteAccess,
   SENSITIVE,
 } from './access.decorators.js';
@@ -52,8 +53,11 @@ export class AccessGuard implements CanActivate {
       }
       case 'admin':
       case 'adminSetup': {
-        // Requests the panel makes on its own (polling) do not count as activity (rule D4).
-        const background = request.headers[BACKGROUND_REQUEST_HEADER] === '1';
+        // Requests the panel makes on its own (polling, the stream) do not count as activity
+        // (rule D4).
+        const background =
+          request.headers[BACKGROUND_REQUEST_HEADER] === '1' ||
+          this.reflector.getAllAndOverride<boolean>(NO_ACTIVITY, targets) === true;
         const admin = await this.admins.adminOf(request.headers, { activity: !background });
         if (!admin || admin.archived) {
           throw new CodedException(401, 'UNAUTHORIZED', 'Sign in first');

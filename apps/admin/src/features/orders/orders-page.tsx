@@ -18,11 +18,6 @@ import {
   Input,
   PageHeader,
   Pagination,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Skeleton,
   Table,
   TableBody,
@@ -40,12 +35,11 @@ import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince } from '../../lib/format';
+import { ALL, FilterSelect } from './filter-select';
 import { STATUS_TONES } from './order-labels';
 import { type OrderSearch, tabOf, withFilter } from './order-search';
 import { orderListQuery } from './orders.queries';
 import { shortCheckoutId } from './share-links';
-
-const ALL = 'all';
 
 /**
  * "الطلبات" (S08 screens): the tabs (every order, held for review, manual waiting, in progress,
@@ -235,38 +229,6 @@ function Filters({
         </form>
       </search>
     </Card>
-  );
-}
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  const { t } = useTranslation();
-  const items = [{ value: ALL, label: t('orders.filters.all') }, ...options];
-  return (
-    <Field>
-      <FieldLabel>{label}</FieldLabel>
-      <Select items={items} value={value} onValueChange={(next) => onChange(next ?? ALL)}>
-        <SelectTrigger aria-label={label}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {items.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </Field>
   );
 }
 

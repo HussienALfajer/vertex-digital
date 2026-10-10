@@ -19,10 +19,10 @@ Spec: `docs/specs/S11-live-operations.md` (F17, F18; ADRs 0003, 0004, 0005, 0011
 - [x] Checks (lint, typecheck, build, e2e, drift: passed and recorded on 135698275a6c; test: all packages pass except 3 Windows-only worker failures in `telegram-jobs.test.ts` that predate this branch, left to CI), reviewer (two blocking findings: an open manual attempt's cost could be rewritten without its proof; the access and error matrix was incomplete; both fixed), owner acceptance (2026-10-10), PR with auto-merge
 
 ## PR 2 — Admin screens, E2E (`feat/s11-live-ops-screens`) · Opus 5.5 `high`
-- [ ] Admin stream hook (`features/live/` or `lib/`), reconnect, `resync`, indicator
-- [ ] Dashboard home page `/`: attention list, KPI row with deltas and the 7-day line, live counts, deposits, suppliers table, rate; skeletons, error, stale note; refetch rules DB9
-- [ ] `/orders/live`: filters in the URL, four columns (tabs below tablet), cards with ticking time, amber/red, "+N أخرى", sound toggle (`localStorage`), tab title count, side sheet with actions; navigation item
-- [ ] Dialogs: reroute (route table, warning), manual fulfil (units, codes, cost with live profit/loss, loss checkbox, proof upload with preview), extended refund; on `/orders/$id` too; attempts show "اختاره الأدمن", "تنفيذ يدوي", reference, proof thumbnail; i18n keys
-- [ ] E2E flows (mocked stream event moving a card) and RTL screenshots light and dark
-- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S11 done, `apps/admin/CLAUDE.md`, `wiring.md` patterns)
-- [ ] Checks, reviewer, owner acceptance, PR with auto-merge
+- [x] Admin stream hook (`features/live/` or `lib/`), reconnect, `resync`, indicator
+- [x] Dashboard home page `/`: attention list, KPI row with deltas and the 7-day line, live counts, deposits, suppliers table, rate; skeletons, error, stale note; refetch rules DB9
+- [x] `/orders/live`: filters in the URL, four columns (tabs below tablet), cards with ticking time, amber/red, "+N أخرى", sound toggle (`localStorage`), tab title count, side sheet with actions; navigation item
+- [x] Dialogs: reroute (route table, warning), manual fulfil (units, codes, cost with live profit/loss, loss checkbox, proof upload with preview), extended refund; on `/orders/$id` too; attempts show "اختاره الأدمن", "تنفيذ يدوي", reference, proof thumbnail; i18n keys
+- [x] E2E flows (mocked stream event moving a card) and RTL screenshots light and dark
+- [x] Wiring checklist, docs (`docs/ROADMAP.md` S11 done, `apps/admin/CLAUDE.md`, `wiring.md` patterns)
+- [x] Checks (lint, typecheck, test, build recorded on 219dd4dbdb6a; e2e: admin 114 passed, store passed with one flake that passed alone, left to CI), reviewer (one blocking finding: stream reconnects counted as activity and looped past 3 streams; fixed with `@NoActivity()` and the `replaced` event), owner acceptance (2026-10-10), PR with auto-merge

@@ -3,6 +3,7 @@ import {
   type AuditEntry,
   approvalFlags,
   approvalNeedsReauthentication,
+  type Dashboard,
   DEPOSIT_SETTINGS_DEFAULTS,
   depositCreditUsdUnits,
   floorToWholeCents,
@@ -18,6 +19,7 @@ import {
 } from '@vertex-digital/contracts';
 import openapi from '../../api/openapi.json' with { type: 'json' };
 import { CatalogMock } from './catalog-mock';
+import { quietDashboard } from './dashboard-mock';
 import { OrdersMock } from './orders-mock';
 import { SuppliersMock } from './suppliers-mock';
 
@@ -290,6 +292,14 @@ export class AdminApi {
   );
   /** S08: the orders, their decisions, code reveals and the policy. */
   readonly orders = new OrdersMock(() => this.reauthenticationRequired);
+  /** S11: the home page's read; null answers a quiet day with the current rate. */
+  dashboard: Dashboard | null = null;
+  /**
+   * S11 rule LR4: what the admin stream sends, after `delayMs`. The body ends there, so the
+   * browser reconnects after `retryMs` (its own 3 seconds when null) and the panel resyncs.
+   */
+  stream: { events: { event: string; data: unknown }[]; delayMs: number; retryMs: number | null } =
+    { events: [], delayMs: 0, retryMs: null };
   /** S04: the recorded USDT transfers, newest first, with their holder and candidates. */
   usdtTransfers: (Record<string, unknown> & { id: string; txid: string; method: string })[] = [];
   /** The transaction numbers already claimed (rule SC14). */
@@ -762,6 +772,16 @@ export class AdminApi {
     const apiError = (status: number, code: string) =>
       json(status, { statusCode: status, code, message: code });
 
+    // The stream cannot report an idle session to the panel (EventSource): it never takes the flag.
+    if (key === 'GET /api/admin/stream') {
+      const { events, delayMs, retryMs } = this.stream;
+      if (delayMs > 0) await new Promise((done) => setTimeout(done, delayMs));
+      const body = [
+        retryMs === null ? ': connected\n\n' : `retry: ${retryMs}\n\n`,
+        ...events.map((item) => `event: ${item.event}\ndata: ${JSON.stringify(item.data)}\n\n`),
+      ].join('');
+      return route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+    }
     if (
       this.idleExpired &&
       path.startsWith('/api/admin/') &&
@@ -856,9 +876,15 @@ export class AdminApi {
         .filter((transfer) => !byMethod || transfer.method === byMethod);
       return json(200, { items, nextCursor: null });
     }
+    if (key === 'GET /api/admin/dashboard') {
+      return json(200, this.dashboard ?? quietDashboard(this.rates[0] ?? null));
+    }
     if (path.startsWith('/api/admin/orders')) {
       this.orders.idempotencyKey = request.headers()['idempotency-key'] ?? null;
       const answer = this.orders.answer(request.method(), url, body);
+      if (answer && 'image' in answer) {
+        return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+      }
       if (answer && 'json' in answer) return json(answer.status, answer.json);
     }
     if (

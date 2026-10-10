@@ -1,8 +1,12 @@
 import { keepPreviousData, queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
+  DeliveryProof,
+  FulfilOrder,
+  LiveBoardQuery,
   OrderPolicy,
   PollAttempt,
   RefundOrder,
+  RerouteOrder,
   ResolveAttempt,
   RevokeShareLink,
 } from '@vertex-digital/contracts';
@@ -12,7 +16,8 @@ import { listQuery, type OrderSearch } from './order-search';
 
 /*
  * Orders as the admin works them (S08): the list with its tabs, the navigation badge, one order
- * with its attempts, the decisions (rules D1–D5), code reveals (C3) and the policy. Keys start
+ * with its attempts, the decisions (rules D1–D5), code reveals (C3) and the policy. S11: the live
+ * board, an order's route options, reroute, the delivery proof and the manual fulfil. Keys start
  * with `orders`.
  */
 
@@ -38,6 +43,35 @@ export const orderQuery = (id: string) =>
     queryKey: ['orders', 'order', id],
     queryFn: () => call(api.GET('/api/admin/orders/{id}', { params: { path: { id } } })),
   });
+
+/**
+ * S11 rule LR5: the live board, read when the page opens and again on stream events, on focus
+ * and every minute; each of those reads is background work, never the admin's activity (rule D4).
+ */
+export const liveBoardQuery = (query: LiveBoardQuery) =>
+  queryOptions({
+    queryKey: ['orders', 'live', query],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/orders/live', {
+          params: { query: query as never },
+          headers: BACKGROUND_REQUEST,
+        }),
+      ),
+    placeholderData: keepPreviousData,
+  });
+
+/** S11 rule RR2: every route of the order's product with its eligibility, read fresh each time. */
+export const rerouteOptionsQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['orders', 'routes', id],
+    queryFn: () => call(api.GET('/api/admin/orders/{id}/routes', { params: { path: { id } } })),
+    staleTime: 0,
+  });
+
+/** S11 rule MF2: a proof is served to the admin only once an attempt of the order holds it. */
+export const proofUrl = (orderId: string, fileId: string) =>
+  `/api/admin/orders/${orderId}/proofs/${fileId}`;
 
 export const orderPolicyQuery = queryOptions({
   queryKey: ['orders', 'policy'],
@@ -99,6 +133,52 @@ export const useRefundOrder = (orderId: string) =>
         body,
       }),
     ),
+  );
+
+/** S11 rule RR3: closes the open attempt and sends the remaining units to the chosen route. */
+export const useRerouteOrder = (orderId: string) =>
+  useOrdersMutation(({ body, key }: { body: RerouteOrder; key: string }) =>
+    call(
+      api.POST('/api/admin/orders/{id}/reroute', {
+        params: { path: { id: orderId }, header: { 'Idempotency-Key': key } },
+        body,
+      }),
+    ),
+  );
+
+/** S11 rule MF2: the screenshot, re-encoded by the API; the fulfil sends the returned id. */
+export function useUploadProof(orderId: string) {
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: (file: File) =>
+      withReauthentication(() => {
+        const body = new FormData();
+        body.append('file', file);
+        // openapi-fetch sends a FormData body as it is, with its multipart boundary.
+        return call<DeliveryProof>(
+          api.POST('/api/admin/orders/{id}/proof', {
+            params: { path: { id: orderId } },
+            body: body as never,
+          }),
+        );
+      }),
+  });
+}
+
+/**
+ * S11 rules MF1–MF5: units delivered from another source, with their cost and proof. The codes
+ * typed leave the mutation cache as soon as it settles (rule C1).
+ */
+export const useFulfilOrder = (orderId: string) =>
+  useOrdersMutation(
+    ({ body, key }: { body: FulfilOrder; key: string }) =>
+      call(
+        api.POST('/api/admin/orders/{id}/fulfil', {
+          params: { path: { id: orderId }, header: { 'Idempotency-Key': key } },
+          body: body as never,
+        }),
+      ),
+    { gcTime: 0 },
   );
 
 /** Rule C3: a code's value, re-authenticated and logged; never kept in the mutation cache. */

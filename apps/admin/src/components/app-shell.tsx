@@ -27,6 +27,7 @@ import {
   type LucideIcon,
   MenuIcon,
   PercentIcon,
+  RadioTowerIcon,
   ScaleIcon,
   ScrollTextIcon,
   SendIcon,
@@ -52,6 +53,7 @@ interface NavItem {
   to: LinkProps['to'];
   label:
     | 'nav.home'
+    | 'nav.liveOrders'
     | 'nav.orders'
     | 'nav.deposits'
     | 'nav.usdtTransfers'
@@ -77,7 +79,8 @@ interface NavItem {
 /** Each feature adds its section here. One admin, full access: no permission checks (ADR 0016). */
 const navItems: NavItem[] = [
   { to: '/', label: 'nav.home', icon: HouseIcon, exact: true },
-  { to: '/orders', label: 'nav.orders', icon: ShoppingBagIcon },
+  { to: '/orders/live', label: 'nav.liveOrders', icon: RadioTowerIcon },
+  { to: '/orders', label: 'nav.orders', icon: ShoppingBagIcon, except: '/orders/live' },
   {
     to: '/deposits',
     label: 'nav.deposits',

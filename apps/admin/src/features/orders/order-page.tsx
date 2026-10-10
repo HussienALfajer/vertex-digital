@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   CardTitle,
-  Dialog,
   EmptyState,
   PageHeader,
   Skeleton,
@@ -17,16 +16,21 @@ import {
   TableHeader,
   TableRow,
 } from '@vertex-digital/ui';
-import { ArrowRightIcon, CircleAlertIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
+import { ArrowRightIcon, CircleAlertIcon, EyeIcon, EyeOffIcon, ImageIcon } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopyButton } from '../../components/copy-button';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, ltr } from '../../lib/format';
-import { DecisionDialog, type OrderDecision } from './decision-dialogs';
+import {
+  hasActions,
+  type OrderAction,
+  OrderActionButtons,
+  OrderActionDialog,
+} from './order-actions';
 import { ATTEMPT_TONES, playerCheckText, STATUS_TONES } from './order-labels';
-import { orderQuery, useRevealCode } from './orders.queries';
+import { orderQuery, proofUrl, useRevealCode } from './orders.queries';
 import { CheckoutBlock, GiftBlock, ShareLinksBlock } from './share-links';
 
 /** A revealed code is hidden again after this long (rule C3). */
@@ -36,12 +40,22 @@ const REVEAL_MS = 30_000;
  * One order (S08 screens): the header, the decision panel when rule D1 allows one, the account
  * fields, the attempts newest first with their candidates and webhook events, the events, the
  * journals, and the codes masked with their reveal log. S10 (AD1): the checkout, the gift's texts
- * and the share links with their revocation.
+ * and the share links with their revocation. S11: reroute and manual fulfil in the decision panel,
+ * and the attempts' admin choices, references and proofs; `decide=fulfil` (the Telegram manual
+ * order card's link, edge case 10) opens the manual fulfil once the order allows it.
  */
-export function OrderPage({ id }: { id: string }) {
+export function OrderPage({ id, decide }: { id: string; decide?: 'fulfil' }) {
   const { t } = useTranslation();
   const order = useQuery(orderQuery(id));
-  const [decision, setDecision] = useState<OrderDecision | null>(null);
+  const [action, setAction] = useState<OrderAction | null>(null);
+  const asked = useRef(false);
+  const canFulfil = order.data?.decisions.fulfil ?? false;
+
+  useEffect(() => {
+    if (decide !== 'fulfil' || asked.current || !canFulfil) return;
+    asked.current = true;
+    setAction('fulfil');
+  }, [decide, canFulfil]);
 
   return (
     <>
@@ -72,7 +86,7 @@ export function OrderPage({ id }: { id: string }) {
       {order.isSuccess && (
         <div className="flex flex-col gap-6">
           <Header order={order.data} />
-          <Decisions order={order.data} onDecide={setDecision} />
+          <Decisions order={order.data} onAction={setAction} />
           <Fields order={order.data} />
           {order.data.checkout && (
             <CheckoutBlock order={order.data} checkout={order.data.checkout} />
@@ -82,18 +96,10 @@ export function OrderPage({ id }: { id: string }) {
             <ShareLinksBlock order={order.data} />
           )}
           {order.data.codes.length > 0 && <Codes order={order.data} />}
-          <Attempts attempts={order.data.attempts} />
+          <Attempts orderId={order.data.id} attempts={order.data.attempts} />
           <Events order={order.data} />
           <Journals order={order.data} />
-          <Dialog open={decision !== null} onOpenChange={(open) => !open && setDecision(null)}>
-            {decision && (
-              <DecisionDialog
-                order={order.data}
-                decision={decision}
-                onDone={() => setDecision(null)}
-              />
-            )}
-          </Dialog>
+          <OrderActionDialog order={order.data} action={action} onClose={() => setAction(null)} />
         </div>
       )}
     </>
@@ -183,17 +189,16 @@ function Header({ order }: { order: AdminOrder }) {
   );
 }
 
-/** Rule D1: only the decisions the order allows now. */
+/** Rule D1 (S11 rules RR1, MF1, RF1): only the actions the order allows now. */
 function Decisions({
   order,
-  onDecide,
+  onAction,
 }: {
   order: AdminOrder;
-  onDecide: (decision: OrderDecision) => void;
+  onAction: (action: OrderAction) => void;
 }) {
   const { t } = useTranslation();
-  const { decisions } = order;
-  if (!decisions.poll && !decisions.resolve && !decisions.refund) return null;
+  if (!hasActions(order)) return null;
   return (
     <Card className="gap-4 border-status-warning">
       <div className="flex flex-col gap-1">
@@ -204,29 +209,7 @@ function Decisions({
             : t('orders.decisions.manualHelp')}
         </p>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {decisions.poll && (
-          <Button variant="outline" onClick={() => onDecide('poll')}>
-            {t('orders.decisions.poll.open')}
-          </Button>
-        )}
-        {/* S11 rule MF1: a manual attempt is delivered by the manual fulfil, with its proof. */}
-        {decisions.resolveDelivered && (
-          <Button onClick={() => onDecide('delivered')}>
-            {t('orders.decisions.delivered.open')}
-          </Button>
-        )}
-        {decisions.resolve && (
-          <Button variant="outline" onClick={() => onDecide('failed')}>
-            {t('orders.decisions.failed.open')}
-          </Button>
-        )}
-        {decisions.refund && (
-          <Button variant="destructive" onClick={() => onDecide('refund')}>
-            {t('orders.decisions.refund.open')}
-          </Button>
-        )}
-      </div>
+      <OrderActionButtons order={order} onAction={onAction} />
     </Card>
   );
 }
@@ -355,7 +338,7 @@ function Codes({ order }: { order: AdminOrder }) {
   );
 }
 
-function Attempts({ attempts }: { attempts: FulfilmentAttempt[] }) {
+function Attempts({ orderId, attempts }: { orderId: string; attempts: FulfilmentAttempt[] }) {
   const { t } = useTranslation();
   return (
     <section className="flex flex-col gap-3" aria-labelledby="order-attempts">
@@ -376,18 +359,26 @@ function Attempts({ attempts }: { attempts: FulfilmentAttempt[] }) {
               {attempt.inputRejected && (
                 <Badge tone="danger">{t('orders.attempts.inputRejected')}</Badge>
               )}
+              {attempt.kind === 'admin_fulfil' && (
+                <Badge tone="brand">{t('orders.attempts.adminFulfil')}</Badge>
+              )}
+              {attempt.chosenByAdmin && (
+                <Badge tone="gold">{t('orders.attempts.chosenByAdmin')}</Badge>
+              )}
             </span>
             <span className="text-sm text-muted-foreground">
               {attempt.sentAt ? formatDateTime(attempt.sentAt) : formatDateTime(attempt.createdAt)}
             </span>
           </div>
           <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-            <Fact label={t('orders.attempts.offer')}>
-              {attempt.offerName}{' '}
-              <bdi dir="ltr" className="text-muted-foreground">
-                {attempt.offerId}
-              </bdi>
-            </Fact>
+            {attempt.kind === 'routed' && (
+              <Fact label={t('orders.attempts.offer')}>
+                {attempt.offerName}{' '}
+                <bdi dir="ltr" className="text-muted-foreground">
+                  {attempt.offerId}
+                </bdi>
+              </Fact>
+            )}
             <Fact label={t('orders.attempts.units')}>
               {t('orders.attempts.unitsValue', {
                 quantity: attempt.quantity,
@@ -433,46 +424,56 @@ function Attempts({ attempts }: { attempts: FulfilmentAttempt[] }) {
             {attempt.adminReason && (
               <Fact label={t('orders.attempts.adminReason')}>{attempt.adminReason}</Fact>
             )}
+            {attempt.deliveryReference && (
+              <Fact label={t('orders.attempts.reference')}>
+                <bdi dir="ltr" className="break-all">
+                  {attempt.deliveryReference}
+                </bdi>
+              </Fact>
+            )}
           </dl>
-          <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-bold">{t('orders.attempts.candidates')}</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('orders.attempts.candidate.supplier')}</TableHead>
-                  <TableHead>{t('orders.attempts.candidate.tier')}</TableHead>
-                  <TableHead>{t('orders.attempts.candidate.cost')}</TableHead>
-                  <TableHead>{t('orders.attempts.candidate.result')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {attempt.candidates.map((candidate) => (
-                  <TableRow key={candidate.routeId}>
-                    <TableCell>{t(`orders.suppliers.${candidate.supplierCode}`)}</TableCell>
-                    <TableCell>
-                      {candidate.tier ? t(`orders.attempts.tiers.${candidate.tier}`) : '—'}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {candidate.costUsdUnits === null ? (
-                        '—'
-                      ) : (
-                        <bdi dir="ltr">{formatUsd(candidate.costUsdUnits)}</bdi>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {candidate.rank !== null ? (
-                        <Badge tone={candidate.rank === 1 ? 'success' : 'neutral'}>
-                          {t('orders.attempts.candidate.rank', { rank: candidate.rank })}
-                        </Badge>
-                      ) : (
-                        t(`orders.skipReasons.${candidate.skipReason ?? 'archived'}`)
-                      )}
-                    </TableCell>
+          {attempt.proofFileId && <ProofThumbnail orderId={orderId} fileId={attempt.proofFileId} />}
+          {attempt.candidates.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-sm font-bold">{t('orders.attempts.candidates')}</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('orders.attempts.candidate.supplier')}</TableHead>
+                    <TableHead>{t('orders.attempts.candidate.tier')}</TableHead>
+                    <TableHead>{t('orders.attempts.candidate.cost')}</TableHead>
+                    <TableHead>{t('orders.attempts.candidate.result')}</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {attempt.candidates.map((candidate) => (
+                    <TableRow key={candidate.routeId}>
+                      <TableCell>{t(`orders.suppliers.${candidate.supplierCode}`)}</TableCell>
+                      <TableCell>
+                        {candidate.tier ? t(`orders.attempts.tiers.${candidate.tier}`) : '—'}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {candidate.costUsdUnits === null ? (
+                          '—'
+                        ) : (
+                          <bdi dir="ltr">{formatUsd(candidate.costUsdUnits)}</bdi>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {candidate.rank !== null ? (
+                          <Badge tone={candidate.rank === 1 ? 'success' : 'neutral'}>
+                            {t('orders.attempts.candidate.rank', { rank: candidate.rank })}
+                          </Badge>
+                        ) : (
+                          t(`orders.skipReasons.${candidate.skipReason ?? 'archived'}`)
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
           {attempt.webhookEvents.length > 0 && (
             <div className="flex flex-col gap-2">
               <h3 className="text-sm font-bold">{t('orders.attempts.webhooks')}</h3>
@@ -496,6 +497,32 @@ function Attempts({ attempts }: { attempts: FulfilmentAttempt[] }) {
         </Card>
       ))}
     </section>
+  );
+}
+
+/** S11 rule MF2: the delivery proof, small; it opens full size in a new tab (`no-store`). */
+function ProofThumbnail({ orderId, fileId }: { orderId: string; fileId: string }) {
+  const { t } = useTranslation();
+  const url = proofUrl(orderId, fileId);
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="flex items-center gap-2 text-sm font-bold">
+        <ImageIcon className="size-4" aria-hidden="true" />
+        {t('orders.attempts.proof')}
+      </h3>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="w-fit overflow-hidden rounded-md border border-border bg-muted"
+      >
+        <img
+          src={url}
+          alt={t('orders.attempts.proofOpen')}
+          className="h-32 w-auto object-contain"
+        />
+      </a>
+    </div>
   );
 }
 

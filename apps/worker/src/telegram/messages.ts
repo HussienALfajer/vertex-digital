@@ -339,7 +339,7 @@ function orderText<Kind extends TelegramMessageKind>(
         `🖐 طلب يدوي ${order.orderNumber} بانتظارك`,
         `${order.gameNameAr} · ${order.productNameAr} × ${order.quantity}`,
         `منذ ${atDamascus(new Date(order.sentAt))}`,
-        `${links.admin}/orders/${order.orderId}`,
+        `${links.admin}/orders/${order.orderId}?decide=fulfil`,
       ].join('\n');
     }
     case 'manual_order_reminder': {
@@ -347,7 +347,7 @@ function orderText<Kind extends TelegramMessageKind>(
       return [
         `⏰ الطلب اليدوي ${order.orderNumber} ما زال بانتظارك منذ ${waitText(order.waitMinutes)}`,
         `${order.gameNameAr} · ${order.productNameAr} × ${order.quantity}`,
-        `${links.admin}/orders/${order.orderId}`,
+        `${links.admin}/orders/${order.orderId}?decide=fulfil`,
       ].join('\n');
     }
     case 'order_needs_review': {

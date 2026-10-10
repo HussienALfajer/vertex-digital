@@ -37,7 +37,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] Production deploy of Phase 2 (registration still closed)
 
 ## Phase 3 — Operations
-- [~] S11 Live operations: F17 Live orders room · F18 Admin dashboard; spec `docs/specs/S11-live-operations.md`
+- [x] S11 Live operations: F17 Live orders room · F18 Admin dashboard; spec `docs/specs/S11-live-operations.md` (two PRs: contracts, db, api with the admin stream and the dashboard read, worker guards; the admin dashboard home page, `/orders/live` with its side sheet, the reroute and manual fulfil dialogs with E2E)
 - [ ] S12 Customers and support: F19 Customers administration · F23 Support tickets
 - [ ] S13 Reconciliation and reports: F20 Daily reconciliation (A11) · F22 Reports
 - [ ] S14 Content and live activity: F21 Content · F25 Live activity

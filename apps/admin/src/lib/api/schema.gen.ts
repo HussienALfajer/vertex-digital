@@ -5335,7 +5335,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Server-sent events: `order` `{ orderId, status }` and `resync` (rule LR4) */
+            /** @description Server-sent events: `order` `{ orderId, status }`, `resync`, and `replaced` before a newer stream closes this one (rule LR4) */
             200: {
                 headers: {
                     [name: string]: unknown;
