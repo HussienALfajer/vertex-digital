@@ -1,0 +1,1 @@
+CREATE INDEX "order_events_conflict_idx" ON "order_events" USING btree ("created_at") WHERE "order_events"."kind" = 'note' and "order_events"."reason" in ('webhook_conflict', 'late_result_conflict');

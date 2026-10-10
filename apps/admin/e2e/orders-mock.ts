@@ -46,6 +46,7 @@ function attempt(
 ): AdminOrder['attempts'][number] {
   return {
     id: id(100 + n),
+    kind: 'routed',
     routeId: id(200 + n),
     supplierCode: supplier.code,
     supplierNameAr: supplier.nameAr,
@@ -54,6 +55,9 @@ function attempt(
     quantity: 1,
     deliveredQuantity: status === 'delivered' ? 1 : 0,
     unitCostUsdUnits: 880_000,
+    chosenByAdmin: false,
+    proofFileId: null,
+    deliveryReference: null,
     status,
     supplierOrderId: status === 'pending' ? null : `S-${n}`,
     failureReason: status === 'unknown' ? 'Supplier timed out' : null,
@@ -117,7 +121,15 @@ function order(n: keyof typeof ORDER_IDS, number: string, fields: Partial<AdminO
     finishedAt: null,
     reviewSince: null,
     createdAt: at(46),
-    decisions: { attemptId: null, poll: false, resolve: false, refund: false },
+    decisions: {
+      attemptId: null,
+      poll: false,
+      resolve: false,
+      resolveDelivered: false,
+      refund: false,
+      reroute: false,
+      fulfil: false,
+    },
     attempts: [],
     events: [
       {
@@ -459,6 +471,10 @@ export class OrdersMock {
     if (!parsed.success) return error(400, 'VALIDATION_FAILED');
     const resolved = parsed.data;
     if (resolved.outcome === 'delivered') {
+      // S11 rule MF1: a manual attempt is delivered only by the manual fulfil.
+      if (!row.decisions.resolveDelivered) {
+        return error(409, 'ATTEMPT_NOT_RESOLVABLE', { use: 'fulfil' });
+      }
       const codeCount = resolved.codes.length;
       if (row.product.kind === 'code' ? codeCount !== resolved.quantity : codeCount > 0) {
         return error(400, 'CODES_COUNT_MISMATCH');

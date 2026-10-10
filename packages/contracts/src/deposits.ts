@@ -482,6 +482,12 @@ function zoneInstant(year: number, month: number, day: number, minutes: number):
   return new Date(wall - zoneOffset(new Date(first)));
 }
 
+/** The start of the review zone's calendar day of `at`, `daysBack` days earlier (S11). */
+export function zoneDayStart(at: Date, daysBack = 0): Date {
+  const clock = zoneClock(at);
+  return zoneInstant(clock.year, clock.month, clock.day - daysBack, 0);
+}
+
 /** True when `at` falls within the review hours, start included, end excluded. */
 export function isWithinReviewHours(at: Date, hours: ReviewHours): boolean {
   const { minutes } = zoneClock(at);

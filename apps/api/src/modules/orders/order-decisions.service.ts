@@ -16,12 +16,12 @@ import {
   adminOrderCounts,
   adminOrderPage,
   applyOutcome,
+  closeForAdminRefund,
   currentOrderPolicy,
   type Database,
   fulfilmentAttempts,
   lockOrder,
   newId,
-  type OrderRow,
   openAttempt,
   orderCodesKey,
   orderPolicy,
@@ -167,6 +167,8 @@ export class OrderDecisionsService {
           throw orderRefusals.notResolvable();
         }
         if (body.outcome === 'delivered') {
+          // S11 rule MF1: a manual attempt is delivered by the manual fulfil, with its proof.
+          if (!decisions.resolveDelivered) throw orderRefusals.useFulfil();
           if (body.quantity > attempt.quantity) throw orderRefusals.tooManyUnits(attempt.quantity);
           const expected = order.kind === 'code' ? body.quantity : 0;
           if (body.codes.length !== expected) throw orderRefusals.codesCount();
@@ -228,7 +230,8 @@ export class OrderDecisionsService {
 
   /**
    * Rule D5: an order in `needs_review` is refunded: its open attempt closed `failed` by the admin
-   * and the remaining units returned to the wallet, without another route.
+   * and the remaining units returned to the wallet, without another route. S11 rule RF1: so is an
+   * order waiting on the manual supplier, through `failed`.
    */
   async refund(
     actor: DecisionActor,
@@ -241,13 +244,16 @@ export class OrderDecisionsService {
     }
     try {
       const created = await this.db.transaction(async (tx) => {
-        const order = isUuid(orderId) ? await lockOrder(tx, orderId) : null;
-        if (!order) throw orderRefusals.notFound();
+        const locked = isUuid(orderId) ? await lockOrder(tx, orderId) : null;
+        if (!locked) throw orderRefusals.notFound();
         // The same key waited on the lock behind its first request: a replay.
-        if (order.refundIdempotencyKey === idempotencyKey) return false;
-        if (order.status !== 'needs_review') throw orderRefusals.notDecidable();
-        const open = await openAttempt(tx, orderId);
-        if (open) await this.closeForRefund(tx, actor, order, open.attempt.id, reason);
+        if (locked.refundIdempotencyKey === idempotencyKey) return false;
+        const { order, closedAttemptId } = await closeForAdminRefund(
+          tx,
+          orderId,
+          { id: actor.adminId, reason },
+          new Date(),
+        );
         const units = order.quantity - order.deliveredQuantity - order.refundedQuantity;
         const refunded = await refundRemaining(tx, this.context(), order, 'admin', {
           actor: 'admin',
@@ -264,7 +270,7 @@ export class OrderDecisionsService {
           entityId: order.id,
           reason,
           details: {
-            attemptId: open?.attempt.id ?? null,
+            attemptId: closedAttemptId,
             units,
             amountUsdUnits: refunded.refundedUsdUnits,
           },
@@ -293,35 +299,6 @@ export class OrderDecisionsService {
     if (!order) return false;
     if (order.id !== orderId) throw orderRefusals.keyReused();
     return true;
-  }
-
-  /** The open attempt closed `failed` by the admin, without routing the rest (rule D5). */
-  private async closeForRefund(
-    tx: Transaction,
-    actor: DecisionActor,
-    order: OrderRow,
-    attemptId: string,
-    reason: string,
-  ) {
-    await tx
-      .update(fulfilmentAttempts)
-      .set({
-        status: 'failed',
-        nextPollAt: null,
-        failureReason: 'Refunded by the admin',
-        resolvedAt: new Date(),
-        resolvedBy: 'admin',
-        adminReason: reason,
-        result: { status: 'failed', inputRejected: false },
-      })
-      .where(eq(fulfilmentAttempts.id, attemptId));
-    await addOrderEvent(tx, order.id, 'attempt', {
-      actor: 'admin',
-      actorId: actor.adminId,
-      attemptId,
-      reason: 'admin_refund',
-      details: { status: 'failed' },
-    });
   }
 
   /** Rule C3: one code shown to the admin, the reveal logged and audited (never its value). */

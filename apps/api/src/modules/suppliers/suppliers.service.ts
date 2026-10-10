@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  FAILING_SYNC_RUNS,
   type ImportOffers,
   type ImportResult,
   type ImportRowError,
@@ -31,6 +32,7 @@ import {
   currentSupplierPolicy,
   type Database,
   encryptCredentials,
+  failedRunStreak,
   newId,
   productRoutes,
   productRoutingStates,
@@ -113,6 +115,20 @@ export class SuppliersService {
       this.visible(state.code),
     );
     return this.summaries(states);
+  }
+
+  /**
+   * S11 rule DB6: the suppliers whose sync failed `FAILING_SYNC_RUNS` times since its last
+   * success, as the failing-sync alert counts them.
+   */
+  async failingSyncs(): Promise<Set<SupplierCode>> {
+    const rows = await this.db.select({ id: suppliers.id, code: suppliers.code }).from(suppliers);
+    const streaks = await Promise.all(
+      rows.map(async (row) => ({ ...row, streak: await failedRunStreak(this.db, row.id) })),
+    );
+    return new Set(
+      streaks.filter((row) => row.streak.count >= FAILING_SYNC_RUNS).map((row) => row.code),
+    );
   }
 
   /** `GET /api/admin/suppliers/:code`. */

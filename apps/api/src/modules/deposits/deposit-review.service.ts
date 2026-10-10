@@ -7,12 +7,15 @@ import {
   type ApproveDeposit,
   approvalFlags,
   approvalNeedsReauthentication,
+  type Dashboard,
   DEPOSIT_FLAG_DETAILS,
   DEPOSIT_PENDING_HOURS,
   type DepositFlagCode,
+  type DepositMethod,
   depositCreditUsdUnits,
   type NotificationEvent,
   type NotificationParams,
+  overdueReviews,
   type RejectDeposit,
   type RequestReceipt,
   rateFromNumeric,
@@ -41,7 +44,7 @@ import {
   usdtTransferState,
   usdtTransfers,
 } from '@vertex-digital/db';
-import { and, asc, count, desc, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
 import { isRecentlyReauthenticated } from '../../core/access/index.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
@@ -298,6 +301,71 @@ export class DepositReviewService {
     return {
       waiting: (shamCash?.count ?? 0) + counts.usdtReview,
       unmatchedTransfers: counts.unmatchedTransfers,
+    };
+  }
+
+  /**
+   * S11 rules DB5, DB6: the dashboard's deposits: Sham Cash waiting (oldest, flagged, overdue past
+   * the review target inside the review hours, as the reminder counts them), USDT deposits being
+   * checked, the open unmatched transfers, and real customers' credits since `todayStart`.
+   */
+  async dashboardFigures(
+    now: Date,
+    todayStart: Date,
+  ): Promise<{ deposits: Dashboard['deposits']; overdue: number; overdueSince: Date | null }> {
+    const [counts, submitted, credited, settings] = await Promise.all([
+      this.counts(),
+      // Every method at once, so the two counts come from one snapshot.
+      this.db
+        .select({ method: deposits.method, submittedAt: deposits.submittedAt, flagged })
+        .from(deposits)
+        .where(eq(deposits.status, 'submitted'))
+        .orderBy(asc(deposits.submittedAt), asc(deposits.id)),
+      this.db
+        .select({
+          customerId: deposits.customerId,
+          method: deposits.method,
+          usdUnits: deposits.creditedUsdUnits,
+        })
+        .from(deposits)
+        .where(and(eq(deposits.status, 'credited'), gte(deposits.decidedAt, todayStart))),
+      this.settings.current(),
+    ]);
+    const customers = await this.customers.depositCustomers([
+      ...new Set(credited.map((row) => row.customerId)),
+    ]);
+    const byMethod = new Map<DepositMethod, { count: number; usdUnits: number }>();
+    for (const row of credited) {
+      if (customers.get(row.customerId)?.isTest !== false) continue;
+      const total = byMethod.get(row.method) ?? { count: 0, usdUnits: 0 };
+      byMethod.set(row.method, {
+        count: total.count + 1,
+        usdUnits: total.usdUnits + (row.usdUnits ?? 0),
+      });
+    }
+    const shamCash = submitted.filter((row) => row.method === 'sham_cash');
+    const waiting = shamCash.flatMap((row) =>
+      row.submittedAt ? [{ submittedAt: row.submittedAt, remindedAt: null }] : [],
+    );
+    const overdue = settings
+      ? overdueReviews(
+          waiting,
+          now,
+          { start: settings.reviewHoursStart, end: settings.reviewHoursEnd },
+          settings.reviewTargetMinutes,
+        ).filter((review) => review.overdueAt <= now)
+      : [];
+    return {
+      deposits: {
+        shamCashWaiting: shamCash.length,
+        shamCashOldestAt: waiting[0]?.submittedAt.toISOString() ?? null,
+        shamCashFlagged: shamCash.filter((row) => row.flagged).length,
+        usdtWaiting: submitted.length - shamCash.length,
+        unmatchedTransfers: counts.unmatchedTransfers,
+        creditedToday: [...byMethod].map(([method, total]) => ({ method, ...total })),
+      },
+      overdue: overdue.length,
+      overdueSince: overdue[0]?.submittedAt ?? null,
     };
   }
 

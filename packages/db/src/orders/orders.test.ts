@@ -25,6 +25,14 @@ import {
   savedPlayers,
   storeSwitchChanges,
 } from '../schema/index.js';
+import {
+  ADMIN_CLOSE_REASONS,
+  closeForAdminRefund,
+  fulfilOrderManually,
+  type ManualFulfilInput,
+  rerouteOptions,
+  rerouteOrder,
+} from './admin-actions.js';
 import { type CheckoutInput, checkoutOrders } from './checkout.js';
 import { applyOutcome, refundRemaining } from './outcome.js';
 import { OrderError, type PurchaseInput, purchaseOrder } from './purchase.js';
@@ -1941,5 +1949,546 @@ describe('checkouts, saved ids, gifts and share links (S10)', () => {
     await expect(
       owner.pool.query('delete from order_share_links where id = $1', [link.id]),
     ).rejects.toThrow(/never deleted/);
+  });
+});
+
+describe('live operations: reroute, manual fulfil, refund (S11)', () => {
+  /** A manual route on the product at `cost` (S07: the admin's own cost). */
+  async function manualRoute(productId: string, cost = usd(0.85)) {
+    const [offer, route] = [newId(), newId()];
+    await pool.query(
+      `insert into supplier_offers (id, supplier_id, offer_id, name, in_stock, cost_usd_units,
+         cost_confirmed_at, last_seen_at) values ($1, $2, $3, 'Manual', true, $4, now(), now())`,
+      [offer, suppliers.manual, `m-${unique()}`, cost],
+    );
+    await pool.query(
+      `insert into product_routes (id, product_id, supplier_id, offer_id, field_map)
+       values ($1, $2, $3, $4, '{}')`,
+      [route, productId, suppliers.manual, offer],
+    );
+    return { route, offer, cost };
+  }
+
+  /** A stored `delivery_proof` file (rule MF2). */
+  async function proof(kind: 'delivery_proof' | 'deposit_receipt' = 'delivery_proof') {
+    const id = newId();
+    await pool.query(
+      `insert into stored_files (id, kind, storage_key, content_type, byte_size, width, height)
+       values ($1, $2, $3, 'image/webp', 10, 1, 1)`,
+      [id, kind, `${kind}/${id.slice(-2)}/${id}.webp`],
+    );
+    return id;
+  }
+
+  type Item = Awaited<ReturnType<typeof product>>;
+
+  /** The SQLSTATE of a refused statement (Drizzle keeps PostgreSQL's error as its cause). */
+  const sqlState = async (statement: Promise<unknown>) => {
+    try {
+      await statement;
+    } catch (error) {
+      const { cause, code } = error as { cause?: { code?: string }; code?: string };
+      return cause?.code ?? code;
+    }
+    throw new Error('Expected a refusal');
+  };
+
+  const routing = { now: new Date(), fakeEnabled: true };
+  const admin = (key = newId()) => ({ id: newId(), reason: 'قرار الأدمن', idempotencyKey: key });
+  const reroute = (orderId: string, routeId: string, decision = admin()) =>
+    db.transaction((tx) =>
+      rerouteOrder(tx, { ...context(), routing }, { orderId, routeId, admin: decision }),
+    );
+  const fulfil = (orderId: string, input: Partial<ManualFulfilInput> & { proofFileId: string }) =>
+    db.transaction((tx) =>
+      fulfilOrderManually(tx, context(), {
+        orderId,
+        quantity: 1,
+        codes: [],
+        unitCostUsdUnits: usd(0.8),
+        acceptLoss: false,
+        reference: null,
+        admin: admin(),
+        ...input,
+      }),
+    );
+  const attemptsOf = (orderId: string) =>
+    db
+      .select()
+      .from(fulfilmentAttempts)
+      .where(eq(fulfilmentAttempts.orderId, orderId))
+      .orderBy(fulfilmentAttempts.createdAt, fulfilmentAttempts.id);
+  const hold = (orderId: string) =>
+    db.transaction(async (tx) => {
+      const locked = (await lockOrder(tx, orderId)) as OrderRow;
+      await transitionOrder(tx, locked, 'needs_review', { actor: 'system', reason: 'hard_limit' });
+    });
+
+  /** A paid order sent to its fake route and held for review (rule F7's hard limit). */
+  async function held(item: Item) {
+    const buyer = await customer({ funds: usd(50) });
+    const { order } = await buy(request(buyer, item));
+    const attemptId = await send(order, item);
+    await apply(attemptId, { status: 'unknown', reason: 'timeout' });
+    await hold(order.id);
+    return { order: await orderRow(order.id), attemptId };
+  }
+
+  /** A paid order waiting on its manual route (rule MN1), after a reroute from review. */
+  async function waitingManual(item: Item, manual: { route: string }) {
+    const { order, attemptId } = await held(item);
+    await reroute(order.id, manual.route);
+    const open = (await attemptsOf(order.id)).find((attempt) => attempt.status === 'pending');
+    return {
+      order: await orderRow(order.id),
+      closedAttemptId: attemptId,
+      manualAttemptId: open?.id as string,
+    };
+  }
+
+  it('checks attempt kinds, zero costs and proofs (migration 0038)', async () => {
+    const item = await product();
+    const { order } = await held(item);
+    const insert = async (values: Partial<typeof fulfilmentAttempts.$inferInsert>) =>
+      sqlState(
+        db.insert(fulfilmentAttempts).values({
+          id: newId(),
+          orderId: order.id,
+          supplierId: suppliers.manual,
+          quantity: 1,
+          candidates: [],
+          unitCostUsdUnits: 0,
+          status: 'delivered',
+          deliveredQuantity: 1,
+          resolvedAt: new Date(),
+          resolvedBy: 'admin',
+          adminReason: 'سلّمت من مصدر آخر',
+          ...values,
+        }),
+      );
+    // An admin delivery has a proof and no route; a routed attempt has its route.
+    expect(await insert({ kind: 'admin_fulfil' })).toBe('23514');
+    expect(
+      await insert({ kind: 'admin_fulfil', proofFileId: await proof(), routeId: item.route }),
+    ).toBe('23514');
+    expect(await insert({ kind: 'routed', proofFileId: await proof() })).toBe('23514');
+    // A zero-cost routed attempt needs a proof; a delivered cost needs its journal.
+    expect(
+      await insert({
+        kind: 'routed',
+        routeId: item.route,
+        offerId: item.offer,
+        supplierOfferId: 'o-x',
+        status: 'pending',
+        deliveredQuantity: 0,
+        resolvedAt: null,
+        resolvedBy: null,
+        adminReason: null,
+      }),
+    ).toBe('23514');
+    expect(
+      await insert({ kind: 'admin_fulfil', proofFileId: await proof(), unitCostUsdUnits: 10_000 }),
+    ).toBe('23514');
+    // A proof serves one attempt.
+    const used = await proof();
+    await db.insert(fulfilmentAttempts).values({
+      id: newId(),
+      orderId: order.id,
+      kind: 'admin_fulfil',
+      supplierId: suppliers.manual,
+      quantity: 1,
+      candidates: [],
+      unitCostUsdUnits: 0,
+      status: 'delivered',
+      deliveredQuantity: 1,
+      resolvedAt: new Date(),
+      resolvedBy: 'admin',
+      adminReason: 'سلّمت من مصدر آخر',
+      proofFileId: used,
+    });
+    expect(await insert({ kind: 'admin_fulfil', proofFileId: used })).toBe('23505');
+  });
+
+  it('keeps kinds fixed and takes a cost and a proof only on an open manual attempt', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const { closedAttemptId, manualAttemptId } = await waitingManual(item, manual);
+    const update = (id: string, values: Partial<typeof fulfilmentAttempts.$inferInsert>) =>
+      sqlState(db.update(fulfilmentAttempts).set(values).where(eq(fulfilmentAttempts.id, id)));
+    expect(await update(manualAttemptId, { kind: 'admin_fulfil' })).toBe('23001');
+    expect(await update(manualAttemptId, { chosenByAdmin: false })).toBe('23001');
+    expect(await update(closedAttemptId, { unitCostUsdUnits: 1 })).toBe('23001');
+    // The cost and the reference change only with the proof, once.
+    expect(await update(manualAttemptId, { unitCostUsdUnits: usd(0.7) })).toBe('23001');
+    expect(await update(manualAttemptId, { deliveryReference: 'OP-0' })).toBe('23001');
+    await db
+      .update(fulfilmentAttempts)
+      .set({ unitCostUsdUnits: usd(0.7), proofFileId: await proof(), deliveryReference: 'OP-1' })
+      .where(eq(fulfilmentAttempts.id, manualAttemptId));
+    // A proof and a reference are set once.
+    expect(await update(manualAttemptId, { proofFileId: await proof() })).toBe('23001');
+    expect(await update(manualAttemptId, { deliveryReference: 'OP-2' })).toBe('23001');
+    expect(await update(manualAttemptId, { unitCostUsdUnits: usd(0.6) })).toBe('23001');
+    // An open automatic attempt takes neither a cost nor a proof.
+    const other = await held(await product());
+    expect(await update(other.attemptId, { unitCostUsdUnits: usd(0.5) })).toBe('23001');
+    expect(await update(other.attemptId, { proofFileId: await proof() })).toBe('23001');
+  });
+
+  it('lists the routes with their eligibility for the order (rule RR2)', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const { order } = await held(item);
+    const options = await rerouteOptions(db, order, routing);
+    expect(options).toMatchObject({ orderId: order.id, remainingUnits: 1 });
+    const byRoute = new Map(options.routes.map((route) => [route.routeId, route]));
+    expect(options.routes).toHaveLength(2);
+    expect(byRoute.get(item.route)).toMatchObject({ eligible: false, skipReason: 'already_tried' });
+    expect(byRoute.get(manual.route)).toMatchObject({
+      eligible: true,
+      supplierCode: 'manual',
+      balanceUsdUnits: null,
+      unitCostUsdUnits: manual.cost,
+      marginUsdUnits: item.price - manual.cost,
+    });
+  });
+
+  it('reroutes a held order to the manual route with its card (rules RR1–RR3)', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const { order, attemptId } = await held(item);
+    const key = newId();
+    sent.length = 0;
+    const result = await reroute(order.id, manual.route, admin(key));
+    expect(result).toMatchObject({ closedAttemptId: attemptId, supplierCode: 'manual' });
+    expect(result.order.status).toBe('sent_to_supplier');
+    const [closed, opened] = await attemptsOf(order.id);
+    expect(closed).toMatchObject({
+      status: 'failed',
+      resolvedBy: 'admin',
+      inputRejected: false,
+      decisionIdempotencyKey: key,
+      failureReason: ADMIN_CLOSE_REASONS.reroute,
+    });
+    expect(opened).toMatchObject({ status: 'pending', chosenByAdmin: true, quantity: 1 });
+    expect(opened?.candidates).toHaveLength(2);
+    const { rows: cards } = await pool.query(
+      'select kind from telegram_messages where dedupe_key = $1',
+      [`manual:${opened?.id}`],
+    );
+    expect(cards).toEqual([{ kind: 'manual_order' }]);
+    expect(sent.some((job) => job.queue === QUEUES.ordersPoll)).toBe(false);
+    // The route already tried, and a supplier without credentials, are refused.
+    expect(await refusal(reroute(order.id, item.route))).toEqual({
+      code: 'ROUTE_NOT_ELIGIBLE',
+      details: { reason: 'already_tried' },
+    });
+    expect(await refusal(reroute(order.id, newId()))).toEqual({
+      code: 'ROUTE_NOT_ELIGIBLE',
+      details: { reason: 'archived' },
+    });
+    const statuses = await db
+      .select({ to: orderEvents.toStatus })
+      .from(orderEvents)
+      .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.kind, 'status')))
+      .orderBy(orderEvents.createdAt, orderEvents.id);
+    expect(statuses.map((row) => row.to)).toEqual([
+      'paid',
+      'sent_to_supplier',
+      'needs_review',
+      'sent_to_supplier',
+    ]);
+  });
+
+  it('moves a manual order to an automatic route through failed, sent by its poll', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const buyer = await customer({ funds: usd(10) });
+    const { order } = await buy(request(buyer, item));
+    // Sent to the manual route first, as `orders.fulfil` does when it ranks first.
+    const manualAttemptId = await db.transaction(async (tx) => {
+      const locked = (await lockOrder(tx, order.id)) as OrderRow;
+      const id = newId();
+      await tx.insert(fulfilmentAttempts).values({
+        id,
+        orderId: order.id,
+        routeId: manual.route,
+        supplierId: suppliers.manual,
+        offerId: manual.offer,
+        supplierOfferId: 'm-test',
+        quantity: 1,
+        unitCostUsdUnits: manual.cost,
+        status: 'pending',
+        candidates: [],
+        sentAt: new Date(),
+      });
+      await transitionOrder(tx, locked, 'sent_to_supplier', { actor: 'system', attemptId: id });
+      return id;
+    });
+    sent.length = 0;
+    const result = await reroute(order.id, item.route);
+    expect(result).toMatchObject({ closedAttemptId: manualAttemptId, supplierCode: 'fake' });
+    expect(result.attempt).toMatchObject({ status: 'sending', chosenByAdmin: true });
+    expect(sent).toContainEqual(
+      expect.objectContaining({ queue: QUEUES.ordersPoll, data: { attemptId: result.attempt.id } }),
+    );
+    const statuses = await db
+      .select({ to: orderEvents.toStatus })
+      .from(orderEvents)
+      .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.kind, 'status')))
+      .orderBy(orderEvents.createdAt, orderEvents.id);
+    expect(statuses.map((row) => row.to)).toEqual([
+      'paid',
+      'sent_to_supplier',
+      'failed',
+      'sent_to_supplier',
+    ]);
+    // An automatic attempt now runs: no reroute before the hard limit (ADR 0004).
+    expect(await refusal(reroute(order.id, manual.route))).toMatchObject({
+      code: 'ORDER_NOT_DECIDABLE',
+    });
+  });
+
+  it('refuses a reroute of a running, finished or unknown order', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const buyer = await customer({ funds: usd(10) });
+    const { order } = await buy(request(buyer, item));
+    expect(await refusal(reroute(order.id, manual.route))).toMatchObject({
+      code: 'ORDER_NOT_DECIDABLE',
+    });
+    await send(order, item);
+    expect(await refusal(reroute(order.id, manual.route))).toMatchObject({
+      code: 'ORDER_NOT_DECIDABLE',
+    });
+    expect(await refusal(reroute(newId(), manual.route))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('rechecks the route under the lock: a cost rise makes it unprofitable (edge case 2)', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const { order } = await held(item);
+    await pool.query('update supplier_offers set cost_usd_units = $1 where id = $2', [
+      item.price,
+      manual.offer,
+    ]);
+    expect(await refusal(reroute(order.id, manual.route))).toEqual({
+      code: 'ROUTE_NOT_ELIGIBLE',
+      details: { reason: 'unprofitable' },
+    });
+  });
+
+  it('offers only fake and manual routes to a test customer (edge case 3)', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const buyer = await customer({ isTest: true, funds: usd(10) });
+    const { order } = await buy(request(buyer, item));
+    const attemptId = await send(order, item);
+    await apply(attemptId, { status: 'unknown', reason: 'timeout' });
+    await hold(order.id);
+    const options = await rerouteOptions(db, await orderRow(order.id), routing);
+    expect(options.routes.find((route) => route.routeId === manual.route)?.eligible).toBe(true);
+  });
+
+  it('serializes a reroute and a late result on one attempt (edge case 1)', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const { order, attemptId } = await held(item);
+    const [rerouted, late] = await Promise.allSettled([
+      reroute(order.id, manual.route),
+      apply(attemptId, { status: 'delivered', quantity: 1 }, 'webhook'),
+    ]);
+    const final = await orderRow(order.id);
+    if (rerouted.status === 'fulfilled') {
+      // The reroute won: the late result found its attempt closed and changed nothing.
+      expect(late).toMatchObject({ status: 'fulfilled', value: { applied: false } });
+      expect(final.status).toBe('sent_to_supplier');
+    } else {
+      expect(rerouted.reason).toMatchObject({ code: 'ORDER_NOT_DECIDABLE' });
+      expect(final.status).toBe('delivered');
+    }
+  });
+
+  it('fulfils an open manual attempt with its proof and cost (rules MF2–MF5, MF-M1)', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const { order, manualAttemptId } = await waitingManual(item, manual);
+    const before = await balance(order.customerId);
+    const prepaid = await db.transaction((tx) =>
+      ensureSystemAccount(tx, {
+        code: 'supplier_prepaid:manual',
+        kind: 'supplier_prepaid',
+        currency: 'USD',
+      }),
+    );
+    const prepaidBefore = await accountBalance(db, prepaid);
+    const proofFileId = await proof();
+    const key = newId();
+    const result = await fulfil(order.id, { proofFileId, reference: 'OP-1', admin: admin(key) });
+    expect(result).toMatchObject({
+      attemptId: manualAttemptId,
+      case: 'manual_attempt',
+      lossAccepted: false,
+    });
+    expect(result.order.status).toBe('delivered');
+    const attempt = (await attemptsOf(order.id)).find((row) => row.id === manualAttemptId);
+    expect(attempt).toMatchObject({
+      status: 'delivered',
+      unitCostUsdUnits: usd(0.8),
+      proofFileId,
+      deliveryReference: 'OP-1',
+      resolvedBy: 'admin',
+      decisionIdempotencyKey: key,
+    });
+    expect(attempt?.costJournalId).not.toBeNull();
+    expect(await accountBalance(db, prepaid)).toBe(prepaidBefore - usd(0.8));
+    expect(await balance(order.customerId)).toBe(before);
+    const [delivered] = await db
+      .select({ event: customerNotifications.event })
+      .from(customerNotifications)
+      .where(eq(customerNotifications.customerId, order.customerId))
+      .orderBy(desc(customerNotifications.createdAt))
+      .limit(1);
+    expect(delivered?.event).toBe('order_delivered');
+  });
+
+  it('refuses a used or foreign proof, a loss without confirmation and wrong units', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const first = await waitingManual(item, manual);
+    const used = await proof();
+    await fulfil(first.order.id, { proofFileId: used });
+
+    const second = await held(item);
+    const id = second.order.id;
+    expect(await refusal(fulfil(id, { proofFileId: used }))).toMatchObject({
+      code: 'PROOF_INVALID',
+    });
+    expect(
+      await refusal(fulfil(id, { proofFileId: await proof('deposit_receipt') })),
+    ).toMatchObject({ code: 'PROOF_INVALID' });
+    expect(await refusal(fulfil(id, { proofFileId: newId() }))).toMatchObject({
+      code: 'PROOF_INVALID',
+    });
+    const fresh = await proof();
+    const above = item.price + 10_000;
+    expect(await refusal(fulfil(id, { proofFileId: fresh, unitCostUsdUnits: above }))).toEqual({
+      code: 'LOSS_NOT_CONFIRMED',
+      details: { unitCostUsdUnits: above, unitPriceUsdUnits: item.price },
+    });
+    expect(await refusal(fulfil(id, { proofFileId: fresh, codes: ['ABCDEFGH'] }))).toMatchObject({
+      code: 'CODES_COUNT_MISMATCH',
+    });
+    expect(await refusal(fulfil(id, { proofFileId: fresh, quantity: 2 }))).toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+    const loss = await fulfil(id, {
+      proofFileId: fresh,
+      unitCostUsdUnits: above,
+      acceptLoss: true,
+    });
+    expect(loss).toMatchObject({ case: 'review', lossAccepted: true });
+    expect(loss.order.status).toBe('delivered');
+    expect(await refusal(fulfil(id, { proofFileId: await proof() }))).toMatchObject({
+      code: 'ORDER_NOT_DECIDABLE',
+    });
+  });
+
+  it('fulfils part of a held code order elsewhere at zero cost (edge cases 5, 7)', async () => {
+    const item = await product({ kind: 'code' });
+    const buyer = await customer({ funds: usd(50) });
+    const { order } = await buy(request(buyer, item, { quantity: 3, fields: {} }));
+    const attemptId = await send(order, item);
+    await apply(attemptId, { status: 'unknown', reason: 'timeout' });
+    await hold(order.id);
+    sent.length = 0;
+    const result = await fulfil(order.id, {
+      proofFileId: await proof(),
+      quantity: 2,
+      codes: ['CODE-AAAA-1111', 'CODE-BBBB-2222'],
+      unitCostUsdUnits: 0,
+    });
+    expect(result.case).toBe('review');
+    const [closed, delivered] = await attemptsOf(order.id);
+    expect(closed).toMatchObject({ status: 'failed', failureReason: ADMIN_CLOSE_REASONS.fulfil });
+    expect(delivered).toMatchObject({
+      kind: 'admin_fulfil',
+      routeId: null,
+      status: 'delivered',
+      deliveredQuantity: 2,
+      unitCostUsdUnits: 0,
+      costJournalId: null,
+    });
+    // The third unit goes to `orders.fulfil` from review (there is no `needs_review → failed`).
+    expect(result.order).toMatchObject({ status: 'needs_review', deliveredQuantity: 2 });
+    expect(sent.filter((job) => job.queue === QUEUES.ordersFulfil)).toHaveLength(1);
+    const codes = await db
+      .select()
+      .from(orderCodes)
+      .where(eq(orderCodes.attemptId, result.attemptId));
+    expect(codes).toHaveLength(2);
+    // An admin delivery is never the open attempt (edge case 17).
+    const read = await adminOrder(db, order.id);
+    expect(read?.attempts[0]).toMatchObject({ kind: 'admin_fulfil', offerId: null, routeId: null });
+    expect(read?.decisions).toMatchObject({ attemptId: null, fulfil: true, reroute: false });
+  });
+
+  it('lets one of two parallel fulfils win (edge case 9)', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const { order } = await waitingManual(item, manual);
+    const [a, b] = await Promise.allSettled([
+      fulfil(order.id, { proofFileId: await proof() }),
+      fulfil(order.id, { proofFileId: await proof() }),
+    ]);
+    expect([a, b].filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const lost = [a, b].find((result) => result.status === 'rejected') as PromiseRejectedResult;
+    expect(lost.reason).toMatchObject({ code: 'ORDER_NOT_DECIDABLE' });
+  });
+
+  it('serializes a manual fulfil and a late result from review (rule MF6)', async () => {
+    const item = await product();
+    const { order, attemptId } = await held(item);
+    const [fulfilled, late] = await Promise.allSettled([
+      fulfil(order.id, { proofFileId: await proof() }),
+      apply(attemptId, { status: 'delivered', quantity: 1 }, 'poll'),
+    ]);
+    const attempts = await attemptsOf(order.id);
+    if (fulfilled.status === 'fulfilled') {
+      expect(late).toMatchObject({ status: 'fulfilled', value: { applied: false } });
+      expect(attempts.map((row) => row.status)).toEqual(['failed', 'delivered']);
+    } else {
+      expect(fulfilled.reason).toMatchObject({ code: 'ORDER_NOT_DECIDABLE' });
+      expect(attempts.map((row) => row.status)).toEqual(['delivered']);
+    }
+    expect((await orderRow(order.id)).status).toBe('delivered');
+  });
+
+  it('refunds an order waiting on the manual supplier through failed (rule RF1)', async () => {
+    const item = await product();
+    const manual = await manualRoute(item.id);
+    const { order, manualAttemptId } = await waitingManual(item, manual);
+    const before = await balance(order.customerId);
+    const by = { id: newId(), reason: 'لا يتوفر الآن' };
+    const refunded = await db.transaction(async (tx) => {
+      const closed = await closeForAdminRefund(tx, order.id, by, new Date());
+      expect(closed).toMatchObject({ closedAttemptId: manualAttemptId });
+      expect(closed.order.status).toBe('failed');
+      return refundRemaining(tx, context(), closed.order, 'admin', {
+        actor: 'admin',
+        actorId: by.id,
+        idempotencyKey: newId(),
+      });
+    });
+    expect(refunded.status).toBe('refunded');
+    expect(await balance(order.customerId)).toBe(before + item.price);
+    const manualAttempt = (await attemptsOf(order.id)).find((row) => row.id === manualAttemptId);
+    expect(manualAttempt).toMatchObject({
+      status: 'failed',
+      failureReason: ADMIN_CLOSE_REASONS.refund,
+    });
+    expect(
+      await refusal(db.transaction((tx) => closeForAdminRefund(tx, order.id, by, new Date()))),
+    ).toMatchObject({ code: 'ORDER_NOT_DECIDABLE' });
   });
 });

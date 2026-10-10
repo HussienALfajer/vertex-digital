@@ -40,7 +40,8 @@ export interface ServedFile {
 
 /**
  * What each kind becomes: receipts WebP up to 2000 px, QR images PNG up to 1000 px, catalog images
- * WebP up to 1600 px from at most 25 megapixels (S06 rule CT10); and the code that refuses it.
+ * WebP up to 1600 px from at most 25 megapixels (S06 rule CT10), delivery proofs as receipts
+ * (S11); and the code that refuses it.
  */
 const OUTPUT = {
   deposit_receipt: {
@@ -62,6 +63,14 @@ const OUTPUT = {
     contentType: 'image/webp',
     maxDimension: CATALOG_IMAGE_MAX_DIMENSION,
     maxInputPixels: CATALOG_IMAGE_MAX_INPUT_PIXELS,
+    invalidCode: 'IMAGE_INVALID',
+  },
+  /** S11 rule MF2: a manual delivery's screenshot, re-encoded like a receipt. */
+  delivery_proof: {
+    format: 'webp',
+    contentType: 'image/webp',
+    maxDimension: RECEIPT_MAX_DIMENSION,
+    maxInputPixels: UPLOAD_MAX_INPUT_PIXELS,
     invalidCode: 'IMAGE_INVALID',
   },
 } as const satisfies Record<StoredFileKind, unknown>;

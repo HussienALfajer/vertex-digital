@@ -165,6 +165,12 @@ export const ERROR_CODES = [
   'CHECKOUT_REFUSED',
   /** No share link for this order; `details.reason`: `status`, `not_gift`, `link_exists` (S10). */
   'ORDER_NOT_SHAREABLE',
+  /** The chosen route cannot take the order now; `details.reason`: a route skip reason (S11 RR3). */
+  'ROUTE_NOT_ELIGIBLE',
+  /** The cost is above the price and the loss was not confirmed; `details.unitCostUsdUnits`, `details.unitPriceUsdUnits` (S11 MF4). */
+  'LOSS_NOT_CONFIRMED',
+  /** The delivery proof is missing, of another kind, or already used (S11 MF2). */
+  'PROOF_INVALID',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

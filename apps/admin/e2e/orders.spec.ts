@@ -6,7 +6,7 @@ import { type AdminApi, expect, PASSWORD, screenshot, TOTP_CODE, test } from './
 
 /*
  * Orders (S08): the list with its tabs and the badge, a held order's decisions with
- * re-authentication (poll again, refund), a manual order confirmed delivered with its codes, a
+ * re-authentication (poll again, refund), a manual order refunded (S11 RF1), a
  * code revealed and hidden, and the policy, against the mocked API.
  */
 
@@ -46,7 +46,15 @@ function reservations(admin: AdminApi) {
     attempts: [],
     journals: [],
     events: [],
-    decisions: { attemptId: null, poll: false, resolve: false, refund: false },
+    decisions: {
+      attemptId: null,
+      poll: false,
+      resolve: false,
+      resolveDelivered: false,
+      refund: false,
+      reroute: false,
+      fulfil: false,
+    },
   };
   admin.orders.orders.push(
     {
@@ -169,23 +177,19 @@ test.describe('orders', () => {
     expect(admin.orders.counts().needsReview).toBe(0);
   });
 
-  test('confirms a manual code order delivered, asking one code per unit (rule D2)', async ({
+  test('refunds a manual order, which the panel no longer confirms delivered (S11 MF1, RF1)', async ({
     page,
     admin,
   }) => {
     await open(page, admin, `/orders/${ORDER_IDS.manual}`);
-    await page.getByRole('button', { name: o.decisions.delivered.open }).click();
+    await expect(page.getByText(o.decisions.manualHelp)).toBeVisible();
+    await expect(page.getByRole('button', { name: o.decisions.delivered.open })).toBeHidden();
+    await page.getByRole('button', { name: o.decisions.refund.open }).click();
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByLabel(o.decisions.delivered.quantity)).toHaveValue('2');
-    await dialog.getByLabel(o.decisions.delivered.codes).fill('CODE-AAAA-1111');
-    await dialog.getByLabel(o.decisions.reason).fill('سلّمني المورد الكودين يدوياً');
-    await dialog.getByRole('button', { name: o.decisions.delivered.submit }).click();
-    await expect(dialog.getByText(o.decisions.delivered.codesError)).toBeVisible();
-    await dialog.getByLabel(o.decisions.delivered.codes).fill('CODE-AAAA-1111\nCODE-BBBB-2222');
-    await dialog.getByRole('button', { name: o.decisions.delivered.submit }).click();
+    await dialog.getByLabel(o.decisions.reason).fill('لا يتوفر الكود الآن');
+    await dialog.getByRole('button', { name: o.decisions.refund.submit }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByText(o.statuses.delivered, { exact: true }).first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: o.codes.title })).toBeVisible();
+    await expect(page.getByText(o.statuses.refunded, { exact: true }).first()).toBeVisible();
   });
 
   test('reveals a code with re-authentication, logs it and hides it again (rule C3)', async ({
@@ -331,7 +335,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await screenshot(page, testInfo, `order-refund-${colorScheme}`);
       await page.keyboard.press('Escape');
       await page.goto(`/orders/${ORDER_IDS.manual}`);
-      await page.getByRole('button', { name: o.decisions.delivered.open }).click();
+      await page.getByRole('button', { name: o.decisions.refund.open }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
       await screenshot(page, testInfo, `order-manual-${colorScheme}`);
       await page.keyboard.press('Escape');

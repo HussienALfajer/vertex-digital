@@ -28,7 +28,7 @@ import {
   api,
   body,
   notificationsOf,
-  openCustomerStream,
+  openEventStream,
   PASSWORD,
   removeAccounts,
   seedCustomer,
@@ -698,7 +698,7 @@ describe('the purchase with checks and reservations (rules PV8, RS1, RS2, RS8)',
     const item = await product(ids.gameId, 'direct', 0.88);
     const customer = await buyer({ funds: usd(10) });
     const other = await buyer({ funds: usd(10) });
-    const stream = await openCustomerStream(client, customer.cookie);
+    const stream = await openEventStream(client, customer.cookie);
     expect((await stream.event(1)).event).toBe('unread');
     await json(await purchase(other, item, { confirmPlayer: true }), 201);
     const order = await json<{ id: string }>(

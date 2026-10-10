@@ -75,6 +75,13 @@ export class AccessGuard implements CanActivate {
           }
         }
         request.admin = admin;
+        // For long requests (the admin stream, S11 rule LR4): the session still open, not idle,
+        // checked without counting as activity.
+        request.adminSessionValid = () =>
+          this.admins.adminOf(request.headers, { activity: false }).then(
+            (again) => again !== null && !again.archived && again.sessionId === admin.sessionId,
+            () => false,
+          );
         return true;
       }
       default:

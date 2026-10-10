@@ -199,6 +199,15 @@ Admin only (Arabic, RTL, light and dark; desktop first, usable at tablet width).
 18. A product, route or supplier archived after payment: options show it as not eligible; the order keeps its history.
 19. Purchases stopped (S05): reroute and manual fulfil still work (orders already paid continue, ADR 0004).
 
+## Settled in implementation
+- PR 1: a routed attempt with a zero cost needs its proof (the manual fulfil of a manual attempt at $0); `admin_fulfil` attempts are delivered, by the admin, with a proof and no route, offer or `chosen_by_admin`. Migration 0039 lets an open manual attempt take its cost once and its proof and reference once; every other column stays fixed as in S08.
+- A reroute needs an open attempt (`orderDecisions.reroute`): its `Idempotency-Key` is kept on the attempt it closes, where no later decision can overwrite it. A manual fulfil keeps its key on the attempt it delivers; a reroute or fulfil key reused elsewhere answers `IDEMPOTENCY_KEY_REUSED`.
+- There is no `needs_review → failed` transition (ADR 0004's table): a partial manual fulfil from review (edge case 5) keeps the order in `needs_review` with its delivered units and queues `orders.fulfil`, which routes the rest from there or refunds it, as S08 F2 already does.
+- `orderDecisions` gains `resolveDelivered`, `reroute` and `fulfil`; the panel reads them instead of the supplier code.
+- The admin stream shares the notification stream's `LISTEN` connection and limits (`NotificationStreamService.openAdmin`); its session check runs without counting as activity, so an idle panel still signs out after 30 minutes and the stream closes.
+- The dashboard's money reads use `orders_finished_at_idx` (migration 0040) and the conflicts `order_events_conflict_idx` (migration 0041). A sync is failing after `FAILING_SYNC_RUNS` (3) failed runs since the last success: `failedRunStreak` moved from the worker to `packages/db/src/suppliers` so the alert and the dashboard share it. The quota item counts a supplier that checks players and reached its daily quota.
+- Delivery proofs are WebP like receipts, up to 10 MB uploaded (`DELIVERY_PROOF_MAX_BYTES`), refused with the catalog upload's `IMAGE_INVALID`; served only when one of the order's attempts holds them.
+
 ## Open questions
 None. All answered on 2026-10-10 (ADR 0025).
 

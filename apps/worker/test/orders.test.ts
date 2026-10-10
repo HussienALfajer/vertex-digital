@@ -23,6 +23,7 @@ import {
   ensureSystemAccount,
   findCustomerWallet,
   fulfilmentAttempts,
+  fulfilOrderManually,
   ledgerJournals,
   newId,
   orderCodes,
@@ -36,6 +37,7 @@ import {
   productRoutes,
   purchaseOrder,
   repriceProducts,
+  rerouteOrder,
   storeSwitchChanges,
   supplierBalanceReads,
   supplierCalls,
@@ -47,6 +49,7 @@ import {
   supplierWebhookEvents,
   type Transaction,
   telegramMessages,
+  transitionOrder,
 } from '@vertex-digital/db';
 import {
   FakeSupplierAdapter,
@@ -1673,5 +1676,74 @@ describe('races on one attempt (committed: each side has its own connection)', (
       .where(eq(fulfilmentAttempts.id, attemptId));
     expect(attempt).toMatchObject({ status: 'delivered', resolvedBy: 'poll' });
     expect(Object.keys(fakeState.orders)).toEqual([attemptId]);
+  });
+});
+
+describe('live operations (S11)', () => {
+  const admin = () => ({ id: newId(), reason: 'قرار الأدمن', idempotencyKey: newId() });
+  const context = () => ({ jobs, codesKey, now: new Date() });
+
+  it('sends a rerouted automatic attempt by its poll, with its own key (rule RR3)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, { fake: null, manualCost: usd(0.9) });
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [manual] = await attemptsOf(tx, order.id);
+      expect(manual).toMatchObject({ routeId: item.manualRoute, status: 'pending' });
+      // A fake route added since: the admin moves the order to it.
+      const offer = await fakeOffer(tx, 'fake-uc-60', usd(0.88));
+      const route = newId();
+      await tx.insert(productRoutes).values({
+        id: route,
+        productId: item.id,
+        supplierId: ids.fake,
+        offerId: offer,
+        fieldMap: { playerId: 'player_id' },
+      });
+      sent.length = 0;
+      const rerouted = await rerouteOrder(
+        tx,
+        { ...context(), routing: { now: new Date(), fakeEnabled: true } },
+        { orderId: order.id, routeId: route, admin: admin() },
+      );
+      expect(rerouted.attempt).toMatchObject({ status: 'sending', chosenByAdmin: true });
+      expect(queued(QUEUES.ordersPoll, 'attemptId', rerouted.attempt.id)).toHaveLength(1);
+      script('fake-uc-60', 'delivered');
+      await poll.poll(rerouted.attempt.id, tx);
+      expect(await orderOf(tx, order.id)).toMatchObject({ status: 'delivered' });
+      expect(Object.keys(fakeState.orders)).toEqual([rerouted.attempt.id]);
+    });
+  });
+
+  it('never polls, sweeps or routes around an admin delivery (edge case 17)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      script('fake-uc-60', 'unknown');
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      await transitionOrder(tx, await orderOf(tx, order.id), 'needs_review', {
+        actor: 'system',
+        reason: 'hard_limit',
+      });
+      const proof = newId();
+      await tx.execute(sql`insert into stored_files (id, kind, storage_key, content_type,
+        byte_size, width, height) values (${proof}, 'delivery_proof',
+        ${`delivery_proof/${proof.slice(-2)}/${proof}.webp`}, 'image/webp', 10, 1, 1)`);
+      const done = await fulfilOrderManually(tx, context(), {
+        orderId: order.id,
+        quantity: 1,
+        codes: [],
+        unitCostUsdUnits: usd(0.8),
+        acceptLoss: false,
+        proofFileId: proof,
+        reference: null,
+        admin: admin(),
+      });
+      expect(done.order.status).toBe('delivered');
+      const result = await sweep.sweep(new Date(Date.now() + 60 * 60_000), tx);
+      for (const ids of Object.values(result)) expect(ids).not.toContain(done.attemptId);
+      expect(await poll.poll(done.attemptId, tx)).toBeNull();
+      expect(await fulfil.fulfil(order.id, tx)).toEqual({ kind: 'skipped' });
+    });
   });
 });

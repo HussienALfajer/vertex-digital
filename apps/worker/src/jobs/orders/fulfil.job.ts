@@ -9,8 +9,6 @@ import {
 import {
   type AttemptRow,
   applyOutcome,
-  catalogGames,
-  catalogProducts,
   type Database,
   fulfilmentAttempts,
   lockOrder,
@@ -19,7 +17,7 @@ import {
   openAttempt,
   orderCodesKey,
   productRoutingStates,
-  queueTelegramMessage,
+  queueManualCard,
   refundRemaining,
   type Transaction,
   transitionOrder,
@@ -110,6 +108,8 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
       .select({ routeId: fulfilmentAttempts.routeId })
       .from(fulfilmentAttempts)
       .where(eq(fulfilmentAttempts.orderId, orderId));
+    // S11: an `admin_fulfil` attempt has no route; it still counts as an attempt for R5's reason.
+    const triedRouteIds = tried.flatMap((row) => (row.routeId ? [row.routeId] : []));
     const candidates = orderCandidates(
       routes.map(
         (route): CandidateRoute => ({
@@ -128,7 +128,7 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
         minMarginUsdUnits: order.minMarginUsdUnits,
         remainingUnits,
         isTestCustomer: order.isTest,
-        triedRouteIds: tried.map((row) => row.routeId),
+        triedRouteIds,
       },
     );
     const chosen = candidates.find((candidate) => candidate.rank === 1);
@@ -170,34 +170,7 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
       details: { supplier: route.supplierCode, units: remainingUnits },
     });
     if (!moved) throw new Error(`Order ${orderId} changed under its lock`);
-    if (manual) await this.manualCard(tx, context, moved, id, now);
+    if (manual) await queueManualCard(tx, context, moved, id, now);
     return { kind: 'sent', attempt: attempt as AttemptRow, manual };
-  }
-
-  /** Rule MN1: the card for the admin; never field values or codes. */
-  private async manualCard(
-    tx: Transaction,
-    context: ReturnType<typeof orderContext>,
-    order: OrderRow,
-    attemptId: string,
-    sentAt: Date,
-  ) {
-    const [names] = await tx
-      .select({ productNameAr: catalogProducts.nameAr, gameNameAr: catalogGames.nameAr })
-      .from(catalogProducts)
-      .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
-      .where(eq(catalogProducts.id, order.productId));
-    await queueTelegramMessage(tx, context.jobs, {
-      kind: 'manual_order',
-      params: {
-        orderId: order.id,
-        orderNumber: order.number,
-        gameNameAr: names?.gameNameAr ?? '',
-        productNameAr: names?.productNameAr ?? '',
-        quantity: order.quantity - order.deliveredQuantity - order.refundedQuantity,
-        sentAt: sentAt.toISOString(),
-      },
-      dedupeKey: `manual:${attemptId}`,
-    });
   }
 }

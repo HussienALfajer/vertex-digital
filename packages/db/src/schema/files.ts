@@ -8,8 +8,16 @@ import { id } from './columns.js';
  * Append-only (migration 0012).
  */
 
-/** `catalog_image` (S06 rule CT10): game covers and ID guides, WebP within 1600 px. */
-export const STORED_FILE_KINDS = ['deposit_receipt', 'sham_cash_qr', 'catalog_image'] as const;
+/**
+ * `catalog_image` (S06 rule CT10): game covers and ID guides, WebP within 1600 px.
+ * `delivery_proof` (S11 rule MF2): a manual delivery's screenshot, re-encoded like a receipt.
+ */
+export const STORED_FILE_KINDS = [
+  'deposit_receipt',
+  'sham_cash_qr',
+  'catalog_image',
+  'delivery_proof',
+] as const;
 
 export const storedFileKindEnum = pgEnum('stored_file_kind', STORED_FILE_KINDS);
 

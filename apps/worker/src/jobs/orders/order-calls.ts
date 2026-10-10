@@ -88,6 +88,11 @@ export async function askSupplier(
   attempt: AttemptRow,
   call: 'place' | 'get',
 ): Promise<AttemptOutcome> {
+  const { routeId, supplierOfferId } = attempt;
+  // S11: an `admin_fulfil` attempt is closed from its insert and never asked (edge case 17).
+  if (routeId === null || supplierOfferId === null) {
+    throw new Error(`Attempt ${attempt.id} has no route to ask`);
+  }
   const [row] = await db
     .select({
       code: suppliers.code,
@@ -95,7 +100,7 @@ export async function askSupplier(
       fields: orders.fields,
     })
     .from(suppliers)
-    .innerJoin(productRoutes, eq(productRoutes.id, attempt.routeId))
+    .innerJoin(productRoutes, eq(productRoutes.id, routeId))
     .innerJoin(orders, eq(orders.id, attempt.orderId))
     .where(eq(suppliers.id, attempt.supplierId));
   if (!row) throw new Error(`Attempt ${attempt.id} names no supplier, route or order`);
@@ -123,7 +128,7 @@ export async function askSupplier(
       call === 'place'
         ? adapter.placeOrder({
             idempotencyKey: attempt.id,
-            offerId: attempt.supplierOfferId,
+            offerId: supplierOfferId,
             quantity: attempt.quantity,
             fields,
           })

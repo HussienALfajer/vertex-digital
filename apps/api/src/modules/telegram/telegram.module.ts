@@ -12,10 +12,12 @@ import { TelegramWebhookController } from './telegram-webhook.controller.js';
  * `telegram_messages`, `telegram_updates`, `telegram_prompts`. A domain module above `deposits`
  * and `settings`: bot actions run through their services with the channel `telegram`. Other
  * modules queue bot messages with `queueTelegramMessage` from `packages/db`, never through here.
+ * S11: the dashboard reads the link's status (`TelegramService.status`).
  */
 @Module({
   imports: [AdminModule, DepositsModule, SettingsModule],
   controllers: [TelegramAdminController, TelegramWebhookController],
   providers: [TelegramService, TelegramBotService],
+  exports: [TelegramService],
 })
 export class TelegramModule {}

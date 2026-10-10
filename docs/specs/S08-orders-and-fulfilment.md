@@ -132,7 +132,7 @@ The state machine is ADR 0004's table plus ADR 0013 (`packages/contracts` `ORDER
 
 ### Admin decisions (owner, 2026-10-09)
 - D1. Decisions apply to an order in `needs_review` or to an open manual attempt; otherwise `ORDER_NOT_DECIDABLE` / `ATTEMPT_NOT_RESOLVABLE`. All require re-authentication (S01 D5) and a reason of 5–500 characters, and write an audit entry. The three that change money or goods take an `Idempotency-Key` (the same key returns the first result).
-- D2. **Confirm delivered** (`resolve` with `delivered`): the units delivered (1 to the attempt's units) and, for a code product, exactly that many codes (`CODES_COUNT_MISMATCH`), each 1–200 printable characters; applied by F1 with `resolvedBy = admin`.
+- D2. **Confirm delivered** (`resolve` with `delivered`): the units delivered (1 to the attempt's units) and, for a code product, exactly that many codes (`CODES_COUNT_MISMATCH`), each 1–200 printable characters; applied by F1 with `resolvedBy = admin`. S11 rule MF1: a manual-supplier attempt is delivered only through the manual fulfil, with its proof and actual cost; D2 stays for held automatic attempts.
 - D3. **Confirm failed** (`resolve` with `failed`): the attempt `failed` by F1 (not `inputRejected`); the remaining units go to the next route or are refunded.
 - D4. **Poll again** (held automatic attempts only): queues `orders.poll` now; nothing changes until a result comes.
 - D5. **Refund** (orders in `needs_review` only): the open attempt is closed `failed` (`resolvedBy = admin`) and the remaining units refunded (reason `admin`), without trying another route. The panel warns that the supplier may still deliver; a later delivery is a `conflict` (F5).

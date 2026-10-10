@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import {
+  FAILING_SYNC_RUNS,
   HEALTH_PROBE_REASON,
   type HealthStanding,
   type HealthVerdict,
@@ -14,6 +15,7 @@ import {
   bossJobSender,
   currentSupplierPolicy,
   type Database,
+  failedRunStreak,
   newId,
   productPrices,
   productRoutes,
@@ -37,7 +39,6 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { recordedCall } from '../../suppliers/supplier-calls.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
-import { FAILING_SYNC_RUNS, failedRunStreak } from './sync.job.js';
 
 type Executor = Database | Transaction;
 

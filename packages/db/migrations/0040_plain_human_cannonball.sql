@@ -1,0 +1,1 @@
+CREATE INDEX "orders_finished_at_idx" ON "orders" USING btree ("finished_at") WHERE "orders"."finished_at" is not null;

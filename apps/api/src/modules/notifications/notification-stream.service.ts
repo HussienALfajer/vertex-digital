@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
 import {
+  type AdminStreamEvent,
   type NotificationStreamEvent,
   orderCustomerStage,
   orderStatusSchema,
@@ -19,8 +20,12 @@ const HEARTBEAT_MS = 25_000;
 const SESSION_CHECK_MS = 5 * 60_000;
 const RECONNECT_MAX_MS = 30_000;
 
+/** The streams of the admin (one account, ADR 0016) share this key; customers use their id. */
+const ADMIN_KEY = 'admin';
+
 interface Stream {
-  customerId: string;
+  /** The customer's id, or `ADMIN_KEY`. */
+  key: string;
   response: Response;
   sessionValid: () => Promise<boolean>;
   close: () => void;
@@ -32,13 +37,14 @@ interface Stream {
  * the first stream, so a process that serves none holds no connection. When the connection drops
  * it reconnects with backoff, then every stream gets `resync`: notifications are read from the
  * table, so none is lost. S09 rule LT2: the same connection listens on `customer_orders` and sends
- * the customer's streams an `order` event (ids and status only).
+ * the customer's streams an `order` event (ids and status only). S11 rule LR4: the admin's streams
+ * get every order's `order` event (`{ orderId, status }`) and `resync`, with the same limits.
  */
 @Injectable()
 export class NotificationStreamService implements OnApplicationShutdown {
   private readonly logger = new Logger(NotificationStreamService.name);
   private readonly streams = new Map<string, Stream[]>();
-  /** Connect times per customer in the last minute (in memory, as the IP limits). */
+  /** Connect times per customer (or the admin) in the last minute (in memory, as the IP limits). */
   private readonly connects = new Map<string, number[]>();
   private listener: pg.Client | null = null;
   private listening: Promise<void> | null = null;
@@ -58,13 +64,40 @@ export class NotificationStreamService implements OnApplicationShutdown {
     request: Request,
     response: Response,
   ): Promise<void> {
-    this.countConnect(customerId);
+    await this.openStream(customerId, sessionValid, request, response, async () => {
+      const unreadCount = await this.notifications.unreadCount(customerId);
+      return () => send(response, 'unread', { unreadCount });
+    });
+  }
+
+  /** S11 rule LR4: opens a stream of order events for the admin, or `429 RATE_LIMITED`. */
+  async openAdmin(
+    sessionValid: () => Promise<boolean>,
+    request: Request,
+    response: Response,
+  ): Promise<void> {
+    await this.openStream(ADMIN_KEY, sessionValid, request, response, async () => () => {});
+  }
+
+  /**
+   * Counts the connect, listens, then (unless the client left meanwhile) opens the SSE response
+   * with its heartbeat and session check; a 4th stream of the same key closes the oldest. `first`
+   * prepares the opening event, sent once the stream is registered.
+   */
+  private async openStream(
+    key: string,
+    sessionValid: () => Promise<boolean>,
+    request: Request,
+    response: Response,
+    first: () => Promise<() => void>,
+  ): Promise<void> {
+    this.countConnect(key);
     let gone = false;
     request.once('close', () => {
       gone = true;
     });
     await this.listen();
-    const unreadCount = await this.notifications.unreadCount(customerId);
+    const opening = await first();
     // The client left while the stream was being prepared: nothing to keep open.
     if (gone) return;
 
@@ -79,7 +112,7 @@ export class NotificationStreamService implements OnApplicationShutdown {
     const heartbeat = setInterval(() => response.write(': ping\n\n'), HEARTBEAT_MS);
     const sessionCheck = setInterval(() => void this.checkSession(stream), SESSION_CHECK_MS);
     const stream: Stream = {
-      customerId,
+      key,
       response,
       sessionValid,
       close: () => {
@@ -91,11 +124,11 @@ export class NotificationStreamService implements OnApplicationShutdown {
     };
     request.on('close', stream.close);
 
-    const open = [...(this.streams.get(customerId) ?? []), stream];
-    this.streams.set(customerId, open);
+    const open = [...(this.streams.get(key) ?? []), stream];
+    this.streams.set(key, open);
     // A 4th stream closes the oldest (edge case 14).
     if (open.length > MAX_STREAMS) open[0]?.close();
-    send(response, 'unread', { unreadCount });
+    opening();
   }
 
   /** Re-runs the session check of every open stream now; the timer does it every 5 minutes. */
@@ -112,14 +145,14 @@ export class NotificationStreamService implements OnApplicationShutdown {
     await listener?.end().catch(() => {});
   }
 
-  private countConnect(customerId: string): void {
+  private countConnect(key: string): void {
     const now = Date.now();
-    const recent = (this.connects.get(customerId) ?? []).filter((at) => now - at < 60_000);
+    const recent = (this.connects.get(key) ?? []).filter((at) => now - at < 60_000);
     if (recent.length >= CONNECTS_PER_MINUTE) {
-      this.connects.set(customerId, recent);
+      this.connects.set(key, recent);
       throw new CodedException(429, 'RATE_LIMITED', 'Too many stream connections');
     }
-    this.connects.set(customerId, [...recent, now]);
+    this.connects.set(key, [...recent, now]);
   }
 
   private async checkSession(stream: Stream): Promise<void> {
@@ -127,9 +160,9 @@ export class NotificationStreamService implements OnApplicationShutdown {
   }
 
   private remove(stream: Stream): void {
-    const left = (this.streams.get(stream.customerId) ?? []).filter((open) => open !== stream);
-    if (left.length > 0) this.streams.set(stream.customerId, left);
-    else this.streams.delete(stream.customerId);
+    const left = (this.streams.get(stream.key) ?? []).filter((open) => open !== stream);
+    if (left.length > 0) this.streams.set(stream.key, left);
+    else this.streams.delete(stream.key);
   }
 
   /** Starts listening once; a failed start is retried by the next stream. */
@@ -190,14 +223,18 @@ export class NotificationStreamService implements OnApplicationShutdown {
     }, this.reconnectDelay);
   }
 
-  /** Rule LT2: `<customer id>:<order id>:<status>` from the `orders_notify` trigger. */
+  /**
+   * Rule LT2: `<customer id>:<order id>:<status>` from the `orders_notify` trigger, to the
+   * customer's streams with the stage; S11 rule LR4: to the admin's with the status only.
+   */
   private deliverOrder(payload: string): void {
     const [customerId, orderId, status] = payload.split(':');
     const parsed = orderStatusSchema.safeParse(status);
-    const streams = customerId ? this.streams.get(customerId) : undefined;
-    if (!streams || !orderId || !parsed.success) return;
+    if (!customerId || customerId === ADMIN_KEY || !orderId || !parsed.success) return;
     const item = { orderId, status: parsed.data, stage: orderCustomerStage(parsed.data) };
-    for (const stream of streams) send(stream.response, 'order', item);
+    for (const stream of this.streams.get(customerId) ?? []) send(stream.response, 'order', item);
+    const event: AdminStreamEvent = { orderId, status: parsed.data };
+    for (const stream of this.streams.get(ADMIN_KEY) ?? []) send(stream.response, 'order', event);
   }
 
   private async deliver(notificationId: string): Promise<void> {

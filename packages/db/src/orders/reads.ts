@@ -586,7 +586,8 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
       })
       .from(fulfilmentAttempts)
       .innerJoin(suppliers, eq(suppliers.id, fulfilmentAttempts.supplierId))
-      .innerJoin(supplierOffers, eq(supplierOffers.id, fulfilmentAttempts.offerId))
+      // S11: an `admin_fulfil` attempt has no offer.
+      .leftJoin(supplierOffers, eq(supplierOffers.id, fulfilmentAttempts.offerId))
       .where(eq(fulfilmentAttempts.orderId, order.id))
       .orderBy(desc(fulfilmentAttempts.createdAt), desc(fulfilmentAttempts.id)),
     db
@@ -674,6 +675,7 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
     attempts: attempts.map(
       ({ attempt, supplierCode, supplierNameAr, offerName }): FulfilmentAttempt => ({
         id: attempt.id,
+        kind: attempt.kind,
         routeId: attempt.routeId,
         supplierCode,
         supplierNameAr,
@@ -682,6 +684,9 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
         quantity: attempt.quantity,
         deliveredQuantity: attempt.deliveredQuantity,
         unitCostUsdUnits: attempt.unitCostUsdUnits,
+        chosenByAdmin: attempt.chosenByAdmin,
+        proofFileId: attempt.proofFileId,
+        deliveryReference: attempt.deliveryReference,
         status: attempt.status,
         supplierOrderId: attempt.supplierOrderId,
         failureReason: attempt.failureReason,

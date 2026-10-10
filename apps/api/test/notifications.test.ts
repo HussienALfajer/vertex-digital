@@ -8,7 +8,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { NotificationStreamService } from '../src/modules/notifications/notification-stream.service.js';
 import { NotificationsService } from '../src/modules/notifications/notifications.service.js';
-import { api, body, openCustomerStream, removeAccounts, seedCustomer } from './helpers.js';
+import { api, body, openEventStream, removeAccounts, seedCustomer } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
 
 /*
@@ -62,7 +62,7 @@ async function newest(customerId: string): Promise<string> {
   return row?.id as string;
 }
 
-const openStream = (cookie: string) => openCustomerStream(client, cookie);
+const openStream = (cookie: string) => openEventStream(client, cookie);
 
 describe('access', () => {
   it('answers 401 without a customer session, and to the admin', async () => {

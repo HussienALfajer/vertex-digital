@@ -8,6 +8,8 @@ export interface AuthenticatedRequest {
   /** On customer routes: whether the request's session still passes the guard's checks. */
   customerSessionValid?: () => Promise<boolean>;
   admin?: AdminIdentity;
+  /** On admin routes: whether the request's session is still open and not idle (S11 LR4). */
+  adminSessionValid?: () => Promise<boolean>;
 }
 
 function attached<T>(key: keyof AuthenticatedRequest, context: ExecutionContext): T {
@@ -31,4 +33,10 @@ export const CurrentAdmin = createParamDecorator(
 export const CustomerSessionCheck = createParamDecorator(
   (_: unknown, context: ExecutionContext): (() => Promise<boolean>) =>
     attached('customerSessionValid', context),
+);
+
+/** On an `@AdminRoute()`: re-checks the request's admin session (S11 rule LR4). */
+export const AdminSessionCheck = createParamDecorator(
+  (_: unknown, context: ExecutionContext): (() => Promise<boolean>) =>
+    attached('adminSessionValid', context),
 );

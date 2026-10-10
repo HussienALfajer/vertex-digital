@@ -1,4 +1,5 @@
 import {
+  ATTEMPT_KINDS,
   ATTEMPT_RESOLVERS,
   ATTEMPT_STATUSES,
   CANCEL_REASONS,
@@ -32,6 +33,7 @@ import {
 import { customers } from './auth.js';
 import { catalogGames, catalogProducts, productKindEnum } from './catalog.js';
 import { amountUnits, bytea, id, timestamps } from './columns.js';
+import { storedFiles } from './files.js';
 import { productPrices } from './pricing.js';
 import { exchangeRates } from './rates.js';
 import { productRoutes, supplierOffers, suppliers } from './suppliers.js';
@@ -47,6 +49,8 @@ import { ledgerJournals } from './wallet.js';
 export const orderStatusEnum = pgEnum('order_status', ORDER_STATUSES);
 
 export const attemptStatusEnum = pgEnum('attempt_status', ATTEMPT_STATUSES);
+
+export const attemptKindEnum = pgEnum('attempt_kind', ATTEMPT_KINDS);
 
 export const attemptResolverEnum = pgEnum('attempt_resolver', ATTEMPT_RESOLVERS);
 
@@ -166,6 +170,10 @@ export const orders = pgTable(
     index('orders_awaiting_expires_at_idx')
       .on(table.expiresAt)
       .where(sql`${table.status} = 'awaiting_balance'`),
+    /** S11: orders finished in a period (the live room's last hour, the dashboard's days). */
+    index('orders_finished_at_idx')
+      .on(table.finishedAt)
+      .where(sql`${table.finishedAt} is not null`),
     /** Delivery time (rule T1). */
     index('orders_delivery_stats_idx')
       .on(table.productId, table.deliveredAt.desc())
@@ -407,6 +415,12 @@ export const orderEvents = pgTable(
   (table) => [
     index('order_events_order_id_created_at_idx').on(table.orderId, table.createdAt),
     index('order_events_attempt_id_idx').on(table.attemptId),
+    /** S11 rule DB6: the recent conflicts the dashboard lists. */
+    index('order_events_conflict_idx')
+      .on(table.createdAt)
+      .where(
+        sql`${table.kind} = 'note' and ${table.reason} in ('webhook_conflict', 'late_result_conflict')`,
+      ),
     check('order_events_reason_check', sql`char_length(${table.reason}) between 1 and 64`),
     check(
       'order_events_status_check',
@@ -418,6 +432,8 @@ export const orderEvents = pgTable(
 /**
  * One supplier call for an order's remaining units (rules R3, F1). Its id is the idempotency key
  * sent to the supplier (ADR 0004). A route is tried once per order; one attempt is open at a time.
+ * S11: an `admin_fulfil` attempt records units the admin delivered from another source, on the
+ * `manual` supplier, without a route or offer, inserted already delivered (rule MF5).
  */
 export const fulfilmentAttempts = pgTable(
   'fulfilment_attempts',
@@ -426,17 +442,15 @@ export const fulfilmentAttempts = pgTable(
     orderId: uuid('order_id')
       .notNull()
       .references(() => orders.id),
-    routeId: uuid('route_id')
-      .notNull()
-      .references(() => productRoutes.id),
+    kind: attemptKindEnum('kind').notNull().default('routed'),
+    /** Set for `routed` attempts, null for `admin_fulfil` (S11). */
+    routeId: uuid('route_id').references(() => productRoutes.id),
     supplierId: uuid('supplier_id')
       .notNull()
       .references(() => suppliers.id),
-    offerId: uuid('offer_id')
-      .notNull()
-      .references(() => supplierOffers.id),
+    offerId: uuid('offer_id').references(() => supplierOffers.id),
     /** The supplier's own offer id, as sent. */
-    supplierOfferId: text('supplier_offer_id').notNull(),
+    supplierOfferId: text('supplier_offer_id'),
     /**
      * The route's field map when the attempt was written (supplier field → input field key; no
      * values): every re-send with the attempt's key carries the same fields (S08 rules F3, F6),
@@ -470,6 +484,14 @@ export const fulfilmentAttempts = pgTable(
     costJournalId: uuid('cost_journal_id')
       .unique()
       .references(() => ledgerJournals.id),
+    /** S11 rule RR3: the admin picked this attempt's route on a reroute. */
+    chosenByAdmin: boolean('chosen_by_admin').notNull().default(false),
+    /** S11 rule MF2: the delivery proof of a manual delivery, used once. */
+    proofFileId: uuid('proof_file_id')
+      .unique()
+      .references(() => storedFiles.id),
+    /** S11 rule MF2: the operation number at the other source. */
+    deliveryReference: text('delivery_reference'),
     ...timestamps(),
   },
   (table) => [
@@ -488,12 +510,26 @@ export const fulfilmentAttempts = pgTable(
       sql`${table.deliveredQuantity} between 0 and ${table.quantity}
         and (${table.status} = 'delivered') = (${table.deliveredQuantity} > 0)`,
     ),
-    check('fulfilment_attempts_unit_cost_check', sql`${table.unitCostUsdUnits} > 0`),
+    check(
+      'fulfilment_attempts_unit_cost_check',
+      sql`${table.unitCostUsdUnits} >= 0
+        and (${table.kind} = 'admin_fulfil' or ${table.unitCostUsdUnits} > 0 or ${table.proofFileId} is not null)`,
+    ),
+    check(
+      'fulfilment_attempts_kind_check',
+      sql`case ${table.kind}
+        when 'routed' then ${table.routeId} is not null and ${table.offerId} is not null
+          and ${table.supplierOfferId} is not null
+        else ${table.routeId} is null and ${table.offerId} is null and ${table.supplierOfferId} is null
+          and ${table.status} = 'delivered' and ${table.resolvedBy} = 'admin'
+          and ${table.proofFileId} is not null and not ${table.chosenByAdmin}
+        end`,
+    ),
     check(
       'fulfilment_attempts_resolved_check',
       sql`(${table.status} in ('delivered', 'failed')) = (${table.resolvedAt} is not null)
         and (${table.resolvedAt} is null) = (${table.resolvedBy} is null)
-        and (${table.status} = 'delivered') = (${table.costJournalId} is not null)
+        and (${table.costJournalId} is not null) = (${table.status} = 'delivered' and ${table.unitCostUsdUnits} > 0)
         and (not ${table.inputRejected} or ${table.status} = 'failed')
         and (${table.resolvedBy} = 'admin') = (${table.adminReason} is not null)`,
     ),
@@ -503,7 +539,8 @@ export const fulfilmentAttempts = pgTable(
         and char_length(${table.supplierOrderId}) between 1 and 128
         and char_length(${table.failureReason}) between 1 and 200
         and char_length(${table.supplierErrorCode}) between 1 and 64
-        and char_length(${table.adminReason}) between 5 and 500`,
+        and char_length(${table.adminReason}) between 5 and 500
+        and char_length(${table.deliveryReference}) between 1 and 200`,
     ),
     check('fulfilment_attempts_poll_count_check', sql`${table.pollCount} >= 0`),
   ],

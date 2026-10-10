@@ -400,9 +400,13 @@ export interface StreamEvent {
   data: Record<string, unknown>;
 }
 
-/** An open SSE stream (S05 rule NT6): its events in order, and whether the server ended it. */
-export async function openCustomerStream(client: ReturnType<typeof api>, cookie: string) {
-  const response = await client.get('/api/notifications/stream', { cookie });
+/** An open SSE stream (S05 rule NT6, S11 rule LR4): its events in order, and whether it ended. */
+export async function openEventStream(
+  client: ReturnType<typeof api>,
+  cookie: string,
+  path = '/api/notifications/stream',
+) {
+  const response = await client.get(path, { cookie });
   const events: StreamEvent[] = [];
   const waiters: (() => void)[] = [];
   let ended = false;

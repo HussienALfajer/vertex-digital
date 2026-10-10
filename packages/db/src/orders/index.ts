@@ -1,10 +1,26 @@
 export {
+  ADMIN_CLOSE_REASONS,
+  type AdminCloseKind,
+  type AdminDecision,
+  closeAttemptByAdmin,
+  closeForAdminRefund,
+  fulfilOrderManually,
+  type ManualFulfilInput,
+  type ManualFulfilResult,
+  queueManualCard,
+  type RerouteResult,
+  rerouteOptions,
+  rerouteOrder,
+} from './admin-actions.js';
+export {
   type CheckoutInput,
   type CheckoutResult,
   type CheckoutRow,
   checkoutOrderRows,
   checkoutOrders,
 } from './checkout.js';
+export { type OrderFigures, orderFigures, type PeriodFigures } from './figures.js';
+export { liveBoard, liveCounts } from './live.js';
 export {
   type AppliedOutcome,
   type AttemptOutcome,

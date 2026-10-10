@@ -19,6 +19,9 @@ const STATUS: Partial<Record<ErrorCode, 400 | 404 | 409>> = {
   ORDER_NOT_CANCELLABLE: 409,
   CHECKOUT_REFUSED: 409,
   ORDER_NOT_SHAREABLE: 409,
+  ROUTE_NOT_ELIGIBLE: 409,
+  LOSS_NOT_CONFIRMED: 409,
+  PROOF_INVALID: 400,
 };
 
 /** An `OrderError` or `LedgerError` as the API answers it; anything else is rethrown as is. */
@@ -41,6 +44,11 @@ export const orderRefusals = {
     new CodedException(409, 'ORDER_NOT_DECIDABLE', 'The order is not waiting for a decision'),
   notResolvable: () =>
     new CodedException(409, 'ATTEMPT_NOT_RESOLVABLE', 'The attempt cannot take this decision'),
+  /** S11 rule MF1: a manual attempt is delivered through the manual fulfil. */
+  useFulfil: () =>
+    new CodedException(409, 'ATTEMPT_NOT_RESOLVABLE', 'Deliver a manual attempt by fulfilling it', {
+      use: 'fulfil',
+    }),
   keyReused: () =>
     new CodedException(409, 'IDEMPOTENCY_KEY_REUSED', 'The key was used for another decision'),
   tooManyUnits: (max: number) =>
