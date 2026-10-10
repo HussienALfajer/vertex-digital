@@ -24,6 +24,7 @@ import { Route as AppDepositsIdRouteImport } from './routes/_app/deposits.$id'
 import { Route as AppDepositsTransfersRouteImport } from './routes/_app/deposits.transfers'
 import { Route as AppOrdersIndexRouteImport } from './routes/_app/orders.index'
 import { Route as AppOrdersIdRouteImport } from './routes/_app/orders.$id'
+import { Route as AppOrdersLiveRouteImport } from './routes/_app/orders.live'
 import { Route as AppOrdersPolicyRouteImport } from './routes/_app/orders.policy'
 import { Route as AppPricingIndexRouteImport } from './routes/_app/pricing.index'
 import { Route as AppPricingReviewsRouteImport } from './routes/_app/pricing.reviews'
@@ -112,6 +113,11 @@ const AppOrdersIdRoute = AppOrdersIdRouteImport.update({
   path: '/orders/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrdersLiveRoute = AppOrdersLiveRouteImport.update({
+  id: '/orders/live',
+  path: '/orders/live',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrdersPolicyRoute = AppOrdersPolicyRouteImport.update({
   id: '/orders/policy',
   path: '/orders/policy',
@@ -190,6 +196,7 @@ export interface FileRoutesByFullPath {
   '/deposits/$id': typeof AppDepositsIdRoute
   '/deposits/transfers': typeof AppDepositsTransfersRoute
   '/orders/$id': typeof AppOrdersIdRoute
+  '/orders/live': typeof AppOrdersLiveRoute
   '/orders/policy': typeof AppOrdersPolicyRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
@@ -219,6 +226,7 @@ export interface FileRoutesByTo {
   '/deposits/$id': typeof AppDepositsIdRoute
   '/deposits/transfers': typeof AppDepositsTransfersRoute
   '/orders/$id': typeof AppOrdersIdRoute
+  '/orders/live': typeof AppOrdersLiveRoute
   '/orders/policy': typeof AppOrdersPolicyRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
@@ -250,6 +258,7 @@ export interface FileRoutesById {
   '/_app/deposits/$id': typeof AppDepositsIdRoute
   '/_app/deposits/transfers': typeof AppDepositsTransfersRoute
   '/_app/orders/$id': typeof AppOrdersIdRoute
+  '/_app/orders/live': typeof AppOrdersLiveRoute
   '/_app/orders/policy': typeof AppOrdersPolicyRoute
   '/_app/pricing/reviews': typeof AppPricingReviewsRoute
   '/_app/settings/deposits': typeof AppSettingsDepositsRoute
@@ -281,6 +290,7 @@ export interface FileRouteTypes {
     | '/deposits/$id'
     | '/deposits/transfers'
     | '/orders/$id'
+    | '/orders/live'
     | '/orders/policy'
     | '/pricing/reviews'
     | '/settings/deposits'
@@ -310,6 +320,7 @@ export interface FileRouteTypes {
     | '/deposits/$id'
     | '/deposits/transfers'
     | '/orders/$id'
+    | '/orders/live'
     | '/orders/policy'
     | '/pricing/reviews'
     | '/settings/deposits'
@@ -340,6 +351,7 @@ export interface FileRouteTypes {
     | '/_app/deposits/$id'
     | '/_app/deposits/transfers'
     | '/_app/orders/$id'
+    | '/_app/orders/live'
     | '/_app/orders/policy'
     | '/_app/pricing/reviews'
     | '/_app/settings/deposits'
@@ -472,6 +484,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrdersIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/orders/live': {
+      id: '/_app/orders/live'
+      path: '/orders/live'
+      fullPath: '/orders/live'
+      preLoaderRoute: typeof AppOrdersLiveRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/orders/policy': {
       id: '/_app/orders/policy'
       path: '/orders/policy'
@@ -575,6 +594,7 @@ interface AppRouteChildren {
   AppDepositsIdRoute: typeof AppDepositsIdRoute
   AppDepositsTransfersRoute: typeof AppDepositsTransfersRoute
   AppOrdersIdRoute: typeof AppOrdersIdRoute
+  AppOrdersLiveRoute: typeof AppOrdersLiveRoute
   AppOrdersPolicyRoute: typeof AppOrdersPolicyRoute
   AppPricingReviewsRoute: typeof AppPricingReviewsRoute
   AppSettingsDepositsRoute: typeof AppSettingsDepositsRoute
@@ -602,6 +622,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDepositsIdRoute: AppDepositsIdRoute,
   AppDepositsTransfersRoute: AppDepositsTransfersRoute,
   AppOrdersIdRoute: AppOrdersIdRoute,
+  AppOrdersLiveRoute: AppOrdersLiveRoute,
   AppOrdersPolicyRoute: AppOrdersPolicyRoute,
   AppPricingReviewsRoute: AppPricingReviewsRoute,
   AppSettingsDepositsRoute: AppSettingsDepositsRoute,

@@ -8,6 +8,7 @@ import { ADMIN_SESSION_RULES } from '@vertex-digital/contracts';
 
 export const ACCESS = Symbol('ACCESS');
 export const SENSITIVE = Symbol('SENSITIVE');
+export const NO_ACTIVITY = Symbol('NO_ACTIVITY');
 
 export type RouteAccess =
   | { kind: 'public' }
@@ -40,6 +41,13 @@ export const AdminSetupRoute = () =>
  * else `403 REAUTHENTICATION_REQUIRED` (rule D5). Each spec marks its own sensitive routes.
  */
 export const Sensitive = () => SetMetadata(SENSITIVE, true);
+
+/**
+ * An admin route that never counts as the admin's activity (rule D4), as if every request sent
+ * `X-Background-Request`: the admin stream (S11 rule LR4), whose `EventSource` cannot send the
+ * header and reconnects on its own.
+ */
+export const NoActivity = () => SetMetadata(NO_ACTIVITY, true);
 
 /**
  * True when the admin re-authenticated in the last 5 minutes (rule D5): what `@Sensitive()`

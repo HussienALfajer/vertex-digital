@@ -293,8 +293,18 @@ export const unreadCountSchema = z.object(unreadCount).meta({ id: 'UnreadCount' 
 
 export type UnreadCount = z.infer<typeof unreadCountSchema>;
 
-/** The live stream's events (rule NT6), sent as SSE `event:` names with JSON `data:`. */
-export const NOTIFICATION_STREAM_EVENTS = ['unread', 'notification', 'order', 'resync'] as const;
+/**
+ * The live stream's events (rule NT6), sent as SSE `event:` names with JSON `data:`. `replaced`
+ * (S11): a newer stream of the same viewer took this one's place; the client stops instead of
+ * reconnecting, which would close the next oldest in turn.
+ */
+export const NOTIFICATION_STREAM_EVENTS = [
+  'unread',
+  'notification',
+  'order',
+  'resync',
+  'replaced',
+] as const;
 
 export type NotificationStreamEvent = (typeof NOTIFICATION_STREAM_EVENTS)[number];
 

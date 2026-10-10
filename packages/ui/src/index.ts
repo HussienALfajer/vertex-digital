@@ -29,6 +29,7 @@ export * from './components/select';
 export * from './components/sheet';
 export * from './components/skeleton';
 export * from './components/slide-to-pay';
+export * from './components/sparkline';
 export * from './components/switch';
 export * from './components/table';
 export * from './components/tabs';

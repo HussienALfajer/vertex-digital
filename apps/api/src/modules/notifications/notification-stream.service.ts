@@ -126,8 +126,12 @@ export class NotificationStreamService implements OnApplicationShutdown {
 
     const open = [...(this.streams.get(key) ?? []), stream];
     this.streams.set(key, open);
-    // A 4th stream closes the oldest (edge case 14).
-    if (open.length > MAX_STREAMS) open[0]?.close();
+    // A 4th stream closes the oldest (edge case 14), telling it first so its client stays closed.
+    const oldest = open.length > MAX_STREAMS ? open[0] : undefined;
+    if (oldest) {
+      send(oldest.response, 'replaced', {});
+      oldest.close();
+    }
     opening();
   }
 

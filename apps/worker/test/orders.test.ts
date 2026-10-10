@@ -1056,7 +1056,8 @@ describe('Telegram order messages (rules MN1, MN2, F5, F7)', () => {
     ).text;
     expect(card).toContain('طلب يدوي VO-ABC234 بانتظارك');
     expect(card).toContain('ببجي موبايل · 60 UC × 2');
-    expect(card).toContain(`${links.admin}/orders/${orderId}`);
+    // S11 edge case 10: the link opens the manual fulfil.
+    expect(card).toContain(`${links.admin}/orders/${orderId}?decide=fulfil`);
     expect(
       renderTelegramMessage(
         'manual_order_reminder',

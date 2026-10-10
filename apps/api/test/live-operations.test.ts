@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { priceFromCost } from '@vertex-digital/contracts';
 import {
+  adminSessions,
   applyOutcome,
   catalogCategories,
   ensureCustomerWallet,
@@ -768,6 +769,8 @@ describe('the admin stream (rule LR4)', () => {
     for (let index = 0; index < 4; index += 1)
       streams.push(await openStream(index ? admin.cookie : other));
     await streams[0]?.waitEnded();
+    // Told first, so the panel stays closed instead of reconnecting and closing the next oldest.
+    expect(streams[0]?.events.at(-1)).toEqual({ event: 'replaced', data: {} });
     expect(streams.slice(1).map((stream) => stream.ended())).toEqual([false, false, false]);
     await Promise.all(streams.map((stream) => stream.close()));
 
@@ -780,6 +783,25 @@ describe('the admin stream (rule LR4)', () => {
     }
     await test.app.get(NotificationStreamService).checkSessions();
     await ending.waitEnded();
+  });
+
+  it('never counts a connect as the admin’s activity (rule D4)', async () => {
+    const token = decodeURIComponent(
+      /vd-admin\.session_token=([^;]+)/.exec(admin.cookie)?.[1] ?? '',
+    ).split('.')[0] as string;
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60_000);
+    await test.db
+      .update(adminSessions)
+      .set({ lastActiveAt: tenMinutesAgo })
+      .where(eq(adminSessions.token, token));
+    const stream = await openStream();
+    expect(stream.response.status).toBe(200);
+    await stream.close();
+    const [session] = await test.db
+      .select({ lastActiveAt: adminSessions.lastActiveAt })
+      .from(adminSessions)
+      .where(eq(adminSessions.token, token));
+    expect(session?.lastActiveAt).toEqual(tenMinutesAgo);
   });
 
   it('refuses a 31st connect in a minute', async () => {
