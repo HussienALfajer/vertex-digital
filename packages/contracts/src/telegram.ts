@@ -19,6 +19,7 @@ import {
   switchChannelSchema,
 } from './settings.js';
 import { supplierCodeSchema, supplierHealthStateSchema } from './suppliers.js';
+import { ticketCategorySchema } from './support.js';
 import { usdtMethodSchema } from './usdt.js';
 
 /*
@@ -80,6 +81,9 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'order_needs_review',
   'order_conflict',
   'validation_quota_reached',
+  /** S12 TK8: a customer opened a ticket, or wrote in one (one per ticket per 10 minutes). */
+  'ticket_opened',
+  'ticket_reply',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -173,6 +177,7 @@ export const telegramBotReplySchema = z.discriminatedUnion('reply', [
       'over_limit',
       'off',
       'panel_only',
+      'frozen',
     ]),
   }),
 ]);
@@ -261,6 +266,9 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     /** S10: real customers' checkouts paid today, and their orders. */
     checkouts: z.int().nonnegative().default(0),
     checkoutOrders: z.int().nonnegative().default(0),
+    /** S12 TK13: tickets opened today, and tickets waiting for the admin now. */
+    ticketsOpened: z.int().nonnegative().default(0),
+    ticketsWaiting: z.int().nonnegative().default(0),
   }),
   bot_reply: telegramBotReplySchema,
   /** To the previous chat when another chat was linked (rule TG3). */
@@ -354,6 +362,26 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     supplierNameAr: z.string(),
     quota: z.int().nonnegative(),
   }),
+  /**
+   * S12 TK8: the number, the type, the subject (cut to 120), whether there are images and the
+   * customer's email; never the message or the images. The link opens the ticket in the panel.
+   */
+  ticket_opened: z.object({
+    ticketId: z.uuid(),
+    number: z.string(),
+    category: ticketCategorySchema,
+    subject: z.string().max(120),
+    hasImages: z.boolean(),
+    customerEmail: z.string(),
+  }),
+  ticket_reply: z.object({
+    ticketId: z.uuid(),
+    number: z.string(),
+    category: ticketCategorySchema,
+    subject: z.string().max(120),
+    hasImages: z.boolean(),
+    customerEmail: z.string(),
+  }),
 } as const satisfies Record<TelegramMessageKind, z.ZodType>;
 
 export type TelegramMessageParams<Kind extends TelegramMessageKind> = z.infer<
@@ -403,16 +431,19 @@ export function telegramRejectReasons(method: DepositMethod): DepositRejectReaso
 }
 
 /** Why a deposit cannot be approved from Telegram (rule TC4), or null when it can. */
-export type TelegramApprovalRefusal = 'panel_only' | 'off' | 'flagged' | 'over_limit';
+export type TelegramApprovalRefusal = 'panel_only' | 'frozen' | 'off' | 'flagged' | 'over_limit';
 
 export function telegramApprovalRefusal(input: {
   method: DepositMethod;
+  /** S12 CF4: a frozen customer's deposit is approved in the panel only ("العميل مجمّد"). */
+  customerFrozen: boolean;
   flagCount: number;
   creditUsdUnits: number;
   /** `deposit_settings.telegram_approval_max_usd_units`; 0 turns approval off. */
   limitUsdUnits: number;
 }): TelegramApprovalRefusal | null {
   if (input.method !== 'sham_cash') return 'panel_only';
+  if (input.customerFrozen) return 'frozen';
   if (input.limitUsdUnits === 0) return 'off';
   if (input.flagCount > 0) return 'flagged';
   return input.creditUsdUnits > input.limitUsdUnits ? 'over_limit' : null;

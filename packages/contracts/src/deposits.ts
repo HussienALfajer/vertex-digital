@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { customerMarksSchema } from './customer-status.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import {
   amountUnitsSchema,
@@ -938,6 +939,8 @@ export const adminDepositQuerySchema = cursorQuerySchema
     method: depositMethodSchema.optional(),
     /** A reference code (any case, dash optional) or the customer's email prefix. */
     q: z.string().trim().min(3).max(254).optional(),
+    /** S12 CS4: the customer profile's deposits tab. */
+    customerId: z.uuid().optional(),
   })
   .meta({ id: 'AdminDepositQuery' });
 
@@ -1087,6 +1090,8 @@ export const adminDepositSchema = z
     flags: z.array(depositFlagSchema),
     customer: z.object({
       ...depositCustomer,
+      /** S12 CS6: the status, the pinned note and the signals. */
+      marks: customerMarksSchema,
       phone: z.string(),
       createdAt: z.iso.datetime(),
       /** Rule SC3: one credited deposit makes an account established. */

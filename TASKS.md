@@ -1,28 +1,30 @@
-# TASKS — S11 Live operations
+# TASKS — S12 Customers and support
 
-Spec: `docs/specs/S11-live-operations.md` (F17, F18; ADRs 0003, 0004, 0005, 0011, 0016, 0019, 0020, 0022, 0025). Two PRs, as the spec's implementation notes suggest; each leaves `main` green.
+Spec: `docs/specs/S12-customers-and-support.md` (F19, F23, F27 ticket replies; ADRs 0003, 0004, 0006, 0007, 0011, 0016, 0018, 0019, 0023, 0024, 0026). Two PRs, as the spec's implementation notes suggest; each leaves `main` green.
 
-## PR 1 — Contracts, db, api, worker guards, bridge (`feat/s11-live-ops-api`) · Opus 5.5 `high`
-- [x] Contracts `orders.ts`: `ATTEMPT_KINDS`, `LIVE_COLUMNS`, `liveColumn`, `slowAfterSeconds`; live board, card, stream event, reroute options/request, fulfil, delivery proof schemas; admin attempt shape gains `kind`, `chosenByAdmin`, `proofFileId`, `deliveryReference`
-- [x] Contracts `dashboard.ts` (new, re-exported): `damascusDayBounds` (reuse the daily summary's helper if present), `deltaPercent`, `ATTENTION_KINDS`, `attentionItemSchema`, `dashboardSchema`
-- [x] `STORED_FILE_KINDS` (db `files.ts`) + `delivery_proof`; error codes `ROUTE_NOT_ELIGIBLE`, `LOSS_NOT_CONFIRMED`, `PROOF_INVALID` with Arabic admin text; audit `order.rerouted`, `order.fulfilled_manually`, `order.proof_uploaded` with labels; 100% coverage of the pure rules
-- [x] Db (`/db-migration`): `fulfilment_attempts` `kind` enum, nullable route fields with the kind check, cost checks (`≥ 0`, `> 0` for routed, journal ⇔ delivered and cost > 0), `proof_file_id` unique FK, `delivery_reference`, `chosen_by_admin`; file kind `delivery_proof`; tests of the checks, triggers unchanged
-- [x] Db write paths in `packages/db/src/orders`: `rerouteOrder` (RR1–RR3, eligibility rechecked under the lock, two transitions from `sent_to_supplier`, `orders.poll` or `manual_order` card in the transaction), `fulfilOrderManually` (MF1–MF5, zero cost posts no journal), refund extension RF1; concurrency tests (reroute vs late poll and webhook, fulfil vs late result, two fulfils with different keys, same key replayed, reroute vs cost change)
-- [x] Api `orders` admin: `GET /orders/live` (LR1, LR2, filters, caps), `GET /orders/:id/routes` (RR2), `POST /reroute`, `POST /proof` (re-encoded, audited), `GET /proofs/:fileId` (`no-store`), `POST /fulfil`, refund RF1, resolve refusal MF1; attempts' new fields on the order detail
-- [x] Api admin stream `GET /api/admin/stream` (LR4: forward `customer_orders` events, `resync`, heartbeat, 3 streams, 30 connects/min, session re-check)
-- [x] Api `dashboard` read module (DB1–DB9) reading other modules through their services; `TABLE_OWNERS`/architecture test
-- [x] Tests: `test/live-operations.test.ts` (every route: success, 401, 403, re-auth, every error code, `no-store`)
-- [x] Worker: sweep, fulfil and poll ignore `admin_fulfil` attempts; a rerouted `sending` attempt is sent by its poll with its key; tests
-- [x] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow changed shapes; the order page hides "تأكّدت: تمّ التسليم" on manual attempts (MF1) until PR 2 adds the manual fulfil
-- [x] nginx: admin host `/api/admin/stream` buffering off and long read timeout, proof uploads up to 11 MB (`deploy/`)
-- [x] Wiring checklist, docs (`docs/architecture.md` admin stream and dashboard module, S08 D2 note → MF1, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, build, e2e, drift: passed and recorded on 135698275a6c; test: all packages pass except 3 Windows-only worker failures in `telegram-jobs.test.ts` that predate this branch, left to CI), reviewer (two blocking findings: an open manual attempt's cost could be rewritten without its proof; the access and error matrix was incomplete; both fixed), owner acceptance (2026-10-10), PR with auto-merge
+## PR 1 — Contracts, db, purchase and deposit guards, api, worker, bridge (`feat/s12-customers-support-api`) · Opus 5.5 `high`
+- [x] Contracts `customers.ts`: `CUSTOMER_STATUSES`, `customerStatus`, search query (CS1 classifier with phone normalization), row/page/profile, signals, limits, state change, notes, sign-ins schemas; `effectiveDepositLimitSettings` (LM2), `purchaseCapBreach` (LM4)
+- [x] Contracts `support.ts` (new, re-exported): categories, statuses, authors, closers, `TICKET_LIMITS`, subject/body/create/message/ticket/page/admin schemas, channels and settings schemas; `ticketTransition`, `customerCanReply` (TK3–TK6)
+- [x] Contracts extended: `STORED_FILE_KINDS` + `ticket_attachment`; `NOTIFICATION_EVENTS` + `ticket_replied` (email template, preference on by default); `TELEGRAM_MESSAGE_KINDS` + `ticket_opened`, `ticket_reply`; `ATTENTION_KINDS` + `tickets_waiting`; reservation cancel reason `frozen`; session user `frozen`; jobs `support.auto_close`, `customers.purge_sign_ins`
+- [x] Error codes `ACCOUNT_FROZEN`, `PURCHASE_LIMIT_EXCEEDED`, `CUSTOMER_STATE_INVALID`, `CUSTOMER_NOT_ARCHIVABLE`, `TICKETS_LIMIT_REACHED`, `TICKET_ALREADY_OPEN`, `TICKET_CLOSED`, `TICKET_LINK_INVALID` with Arabic store and admin text; audit actions AU1 with labels; 100% coverage of the pure rules
+- [x] Db (`/db-migration`): `customers.frozen_at`; `customer_sign_ins`; `customer_limits` (checks); `customer_notes` (one pinned, body trigger); `support_tickets` (enums, checks, partial unique per order and deposit, indexes); `support_messages` and `support_attachments` (append-only triggers, grants); `support_settings` (seeded row); file kind; tests of checks, indexes and triggers
+- [x] Db write paths: one customer guard helper (`FOR SHARE`, `ACCOUNT_FROZEN`, cap LM4) used by `purchase.ts`, `checkout.ts`, `reservations.ts` (create refusal, payment skip under the cap) and deposit creation; freeze/archive locks; concurrency tests (freeze vs purchase both orders, freeze vs checkout, two freezes, cap with refunds and the 24-hour edge, reservation skip, archive blockers)
+- [x] Api `auth`: `customer_sign_ins` written with every session creation; `frozen` in the session payload; player check refuses a frozen customer
+- [x] Api deposits: effective limits (LM2) in creation and the wizard's limits read; `ACCOUNT_FROZEN` on creation; Telegram deposit card without Approve for a frozen customer and refusal of an older Approve (CF4)
+- [x] Api `customers` module (admin): search (CS1, CS2), profile (CS3, CS5), sign-ins, sessions, notes, history tabs; freeze/unfreeze (CF1, CF6), limits (LM5), archive/unarchive (AR1–AR3), sessions revoke (SN1), notes (SN2); `customerId` filter on admin orders and deposits; pinned note, status and signals count on the deposit and order admin pages (CS6)
+- [x] Api `support` module: customer routes (list, create multipart, read, message, close, attachment), admin routes (queue with `open` count, create, read, message, close, attachment, settings), public channels; idempotency per ticket and author; limits and rate limit; Telegram outbox (TK8) and `ticket_replied` (TK9) in the transaction; nginx rate zone and body size for the multipart routes (`deploy/`)
+- [x] Dashboard `tickets_waiting` (TK13); `TABLE_OWNERS` and the architecture test
+- [x] Api tests: `test/customers.test.ts`, `test/support.test.ts` (every route: success, 401, 403, other customer's 404, re-auth, every error code, `no-store`), every purchase and deposit route refusing a frozen customer, the Telegram approval refusal
+- [x] Worker: `support.auto_close` (hourly), `customers.purge_sign_ins` (daily 04:00 Damascus); Telegram templates `ticket_opened`, `ticket_reply`, deposit card frozen; email `ticket_replied` (once per ticket per 10 minutes); daily summary lines; tests
+- [x] Bridge: build, OpenAPI export, admin client; admin and store E2E mocks follow changed shapes
+- [x] Wiring checklist, docs (`docs/architecture.md` customers and support modules, `docs/open-questions.md` Q14, S05 notes, folder `CLAUDE.md` files, spec "Settled in implementation")
+- [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 69825e421930), reviewer (three blocking findings fixed: an archived customer let through the guard, `FOR UPDATE` on the customer deadlocking with foreign-key checks, the nginx ticket zone counting reads and sharing the receipt budget), owner acceptance (2026-10-10), PR with auto-merge
 
-## PR 2 — Admin screens, E2E (`feat/s11-live-ops-screens`) · Opus 5.5 `high`
-- [x] Admin stream hook (`features/live/` or `lib/`), reconnect, `resync`, indicator
-- [x] Dashboard home page `/`: attention list, KPI row with deltas and the 7-day line, live counts, deposits, suppliers table, rate; skeletons, error, stale note; refetch rules DB9
-- [x] `/orders/live`: filters in the URL, four columns (tabs below tablet), cards with ticking time, amber/red, "+N أخرى", sound toggle (`localStorage`), tab title count, side sheet with actions; navigation item
-- [x] Dialogs: reroute (route table, warning), manual fulfil (units, codes, cost with live profit/loss, loss checkbox, proof upload with preview), extended refund; on `/orders/$id` too; attempts show "اختاره الأدمن", "تنفيذ يدوي", reference, proof thumbnail; i18n keys
-- [x] E2E flows (mocked stream event moving a card) and RTL screenshots light and dark
-- [x] Wiring checklist, docs (`docs/ROADMAP.md` S11 done, `apps/admin/CLAUDE.md`, `wiring.md` patterns)
-- [x] Checks (lint, typecheck, test, build recorded on 219dd4dbdb6a; e2e: admin 114 passed, store passed with one flake that passed alone, left to CI), reviewer (one blocking finding: stream reconnects counted as activity and looped past 3 streams; fixed with `@NoActivity()` and the `replaced` event), owner acceptance (2026-10-10), PR with auto-merge
+## PR 2 — Admin and store screens, E2E (`feat/s12-customers-support-screens`) · Opus 5.5 `high`
+- [ ] Admin `features/customers/`: `/customers` (search and status tabs in the URL, table, link to test customers), `/customers/$id` (header, chips, actions menu and dialogs with re-authentication; tabs: summary, wallet, orders, deposits, tickets, devices, notes, history)
+- [ ] Admin customer panel on the deposit review and order pages: chips, pinned note, signals count (CS6)
+- [ ] Admin `features/support/`: `/support` queue (tabs and filters in the URL), `/support/$id` thread (attachments, reply with images, Ctrl+Enter, close, side panel), `/support/new?customer=`, `/settings/support`; navigation items "العملاء" and "الدعم" with the `open` badge; dashboard `tickets_waiting`; i18n keys
+- [ ] Store: frozen banner and disabled buy box, cart, deposit wizard and player check; footer links; `/support`, `/support/new` (type, picker, images), `/support/$id` (thread, reply, close, closed states, refetch on `ticket_replied`); "تحتاج مساعدة؟" on order and deposit pages; notification text; `/account` preference "ردود الدعم"; i18n keys
+- [ ] E2E flows and RTL screenshots (admin light and dark; store phone width, light and dark)
+- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S12 done, folder `CLAUDE.md` files, `wiring.md` patterns)
+- [ ] Checks, reviewer, owner acceptance (spec "Acceptance" steps), PR with auto-merge

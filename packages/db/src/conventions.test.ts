@@ -74,6 +74,12 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   checkouts: 'A payment record (S10 CT5): never deleted or archived, only finished once',
   saved_players: 'The customer’s own data (S10 F14): deleted for real, nothing references it',
   order_share_links: 'A link record (S10 SH1): revoked, never deleted or archived',
+  customer_sign_ins: 'A log (S12): deleted after 90 days, never archived',
+  customer_limits: "A customer's overrides (S12 LM5): overwritten with an audit entry",
+  support_tickets: 'A conversation record (S12 TK3): closed, never archived or deleted',
+  support_messages: 'Append-only (S12 TK7): a ticket conversation is a record',
+  support_attachments: 'Append-only (S12 TK11): the images of a message',
+  support_settings: 'One row of settings (S12 SC1), changes audited',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -84,6 +90,9 @@ const NATURAL_KEYS: Record<string, string> = {
   telegram_updates: "Keyed by Telegram's update id: one row per handled update (S05 TG5)",
   telegram_deposit_cards: 'Keyed by deposit and submission: one card per submission (S05 TC1)',
   telegram_bot_state: 'One row, id 1 (S05 RM3)',
+  customer_limits: 'Keyed by its customer: one row of overrides per customer (S12 LM5)',
+  support_attachments: 'Keyed by message and position: up to 3 images per message (S12 TK11)',
+  support_settings: 'One row, id 1 (S12 SC1)',
 };
 
 /**
@@ -114,6 +123,8 @@ const APPEND_ONLY_TABLES = [
   'order_codes',
   'order_code_reveals',
   'order_policy',
+  'support_messages',
+  'support_attachments',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

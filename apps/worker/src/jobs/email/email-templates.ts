@@ -75,6 +75,7 @@ const CANCEL_REASON_LABELS: Record<Exclude<CancelReason, 'customer'>, string> = 
   expired: 'انتهت مدة الحجز (24 ساعة)',
   price_rose: 'تغيّر سعر الباقة',
   product_changed: 'تغيّرت بيانات الباقة',
+  frozen: 'أُوقف حسابك مؤقتاً، تواصل مع الدعم',
 };
 
 const orderPage = (orderId: string) => ({ label: 'عرض الطلب', path: `/orders/${orderId}` });
@@ -253,6 +254,12 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
       link: { label: 'عرض طلبات السلة', path: `/orders?checkout=${checkoutId}` },
     };
   },
+  // S12 TK9: the ticket number and a link, never the reply.
+  customer_ticket_replied: ({ ticketId, number }) => ({
+    subject: `ردّ فريق الدعم على تذكرتك ${number}`,
+    lines: [`ردّ فريق Vertex Digital على تذكرتك ${number}. افتح التذكرة لقراءة الرد.`],
+    link: { label: 'عرض التذكرة', path: `/support/${ticketId}` },
+  }),
 };
 
 const escapeHtml = (value: string) =>

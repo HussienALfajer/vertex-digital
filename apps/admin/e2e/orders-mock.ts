@@ -60,8 +60,10 @@ const ROUTES = [
   { routeId: id(252), code: 'manual', nameAr: 'يدوي', share: 0.8, tier: 'manual' },
 ] as const;
 
-const customer = { id: id(90), name: 'سارة', email: 'sara@example.com', isTest: false };
-const testCustomer = { id: id(91), name: 'تجربة', email: 'test@example.com', isTest: true };
+/** S12 CS6: the customer panel's marks on the order page. */
+const marks = { status: 'active' as const, pinnedNote: null, signalsCount: 0 };
+const customer = { id: id(90), name: 'سارة', email: 'sara@example.com', isTest: false, marks };
+const testCustomer = { id: id(91), name: 'تجربة', email: 'test@example.com', isTest: true, marks };
 const pubg = { id: id(80), nameAr: 'ببجي موبايل' };
 const itunes = { id: id(81), nameAr: 'آيتونز' };
 

@@ -2,7 +2,6 @@ import { randomInt } from 'node:crypto';
 import {
   type AuditChannel,
   availabilityForCustomer,
-  type ErrorCode,
   ORDER_NUMBER_ALPHABET,
   ORDER_NUMBER_LENGTH,
   ORDER_NUMBER_PREFIX,
@@ -18,6 +17,7 @@ import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { PgInsertValue } from 'drizzle-orm/pg-core';
 import { recordAudit } from '../audit/index.js';
 import type { Transaction } from '../client.js';
+import { checkPurchaseCap, checkReservationCap, lockActiveCustomer } from '../customers/guard.js';
 import { newId } from '../id.js';
 import {
   accountBalance,
@@ -26,13 +26,8 @@ import {
   postJournal,
 } from '../ledger/index.js';
 import { type ProductRoutingState, productRoutingStates } from '../pricing/index.js';
-import {
-  catalogInputFields,
-  catalogProducts,
-  customers,
-  exchangeRates,
-  orders,
-} from '../schema/index.js';
+import { catalogInputFields, catalogProducts, exchangeRates, orders } from '../schema/index.js';
+import { OrderError } from './errors.js';
 import { findSavedPlayer, type SavedPlayerRow, touchSavedPlayer } from './saved-players.js';
 import { createShareLink } from './share-links.js';
 import {
@@ -43,18 +38,7 @@ import {
   queuePayWaiting,
 } from './transition.js';
 
-/** A purchase refusal the API answers with its contract code (S08 rules O1–O5). */
-export class OrderError extends Error {
-  readonly code: ErrorCode;
-  readonly details: unknown;
-
-  constructor(code: ErrorCode, message: string, details?: unknown) {
-    super(message);
-    this.name = 'OrderError';
-    this.code = code;
-    this.details = details;
-  }
-}
+export { OrderError };
 
 /** One pack to buy: a purchase, or a line of a checkout (S10 rule CT5). */
 export interface LineInput {
@@ -386,11 +370,8 @@ export async function purchaseOrder(
   }
   if (input.purchasesStopped) throw new OrderError('PURCHASES_STOPPED', 'Purchases are stopped');
 
-  const [customer] = await tx
-    .select({ isTest: customers.isTest })
-    .from(customers)
-    .where(eq(customers.id, input.customerId));
-  if (!customer) throw new Error(`Customer ${input.customerId} does not exist`);
+  // S12 CF2: the customer `FOR SHARE` before any write; a frozen customer is refused.
+  const customer = await lockActiveCustomer(tx, input.customerId);
   const [product] = await tx
     .select()
     .from(catalogProducts)
@@ -412,6 +393,9 @@ export async function purchaseOrder(
   const wallet = await lockCustomerWallet(tx, input.customerId);
   const reserve =
     input.whenBalanceShort === 'reserve' && (await accountBalance(tx, wallet)) < total;
+  // S12 LM4: the cap read under the wallet lock, so the customer's purchases see each other.
+  if (reserve) checkReservationCap(customer, total);
+  else await checkPurchaseCap(tx, customer, total);
   let journalId: string | null = null;
   if (reserve) {
     const [open] = await tx

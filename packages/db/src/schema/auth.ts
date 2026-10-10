@@ -1,6 +1,8 @@
+import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
   pgTable,
@@ -32,10 +34,37 @@ export const customers = pgTable(
     phone: text('phone').notNull(),
     /** Created by the admin for testing (rule T1); reports and dashboards leave it out. */
     isTest: boolean('is_test').notNull().default(false),
+    /** S12 CF1: set while the admin keeps the customer from depositing and buying. */
+    frozenAt: timestamp('frozen_at', { withTimezone: true }),
     ...timestamps(),
     archivedAt: archivedAt(),
   },
   (table) => [index('customers_phone_idx').on(table.phone)],
+);
+
+/**
+ * S12: every session created for a customer (sign-in, verification, password reset), for the
+ * devices tab and the shared-IP signal (CS5). Kept 90 days, then deleted by the worker.
+ */
+export const customerSignIns = pgTable(
+  'customer_sign_ins',
+  {
+    id: id(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('customer_sign_ins_customer_idx').on(table.customerId, table.createdAt.desc()),
+    index('customer_sign_ins_ip_idx').on(table.ipAddress, table.createdAt.desc()),
+    check(
+      'customer_sign_ins_user_agent_check',
+      sql`${table.userAgent} is null or char_length(${table.userAgent}) <= 500`,
+    ),
+  ],
 );
 
 export const customerSessions = pgTable(

@@ -12,5 +12,6 @@ import { AuditService } from './audit.service.js';
   imports: [AuthModule, AdminModule],
   controllers: [AuditAdminController],
   providers: [AuditService],
+  exports: [AuditService],
 })
 export class AuditModule {}

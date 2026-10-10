@@ -3,6 +3,15 @@ import { CURRENCY_SCALE, priceFromCost, QUEUES } from '@vertex-digital/contracts
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Transaction } from '../client.js';
+import { purchasedLastDay } from '../customers/guard.js';
+import {
+  archiveCustomer,
+  CustomerError,
+  freezeCustomer,
+  setCustomerLimits,
+  unarchiveCustomer,
+  unfreezeCustomer,
+} from '../customers/state.js';
 import { newId } from '../id.js';
 import { accountBalance } from '../ledger/balance.js';
 import { ensureCustomerWallet, ensureSystemAccount, findCustomerWallet } from '../ledger/index.js';
@@ -2492,3 +2501,339 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
     ).toMatchObject({ code: 'ORDER_NOT_DECIDABLE' });
   });
 });
+
+describe('customer guards: freezing, the purchase cap and archiving (S12)', () => {
+  const admin = { adminId: newId(), ipAddress: null, userAgent: null };
+  const reason = 'تحقق من الحساب';
+  const freeze = (customerId: string) =>
+    db.transaction((tx) => freezeCustomer(tx, context(), { customerId, reason, actor: admin }));
+  const unfreeze = (customerId: string) =>
+    db.transaction((tx) => unfreezeCustomer(tx, { customerId, reason, actor: admin }));
+  const archive = (customerId: string) =>
+    db.transaction((tx) => archiveCustomer(tx, { customerId, reason, actor: admin }));
+  const setCap = (customerId: string, dailyPurchaseUsdUnits: number | null) =>
+    db.transaction((tx) =>
+      setCustomerLimits(tx, {
+        customerId,
+        limits: { perDepositUsdUnits: null, dailyDepositUsdUnits: null, dailyPurchaseUsdUnits },
+        reason,
+        actor: admin,
+      }),
+    );
+  const stateRefusal = async (promise: Promise<unknown>) => {
+    try {
+      await promise;
+    } catch (error) {
+      if (error instanceof CustomerError) return { code: error.code, details: error.details };
+      throw error;
+    }
+    throw new Error('Expected a refusal');
+  };
+  const cart = (customerId: string, items: { id: string; price: number }[]): CheckoutInput => ({
+    customerId,
+    lines: items.map((item) => ({
+      productId: item.id,
+      quantity: 1,
+      fields: { player_id: '5123456789' },
+      expectedUnitPriceUsdUnits: item.price,
+      confirmPlayer: false,
+    })),
+    idempotencyKey: newId(),
+    requestHash: hash({ items: items.map((item) => item.id) }),
+    fakeEnabled: true,
+    purchasesStopped: false,
+    channel: 'store',
+    playerCheck: async () => null,
+  });
+  const payCheckout = (input: CheckoutInput) =>
+    db.transaction((tx) => checkoutOrders(tx, context(), input));
+  const reserve = (customerId: string, item: { id: string; price: number }) =>
+    buy(request(customerId, item, { whenBalanceShort: 'reserve' }));
+  const ticketNumber = () =>
+    `VT-${Array.from({ length: 6 }, () => TICKET_ALPHABET[(randomBytes(1)[0] as number) % TICKET_ALPHABET.length]).join('')}`;
+  /** A transaction held open after `work` until `release` is called. */
+  function held<T>(work: (tx: Transaction) => Promise<T>) {
+    let release = () => {};
+    let inside = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const entered = new Promise<void>((resolve) => {
+      inside = resolve;
+    });
+    const done = db.transaction(async (tx) => {
+      const result = await work(tx);
+      inside();
+      await gate;
+      return result;
+    });
+    return { done, entered, release: () => release() };
+  }
+  const settledWithin = (promise: Promise<unknown>, ms: number) =>
+    Promise.race([
+      promise.then(
+        () => true,
+        () => true,
+      ),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms)),
+    ]);
+
+  it('refuses a frozen customer every purchase, checkout and reservation (CF2)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    await freeze(buyer);
+    expect(await refusal(buy(request(buyer, item)))).toEqual({
+      code: 'ACCOUNT_FROZEN',
+      details: undefined,
+    });
+    expect((await refusal(payCheckout(cart(buyer, [item])))).code).toBe('ACCOUNT_FROZEN');
+    const poor = await customer();
+    await freeze(poor);
+    expect((await refusal(reserve(poor, item))).code).toBe('ACCOUNT_FROZEN');
+    await unfreeze(buyer);
+    expect((await buy(request(buyer, item))).created).toBe(true);
+  });
+
+  it('cancels every reservation with the reason frozen and tells the customer (CF1)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const first = (await reserve(buyer, item)).order;
+    const second = (await reserve(buyer, item)).order;
+    const { cancelledOrderIds } = await freeze(buyer);
+    expect(cancelledOrderIds.sort()).toEqual([first.id, second.id].sort());
+    for (const id of [first.id, second.id]) {
+      expect(await orderRow(id)).toMatchObject({ status: 'cancelled', cancelReason: 'frozen' });
+    }
+    const events = await db
+      .select({ event: customerNotifications.event })
+      .from(customerNotifications)
+      .where(eq(customerNotifications.customerId, buyer));
+    expect(events).toEqual([{ event: 'order_cancelled' }, { event: 'order_cancelled' }]);
+    const [audit] = await db
+      .select({ reason: auditEntries.reason })
+      .from(auditEntries)
+      .where(and(eq(auditEntries.entityId, buyer), eq(auditEntries.action, 'customer.frozen')));
+    expect(audit?.reason).toBe(reason);
+    // Edge case 2: nothing comes back after an unfreeze.
+    await unfreeze(buyer);
+    expect((await orderRow(first.id)).status).toBe('cancelled');
+  });
+
+  it('lets one of two freezes win and refuses unfreezing an active customer (CF1, CF6)', async () => {
+    const buyer = await customer();
+    const outcomes = await Promise.allSettled([freeze(buyer), freeze(buyer)]);
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    const failed = outcomes.find((outcome) => outcome.status === 'rejected');
+    expect((failed as PromiseRejectedResult).reason).toMatchObject({
+      code: 'CUSTOMER_STATE_INVALID',
+      details: { status: 'frozen' },
+    });
+    expect(await stateRefusal(unfreeze(await customer()))).toEqual({
+      code: 'CUSTOMER_STATE_INVALID',
+      details: { status: 'active' },
+    });
+  });
+
+  it('serializes a purchase and a freeze in either order (CF2, edge case 1)', async () => {
+    const item = await product();
+    // The purchase first: the freeze waits, then the paid order stays paid.
+    const early = await customer({ funds: usd(10) });
+    const purchase = held((tx) => purchaseOrder(tx, context(), request(early, item)));
+    await purchase.entered;
+    const frozen = freeze(early);
+    expect(await settledWithin(frozen, 200)).toBe(false);
+    purchase.release();
+    const { order } = await purchase.done;
+    expect((await frozen).cancelledOrderIds).toEqual([]);
+    expect((await orderRow(order.id)).status).toBe('paid');
+
+    // The freeze first: the purchase waits, then is refused.
+    const late = await customer({ funds: usd(10) });
+    const freezing = held((tx) =>
+      freezeCustomer(tx, context(), { customerId: late, reason, actor: admin }),
+    );
+    await freezing.entered;
+    const buying = buy(request(late, item));
+    expect(await settledWithin(buying, 200)).toBe(false);
+    freezing.release();
+    await freezing.done;
+    expect((await refusal(buying)).code).toBe('ACCOUNT_FROZEN');
+    expect(await balance(late)).toBe(usd(10));
+  });
+
+  it('caps purchases over 24 hours net of refunds, and a checkout as a whole (LM4)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    await setCap(buyer, usd(1));
+    const { order } = await buy(request(buyer, item));
+    expect(await refusal(buy(request(buyer, item)))).toEqual({
+      code: 'PURCHASE_LIMIT_EXCEEDED',
+      details: { limitUnits: usd(1), remainingUnits: usd(1) - item.price },
+    });
+    // Edge case 5: a checkout beyond the cap is refused as a whole.
+    expect((await refusal(payCheckout(cart(buyer, [item])))).code).toBe('PURCHASE_LIMIT_EXCEEDED');
+    // Edge case 6: a refund frees room by its amount.
+    await db.transaction(async (tx) =>
+      refundRemaining(tx, context(), (await lockOrder(tx, order.id)) as OrderRow, 'no_route', {
+        actor: 'system',
+        actorId: null,
+      }),
+    );
+    expect(await purchasedLastDay(db, buyer)).toBe(0);
+    expect((await buy(request(buyer, item))).created).toBe(true);
+    await setCap(buyer, null);
+    expect((await buy(request(buyer, item))).created).toBe(true);
+  });
+
+  it('counts only orders paid in the last 24 hours (LM4)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    const { order } = await buy(request(buyer, item));
+    expect(await purchasedLastDay(db, buyer)).toBe(item.price);
+    // Only the owner, with the guard off inside one transaction, can move a payment back in time.
+    await owner.db.transaction(async (tx) => {
+      await tx.execute(sql`alter table orders disable trigger orders_guard`);
+      await tx.execute(
+        sql`update orders set paid_at = now() - interval '24 hours' where id = ${order.id}`,
+      );
+      await tx.execute(sql`alter table orders enable trigger orders_guard`);
+    });
+    expect(await purchasedLastDay(db, buyer)).toBe(0);
+  });
+
+  it('refuses a reservation above the cap and skips paying one past it (LM4, edge case 7)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    await setCap(buyer, item.price - 10_000);
+    expect((await refusal(reserve(buyer, item))).code).toBe('PURCHASE_LIMIT_EXCEEDED');
+    await setCap(buyer, item.price + 10_000);
+    const reserved = (await reserve(buyer, item)).order;
+    await db.transaction(async (tx) => {
+      await postJournal(tx, {
+        idempotencyKey: `test:${newId()}`,
+        kind: 'adjustment',
+        postings: [
+          { accountId: await ensureCustomerWallet(tx, buyer), amountUnits: usd(10) },
+          {
+            accountId: await ensureSystemAccount(tx, {
+              code: 'adjustments:test_funds',
+              kind: 'adjustments',
+              currency: 'USD',
+            }),
+            amountUnits: -usd(10),
+          },
+        ],
+      });
+    });
+    await buy(request(buyer, item));
+    const run = await payWaitingOrders(
+      db,
+      { jobs: context().jobs, now: () => new Date(), fakeEnabled: true },
+      buyer,
+    );
+    expect(run.outcomes).toEqual([{ orderId: reserved.id, outcome: 'skipped_cap' }]);
+    expect((await orderRow(reserved.id)).status).toBe('awaiting_balance');
+  });
+
+  it('archives only a customer with a zero balance and nothing open (AR1, AR2)', async () => {
+    const item = await product();
+    const rich = await customer({ funds: usd(1) });
+    expect(await stateRefusal(archive(rich))).toEqual({
+      code: 'CUSTOMER_NOT_ARCHIVABLE',
+      details: { blockers: ['balance'] },
+    });
+    const buyer = await customer({ funds: item.price });
+    await buy(request(buyer, item));
+    expect(await stateRefusal(archive(buyer))).toEqual({
+      code: 'CUSTOMER_NOT_ARCHIVABLE',
+      details: { blockers: ['open_orders'] },
+    });
+
+    const quiet = await customer();
+    await pool.query(
+      `insert into customer_sessions (id, user_id, token, expires_at)
+       values ($1, $2, $3, now() + interval '1 day')`,
+      [newId(), quiet, newId()],
+    );
+    const ticket = newId();
+    await pool.query(
+      `insert into support_tickets (id, number, customer_id, category, subject, status, opened_by)
+       values ($1, $2, $3, 'account', 'سؤال', 'open', 'customer')`,
+      [ticket, ticketNumber(), quiet],
+    );
+    expect(await archive(quiet)).toEqual({ sessions: 1, closedTicketIds: [ticket] });
+    const { rows } = await pool.query(
+      'select status, closed_by from support_tickets where id = $1',
+      [ticket],
+    );
+    expect(rows).toEqual([{ status: 'closed', closed_by: 'system' }]);
+    expect(await stateRefusal(archive(quiet))).toMatchObject({ code: 'CUSTOMER_STATE_INVALID' });
+    expect(await stateRefusal(freeze(quiet))).toEqual({
+      code: 'CUSTOMER_STATE_INVALID',
+      details: { status: 'archived' },
+    });
+    await db.transaction((tx) =>
+      unarchiveCustomer(tx, { customerId: quiet, reason, actor: admin }),
+    );
+  });
+
+  it('serializes an archive and a checkout: the checkout first blocks the archive (AR1)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: item.price });
+    const paying = held((tx) => checkoutOrders(tx, context(), cart(buyer, [item])));
+    await paying.entered;
+    const archiving = archive(buyer);
+    expect(await settledWithin(archiving, 200)).toBe(false);
+    paying.release();
+    await paying.done;
+    expect(await stateRefusal(archiving)).toEqual({
+      code: 'CUSTOMER_NOT_ARCHIVABLE',
+      details: { blockers: ['open_orders'] },
+    });
+  });
+
+  it('refuses a reservation that waited behind an archive (AR1)', async () => {
+    const item = await product();
+    const quiet = await customer();
+    const archiving = held((tx) =>
+      archiveCustomer(tx, { customerId: quiet, reason, actor: admin }),
+    );
+    await archiving.entered;
+    const reserving = reserve(quiet, item);
+    expect(await settledWithin(reserving, 200)).toBe(false);
+    archiving.release();
+    await archiving.done;
+    expect((await refusal(reserving)).code).toBe('ACCOUNT_FROZEN');
+    const open = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(eq(orders.customerId, quiet));
+    expect(open).toEqual([]);
+  });
+
+  it('keeps one open ticket per order: of two at once, one wins (TK1, edge case 12)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    const { order } = await buy(request(buyer, item));
+    const open = (closed: boolean) =>
+      pool.query(
+        `insert into support_tickets (id, number, customer_id, category, order_id, subject, status,
+           opened_by, closed_at, closed_by)
+         values ($1, $2, $3, 'order', $4, 'أين طلبي؟', $5, 'customer', $6, $7)`,
+        [
+          newId(),
+          ticketNumber(),
+          buyer,
+          order.id,
+          closed ? 'closed' : 'open',
+          closed ? new Date() : null,
+          closed ? 'customer' : null,
+        ],
+      );
+    const outcomes = await Promise.allSettled([open(false), open(false)]);
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    await open(true);
+  });
+});
+
+const TICKET_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';

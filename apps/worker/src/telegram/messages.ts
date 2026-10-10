@@ -13,6 +13,7 @@ import {
   type TelegramBotReply,
   type TelegramMessageKind,
   type TelegramMessageParams,
+  type TicketCategory,
   telegramCallbackData,
   USDT_NETWORKS,
 } from '@vertex-digital/contracts';
@@ -91,6 +92,7 @@ const APPROVAL_REFUSALS: Record<TelegramApprovalRefusal, string> = {
   off: 'الاعتماد من تيليجرام متوقف',
   flagged: 'عليه علامات، الاعتماد من اللوحة',
   over_limit: 'فوق حد تيليجرام، الاعتماد من اللوحة',
+  frozen: 'العميل مجمّد، الاعتماد من اللوحة',
 };
 
 /** The answers to a refused decision (rule TC4 step 4, edge cases 3–5). */
@@ -105,6 +107,7 @@ const DECISION_REFUSALS: Record<
   over_limit: 'فوق حد تيليجرام، اعتمد من اللوحة.',
   off: 'الاعتماد من تيليجرام متوقف، اعتمد من اللوحة.',
   panel_only: 'من اللوحة فقط.',
+  frozen: 'العميل مجمّد، الاعتماد من اللوحة.',
 };
 
 /** A wait in words: "12 د" or "3 س 5 د". */
@@ -320,6 +323,14 @@ function supplierText<Kind extends TelegramMessageKind>(
   }
 }
 
+/** The ticket types in Arabic (S12 TK8). */
+const TICKET_CATEGORY_LABELS: Record<TicketCategory, string> = {
+  order: 'طلب',
+  deposit: 'إيداع',
+  account: 'حسابي',
+  other: 'أخرى',
+};
+
 /** A duration in seconds or minutes, Latin digits: "45 ث"، "3 د". */
 function durationText(ms: number): string {
   const seconds = Math.round(ms / 1_000);
@@ -406,6 +417,7 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
       : [`وسيط وقت التسليم اليوم: ${durationText(summary.medianDeliveryMs)}`]),
     `الحجوزات اليوم: ${summary.reservationsPaid} دُفعت، ${summary.reservationsExpired} انتهت`,
     `سلال اليوم: ${summary.checkouts} (${summary.checkoutOrders} طلبات)`,
+    `تذاكر جديدة اليوم: ${summary.ticketsOpened} · بانتظار ردّك الآن: ${summary.ticketsWaiting}`,
     ...(summary.validations.length > 0
       ? [
           `التحقق من المعرّف اليوم: ${summary.validations.map((row) => `${row.supplierNameAr} ${row.count}`).join('، ')}`,
@@ -566,6 +578,21 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
     case 'order_needs_review':
     case 'order_conflict':
       return { text: orderText(kind, params, links) };
+    case 'ticket_opened':
+    case 'ticket_reply': {
+      // S12 TK8: never the message or the images.
+      const ticket = params as TelegramMessageParams<'ticket_opened'>;
+      return {
+        text: [
+          kind === 'ticket_opened'
+            ? `🎫 تذكرة جديدة ${ticket.number} · ${TICKET_CATEGORY_LABELS[ticket.category]}`
+            : `💬 ردّ العميل على التذكرة ${ticket.number} · ${TICKET_CATEGORY_LABELS[ticket.category]}`,
+          ticket.subject,
+          `${ticket.customerEmail}${ticket.hasImages ? ' · مع صور' : ''}`,
+          `افتح في اللوحة: ${links.admin}/support/${ticket.ticketId}`,
+        ].join('\n'),
+      };
+    }
     case 'validation_quota_reached': {
       // S09 rule PV5: once a day per supplier.
       const quota = params as TelegramMessageParams<'validation_quota_reached'>;

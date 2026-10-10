@@ -44,6 +44,8 @@ export const EMAIL_TEMPLATES = [
   'customer_order_cancelled',
   /** Every order of a checkout finished: the counts and the refund (S10 CT8), never fields. */
   'customer_checkout_finished',
+  /** The admin answered a ticket (S12 TK9): the number and a link, never the reply. */
+  'customer_ticket_replied',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -79,6 +81,7 @@ export const NOTIFICATION_EVENTS = [
   'order_paid',
   'order_cancelled',
   'checkout_finished',
+  'ticket_replied',
 ] as const;
 
 export const notificationEventSchema = z
@@ -160,6 +163,8 @@ export const NOTIFICATION_PARAMS = {
     refunded: z.int().nonnegative(),
     refundedUsdUnits: z.int().nonnegative(),
   }),
+  // S12 TK9: the ticket, never the message.
+  ticket_replied: z.object({ ticketId: z.uuid(), number: z.string() }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
@@ -188,6 +193,7 @@ export const EMAIL_PARAMS = {
   customer_order_refunded: NOTIFICATION_PARAMS.order_refunded.extend(at.shape),
   customer_order_cancelled: NOTIFICATION_PARAMS.order_cancelled.extend(at.shape),
   customer_checkout_finished: NOTIFICATION_PARAMS.checkout_finished.extend(at.shape),
+  customer_ticket_replied: NOTIFICATION_PARAMS.ticket_replied,
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
@@ -222,6 +228,7 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   order_paid: null,
   order_cancelled: 'customer_order_cancelled',
   checkout_finished: 'customer_checkout_finished',
+  ticket_replied: 'customer_ticket_replied',
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -258,6 +265,7 @@ export const customerNotificationSchema = z
     notification('order_paid'),
     notification('order_cancelled'),
     notification('checkout_finished'),
+    notification('ticket_replied'),
   ])
   .meta({ id: 'CustomerNotification' });
 

@@ -171,6 +171,22 @@ export const ERROR_CODES = [
   'LOSS_NOT_CONFIRMED',
   /** The delivery proof is missing, of another kind, or already used (S11 MF2). */
   'PROOF_INVALID',
+  /** The customer is frozen: no new deposit, purchase, reservation or player check (S12 CF2). */
+  'ACCOUNT_FROZEN',
+  /** Beyond the customer's daily purchase cap; `details.limitUnits`, `details.remainingUnits` (S12 LM4). */
+  'PURCHASE_LIMIT_EXCEEDED',
+  /** The customer's status does not allow this change; `details.status` (S12 CF1, CF6, AR1, AR3, LM5, TK10). */
+  'CUSTOMER_STATE_INVALID',
+  /** Archiving needs a zero balance and nothing open; `details.blockers` (S12 AR1). */
+  'CUSTOMER_NOT_ARCHIVABLE',
+  /** Too many tickets; `details.limit`: `open` or `daily` (S12 TK1, TK4). */
+  'TICKETS_LIMIT_REACHED',
+  /** The order or deposit already has a ticket that is not closed; `details.ticketId` (S12 TK1, TK4). */
+  'TICKET_ALREADY_OPEN',
+  /** The ticket closed more than 7 days ago: open a new one (S12 TK4). */
+  'TICKET_CLOSED',
+  /** The ticket's order or deposit is missing for its type, given for another, or not the customer's (S12 TK1). */
+  'TICKET_LINK_INVALID',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

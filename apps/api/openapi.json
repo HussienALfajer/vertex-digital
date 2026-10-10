@@ -922,6 +922,16 @@
                 "customer.sessions_revoked",
                 "customer.test_created",
                 "customer.test_password_reset",
+                "customer.frozen",
+                "customer.unfrozen",
+                "customer.limits_changed",
+                "customer.archived",
+                "customer.unarchived",
+                "customer.sessions_revoked_by_admin",
+                "customer.note_added",
+                "customer.note_pinned",
+                "customer.note_unpinned",
+                "customer.note_archived",
                 "customer.notification_preference_changed",
                 "wallet_adjustment.created",
                 "wallet_adjustment.reversed",
@@ -992,6 +1002,13 @@
                 "order.fulfilled_manually",
                 "order.proof_uploaded",
                 "order.code_revealed",
+                "ticket.opened",
+                "ticket.opened_by_admin",
+                "ticket.customer_replied",
+                "ticket.replied",
+                "ticket.closed",
+                "ticket.reopened",
+                "support.settings_changed",
                 "order_policy.set"
               ]
             }
@@ -1022,7 +1039,10 @@
                 "product_route",
                 "price_review",
                 "order",
-                "order_policy"
+                "order_policy",
+                "customer_note",
+                "support_ticket",
+                "support_settings"
               ]
             }
           },
@@ -2017,6 +2037,16 @@
               "minLength": 3,
               "maxLength": 254
             }
+          },
+          {
+            "name": "customerId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
           }
         ],
         "responses": {
@@ -2403,6 +2433,1256 @@
         },
         "tags": [
           "deposits"
+        ]
+      }
+    },
+    "/api/admin/customers": {
+      "get": {
+        "operationId": "CustomersAdminController_search",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "all",
+                "active",
+                "frozen",
+                "archived",
+                "test"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomerPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}": {
+      "get": {
+        "operationId": "CustomersAdminController_profile",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomer"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/sign-ins": {
+      "get": {
+        "operationId": "CustomersAdminController_signIns",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerSignInPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/sessions": {
+      "get": {
+        "operationId": "CustomersAdminController_sessions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessions not expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerSessionList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/history": {
+      "get": {
+        "operationId": "CustomersAdminController_history",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/notes": {
+      "get": {
+        "operationId": "CustomersAdminController_notes",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "archived",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerNotePage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      },
+      "post": {
+        "operationId": "CustomersAdminController_addNote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomerNote"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Added (SN2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerNote"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/freeze": {
+      "post": {
+        "operationId": "CustomersAdminController_freeze",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerStateChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Frozen (CF1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomer"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/unfreeze": {
+      "post": {
+        "operationId": "CustomersAdminController_unfreeze",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerStateChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unfrozen (CF6)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomer"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/archive": {
+      "post": {
+        "operationId": "CustomersAdminController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerStateChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Archived (AR1, AR2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomer"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/unarchive": {
+      "post": {
+        "operationId": "CustomersAdminController_unarchive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerStateChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unarchived (AR3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomer"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/sessions/revoke": {
+      "post": {
+        "operationId": "CustomersAdminController_revokeSessions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerStateChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed out everywhere (SN1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomer"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/limits": {
+      "put": {
+        "operationId": "CustomersAdminController_limits",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomerLimits"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The limits in force (LM5)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerLimits"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/notes/{noteId}/pin": {
+      "post": {
+        "operationId": "CustomersAdminController_pinNote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "noteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pinned (SN2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerNote"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/notes/{noteId}/unpin": {
+      "post": {
+        "operationId": "CustomersAdminController_unpinNote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "noteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unpinned (SN2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerNote"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/notes/{noteId}/archive": {
+      "post": {
+        "operationId": "CustomersAdminController_archiveNote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "noteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archived (SN2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerNote"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/support/channels": {
+      "get": {
+        "operationId": "SupportController_channels",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The support links (SC2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportChannels"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/support/tickets": {
+      "get": {
+        "operationId": "SupportController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest activity first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      },
+      "post": {
+        "operationId": "SupportController_open",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicket"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Opened (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ticket"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/support/tickets/{id}": {
+      "get": {
+        "operationId": "SupportController_ticket",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The thread, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ticket"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/support/tickets/{id}/messages": {
+      "post": {
+        "operationId": "SupportController_reply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketMessageInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sent (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ticket"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/support/tickets/{id}/close": {
+      "post": {
+        "operationId": "SupportController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ticket"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/support/tickets/{id}/attachments/{fileId}": {
+      "get": {
+        "operationId": "SupportController_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An image of the ticket (TK11)"
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/admin/support/tickets": {
+      "get": {
+        "operationId": "SupportAdminController_queue",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "open",
+              "type": "string",
+              "enum": [
+                "open",
+                "answered",
+                "closed",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "order",
+                "deposit",
+                "account",
+                "other"
+              ]
+            }
+          },
+          {
+            "name": "customerId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The queue (TK12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTicketPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      },
+      "post": {
+        "operationId": "SupportAdminController_open",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreateTicket"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Opened (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTicket"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/admin/support/tickets/{id}": {
+      "get": {
+        "operationId": "SupportAdminController_ticket",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The thread and its side panel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTicket"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/admin/support/tickets/{id}/messages": {
+      "post": {
+        "operationId": "SupportAdminController_reply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketMessageInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sent (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTicket"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/admin/support/tickets/{id}/close": {
+      "post": {
+        "operationId": "SupportAdminController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTicket"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/admin/support/tickets/{id}/attachments/{fileId}": {
+      "get": {
+        "operationId": "SupportAdminController_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An image of the ticket (TK11)"
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/admin/support/settings": {
+      "get": {
+        "operationId": "SupportAdminController_settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The support settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
+        ]
+      },
+      "put": {
+        "operationId": "SupportAdminController_updateSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved (SC1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "support"
         ]
       }
     },
@@ -5054,6 +6334,16 @@
             }
           },
           {
+            "name": "customerId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
             "name": "supplier",
             "required": false,
             "in": "query",
@@ -6532,7 +7822,8 @@
                     "enum": [
                       "expired",
                       "price_rose",
-                      "product_changed"
+                      "product_changed",
+                      "frozen"
                     ]
                   }
                 },
@@ -6633,6 +7924,59 @@
               "params"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "ticket_replied"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "ticketId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "number": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "ticketId",
+                  "number"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -6721,7 +8065,8 @@
               "order_delayed",
               "order_paid",
               "order_cancelled",
-              "checkout_finished"
+              "checkout_finished",
+              "ticket_replied"
             ]
           }
         },
@@ -6758,7 +8103,8 @@
           "order_delayed",
           "order_paid",
           "order_cancelled",
-          "checkout_finished"
+          "checkout_finished",
+          "ticket_replied"
         ]
       },
       "StoreStatus": {
@@ -7504,6 +8850,16 @@
           "customer.sessions_revoked",
           "customer.test_created",
           "customer.test_password_reset",
+          "customer.frozen",
+          "customer.unfrozen",
+          "customer.limits_changed",
+          "customer.archived",
+          "customer.unarchived",
+          "customer.sessions_revoked_by_admin",
+          "customer.note_added",
+          "customer.note_pinned",
+          "customer.note_unpinned",
+          "customer.note_archived",
           "customer.notification_preference_changed",
           "wallet_adjustment.created",
           "wallet_adjustment.reversed",
@@ -7574,6 +8930,13 @@
           "order.fulfilled_manually",
           "order.proof_uploaded",
           "order.code_revealed",
+          "ticket.opened",
+          "ticket.opened_by_admin",
+          "ticket.customer_replied",
+          "ticket.replied",
+          "ticket.closed",
+          "ticket.reopened",
+          "support.settings_changed",
           "order_policy.set"
         ]
       },
@@ -7599,7 +8962,10 @@
           "product_route",
           "price_review",
           "order",
-          "order_policy"
+          "order_policy",
+          "customer_note",
+          "support_ticket",
+          "support_settings"
         ]
       },
       "AuditPage": {
@@ -9804,6 +11170,11 @@
             "type": "string",
             "minLength": 3,
             "maxLength": 254
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           }
         }
       },
@@ -10227,6 +11598,9 @@
               "isTest": {
                 "type": "boolean"
               },
+              "marks": {
+                "$ref": "#/components/schemas/CustomerMarks"
+              },
               "phone": {
                 "type": "string"
               },
@@ -10300,6 +11674,7 @@
               "name",
               "email",
               "isTest",
+              "marks",
               "phone",
               "createdAt",
               "established",
@@ -10407,6 +11782,37 @@
           "createdAt"
         ],
         "additionalProperties": false
+      },
+      "CustomerMarks": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/CustomerStatus"
+          },
+          "pinnedNote": {
+            "nullable": true,
+            "type": "string"
+          },
+          "signalsCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "status",
+          "pinnedNote",
+          "signalsCount"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "frozen",
+          "archived"
+        ]
       },
       "AdminDepositUsdt": {
         "type": "object",
@@ -10957,6 +12363,1596 @@
           "bound",
           "unmatched"
         ]
+      },
+      "CustomerSearchQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 25,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "status": {
+            "default": "all",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CustomerFilter"
+              }
+            ]
+          }
+        }
+      },
+      "CustomerFilter": {
+        "type": "string",
+        "enum": [
+          "all",
+          "active",
+          "frozen",
+          "archived",
+          "test"
+        ]
+      },
+      "AdminCustomerPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminCustomerRow"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "AdminCustomerRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "isTest": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CustomerStatus"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "balanceUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "deliveredOrders": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "lastOrderAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "phone",
+          "isTest",
+          "status",
+          "createdAt",
+          "balanceUnits",
+          "deliveredOrders",
+          "lastOrderAt"
+        ],
+        "additionalProperties": false
+      },
+      "AdminCustomer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "emailVerified": {
+            "type": "boolean"
+          },
+          "isTest": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "established": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CustomerStatus"
+          },
+          "statusChange": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "reason": {
+                "nullable": true,
+                "type": "string"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "reason",
+              "at"
+            ],
+            "additionalProperties": false
+          },
+          "limits": {
+            "$ref": "#/components/schemas/CustomerLimits"
+          },
+          "pinnedNote": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CustomerNote"
+              }
+            ]
+          },
+          "balanceUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "deliveredOrders": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "deliveredTotalUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "refundedOrders": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "creditedDeposits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "creditedTotalUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "openTickets": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "activeSessions": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "reservations": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "deliveredOrders",
+              "deliveredTotalUsdUnits",
+              "refundedOrders",
+              "creditedDeposits",
+              "creditedTotalUsdUnits",
+              "openTickets",
+              "activeSessions",
+              "reservations"
+            ],
+            "additionalProperties": false
+          },
+          "signals": {
+            "$ref": "#/components/schemas/CustomerSignals"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "phone",
+          "emailVerified",
+          "isTest",
+          "createdAt",
+          "established",
+          "status",
+          "statusChange",
+          "limits",
+          "pinnedNote",
+          "balanceUnits",
+          "counts",
+          "signals"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerLimits": {
+        "type": "object",
+        "properties": {
+          "perDepositUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "dailyDepositUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "dailyPurchaseUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "effective": {
+            "type": "object",
+            "properties": {
+              "perDeposit": {
+                "type": "object",
+                "properties": {
+                  "units": {
+                    "nullable": true,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "source": {
+                    "$ref": "#/components/schemas/CustomerLimitSource"
+                  }
+                },
+                "required": [
+                  "units",
+                  "source"
+                ],
+                "additionalProperties": false
+              },
+              "dailyDeposit": {
+                "type": "object",
+                "properties": {
+                  "units": {
+                    "nullable": true,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "source": {
+                    "$ref": "#/components/schemas/CustomerLimitSource"
+                  }
+                },
+                "required": [
+                  "units",
+                  "source"
+                ],
+                "additionalProperties": false
+              },
+              "dailyPurchase": {
+                "type": "object",
+                "properties": {
+                  "units": {
+                    "nullable": true,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "source": {
+                    "$ref": "#/components/schemas/CustomerLimitSource"
+                  }
+                },
+                "required": [
+                  "units",
+                  "source"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "perDeposit",
+              "dailyDeposit",
+              "dailyPurchase"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "perDepositUsdUnits",
+          "dailyDepositUsdUnits",
+          "dailyPurchaseUsdUnits",
+          "effective"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerLimitSource": {
+        "type": "string",
+        "enum": [
+          "default_new",
+          "default_established",
+          "custom",
+          "none"
+        ]
+      },
+      "CustomerNote": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "body": {
+            "type": "string"
+          },
+          "pinned": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "archivedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "body",
+          "pinned",
+          "createdAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerSignals": {
+        "type": "object",
+        "properties": {
+          "sharedPhone": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "customers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "email"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "count",
+              "customers"
+            ],
+            "additionalProperties": false
+          },
+          "sharedIp": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "customers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "ipAddresses": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "email",
+                    "ipAddresses"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "count",
+              "customers"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "sharedPhone",
+          "sharedIp"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerSignInPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerSignIn"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerSignIn": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "ipAddress": {
+            "nullable": true,
+            "type": "string"
+          },
+          "userAgent": {
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "ipAddress",
+          "userAgent",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerSessionList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CustomerSession"
+        }
+      },
+      "CustomerSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "ipAddress": {
+            "nullable": true,
+            "type": "string"
+          },
+          "userAgent": {
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "lastActiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "ipAddress",
+          "userAgent",
+          "createdAt",
+          "lastActiveAt"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerNoteListQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "archived": {
+            "type": "string"
+          }
+        }
+      },
+      "CustomerNotePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerNote"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerStateChange": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "UpdateCustomerLimits": {
+        "type": "object",
+        "properties": {
+          "perDepositUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 100000000000
+          },
+          "dailyDepositUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 100000000000
+          },
+          "dailyPurchaseUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 100000000000
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "perDepositUsdUnits",
+          "dailyDepositUsdUnits",
+          "dailyPurchaseUsdUnits",
+          "reason"
+        ]
+      },
+      "CreateCustomerNote": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "pinned": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "SupportChannels": {
+        "type": "object",
+        "properties": {
+          "telegramUrl": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "telegramUrl"
+        ],
+        "additionalProperties": false
+      },
+      "TicketListQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        }
+      },
+      "TicketPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketSummary"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "TicketSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "number": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/TicketCategory"
+          },
+          "order": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "number": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "number"
+            ],
+            "additionalProperties": false
+          },
+          "deposit": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "referenceCode": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "referenceCode"
+            ],
+            "additionalProperties": false
+          },
+          "subject": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TicketStatus"
+          },
+          "openedBy": {
+            "$ref": "#/components/schemas/TicketAuthor"
+          },
+          "lastAuthor": {
+            "$ref": "#/components/schemas/TicketAuthor"
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "closedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "closedBy": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TicketCloser"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "category",
+          "order",
+          "deposit",
+          "subject",
+          "status",
+          "openedBy",
+          "lastAuthor",
+          "lastMessageAt",
+          "closedAt",
+          "closedBy",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "TicketCategory": {
+        "type": "string",
+        "enum": [
+          "order",
+          "deposit",
+          "account",
+          "other"
+        ]
+      },
+      "TicketStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "answered",
+          "closed"
+        ]
+      },
+      "TicketAuthor": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "admin"
+        ]
+      },
+      "TicketCloser": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "admin",
+          "system"
+        ]
+      },
+      "CreateTicket": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/TicketCategory"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "depositId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "body": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "subject",
+          "body"
+        ]
+      },
+      "Ticket": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "number": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/TicketCategory"
+          },
+          "order": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "number": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "number"
+            ],
+            "additionalProperties": false
+          },
+          "deposit": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "referenceCode": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "referenceCode"
+            ],
+            "additionalProperties": false
+          },
+          "subject": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TicketStatus"
+          },
+          "openedBy": {
+            "$ref": "#/components/schemas/TicketAuthor"
+          },
+          "lastAuthor": {
+            "$ref": "#/components/schemas/TicketAuthor"
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "closedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "closedBy": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TicketCloser"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "canReply": {
+            "type": "boolean"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketMessage"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "category",
+          "order",
+          "deposit",
+          "subject",
+          "status",
+          "openedBy",
+          "lastAuthor",
+          "lastMessageAt",
+          "closedAt",
+          "closedBy",
+          "createdAt",
+          "canReply",
+          "messages"
+        ],
+        "additionalProperties": false
+      },
+      "TicketMessage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "author": {
+            "$ref": "#/components/schemas/TicketAuthor"
+          },
+          "body": {
+            "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "body",
+          "attachments",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "TicketMessageInput": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "AdminTicketListQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 25,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "status": {
+            "default": "open",
+            "type": "string",
+            "enum": [
+              "open",
+              "answered",
+              "closed",
+              "all"
+            ]
+          },
+          "category": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TicketCategory"
+              }
+            ]
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        }
+      },
+      "AdminTicketPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminTicketSummary"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          },
+          "openCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "openCount"
+        ],
+        "additionalProperties": false
+      },
+      "AdminTicketSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "number": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/TicketCategory"
+          },
+          "order": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "number": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "number"
+            ],
+            "additionalProperties": false
+          },
+          "deposit": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "referenceCode": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "referenceCode"
+            ],
+            "additionalProperties": false
+          },
+          "subject": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TicketStatus"
+          },
+          "openedBy": {
+            "$ref": "#/components/schemas/TicketAuthor"
+          },
+          "lastAuthor": {
+            "$ref": "#/components/schemas/TicketAuthor"
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "closedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "closedBy": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TicketCloser"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/CustomerStatus"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "category",
+          "order",
+          "deposit",
+          "subject",
+          "status",
+          "openedBy",
+          "lastAuthor",
+          "lastMessageAt",
+          "closedAt",
+          "closedBy",
+          "createdAt",
+          "customer"
+        ],
+        "additionalProperties": false
+      },
+      "AdminCreateTicket": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/TicketCategory"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "depositId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "body": {
+            "type": "string"
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "category",
+          "subject",
+          "body",
+          "customerId"
+        ]
+      },
+      "AdminTicket": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "number": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/TicketCategory"
+          },
+          "order": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "number": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "number"
+            ],
+            "additionalProperties": false
+          },
+          "deposit": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "referenceCode": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "referenceCode"
+            ],
+            "additionalProperties": false
+          },
+          "subject": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TicketStatus"
+          },
+          "openedBy": {
+            "$ref": "#/components/schemas/TicketAuthor"
+          },
+          "lastAuthor": {
+            "$ref": "#/components/schemas/TicketAuthor"
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "closedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "closedBy": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TicketCloser"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketMessage"
+            }
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/CustomerStatus"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "isTest": {
+                "type": "boolean"
+              },
+              "marks": {
+                "$ref": "#/components/schemas/CustomerMarks"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "status",
+              "phone",
+              "isTest",
+              "marks"
+            ],
+            "additionalProperties": false
+          },
+          "orderSummary": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "number": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/OrderStatus"
+              },
+              "productNameAr": {
+                "type": "string"
+              },
+              "quantity": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "totalUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "id",
+              "number",
+              "status",
+              "productNameAr",
+              "quantity",
+              "totalUsdUnits",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          },
+          "depositSummary": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "referenceCode": {
+                "type": "string"
+              },
+              "method": {
+                "$ref": "#/components/schemas/DepositMethod"
+              },
+              "status": {
+                "$ref": "#/components/schemas/DepositStatus"
+              },
+              "declaredUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "id",
+              "referenceCode",
+              "method",
+              "status",
+              "declaredUsdUnits",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "category",
+          "order",
+          "deposit",
+          "subject",
+          "status",
+          "openedBy",
+          "lastAuthor",
+          "lastMessageAt",
+          "closedAt",
+          "closedBy",
+          "createdAt",
+          "messages",
+          "customer",
+          "orderSummary",
+          "depositSummary"
+        ],
+        "additionalProperties": false
+      },
+      "OrderStatus": {
+        "type": "string",
+        "enum": [
+          "awaiting_balance",
+          "paid",
+          "sent_to_supplier",
+          "failed",
+          "needs_review",
+          "delivered",
+          "partially_refunded",
+          "refunded",
+          "cancelled"
+        ]
+      },
+      "SupportSettings": {
+        "type": "object",
+        "properties": {
+          "telegramUrl": {
+            "nullable": true,
+            "type": "string",
+            "pattern": "^https:\\/\\/t\\.me\\/[A-Za-z0-9_]{5,32}$"
+          }
+        },
+        "required": [
+          "telegramUrl"
+        ],
+        "additionalProperties": false
       },
       "Storefront": {
         "type": "object",
@@ -15233,7 +18229,8 @@
           "expired",
           "customer",
           "price_rose",
-          "product_changed"
+          "product_changed",
+          "frozen"
         ]
       },
       "DeliveryStats": {
@@ -16083,13 +19080,17 @@
               },
               "isTest": {
                 "type": "boolean"
+              },
+              "marks": {
+                "$ref": "#/components/schemas/CustomerMarks"
               }
             },
             "required": [
               "id",
               "name",
               "email",
-              "isTest"
+              "isTest",
+              "marks"
             ],
             "additionalProperties": false
           },
@@ -16505,20 +19506,6 @@
           "shareLinks"
         ],
         "additionalProperties": false
-      },
-      "OrderStatus": {
-        "type": "string",
-        "enum": [
-          "awaiting_balance",
-          "paid",
-          "sent_to_supplier",
-          "failed",
-          "needs_review",
-          "delivered",
-          "partially_refunded",
-          "refunded",
-          "cancelled"
-        ]
       },
       "PlayerCheckState": {
         "type": "string",
@@ -17068,6 +20055,11 @@
             "maxLength": 100
           },
           "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "customerId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
@@ -18220,7 +21212,9 @@
           "manual_order_reminder",
           "order_needs_review",
           "order_conflict",
-          "validation_quota_reached"
+          "validation_quota_reached",
+          "ticket_opened",
+          "ticket_reply"
         ]
       },
       "TelegramMessageStatus": {
@@ -18730,7 +21724,8 @@
           "rate_stale",
           "switches_active",
           "order_conflicts",
-          "telegram_unlinked"
+          "telegram_unlinked",
+          "tickets_waiting"
         ]
       },
       "HealthResponse": {

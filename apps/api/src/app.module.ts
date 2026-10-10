@@ -16,6 +16,7 @@ import { AdminModule } from './modules/admin/index.js';
 import { AuditModule } from './modules/audit/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { CatalogModule } from './modules/catalog/index.js';
+import { CustomersModule } from './modules/customers/index.js';
 import { DashboardModule } from './modules/dashboard/index.js';
 import { DepositsModule } from './modules/deposits/index.js';
 import { FilesModule } from './modules/files/index.js';
@@ -26,6 +27,7 @@ import { PricingModule } from './modules/pricing/index.js';
 import { RatesModule } from './modules/rates/index.js';
 import { SettingsModule } from './modules/settings/index.js';
 import { SuppliersModule } from './modules/suppliers/index.js';
+import { SupportModule } from './modules/support/index.js';
 import { TelegramModule } from './modules/telegram/index.js';
 import { WalletModule } from './modules/wallet/index.js';
 
@@ -55,6 +57,8 @@ import { WalletModule } from './modules/wallet/index.js';
     WalletModule,
     FilesModule,
     DepositsModule,
+    CustomersModule,
+    SupportModule,
     CatalogModule,
     PricingModule,
     SuppliersModule,

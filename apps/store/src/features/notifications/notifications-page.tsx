@@ -12,6 +12,7 @@ import {
   CircleSlashIcon,
   CircleXIcon,
   ClockAlertIcon,
+  LifeBuoyIcon,
   type LucideIcon,
   PackageCheckIcon,
   PackageMinusIcon,
@@ -48,6 +49,7 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   order_refunded: Undo2Icon,
   order_delayed: ClockAlertIcon,
   order_paid: WalletIcon,
+  ticket_replied: LifeBuoyIcon,
   order_cancelled: CircleSlashIcon,
   checkout_finished: ShoppingCartIcon,
 };

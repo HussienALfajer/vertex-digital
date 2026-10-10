@@ -27,6 +27,7 @@ import {
 } from '@vertex-digital/contracts';
 import {
   claimPaymentReference,
+  customerMarks,
   type Database,
   depositFlags,
   depositReceipts,
@@ -207,6 +208,7 @@ export class DepositReviewService {
     const filters: (SQL | undefined)[] = [
       query.status === 'all' ? undefined : eq(deposits.status, query.status),
       query.method ? eq(deposits.method, query.method) : undefined,
+      query.customerId ? eq(deposits.customerId, query.customerId) : undefined,
       query.flagged === 'true'
         ? flagged
         : query.flagged === 'false'
@@ -499,11 +501,17 @@ export class DepositReviewService {
       creditUsdUnits: plan.creditedUsdUnits,
       approvalRefusal: telegramApprovalRefusal({
         method: row.method,
+        customerFrozen: await this.customerFrozen(row.customerId),
         flagCount: plan.expectedFlags.length,
         creditUsdUnits: plan.creditedUsdUnits,
         limitUsdUnits: settings?.telegramApprovalMaxUsdUnits ?? 0,
       }),
     };
+  }
+
+  /** S12 CF4: whether the deposit's customer is frozen now. */
+  private async customerFrozen(customerId: string): Promise<boolean> {
+    return (await this.customers.depositCustomers([customerId])).get(customerId)?.frozen ?? false;
   }
 
   private async row(id: string): Promise<DepositRow> {
@@ -522,6 +530,7 @@ export class DepositReviewService {
     const settings = await this.settings.current();
     const refusal = telegramApprovalRefusal({
       method: deposit.method,
+      customerFrozen: await this.customerFrozen(deposit.customerId),
       flagCount: approval.expectedFlags.length,
       creditUsdUnits: approval.creditedUsdUnits,
       limitUsdUnits: settings?.telegramApprovalMaxUsdUnits ?? 0,
@@ -1085,6 +1094,7 @@ export class DepositReviewService {
         email: customer.email,
         phone: customer.phone,
         isTest: customer.isTest,
+        marks: await customerMarks(this.db, customer.id),
         createdAt: customer.createdAt.toISOString(),
         established: history.creditedCount > 0,
         creditedCount: history.creditedCount,

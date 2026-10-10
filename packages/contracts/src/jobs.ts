@@ -48,6 +48,10 @@ export const QUEUES = {
   ordersWaitingSweep: 'orders.waiting-sweep',
   /** Refreshes the store's cached catalog pages (S09 rule SF4). */
   storeRevalidate: 'store.revalidate',
+  /** Closes answered tickets 7 days after the last admin message, every hour (S12 TK6). */
+  supportAutoClose: 'support.auto-close',
+  /** Deletes sign-ins older than 90 days, daily at 04:00 `Asia/Damascus` (S12 data). */
+  customersPurgeSignIns: 'customers.purge-sign-ins',
 } as const;
 
 /**

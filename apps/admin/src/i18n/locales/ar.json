@@ -99,7 +99,8 @@
         "rate_stale": "لم يُحدَّث سعر الصرف منذ أكثر من 48 ساعة",
         "switches_active": "مفتاح مفعّل في المتجر: {{switch}}",
         "order_conflicts": "تعارضات طلبات في آخر 7 أيام: {{count}}",
-        "telegram_unlinked": "بوت تيليجرام غير مربوط: لا تصل التنبيهات"
+        "telegram_unlinked": "بوت تيليجرام غير مربوط: لا تصل التنبيهات",
+        "tickets_waiting": "تذاكر بانتظار ردّك: {{count}}"
       }
     },
     "now": {
@@ -279,7 +280,15 @@
       "ORDER_NOT_SHAREABLE": "لا يمكن إنشاء رابط مشاركة لهذا الطلب.",
       "ROUTE_NOT_ELIGIBLE": "هذا المسار لم يعد مؤهلاً لهذا الطلب. حدّث قائمة المسارات واختر غيره.",
       "LOSS_NOT_CONFIRMED": "التكلفة أعلى من سعر البيع. أكّد قبول الخسارة للمتابعة.",
-      "PROOF_INVALID": "صورة إثبات التسليم غير صالحة أو مستخدمة في طلب آخر. ارفع صورة جديدة."
+      "PROOF_INVALID": "صورة إثبات التسليم غير صالحة أو مستخدمة في طلب آخر. ارفع صورة جديدة.",
+      "ACCOUNT_FROZEN": "العميل مجمّد: لا يمكنه الإيداع أو الشراء.",
+      "PURCHASE_LIMIT_EXCEEDED": "تجاوز العميل حد الشراء اليومي.",
+      "CUSTOMER_STATE_INVALID": "حالة العميل تغيّرت ولم يعد هذا الإجراء متاحاً. حدّث الصفحة.",
+      "CUSTOMER_NOT_ARCHIVABLE": "لا يمكن أرشفة العميل: يجب أن يكون رصيده صفراً ولا طلبات أو إيداعات مفتوحة.",
+      "TICKETS_LIMIT_REACHED": "بلغ العميل الحد الأقصى من التذاكر.",
+      "TICKET_ALREADY_OPEN": "لهذا الطلب أو الإيداع تذكرة مفتوحة بالفعل.",
+      "TICKET_CLOSED": "هذه التذكرة مغلقة.",
+      "TICKET_LINK_INVALID": "الطلب أو الإيداع المختار لا يخص هذا العميل أو لا يناسب نوع التذكرة."
     }
   },
   "changePassword": {
@@ -422,7 +431,10 @@
       "product_route": "مسار باقة",
       "price_review": "مراجعة سعر",
       "order": "طلب",
-      "order_policy": "سياسة الطلبات"
+      "order_policy": "سياسة الطلبات",
+      "customer_note": "ملاحظة عميل",
+      "support_ticket": "تذكرة دعم",
+      "support_settings": "إعدادات الدعم"
     },
     "fields": {
       "name": "الاسم",
@@ -626,7 +638,24 @@
       "order.fulfilled_manually": "تنفيذ طلب يدوياً",
       "order.proof_uploaded": "رفع إثبات تسليم",
       "order.share_revoked": "إلغاء رابط مشاركة",
-      "order_policy.set": "تعديل سياسة الطلبات"
+      "order_policy.set": "تعديل سياسة الطلبات",
+      "customer.frozen": "تجميد عميل",
+      "customer.unfrozen": "إلغاء تجميد عميل",
+      "customer.limits_changed": "تعديل حدود عميل",
+      "customer.archived": "أرشفة عميل",
+      "customer.unarchived": "إلغاء أرشفة عميل",
+      "customer.sessions_revoked_by_admin": "تسجيل خروج العميل من كل الأجهزة",
+      "customer.note_added": "إضافة ملاحظة",
+      "customer.note_pinned": "تثبيت ملاحظة",
+      "customer.note_unpinned": "إلغاء تثبيت ملاحظة",
+      "customer.note_archived": "أرشفة ملاحظة",
+      "ticket.opened": "فتح تذكرة",
+      "ticket.opened_by_admin": "فتح تذكرة للعميل",
+      "ticket.customer_replied": "رد العميل على تذكرة",
+      "ticket.replied": "رد على تذكرة",
+      "ticket.closed": "إغلاق تذكرة",
+      "ticket.reopened": "إعادة فتح تذكرة",
+      "support.settings_changed": "تعديل إعدادات الدعم"
     }
   },
   "testCustomers": {
@@ -1087,7 +1116,9 @@
       "manual_order_reminder": "تذكير بطلب يدوي",
       "order_needs_review": "طلب بحاجة لمراجعة",
       "order_conflict": "تعارض في طلب",
-      "validation_quota_reached": "بلوغ حصة التحقق اليومية"
+      "validation_quota_reached": "بلوغ حصة التحقق اليومية",
+      "ticket_opened": "تذكرة دعم جديدة",
+      "ticket_reply": "ردّ عميل على تذكرة"
     }
   },
   "rates": {
@@ -2426,7 +2457,8 @@
       "expired": "انتهت مدة الحجز",
       "customer": "ألغاه العميل",
       "price_rose": "ارتفع السعر",
-      "product_changed": "تغيّرت بيانات الباقة"
+      "product_changed": "تغيّرت بيانات الباقة",
+      "frozen": "جُمّد الحساب"
     },
     "playerChecks": {
       "valid": "تم التحقق: {{name}}",

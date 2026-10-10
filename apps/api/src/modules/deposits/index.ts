@@ -6,4 +6,5 @@ export {
   type TelegramDecisionRefusal,
   type TelegramDepositFacts,
 } from './deposit-review.service.js';
+export { DepositSettingsService } from './deposit-settings.service.js';
 export { DepositsModule } from './deposits.module.js';

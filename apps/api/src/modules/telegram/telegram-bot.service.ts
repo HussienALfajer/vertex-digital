@@ -72,6 +72,7 @@ const ANSWERS = {
   flagged: 'عليه علامات، اعتمد من اللوحة.',
   overLimit: 'فوق حد تيليجرام، اعتمد من اللوحة.',
   off: 'الاعتماد من تيليجرام متوقف، اعتمد من اللوحة.',
+  frozen: 'العميل مجمّد، الاعتماد من اللوحة.',
 } as const;
 
 const APPROVAL_ANSWERS = {
@@ -79,6 +80,7 @@ const APPROVAL_ANSWERS = {
   off: ANSWERS.off,
   flagged: ANSWERS.flagged,
   over_limit: ANSWERS.overLimit,
+  frozen: ANSWERS.frozen,
 } as const;
 
 /**

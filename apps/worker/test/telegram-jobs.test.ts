@@ -444,6 +444,8 @@ describe('the messages of PR 4', () => {
       reservationsExpired: 1,
       checkouts: 2,
       checkoutOrders: 5,
+      ticketsOpened: 3,
+      ticketsWaiting: 2,
     };
     const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
     for (const line of [
@@ -461,6 +463,7 @@ describe('the messages of PR 4', () => {
       '💰 رصيد SHOP2TOPUP تحت الحد: $20.00',
       'الحجوزات اليوم: 4 دُفعت، 1 انتهت',
       'سلال اليوم: 2 (5 طلبات)',
+      'تذاكر جديدة اليوم: 3 · بانتظار ردّك الآن: 2',
       'التحقق من المعرّف اليوم: SHOP2TOPUP 12، WDGZone 3',
     ]) {
       expect(text).toContain(line);
@@ -469,6 +472,29 @@ describe('the messages of PR 4', () => {
     expect(
       renderTelegramMessage('daily_summary', { ...summary, validations: [] }, LINKS).text,
     ).not.toContain('التحقق من المعرّف');
+  });
+
+  it('render a ticket notice with its number, type, subject and email, never the message (S12 TK8)', () => {
+    const ticket = {
+      ticketId: newId(),
+      number: 'VT-7KQ2MX',
+      category: 'order' as const,
+      subject: 'أين طلبي؟',
+      hasImages: true,
+      customerEmail: 'a@example.com',
+    };
+    const opened = renderTelegramMessage('ticket_opened', ticket, LINKS).text;
+    expect(opened).toContain('تذكرة جديدة VT-7KQ2MX · طلب');
+    expect(opened).toContain('أين طلبي؟');
+    expect(opened).toContain('a@example.com · مع صور');
+    expect(opened).toContain(`/support/${ticket.ticketId}`);
+    const reply = renderTelegramMessage(
+      'ticket_reply',
+      { ...ticket, hasImages: false },
+      LINKS,
+    ).text;
+    expect(reply).toContain('ردّ العميل على التذكرة VT-7KQ2MX');
+    expect(reply).not.toContain('مع صور');
   });
 
   it('render the decision questions and answers (rules TC4, TC5)', () => {

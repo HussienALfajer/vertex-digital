@@ -8,6 +8,7 @@ import {
   type DepositUsdt,
   depositLimits,
   depositStopReason,
+  effectiveDepositLimitSettings,
   MAX_DEPOSITS_IN_REVIEW,
   REFERENCE_CODE_ALPHABET,
   REFERENCE_CODE_LENGTH,
@@ -15,7 +16,15 @@ import {
   type ReviewEta,
   rateFromNumeric,
 } from '@vertex-digital/contracts';
-import { type Database, deposits, newId, type Transaction } from '@vertex-digital/db';
+import {
+  customerLimitOverrides,
+  type Database,
+  deposits,
+  lockActiveCustomer,
+  newId,
+  OrderError,
+  type Transaction,
+} from '@vertex-digital/db';
 import { and, eq, type SQL, sql } from 'drizzle-orm';
 import type { PgInsertValue } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
@@ -184,12 +193,34 @@ export async function checkCreation(tx: Transaction, customerId: string): Promis
   if ((state?.lastHour ?? 0) >= DEPOSIT_CREATIONS_PER_HOUR) throw rateLimited();
 }
 
-/** Rule SC3: new or established, and what the last 24 hours used. */
+/**
+ * S12 CF2: the customer read `FOR SHARE` inside the creation's transaction, before any write; a
+ * frozen customer creates no deposit.
+ */
+export async function checkNotFrozen(tx: Transaction, customerId: string): Promise<void> {
+  try {
+    await lockActiveCustomer(tx, customerId);
+  } catch (error) {
+    if (error instanceof OrderError && error.code === 'ACCOUNT_FROZEN') {
+      throw new CodedException(403, 'ACCOUNT_FROZEN', 'The account is frozen');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Rule SC3: new or established, and what the last 24 hours used; S12 LM2: the customer's
+ * overrides replace the tier's per-deposit and daily values.
+ */
 export async function limitsOf(
   db: Database | Transaction,
   customerId: string,
-  settings: DepositLimitSettings,
+  tierSettings: DepositLimitSettings,
 ) {
+  const settings = effectiveDepositLimitSettings(
+    tierSettings,
+    await customerLimitOverrides(db, customerId),
+  );
   const [row] = await db
     .select({
       established: sql<boolean>`bool_or(${deposits.status} = 'credited')`,

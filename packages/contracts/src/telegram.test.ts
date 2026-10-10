@@ -249,12 +249,14 @@ describe('Decisions from Telegram (S05 rules TC4, TC5)', () => {
   it('approve only an unflagged Sham Cash deposit within the limit', () => {
     const base = {
       method: 'sham_cash' as const,
+      customerFrozen: false,
       flagCount: 0,
       creditUsdUnits: 100,
       limitUsdUnits: 100,
     };
     expect(telegramApprovalRefusal(base)).toBeNull();
     expect(telegramApprovalRefusal({ ...base, method: 'usdt_trc20' })).toBe('panel_only');
+    expect(telegramApprovalRefusal({ ...base, customerFrozen: true })).toBe('frozen');
     expect(telegramApprovalRefusal({ ...base, method: 'sham_cash', limitUsdUnits: 0 })).toBe('off');
     expect(telegramApprovalRefusal({ ...base, method: 'sham_cash', flagCount: 1 })).toBe('flagged');
     expect(telegramApprovalRefusal({ ...base, method: 'sham_cash', creditUsdUnits: 101 })).toBe(

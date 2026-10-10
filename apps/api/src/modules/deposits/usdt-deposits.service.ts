@@ -43,6 +43,7 @@ import { SettingsService } from '../settings/index.js';
 import {
   AlreadyCreated,
   checkCreation,
+  checkNotFrozen,
   checkNotStopped,
   customerEntry,
   insertDeposit,
@@ -151,6 +152,7 @@ export class UsdtDepositsService {
           .where(eq(deposits.idempotencyKey, idempotencyKey));
         if (written) throw new AlreadyCreated();
         await checkNotStopped(this.switches, tx, input.method);
+        await checkNotFrozen(tx, customerId);
         await checkCreation(tx, customerId);
         const limits = await limitsOf(
           tx,

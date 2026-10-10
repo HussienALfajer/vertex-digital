@@ -27,6 +27,7 @@ import { marginRuleValuesSchema, marginScopeSchema } from './pricing.js';
 import { displayStepSchema } from './rates.js';
 import { storeSwitchSchema } from './settings.js';
 import { supplierCodeSchema, supplierPolicySchema } from './suppliers.js';
+import { ticketCategorySchema, ticketStatusSchema } from './support.js';
 import {
   adjustmentCategorySchema,
   adjustmentDirectionSchema,
@@ -72,6 +73,9 @@ export const AUDIT_ENTITY_TYPES = [
   'price_review',
   'order',
   'order_policy',
+  'customer_note',
+  'support_ticket',
+  'support_settings',
 ] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
@@ -185,6 +189,28 @@ const reviewDecision = z.strictObject({
   priceAfterUsdUnits: z.int(),
 });
 
+/** S12 AU1: limits in audit details, before and after; null is the store default. */
+const customerLimitValues = z.strictObject({
+  perDepositUsdUnits: z.int().nullable(),
+  dailyDepositUsdUnits: z.int().nullable(),
+  dailyPurchaseUsdUnits: z.int().nullable(),
+});
+/** S12 AU1: ids, the category and the status before and after; never a message body. */
+const ticketChange = z.strictObject({
+  ticketId: z.uuid(),
+  category: ticketCategorySchema,
+  before: ticketStatusSchema.nullable(),
+  after: ticketStatusSchema,
+});
+const ticketMessage = z.strictObject({
+  ticketId: z.uuid(),
+  category: ticketCategorySchema,
+  messageId: z.uuid(),
+  before: ticketStatusSchema,
+  after: ticketStatusSchema,
+  images: z.int().min(0).max(3),
+});
+
 /**
  * Every audit action (`<entity>.<verb>`) with the shape of its `details`: before and after of the
  * changed fields, never a password, hash, code, secret, backup code, token or session id (the
@@ -218,6 +244,27 @@ export const AUDIT_DETAILS = {
   'customer.test_created': identity,
   /** `count` is the sessions signed out (rule T2). */
   'customer.test_password_reset': count,
+  /** S12 CF1: the reason is the entry's `reason`; the reservations it cancelled. */
+  'customer.frozen': z.strictObject({ cancelledOrderIds: z.array(z.uuid()) }),
+  'customer.unfrozen': none,
+  /** S12 LM5. */
+  'customer.limits_changed': z.strictObject({
+    before: customerLimitValues,
+    after: customerLimitValues,
+  }),
+  /** S12 AR2: `count` is the sessions deleted, `closedTicketIds` the tickets closed. */
+  'customer.archived': z.strictObject({
+    count: z.int().nonnegative(),
+    closedTicketIds: z.array(z.uuid()),
+  }),
+  'customer.unarchived': none,
+  /** S12 SN1. */
+  'customer.sessions_revoked_by_admin': count,
+  /** S12 SN2: never the body. */
+  'customer.note_added': z.strictObject({ noteId: z.uuid(), pinned: z.boolean() }),
+  'customer.note_pinned': z.strictObject({ noteId: z.uuid(), unpinnedNoteId: z.uuid().nullable() }),
+  'customer.note_unpinned': z.strictObject({ noteId: z.uuid() }),
+  'customer.note_archived': z.strictObject({ noteId: z.uuid() }),
   /** S05 rule NT8: one email choice changed on `/account`. */
   'customer.notification_preference_changed': z.strictObject({
     event: notificationEventSchema,
@@ -485,6 +532,20 @@ export const AUDIT_DETAILS = {
   'order.proof_uploaded': z.strictObject({ fileId: z.uuid() }),
   /** Rule C3: which stored item was shown, never its value. */
   'order.code_revealed': z.strictObject({ itemId: z.uuid(), position: z.int().positive() }),
+  /** S12 AU1: by the customer (TK1) or the admin (TK2). */
+  'ticket.opened': ticketChange,
+  'ticket.opened_by_admin': ticketChange.extend({ customerId: z.uuid() }),
+  /** The customer's message (TK3, TK4); `ticket.replied` is the admin's (TK3, TK5). */
+  'ticket.customer_replied': ticketMessage,
+  'ticket.replied': ticketMessage,
+  /** By the customer, the admin or the system (TK6 auto-close, AR2 archive). */
+  'ticket.closed': ticketChange.extend({ cause: z.enum(['manual', 'auto_close', 'archive']) }),
+  'ticket.reopened': ticketChange,
+  /** S12 SC1. */
+  'support.settings_changed': z.strictObject({
+    before: z.strictObject({ telegramUrl: z.string().nullable() }),
+    after: z.strictObject({ telegramUrl: z.string().nullable() }),
+  }),
   /** `before` is the policy in force, the seed included. */
   'order_policy.set': z.strictObject({
     before: orderPolicySchema.strict(),

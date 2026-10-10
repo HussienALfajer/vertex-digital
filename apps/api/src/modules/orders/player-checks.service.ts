@@ -14,6 +14,7 @@ import {
   checkOrderFields,
   type Database,
   damascusDate,
+  lockActiveCustomer,
   newId,
   type PlayerCheckLookup,
   type ProductRoutingState,
@@ -33,7 +34,7 @@ import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { AuthService, withinLimits } from '../auth/index.js';
 import { SupplierAdaptersService } from '../suppliers/index.js';
-import { orderRefusals } from './order-errors.js';
+import { asCodedException, orderRefusals } from './order-errors.js';
 
 type Executor = Database | Transaction;
 
@@ -74,6 +75,12 @@ export class PlayerChecksService {
     request: PlayerCheckRequest,
     meta: RequestMeta,
   ): Promise<PlayerCheck> {
+    // S12 CF2: a frozen customer spends no supplier quota.
+    await this.db
+      .transaction((tx) => lockActiveCustomer(tx, customerId))
+      .catch((error: unknown) => {
+        throw asCodedException(error);
+      });
     const state = (
       await productRoutingStates(this.db, [request.productId], routingContext(this.env))
     ).get(request.productId);

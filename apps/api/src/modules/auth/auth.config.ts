@@ -1,6 +1,7 @@
 import {
   customerAccounts,
   customerSessions,
+  customerSignIns,
   customers,
   customerVerifications,
   type Database,
@@ -190,6 +191,8 @@ export function createCustomerAuth(
         phone: { type: 'string', required: false, input: false },
         isTest: { type: 'boolean', required: false, input: false },
         archivedAt: { type: 'date', required: false, input: false },
+        /** S12 CF5: the store shows the frozen banner and disables buying and depositing. */
+        frozenAt: { type: 'date', required: false, input: false },
       },
     },
     emailAndPassword: {
@@ -233,6 +236,14 @@ export function createCustomerAuth(
             if (!customer || customer.archivedAt) {
               throw APIError.from('UNAUTHORIZED', BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD);
             }
+          },
+          // S12: every new session joins the sign-in log (devices tab, shared-IP signal, CS5).
+          after: async (session) => {
+            await db.insert(customerSignIns).values({
+              customerId: session.userId,
+              ipAddress: session.ipAddress ?? null,
+              userAgent: session.userAgent?.slice(0, 500) ?? null,
+            });
           },
         },
       },
