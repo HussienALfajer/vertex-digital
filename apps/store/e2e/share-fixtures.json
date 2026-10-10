@@ -1,0 +1,45 @@
+{
+  "G1ftT0kenAAAAAAAAAAAAA": {
+    "kind": "gift",
+    "orderNumber": null,
+    "game": {
+      "nameAr": "ببجي موبايل",
+      "nameEn": "PUBG Mobile",
+      "cover": {
+        "id": "0199d000-0000-7000-8000-000000000065",
+        "url": "/api/catalog/images/0199d000-0000-7000-8000-000000000065",
+        "width": 640,
+        "height": 640
+      },
+      "accentColor": "#F2A900"
+    },
+    "product": { "nameAr": "325 UC", "kind": "direct", "gameAmount": 325 },
+    "quantity": 1,
+    "deliveredQuantity": 1,
+    "stage": "delivered",
+    "paidAt": "2026-10-09T10:00:00.000Z",
+    "finishedAt": "2026-10-09T10:00:12.000Z",
+    "price": null,
+    "fields": [{ "label": "معرّف اللاعب (ID)", "value": "••••4568" }],
+    "gift": { "senderName": "أحمد", "message": "كل عام وأنت بخير" }
+  },
+  "R3ceiptT0kenAAAAAAAAAA": {
+    "kind": "receipt",
+    "orderNumber": "VO-RCPT23",
+    "game": {
+      "nameAr": "ببجي موبايل",
+      "nameEn": "PUBG Mobile",
+      "cover": null,
+      "accentColor": "#F2A900"
+    },
+    "product": { "nameAr": "60 UC", "kind": "direct", "gameAmount": 60 },
+    "quantity": 2,
+    "deliveredQuantity": 1,
+    "stage": "partially_delivered",
+    "paidAt": "2026-10-09T10:00:00.000Z",
+    "finishedAt": "2026-10-09T10:05:00.000Z",
+    "price": { "totalUsdUnits": 1980000, "refundedUsdUnits": 990000 },
+    "fields": [{ "label": "معرّف اللاعب (ID)", "value": "51234567" }],
+    "gift": null
+  }
+}

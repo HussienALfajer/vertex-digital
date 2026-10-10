@@ -37,6 +37,15 @@ const config: NextConfig = {
         : './src/app/no-madani.css',
     },
   },
+  // S10 rule SH5: share links are never indexed (the pages also say so in their metadata).
+  async headers() {
+    return [
+      {
+        source: '/:kind(g|r)/:token',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
+    ];
+  },
   // nginx sends /api to the API in production; the development server does it here.
   async rewrites() {
     if (process.env.NODE_ENV === 'production') return [];

@@ -9,6 +9,7 @@ import {
   orderPolicySchema,
   refundOrderSchema,
   resolveAttemptSchema,
+  revokeShareLinkSchema,
 } from '@vertex-digital/contracts';
 import type { Answer } from './catalog-mock';
 
@@ -323,7 +324,8 @@ export class OrdersMock {
           (row) =>
             !q ||
             row.number.toLowerCase().includes(q.replace(/^vo-?/, '')) ||
-            row.customer.email.includes(q),
+            row.customer.email.includes(q) ||
+            row.checkoutId === q,
         )
         .filter((row) => !supplier || row.supplierCode === supplier)
         .filter((row) => !status || row.status === status)
@@ -343,6 +345,33 @@ export class OrdersMock {
     if (one && method === 'GET') {
       const row = this.find(one[1] as string);
       return row ? { status: 200, json: row } : error(404, 'NOT_FOUND');
+    }
+
+    // S10 rule AD1: an admin revocation, with its reason; a revoked link answers the order again.
+    const revoke = path.match(/^\/api\/admin\/orders\/([^/]+)\/share-links\/([^/]+)\/revoke$/);
+    if (revoke && method === 'POST') {
+      const row = this.find(revoke[1] as string);
+      const link = row?.shareLinks.find((item) => item.id === revoke[2]);
+      if (!row || !link) return error(404, 'NOT_FOUND');
+      const parsed = revokeShareLinkSchema.safeParse(body);
+      if (!parsed.success) return error(400, 'VALIDATION_FAILED');
+      if (link.revokedAt) return { status: 200, json: row };
+      return {
+        status: 200,
+        json: this.replace({
+          ...row,
+          shareLinks: row.shareLinks.map((item) =>
+            item.id === link.id
+              ? {
+                  ...item,
+                  revokedAt: new Date().toISOString(),
+                  revokedBy: 'admin',
+                  revokeReason: parsed.data.reason,
+                }
+              : item,
+          ),
+        }),
+      };
     }
 
     const decision = path.match(

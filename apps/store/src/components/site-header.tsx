@@ -3,11 +3,12 @@ import Link from 'next/link';
 import { SearchButton } from '@/features/search/search-trigger';
 import { t } from '@/lib/i18n';
 import { AccountLink } from './account-link';
+import { CartButton } from './cart-button';
 import { ThemeToggle } from './theme-toggle';
 
 export function SiteHeader() {
   return (
-    <header className="border-b border-border bg-background">
+    <header className="group/header border-b border-border bg-background">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4">
         <Link
           href="/"
@@ -22,10 +23,14 @@ export function SiteHeader() {
             {t('app.name')}
           </span>
         </Link>
-        {/* No gap at phone width: signed in, six 44 px targets share 360 px. */}
+        {/* No gap at phone width. Signed in, the theme switch moves into the account menu there:
+            the search, the cart, the balance, the bell and the menu share 360 px (S10). */}
         <div className="flex items-center sm:gap-1">
           <SearchButton />
-          <ThemeToggle />
+          <CartButton />
+          <span className="flex max-sm:group-has-data-signed-in/header:hidden">
+            <ThemeToggle />
+          </span>
           <AccountLink />
         </div>
       </div>

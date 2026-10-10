@@ -43,6 +43,7 @@ import { formatDateTime, formatSince } from '../../lib/format';
 import { STATUS_TONES } from './order-labels';
 import { type OrderSearch, tabOf, withFilter } from './order-search';
 import { orderListQuery } from './orders.queries';
+import { shortCheckoutId } from './share-links';
 
 const ALL = 'all';
 
@@ -313,6 +314,24 @@ function OrderTable({ orders }: { orders: AdminOrderSummary[] }) {
               <span className="flex flex-col gap-1">
                 <bdi>{order.product.nameAr}</bdi>
                 <span className="text-sm text-muted-foreground">{order.game.nameAr}</span>
+                {(order.isGift || order.checkoutId) && (
+                  <span className="flex flex-wrap gap-1">
+                    {order.isGift && <Badge tone="info">{t('orders.gift.badge')}</Badge>}
+                    {order.checkoutId && (
+                      <Link
+                        to="/orders"
+                        search={{ q: order.checkoutId }}
+                        aria-label={t('orders.checkout.filter')}
+                        className="rounded-sm"
+                      >
+                        <Badge tone="neutral">
+                          {t('orders.checkout.badge')}{' '}
+                          <bdi dir="ltr">{shortCheckoutId(order.checkoutId)}</bdi>
+                        </Badge>
+                      </Link>
+                    )}
+                  </span>
+                )}
               </span>
             </TableCell>
             <TableCell className="tabular-nums">{order.quantity}</TableCell>

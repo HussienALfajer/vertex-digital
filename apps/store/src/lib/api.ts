@@ -41,7 +41,7 @@ export async function apiRequest<Data = unknown>(
     headers,
     fetcher = fetch,
   }: {
-    method?: 'GET' | 'POST' | 'PATCH' | 'PUT';
+    method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
     body?: unknown;
     headers?: Record<string, string>;
     fetcher?: typeof fetch;

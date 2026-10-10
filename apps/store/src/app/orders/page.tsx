@@ -1,6 +1,7 @@
 import { PageHeader } from '@vertex-digital/ui/components/page-header';
 import type { Metadata } from 'next';
-import { OrdersList } from '@/features/orders/orders-list';
+import { Suspense } from 'react';
+import { OrdersList, OrdersSkeleton } from '@/features/orders/orders-list';
 import { t } from '@/lib/i18n';
 
 export const metadata: Metadata = {
@@ -8,12 +9,17 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-/** "طلباتي": read in the browser with the session cookie and never cached (S08). */
+/**
+ * "طلباتي": read in the browser with the session cookie and never cached (S08); `?checkout=`
+ * (S10) is read inside the boundary, so the shell stays static.
+ */
 export default function OrdersRoute() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10 md:py-16">
       <PageHeader title={t('orders.title')} description={t('orders.subtitle')} />
-      <OrdersList />
+      <Suspense fallback={<OrdersSkeleton />}>
+        <OrdersList />
+      </Suspense>
     </div>
   );
 }

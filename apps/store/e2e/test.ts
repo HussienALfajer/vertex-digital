@@ -94,6 +94,8 @@ export class MockApi {
         },
       },
     ],
+    // No saved player ID: the buy box reads them once signed in (S10 rule SP3).
+    ['GET /api/saved-players', { status: 200, body: { items: [] } }],
     // No unread notification: the header's bell opens the stream once signed in (S05 NT6).
     [
       'GET /api/notifications/stream',

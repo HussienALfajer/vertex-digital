@@ -2,6 +2,7 @@
 
 import {
   CALCULATOR_MAX_TARGET,
+  CART_LINES_MAX,
   cheapestPackCombination,
   displaySypTotal,
   formatSyp,
@@ -15,24 +16,33 @@ import {
   FieldLabel,
 } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
+import { ShoppingCartIcon } from 'lucide-react';
 import { useState } from 'react';
+import { FormAlert } from '@/components/form-alert';
+import { splitCount } from '@/features/cart/cart';
+import { storedLineCount } from '@/features/cart/cart-keys';
 import { t } from '@/lib/i18n';
 
 import type { CalculatorPack } from './calculator-card';
 
 /**
  * The calculator's body (rules CL2, CL3): the cheapest combination of packs reaching the target
- * amount, each line with "اشترِ" opening the buy box on that pack. Nothing is bought together
- * until S10's cart. Loaded when the calculator is first opened.
+ * amount, each line with "اشترِ" opening the buy box on that pack, and S10's "أضف الكل إلى السلة"
+ * (rule CT3): the buy box asks for the fields once, then adds every pack × count as cart lines (a
+ * count above the pack's maximum becomes several lines). A result needing more than 10 lines adds
+ * nothing. Loaded when the calculator is first opened.
  */
 export function Calculator({
   packs,
   onBuy,
+  onAddAll,
 }: {
   packs: CalculatorPack[];
   onBuy: (packId: string, count: number) => void;
+  onAddAll: (lines: { product: CalculatorPack; count: number }[]) => void;
 }) {
   const [text, setText] = useState('');
+  const [tooMany, setTooMany] = useState(false);
   const trimmed = text.trim();
   const target = /^\d{1,6}$/.test(trimmed) ? Number(trimmed) : null;
   const valid = target !== null && target >= 1 && target <= CALCULATOR_MAX_TARGET;
@@ -69,7 +79,10 @@ export function Calculator({
           maxLength={6}
           className="h-11 text-md"
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            setText(event.target.value);
+            setTooMany(false);
+          }}
         />
         <FieldDescription>{t('calculator.hint')}</FieldDescription>
         <FieldError match={trimmed !== '' && !valid}>
@@ -132,6 +145,27 @@ export function Calculator({
             </p>
           )}
           <p className="text-xs text-muted-foreground">{t('calculator.separate')}</p>
+          {storedLineCount() !== null && (
+            <Button
+              size="xl"
+              onClick={() => {
+                const lines = result.lines.flatMap((line) => {
+                  const pack = byId.get(line.packId);
+                  return pack ? [{ product: pack, count: line.count }] : [];
+                });
+                const count = lines.reduce(
+                  (sum, line) => sum + splitCount(line.count, line.product.maxQuantity).length,
+                  0,
+                );
+                if (count > CART_LINES_MAX) return setTooMany(true);
+                onAddAll(lines);
+              }}
+            >
+              <ShoppingCartIcon aria-hidden="true" />
+              {t('calculator.addAll')}
+            </Button>
+          )}
+          {tooMany && <FormAlert>{t('calculator.tooMany', { max: CART_LINES_MAX })}</FormAlert>}
         </div>
       )}
     </div>

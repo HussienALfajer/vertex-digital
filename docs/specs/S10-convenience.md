@@ -306,6 +306,7 @@ Tests:
 - `savedPlayerSchema` gains `gameShown` (edge case 11: "اشحن" disabled on a hidden game). `publicShareSchema` gains `deliveredQuantity` (SH4's "تم شحن d من q").
 - A missing product in a checkout line is refused as `PRODUCT_UNAVAILABLE` with `availability: hidden`, one of the four line codes.
 - The player-check cache (PV3) hashes the fields with the contracts' `canonicalFields` (key order by code unit instead of `localeCompare`; existing cache rows expire within a day).
+- PR 2: the share pages send `no-referrer` as a `<meta name="referrer">` (nginx already sends the server's own `Referrer-Policy`, and a second header would be ambiguous); the store adds `X-Robots-Tag: noindex, nofollow` on `/g/` and `/r/`. The store forwards the visitor's `X-Forwarded-For` (set by nginx) when it reads `/api/shares/:token`, so the API's 60 per minute counts each visitor. On phones, signed in, the theme switch moves from the header into the account menu to leave room for the cart button. Budgets: `/cart` 380 KB of JS, share pages 215 KB (apps/store/CLAUDE.md).
 
 ## Implementation notes
 - Suggested split, each leaving `main` green:

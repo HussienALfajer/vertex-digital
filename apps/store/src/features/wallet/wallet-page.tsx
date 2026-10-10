@@ -11,6 +11,11 @@ import {
 } from '@vertex-digital/contracts';
 import { Button } from '@vertex-digital/ui/components/button';
 import { Card } from '@vertex-digital/ui/components/card';
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from '@vertex-digital/ui/components/collapsible';
 import { EmptyState } from '@vertex-digital/ui/components/empty-state';
 import { IconTile } from '@vertex-digital/ui/components/icon-tile';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
@@ -217,6 +222,37 @@ function EntryRow({ entry }: { entry: WalletEntry }) {
           >
             <bdi dir="ltr">{entry.order.number}</bdi>
           </Link>
+        )}
+        {entry.checkout && (
+          // S10 (W5): a checkout's one entry opens to its orders.
+          <Collapsible>
+            <CollapsibleTrigger className="min-h-11 w-fit gap-2 text-sm text-primary">
+              {t('wallet.checkoutOrders')}
+            </CollapsibleTrigger>
+            <CollapsiblePanel>
+              <ul className="flex flex-col gap-1 pb-1 text-sm">
+                {entry.checkout.orders.map((order) => (
+                  <li key={order.id} className="flex flex-wrap items-baseline gap-x-2">
+                    <bdi>{order.productNameAr}</bdi>
+                    <Link
+                      href={`/orders/${order.id}`}
+                      className="text-primary underline-offset-4 hover:underline"
+                    >
+                      <bdi dir="ltr">{order.number}</bdi>
+                    </Link>
+                  </li>
+                ))}
+                <li>
+                  <Link
+                    href={`/orders?checkout=${entry.checkout.id}`}
+                    className="text-primary underline-offset-4 hover:underline"
+                  >
+                    {t('wallet.checkoutView')}
+                  </Link>
+                </li>
+              </ul>
+            </CollapsiblePanel>
+          </Collapsible>
         )}
         {entry.adjustment?.customerNote && (
           <p className="text-sm break-words text-muted-foreground">

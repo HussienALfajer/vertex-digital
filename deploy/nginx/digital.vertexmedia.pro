@@ -90,9 +90,9 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
-    # Purchases (S08 rule O1): POST is limited (the zone's key is empty for GET), on top of the
-    # API's per-customer counters.
-    location ~* ^/api/orders/?$ {
+    # Purchases (S08 rule O1) and cart checkouts (S10 rule CT9, one request each): POST is
+    # limited (the zone's key is empty for GET), on top of the API's per-customer counters.
+    location ~* ^/api/(?:orders|checkouts)/?$ {
         limit_req zone=vdpurchase burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;
@@ -103,6 +103,15 @@ server {
     # API's per-customer and per-address counters.
     location ~* ^/api/player-checks/?$ {
         limit_req zone=vdplayercheck burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # Gift and receipt data and images (S10 rules SH1, SH2, SH5), public: on top of the API's 60
+    # a minute per address. The API sets the cache headers and reads no cookie.
+    location ~* ^/api/shares/ {
+        limit_req zone=vdshare burst=20 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;
         include snippets/vertexdigital-proxy.conf;
@@ -184,6 +193,16 @@ server {
     # Dotfiles and source maps are never served.
     location ~ /\. { return 404; }
     location ~ \.map$ { return 404; }
+
+    # The public gift and receipt pages (S10 rules GF5, RC2, SH5): rendered per request by the
+    # store, which reads /api/shares/ with the visitor's address. The pages carry
+    # `<meta name="referrer" content="no-referrer">` and the store adds `X-Robots-Tag: noindex`.
+    location ~ ^/(?:g|r)/ {
+        limit_req zone=vdshare burst=20 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3061;
+        include snippets/vertexdigital-proxy.conf;
+    }
 
     # Every page is rendered (or served from its cache) by the store.
     location / {

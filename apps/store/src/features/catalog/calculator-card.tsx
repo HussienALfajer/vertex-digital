@@ -34,9 +34,11 @@ const Calculator = dynamic(() => import('./calculator').then((module) => module.
 export function CalculatorCard({
   packs,
   onBuy,
+  onAddAll,
 }: {
   packs: CalculatorPack[];
   onBuy: (packId: string, count: number) => void;
+  onAddAll: (lines: { product: CalculatorPack; count: number }[]) => void;
 }) {
   const [opened, setOpened] = useState(false);
   return (
@@ -45,7 +47,9 @@ export function CalculatorCard({
         <CollapsibleTrigger className="min-h-12 px-4 text-lg font-bold">
           {t('calculator.title')}
         </CollapsibleTrigger>
-        <CollapsiblePanel>{opened && <Calculator packs={packs} onBuy={onBuy} />}</CollapsiblePanel>
+        <CollapsiblePanel>
+          {opened && <Calculator packs={packs} onBuy={onBuy} onAddAll={onAddAll} />}
+        </CollapsiblePanel>
       </Card>
     </Collapsible>
   );

@@ -222,6 +222,98 @@ test.describe('orders', () => {
   });
 });
 
+const CHECKOUT_ID = '0199b000-0000-7000-8000-0000000000c1';
+const GIFT_LINK_ID = '0199b000-0000-7000-8000-0000000000e1';
+
+/**
+ * S10 rules AD1, AD2: the delivered order becomes a gift paid in a checkout with the refunded
+ * one, with a live gift link and a receipt link the customer revoked.
+ */
+function checkout(admin: AdminApi) {
+  const delivered = admin.orders.orders.find((row) => row.id === ORDER_IDS.delivered) as AdminOrder;
+  const refunded = admin.orders.orders.find((row) => row.id === ORDER_IDS.refunded) as AdminOrder;
+  const info = {
+    id: CHECKOUT_ID,
+    totalUsdUnits: delivered.totalUsdUnits + refunded.totalUsdUnits,
+    orderCount: 2,
+    finishedAt: new Date().toISOString(),
+    orders: [
+      { id: delivered.id, number: delivered.number, line: 1, status: delivered.status },
+      { id: refunded.id, number: refunded.number, line: 2, status: refunded.status },
+    ],
+  };
+  admin.orders.orders = admin.orders.orders.map((row) =>
+    row.id === delivered.id
+      ? {
+          ...row,
+          checkout: info,
+          gift: { senderName: 'أحمد', message: 'كل عام وأنت بخير' },
+          shareLinks: [
+            {
+              id: GIFT_LINK_ID,
+              kind: 'gift',
+              showPrice: false,
+              playerDisplay: 'masked',
+              createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+              revokedAt: null,
+              revokedBy: null,
+              revokeReason: null,
+            },
+            {
+              id: '0199b000-0000-7000-8000-0000000000e2',
+              kind: 'receipt',
+              showPrice: true,
+              playerDisplay: 'full',
+              createdAt: new Date(Date.now() - 7_200_000).toISOString(),
+              revokedAt: new Date(Date.now() - 3_000_000).toISOString(),
+              revokedBy: 'customer',
+              revokeReason: null,
+            },
+          ],
+        }
+      : row.id === refunded.id
+        ? { ...row, checkout: info }
+        : row,
+  );
+}
+
+test.describe('checkouts, gifts and share links (S10 rules AD1, AD2)', () => {
+  test('shows the badges, finds a checkout by its id, and revokes a link with a reason', async ({
+    page,
+    admin,
+  }) => {
+    checkout(admin);
+    await open(page, admin, '/orders');
+    await expect(rows(page).filter({ hasText: o.gift.badge })).toHaveCount(1);
+    await expect(rows(page).filter({ hasText: o.checkout.badge })).toHaveCount(2);
+    await page.getByRole('link', { name: o.checkout.filter }).first().click();
+    await expect(page).toHaveURL(new RegExp(`q=${CHECKOUT_ID}`));
+    await expect(rows(page)).toHaveCount(2);
+
+    await page.goto(`/orders/${ORDER_IDS.delivered}`);
+    await expect(page.getByText(fill(o.checkout.title, { count: 2 }))).toBeVisible();
+    await expect(page.getByText('كل عام وأنت بخير')).toBeVisible();
+    await expect(page.getByText(o.shareLinks.live)).toBeVisible();
+    await expect(
+      page.getByText(o.shareLinks.revokedBy.split('{{')[0] as string).first(),
+    ).toBeVisible();
+    await page.getByRole('button', { name: o.shareLinks.revoke }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel(o.decisions.reason).fill('بلاغ');
+    await dialog.getByRole('button', { name: o.shareLinks.revoke }).click();
+    await expect(dialog.getByText(o.decisions.reasonError)).toBeVisible();
+    await dialog.getByLabel(o.decisions.reason).fill('بلاغ عن رسالة احتيال');
+    await dialog.getByRole('button', { name: o.shareLinks.revoke }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('بلاغ عن رسالة احتيال')).toBeVisible();
+    await expect(page.getByText(o.shareLinks.live)).toBeHidden();
+    const link = admin.orders.orders
+      .find((row) => row.id === ORDER_IDS.delivered)
+      ?.shareLinks.find((item) => item.id === GIFT_LINK_ID);
+    expect(link).toMatchObject({ revokedBy: 'admin', revokeReason: 'بلاغ عن رسالة احتيال' });
+  });
+});
+
 // RTL screenshots of the S08 admin screens in both themes: the design review evidence (ADR 0011).
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`${colorScheme} theme`, () => {
@@ -246,6 +338,22 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/orders/policy');
       await expect(page.getByRole('button', { name: o.policy.save })).toBeVisible();
       await screenshot(page, testInfo, `order-policy-${colorScheme}`, { fullPage: true });
+    });
+
+    test('S10 screenshots: the checkout, the gift and the share links', async ({
+      page,
+      admin,
+    }, testInfo) => {
+      checkout(admin);
+      await open(page, admin, '/orders');
+      await expect(rows(page).filter({ hasText: o.gift.badge })).toHaveCount(1);
+      await screenshot(page, testInfo, `orders-s10-badges-${colorScheme}`, { fullPage: true });
+      await page.goto(`/orders/${ORDER_IDS.delivered}`);
+      await expect(page.getByText(o.shareLinks.live)).toBeVisible();
+      await screenshot(page, testInfo, `order-s10-gift-${colorScheme}`, { fullPage: true });
+      await page.getByRole('button', { name: o.shareLinks.revoke }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await screenshot(page, testInfo, `order-s10-revoke-${colorScheme}`);
     });
 
     test('S09 screenshots: a reservation and the status filter', async ({

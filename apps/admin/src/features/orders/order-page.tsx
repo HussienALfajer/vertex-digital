@@ -27,6 +27,7 @@ import { formatDateTime, ltr } from '../../lib/format';
 import { DecisionDialog, type OrderDecision } from './decision-dialogs';
 import { ATTEMPT_TONES, playerCheckText, STATUS_TONES } from './order-labels';
 import { orderQuery, useRevealCode } from './orders.queries';
+import { CheckoutBlock, GiftBlock, ShareLinksBlock } from './share-links';
 
 /** A revealed code is hidden again after this long (rule C3). */
 const REVEAL_MS = 30_000;
@@ -34,7 +35,8 @@ const REVEAL_MS = 30_000;
 /**
  * One order (S08 screens): the header, the decision panel when rule D1 allows one, the account
  * fields, the attempts newest first with their candidates and webhook events, the events, the
- * journals, and the codes masked with their reveal log.
+ * journals, and the codes masked with their reveal log. S10 (AD1): the checkout, the gift's texts
+ * and the share links with their revocation.
  */
 export function OrderPage({ id }: { id: string }) {
   const { t } = useTranslation();
@@ -72,6 +74,13 @@ export function OrderPage({ id }: { id: string }) {
           <Header order={order.data} />
           <Decisions order={order.data} onDecide={setDecision} />
           <Fields order={order.data} />
+          {order.data.checkout && (
+            <CheckoutBlock order={order.data} checkout={order.data.checkout} />
+          )}
+          {order.data.gift && <GiftBlock gift={order.data.gift} />}
+          {(order.data.shareLinks.length > 0 || order.data.gift) && (
+            <ShareLinksBlock order={order.data} />
+          )}
           {order.data.codes.length > 0 && <Codes order={order.data} />}
           <Attempts attempts={order.data.attempts} />
           <Events order={order.data} />
