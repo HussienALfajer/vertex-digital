@@ -464,6 +464,25 @@ export const AUDIT_DETAILS = {
   }),
   /** S10 rule AD1: the admin revoked a share link, with the reason in the entry's `reason`. */
   'order.share_revoked': z.strictObject({ linkId: z.uuid(), kind: shareKindSchema }),
+  /** S11 rule AU1: a reroute, with the reason in the entry's `reason`. */
+  'order.rerouted': z.strictObject({
+    closedAttemptId: z.uuid().nullable(),
+    attemptId: z.uuid(),
+    routeId: z.uuid(),
+    ...supplier,
+  }),
+  /** S11 rule AU1: a manual fulfil; the number of codes typed, never the codes. */
+  'order.fulfilled_manually': z.strictObject({
+    attemptId: z.uuid(),
+    case: z.enum(['manual_attempt', 'review']),
+    units: z.int().positive(),
+    unitCostUsdUnits: z.int().nonnegative(),
+    lossAccepted: z.boolean(),
+    proofFileId: z.uuid(),
+    hasReference: z.boolean(),
+    items: z.int().nonnegative(),
+  }),
+  'order.proof_uploaded': z.strictObject({ fileId: z.uuid() }),
   /** Rule C3: which stored item was shown, never its value. */
   'order.code_revealed': z.strictObject({ itemId: z.uuid(), position: z.int().positive() }),
   /** `before` is the policy in force, the seed included. */

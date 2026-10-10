@@ -19,6 +19,6 @@ import { SuppliersService } from './suppliers.service.js';
   imports: [AdminModule, CatalogModule],
   controllers: [SuppliersAdminController, RoutesAdminController, SupplierWebhooksController],
   providers: [SuppliersService, RoutesService, SupplierWebhooksService, SupplierAdaptersService],
-  exports: [SupplierAdaptersService],
+  exports: [SupplierAdaptersService, SuppliersService],
 })
 export class SuppliersModule {}

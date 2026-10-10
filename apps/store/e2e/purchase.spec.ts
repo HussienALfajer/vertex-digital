@@ -310,9 +310,12 @@ test.describe('buy box', () => {
     await buyBox(page).getByRole('button', { name: p.continue }).click();
     await buyBox(page).getByRole('slider').focus();
     await page.keyboard.press('End');
+    // The lost answer first: switching the mock before the request leaves would answer it 429.
+    const retry = buyBox(page).getByRole('button', { name: p.retry });
+    await expect(retry).toBeVisible();
     const first = api.last('POST /api/orders');
     api.on('POST /api/orders', 429, { statusCode: 429, code: 'RATE_LIMITED' });
-    await buyBox(page).getByRole('button', { name: p.retry }).click();
+    await retry.click();
     await expect(buyBox(page).getByText(ar.errors.RATE_LIMITED)).toBeVisible();
     api.on('POST /api/orders', 200, order(p60)).on(`GET /api/orders/${ORDER_ID}`, 200, order(p60));
     await buyBox(page).getByRole('slider').focus();

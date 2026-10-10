@@ -9,9 +9,21 @@ import {
   Put,
   Query,
   Req,
+  Res,
   SerializeOptions,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiAcceptedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiAcceptedResponse,
+  ApiBody,
+  ApiConsumes,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiProduces,
+  ApiTags,
+} from '@nestjs/swagger';
 import {
   type AdminOrderListQuery,
   adminOrderCountsSchema,
@@ -19,30 +31,45 @@ import {
   adminOrderPageSchema,
   adminOrderSchema,
   adminRevealedCodeSchema,
+  DELIVERY_PROOF_MAX_BYTES,
+  deliveryProofSchema,
+  fulfilOrderSchema,
+  liveBoardQuerySchema,
+  liveBoardSchema,
   type OrderPolicy,
   orderPolicySchema,
   type PollAttempt,
   pollAttemptSchema,
   type RefundOrder,
+  type RerouteOrder,
   type RevokeShareLink,
   refundOrderSchema,
+  rerouteOptionsSchema,
+  rerouteOrderSchema,
   resolveAttemptSchema,
   revokeShareLinkSchema,
 } from '@vertex-digital/contracts';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import type { z } from 'zod';
 import { AdminRoute, CurrentAdmin, Sensitive } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
 import { ApiIdempotencyKey, IdempotencyKey } from '../../core/http/idempotency-key.js';
 import { requestMeta } from '../../core/http/request-meta.js';
 import type { AdminIdentity } from '../admin/index.js';
+import { sendImage, uploadBody } from '../files/index.js';
+import { OrderActionsService } from './order-actions.service.js';
 import { OrderDecisionsService } from './order-decisions.service.js';
 import { ShareLinksService } from './share-links.service.js';
+
+const proofUpload = FileInterceptor('file', {
+  limits: { fileSize: DELIVERY_PROOF_MAX_BYTES, files: 1, fields: 0 },
+});
 
 /**
  * The admin's orders (S08 rules D1–D6, C3): every decision, reveal and policy change needs a
  * recent re-authentication; resolving and refunding take an `Idempotency-Key` (`200` either way:
- * the order as the decision left it).
+ * the order as the decision left it). S11: the live room, reroute, the delivery proof and the
+ * manual fulfil (`OrderActionsService`), each re-authenticated with its `Idempotency-Key`.
  */
 @ApiTags('orders')
 @Controller('admin/orders')
@@ -50,6 +77,7 @@ export class OrdersAdminController {
   constructor(
     private readonly decisions: OrderDecisionsService,
     private readonly shareLinks: ShareLinksService,
+    private readonly actions: OrderActionsService,
   ) {}
 
   /** S10 rule AD1: removes exposure only, so no re-authentication; audited with the reason. */
@@ -94,6 +122,17 @@ export class OrdersAdminController {
   @ApiOkResponse({ description: 'The navigation badge', standardSchema: adminOrderCountsSchema })
   counts() {
     return this.decisions.counts();
+  }
+
+  /** S11 rules LR1–LR3: the live room's four columns. */
+  @Get('live')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @ApiQueryOf(liveBoardQuerySchema)
+  @SerializeOptions({ schema: liveBoardSchema })
+  @ApiOkResponse({ description: 'The live board', standardSchema: liveBoardSchema })
+  live(@Query({ schema: liveBoardQuerySchema }) query: z.output<typeof liveBoardQuerySchema>) {
+    return this.actions.board(query);
   }
 
   @Get('policy')
@@ -196,6 +235,110 @@ export class OrdersAdminController {
       id,
       idempotencyKey,
       body.reason,
+    );
+    return order;
+  }
+
+  /** S11 rule RR2: the routes with their eligibility. */
+  @Get(':id/routes')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: rerouteOptionsSchema })
+  @ApiOkResponse({
+    description: 'The routes and why each is or is not eligible',
+    standardSchema: rerouteOptionsSchema,
+  })
+  routes(@Param('id') id: string) {
+    return this.actions.routes(id);
+  }
+
+  /** S11 rule RR3. */
+  @Post(':id/reroute')
+  @AdminRoute()
+  @Sensitive()
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  @ApiIdempotencyKey()
+  @SerializeOptions({ schema: adminOrderSchema })
+  @ApiOkResponse({
+    description: 'The order sent to the chosen route',
+    standardSchema: adminOrderSchema,
+  })
+  async reroute(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id') id: string,
+    @IdempotencyKey() idempotencyKey: string,
+    @Body({ schema: rerouteOrderSchema }) body: RerouteOrder,
+    @Req() request: Request,
+  ) {
+    const { order } = await this.actions.reroute(
+      { adminId: admin.id, meta: requestMeta(request) },
+      id,
+      idempotencyKey,
+      body,
+    );
+    return order;
+  }
+
+  /** S11 rule MF2: re-encoded, audited; the fulfil names the returned id. */
+  @Post(':id/proof')
+  @AdminRoute()
+  @Sensitive()
+  @UseInterceptors(proofUpload)
+  @Header('cache-control', 'no-store')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody(uploadBody())
+  @SerializeOptions({ schema: deliveryProofSchema })
+  @ApiCreatedResponse({ description: 'The stored proof', standardSchema: deliveryProofSchema })
+  uploadProof(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id') id: string,
+    @UploadedFile() file: { buffer: Buffer } | undefined,
+    @Req() request: Request,
+  ) {
+    return this.actions.uploadProof(
+      { adminId: admin.id, meta: requestMeta(request) },
+      id,
+      file?.buffer,
+    );
+  }
+
+  @Get(':id/proofs/:fileId')
+  @AdminRoute()
+  @ApiProduces('image/webp')
+  @ApiOkResponse({ description: 'A delivery proof, never cached' })
+  async proof(
+    @Param('id') id: string,
+    @Param('fileId') fileId: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return sendImage(response, await this.actions.proof(id, fileId), 'private, no-store');
+  }
+
+  /** S11 rules MF1–MF5. */
+  @Post(':id/fulfil')
+  @AdminRoute()
+  @Sensitive()
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  @ApiIdempotencyKey()
+  @SerializeOptions({ schema: adminOrderSchema })
+  @ApiOkResponse({
+    description: 'The order after the manual delivery',
+    standardSchema: adminOrderSchema,
+  })
+  async fulfil(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id') id: string,
+    @IdempotencyKey() idempotencyKey: string,
+    @Body({ schema: fulfilOrderSchema }) body: z.output<typeof fulfilOrderSchema>,
+    @Req() request: Request,
+  ) {
+    const { order } = await this.actions.fulfil(
+      { adminId: admin.id, meta: requestMeta(request) },
+      id,
+      idempotencyKey,
+      body,
     );
     return order;
   }

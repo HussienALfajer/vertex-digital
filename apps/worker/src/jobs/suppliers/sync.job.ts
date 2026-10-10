@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import {
+  FAILING_SYNC_RUNS,
   formatSyp,
   formatUsd,
   isCostStale,
@@ -15,6 +16,7 @@ import {
   bossJobSender,
   currentSupplierPolicy,
   type Database,
+  failedRunStreak,
   newId,
   productPrices,
   productRoutes,
@@ -31,7 +33,7 @@ import {
   withoutQueryParameters,
 } from '@vertex-digital/db';
 import { SupplierError, type SupplierOffer } from '@vertex-digital/suppliers';
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -44,9 +46,6 @@ type OfferRow = typeof supplierOffers.$inferSelect;
 
 /** A run left `running` this long was lost in a crash: the next run closes it (rule SY1). */
 export const ABANDONED_RUN_MINUTES = 10;
-
-/** Failed runs in a row before the admin is told (S07 "Jobs and integrations"). */
-export const FAILING_SYNC_RUNS = 3;
 
 const FIELD_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
 
@@ -107,49 +106,6 @@ export function listedOffers(offers: readonly SupplierOffer[]): ListedOffer[] {
 
 const sameFields = (a: readonly string[] | null, b: readonly string[] | null) =>
   a === b || (a !== null && b !== null && a.join('\n') === b.join('\n'));
-
-/** The failed runs since the supplier's last successful one (for the failing-sync alerts). */
-export async function failedRunStreak(
-  db: Executor,
-  supplierId: string,
-): Promise<{ count: number; firstRunId: string | null; lastErrorCode: string | null }> {
-  const [lastSuccess] = await db
-    .select({ id: supplierSyncRuns.id })
-    .from(supplierSyncRuns)
-    .where(
-      and(eq(supplierSyncRuns.supplierId, supplierId), eq(supplierSyncRuns.status, 'succeeded')),
-    )
-    .orderBy(desc(supplierSyncRuns.startedAt), desc(supplierSyncRuns.id))
-    .limit(1);
-  const failed = and(
-    eq(supplierSyncRuns.supplierId, supplierId),
-    eq(supplierSyncRuns.status, 'failed'),
-    lastSuccess
-      ? // Compared in the database: a timestamp read back into JavaScript loses its microseconds.
-        sql`(${supplierSyncRuns.startedAt}, ${supplierSyncRuns.id}) > (select started_at, id from ${supplierSyncRuns} where id = ${lastSuccess.id})`
-      : undefined,
-  );
-  const [[total], [first], [last]] = await Promise.all([
-    db.select({ count: count() }).from(supplierSyncRuns).where(failed),
-    db
-      .select({ id: supplierSyncRuns.id })
-      .from(supplierSyncRuns)
-      .where(failed)
-      .orderBy(asc(supplierSyncRuns.startedAt), asc(supplierSyncRuns.id))
-      .limit(1),
-    db
-      .select({ errorCode: supplierSyncRuns.errorCode })
-      .from(supplierSyncRuns)
-      .where(failed)
-      .orderBy(desc(supplierSyncRuns.startedAt), desc(supplierSyncRuns.id))
-      .limit(1),
-  ]);
-  return {
-    count: total?.count ?? 0,
-    firstRunId: first?.id ?? null,
-    lastErrorCode: last?.errorCode ?? null,
-  };
-}
 
 class SuspiciousCatalog extends Error {}
 

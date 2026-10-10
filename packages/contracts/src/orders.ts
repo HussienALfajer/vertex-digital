@@ -11,9 +11,9 @@ import {
   productKindSchema,
   productSchema,
 } from './catalog.js';
-import { REFERENCE_CODE_ALPHABET } from './deposits.js';
+import { REFERENCE_CODE_ALPHABET, storedFileRefSchema } from './deposits.js';
 import { cursorQuerySchema, pagedListSchema, pageQuerySchema } from './lists.js';
-import { usdCentsSchema } from './money.js';
+import { CURRENCY_SCALE, usdCentsSchema } from './money.js';
 import {
   orderRoutes,
   ROUTE_UNUSABLE_REASONS,
@@ -24,6 +24,7 @@ import {
   type SupplierCode,
   type SupplierHealthState,
   supplierCodeSchema,
+  supplierHealthStateSchema,
 } from './suppliers.js';
 
 /*
@@ -477,6 +478,16 @@ export const OPEN_ATTEMPT_STATUSES = [
 export function isOpenAttempt(status: AttemptStatus): boolean {
   return (OPEN_ATTEMPT_STATUSES as readonly AttemptStatus[]).includes(status);
 }
+
+/**
+ * How an attempt came to be (S11): `routed` calls a route's supplier; `admin_fulfil` records
+ * units the admin delivered from another source (rule MF5), inserted already delivered.
+ */
+export const ATTEMPT_KINDS = ['routed', 'admin_fulfil'] as const;
+
+export const attemptKindSchema = z.enum(ATTEMPT_KINDS).meta({ id: 'AttemptKind' });
+
+export type AttemptKind = z.infer<typeof attemptKindSchema>;
 
 /** Who gave an attempt its final result (rule F1). */
 export const ATTEMPT_RESOLVERS = ['supplier', 'poll', 'webhook', 'admin'] as const;
@@ -1270,15 +1281,23 @@ export type WebhookEventResult = z.infer<typeof webhookEventResultSchema>;
 export const fulfilmentAttemptSchema = z
   .object({
     id: z.uuid(),
-    routeId: z.uuid(),
+    /** S11: `admin_fulfil` attempts have no route, offer or supplier offer. */
+    kind: attemptKindSchema,
+    routeId: z.uuid().nullable(),
     supplierCode: supplierCodeSchema,
     supplierNameAr: z.string(),
     /** The supplier's own offer id, and its name. */
-    offerId: z.string(),
-    offerName: z.string(),
+    offerId: z.string().nullable(),
+    offerName: z.string().nullable(),
     quantity: z.int().positive(),
     deliveredQuantity: z.int().nonnegative(),
-    unitCostUsdUnits: z.int().positive(),
+    /** Zero only for a manual delivery the admin recorded at no cost (S11 rule MF4). */
+    unitCostUsdUnits: z.int().nonnegative(),
+    /** S11 rule RR3: the admin picked this attempt's route. */
+    chosenByAdmin: z.boolean(),
+    /** S11 rule MF2: the delivery proof and the reference at the other source. */
+    proofFileId: z.uuid().nullable(),
+    deliveryReference: z.string().nullable(),
     status: attemptStatusSchema,
     supplierOrderId: z.string().nullable(),
     failureReason: z.string().nullable(),
@@ -1340,14 +1359,18 @@ export const adminOrderCodeSchema = z
   })
   .meta({ id: 'AdminOrderCode' });
 
-/** What the admin may decide on the order now (rule D1). */
+/** What the admin may decide on the order now (rule D1; S11 rules RR1, MF1, RF1). */
 export const orderDecisionsSchema = z
   .object({
     /** The open attempt to poll or resolve; null with none. */
     attemptId: z.uuid().nullable(),
     poll: z.boolean(),
     resolve: z.boolean(),
+    /** S11 rule MF1: `delivered` through resolve only for a held automatic attempt. */
+    resolveDelivered: z.boolean(),
     refund: z.boolean(),
+    reroute: z.boolean(),
+    fulfil: z.boolean(),
   })
   .meta({ id: 'OrderDecisions' });
 
@@ -1355,19 +1378,26 @@ export type OrderDecisions = z.infer<typeof orderDecisionsSchema>;
 
 /**
  * Rule D1: an open manual attempt may be resolved; an order in `needs_review` may be refunded,
- * its open attempt resolved and, when automatic, polled again (D4).
+ * its open attempt resolved and, when automatic, polled again (D4). S11: both cases may also be
+ * rerouted when an attempt is open (RR1), fulfilled by the admin (MF1) and refunded (RF1); a manual attempt is delivered
+ * only through the manual fulfil, with its proof (MF1).
  */
 export function orderDecisions(
   status: OrderStatus,
   openAttempt: { id: string; supplierCode: SupplierCode } | null,
 ): OrderDecisions {
   const held = status === 'needs_review';
-  const manual = openAttempt?.supplierCode === 'manual';
+  const manual = status === 'sent_to_supplier' && openAttempt?.supplierCode === 'manual';
+  const resolve = openAttempt !== null && (held || manual);
   return {
     attemptId: openAttempt?.id ?? null,
-    poll: held && openAttempt !== null && !manual,
-    resolve: openAttempt !== null && (held || manual),
-    refund: held,
+    poll: held && openAttempt !== null && openAttempt.supplierCode !== 'manual',
+    resolve,
+    resolveDelivered: resolve && openAttempt?.supplierCode !== 'manual',
+    refund: held || manual,
+    // The reroute's key is kept on the attempt it closes.
+    reroute: resolve,
+    fulfil: held || manual,
   };
 }
 
@@ -1491,3 +1521,207 @@ export const adminRevealedCodeSchema = z
   .meta({ id: 'AdminRevealedCode' });
 
 export type AdminRevealedCode = z.infer<typeof adminRevealedCodeSchema>;
+
+// Live operations (S11, F17) --------------------------------------------------------------------
+
+/** The live room's columns (rule LR1). */
+export const LIVE_COLUMNS = ['at_supplier', 'manual', 'review', 'finished'] as const;
+
+export const liveColumnSchema = z.enum(LIVE_COLUMNS).meta({ id: 'LiveColumn' });
+
+export type LiveColumn = z.infer<typeof liveColumnSchema>;
+
+/** A finished order stays on the board this long (rule LR1). */
+export const LIVE_FINISHED_MINUTES = 60;
+
+/** At most this many cards per column (rule LR1); the count stays exact. */
+export const LIVE_COLUMN_LIMIT = 100;
+
+/**
+ * Rule LR1: the column of an order, from its status, the supplier of its open attempt and when it
+ * finished; null for reservations, cancels and orders finished over an hour ago.
+ */
+export function liveColumn(
+  order: { status: OrderStatus; finishedAt: Date | null },
+  openAttempt: { supplierCode: SupplierCode } | null,
+  now: Date,
+): LiveColumn | null {
+  switch (order.status) {
+    case 'needs_review':
+      return 'review';
+    case 'sent_to_supplier':
+      return openAttempt?.supplierCode === 'manual' ? 'manual' : 'at_supplier';
+    case 'paid':
+    case 'failed':
+      return 'at_supplier';
+    case 'delivered':
+    case 'partially_refunded':
+    case 'refunded':
+      return order.finishedAt !== null &&
+        now.getTime() - order.finishedAt.getTime() <= LIVE_FINISHED_MINUTES * 60_000
+        ? 'finished'
+        : null;
+    default:
+      return null;
+  }
+}
+
+/** Rule LR3 (A14): slow past the product's p90, at least 2 minutes; 10 minutes without stats. */
+export const SLOW_FLOOR_SECONDS = 120;
+export const SLOW_DEFAULT_SECONDS = 600;
+
+export function slowAfterSeconds(stats: DeliveryStats | null): number {
+  if (stats === null) return SLOW_DEFAULT_SECONDS;
+  return Math.max(SLOW_FLOOR_SECONDS, Math.ceil(stats.p90Ms / 1000));
+}
+
+export const LIVE_TEST_FILTERS = ['all', 'hide', 'only'] as const;
+
+/** `GET /api/admin/orders/live` (rule LR1). */
+export const liveBoardQuerySchema = z
+  .object({
+    supplier: supplierCodeSchema.optional(),
+    gameId: z.uuid().optional(),
+    test: z.enum(LIVE_TEST_FILTERS).default('all'),
+  })
+  .meta({ id: 'LiveBoardQuery' });
+
+export type LiveBoardQuery = z.input<typeof liveBoardQuerySchema>;
+
+/** Rule LR2: a card; never field values or codes. */
+export const liveOrderCardSchema = z
+  .object({
+    id: z.uuid(),
+    number: z.string(),
+    status: orderStatusSchema,
+    game: z.object({ id: z.uuid(), nameAr: z.string() }),
+    product: z.object({ id: z.uuid(), nameAr: z.string() }),
+    quantity: z.int().positive(),
+    totalUsdUnits: z.int().positive(),
+    isTest: z.boolean(),
+    customerEmail: z.string(),
+    /** The open attempt, else the newest one; null before routing. */
+    attempt: z
+      .object({
+        supplierCode: supplierCodeSchema,
+        supplierNameAr: z.string(),
+        status: attemptStatusSchema,
+      })
+      .nullable(),
+    paidAt: z.iso.datetime(),
+    /** The open attempt's `sent_at`. */
+    sentAt: z.iso.datetime().nullable(),
+    reviewSince: z.iso.datetime().nullable(),
+    finishedAt: z.iso.datetime().nullable(),
+    /** Rule LR3, for `at_supplier` cards only. */
+    slowAfterSeconds: z.int().positive().nullable(),
+  })
+  .meta({ id: 'LiveOrderCard' });
+
+export type LiveOrderCard = z.infer<typeof liveOrderCardSchema>;
+
+const liveColumnContent = z.object({
+  count: z.int().nonnegative(),
+  cards: z.array(liveOrderCardSchema).max(LIVE_COLUMN_LIMIT),
+});
+
+export const liveBoardSchema = z
+  .object({
+    columns: z.object({
+      at_supplier: liveColumnContent,
+      manual: liveColumnContent,
+      review: liveColumnContent,
+      finished: liveColumnContent,
+    }),
+    awaitingBalance: z.int().nonnegative(),
+    generatedAt: z.iso.datetime(),
+  })
+  .meta({ id: 'LiveBoard' });
+
+export type LiveBoard = z.infer<typeof liveBoardSchema>;
+
+/** The admin stream's `order` event (rule LR4): ids and status only. */
+export const adminStreamEventSchema = z
+  .object({ orderId: z.uuid(), status: orderStatusSchema })
+  .meta({ id: 'AdminStreamEvent' });
+
+export type AdminStreamEvent = z.infer<typeof adminStreamEventSchema>;
+
+/** `GET /api/admin/orders/:id/routes` (rule RR2): every unarchived route with its eligibility. */
+export const rerouteOptionsSchema = z
+  .object({
+    orderId: z.uuid(),
+    remainingUnits: z.int().positive(),
+    unitPriceUsdUnits: z.int().positive(),
+    minMarginUsdUnits: z.int().nonnegative(),
+    routes: z.array(
+      z.object({
+        routeId: z.uuid(),
+        supplierCode: supplierCodeSchema,
+        supplierNameAr: z.string(),
+        health: supplierHealthStateSchema,
+        /** The newest balance in USD units and when it was read; null for none or `manual`. */
+        balanceUsdUnits: z.int().nullable(),
+        balanceAt: z.iso.datetime().nullable(),
+        offerId: z.string(),
+        offerName: z.string(),
+        tier: routeTierSchema.nullable(),
+        unitCostUsdUnits: z.int().nullable(),
+        /** The unit price minus the cost; null without a cost. */
+        marginUsdUnits: z.int().nullable(),
+        eligible: z.boolean(),
+        skipReason: routeSkipReasonSchema.nullable(),
+      }),
+    ),
+  })
+  .meta({ id: 'RerouteOptions' });
+
+export type RerouteOptions = z.infer<typeof rerouteOptionsSchema>;
+
+/** `POST /api/admin/orders/:id/reroute` (rule RR3). */
+export const rerouteOrderSchema = z
+  .object({ routeId: z.uuid(), reason: decisionReason })
+  .meta({ id: 'RerouteOrder' });
+
+export type RerouteOrder = z.infer<typeof rerouteOrderSchema>;
+
+/** Rule MF4: a manual fulfil's unit cost, whole cents from $0 to $100,000. */
+export const FULFIL_COST_MAX_USD_UNITS = 100_000 * CURRENCY_SCALE.USD;
+
+/** Rule MF2: the operation number at the other source, 1–200 printable characters. */
+export const deliveryReferenceSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[^\p{Cc}]+$/u);
+
+/** `POST /api/admin/orders/:id/fulfil` (rules MF1–MF4). */
+export const fulfilOrderSchema = z
+  .object({
+    quantity: z.int().min(1).max(MAX_QUANTITY_LIMIT),
+    /** Exactly `quantity` codes for a code product, none for a top-up (`CODES_COUNT_MISMATCH`). */
+    codes: z.array(deliveredCodeSchema).max(MAX_QUANTITY_LIMIT).default([]),
+    unitCostUsdUnits: usdCentsSchema.max(FULFIL_COST_MAX_USD_UNITS),
+    /** Required when the cost is above the order's unit price (`LOSS_NOT_CONFIRMED`). */
+    acceptLoss: z.boolean().default(false),
+    proofFileId: z.uuid(),
+    reference: deliveryReferenceSchema.optional(),
+    reason: decisionReason,
+  })
+  .meta({ id: 'FulfilOrder' });
+
+export type FulfilOrder = z.input<typeof fulfilOrderSchema>;
+
+/** Rule MF4: a cost above the price the customer paid is a loss the admin must confirm. */
+export function fulfilIsLoss(unitCostUsdUnits: number, unitPriceUsdUnits: number): boolean {
+  return unitCostUsdUnits > unitPriceUsdUnits;
+}
+
+/** Rule MF2: a delivery proof is at most 10 MB as uploaded (S03's image rules otherwise). */
+export const DELIVERY_PROOF_MAX_BYTES = 10 * 1024 * 1024;
+
+/** `POST /api/admin/orders/:id/proof` answers the stored proof (rule MF2). */
+export const deliveryProofSchema = storedFileRefSchema.meta({ id: 'DeliveryProof' });
+
+export type DeliveryProof = z.infer<typeof deliveryProofSchema>;

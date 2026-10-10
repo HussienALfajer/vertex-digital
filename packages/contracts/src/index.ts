@@ -3,6 +3,7 @@ export * from './audit.js';
 export * from './auth.js';
 export * from './catalog.js';
 export * from './customers.js';
+export * from './dashboard.js';
 export * from './deposits.js';
 export * from './errors.js';
 export * from './jobs.js';

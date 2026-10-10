@@ -267,6 +267,34 @@
       "when": 1791586504067,
       "tag": "0037_s10_convenience_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791599963635,
+      "tag": "0038_luxuriant_enchantress",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791599980911,
+      "tag": "0039_s11_live_ops_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791600635331,
+      "tag": "0040_plain_human_cannonball",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791600978526,
+      "tag": "0041_graceful_doctor_spectrum",
+      "breakpoints": true
     }
   ]
 }

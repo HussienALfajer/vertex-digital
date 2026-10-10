@@ -210,15 +210,16 @@ function Decisions({
             {t('orders.decisions.poll.open')}
           </Button>
         )}
+        {/* S11 rule MF1: a manual attempt is delivered by the manual fulfil, with its proof. */}
+        {decisions.resolveDelivered && (
+          <Button onClick={() => onDecide('delivered')}>
+            {t('orders.decisions.delivered.open')}
+          </Button>
+        )}
         {decisions.resolve && (
-          <>
-            <Button onClick={() => onDecide('delivered')}>
-              {t('orders.decisions.delivered.open')}
-            </Button>
-            <Button variant="outline" onClick={() => onDecide('failed')}>
-              {t('orders.decisions.failed.open')}
-            </Button>
-          </>
+          <Button variant="outline" onClick={() => onDecide('failed')}>
+            {t('orders.decisions.failed.open')}
+          </Button>
         )}
         {decisions.refund && (
           <Button variant="destructive" onClick={() => onDecide('refund')}>

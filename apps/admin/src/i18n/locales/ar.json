@@ -210,7 +210,10 @@
       "RESERVATIONS_LIMIT_REACHED": "بلغ العميل الحد الأقصى من الطلبات المحجوزة.",
       "ORDER_NOT_CANCELLABLE": "لا يمكن إلغاء هذا الطلب في حالته الحالية.",
       "CHECKOUT_REFUSED": "رُفضت السلة كاملة لأن بعض بنودها لم تعد صالحة.",
-      "ORDER_NOT_SHAREABLE": "لا يمكن إنشاء رابط مشاركة لهذا الطلب."
+      "ORDER_NOT_SHAREABLE": "لا يمكن إنشاء رابط مشاركة لهذا الطلب.",
+      "ROUTE_NOT_ELIGIBLE": "هذا المسار لم يعد مؤهلاً لهذا الطلب. حدّث قائمة المسارات واختر غيره.",
+      "LOSS_NOT_CONFIRMED": "التكلفة أعلى من سعر البيع. أكّد قبول الخسارة للمتابعة.",
+      "PROOF_INVALID": "صورة إثبات التسليم غير صالحة أو مستخدمة في طلب آخر. ارفع صورة جديدة."
     }
   },
   "changePassword": {
@@ -553,6 +556,9 @@
       "order.attempt_resolved": "حسم محاولة تنفيذ",
       "order.refund_decided": "قرار استرداد طلب",
       "order.code_revealed": "كشف كود",
+      "order.rerouted": "تحويل طلب لمورد آخر",
+      "order.fulfilled_manually": "تنفيذ طلب يدوياً",
+      "order.proof_uploaded": "رفع إثبات تسليم",
       "order.share_revoked": "إلغاء رابط مشاركة",
       "order_policy.set": "تعديل سياسة الطلبات"
     }

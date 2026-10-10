@@ -100,6 +100,9 @@ export const LOW_BALANCE_DEFAULT_USD_UNITS = 50 * CURRENCY_SCALE.USD;
 export const SYNC_REQUEST_INTERVAL_SECONDS = 60;
 
 /** An import takes 1–100 offers (rule RT8); a field map at most 10 entries. */
+/** Failed sync runs in a row before the admin is told (S07 "Jobs and integrations", S11 DB6). */
+export const FAILING_SYNC_RUNS = 3;
+
 export const MAX_IMPORT_ROWS = 100;
 export const MAX_FIELD_MAP_ENTRIES = 10;
 

@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/index.js';
 import { FilesModule } from '../files/index.js';
 import { SettingsModule } from '../settings/index.js';
 import { SuppliersModule } from '../suppliers/index.js';
+import { OrderActionsService } from './order-actions.service.js';
 import { OrderDecisionsService } from './order-decisions.service.js';
 import { OrdersAdminController } from './orders.admin.controller.js';
 import { OrdersController } from './orders.controller.js';
@@ -18,7 +19,8 @@ import { SharesController } from './shares.controller.js';
  * order policy. Above `catalog`, `pricing`, `suppliers`, `wallet` and `settings`: the purchase,
  * outcomes and refunds go through the order write path of `packages/db`, which reads their rows.
  * Routing, sending, polling and webhook processing are worker jobs. S10: checkouts, saved player
- * ids and share links, with the public share pages and images (`shares.controller.ts`).
+ * ids and share links, with the public share pages and images (`shares.controller.ts`). S11: the
+ * live room and the admin's reroute, delivery proof and manual fulfil (`order-actions.service.ts`).
  */
 @Module({
   imports: [AdminModule, AuthModule, FilesModule, SettingsModule, SuppliersModule],
@@ -26,10 +28,11 @@ import { SharesController } from './shares.controller.js';
   providers: [
     OrdersService,
     OrderDecisionsService,
+    OrderActionsService,
     PlayerChecksService,
     SavedPlayersService,
     ShareLinksService,
   ],
-  exports: [OrdersService],
+  exports: [OrdersService, OrderActionsService],
 })
 export class OrdersModule {}

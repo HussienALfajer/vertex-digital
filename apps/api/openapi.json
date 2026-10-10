@@ -153,6 +153,20 @@
         ]
       }
     },
+    "/api/admin/stream": {
+      "get": {
+        "operationId": "NotificationsAdminController_stream",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Server-sent events: `order` `{ orderId, status }` and `resync` (rule LR4)"
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
     "/api/store/status": {
       "get": {
         "operationId": "SettingsController_status",
@@ -974,6 +988,9 @@
                 "order.attempt_resolved",
                 "order.refund_decided",
                 "order.share_revoked",
+                "order.rerouted",
+                "order.fulfilled_manually",
+                "order.proof_uploaded",
                 "order.code_revealed",
                 "order_policy.set"
               ]
@@ -5121,6 +5138,66 @@
         ]
       }
     },
+    "/api/admin/orders/live": {
+      "get": {
+        "operationId": "OrdersAdminController_live",
+        "parameters": [
+          {
+            "name": "supplier",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "shop2topup",
+                "wdgzone",
+                "manual",
+                "fake"
+              ]
+            }
+          },
+          {
+            "name": "gameId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "test",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "all",
+                "hide",
+                "only"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The live board",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveBoard"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/api/admin/orders/policy": {
       "get": {
         "operationId": "OrdersAdminController_policy",
@@ -5357,6 +5434,216 @@
         ]
       }
     },
+    "/api/admin/orders/{id}/routes": {
+      "get": {
+        "operationId": "OrdersAdminController_routes",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The routes and why each is or is not eligible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RerouteOptions"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/admin/orders/{id}/reroute": {
+      "post": {
+        "operationId": "OrdersAdminController_reroute",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RerouteOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The order sent to the chosen route",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOrder"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/admin/orders/{id}/proof": {
+      "post": {
+        "operationId": "OrdersAdminController_uploadProof",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The stored proof",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryProof"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/admin/orders/{id}/proofs/{fileId}": {
+      "get": {
+        "operationId": "OrdersAdminController_proof",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A delivery proof, never cached"
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/admin/orders/{id}/fulfil": {
+      "post": {
+        "operationId": "OrdersAdminController_fulfil",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FulfilOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The order after the manual delivery",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOrder"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/api/admin/orders/{id}/codes/{codeId}/reveal": {
       "post": {
         "operationId": "OrdersAdminController_reveal",
@@ -5535,6 +5822,27 @@
         },
         "tags": [
           "telegram"
+        ]
+      }
+    },
+    "/api/admin/dashboard": {
+      "get": {
+        "operationId": "DashboardAdminController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Today against yesterday, and what needs the admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "dashboard"
         ]
       }
     },
@@ -7262,6 +7570,9 @@
           "order.attempt_resolved",
           "order.refund_decided",
           "order.share_revoked",
+          "order.rerouted",
+          "order.fulfilled_manually",
+          "order.proof_uploaded",
           "order.code_revealed",
           "order_policy.set"
         ]
@@ -16233,7 +16544,16 @@
           "resolve": {
             "type": "boolean"
           },
+          "resolveDelivered": {
+            "type": "boolean"
+          },
           "refund": {
+            "type": "boolean"
+          },
+          "reroute": {
+            "type": "boolean"
+          },
+          "fulfil": {
             "type": "boolean"
           }
         },
@@ -16241,7 +16561,10 @@
           "attemptId",
           "poll",
           "resolve",
-          "refund"
+          "resolveDelivered",
+          "refund",
+          "reroute",
+          "fulfil"
         ],
         "additionalProperties": false
       },
@@ -16253,7 +16576,11 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
+          "kind": {
+            "$ref": "#/components/schemas/AttemptKind"
+          },
           "routeId": {
+            "nullable": true,
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
@@ -16265,9 +16592,11 @@
             "type": "string"
           },
           "offerId": {
+            "nullable": true,
             "type": "string"
           },
           "offerName": {
+            "nullable": true,
             "type": "string"
           },
           "quantity": {
@@ -16284,8 +16613,20 @@
           "unitCostUsdUnits": {
             "type": "integer",
             "minimum": 0,
-            "exclusiveMinimum": true,
             "maximum": 9007199254740991
+          },
+          "chosenByAdmin": {
+            "type": "boolean"
+          },
+          "proofFileId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "deliveryReference": {
+            "nullable": true,
+            "type": "string"
           },
           "status": {
             "$ref": "#/components/schemas/AttemptStatus"
@@ -16397,6 +16738,7 @@
         },
         "required": [
           "id",
+          "kind",
           "routeId",
           "supplierCode",
           "supplierNameAr",
@@ -16405,6 +16747,9 @@
           "quantity",
           "deliveredQuantity",
           "unitCostUsdUnits",
+          "chosenByAdmin",
+          "proofFileId",
+          "deliveryReference",
           "status",
           "supplierOrderId",
           "failureReason",
@@ -16421,6 +16766,13 @@
           "webhookEvents"
         ],
         "additionalProperties": false
+      },
+      "AttemptKind": {
+        "type": "string",
+        "enum": [
+          "routed",
+          "admin_fulfil"
+        ]
       },
       "AttemptStatus": {
         "type": "string",
@@ -16947,6 +17299,292 @@
         ],
         "additionalProperties": false
       },
+      "LiveBoardQuery": {
+        "type": "object",
+        "properties": {
+          "supplier": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SupplierCode"
+              }
+            ]
+          },
+          "gameId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "test": {
+            "default": "all",
+            "type": "string",
+            "enum": [
+              "all",
+              "hide",
+              "only"
+            ]
+          }
+        }
+      },
+      "LiveBoard": {
+        "type": "object",
+        "properties": {
+          "columns": {
+            "type": "object",
+            "properties": {
+              "at_supplier": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "cards": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/LiveOrderCard"
+                    }
+                  }
+                },
+                "required": [
+                  "count",
+                  "cards"
+                ],
+                "additionalProperties": false
+              },
+              "manual": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "cards": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/LiveOrderCard"
+                    }
+                  }
+                },
+                "required": [
+                  "count",
+                  "cards"
+                ],
+                "additionalProperties": false
+              },
+              "review": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "cards": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/LiveOrderCard"
+                    }
+                  }
+                },
+                "required": [
+                  "count",
+                  "cards"
+                ],
+                "additionalProperties": false
+              },
+              "finished": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "cards": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/LiveOrderCard"
+                    }
+                  }
+                },
+                "required": [
+                  "count",
+                  "cards"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "at_supplier",
+              "manual",
+              "review",
+              "finished"
+            ],
+            "additionalProperties": false
+          },
+          "awaitingBalance": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "columns",
+          "awaitingBalance",
+          "generatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "LiveOrderCard": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "number": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "game": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "nameAr": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "nameAr"
+            ],
+            "additionalProperties": false
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "nameAr": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "nameAr"
+            ],
+            "additionalProperties": false
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "totalUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "isTest": {
+            "type": "boolean"
+          },
+          "customerEmail": {
+            "type": "string"
+          },
+          "attempt": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "supplierCode": {
+                "$ref": "#/components/schemas/SupplierCode"
+              },
+              "supplierNameAr": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/AttemptStatus"
+              }
+            },
+            "required": [
+              "supplierCode",
+              "supplierNameAr",
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "paidAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "sentAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "reviewSince": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "finishedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "slowAfterSeconds": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "game",
+          "product",
+          "quantity",
+          "totalUsdUnits",
+          "isTest",
+          "customerEmail",
+          "attempt",
+          "paidAt",
+          "sentAt",
+          "reviewSince",
+          "finishedAt",
+          "slowAfterSeconds"
+        ],
+        "additionalProperties": false
+      },
       "OrderPolicy": {
         "type": "object",
         "properties": {
@@ -17091,6 +17729,208 @@
           }
         },
         "required": [
+          "reason"
+        ]
+      },
+      "RerouteOptions": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "remainingUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "unitPriceUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "minMarginUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "routeId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "supplierCode": {
+                  "$ref": "#/components/schemas/SupplierCode"
+                },
+                "supplierNameAr": {
+                  "type": "string"
+                },
+                "health": {
+                  "$ref": "#/components/schemas/SupplierHealthState"
+                },
+                "balanceUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "balanceAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "offerId": {
+                  "type": "string"
+                },
+                "offerName": {
+                  "type": "string"
+                },
+                "tier": {
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/RouteTier"
+                    }
+                  ]
+                },
+                "unitCostUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "marginUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "eligible": {
+                  "type": "boolean"
+                },
+                "skipReason": {
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/RouteSkipReason"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "routeId",
+                "supplierCode",
+                "supplierNameAr",
+                "health",
+                "balanceUsdUnits",
+                "balanceAt",
+                "offerId",
+                "offerName",
+                "tier",
+                "unitCostUsdUnits",
+                "marginUsdUnits",
+                "eligible",
+                "skipReason"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "orderId",
+          "remainingUnits",
+          "unitPriceUsdUnits",
+          "minMarginUsdUnits",
+          "routes"
+        ],
+        "additionalProperties": false
+      },
+      "RerouteOrder": {
+        "type": "object",
+        "properties": {
+          "routeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500,
+            "pattern": "^[^\\p{Cc}]+$"
+          }
+        },
+        "required": [
+          "routeId",
+          "reason"
+        ]
+      },
+      "DeliveryProof": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/StoredFileRef"
+          }
+        ]
+      },
+      "FulfilOrder": {
+        "type": "object",
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "codes": {
+            "default": [],
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            }
+          },
+          "unitCostUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000000
+          },
+          "acceptLoss": {
+            "default": false,
+            "type": "boolean"
+          },
+          "proofFileId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500,
+            "pattern": "^[^\\p{Cc}]+$"
+          }
+        },
+        "required": [
+          "quantity",
+          "unitCostUsdUnits",
+          "proofFileId",
           "reason"
         ]
       },
@@ -17410,6 +18250,488 @@
           "expiresAt"
         ],
         "additionalProperties": false
+      },
+      "Dashboard": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "sales": {
+            "type": "object",
+            "properties": {
+              "today": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "yesterday": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "deltaPercent": {
+                "nullable": true,
+                "type": "number"
+              }
+            },
+            "required": [
+              "today",
+              "yesterday",
+              "deltaPercent"
+            ],
+            "additionalProperties": false
+          },
+          "profit": {
+            "type": "object",
+            "properties": {
+              "today": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "yesterday": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "deltaPercent": {
+                "nullable": true,
+                "type": "number"
+              }
+            },
+            "required": [
+              "today",
+              "yesterday",
+              "deltaPercent"
+            ],
+            "additionalProperties": false
+          },
+          "marginPercent": {
+            "nullable": true,
+            "type": "number"
+          },
+          "delivered": {
+            "type": "object",
+            "properties": {
+              "today": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "yesterday": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "deltaPercent": {
+                "nullable": true,
+                "type": "number"
+              }
+            },
+            "required": [
+              "today",
+              "yesterday",
+              "deltaPercent"
+            ],
+            "additionalProperties": false
+          },
+          "refunds": {
+            "type": "object",
+            "properties": {
+              "today": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "yesterday": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "deltaPercent": {
+                "nullable": true,
+                "type": "number"
+              }
+            },
+            "required": [
+              "today",
+              "yesterday",
+              "deltaPercent"
+            ],
+            "additionalProperties": false
+          },
+          "refundedUsd": {
+            "type": "object",
+            "properties": {
+              "today": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "yesterday": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "deltaPercent": {
+                "nullable": true,
+                "type": "number"
+              }
+            },
+            "required": [
+              "today",
+              "yesterday",
+              "deltaPercent"
+            ],
+            "additionalProperties": false
+          },
+          "medianDeliveryMs": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "salesLine": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "salesUsdUnits": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "date",
+                "salesUsdUnits"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "now": {
+            "type": "object",
+            "properties": {
+              "atSupplier": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "manual": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "review": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "finished": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "awaitingBalance": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "openValueUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "atSupplier",
+              "manual",
+              "review",
+              "finished",
+              "awaitingBalance",
+              "openValueUsdUnits"
+            ],
+            "additionalProperties": false
+          },
+          "deposits": {
+            "type": "object",
+            "properties": {
+              "shamCashWaiting": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "shamCashOldestAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "shamCashFlagged": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "usdtWaiting": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "unmatchedTransfers": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "creditedToday": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "method": {
+                      "$ref": "#/components/schemas/DepositMethod"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "usdUnits": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "method",
+                    "count",
+                    "usdUnits"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "shamCashWaiting",
+              "shamCashOldestAt",
+              "shamCashFlagged",
+              "usdtWaiting",
+              "unmatchedTransfers",
+              "creditedToday"
+            ],
+            "additionalProperties": false
+          },
+          "suppliers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "$ref": "#/components/schemas/SupplierCode"
+                },
+                "nameAr": {
+                  "type": "string"
+                },
+                "health": {
+                  "$ref": "#/components/schemas/SupplierHealthState"
+                },
+                "healthSince": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "paused": {
+                  "type": "boolean"
+                },
+                "balanceUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "balanceAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "lowBalanceUsdUnits": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "balanceLow": {
+                  "type": "boolean"
+                },
+                "lastSync": {
+                  "nullable": true,
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "$ref": "#/components/schemas/SyncRunStatus"
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "at"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "code",
+                "nameAr",
+                "health",
+                "healthSince",
+                "paused",
+                "balanceUsdUnits",
+                "balanceAt",
+                "lowBalanceUsdUnits",
+                "balanceLow",
+                "lastSync"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "rate": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "sypPerUsd": {
+                "$ref": "#/components/schemas/ExchangeRate"
+              },
+              "setAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "stale": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "sypPerUsd",
+              "setAt",
+              "stale"
+            ],
+            "additionalProperties": false
+          },
+          "attention": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttentionItem"
+            }
+          }
+        },
+        "required": [
+          "generatedAt",
+          "sales",
+          "profit",
+          "marginPercent",
+          "delivered",
+          "refunds",
+          "refundedUsd",
+          "medianDeliveryMs",
+          "salesLine",
+          "now",
+          "deposits",
+          "suppliers",
+          "rate",
+          "attention"
+        ],
+        "additionalProperties": false
+      },
+      "AttentionItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/AttentionKind"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "oldestAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "target": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "orders": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "number": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "number"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "count",
+          "oldestAt",
+          "target",
+          "params",
+          "orders"
+        ],
+        "additionalProperties": false
+      },
+      "AttentionKind": {
+        "type": "string",
+        "enum": [
+          "orders_review",
+          "orders_manual",
+          "deposits_overdue",
+          "deposits_flagged",
+          "usdt_unmatched",
+          "supplier_down",
+          "supplier_degraded",
+          "supplier_balance_low",
+          "supplier_sync_failing",
+          "validation_quota_reached",
+          "price_reviews",
+          "rate_stale",
+          "switches_active",
+          "order_conflicts",
+          "telegram_unlinked"
+        ]
       },
       "HealthResponse": {
         "type": "object",

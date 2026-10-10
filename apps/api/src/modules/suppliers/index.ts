@@ -2,4 +2,5 @@
 
 export { SupplierAdaptersService } from './supplier-adapters.service.js';
 export { SuppliersModule } from './suppliers.module.js';
+export { SuppliersService } from './suppliers.service.js';
 export { SUPPLIER_WEBHOOK_ROUTE, supplierWebhookBody } from './webhook-body.js';

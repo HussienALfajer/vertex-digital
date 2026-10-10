@@ -16,6 +16,7 @@ import { AdminModule } from './modules/admin/index.js';
 import { AuditModule } from './modules/audit/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { CatalogModule } from './modules/catalog/index.js';
+import { DashboardModule } from './modules/dashboard/index.js';
 import { DepositsModule } from './modules/deposits/index.js';
 import { FilesModule } from './modules/files/index.js';
 import { HealthModule } from './modules/health/index.js';
@@ -59,6 +60,7 @@ import { WalletModule } from './modules/wallet/index.js';
     SuppliersModule,
     OrdersModule,
     TelegramModule,
+    DashboardModule,
     HealthModule,
   ],
   providers: [

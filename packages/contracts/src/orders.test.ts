@@ -502,33 +502,45 @@ describe('admin decisions (rule D1)', () => {
   const automatic = { id: '0199a000-0000-7000-8000-000000000004', supplierCode: 'fake' as const };
   const manual = { ...automatic, supplierCode: 'manual' as const };
 
-  it('allows polling, resolving and refunding a held order', () => {
+  it('allows polling, resolving, refunding, rerouting and fulfilling a held order', () => {
     expect(orderDecisions('needs_review', automatic)).toEqual({
       attemptId: automatic.id,
       poll: true,
       resolve: true,
+      resolveDelivered: true,
       refund: true,
+      reroute: true,
+      fulfil: true,
     });
     expect(orderDecisions('needs_review', null)).toEqual({
       attemptId: null,
       poll: false,
       resolve: false,
+      resolveDelivered: false,
       refund: true,
+      reroute: false,
+      fulfil: true,
     });
   });
 
-  it('allows resolving an open manual attempt, and nothing else', () => {
+  it('delivers an open manual attempt only through the manual fulfil (S11 MF1, RF1)', () => {
     expect(orderDecisions('sent_to_supplier', manual)).toEqual({
       attemptId: manual.id,
       poll: false,
       resolve: true,
-      refund: false,
+      resolveDelivered: false,
+      refund: true,
+      reroute: true,
+      fulfil: true,
     });
     expect(orderDecisions('sent_to_supplier', automatic)).toEqual({
       attemptId: automatic.id,
       poll: false,
       resolve: false,
+      resolveDelivered: false,
       refund: false,
+      reroute: false,
+      fulfil: false,
     });
     expect(orderDecisions('delivered', null).refund).toBe(false);
   });

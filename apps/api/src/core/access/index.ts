@@ -8,4 +8,9 @@ export {
   type RouteAccess,
   Sensitive,
 } from './access.decorators.js';
-export { CurrentAdmin, CurrentCustomer, CustomerSessionCheck } from './current-user.decorator.js';
+export {
+  AdminSessionCheck,
+  CurrentAdmin,
+  CurrentCustomer,
+  CustomerSessionCheck,
+} from './current-user.decorator.js';

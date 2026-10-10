@@ -9,6 +9,7 @@ import {
   type OrderEventActor,
   type RefundReason,
   refundAmount,
+  type SupplierCode,
 } from '@vertex-digital/contracts';
 import { desc, eq } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
@@ -30,6 +31,7 @@ import {
   currentOrderPolicy,
   lockOrder,
   type OrderContext,
+  type OrderEventInput,
   type OrderRow,
   queueFulfil,
   queuePoll,
@@ -153,39 +155,12 @@ export async function applyOutcome(
   switch (outcome.status) {
     case 'delivered': {
       const units = outcome.quantity;
-      for (const [index, code] of (outcome.codes ?? []).entries()) {
-        const id = newId();
-        await tx.insert(orderCodes).values({
-          id,
-          orderId: order.id,
-          attemptId,
-          position: index + 1,
-          ciphertext: encryptSecret(context.codesKey, id, code),
-          hint: codeHint(code),
-        });
-      }
-      const cost = costOfGoods(attempt.unitCostUsdUnits, units);
-      const journal = await postJournal(tx, {
-        idempotencyKey: `order:${order.id}:cost:${attemptId}`,
-        kind: 'cost_of_goods',
-        postings: [
-          {
-            accountId: await ensureSystemAccount(tx, {
-              code: 'cost_of_goods:USD',
-              kind: 'cost_of_goods',
-              currency: 'USD',
-            }),
-            amountUnits: cost,
-          },
-          {
-            accountId: await ensureSystemAccount(tx, {
-              code: `supplier_prepaid:${supplierCode}`,
-              kind: 'supplier_prepaid',
-              currency: 'USD',
-            }),
-            amountUnits: -cost,
-          },
-        ],
+      await storeCodes(tx, context, order.id, attemptId, outcome.codes ?? []);
+      const journalId = await postCostOfGoods(tx, order.id, attemptId, {
+        supplierCode,
+        unitCostUsdUnits: attempt.unitCostUsdUnits,
+        units,
+        adminId: admin?.id ?? null,
       });
       const [closed] = await tx
         .update(fulfilmentAttempts)
@@ -195,7 +170,7 @@ export async function applyOutcome(
           deliveredQuantity: units,
           supplierOrderId,
           nextPollAt: null,
-          costJournalId: journal.journalId,
+          costJournalId: journalId,
           result: { status: 'delivered', quantity: units, codeCount: outcome.codes?.length ?? 0 },
         })
         .where(eq(fulfilmentAttempts.id, attemptId))
@@ -204,56 +179,7 @@ export async function applyOutcome(
         ...event,
         details: { status: 'delivered', units },
       });
-      await recordAudit(tx, {
-        action: 'order.cost_posted',
-        actorKind: admin ? 'admin' : 'system',
-        actorId: admin?.id ?? null,
-        channel: admin ? 'admin' : 'worker',
-        entityType: 'order',
-        entityId: order.id,
-        details: {
-          supplier: supplierCode,
-          attemptId,
-          units,
-          costUsdUnits: cost,
-          journalId: journal.journalId,
-        },
-      });
-      const delivered = order.deliveredQuantity + units;
-      let changed: OrderRow;
-      if (delivered === order.quantity) {
-        // The order's own notification first: a checkout's summary follows it (S10 CT7).
-        await notifyDelivered(tx, context, order);
-        changed = (await transitionOrder(
-          tx,
-          order,
-          'delivered',
-          event,
-          { deliveredQuantity: delivered },
-          context.jobs,
-        )) as OrderRow;
-      } else {
-        // Partial delivery (ADR 0004): the rest goes to the next route, or is refunded.
-        changed =
-          order.status === 'sent_to_supplier'
-            ? ((await transitionOrder(
-                tx,
-                order,
-                'failed',
-                { ...event, reason: 'partial' },
-                {
-                  deliveredQuantity: delivered,
-                },
-              )) as OrderRow)
-            : ((
-                await tx
-                  .update(orders)
-                  .set({ deliveredQuantity: delivered })
-                  .where(eq(orders.id, order.id))
-                  .returning()
-              )[0] as OrderRow);
-        await queueFulfil(tx, context.jobs, order.id);
-      }
+      const changed = await orderAfterDelivery(tx, context, order, units, event);
       return { applied: true, order: changed, attempt: closed as AttemptRow };
     }
     case 'failed': {
@@ -325,6 +251,130 @@ export async function applyOutcome(
       return { applied: true, order, attempt: kept as AttemptRow };
     }
   }
+}
+
+/** Codes of a code product, one per unit, stored encrypted (rule C1). */
+export async function storeCodes(
+  tx: Transaction,
+  context: Pick<OrderContext, 'codesKey'>,
+  orderId: string,
+  attemptId: string,
+  codes: readonly string[],
+): Promise<void> {
+  for (const [index, code] of codes.entries()) {
+    const id = newId();
+    await tx.insert(orderCodes).values({
+      id,
+      orderId,
+      attemptId,
+      position: index + 1,
+      ciphertext: encryptSecret(context.codesKey, id, code),
+      hint: codeHint(code),
+    });
+  }
+}
+
+/**
+ * Rule M2: the cost of goods of an attempt's delivered units, `order:<id>:cost:<attempt>`, with
+ * its audit entry; the journal's id. A zero cost (S11 MF-M1) posts nothing and answers null.
+ */
+export async function postCostOfGoods(
+  tx: Transaction,
+  orderId: string,
+  attemptId: string,
+  cost: {
+    supplierCode: SupplierCode;
+    unitCostUsdUnits: number;
+    units: number;
+    adminId: string | null;
+  },
+): Promise<string | null> {
+  const amount = costOfGoods(cost.unitCostUsdUnits, cost.units);
+  if (amount === 0) return null;
+  const journal = await postJournal(tx, {
+    idempotencyKey: `order:${orderId}:cost:${attemptId}`,
+    kind: 'cost_of_goods',
+    postings: [
+      {
+        accountId: await ensureSystemAccount(tx, {
+          code: 'cost_of_goods:USD',
+          kind: 'cost_of_goods',
+          currency: 'USD',
+        }),
+        amountUnits: amount,
+      },
+      {
+        accountId: await ensureSystemAccount(tx, {
+          code: `supplier_prepaid:${cost.supplierCode}`,
+          kind: 'supplier_prepaid',
+          currency: 'USD',
+        }),
+        amountUnits: -amount,
+      },
+    ],
+  });
+  await recordAudit(tx, {
+    action: 'order.cost_posted',
+    actorKind: cost.adminId ? 'admin' : 'system',
+    actorId: cost.adminId,
+    channel: cost.adminId ? 'admin' : 'worker',
+    entityType: 'order',
+    entityId: orderId,
+    details: {
+      supplier: cost.supplierCode,
+      attemptId,
+      units: cost.units,
+      costUsdUnits: amount,
+      journalId: journal.journalId,
+    },
+  });
+  return journal.journalId;
+}
+
+/**
+ * Rules F1, F2: the order after an attempt delivered `units`: `delivered` when every unit is (the
+ * customer told first), else the rest routed again by `orders.fulfil` (`failed`, or kept in
+ * `needs_review` with its delivered units).
+ */
+export async function orderAfterDelivery(
+  tx: Transaction,
+  context: OrderContext,
+  order: OrderRow,
+  units: number,
+  event: OrderEventInput,
+): Promise<OrderRow> {
+  const delivered = order.deliveredQuantity + units;
+  if (delivered === order.quantity) {
+    // The order's own notification first: a checkout's summary follows it (S10 CT7).
+    await notifyDelivered(tx, context, order);
+    return (await transitionOrder(
+      tx,
+      order,
+      'delivered',
+      event,
+      { deliveredQuantity: delivered },
+      context.jobs,
+    )) as OrderRow;
+  }
+  // Partial delivery (ADR 0004): the rest goes to the next route, or is refunded.
+  const changed =
+    order.status === 'sent_to_supplier'
+      ? ((await transitionOrder(
+          tx,
+          order,
+          'failed',
+          { ...event, reason: 'partial' },
+          { deliveredQuantity: delivered },
+        )) as OrderRow)
+      : ((
+          await tx
+            .update(orders)
+            .set({ deliveredQuantity: delivered })
+            .where(eq(orders.id, order.id))
+            .returning()
+        )[0] as OrderRow);
+  await queueFulfil(tx, context.jobs, order.id);
+  return changed;
 }
 
 /** Who refunds: the system after failures, or the admin's decision (rule D5). */

@@ -1,32 +1,28 @@
-# TASKS — S10 Convenience
+# TASKS — S11 Live operations
 
-Spec: `docs/specs/S10-convenience.md` (F14, F16; ADRs 0003, 0004, 0011, 0015, 0019, 0022, 0023, 0024). Two PRs, as the spec's implementation notes suggest; each leaves `main` green.
+Spec: `docs/specs/S11-live-operations.md` (F17, F18; ADRs 0003, 0004, 0005, 0011, 0016, 0019, 0020, 0022, 0025). Two PRs, as the spec's implementation notes suggest; each leaves `main` green.
 
-## PR 1 — Contracts, db, api (checkouts, saved IDs, gifts, share links and images, admin additions), bridge · Opus 5.5 `high`
-- [x] Contracts `orders.ts`: limits, `savedPlayerLabelSchema`, `savedPlayerSchema`, `giftSchema`, `createOrderSchema` (`savePlayer`, `gift`), checkout line/request/response schemas, receipt options, share kinds, token, link and public share schemas; order shapes gain `checkoutId`, `isGift`, `repeatable`, `gift`, `shareLinks`
-- [x] Contracts pure rules (100% coverage): `giftTextAllowed`, `maskFieldValue`, `canonicalFields`, `shareStage`, `cartLineKey`, `checkoutTotal`
-- [x] Contracts: notification `checkout_finished` and template `customer_checkout_finished`; wallet `purchase` extras `checkout`; error codes `CHECKOUT_REFUSED`, `ORDER_NOT_SHAREABLE` with Arabic store and admin text; audit `order.share_revoked` with its label, `order.paid` details
-- [x] Db (`/db-migration`): `checkouts` (trigger: only `finished_at` once), `orders` changes (checkout pair, partial unique journal, journal match on insert, no reserved cart line, gift columns and checks, identity guard), `saved_players`, `order_share_links` (trigger, one live link per kind); grants; tests
-- [x] Db write path: `checkoutOrders` beside `purchaseOrder` sharing its line checks (switches lock, products `FOR SHARE` in id order, all refusals collected, one journal M1); saved IDs (SP1, SP2, SP4, SP6) and gift link (GF4) in purchase, RS4 payment and checkout; CT7 finishing hook in the terminal path; `notifyCustomer` without email (CT8); concurrency tests (one key in parallel, repricing and stop races, opposite product order, two orders finishing together, checkout vs single purchase on one balance, journal = sum of orders)
-- [x] Api `orders`: saved-players routes; `POST /api/checkouts` (idempotency, purchase rate limit counted once); order extensions (save, gift, `checkout` filter, `repeatable`, `shareLinks`); receipt/gift link routes and revoke (20 per hour); public `GET /api/shares/:token` and `/image` (sharp + SVG template, bundled Noto Kufi Arabic; verify Arabic shaping and report the choice), 60/min/IP, cache headers, no cookie
-- [x] Api admin: order detail and list (`checkout`, `gift`, `shareLinks`, badges data, `q` by checkout id); `POST /api/admin/orders/:id/share-links/:linkId/revoke` with audit
-- [x] Api wallet: `checkout` on the purchase entry extras (customer and admin entries)
-- [x] Email template `customer_checkout_finished`; Telegram daily summary line "سلال اليوم"
-- [x] Dev CLI: `order:place --gift-message --gift-sender --save`; new `checkout:place`; commands table in `AGENTS.md`
-- [x] Tests: `test/orders.test.ts` / new `test/checkouts.test.ts`, `test/saved-players.test.ts`, `test/shares.test.ts`, wallet and admin additions; worker CT8 tests (center rows without email, one `checkout_finished` with the right counts)
-- [x] Bridge: build, OpenAPI export, admin client; admin and store E2E mocks follow changed shapes
-- [x] Wiring checklist, docs (`docs/architecture.md`, S02 W5 list, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [x] Review fix: gift texts read as shown (joiners, combining marks and ideographic full stops no longer hide a phone, handle or domain)
-- [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 5e99a3d0e6c3), reviewer (one blocking finding: GF3 bypass by invisible characters; fixed), owner acceptance (2026-10-09), PR with auto-merge
+## PR 1 — Contracts, db, api, worker guards, bridge (`feat/s11-live-ops-api`) · Opus 5.5 `high`
+- [x] Contracts `orders.ts`: `ATTEMPT_KINDS`, `LIVE_COLUMNS`, `liveColumn`, `slowAfterSeconds`; live board, card, stream event, reroute options/request, fulfil, delivery proof schemas; admin attempt shape gains `kind`, `chosenByAdmin`, `proofFileId`, `deliveryReference`
+- [x] Contracts `dashboard.ts` (new, re-exported): `damascusDayBounds` (reuse the daily summary's helper if present), `deltaPercent`, `ATTENTION_KINDS`, `attentionItemSchema`, `dashboardSchema`
+- [x] `STORED_FILE_KINDS` (db `files.ts`) + `delivery_proof`; error codes `ROUTE_NOT_ELIGIBLE`, `LOSS_NOT_CONFIRMED`, `PROOF_INVALID` with Arabic admin text; audit `order.rerouted`, `order.fulfilled_manually`, `order.proof_uploaded` with labels; 100% coverage of the pure rules
+- [x] Db (`/db-migration`): `fulfilment_attempts` `kind` enum, nullable route fields with the kind check, cost checks (`≥ 0`, `> 0` for routed, journal ⇔ delivered and cost > 0), `proof_file_id` unique FK, `delivery_reference`, `chosen_by_admin`; file kind `delivery_proof`; tests of the checks, triggers unchanged
+- [x] Db write paths in `packages/db/src/orders`: `rerouteOrder` (RR1–RR3, eligibility rechecked under the lock, two transitions from `sent_to_supplier`, `orders.poll` or `manual_order` card in the transaction), `fulfilOrderManually` (MF1–MF5, zero cost posts no journal), refund extension RF1; concurrency tests (reroute vs late poll and webhook, fulfil vs late result, two fulfils with different keys, same key replayed, reroute vs cost change)
+- [x] Api `orders` admin: `GET /orders/live` (LR1, LR2, filters, caps), `GET /orders/:id/routes` (RR2), `POST /reroute`, `POST /proof` (re-encoded, audited), `GET /proofs/:fileId` (`no-store`), `POST /fulfil`, refund RF1, resolve refusal MF1; attempts' new fields on the order detail
+- [x] Api admin stream `GET /api/admin/stream` (LR4: forward `customer_orders` events, `resync`, heartbeat, 3 streams, 30 connects/min, session re-check)
+- [x] Api `dashboard` read module (DB1–DB9) reading other modules through their services; `TABLE_OWNERS`/architecture test
+- [x] Tests: `test/live-operations.test.ts` (every route: success, 401, 403, re-auth, every error code, `no-store`)
+- [x] Worker: sweep, fulfil and poll ignore `admin_fulfil` attempts; a rerouted `sending` attempt is sent by its poll with its key; tests
+- [x] Bridge: build, OpenAPI export, admin client; admin E2E mocks follow changed shapes; the order page hides "تأكّدت: تمّ التسليم" on manual attempts (MF1) until PR 2 adds the manual fulfil
+- [x] nginx: admin host `/api/admin/stream` buffering off and long read timeout, proof uploads up to 11 MB (`deploy/`)
+- [x] Wiring checklist, docs (`docs/architecture.md` admin stream and dashboard module, S08 D2 note → MF1, folder `CLAUDE.md` files, spec "Settled in implementation")
+- [x] Checks (lint, typecheck, build, e2e, drift: passed and recorded on 135698275a6c; test: all packages pass except 3 Windows-only worker failures in `telegram-jobs.test.ts` that predate this branch, left to CI), reviewer (two blocking findings: an open manual attempt's cost could be rewritten without its proof; the access and error matrix was incomplete; both fixed), owner acceptance (2026-10-10), PR with auto-merge
 
-## PR 2 — Store and admin screens, E2E, nginx · Opus 5.5 `high`
-- [x] Store cart store (`vd-cart`, versioned, try/catch, merge by key, 10 lines, gift lines apart, cleared at sign-out) with unit tests; header cart button
-- [x] Store buy box: saved-ID chips (SP3, SP6, SP7), save box, gift box (GF1, GF3), "أضف إلى السلة"; calculator "أضف الكل إلى السلة" (CT3); repeat (`?repeat=`, OT1, OT2); `?player=`
-- [x] Store `/cart` (CT4, CT6) and `/orders?checkout=`; order page: repeat, gift section, receipt sheet, "ضمن سلة"; `/orders` badges and repeat
-- [x] Store `/account/players`; `/g/[token]`, `/r/[token]` (per request, `noindex`, `no-referrer`, `og:image`); wallet checkout entry; i18n keys
-- [x] Admin order page: checkout block, gift block, share links with the revoke dialog; list badges; i18n keys
-- [x] Share pages' server render: the API's 60/min/IP limit on `/api/shares/*` must key on the visitor, not the store's loopback address — done: the store forwards the visitor's `X-Forwarded-For` (set by nginx), which the API trusts from loopback; E2E checks it reaches the API
-- [x] nginx `vdshare`; `robots.txt` disallows `/g/`, `/r/`, `/cart`; `docs/deployment.md`
-- [x] E2E flows and RTL screenshots (store phone and desktop, dark and light; admin light and dark); budgets for `/cart` and share pages in `apps/store/CLAUDE.md`
-- [x] Wiring checklist, docs (`docs/ROADMAP.md` S10 done, `apps/store/CLAUDE.md`, `wiring.md` patterns)
-- [x] Checks (lint, typecheck, build, e2e: passed and recorded; db, api and worker tests left to CI: the local test database needs a reset), reviewer (two blocking findings: sign-out from the account page kept the cart; repeat trusted undelivered orders; both fixed), owner acceptance (2026-10-10), PR with auto-merge
+## PR 2 — Admin screens, E2E (`feat/s11-live-ops-screens`) · Opus 5.5 `high`
+- [ ] Admin stream hook (`features/live/` or `lib/`), reconnect, `resync`, indicator
+- [ ] Dashboard home page `/`: attention list, KPI row with deltas and the 7-day line, live counts, deposits, suppliers table, rate; skeletons, error, stale note; refetch rules DB9
+- [ ] `/orders/live`: filters in the URL, four columns (tabs below tablet), cards with ticking time, amber/red, "+N أخرى", sound toggle (`localStorage`), tab title count, side sheet with actions; navigation item
+- [ ] Dialogs: reroute (route table, warning), manual fulfil (units, codes, cost with live profit/loss, loss checkbox, proof upload with preview), extended refund; on `/orders/$id` too; attempts show "اختاره الأدمن", "تنفيذ يدوي", reference, proof thumbnail; i18n keys
+- [ ] E2E flows (mocked stream event moving a card) and RTL screenshots light and dark
+- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S11 done, `apps/admin/CLAUDE.md`, `wiring.md` patterns)
+- [ ] Checks, reviewer, owner acceptance, PR with auto-merge

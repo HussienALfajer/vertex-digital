@@ -59,6 +59,25 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # Delivery proofs of a manual fulfil (S11 rule MF2): images up to 10 MB.
+    location ~* ^/api/admin/orders/[0-9a-f-]{36}/proof/?$ {
+        client_max_body_size 11m;
+        client_body_timeout 60s;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # The admin stream (S11 rule LR4): server-sent events, passed on as they come, open for long.
+    # The API sends a comment every 25 seconds, keeps 3 streams, 30 connects a minute, and
+    # re-checks the session, like the store's notification stream.
+    location ~* ^/api/admin/stream/?$ {
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+    }
+
     # Admin routes only. Case-insensitive, as the API matches routes.
     location ~* ^/api/admin/ {
         proxy_pass http://127.0.0.1:3060;
