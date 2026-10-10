@@ -229,7 +229,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`${colorScheme} theme`, () => {
     test.use({ colorScheme });
 
-    test('support screens', async ({ page, admin }, testInfo) => {
+    test('the queue and a thread', async ({ page, admin }, testInfo) => {
       await open(page, admin, '/support?status=all');
       await expect(rows(page)).toHaveCount(3);
       await screenshot(page, testInfo, `support-queue-${colorScheme}`);
@@ -237,21 +237,27 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto(`/support/${TICKET_IDS.waiting}`);
       await expect(page.getByText('مرحبًا، دفعت قبل ساعة', { exact: false })).toBeVisible();
       await attach(page, 'proof.png');
+      await expect(page.getByRole('img', { name: fill(s.images.preview, { n: 1 }) })).toBeVisible();
       await screenshot(page, testInfo, `support-thread-${colorScheme}`, { fullPage: true });
+    });
 
-      await page.goto(`/support/${TICKET_IDS.answered}`);
+    test('an answered thread', async ({ page, admin }, testInfo) => {
+      await open(page, admin, `/support/${TICKET_IDS.answered}`);
       await expect(page.getByText(s.thread.admin).first()).toBeVisible();
       await screenshot(page, testInfo, `support-thread-answered-${colorScheme}`, {
         fullPage: true,
       });
+    });
 
-      await page.goto(`/support/new?customer=${CUSTOMER_IDS.sara}`);
+    test('a new ticket and the settings', async ({ page, admin }, testInfo) => {
+      await open(page, admin, `/support/new?customer=${CUSTOMER_IDS.sara}`);
       await page.getByRole('button', { name: s.new.submit }).click();
       await expect(page.getByText(s.new.linkError)).toBeVisible();
       await screenshot(page, testInfo, `support-new-${colorScheme}`, { fullPage: true });
 
       await page.goto('/settings/support');
       await page.getByLabel(s.settings.telegram).fill('https://t.me/vertex_support');
+      await expect(page.getByText(s.settings.previewLabel)).toBeVisible();
       await screenshot(page, testInfo, `support-settings-${colorScheme}`);
     });
   });

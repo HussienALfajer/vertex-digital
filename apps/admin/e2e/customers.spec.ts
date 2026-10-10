@@ -226,7 +226,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`${colorScheme} theme`, () => {
     test.use({ colorScheme });
 
-    test('customer screens', async ({ page, admin }, testInfo) => {
+    test('the list, the summary and the frozen profile', async ({ page, admin }, testInfo) => {
       await open(page, admin, '/customers');
       await expect(rows(page)).toHaveCount(5);
       await screenshot(page, testInfo, `customers-${colorScheme}`);
@@ -235,34 +235,42 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(page.getByText(c.signals.natHint)).toBeVisible();
       await screenshot(page, testInfo, `customer-summary-${colorScheme}`, { fullPage: true });
 
-      await page.goto(`/customers/${CUSTOMER_IDS.sara}?tab=devices`);
+      await page.goto(`/customers/${CUSTOMER_IDS.rami}`);
+      await expect(page.getByText('إيصالات مكررة قيد التحقق')).toBeVisible();
+      await screenshot(page, testInfo, `customer-frozen-${colorScheme}`);
+    });
+
+    test('the devices and notes tabs', async ({ page, admin }, testInfo) => {
+      await open(page, admin, `/customers/${CUSTOMER_IDS.sara}?tab=devices`);
       await expect(page.getByText(c.devices.signIns)).toBeVisible();
       await screenshot(page, testInfo, `customer-devices-${colorScheme}`);
 
       await page.goto(`/customers/${CUSTOMER_IDS.sara}?tab=notes`);
       await expect(page.getByText('عميلة قديمة وموثوقة')).toBeVisible();
       await screenshot(page, testInfo, `customer-notes-${colorScheme}`);
+    });
 
+    test('the freeze dialog', async ({ page, admin }, testInfo) => {
+      await open(page, admin, `/customers/${CUSTOMER_IDS.sara}`);
       await action(page, c.actions.freeze);
       await expect(page.getByRole('dialog')).toBeVisible();
       await screenshot(page, testInfo, `customer-freeze-${colorScheme}`);
-      await page.keyboard.press('Escape');
+    });
 
+    test('the limits dialog', async ({ page, admin }, testInfo) => {
+      await open(page, admin, `/customers/${CUSTOMER_IDS.sara}`);
       await action(page, c.actions.limits);
       await expect(page.getByRole('dialog')).toBeVisible();
       await screenshot(page, testInfo, `customer-limits-${colorScheme}`);
-      await page.keyboard.press('Escape');
+    });
 
+    test('an archive refused', async ({ page, admin }, testInfo) => {
+      await open(page, admin, `/customers/${CUSTOMER_IDS.sara}`);
       await action(page, c.actions.archive);
       await page.getByRole('dialog').getByLabel(c.dialogs.reason).fill('طلبت العميلة إغلاق الحساب');
       await page.getByRole('button', { name: c.dialogs.archive.submit }).click();
       await expect(page.getByText(c.dialogs.archive.blockers)).toBeVisible();
       await screenshot(page, testInfo, `customer-archive-refused-${colorScheme}`);
-      await page.keyboard.press('Escape');
-
-      await page.goto(`/customers/${CUSTOMER_IDS.rami}`);
-      await expect(page.getByText('إيصالات مكررة قيد التحقق')).toBeVisible();
-      await screenshot(page, testInfo, `customer-frozen-${colorScheme}`);
     });
   });
 }
