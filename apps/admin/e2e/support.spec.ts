@@ -139,6 +139,22 @@ test.describe('a thread (TK3–TK11)', () => {
     await expect(page.getByText(s.reply.imageOnly, { exact: true })).toBeVisible();
   });
 
+  test('sends the same words twice as two messages with two keys', async ({ page, admin }) => {
+    await open(page, admin, `/support/${TICKET_IDS.answered}`);
+    const box = page.getByRole('textbox', { name: s.reply.label });
+    for (const _ of [1, 2]) {
+      await box.fill('هل ما زالت المشكلة قائمة؟');
+      await page.getByRole('button', { name: s.reply.send }).click();
+      await expect(box).toHaveValue('');
+    }
+    await expect(page.getByText('هل ما زالت المشكلة قائمة؟', { exact: true })).toHaveCount(2);
+    const keys = admin.requests
+      .filter((request) => request.key.endsWith('/messages'))
+      .map((request) => request.headers['idempotency-key']);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
   test('closes after a confirm, and a reply reopens it', async ({ page, admin }) => {
     await open(page, admin, `/support/${TICKET_IDS.answered}`);
     await page.getByRole('button', { name: s.thread.close }).click();

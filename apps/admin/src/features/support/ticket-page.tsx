@@ -224,13 +224,14 @@ function MessageBubble({ ticket, message }: { ticket: AdminTicket; message: Tick
 
 /**
  * Rules TK5, TK7: a reply with up to 3 images; with images only the body becomes "صورة مرفقة".
- * The `Idempotency-Key` is kept while the same reply is retried, new once it changed. The text
- * and images stay on an error.
+ * The `Idempotency-Key` is kept while the same reply is retried, new once it changed or was sent
+ * (the same words sent again later are a new message). The text and images stay on an error.
  */
 function ReplyBox({ ticket }: { ticket: AdminTicket }) {
   const { t } = useTranslation();
   const reply = useReplyTicket(ticket.id);
   const keyFor = useIdempotencyKey();
+  const sent = useRef(0);
   const form = useRef<HTMLFormElement>(null);
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<File[]>([]);
@@ -246,11 +247,13 @@ function ReplyBox({ ticket }: { ticket: AdminTicket }) {
     setInvalid(!parsed.success);
     if (!parsed.success) return;
     const key = keyFor({
+      sent: sent.current,
       body: parsed.data.body,
       files: files.map((file) => [file.name, file.size, file.lastModified]),
     });
     try {
       await reply.mutateAsync({ body: parsed.data, files, key });
+      sent.current += 1;
       setBody('');
       setFiles([]);
     } catch (error) {
