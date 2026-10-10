@@ -4,6 +4,7 @@ import type {
   PollAttempt,
   RefundOrder,
   ResolveAttempt,
+  RevokeShareLink,
 } from '@vertex-digital/contracts';
 import { api, BACKGROUND_REQUEST, call } from '../../lib/api/client';
 import { useReauthentication } from '../account/reauthentication';
@@ -110,6 +111,17 @@ export const useRevealCode = (orderId: string) =>
         }),
       ),
     { gcTime: 0 },
+  );
+
+/** S10 rule AD1: revokes a live share link with a reason; the API writes the audit entry. */
+export const useRevokeShareLink = (orderId: string) =>
+  useOrdersMutation(({ linkId, body }: { linkId: string; body: RevokeShareLink }) =>
+    call(
+      api.POST('/api/admin/orders/{id}/share-links/{linkId}/revoke', {
+        params: { path: { id: orderId, linkId } },
+        body,
+      }),
+    ),
   );
 
 export const useSetOrderPolicy = () =>

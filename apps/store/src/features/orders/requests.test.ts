@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { cancelOrder, getOrder, listOrders, revealCode } from './requests';
+import {
+  cancelOrder,
+  createGiftLink,
+  getOrder,
+  listOrders,
+  revealCode,
+  revokeShareLink,
+  saveReceiptLink,
+} from './requests';
 
 /** A fetch that answers with one response and records what was asked. */
 function fetcher(status: number, body: unknown) {
   const calls: { url: string; method: string }[] = [];
   const fetch = (async (url: string, init?: RequestInit) => {
     calls.push({ url, method: init?.method ?? 'GET' });
-    return new Response(JSON.stringify(body), { status });
+    return new Response(body === null ? null : JSON.stringify(body), { status });
   }) as typeof globalThis.fetch;
   return { fetch, calls };
 }
@@ -18,7 +26,12 @@ describe('listOrders', () => {
     const { fetch, calls } = fetcher(200, page);
     await expect(listOrders(undefined, fetch)).resolves.toEqual({ ok: true, data: page });
     await listOrders('abc=', fetch);
-    expect(calls.map((call) => call.url)).toEqual(['/api/orders', '/api/orders?cursor=abc%3D']);
+    await listOrders(undefined, fetch, 'c1');
+    expect(calls.map((call) => call.url)).toEqual([
+      '/api/orders',
+      '/api/orders?cursor=abc%3D',
+      '/api/orders?checkout=c1',
+    ]);
   });
 
   it('reports a missing session as UNAUTHORIZED', async () => {
@@ -74,5 +87,23 @@ describe('cancelOrder (rule RS8)', () => {
       reason: 'ORDER_NOT_CANCELLABLE',
       details: { status: 'paid' },
     });
+  });
+});
+
+describe('share links (S10 rules RC1, GF4, RC3)', () => {
+  it('saves the receipt link, makes a gift link and revokes a link', async () => {
+    const link = { id: 'l1', kind: 'receipt' };
+    const { fetch, calls } = fetcher(200, link);
+    await expect(
+      saveReceiptLink('o1', { showPrice: false, playerDisplay: 'full' }, fetch),
+    ).resolves.toEqual({ ok: true, data: link });
+    await createGiftLink('o1', fetch);
+    const revoked = fetcher(204, null);
+    await revokeShareLink('o1', 'l1', revoked.fetch);
+    expect([...calls, ...revoked.calls]).toEqual([
+      { url: '/api/orders/o1/receipt-link', method: 'PUT' },
+      { url: '/api/orders/o1/gift-link', method: 'POST' },
+      { url: '/api/orders/o1/share-links/l1/revoke', method: 'POST' },
+    ]);
   });
 });

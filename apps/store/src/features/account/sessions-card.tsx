@@ -16,6 +16,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@vertex-digital/ui
 import { MonitorSmartphoneIcon } from 'lucide-react';
 import { useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { clearStoredCart } from '@/features/cart/cart-keys';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
@@ -47,15 +48,22 @@ export function SessionsCard({
     const result = await revokeSession(token);
     setRevoking(null);
     if (!result.ok) return setFailure(result.reason);
-    // This device is now signed out: the same as signing out (edge case 12).
-    if (token === currentToken) return window.location.assign('/sign-in');
+    // This device is now signed out: the same as signing out (edge case 12), so the cart goes
+    // too (S10 rule CT1).
+    if (token === currentToken) {
+      clearStoredCart();
+      return window.location.assign('/sign-in');
+    }
     onRevoked(token);
   };
 
   const revokeAll = async () => {
     setRevokingAll(true);
     const result = await revokeAllSessions();
-    if (result.ok) return window.location.assign('/sign-in?notice=signed-out');
+    if (result.ok) {
+      clearStoredCart();
+      return window.location.assign('/sign-in?notice=signed-out');
+    }
     setRevokingAll(false);
     setConfirmOpen(false);
     setFailure(result.reason);

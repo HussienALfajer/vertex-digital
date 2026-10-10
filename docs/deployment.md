@@ -49,6 +49,9 @@ Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`)
 | store | `/api/deposits/{sham-cash,usdt}`, `/api/deposits/:id/txid` | API, 10 a minute per address (burst 5) |
 | store | `/api/deposits/:id/receipt` | API, bodies up to 6 MB, the upload limit |
 | store | `/api/notifications/stream` | API, unbuffered, open up to an hour (S05 server-sent events) |
+| store | `/api/orders`, `/api/checkouts` | API, POST 6 a minute per address (burst 10, `vdpurchase`; S08, S10) |
+| store | `/api/shares/*` | API, 60 a minute per address (burst 20, `vdshare`; S10 gift and receipt data and images) |
+| store | `/g/*`, `/r/*` | store, 60 a minute per address (burst 20, `vdshare`; S10 gift and receipt pages) |
 | store | `/api/webhooks/telegram` (any case) | API from Telegram's webhook ranges only (149.154.160.0/20, 91.108.4.0/22), bodies up to 64 KB |
 | store | `/api/*` | API |
 | store | everything else | store (Next.js) |
@@ -179,6 +182,11 @@ ssh vertex "systemctl enable --now vertexdigital-health.timer"
 1. Before the first deploy that contains S09, add `PLAYER_CHECK_SECRET=$(openssl rand -base64 32)` to `shared/.env`: a key of its own (read by the API only; it refuses to start in production without it). `provision.sh` generates it on a new server; an existing `shared/.env` needs it added by hand. Changing it only empties the player-check cache (24 hours at most).
 2. nginx limits player checks (`vdplayercheck`, POST only) and answers 404 for `/_internal/` on the public host: re-run `provision.sh` after the merge so the zone and the locations are installed.
 3. `STORE_REVALIDATE_SECRET` (at least 32 characters, `openssl rand -hex 32`) is read by the worker and the store: the store refuses to start in production without it, and copies only `API_INTERNAL_URL`, `STORE_URL` and `STORE_REVALIDATE_SECRET` from `shared/.env` (through the release's `.env`, `apps/store/src/instrumentation-node.ts`): the store process never holds the database password or the other secrets. `provision.sh` generates it on a new server; an existing `shared/.env` that lacks it needs it added by hand. The store's server components read the catalog from `API_INTERNAL_URL` at request time (never during the build), cache it under the `catalog` tag for at most 5 minutes, and the worker's `store.revalidate` expires it after a change. `STORE_URL` gives the sitemap and the Open Graph images their absolute links.
+
+### Cart, gifts and share links (S10)
+1. No new secret. nginx adds the zone `vdshare` (60 a minute per address) on `/api/shares/`, `/g/` and `/r/`, and puts `/api/checkouts` under `vdpurchase`: re-run `provision.sh` after the merge so the zone and the locations are installed.
+2. The store renders `/g/<token>` and `/r/<token>` per request and reads `/api/shares/<token>` from `API_INTERNAL_URL` with the visitor's `X-Forwarded-For` (set by nginx), so the API's per-address limit counts each visitor, not the store. `STORE_URL` gives the pages their `og:image` and verification links.
+3. The share images are rendered by the API with `sharp` from the TrueType fonts in `apps/api/assets/fonts` (part of the release, nothing to install).
 
 ### Telegram admin bot (S05, ADR 0019)
 1. The owner creates the bot with BotFather (`/newbot`) and keeps its token private.

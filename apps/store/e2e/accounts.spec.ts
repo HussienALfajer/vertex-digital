@@ -287,6 +287,12 @@ test.describe('account', () => {
     signedIn(api);
     api.on('POST /api/auth/revoke-session', 200, { success: true });
     api.on('POST /api/auth/revoke-sessions', 200, { success: true });
+    // S10 rule CT1: a cart on the device goes with the sign-out.
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('vd:e2e-seeded')) return;
+      sessionStorage.setItem('vd:e2e-seeded', '1');
+      localStorage.setItem('vd-cart', JSON.stringify({ v: 1, lines: [{ id: 'l1' }] }));
+    });
     await page.goto('/account');
     await expect(page.getByText(ar.account.sessions.thisDevice)).toBeVisible();
     const other = ar.account.sessions.device
@@ -304,6 +310,7 @@ test.describe('account', () => {
     await page.getByRole('button', { name: ar.account.sessions.confirm }).click();
     await expect(page).toHaveURL('/sign-in?notice=signed-out');
     await expect(page.getByText(ar.signIn.signedOut)).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('vd-cart'))).toBeNull();
   });
 
   test('changes the email with a code sent to the new address', async ({ page, api }) => {

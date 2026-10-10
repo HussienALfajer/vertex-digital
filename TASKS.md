@@ -20,13 +20,13 @@ Spec: `docs/specs/S10-convenience.md` (F14, F16; ADRs 0003, 0004, 0011, 0015, 00
 - [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 5e99a3d0e6c3), reviewer (one blocking finding: GF3 bypass by invisible characters; fixed), owner acceptance (2026-10-09), PR with auto-merge
 
 ## PR 2 — Store and admin screens, E2E, nginx · Opus 5.5 `high`
-- [ ] Store cart store (`vd-cart`, versioned, try/catch, merge by key, 10 lines, gift lines apart, cleared at sign-out) with unit tests; header cart button
-- [ ] Store buy box: saved-ID chips (SP3, SP6, SP7), save box, gift box (GF1, GF3), "أضف إلى السلة"; calculator "أضف الكل إلى السلة" (CT3); repeat (`?repeat=`, OT1, OT2); `?player=`
-- [ ] Store `/cart` (CT4, CT6) and `/orders?checkout=`; order page: repeat, gift section, receipt sheet, "ضمن سلة"; `/orders` badges and repeat
-- [ ] Store `/account/players`; `/g/[token]`, `/r/[token]` (per request, `noindex`, `no-referrer`, `og:image`); wallet checkout entry; i18n keys
-- [ ] Admin order page: checkout block, gift block, share links with the revoke dialog; list badges; i18n keys
-- [ ] Share pages' server render: the API's 60/min/IP limit on `/api/shares/*` must key on the visitor, not the store's loopback address (forward and trust the visitor's IP from the store, or exempt the internal caller and rely on nginx `vdshare`) — from the PR 1 review
-- [ ] nginx `vdshare`; `robots.txt` disallows `/g/`, `/r/`, `/cart`; `docs/deployment.md`
-- [ ] E2E flows and RTL screenshots (store phone and desktop, dark and light; admin light and dark); budgets for `/cart` and share pages in `apps/store/CLAUDE.md`
-- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S10 done, `apps/store/CLAUDE.md`, `wiring.md` patterns)
-- [ ] Checks (lint, typecheck, test, build, e2e), reviewer, owner acceptance, PR with auto-merge
+- [x] Store cart store (`vd-cart`, versioned, try/catch, merge by key, 10 lines, gift lines apart, cleared at sign-out) with unit tests; header cart button
+- [x] Store buy box: saved-ID chips (SP3, SP6, SP7), save box, gift box (GF1, GF3), "أضف إلى السلة"; calculator "أضف الكل إلى السلة" (CT3); repeat (`?repeat=`, OT1, OT2); `?player=`
+- [x] Store `/cart` (CT4, CT6) and `/orders?checkout=`; order page: repeat, gift section, receipt sheet, "ضمن سلة"; `/orders` badges and repeat
+- [x] Store `/account/players`; `/g/[token]`, `/r/[token]` (per request, `noindex`, `no-referrer`, `og:image`); wallet checkout entry; i18n keys
+- [x] Admin order page: checkout block, gift block, share links with the revoke dialog; list badges; i18n keys
+- [x] Share pages' server render: the API's 60/min/IP limit on `/api/shares/*` must key on the visitor, not the store's loopback address — done: the store forwards the visitor's `X-Forwarded-For` (set by nginx), which the API trusts from loopback; E2E checks it reaches the API
+- [x] nginx `vdshare`; `robots.txt` disallows `/g/`, `/r/`, `/cart`; `docs/deployment.md`
+- [x] E2E flows and RTL screenshots (store phone and desktop, dark and light; admin light and dark); budgets for `/cart` and share pages in `apps/store/CLAUDE.md`
+- [x] Wiring checklist, docs (`docs/ROADMAP.md` S10 done, `apps/store/CLAUDE.md`, `wiring.md` patterns)
+- [x] Checks (lint, typecheck, build, e2e: passed and recorded; db, api and worker tests left to CI: the local test database needs a reset), reviewer (two blocking findings: sign-out from the account page kept the cart; repeat trusted undelivered orders; both fixed), owner acceptance (2026-10-10), PR with auto-merge

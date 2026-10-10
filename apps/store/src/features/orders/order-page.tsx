@@ -21,6 +21,9 @@ import {
   ClockIcon,
   EyeIcon,
   HourglassIcon,
+  ReceiptTextIcon,
+  RotateCwIcon,
+  ShoppingCartIcon,
   UserRoundCheckIcon,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -38,8 +41,9 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { GameCover } from './orders-list';
+import { GameCover, repeatHref } from './orders-list';
 import { cancelOrder, getOrder, revealCode } from './requests';
+import { GiftSection, ReceiptSheet, shareable } from './share-links';
 import { STAGE_TONES, stageSentence, stageText, stepText, timelineEntries } from './stages';
 
 type State =
@@ -56,11 +60,13 @@ type State =
  * (rule C2). Read in the browser with the session, never cached; another customer's order is the
  * 404 page. Live: an `order` event or a notification about this order, a `resync`, or the tab
  * coming back into view reads it again (rule LT2); the delivery plays the success sequence once.
+ * S10: "اشترِ مجدداً" (OT1), "مشاركة الإيصال" (RC1), "ضمن سلة" (CT6) and the gift (GF4).
  */
 export function OrderPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<State>({ status: 'loading' });
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   const load = useCallback(async () => {
     const result = await getOrder(id);
@@ -151,7 +157,42 @@ export function OrderPage() {
           </p>
         )}
         <Timeline order={order} />
+        {(order.repeatable || shareable(order) || order.checkoutId) && (
+          <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+            {order.repeatable && (
+              <Button size="xl" render={<Link href={repeatHref(order, order.product.id)} />}>
+                <RotateCwIcon aria-hidden="true" />
+                {t('orders.repeat')}
+              </Button>
+            )}
+            {shareable(order) && (
+              <Button variant="outline" size="xl" onClick={() => setReceiptOpen(true)}>
+                <ReceiptTextIcon aria-hidden="true" />
+                {t('orders.receipt.open')}
+              </Button>
+            )}
+            {order.checkoutId && (
+              <Button
+                variant="ghost"
+                size="xl"
+                render={<Link href={`/orders?checkout=${order.checkoutId}`} />}
+              >
+                <ShoppingCartIcon aria-hidden="true" />
+                {t('orders.checkout.partOf')}
+              </Button>
+            )}
+          </div>
+        )}
       </Card>
+      {shareable(order) && (
+        <ReceiptSheet
+          key={order.shareLinks.find((link) => link.kind === 'receipt')?.id ?? 'new'}
+          order={order}
+          open={receiptOpen}
+          onOpenChange={setReceiptOpen}
+          onChange={load}
+        />
+      )}
 
       {order.stage === 'awaiting_balance' && <Reservation order={order} onChange={load} />}
 
@@ -195,6 +236,8 @@ export function OrderPage() {
           )}
         </dl>
       </Card>
+
+      {order.isGift && <GiftSection order={order} onChange={load} />}
 
       {order.codes.length > 0 && (
         <Card className="gap-4">

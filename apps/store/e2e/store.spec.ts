@@ -101,7 +101,8 @@ for (const theme of ['dark', 'light'] as const) {
  */
 // Script raised from 200 (S05 PR 2): the whole Arabic catalog (`src/messages/ar.json`) ships in
 // the first load, so each feature's strings add to it; the notification strings took it to 201.
-// Raised to 210 (S09 PR 3): the catalog, buy box, search and reservation strings took it to 206.
+// Raised to 210 (S09 PR 3): the catalog, buy box, search and reservation strings took it to 206;
+// S10's strings and the header's cart button took it to 209 (S10 PR 2).
 const BUDGET_KB = { script: 210, stylesheet: 20 };
 
 /**
@@ -148,4 +149,27 @@ test('the game page stays within its performance budget', async ({ page, api: _a
   const kb = await firstLoad(page, '/games/pubg-mobile');
   expect(kb.script).toBeLessThanOrEqual(GAME_BUDGET_KB.script);
   expect(kb.stylesheet).toBeLessThanOrEqual(GAME_BUDGET_KB.stylesheet);
+});
+
+/**
+ * S10, measured in PR 2 (apps/store/CLAUDE.md): the cart loads its rules, the checkout's shapes
+ * and slide-to-pay with the page (373 KB, beside the wallet's 307 and the account's 415); a share
+ * page renders its card on the server and ships only the time and its two actions (210 KB).
+ */
+const CART_BUDGET_KB = { script: 380, stylesheet: 20 };
+const SHARE_BUDGET_KB = { script: 215, stylesheet: 20 };
+
+test('the cart stays within its performance budget', async ({ page, api }) => {
+  test.skip(test.info().project.name !== 'desktop', 'measured once');
+  api.on('GET /api/catalog/search-index', 200, { games: [], products: [] });
+  const kb = await firstLoad(page, '/cart');
+  expect(kb.script).toBeLessThanOrEqual(CART_BUDGET_KB.script);
+  expect(kb.stylesheet).toBeLessThanOrEqual(CART_BUDGET_KB.stylesheet);
+});
+
+test('a share page stays within its performance budget', async ({ page, api: _api }) => {
+  test.skip(test.info().project.name !== 'desktop', 'measured once');
+  const kb = await firstLoad(page, '/g/G1ftT0kenAAAAAAAAAAAAA');
+  expect(kb.script).toBeLessThanOrEqual(SHARE_BUDGET_KB.script);
+  expect(kb.stylesheet).toBeLessThanOrEqual(SHARE_BUDGET_KB.stylesheet);
 });
