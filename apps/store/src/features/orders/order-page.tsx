@@ -37,6 +37,7 @@ import { Line } from '@/features/deposits/panel';
 import { formatClock, useTimeLeft } from '@/features/deposits/use-time-left';
 import { useNotificationEvents, useVisibleAgain } from '@/features/notifications/live';
 import { useBalance } from '@/features/purchase/customer';
+import { HelpButton } from '@/features/support/help-button';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
@@ -263,6 +264,7 @@ export function OrderPage() {
           )}
         </Card>
       )}
+      <HelpButton link={{ orderId: order.id }} />
     </div>
   );
 }

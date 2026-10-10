@@ -19,6 +19,7 @@ import {
 } from '@vertex-digital/contracts';
 import openapi from '../../api/openapi.json' with { type: 'json' };
 import { CatalogMock } from './catalog-mock';
+import { CustomersMock } from './customers-mock';
 import { quietDashboard } from './dashboard-mock';
 import { OrdersMock } from './orders-mock';
 import { SuppliersMock } from './suppliers-mock';
@@ -292,6 +293,14 @@ export class AdminApi {
   );
   /** S08: the orders, their decisions, code reveals and the policy. */
   readonly orders = new OrdersMock(() => this.reauthenticationRequired);
+  /** S12: the customers, their profiles and changes, the support tickets and settings. */
+  readonly customers = new CustomersMock(
+    () => this.reauthenticationRequired,
+    () => this.orders.orders,
+    (entry) => {
+      this.auditEntries = [entry, ...this.auditEntries];
+    },
+  );
   /** S11: the home page's read; null answers a quiet day with the current rate. */
   dashboard: Dashboard | null = null;
   /**
@@ -579,6 +588,11 @@ export class AdminApi {
         .filter((deposit) => status === 'all' || deposit.status === status)
         .filter((deposit) => !byMethod || deposit.method === byMethod)
         .filter((deposit) => !q || String(deposit.referenceCode).includes(q))
+        .filter(
+          (deposit) =>
+            !url.searchParams.get('customerId') ||
+            (deposit.customer as { id: string }).id === url.searchParams.get('customerId'),
+        )
         // Rule RV10: flagged first, then the oldest submission.
         .sort((a, b) => Number(b.flags.length > 0) - Number(a.flags.length > 0))
         .map((deposit) => ({
@@ -882,6 +896,18 @@ export class AdminApi {
     if (path.startsWith('/api/admin/orders')) {
       this.orders.idempotencyKey = request.headers()['idempotency-key'] ?? null;
       const answer = this.orders.answer(request.method(), url, body);
+      if (answer && 'image' in answer) {
+        return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+      }
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
+    }
+    if (path.startsWith('/api/admin/customers') || path.startsWith('/api/admin/support')) {
+      const headers = request.headers();
+      const answer = this.customers.answer(request.method(), url, body, {
+        contentType: headers['content-type'] ?? '',
+        raw: request.postDataBuffer(),
+        idempotencyKey: headers['idempotency-key'] ?? null,
+      });
       if (answer && 'image' in answer) {
         return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       }

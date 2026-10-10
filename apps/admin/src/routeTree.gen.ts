@@ -19,6 +19,8 @@ import { Route as AppAuditRouteImport } from './routes/_app/audit'
 import { Route as AppRatesRouteImport } from './routes/_app/rates'
 import { Route as AppTestCustomersRouteImport } from './routes/_app/test-customers'
 import { Route as AppCatalogIndexRouteImport } from './routes/_app/catalog.index'
+import { Route as AppCustomersIndexRouteImport } from './routes/_app/customers.index'
+import { Route as AppCustomersIdRouteImport } from './routes/_app/customers.$id'
 import { Route as AppDepositsIndexRouteImport } from './routes/_app/deposits.index'
 import { Route as AppDepositsIdRouteImport } from './routes/_app/deposits.$id'
 import { Route as AppDepositsTransfersRouteImport } from './routes/_app/deposits.transfers'
@@ -29,11 +31,15 @@ import { Route as AppOrdersPolicyRouteImport } from './routes/_app/orders.policy
 import { Route as AppPricingIndexRouteImport } from './routes/_app/pricing.index'
 import { Route as AppPricingReviewsRouteImport } from './routes/_app/pricing.reviews'
 import { Route as AppSettingsDepositsRouteImport } from './routes/_app/settings.deposits'
+import { Route as AppSettingsSupportRouteImport } from './routes/_app/settings.support'
 import { Route as AppSettingsSwitchesRouteImport } from './routes/_app/settings.switches'
 import { Route as AppSettingsTelegramRouteImport } from './routes/_app/settings.telegram'
 import { Route as AppSuppliersIndexRouteImport } from './routes/_app/suppliers.index'
 import { Route as AppSuppliersCodeRouteImport } from './routes/_app/suppliers.$code'
 import { Route as AppSuppliersPolicyRouteImport } from './routes/_app/suppliers.policy'
+import { Route as AppSupportIndexRouteImport } from './routes/_app/support.index'
+import { Route as AppSupportIdRouteImport } from './routes/_app/support.$id'
+import { Route as AppSupportNewRouteImport } from './routes/_app/support.new'
 import { Route as AppWalletsIndexRouteImport } from './routes/_app/wallets.index'
 import { Route as AppWalletsCustomerIdRouteImport } from './routes/_app/wallets.$customerId'
 import { Route as AppCatalogGamesIdRouteImport } from './routes/_app/catalog.games.$id'
@@ -88,6 +94,16 @@ const AppCatalogIndexRoute = AppCatalogIndexRouteImport.update({
   path: '/catalog/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCustomersIndexRoute = AppCustomersIndexRouteImport.update({
+  id: '/customers/',
+  path: '/customers/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCustomersIdRoute = AppCustomersIdRouteImport.update({
+  id: '/customers/$id',
+  path: '/customers/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDepositsIndexRoute = AppDepositsIndexRouteImport.update({
   id: '/deposits/',
   path: '/deposits/',
@@ -138,6 +154,11 @@ const AppSettingsDepositsRoute = AppSettingsDepositsRouteImport.update({
   path: '/settings/deposits',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsSupportRoute = AppSettingsSupportRouteImport.update({
+  id: '/settings/support',
+  path: '/settings/support',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsSwitchesRoute = AppSettingsSwitchesRouteImport.update({
   id: '/settings/switches',
   path: '/settings/switches',
@@ -161,6 +182,21 @@ const AppSuppliersCodeRoute = AppSuppliersCodeRouteImport.update({
 const AppSuppliersPolicyRoute = AppSuppliersPolicyRouteImport.update({
   id: '/suppliers/policy',
   path: '/suppliers/policy',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSupportIndexRoute = AppSupportIndexRouteImport.update({
+  id: '/support/',
+  path: '/support/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSupportIdRoute = AppSupportIdRouteImport.update({
+  id: '/support/$id',
+  path: '/support/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSupportNewRoute = AppSupportNewRouteImport.update({
+  id: '/support/new',
+  path: '/support/new',
   getParentRoute: () => AppRoute,
 } as any)
 const AppWalletsIndexRoute = AppWalletsIndexRouteImport.update({
@@ -193,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/audit': typeof AppAuditRoute
   '/rates': typeof AppRatesRoute
   '/test-customers': typeof AppTestCustomersRoute
+  '/customers/$id': typeof AppCustomersIdRoute
   '/deposits/$id': typeof AppDepositsIdRoute
   '/deposits/transfers': typeof AppDepositsTransfersRoute
   '/orders/$id': typeof AppOrdersIdRoute
@@ -200,16 +237,21 @@ export interface FileRoutesByFullPath {
   '/orders/policy': typeof AppOrdersPolicyRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
+  '/settings/support': typeof AppSettingsSupportRoute
   '/settings/switches': typeof AppSettingsSwitchesRoute
   '/settings/telegram': typeof AppSettingsTelegramRoute
   '/suppliers/$code': typeof AppSuppliersCodeRoute
   '/suppliers/policy': typeof AppSuppliersPolicyRoute
+  '/support/$id': typeof AppSupportIdRoute
+  '/support/new': typeof AppSupportNewRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/catalog/': typeof AppCatalogIndexRoute
+  '/customers/': typeof AppCustomersIndexRoute
   '/deposits/': typeof AppDepositsIndexRoute
   '/orders/': typeof AppOrdersIndexRoute
   '/pricing/': typeof AppPricingIndexRoute
   '/suppliers/': typeof AppSuppliersIndexRoute
+  '/support/': typeof AppSupportIndexRoute
   '/wallets/': typeof AppWalletsIndexRoute
   '/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/catalog/games/new': typeof AppCatalogGamesNewRoute
@@ -223,6 +265,7 @@ export interface FileRoutesByTo {
   '/rates': typeof AppRatesRoute
   '/test-customers': typeof AppTestCustomersRoute
   '/': typeof AppIndexRoute
+  '/customers/$id': typeof AppCustomersIdRoute
   '/deposits/$id': typeof AppDepositsIdRoute
   '/deposits/transfers': typeof AppDepositsTransfersRoute
   '/orders/$id': typeof AppOrdersIdRoute
@@ -230,16 +273,21 @@ export interface FileRoutesByTo {
   '/orders/policy': typeof AppOrdersPolicyRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
+  '/settings/support': typeof AppSettingsSupportRoute
   '/settings/switches': typeof AppSettingsSwitchesRoute
   '/settings/telegram': typeof AppSettingsTelegramRoute
   '/suppliers/$code': typeof AppSuppliersCodeRoute
   '/suppliers/policy': typeof AppSuppliersPolicyRoute
+  '/support/$id': typeof AppSupportIdRoute
+  '/support/new': typeof AppSupportNewRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/catalog': typeof AppCatalogIndexRoute
+  '/customers': typeof AppCustomersIndexRoute
   '/deposits': typeof AppDepositsIndexRoute
   '/orders': typeof AppOrdersIndexRoute
   '/pricing': typeof AppPricingIndexRoute
   '/suppliers': typeof AppSuppliersIndexRoute
+  '/support': typeof AppSupportIndexRoute
   '/wallets': typeof AppWalletsIndexRoute
   '/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/catalog/games/new': typeof AppCatalogGamesNewRoute
@@ -255,6 +303,7 @@ export interface FileRoutesById {
   '/_app/rates': typeof AppRatesRoute
   '/_app/test-customers': typeof AppTestCustomersRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/customers/$id': typeof AppCustomersIdRoute
   '/_app/deposits/$id': typeof AppDepositsIdRoute
   '/_app/deposits/transfers': typeof AppDepositsTransfersRoute
   '/_app/orders/$id': typeof AppOrdersIdRoute
@@ -262,16 +311,21 @@ export interface FileRoutesById {
   '/_app/orders/policy': typeof AppOrdersPolicyRoute
   '/_app/pricing/reviews': typeof AppPricingReviewsRoute
   '/_app/settings/deposits': typeof AppSettingsDepositsRoute
+  '/_app/settings/support': typeof AppSettingsSupportRoute
   '/_app/settings/switches': typeof AppSettingsSwitchesRoute
   '/_app/settings/telegram': typeof AppSettingsTelegramRoute
   '/_app/suppliers/$code': typeof AppSuppliersCodeRoute
   '/_app/suppliers/policy': typeof AppSuppliersPolicyRoute
+  '/_app/support/$id': typeof AppSupportIdRoute
+  '/_app/support/new': typeof AppSupportNewRoute
   '/_app/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/_app/catalog/': typeof AppCatalogIndexRoute
+  '/_app/customers/': typeof AppCustomersIndexRoute
   '/_app/deposits/': typeof AppDepositsIndexRoute
   '/_app/orders/': typeof AppOrdersIndexRoute
   '/_app/pricing/': typeof AppPricingIndexRoute
   '/_app/suppliers/': typeof AppSuppliersIndexRoute
+  '/_app/support/': typeof AppSupportIndexRoute
   '/_app/wallets/': typeof AppWalletsIndexRoute
   '/_app/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/_app/catalog/games/new': typeof AppCatalogGamesNewRoute
@@ -287,6 +341,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/rates'
     | '/test-customers'
+    | '/customers/$id'
     | '/deposits/$id'
     | '/deposits/transfers'
     | '/orders/$id'
@@ -294,16 +349,21 @@ export interface FileRouteTypes {
     | '/orders/policy'
     | '/pricing/reviews'
     | '/settings/deposits'
+    | '/settings/support'
     | '/settings/switches'
     | '/settings/telegram'
     | '/suppliers/$code'
     | '/suppliers/policy'
+    | '/support/$id'
+    | '/support/new'
     | '/wallets/$customerId'
     | '/catalog/'
+    | '/customers/'
     | '/deposits/'
     | '/orders/'
     | '/pricing/'
     | '/suppliers/'
+    | '/support/'
     | '/wallets/'
     | '/catalog/games/$id'
     | '/catalog/games/new'
@@ -317,6 +377,7 @@ export interface FileRouteTypes {
     | '/rates'
     | '/test-customers'
     | '/'
+    | '/customers/$id'
     | '/deposits/$id'
     | '/deposits/transfers'
     | '/orders/$id'
@@ -324,16 +385,21 @@ export interface FileRouteTypes {
     | '/orders/policy'
     | '/pricing/reviews'
     | '/settings/deposits'
+    | '/settings/support'
     | '/settings/switches'
     | '/settings/telegram'
     | '/suppliers/$code'
     | '/suppliers/policy'
+    | '/support/$id'
+    | '/support/new'
     | '/wallets/$customerId'
     | '/catalog'
+    | '/customers'
     | '/deposits'
     | '/orders'
     | '/pricing'
     | '/suppliers'
+    | '/support'
     | '/wallets'
     | '/catalog/games/$id'
     | '/catalog/games/new'
@@ -348,6 +414,7 @@ export interface FileRouteTypes {
     | '/_app/rates'
     | '/_app/test-customers'
     | '/_app/'
+    | '/_app/customers/$id'
     | '/_app/deposits/$id'
     | '/_app/deposits/transfers'
     | '/_app/orders/$id'
@@ -355,16 +422,21 @@ export interface FileRouteTypes {
     | '/_app/orders/policy'
     | '/_app/pricing/reviews'
     | '/_app/settings/deposits'
+    | '/_app/settings/support'
     | '/_app/settings/switches'
     | '/_app/settings/telegram'
     | '/_app/suppliers/$code'
     | '/_app/suppliers/policy'
+    | '/_app/support/$id'
+    | '/_app/support/new'
     | '/_app/wallets/$customerId'
     | '/_app/catalog/'
+    | '/_app/customers/'
     | '/_app/deposits/'
     | '/_app/orders/'
     | '/_app/pricing/'
     | '/_app/suppliers/'
+    | '/_app/support/'
     | '/_app/wallets/'
     | '/_app/catalog/games/$id'
     | '/_app/catalog/games/new'
@@ -449,6 +521,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCatalogIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/customers/': {
+      id: '/_app/customers/'
+      path: '/customers'
+      fullPath: '/customers/'
+      preLoaderRoute: typeof AppCustomersIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/customers/$id': {
+      id: '/_app/customers/$id'
+      path: '/customers/$id'
+      fullPath: '/customers/$id'
+      preLoaderRoute: typeof AppCustomersIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/deposits/': {
       id: '/_app/deposits/'
       path: '/deposits'
@@ -519,6 +605,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsDepositsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings/support': {
+      id: '/_app/settings/support'
+      path: '/settings/support'
+      fullPath: '/settings/support'
+      preLoaderRoute: typeof AppSettingsSupportRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings/switches': {
       id: '/_app/settings/switches'
       path: '/settings/switches'
@@ -552,6 +645,27 @@ declare module '@tanstack/react-router' {
       path: '/suppliers/policy'
       fullPath: '/suppliers/policy'
       preLoaderRoute: typeof AppSuppliersPolicyRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/support/': {
+      id: '/_app/support/'
+      path: '/support'
+      fullPath: '/support/'
+      preLoaderRoute: typeof AppSupportIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/support/$id': {
+      id: '/_app/support/$id'
+      path: '/support/$id'
+      fullPath: '/support/$id'
+      preLoaderRoute: typeof AppSupportIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/support/new': {
+      id: '/_app/support/new'
+      path: '/support/new'
+      fullPath: '/support/new'
+      preLoaderRoute: typeof AppSupportNewRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/wallets/': {
@@ -591,6 +705,7 @@ interface AppRouteChildren {
   AppRatesRoute: typeof AppRatesRoute
   AppTestCustomersRoute: typeof AppTestCustomersRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppCustomersIdRoute: typeof AppCustomersIdRoute
   AppDepositsIdRoute: typeof AppDepositsIdRoute
   AppDepositsTransfersRoute: typeof AppDepositsTransfersRoute
   AppOrdersIdRoute: typeof AppOrdersIdRoute
@@ -598,16 +713,21 @@ interface AppRouteChildren {
   AppOrdersPolicyRoute: typeof AppOrdersPolicyRoute
   AppPricingReviewsRoute: typeof AppPricingReviewsRoute
   AppSettingsDepositsRoute: typeof AppSettingsDepositsRoute
+  AppSettingsSupportRoute: typeof AppSettingsSupportRoute
   AppSettingsSwitchesRoute: typeof AppSettingsSwitchesRoute
   AppSettingsTelegramRoute: typeof AppSettingsTelegramRoute
   AppSuppliersCodeRoute: typeof AppSuppliersCodeRoute
   AppSuppliersPolicyRoute: typeof AppSuppliersPolicyRoute
+  AppSupportIdRoute: typeof AppSupportIdRoute
+  AppSupportNewRoute: typeof AppSupportNewRoute
   AppWalletsCustomerIdRoute: typeof AppWalletsCustomerIdRoute
   AppCatalogIndexRoute: typeof AppCatalogIndexRoute
+  AppCustomersIndexRoute: typeof AppCustomersIndexRoute
   AppDepositsIndexRoute: typeof AppDepositsIndexRoute
   AppOrdersIndexRoute: typeof AppOrdersIndexRoute
   AppPricingIndexRoute: typeof AppPricingIndexRoute
   AppSuppliersIndexRoute: typeof AppSuppliersIndexRoute
+  AppSupportIndexRoute: typeof AppSupportIndexRoute
   AppWalletsIndexRoute: typeof AppWalletsIndexRoute
   AppCatalogGamesIdRoute: typeof AppCatalogGamesIdRoute
   AppCatalogGamesNewRoute: typeof AppCatalogGamesNewRoute
@@ -619,6 +739,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppRatesRoute: AppRatesRoute,
   AppTestCustomersRoute: AppTestCustomersRoute,
   AppIndexRoute: AppIndexRoute,
+  AppCustomersIdRoute: AppCustomersIdRoute,
   AppDepositsIdRoute: AppDepositsIdRoute,
   AppDepositsTransfersRoute: AppDepositsTransfersRoute,
   AppOrdersIdRoute: AppOrdersIdRoute,
@@ -626,16 +747,21 @@ const AppRouteChildren: AppRouteChildren = {
   AppOrdersPolicyRoute: AppOrdersPolicyRoute,
   AppPricingReviewsRoute: AppPricingReviewsRoute,
   AppSettingsDepositsRoute: AppSettingsDepositsRoute,
+  AppSettingsSupportRoute: AppSettingsSupportRoute,
   AppSettingsSwitchesRoute: AppSettingsSwitchesRoute,
   AppSettingsTelegramRoute: AppSettingsTelegramRoute,
   AppSuppliersCodeRoute: AppSuppliersCodeRoute,
   AppSuppliersPolicyRoute: AppSuppliersPolicyRoute,
+  AppSupportIdRoute: AppSupportIdRoute,
+  AppSupportNewRoute: AppSupportNewRoute,
   AppWalletsCustomerIdRoute: AppWalletsCustomerIdRoute,
   AppCatalogIndexRoute: AppCatalogIndexRoute,
+  AppCustomersIndexRoute: AppCustomersIndexRoute,
   AppDepositsIndexRoute: AppDepositsIndexRoute,
   AppOrdersIndexRoute: AppOrdersIndexRoute,
   AppPricingIndexRoute: AppPricingIndexRoute,
   AppSuppliersIndexRoute: AppSuppliersIndexRoute,
+  AppSupportIndexRoute: AppSupportIndexRoute,
   AppWalletsIndexRoute: AppWalletsIndexRoute,
   AppCatalogGamesIdRoute: AppCatalogGamesIdRoute,
   AppCatalogGamesNewRoute: AppCatalogGamesNewRoute,

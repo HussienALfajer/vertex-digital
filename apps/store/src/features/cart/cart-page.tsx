@@ -36,7 +36,8 @@ import { savePendingEmail } from '@/features/auth/pending-email';
 import { centsParam } from '@/features/deposits/amounts';
 import { attemptKey, clearAttempt } from '@/features/purchase/attempt';
 import { useBalance, usePurchasesStopped } from '@/features/purchase/customer';
-import { useCustomer } from '@/features/purchase/session';
+import { purchaseRefusalText } from '@/features/purchase/refusals';
+import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { getSearchIndex } from '@/features/search/requests';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
@@ -232,6 +233,11 @@ export function CartPage() {
         again();
         setSending({ status: 'idle' });
         return setNotice(errorText(reason));
+      case 'PURCHASE_LIMIT_EXCEEDED':
+        // S12 LM4 (edge 5): refused as a whole with what remains today; the cart stays.
+        again();
+        setSending({ status: 'idle' });
+        return setNotice(purchaseRefusalText(reason, details));
       case 'UNAUTHORIZED':
         router.push(`/sign-in?next=${encodeURIComponent('/cart')}`);
         return;
@@ -392,6 +398,7 @@ function Pay({
       </Button>
     );
   }
+  if (isFrozenCustomer(customer)) return <FormAlert>{errorText('ACCOUNT_FROZEN')}</FormAlert>;
   if (stopped) return <FormAlert>{t('purchase.stopped')}</FormAlert>;
   if (pricesFailed) {
     return (

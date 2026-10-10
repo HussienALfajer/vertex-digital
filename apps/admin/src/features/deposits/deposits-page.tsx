@@ -199,7 +199,16 @@ function SearchForm({
   );
 }
 
-function DepositTable({ deposits, tab }: { deposits: AdminDepositListItem[]; tab: DepositTab }) {
+/** The deposits as rows; the customer profile's tab (S12 CS4) leaves out the customer column. */
+export function DepositTable({
+  deposits,
+  tab,
+  withCustomer = true,
+}: {
+  deposits: AdminDepositListItem[];
+  tab: DepositTab;
+  withCustomer?: boolean;
+}) {
   const { t } = useTranslation();
   const now = new Date();
   return (
@@ -207,7 +216,7 @@ function DepositTable({ deposits, tab }: { deposits: AdminDepositListItem[]; tab
       <TableHeader>
         <TableRow>
           <TableHead>{t('deposits.columns.reference')}</TableHead>
-          <TableHead>{t('deposits.columns.customer')}</TableHead>
+          {withCustomer && <TableHead>{t('deposits.columns.customer')}</TableHead>}
           <TableHead>{t('deposits.columns.amount')}</TableHead>
           <TableHead>
             {tab === 'submitted' ? t('deposits.columns.waiting') : t('deposits.columns.created')}
@@ -231,17 +240,19 @@ function DepositTable({ deposits, tab }: { deposits: AdminDepositListItem[]; tab
                 {t(`wallets.methods.${deposit.method}`)}
               </Badge>
             </TableCell>
-            <TableCell className="min-w-44 whitespace-normal">
-              <span className="flex flex-col gap-1">
-                <span className="flex items-center gap-2">
-                  {deposit.customer.name}
-                  {deposit.customer.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
+            {withCustomer && (
+              <TableCell className="min-w-44 whitespace-normal">
+                <span className="flex flex-col gap-1">
+                  <span className="flex items-center gap-2">
+                    {deposit.customer.name}
+                    {deposit.customer.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
+                  </span>
+                  <span dir="ltr" className="text-end text-sm text-muted-foreground">
+                    {deposit.customer.email}
+                  </span>
                 </span>
-                <span dir="ltr" className="text-end text-sm text-muted-foreground">
-                  {deposit.customer.email}
-                </span>
-              </span>
-            </TableCell>
+              </TableCell>
+            )}
             <TableCell className="whitespace-nowrap">
               <span className="flex flex-col gap-1">
                 <span className="font-medium tabular-nums">

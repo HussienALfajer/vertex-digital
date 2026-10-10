@@ -23,6 +23,7 @@ import { CopyButton } from '../../components/copy-button';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, ltr } from '../../lib/format';
+import { CustomerMarks } from '../customers/customer-marks';
 import {
   hasActions,
   type OrderAction,
@@ -141,6 +142,14 @@ function Header({ order }: { order: AdminOrder }) {
           <span dir="ltr" className="block text-end text-sm font-normal text-muted-foreground">
             {order.customer.email}
           </span>
+          {/* S12 CS6: the status chips, the pinned note and the signals. */}
+          <div className="mt-2 font-normal">
+            <CustomerMarks
+              customerId={order.customer.id}
+              marks={order.customer.marks}
+              isTest={order.customer.isTest}
+            />
+          </div>
         </Fact>
         <Fact label={t('orders.detail.total')}>
           <bdi dir="ltr">{formatUsd(order.totalUsdUnits)}</bdi>

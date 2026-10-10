@@ -13,7 +13,7 @@ const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
 /** Why a file cannot be the receipt, before it is sent; null when it can. */
 export function receiptProblem(file: { type: string; size: number }): string | null {
   if (!ACCEPTED.includes(file.type)) return errorText('RECEIPT_INVALID');
-  if (file.size > UPLOAD_MAX_BYTES) return errorText('PAYLOAD_TOO_LARGE');
+  if (file.size > UPLOAD_MAX_BYTES) return t('deposits.receipt.tooLarge');
   return null;
 }
 

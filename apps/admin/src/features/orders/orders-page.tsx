@@ -232,7 +232,14 @@ function Filters({
   );
 }
 
-function OrderTable({ orders }: { orders: AdminOrderSummary[] }) {
+/** The orders as rows; the customer profile's tab (S12 CS4) leaves out the customer column. */
+export function OrderTable({
+  orders,
+  withCustomer = true,
+}: {
+  orders: AdminOrderSummary[];
+  withCustomer?: boolean;
+}) {
   const { t } = useTranslation();
   const now = new Date();
   return (
@@ -240,7 +247,7 @@ function OrderTable({ orders }: { orders: AdminOrderSummary[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>{t('orders.columns.number')}</TableHead>
-          <TableHead>{t('orders.columns.customer')}</TableHead>
+          {withCustomer && <TableHead>{t('orders.columns.customer')}</TableHead>}
           <TableHead>{t('orders.columns.product')}</TableHead>
           <TableHead>{t('orders.columns.quantity')}</TableHead>
           <TableHead>{t('orders.columns.total')}</TableHead>
@@ -261,17 +268,19 @@ function OrderTable({ orders }: { orders: AdminOrderSummary[] }) {
                 <bdi dir="ltr">{order.number}</bdi>
               </Link>
             </TableCell>
-            <TableCell className="min-w-44 whitespace-normal">
-              <span className="flex flex-col gap-1">
-                <span className="flex items-center gap-2">
-                  {order.customer.name}
-                  {order.customer.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
+            {withCustomer && (
+              <TableCell className="min-w-44 whitespace-normal">
+                <span className="flex flex-col gap-1">
+                  <span className="flex items-center gap-2">
+                    {order.customer.name}
+                    {order.customer.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
+                  </span>
+                  <span dir="ltr" className="text-end text-sm text-muted-foreground">
+                    {order.customer.email}
+                  </span>
                 </span>
-                <span dir="ltr" className="text-end text-sm text-muted-foreground">
-                  {order.customer.email}
-                </span>
-              </span>
-            </TableCell>
+              </TableCell>
+            )}
             <TableCell className="min-w-40 whitespace-normal">
               <span className="flex flex-col gap-1">
                 <bdi>{order.product.nameAr}</bdi>

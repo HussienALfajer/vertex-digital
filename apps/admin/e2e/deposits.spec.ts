@@ -70,6 +70,7 @@ function deposit(changes: Partial<MockDeposit> & { id: string }): MockDeposit {
       name: 'سارة الأحمد',
       email: 'sara@example.com',
       isTest: true,
+      marks: { status: 'active', pinnedNote: null, signalsCount: 0 },
       phone: '+963944123456',
       createdAt: '2026-10-01T09:00:00.000Z',
       established: false,

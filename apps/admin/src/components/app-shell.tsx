@@ -21,11 +21,14 @@ import {
   ArrowLeftRightIcon,
   ChevronDownIcon,
   CoinsIcon,
+  ContactRoundIcon,
   Gamepad2Icon,
   HouseIcon,
+  LifeBuoyIcon,
   LogOutIcon,
   type LucideIcon,
   MenuIcon,
+  MessageCircleQuestionIcon,
   PercentIcon,
   RadioTowerIcon,
   ScaleIcon,
@@ -46,6 +49,7 @@ import { orderCountsQuery } from '../features/orders/orders.queries';
 import { openReviewCountQuery } from '../features/pricing/pricing.queries';
 import { StaleRateBanner } from '../features/rates/stale-rate-banner';
 import { SwitchesBanner } from '../features/settings/switches-banner';
+import { supportOpenCountQuery } from '../features/support/support.queries';
 import { type AdminSession, authClient, leaveSession, useSession } from '../lib/auth';
 import { ThemeToggle } from './theme-toggle';
 
@@ -58,6 +62,9 @@ interface NavItem {
     | 'nav.deposits'
     | 'nav.usdtTransfers'
     | 'nav.wallets'
+    | 'nav.customers'
+    | 'nav.support'
+    | 'nav.supportSettings'
     | 'nav.catalog'
     | 'nav.suppliers'
     | 'nav.pricing'
@@ -89,6 +96,8 @@ const navItems: NavItem[] = [
   },
   { to: '/deposits/transfers', label: 'nav.usdtTransfers', icon: CoinsIcon },
   { to: '/wallets', label: 'nav.wallets', icon: WalletIcon },
+  { to: '/customers', label: 'nav.customers', icon: ContactRoundIcon },
+  { to: '/support', label: 'nav.support', icon: LifeBuoyIcon },
   { to: '/catalog', label: 'nav.catalog', icon: Gamepad2Icon },
   { to: '/suppliers', label: 'nav.suppliers', icon: TruckIcon },
   { to: '/pricing', label: 'nav.pricing', icon: PercentIcon, except: '/pricing/reviews' },
@@ -97,6 +106,7 @@ const navItems: NavItem[] = [
   { to: '/settings/deposits', label: 'nav.depositSettings', icon: SettingsIcon },
   { to: '/settings/switches', label: 'nav.switches', icon: ToggleRightIcon },
   { to: '/settings/telegram', label: 'nav.telegram', icon: SendIcon },
+  { to: '/settings/support', label: 'nav.supportSettings', icon: MessageCircleQuestionIcon },
   { to: '/audit', label: 'nav.audit', icon: ScrollTextIcon },
   { to: '/test-customers', label: 'nav.testCustomers', icon: UsersRoundIcon },
   { to: '/account', label: 'nav.account', icon: UserRoundCogIcon },
@@ -171,6 +181,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             {to === '/deposits' && <DepositsBadge />}
             {to === '/deposits/transfers' && <TransfersBadge />}
             {to === '/pricing/reviews' && <ReviewsBadge />}
+            {to === '/support' && <SupportBadge />}
           </Link>
         ))}
       </nav>
@@ -253,6 +264,23 @@ function ReviewsBadge() {
       tone="gold"
       className="ms-auto tabular-nums"
       aria-label={t('nav.priceReviewsBadge', { open })}
+    >
+      {open}
+    </Badge>
+  );
+}
+
+/** S12 TK13: the tickets waiting for the admin's answer, read every minute in the background. */
+function SupportBadge() {
+  const { t } = useTranslation();
+  const count = useQuery(supportOpenCountQuery);
+  const open = count.data ?? 0;
+  if (open === 0) return null;
+  return (
+    <Badge
+      tone="gold"
+      className="ms-auto tabular-nums"
+      aria-label={t('nav.supportBadge', { open })}
     >
       {open}
     </Badge>

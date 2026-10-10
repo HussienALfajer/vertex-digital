@@ -4,12 +4,14 @@ import { Badge, Button, Card, CardTitle } from '@vertex-digital/ui';
 import { WalletIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatDateTime, formatSince, ltr } from '../../lib/format';
+import { CustomerMarks } from '../customers/customer-marks';
 import { depositAmount, STATUS_TONES } from './deposit-labels';
 import { Fact } from './fact';
 
 /**
  * Who sent the deposit (A10): account age, new or established (rule SC3), credited deposits, the
- * balance, a shared-phone note, and the last deposits with their codes (edge case 16).
+ * balance, a shared-phone note, and the last deposits with their codes (edge case 16). S12 CS6:
+ * the status chips, the pinned note and the signals, with the profile link.
  */
 export function CustomerPanel({ deposit }: { deposit: AdminDeposit }) {
   const { t } = useTranslation();
@@ -39,6 +41,7 @@ export function CustomerPanel({ deposit }: { deposit: AdminDeposit }) {
           {t('deposits.customer.wallet')}
         </Button>
       </div>
+      <CustomerMarks customerId={customer.id} marks={customer.marks} isTest={customer.isTest} />
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <Fact label={t('deposits.customer.since')}>
           <span title={formatDate(customer.createdAt)}>{formatSince(customer.createdAt)}</span>
