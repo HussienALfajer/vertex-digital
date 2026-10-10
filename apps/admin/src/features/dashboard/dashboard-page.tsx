@@ -34,6 +34,7 @@ import {
   CoinsIcon,
   HandIcon,
   HourglassIcon,
+  LifeBuoyIcon,
   type LucideIcon,
   ScaleIcon,
   SendIcon,
@@ -71,6 +72,7 @@ const ATTENTION_ICONS: Record<AttentionKind, LucideIcon> = {
   switches_active: ToggleRightIcon,
   order_conflicts: TriangleAlertIcon,
   telegram_unlinked: SendIcon,
+  tickets_waiting: LifeBuoyIcon,
 };
 
 const HEALTH_TONES = { healthy: 'success', degraded: 'warning', down: 'danger' } as const;

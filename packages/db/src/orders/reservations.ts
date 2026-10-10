@@ -9,13 +9,18 @@ import { and, asc, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Database, Transaction } from '../client.js';
 import {
+  lockActiveCustomer,
+  type PurchasingCustomer,
+  purchaseCapCheck,
+} from '../customers/guard.js';
+import {
   ensureSystemAccount,
   LedgerError,
   lockCustomerWallet,
   postJournal,
 } from '../ledger/index.js';
 import { notifyCustomer } from '../notifications/index.js';
-import { catalogProducts, customers, orders, storeSwitchChanges } from '../schema/index.js';
+import { catalogProducts, orders, storeSwitchChanges } from '../schema/index.js';
 import {
   availabilityNow,
   checkOrderFields,
@@ -156,6 +161,10 @@ export type PayOutcome =
   | 'skipped_closed'
   | 'skipped_unavailable'
   | 'skipped_balance'
+  /** S12 CF2: the customer was frozen meanwhile (a freeze cancels the reservations). */
+  | 'skipped_frozen'
+  /** S12 LM4: the payment would pass the daily purchase cap; tried again until it fits or expires. */
+  | 'skipped_cap'
   | 'cancelled_price_rose'
   | 'cancelled_product_changed';
 
@@ -197,7 +206,18 @@ export async function payWaitingOrders(
           stopped = true;
           return;
         }
-        outcome = await payOne(tx, context, id);
+        // S12 CF2: the customer `FOR SHARE` before the order, as a freeze locks them in that order.
+        let customer: PurchasingCustomer;
+        try {
+          customer = await lockActiveCustomer(tx, customerId);
+        } catch (error) {
+          if (error instanceof OrderError && error.code === 'ACCOUNT_FROZEN') {
+            outcome = 'skipped_frozen';
+            return;
+          }
+          throw error;
+        }
+        outcome = await payOne(tx, context, id, customer);
       });
     } catch (error) {
       if (!(error instanceof ShortBalance)) throw error;
@@ -213,6 +233,7 @@ async function payOne(
   tx: Transaction,
   context: Pick<OrderContext, 'jobs'> & { now: () => Date; fakeEnabled: boolean },
   orderId: string,
+  customer: PurchasingCustomer,
 ): Promise<PayOutcome> {
   const order = await lockOrder(tx, orderId);
   const now = context.now();
@@ -224,13 +245,9 @@ async function payOne(
     .from(catalogProducts)
     .where(eq(catalogProducts.id, order.productId))
     .for('share');
-  const [customer] = await tx
-    .select({ isTest: customers.isTest })
-    .from(customers)
-    .where(eq(customers.id, order.customerId));
   const usable = await routingNow(tx, order.productId, now, context.fakeEnabled);
   const current = usable?.current;
-  if (!usable || !current || availabilityNow(usable, customer?.isTest ?? false) !== 'available') {
+  if (!usable || !current || availabilityNow(usable, customer.isTest) !== 'available') {
     return 'skipped_unavailable';
   }
   const checked = await checkOrderFields(tx, order.gameId, order.fields);
@@ -259,6 +276,8 @@ async function payOne(
   const total = orderTotal(charge.unitPriceUsdUnits, order.quantity);
   const display = await displayTotal(tx, total);
   const wallet = await lockCustomerWallet(tx, order.customerId);
+  // S12 LM4: skipped while it would pass the cap; it stays reserved until it fits or expires.
+  if (await purchaseCapCheck(tx, customer, total)) return 'skipped_cap';
   const revenue = await ensureSystemAccount(tx, {
     code: 'sales_revenue:USD',
     kind: 'sales_revenue',

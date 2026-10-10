@@ -238,7 +238,7 @@ export class DepositCardJob implements OnApplicationBootstrap {
     }
     const [[customer], [credited], flags, [settings]] = await Promise.all([
       db
-        .select({ name: customers.name })
+        .select({ name: customers.name, frozenAt: customers.frozenAt })
         .from(customers)
         .where(eq(customers.id, deposit.customerId)),
       db
@@ -264,6 +264,7 @@ export class DepositCardJob implements OnApplicationBootstrap {
     ]);
     const refusal = telegramApprovalRefusal({
       method: deposit.method,
+      customerFrozen: (customer?.frozenAt ?? null) !== null,
       flagCount: flags.length,
       creditUsdUnits: deposit.declaredUsdUnits,
       limitUsdUnits: settings?.limit ?? 0,

@@ -3,7 +3,7 @@ import { LedgerError, OrderError } from '@vertex-digital/db';
 import { CodedException } from '../../core/errors/index.js';
 
 /** The HTTP status of each coded refusal of the order write path (S08 "API"). */
-const STATUS: Partial<Record<ErrorCode, 400 | 404 | 409>> = {
+const STATUS: Partial<Record<ErrorCode, 400 | 403 | 404 | 409>> = {
   NOT_FOUND: 404,
   VALIDATION_FAILED: 400,
   CODES_COUNT_MISMATCH: 400,
@@ -22,6 +22,9 @@ const STATUS: Partial<Record<ErrorCode, 400 | 404 | 409>> = {
   ROUTE_NOT_ELIGIBLE: 409,
   LOSS_NOT_CONFIRMED: 409,
   PROOF_INVALID: 400,
+  // S12 CF2, LM4.
+  ACCOUNT_FROZEN: 403,
+  PURCHASE_LIMIT_EXCEEDED: 409,
 };
 
 /** An `OrderError` or `LedgerError` as the API answers it; anything else is rethrown as is. */

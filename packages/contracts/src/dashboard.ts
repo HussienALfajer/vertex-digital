@@ -65,6 +65,8 @@ export const ATTENTION_KINDS = [
   'switches_active',
   'order_conflicts',
   'telegram_unlinked',
+  /** S12 TK13: tickets waiting for the admin, with the oldest customer message. */
+  'tickets_waiting',
 ] as const;
 
 export const attentionKindSchema = z.enum(ATTENTION_KINDS).meta({ id: 'AttentionKind' });

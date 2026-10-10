@@ -73,6 +73,14 @@ const OUTPUT = {
     maxInputPixels: UPLOAD_MAX_INPUT_PIXELS,
     invalidCode: 'IMAGE_INVALID',
   },
+  /** S12 TK11: a support message's image, re-encoded like a receipt. */
+  ticket_attachment: {
+    format: 'webp',
+    contentType: 'image/webp',
+    maxDimension: RECEIPT_MAX_DIMENSION,
+    maxInputPixels: UPLOAD_MAX_INPUT_PIXELS,
+    invalidCode: 'IMAGE_INVALID',
+  },
 } as const satisfies Record<StoredFileKind, unknown>;
 
 /** Formats accepted by their content, whatever the file name or declared type says (rule SC8). */

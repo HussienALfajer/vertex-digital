@@ -206,6 +206,8 @@ describe('append-only trigger', () => {
     );
     expect(rows.map((row) => row.name)).toEqual([
       'audit_entries',
+      // Its TRUNCATE trigger: rows are guarded by `customer_notes_guard` (customers/customers.test.ts).
+      'customer_notes',
       // Its TRUNCATE trigger: rows are guarded by `customer_notifications_guard`.
       'customer_notifications',
       'deposit_flags',
@@ -236,6 +238,10 @@ describe('append-only trigger', () => {
       'supplier_policy',
       // Its TRUNCATE trigger: rows are guarded by `supplier_webhook_events_guard`.
       'supplier_webhook_events',
+      'support_attachments',
+      'support_messages',
+      // Its TRUNCATE trigger: rows are guarded by `support_tickets_guard` (customers/customers.test.ts).
+      'support_tickets',
       // Its TRUNCATE trigger: rows are guarded by `usdt_deposits_guard` (deposits.test.ts).
       'usdt_deposits',
       'usdt_transfers',

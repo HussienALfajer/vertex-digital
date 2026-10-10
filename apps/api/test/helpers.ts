@@ -9,7 +9,10 @@ import {
   adminUsers,
   auditEntries,
   customerAccounts,
+  customerLimits,
+  customerNotes,
   customerNotifications,
+  customerSignIns,
   customers,
   type Database,
   deposits,
@@ -19,6 +22,7 @@ import {
   notificationPreferences,
   playerChecks,
   storeSwitchChanges,
+  supportTickets,
 } from '@vertex-digital/db';
 import { type Challenge, solveChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
@@ -124,6 +128,19 @@ const withoutWallet = (db: Database) =>
         .from(customerNotifications)
         .where(eq(customerNotifications.customerId, customers.id)),
     ),
+    // S12: notes and tickets are archived or closed, never deleted.
+    notExists(
+      db
+        .select({ id: customerNotes.id })
+        .from(customerNotes)
+        .where(eq(customerNotes.customerId, customers.id)),
+    ),
+    notExists(
+      db
+        .select({ id: supportTickets.id })
+        .from(supportTickets)
+        .where(eq(supportTickets.customerId, customers.id)),
+    ),
   );
 
 /**
@@ -136,6 +153,9 @@ export async function removeAccounts(db: Database, ids: string[]): Promise<void>
   await db.delete(notificationPreferences).where(inArray(notificationPreferences.customerId, ids));
   // S09: the player-check cache is not a record.
   await db.delete(playerChecks).where(inArray(playerChecks.customerId, ids));
+  // S12: the sign-in log and the limit overrides are not records.
+  await db.delete(customerSignIns).where(inArray(customerSignIns.customerId, ids));
+  await db.delete(customerLimits).where(inArray(customerLimits.customerId, ids));
   await db.delete(customers).where(and(inArray(customers.id, ids), withoutWallet(db)));
   await db.delete(adminUsers).where(inArray(adminUsers.id, ids));
 }
@@ -158,6 +178,8 @@ export async function removeLeftovers(db: Database): Promise<void> {
     .delete(notificationPreferences)
     .where(inArray(notificationPreferences.customerId, leftovers));
   await db.delete(playerChecks).where(inArray(playerChecks.customerId, leftovers));
+  await db.delete(customerSignIns).where(inArray(customerSignIns.customerId, leftovers));
+  await db.delete(customerLimits).where(inArray(customerLimits.customerId, leftovers));
   await db
     .delete(customers)
     .where(and(like(customers.email, `%${TEST_EMAIL_DOMAIN}`), withoutWallet(db)));

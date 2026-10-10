@@ -58,8 +58,9 @@ export class NotificationsService {
   async notifyCustomer<Event extends NotificationEvent>(
     tx: Transaction,
     input: CustomerNotificationInput<Event>,
+    options: { email?: boolean } = {},
   ): Promise<void> {
-    await notifyCustomer(tx, this.jobs, input);
+    await notifyCustomer(tx, this.jobs, input, options);
   }
 
   /** The customer's notifications, newest first, with the unread count (rule NT5). */

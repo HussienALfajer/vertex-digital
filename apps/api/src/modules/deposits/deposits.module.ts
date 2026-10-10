@@ -39,6 +39,6 @@ import { UsdtReviewService } from './usdt-review.service.js';
     UsdtDepositsService,
     UsdtReviewService,
   ],
-  exports: [DepositReviewService],
+  exports: [DepositReviewService, DepositSettingsService],
 })
 export class DepositsModule {}

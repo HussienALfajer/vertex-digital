@@ -25,6 +25,8 @@ import { SupplierHealthJob } from './jobs/suppliers/health.job.js';
 import { SupplierSyncJob } from './jobs/suppliers/sync.job.js';
 import { SupplierSyncScheduleJob } from './jobs/suppliers/sync-schedule.job.js';
 import { SupplierWebhookJob } from './jobs/suppliers/webhook.job.js';
+import { SupportAutoCloseJob } from './jobs/support/auto-close.job.js';
+import { PurgeSignInsJob } from './jobs/support/purge-sign-ins.job.js';
 import { HeartbeatJob } from './jobs/system/heartbeat.job.js';
 import { DailySummaryJob } from './jobs/telegram/daily-summary.job.js';
 import { DepositCardJob } from './jobs/telegram/deposit-card.job.js';
@@ -95,6 +97,8 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     OrdersWaitingSweepJob,
     SupplierWebhookJob,
     StoreRevalidateJob,
+    SupportAutoCloseJob,
+    PurgeSignInsJob,
   ],
 })
 export class WorkerModule implements OnApplicationBootstrap {

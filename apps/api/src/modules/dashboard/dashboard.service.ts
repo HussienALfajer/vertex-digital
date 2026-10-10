@@ -14,6 +14,7 @@ import { PricingService } from '../pricing/index.js';
 import { RatesService } from '../rates/index.js';
 import { SettingsService } from '../settings/index.js';
 import { SuppliersService } from '../suppliers/index.js';
+import { SupportAdminService } from '../support/index.js';
 import { TelegramService } from '../telegram/index.js';
 
 type Item = Omit<AttentionItem, 'oldestAt' | 'params' | 'orders'> &
@@ -34,11 +35,12 @@ export class DashboardService {
     private readonly rates: RatesService,
     private readonly settings: SettingsService,
     private readonly telegram: TelegramService,
+    private readonly support: SupportAdminService,
   ) {}
 
   async dashboard(now = new Date()): Promise<Dashboard> {
     const bounds = damascusDayBounds(now);
-    const [orders, deposits, suppliers, failing, reviews, rate, switches, telegram] =
+    const [orders, deposits, suppliers, failing, reviews, rate, switches, telegram, tickets] =
       await Promise.all([
         this.orders.figures(bounds, now),
         this.deposits.dashboardFigures(now, bounds.todayStart),
@@ -48,6 +50,7 @@ export class DashboardService {
         this.rates.current(),
         this.settings.adminSwitches(),
         this.telegram.status(),
+        this.support.waiting(),
       ]);
     const { today, yesterday, live } = orders;
     const profit = (period: typeof today) => period.salesUsdUnits - period.costUsdUnits;
@@ -92,6 +95,13 @@ export class DashboardService {
         oldestAt: orders.conflicts.newestAt,
         target: '/orders',
         orders: orders.conflicts.orders,
+      },
+      // S12 TK13: tickets waiting for the admin, with the oldest customer message.
+      {
+        kind: 'tickets_waiting',
+        count: tickets.count,
+        oldestAt: tickets.oldestAt,
+        target: '/support',
       },
       ...(telegram.link === null
         ? [{ kind: 'telegram_unlinked' as const, count: 1, target: '/settings/telegram' }]

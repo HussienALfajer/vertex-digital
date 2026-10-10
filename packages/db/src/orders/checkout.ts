@@ -6,9 +6,10 @@ import {
 import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Transaction } from '../client.js';
+import { checkPurchaseCap, lockActiveCustomer } from '../customers/guard.js';
 import { newId } from '../id.js';
 import { LedgerError, lockCustomerWallet, postJournal } from '../ledger/index.js';
-import { catalogProducts, checkouts, customers, orders } from '../schema/index.js';
+import { catalogProducts, checkouts, orders } from '../schema/index.js';
 import {
   displayTotal,
   insertOrder,
@@ -88,11 +89,8 @@ export async function checkoutOrders(
   }
   if (input.purchasesStopped) throw new OrderError('PURCHASES_STOPPED', 'Purchases are stopped');
 
-  const [customer] = await tx
-    .select({ isTest: customers.isTest })
-    .from(customers)
-    .where(eq(customers.id, input.customerId));
-  if (!customer) throw new Error(`Customer ${input.customerId} does not exist`);
+  // S12 CF2: the customer `FOR SHARE` before any write; a frozen customer is refused as a whole.
+  const customer = await lockActiveCustomer(tx, input.customerId);
   const productIds = [...new Set(input.lines.map((line) => line.productId))];
   const products = await tx
     .select()
@@ -140,6 +138,8 @@ export async function checkoutOrders(
     })),
   );
   const wallet = await lockCustomerWallet(tx, input.customerId);
+  // S12 LM4: the whole total against the cap, all or nothing (edge case 5).
+  await checkPurchaseCap(tx, customer, total);
   let journalId: string;
   try {
     const journal = await postJournal(tx, {

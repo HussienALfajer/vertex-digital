@@ -31,6 +31,8 @@ export interface DepositCustomer {
   isTest: boolean;
   createdAt: Date;
   archived: boolean;
+  /** S12 CF4: a frozen customer's deposit is approved in the panel only. */
+  frozen: boolean;
 }
 
 /** Owns the customer Better Auth instance: its HTTP handler and session lookups. */
@@ -94,11 +96,15 @@ export class AuthService {
         ...walletCustomerColumns,
         createdAt: customers.createdAt,
         archivedAt: customers.archivedAt,
+        frozenAt: customers.frozenAt,
       })
       .from(customers)
       .where(inArray(customers.id, [...ids]));
     return new Map(
-      rows.map(({ archivedAt, ...row }) => [row.id, { ...row, archived: archivedAt !== null }]),
+      rows.map(({ archivedAt, frozenAt, ...row }) => [
+        row.id,
+        { ...row, archived: archivedAt !== null, frozen: frozenAt !== null },
+      ]),
     );
   }
 

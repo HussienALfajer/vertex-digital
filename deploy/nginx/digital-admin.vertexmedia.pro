@@ -67,6 +67,14 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # Support tickets and replies (S12 TK11): up to 3 images of 5 MB, 16 MB a request.
+    location ~* ^/api/admin/support/tickets(?:/[0-9a-f-]{36}/messages)?/?$ {
+        client_max_body_size 16m;
+        client_body_timeout 60s;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # The admin stream (S11 rule LR4): server-sent events, passed on as they come, open for long.
     # The API sends a comment every 25 seconds, keeps 3 streams, 30 connects a minute, and
     # re-checks the session, like the store's notification stream.

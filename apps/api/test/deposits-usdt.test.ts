@@ -1141,14 +1141,20 @@ describe('the USDT transfers (rule U13) and the badge', () => {
   });
 
   it('filters the queue by method', async () => {
-    const { deposit } = await inReview(await customer());
+    const owner = await customer();
+    const { deposit } = await inReview(owner);
+    // Within one customer (S12 CS4): the shared test database keeps every run's deposits.
     const page = (await (
-      await client.get('/api/admin/deposits?method=usdt_trc20&limit=100', { cookie: admin.cookie })
+      await client.get(`/api/admin/deposits?method=usdt_trc20&customerId=${owner.id}`, {
+        cookie: admin.cookie,
+      })
     ).json()) as { items: { id: string; method: string }[] };
     expect(page.items.every((item) => item.method === 'usdt_trc20')).toBe(true);
     expect(page.items.map((item) => item.id)).toContain(deposit.id);
     const sham = (await (
-      await client.get('/api/admin/deposits?method=sham_cash&limit=100', { cookie: admin.cookie })
+      await client.get(`/api/admin/deposits?method=sham_cash&customerId=${owner.id}`, {
+        cookie: admin.cookie,
+      })
     ).json()) as { items: { id: string }[] };
     expect(sham.items.map((item) => item.id)).not.toContain(deposit.id);
   });

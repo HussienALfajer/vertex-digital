@@ -46,6 +46,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { Database, Transaction } from '../client.js';
+import { customerMarks } from '../customers/reads.js';
 import { newId } from '../id.js';
 import {
   catalogCategories,
@@ -450,6 +451,7 @@ function adminFilters(query: AdminOrderListQuery): SQL | undefined {
     );
   }
   if (query.productId) conditions.push(eq(orders.productId, query.productId));
+  if (query.customerId) conditions.push(eq(orders.customerId, query.customerId));
   if (query.supplier) {
     conditions.push(sql`exists (select 1 from ${fulfilmentAttempts}
       join ${suppliers} on ${suppliers.id} = ${fulfilmentAttempts.supplierId}
@@ -645,7 +647,11 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
     id: order.id,
     number: order.number,
     status: order.status,
-    customer: { ...row.customer, isTest: order.isTest },
+    customer: {
+      ...row.customer,
+      isTest: order.isTest,
+      marks: await customerMarks(db, order.customerId),
+    },
     product: row.product,
     game: row.game,
     fields,

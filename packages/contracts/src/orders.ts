@@ -11,6 +11,7 @@ import {
   productKindSchema,
   productSchema,
 } from './catalog.js';
+import { customerMarksSchema } from './customer-status.js';
 import { REFERENCE_CODE_ALPHABET, storedFileRefSchema } from './deposits.js';
 import { cursorQuerySchema, pagedListSchema, pageQuerySchema } from './lists.js';
 import { CURRENCY_SCALE, usdCentsSchema } from './money.js';
@@ -167,7 +168,14 @@ export const RESERVATION_HOURS = 24;
 export const RESERVATIONS_MAX = 3;
 
 /** Why an order was cancelled (rules RS7–RS9); set only on `cancelled` orders. */
-export const CANCEL_REASONS = ['expired', 'customer', 'price_rose', 'product_changed'] as const;
+/** `frozen` (S12 CF1): the admin froze the customer. */
+export const CANCEL_REASONS = [
+  'expired',
+  'customer',
+  'price_rose',
+  'product_changed',
+  'frozen',
+] as const;
 
 export const cancelReasonSchema = z.enum(CANCEL_REASONS).meta({ id: 'CancelReason' });
 
@@ -1212,6 +1220,8 @@ export const adminOrderListQuerySchema = pageQuerySchema
      */
     q: z.string().trim().min(1).max(100).optional(),
     productId: z.uuid().optional(),
+    /** S12 CS4: the customer profile's orders tab. */
+    customerId: z.uuid().optional(),
     supplier: supplierCodeSchema.optional(),
     test: booleanFilter,
     from: z.iso.datetime({ offset: true }).optional(),
@@ -1407,7 +1417,8 @@ export const adminOrderSchema = z
     id: z.uuid(),
     number: z.string(),
     status: orderStatusSchema,
-    customer: orderCustomer,
+    /** S12 CS6: the status, the pinned note and the signals beside the customer. */
+    customer: orderCustomer.extend({ marks: customerMarksSchema }),
     product: z.object({ id: z.uuid(), nameAr: z.string(), kind: productKindSchema }),
     game: z.object({ id: z.uuid(), nameAr: z.string() }),
     fields: z.array(orderFieldValue),

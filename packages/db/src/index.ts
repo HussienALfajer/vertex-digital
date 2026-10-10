@@ -1,5 +1,6 @@
 export * from './audit/index.js';
 export * from './client.js';
+export * from './customers/index.js';
 export * from './env.js';
 export * from './errors.js';
 export * from './id.js';
@@ -11,4 +12,5 @@ export * from './pricing/index.js';
 export * from './schema/index.js';
 export * from './store/index.js';
 export * from './suppliers/index.js';
+export * from './support/index.js';
 export * from './telegram/index.js';

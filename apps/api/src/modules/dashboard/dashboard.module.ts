@@ -5,13 +5,14 @@ import { PricingModule } from '../pricing/index.js';
 import { RatesModule } from '../rates/index.js';
 import { SettingsModule } from '../settings/index.js';
 import { SuppliersModule } from '../suppliers/index.js';
+import { SupportModule } from '../support/index.js';
 import { TelegramModule } from '../telegram/index.js';
 import { DashboardAdminController } from './dashboard.admin.controller.js';
 import { DashboardService } from './dashboard.service.js';
 
 /**
  * The panel's home page (S11, F18): a read module above `orders`, `deposits`, `suppliers`,
- * `pricing`, `rates`, `settings` and `telegram`, reading each through its service. Owns no table.
+ * `pricing`, `rates`, `settings`, `support` and `telegram`, reading each through its service. Owns no table.
  */
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { DashboardService } from './dashboard.service.js';
     RatesModule,
     SettingsModule,
     SuppliersModule,
+    SupportModule,
     TelegramModule,
   ],
   controllers: [DashboardAdminController],

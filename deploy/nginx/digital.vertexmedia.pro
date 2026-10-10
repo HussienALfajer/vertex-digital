@@ -155,11 +155,29 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # Support tickets and messages (S12 TK11): up to 3 images of 5 MB, 16 MB a request.
+    location ~* ^/api/support/tickets(?:/[0-9a-f-]{36}/messages)?/?$ {
+        client_max_body_size 16m;
+        client_body_timeout 60s;
+        limit_req zone=vdticket burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # The Sham Cash QR images, sent by nginx when the API answers with X-Accel-Redirect
     # (FILES_ACCEL_PREFIX). Internal: never reachable by a URL; QR images only on this host.
     location ^~ /internal-files/sham_cash_qr/ {
         internal;
         alias /srv/digital.vertexmedia.pro/shared/files/sham_cash_qr/;
+        include snippets/vertexdigital-store-headers.conf;
+    }
+
+    # Ticket images (S12 TK11), sent by nginx after the API checked the customer's own ticket holds
+    # the file; the API sets `no-store`.
+    location ^~ /internal-files/ticket_attachment/ {
+        internal;
+        alias /srv/digital.vertexmedia.pro/shared/files/ticket_attachment/;
         include snippets/vertexdigital-store-headers.conf;
     }
 

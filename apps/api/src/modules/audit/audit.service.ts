@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AuditEntry, AuditListQuery, AuditPage } from '@vertex-digital/contracts';
 import { auditEntries, type Database } from '@vertex-digital/db';
-import { and, desc, eq, getTableColumns, gte, lte, type SQL } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, gte, inArray, lte, type SQL } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { AdminAuthService } from '../admin/index.js';
@@ -19,8 +19,13 @@ export class AuditService {
     private readonly admins: AdminAuthService,
   ) {}
 
-  async list(query: AuditListQuery): Promise<AuditPage> {
+  /**
+   * `entityIds` (S12 CS4): the entries of these records only, for a customer's history (the
+   * customer, their orders, deposits and tickets).
+   */
+  async list(query: AuditListQuery, entityIds?: readonly string[]): Promise<AuditPage> {
     const filters: (SQL | undefined)[] = [
+      entityIds ? inArray(auditEntries.entityId, [...entityIds]) : undefined,
       query.actorKind ? eq(auditEntries.actorKind, query.actorKind) : undefined,
       query.actorId ? eq(auditEntries.actorId, query.actorId) : undefined,
       query.action ? eq(auditEntries.action, query.action) : undefined,

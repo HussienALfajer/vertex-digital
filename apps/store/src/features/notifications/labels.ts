@@ -87,6 +87,11 @@ export function notificationText(notification: CustomerNotification): string {
         summary: `${parts.join('، ')}${amount}`,
       });
     }
+    // S12 TK9: the ticket, never the reply.
+    case 'ticket_replied':
+      return t('notifications.events.ticket_replied', {
+        number: reference(notification.params.number),
+      });
   }
 }
 
@@ -101,6 +106,8 @@ export function notificationHref(notification: CustomerNotification): string {
       return `/wallet/deposits/${notification.params.depositId}`;
     case 'checkout_finished':
       return `/orders?checkout=${notification.params.checkoutId}`;
+    case 'ticket_replied':
+      return `/support/${notification.params.ticketId}`;
     default:
       return `/orders/${notification.params.orderId}`;
   }

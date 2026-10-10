@@ -25,6 +25,7 @@ import {
   supplierCalls,
   supplierStates,
   suppliers,
+  supportTickets,
   type Transaction,
   telegramPrompts,
   usdtTransferState,
@@ -230,7 +231,19 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       ...(await this.orderLines(db, dayStart)),
       ...(await this.reservationLines(db, dayStart)),
       ...(await this.checkoutLines(db, dayStart)),
+      ...(await this.ticketLines(db, dayStart)),
     };
+  }
+
+  /** S12 TK13: tickets opened today (test customers too: the admin acts on them), and waiting now. */
+  private async ticketLines(db: Database | Transaction, dayStart: SQL) {
+    const [row] = await db
+      .select({
+        opened: sql<number>`(count(*) filter (where ${supportTickets.createdAt} >= ${dayStart}))::int`,
+        waiting: sql<number>`(count(*) filter (where ${supportTickets.status} = 'open'))::int`,
+      })
+      .from(supportTickets);
+    return { ticketsOpened: row?.opened ?? 0, ticketsWaiting: row?.waiting ?? 0 };
   }
 
   /** S10: real customers' checkouts paid today, and how many orders they made. */
