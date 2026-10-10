@@ -442,6 +442,8 @@ describe('the messages of PR 4', () => {
       ],
       reservationsPaid: 4,
       reservationsExpired: 1,
+      checkouts: 2,
+      checkoutOrders: 5,
     };
     const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
     for (const line of [
@@ -458,6 +460,7 @@ describe('the messages of PR 4', () => {
       '⚠️ المورد WDGZone: متراجع',
       '💰 رصيد SHOP2TOPUP تحت الحد: $20.00',
       'الحجوزات اليوم: 4 دُفعت، 1 انتهت',
+      'سلال اليوم: 2 (5 طلبات)',
       'التحقق من المعرّف اليوم: SHOP2TOPUP 12، WDGZone 3',
     ]) {
       expect(text).toContain(line);

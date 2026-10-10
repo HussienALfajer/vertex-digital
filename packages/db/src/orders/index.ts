@@ -1,4 +1,11 @@
 export {
+  type CheckoutInput,
+  type CheckoutResult,
+  type CheckoutRow,
+  checkoutOrderRows,
+  checkoutOrders,
+} from './checkout.js';
+export {
   type AppliedOutcome,
   type AttemptOutcome,
   applyOutcome,
@@ -8,6 +15,7 @@ export {
 } from './outcome.js';
 export {
   checkOrderFields,
+  type LineInput,
   OrderError,
   type PlayerCheckLookup,
   type PurchaseInput,
@@ -17,12 +25,16 @@ export {
   adminOrder,
   adminOrderCounts,
   adminOrderPage,
+  customerCheckout,
   customerOrder,
   customerOrderPage,
+  customerSavedPlayers,
   openAttempt,
   productDeliveryStats,
+  publicShare,
   type RevealInput,
   revealCode,
+  sharePath,
 } from './reads.js';
 export {
   type CancelActor,
@@ -34,7 +46,14 @@ export {
   payWaitingOrders,
   purchasesStoppedLocked,
 } from './reservations.js';
+export {
+  findSavedPlayer,
+  type SavedPlayerRow,
+  savedPlayerHash,
+  touchSavedPlayer,
+} from './saved-players.js';
 export { decryptSecret, encryptSecret, orderCodesKey } from './secrets.js';
+export { createShareLink, type ShareLinkRow, shareToken } from './share-links.js';
 export {
   type AttemptRow,
   addOrderEvent,

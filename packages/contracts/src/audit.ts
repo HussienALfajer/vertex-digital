@@ -17,7 +17,12 @@ import {
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
 import { notificationEventSchema } from './notifications.js';
-import { cancelReasonSchema, orderPolicySchema, refundReasonSchema } from './orders.js';
+import {
+  cancelReasonSchema,
+  orderPolicySchema,
+  refundReasonSchema,
+  shareKindSchema,
+} from './orders.js';
 import { marginRuleValuesSchema, marginScopeSchema } from './pricing.js';
 import { displayStepSchema } from './rates.js';
 import { storeSwitchSchema } from './settings.js';
@@ -414,6 +419,9 @@ export const AUDIT_DETAILS = {
     journalId: z.uuid(),
     /** S09 rule RS6, for a reservation paid by the system: which unit price it took. */
     priceSource: z.enum(['saved', 'current']).optional(),
+    /** S10: the checkout that paid it (rule CT5), and a gift (rule GF1). */
+    checkoutId: z.uuid().optional(),
+    gift: z.boolean().optional(),
   }),
   /** S09 rule RS1: the customer reserved an order; no money moved. */
   'order.reserved': z.strictObject({
@@ -454,6 +462,8 @@ export const AUDIT_DETAILS = {
     units: z.int().positive(),
     amountUsdUnits: z.int().positive(),
   }),
+  /** S10 rule AD1: the admin revoked a share link, with the reason in the entry's `reason`. */
+  'order.share_revoked': z.strictObject({ linkId: z.uuid(), kind: shareKindSchema }),
   /** Rule C3: which stored item was shown, never its value. */
   'order.code_revealed': z.strictObject({ itemId: z.uuid(), position: z.int().positive() }),
   /** `before` is the policy in force, the seed included. */

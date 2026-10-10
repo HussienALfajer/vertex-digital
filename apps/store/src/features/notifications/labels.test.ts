@@ -62,6 +62,32 @@ describe('notification labels', () => {
     ).toBe('/wallet');
   });
 
+  it('sum up a finished checkout and lead to its orders (S10 rule CT8)', () => {
+    const checkoutId = '01920000-0000-7000-8000-000000000009';
+    const finished: CustomerNotification = {
+      ...base,
+      event: 'checkout_finished',
+      params: {
+        checkoutId,
+        orderCount: 5,
+        delivered: 3,
+        partiallyRefunded: 1,
+        refunded: 1,
+        refundedUsdUnits: 2_500_000,
+      },
+    };
+    expect(notificationText(finished)).toBe(
+      `اكتملت سلتك: سُلّم 3، سُلّم جزئياً 1، استُرد 1 (${ltr('$2.50')} أُعيدت إلى رصيدك).`,
+    );
+    expect(
+      notificationText({
+        ...finished,
+        params: { ...finished.params, partiallyRefunded: 0, refunded: 0, refundedUsdUnits: 0 },
+      }),
+    ).toBe('اكتملت سلتك: سُلّم 3.');
+    expect(notificationHref(finished)).toBe(`/orders?checkout=${checkoutId}`);
+  });
+
   it('badge nothing at 0 and 9+ above 9', () => {
     expect([0, 1, 9, 10, 120].map(badgeText)).toEqual([null, '1', '9', '9+', '9+']);
   });

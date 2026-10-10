@@ -13,6 +13,7 @@ import type { Database, Transaction } from '../client.js';
 import { newId } from '../id.js';
 import type { JobSender } from '../notifications/index.js';
 import { type fulfilmentAttempts, orderEvents, orderPolicy, orders } from '../schema/index.js';
+import { orderFinished } from './finish.js';
 
 /*
  * The order state machine's only writer (S08 "States and rules", ADR 0004, 0013): a status
@@ -109,8 +110,9 @@ export type OrderChanges = Partial<
 /**
  * Moves the order from its status to `to` (ADR 0004's table, `ORDER_TRANSITIONS`) with the
  * columns that follow the status: `finished_at` on a terminal status, `delivered_at` on
- * `delivered`, `review_since` while in `needs_review`. Writes the `status` event. Returns the
- * changed row, or null when the order was no longer in that status (a lost race).
+ * `delivered`, `review_since` while in `needs_review`. Writes the `status` event; on a terminal
+ * status, `orderFinished` (S10 rules SP6, CT7), which needs `jobs` for a checkout order. Returns
+ * the changed row, or null when the order was no longer in that status (a lost race).
  */
 export async function transitionOrder(
   tx: Transaction,
@@ -118,6 +120,7 @@ export async function transitionOrder(
   to: OrderStatus,
   event: OrderEventInput,
   changes: OrderChanges = {},
+  jobs?: JobSender,
 ): Promise<OrderRow | null> {
   if (!canTransitionOrder(order.status, to)) {
     throw new Error(`Order ${order.id}: ${order.status} → ${to} is not an allowed transition`);
@@ -135,6 +138,7 @@ export async function transitionOrder(
     .returning();
   if (!row) return null;
   await addOrderEvent(tx, order.id, 'status', event, { from: order.status, to });
+  if (isTerminalOrderStatus(to)) await orderFinished(tx, jobs, row);
   return row;
 }
 

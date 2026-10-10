@@ -24,6 +24,7 @@ import {
   routingNow,
   usableRouteCosts,
 } from './purchase.js';
+import { createShareLink } from './share-links.js';
 import {
   addOrderEvent,
   lockOrder,
@@ -81,6 +82,7 @@ export async function cancelReservation(
       reason,
     },
     { cancelReason: reason },
+    context.jobs,
   );
   if (!row) return null;
   await recordAudit(tx, {
@@ -316,8 +318,11 @@ async function payOne(
       totalUsdUnits: total,
       journalId,
       priceSource: charge.source,
+      ...(order.isGift && { gift: true }),
     },
   });
+  // S10 rule GF2: a reservation's gift link is made when it is paid.
+  if (order.isGift) await createShareLink(tx, { orderId: order.id, kind: 'gift' });
   const [product] = await tx
     .select({ nameAr: catalogProducts.nameAr })
     .from(catalogProducts)

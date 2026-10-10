@@ -258,6 +258,9 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     /** S09: real customers' reservations paid (A02) and expired (A15) today. */
     reservationsPaid: z.int().nonnegative().default(0),
     reservationsExpired: z.int().nonnegative().default(0),
+    /** S10: real customers' checkouts paid today, and their orders. */
+    checkouts: z.int().nonnegative().default(0),
+    checkoutOrders: z.int().nonnegative().default(0),
   }),
   bot_reply: telegramBotReplySchema,
   /** To the previous chat when another chat was linked (rule TG3). */

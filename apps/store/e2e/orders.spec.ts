@@ -57,6 +57,11 @@ function order(changes: Partial<Order> & { id: string }): Order {
     cancelReason: null,
     playerName: null,
     deliveryStats: null,
+    checkoutId: null,
+    isGift: false,
+    gift: null,
+    shareLinks: [],
+    repeatable: false,
     createdAt: '2026-10-09T10:00:00.000Z',
     ...changes,
   };
@@ -156,6 +161,9 @@ const summary = (item: Order): OrderSummary => ({
   totalUsdUnits: item.totalUsdUnits,
   totalSypUnits: item.totalSypUnits,
   expiresAt: item.expiresAt,
+  checkoutId: item.checkoutId,
+  isGift: item.isGift,
+  repeatable: item.repeatable,
   createdAt: item.createdAt,
 });
 
@@ -163,6 +171,7 @@ function withOrders(api: MockApi): MockApi {
   signedIn(api).on('GET /api/orders', 200, {
     items: Object.values(ORDERS).map(summary),
     nextCursor: null,
+    checkout: null,
   });
   for (const item of Object.values(ORDERS)) api.on(`GET /api/orders/${item.id}`, 200, item);
   return api;
@@ -170,7 +179,7 @@ function withOrders(api: MockApi): MockApi {
 
 test.describe('orders', () => {
   test('an empty list points to the games', async ({ page, api }) => {
-    signedIn(api).on('GET /api/orders', 200, { items: [], nextCursor: null });
+    signedIn(api).on('GET /api/orders', 200, { items: [], nextCursor: null, checkout: null });
     await page.goto('/orders');
     await expect(page.getByText(o.emptyTitle)).toBeVisible();
     await expect(page.getByRole('link', { name: o.browseGames })).toHaveAttribute('href', '/');
@@ -334,7 +343,7 @@ for (const theme of ['dark', 'light'] as const) {
     if (theme === 'light') {
       await page.addInitScript(() => localStorage.setItem('vertex-theme', 'light'));
     }
-    signedIn(api).on('GET /api/orders', 200, { items: [], nextCursor: null });
+    signedIn(api).on('GET /api/orders', 200, { items: [], nextCursor: null, checkout: null });
     await page.goto('/orders');
     await expect(page.getByText(o.emptyTitle)).toBeVisible();
     await screenshot(page, testInfo, `orders-empty-${theme}`);

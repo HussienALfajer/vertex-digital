@@ -405,6 +405,7 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
       ? []
       : [`وسيط وقت التسليم اليوم: ${durationText(summary.medianDeliveryMs)}`]),
     `الحجوزات اليوم: ${summary.reservationsPaid} دُفعت، ${summary.reservationsExpired} انتهت`,
+    `سلال اليوم: ${summary.checkouts} (${summary.checkoutOrders} طلبات)`,
     ...(summary.validations.length > 0
       ? [
           `التحقق من المعرّف اليوم: ${summary.validations.map((row) => `${row.supplierNameAr} ${row.count}`).join('، ')}`,

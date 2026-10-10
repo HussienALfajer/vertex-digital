@@ -175,6 +175,13 @@ export interface TimelineOrder {
   productNameAr: string;
 }
 
+/** The checkout of a `purchase` entry that paid several orders (S10 M1), in line order. */
+export interface TimelineCheckout {
+  id: string;
+  orderCount: number;
+  orders: TimelineOrder[];
+}
+
 export interface TimelineEntry {
   journalId: string;
   kind: JournalKind;
@@ -186,6 +193,7 @@ export interface TimelineEntry {
   adjustment: TimelineAdjustment | null;
   deposit: TimelineDeposit | null;
   order: TimelineOrder | null;
+  checkout: TimelineCheckout | null;
 }
 
 /**
@@ -238,7 +246,8 @@ export async function walletTimeline(
       balanceAfterUnits: balanceAfter,
       adjustment: adjustments.get(row.journalId) ?? null,
       deposit: depositsByJournal.get(row.journalId) ?? null,
-      order: ordersByJournal.get(row.journalId) ?? null,
+      order: ordersByJournal.orders.get(row.journalId) ?? null,
+      checkout: ordersByJournal.checkouts.get(row.journalId) ?? null,
     };
     balanceAfter -= amountUnits;
     return entry;
@@ -271,7 +280,11 @@ async function adjustmentsOf(
   return new Map(rows.map(({ journalId, ...adjustment }) => [journalId, adjustment]));
 }
 
-async function ordersOf(db: Executor, journalIds: string[]): Promise<Map<string, TimelineOrder>> {
+/** The order of each purchase or refund journal; a checkout's journal names its checkout. */
+async function ordersOf(
+  db: Executor,
+  journalIds: string[],
+): Promise<{ orders: Map<string, TimelineOrder>; checkouts: Map<string, TimelineCheckout> }> {
   const rows = await db
     .select({
       id: orders.id,
@@ -279,6 +292,8 @@ async function ordersOf(db: Executor, journalIds: string[]): Promise<Map<string,
       productNameAr: catalogProducts.nameAr,
       purchaseJournalId: orders.purchaseJournalId,
       refundJournalId: orders.refundJournalId,
+      checkoutId: orders.checkoutId,
+      checkoutLine: orders.checkoutLine,
     })
     .from(orders)
     .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
@@ -289,11 +304,24 @@ async function ordersOf(db: Executor, journalIds: string[]): Promise<Map<string,
       ),
     );
   const byJournal = new Map<string, TimelineOrder>();
-  for (const { purchaseJournalId, refundJournalId, ...order } of rows) {
-    if (purchaseJournalId) byJournal.set(purchaseJournalId, order);
+  const checkouts = new Map<string, TimelineCheckout>();
+  const lines = [...rows].sort((a, b) => (a.checkoutLine ?? 0) - (b.checkoutLine ?? 0));
+  for (const { purchaseJournalId, refundJournalId, checkoutId, checkoutLine, ...order } of lines) {
+    if (purchaseJournalId && checkoutId) {
+      const checkout = checkouts.get(purchaseJournalId) ?? {
+        id: checkoutId,
+        orderCount: 0,
+        orders: [],
+      };
+      checkout.orders.push(order);
+      checkout.orderCount = checkout.orders.length;
+      checkouts.set(purchaseJournalId, checkout);
+    } else if (purchaseJournalId) {
+      byJournal.set(purchaseJournalId, order);
+    }
     if (refundJournalId) byJournal.set(refundJournalId, order);
   }
-  return byJournal;
+  return { orders: byJournal, checkouts };
 }
 
 async function depositsOf(

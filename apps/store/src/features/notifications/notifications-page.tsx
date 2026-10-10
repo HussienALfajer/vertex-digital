@@ -16,6 +16,7 @@ import {
   PackageCheckIcon,
   PackageMinusIcon,
   ReceiptTextIcon,
+  ShoppingCartIcon,
   SlidersHorizontalIcon,
   Undo2Icon,
   WalletIcon,
@@ -48,6 +49,7 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   order_delayed: ClockAlertIcon,
   order_paid: WalletIcon,
   order_cancelled: CircleSlashIcon,
+  checkout_finished: ShoppingCartIcon,
 };
 
 /** Marks everything up to the newest shown as read and tells the bell (rule NT5). */

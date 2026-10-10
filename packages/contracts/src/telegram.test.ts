@@ -143,6 +143,8 @@ describe('Telegram messages', () => {
       validations: [],
       reservationsPaid: 0,
       reservationsExpired: 0,
+      checkouts: 0,
+      checkoutOrders: 0,
     });
   });
 

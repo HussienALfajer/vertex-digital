@@ -8,8 +8,11 @@ import {
   ORDER_STATUSES,
   PLAYER_CHECK_RESULTS,
   PLAYER_CHECK_STATES,
+  RECEIPT_PLAYER_DISPLAYS,
   REFUND_REASONS,
   type RouteCandidate,
+  SHARE_KINDS,
+  SHARE_REVOKERS,
 } from '@vertex-digital/contracts';
 import { sql } from 'drizzle-orm';
 import {
@@ -61,6 +64,12 @@ export const orderPlayerCheckEnum = pgEnum('order_player_check', PLAYER_CHECK_ST
 
 export const playerCheckResultEnum = pgEnum('player_check_result', PLAYER_CHECK_RESULTS);
 
+export const shareKindEnum = pgEnum('share_kind', SHARE_KINDS);
+
+export const receiptPlayerDisplayEnum = pgEnum('receipt_player_display', RECEIPT_PLAYER_DISPLAYS);
+
+export const shareRevokerEnum = pgEnum('share_revoker', SHARE_REVOKERS);
+
 /** The time of the insert, not of its transaction's start. */
 const insertedAt = () =>
   timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`);
@@ -107,10 +116,11 @@ export const orders = pgTable(
     /** The customer's `Idempotency-Key` and the SHA-256 of the canonical body (rule O1). */
     idempotencyKey: uuid('idempotency_key').notNull().unique(),
     requestHash: text('request_hash').notNull(),
-    /** Null only while reserved, or once a reservation is cancelled unpaid (S09 rule RS1). */
-    purchaseJournalId: uuid('purchase_journal_id')
-      .unique()
-      .references(() => ledgerJournals.id),
+    /**
+     * Null only while reserved, or once a reservation is cancelled unpaid (S09 rule RS1). Unique
+     * per order, except the orders of one checkout, which share their checkout's (S10 M1).
+     */
+    purchaseJournalId: uuid('purchase_journal_id').references(() => ledgerJournals.id),
     refundJournalId: uuid('refund_journal_id')
       .unique()
       .references(() => ledgerJournals.id),
@@ -127,9 +137,21 @@ export const orders = pgTable(
     /** S09 rule PV8: what the purchase knew of the player id, and the in-game name when valid. */
     playerCheck: orderPlayerCheckEnum('player_check').notNull().default('none'),
     playerName: text('player_name'),
+    /** S10 rule CT5: the checkout that paid the order, and its line there (1–10). */
+    checkoutId: uuid('checkout_id').references(() => checkouts.id),
+    checkoutLine: integer('checkout_line'),
+    /** S10 rule GF1: a direct top-up for someone else, with its optional texts. */
+    isGift: boolean('is_gift').notNull().default(false),
+    giftSenderName: text('gift_sender_name'),
+    giftMessage: text('gift_message'),
     ...timestamps(),
   },
   (table) => [
+    uniqueIndex('orders_purchase_journal_id_single_idx')
+      .on(table.purchaseJournalId)
+      .where(sql`${table.checkoutId} is null`),
+    index('orders_purchase_journal_id_idx').on(table.purchaseJournalId),
+    uniqueIndex('orders_checkout_id_checkout_line_idx').on(table.checkoutId, table.checkoutLine),
     index('orders_customer_id_created_at_idx').on(table.customerId, table.createdAt.desc()),
     index('orders_status_created_at_idx').on(table.status, table.createdAt),
     index('orders_created_at_idx').on(table.createdAt.desc()),
@@ -206,6 +228,157 @@ export const orders = pgTable(
       'orders_player_name_check',
       sql`${table.playerName} is null
         or (${table.playerCheck} = 'valid' and char_length(${table.playerName}) between 1 and 64)`,
+    ),
+    check(
+      'orders_checkout_check',
+      sql`(${table.checkoutId} is null) = (${table.checkoutLine} is null)
+        and ${table.checkoutLine} between 1 and 10
+        and (${table.checkoutId} is null or ${table.reservedAt} is null)`,
+    ),
+    check(
+      'orders_gift_check',
+      sql`(${table.isGift} or (${table.giftSenderName} is null and ${table.giftMessage} is null))
+        and (not ${table.isGift} or ${table.kind} = 'direct')
+        and char_length(${table.giftSenderName}) between 1 and 30
+        and char_length(${table.giftMessage}) between 1 and 140`,
+    ),
+  ],
+);
+
+/**
+ * A cart paid at once (S10 F16, rule CT5): one purchase journal for every line, each line its own
+ * order. Never deleted; only `finished_at` changes, once (rule CT7, migration 0037).
+ */
+export const checkouts = pgTable(
+  'checkouts',
+  {
+    id: id(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    /** The customer's test flag at checkout (S08 rule R4). */
+    isTest: boolean('is_test').notNull(),
+    /** The customer's `Idempotency-Key` and the SHA-256 of the canonical body (rule O1). */
+    idempotencyKey: uuid('idempotency_key').notNull().unique(),
+    requestHash: text('request_hash').notNull(),
+    lineCount: integer('line_count').notNull(),
+    totalUsdUnits: amountUnits('total_usd_units').notNull(),
+    /** The pounds shown (rule O6): display only. */
+    displayRateId: uuid('display_rate_id').references(() => exchangeRates.id),
+    totalSypUnits: amountUnits('total_syp_units'),
+    purchaseJournalId: uuid('purchase_journal_id')
+      .notNull()
+      .unique()
+      .references(() => ledgerJournals.id),
+    /** Set once, when the last of its orders reached a terminal status (rule CT7). */
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    index('checkouts_customer_id_created_at_idx').on(table.customerId, table.createdAt.desc()),
+    index('checkouts_display_rate_id_idx').on(table.displayRateId),
+    check('checkouts_line_count_check', sql`${table.lineCount} between 1 and 10`),
+    check(
+      'checkouts_total_check',
+      sql`${table.totalUsdUnits} > 0 and ${table.totalUsdUnits} % 10000 = 0`,
+    ),
+    check(
+      'checkouts_syp_check',
+      sql`(${table.displayRateId} is null) = (${table.totalSypUnits} is null) and ${table.totalSypUnits} >= 0`,
+    ),
+    check('checkouts_request_hash_check', sql`${table.requestHash} ~ '^[0-9a-f]{64}$'`),
+  ],
+);
+
+/**
+ * A customer's saved player id for a game (S10 F14, rules SP1–SP7): their own data, not a
+ * business record. Deleted for real by the customer; orders keep their own copy of the fields.
+ */
+export const savedPlayers = pgTable(
+  'saved_players',
+  {
+    id: id(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => catalogGames.id),
+    label: text('label').notNull(),
+    /** Input field key → value, trimmed, as `orders.fields`. */
+    fields: jsonb('fields').$type<Record<string, string>>().notNull(),
+    /** SHA-256 of the game id and `canonicalFields` (contracts). */
+    fieldsHash: text('fields_hash').notNull(),
+    /** From a `valid` order only (rule SP2). */
+    playerName: text('player_name'),
+    nameCheckedAt: timestamp('name_checked_at', { withTimezone: true }),
+    /** A supplier refused these fields (rule SP6); cleared by a later delivery. */
+    rejectedAt: timestamp('rejected_at', { withTimezone: true }),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex('saved_players_customer_id_game_id_fields_hash_idx').on(
+      table.customerId,
+      table.gameId,
+      table.fieldsHash,
+    ),
+    index('saved_players_customer_id_game_id_last_used_at_idx').on(
+      table.customerId,
+      table.gameId,
+      table.lastUsedAt.desc(),
+    ),
+    index('saved_players_game_id_idx').on(table.gameId),
+    check('saved_players_label_check', sql`char_length(${table.label}) between 1 and 30`),
+    check('saved_players_fields_check', sql`jsonb_typeof(${table.fields}) = 'object'`),
+    check('saved_players_fields_hash_check', sql`${table.fieldsHash} ~ '^[0-9a-f]{64}$'`),
+    check(
+      'saved_players_player_name_check',
+      sql`(${table.playerName} is null) = (${table.nameCheckedAt} is null)
+        and char_length(${table.playerName}) between 1 and 64`,
+    ),
+  ],
+);
+
+/**
+ * A public link to an order (S10 rules GF4, RC1–RC3, SH1): a gift page or a receipt. Never
+ * deleted; one live link of each kind per order; a revoked link never changes (migration 0037).
+ */
+export const orderShareLinks = pgTable(
+  'order_share_links',
+  {
+    id: id(),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id),
+    kind: shareKindEnum('kind').notNull(),
+    /** 22 base64url characters from 16 CSPRNG bytes. */
+    token: text('token').notNull().unique(),
+    /** Receipts only; false for a gift. */
+    showPrice: boolean('show_price').notNull(),
+    /** Always `masked` for a gift. */
+    playerDisplay: receiptPlayerDisplayEnum('player_display').notNull().default('masked'),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    revokedBy: shareRevokerEnum('revoked_by'),
+    /** The admin's reason (rule AD1); a customer gives none. */
+    revokeReason: text('revoke_reason'),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex('order_share_links_live_idx')
+      .on(table.orderId, table.kind)
+      .where(sql`${table.revokedAt} is null`),
+    index('order_share_links_order_id_idx').on(table.orderId),
+    check('order_share_links_token_check', sql`${table.token} ~ '^[A-Za-z0-9_-]{22}$'`),
+    check(
+      'order_share_links_gift_check',
+      sql`${table.kind} = 'receipt' or (not ${table.showPrice} and ${table.playerDisplay} = 'masked')`,
+    ),
+    check(
+      'order_share_links_revoked_check',
+      sql`(${table.revokedAt} is null) = (${table.revokedBy} is null)
+        and (${table.revokedBy} = 'admin') = (${table.revokeReason} is not null)
+        and char_length(${table.revokeReason}) between 5 and 500`,
     ),
   ],
 );

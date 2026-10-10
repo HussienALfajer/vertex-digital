@@ -2,13 +2,16 @@
  * Buys a product for a customer at its current price (S08, development only: refused in
  * production), through the same service as `POST /api/orders`. S09: `--reserve` reserves the
  * order when the balance is short (`whenBalanceShort: 'reserve'`), `--confirm-player` confirms a
- * player id that is not known valid. Prints the order number and stage.
+ * player id that is not known valid. S10: `--save <label>` saves the player id, `--gift-sender`
+ * and `--gift-message` make it a gift. Prints the order number and stage.
  *
  *   pnpm --filter @vertex-digital/api order:place --email <customer> --product <id>
  *     [--quantity <n>] [--field <key>=<value>]… [--reserve] [--confirm-player]
+ *     [--save <label>] [--gift-sender <name>] [--gift-message <text>]
  */
 import { parseArgs } from 'node:util';
 import { NestFactory } from '@nestjs/core';
+import { giftSchema, savedPlayerLabelSchema } from '@vertex-digital/contracts';
 import { loadRootEnv } from '@vertex-digital/db';
 import { z } from 'zod';
 import { AppModule } from '../app.module.js';
@@ -25,6 +28,9 @@ const argsSchema = z.object({
     .default([]),
   reserve: z.boolean().default(false),
   'confirm-player': z.boolean().default(false),
+  save: savedPlayerLabelSchema.optional(),
+  'gift-sender': giftSchema.shape.senderName,
+  'gift-message': giftSchema.shape.message,
 });
 
 loadRootEnv();
@@ -36,11 +42,14 @@ const { values } = parseArgs({
     field: { type: 'string', multiple: true },
     reserve: { type: 'boolean' },
     'confirm-player': { type: 'boolean' },
+    save: { type: 'string' },
+    'gift-sender': { type: 'string' },
+    'gift-message': { type: 'string' },
   },
 });
 const parsed = argsSchema.safeParse(values);
 if (!parsed.success) {
-  console.error(`Usage: order:place --email <customer> --product <id> [--quantity <n>] [--field <key>=<value>]… [--reserve] [--confirm-player]\n
+  console.error(`Usage: order:place --email <customer> --product <id> [--quantity <n>] [--field <key>=<value>]… [--reserve] [--confirm-player] [--save <label>] [--gift-sender <name>] [--gift-message <text>]\n
 ${z.prettifyError(parsed.error)}`);
   process.exit(1);
 }
@@ -64,9 +73,18 @@ try {
     ),
     reserve: args.reserve,
     confirmPlayer: args['confirm-player'],
+    ...(args.save && { saveLabel: args.save }),
+    ...((args['gift-sender'] !== undefined || args['gift-message'] !== undefined) && {
+      gift: {
+        ...(args['gift-sender'] && { senderName: args['gift-sender'] }),
+        ...(args['gift-message'] && { message: args['gift-message'] }),
+      },
+    }),
   });
   const verb = order.stage === 'awaiting_balance' ? 'Reserved' : 'Paid';
   process.stdout.write(`${verb} ${order.number} (${order.stage}): ${order.id}\n`);
+  if (order.savedPlayer) process.stdout.write(`Saved player id: ${order.savedPlayer.label}\n`);
+  for (const link of order.shareLinks) process.stdout.write(`Gift link: ${link.url}\n`);
 } catch (error) {
   if (!(error instanceof CodedException)) throw error;
   const { details } = error.getResponse() as { details?: unknown };

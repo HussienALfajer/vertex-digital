@@ -14,7 +14,8 @@
     "admin:reset-password": "node dist/cli/reset-password.js",
     "admin:reset-two-factor": "node dist/cli/reset-two-factor.js",
     "telegram:fake-update": "node dist/cli/telegram-fake-update.js",
-    "order:place": "node dist/cli/place-order.js"
+    "order:place": "node dist/cli/place-order.js",
+    "checkout:place": "node dist/cli/place-checkout.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",

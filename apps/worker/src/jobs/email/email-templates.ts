@@ -227,6 +227,32 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     ],
     link: orderPage(orderId),
   }),
+  // S10 rule CT8: the counts and the refund, never fields, codes or gift texts.
+  customer_checkout_finished: ({
+    at,
+    checkoutId,
+    orderCount,
+    delivered,
+    partiallyRefunded,
+    refunded,
+    refundedUsdUnits,
+  }) => {
+    const counts = [
+      delivered > 0 && `سُلّم ${delivered}`,
+      partiallyRefunded > 0 && `سُلّم جزئياً ${partiallyRefunded}`,
+      refunded > 0 && `استُرد ${refunded}`,
+    ].filter((part) => part !== false);
+    return {
+      subject: `اكتملت سلتك: ${counts.join('، ')}`,
+      lines: [
+        `اكتملت طلبات سلتك (${orderCount}) بتاريخ ${formatTime(at)}: ${counts.join('، ')}.`,
+        ...(refundedUsdUnits > 0
+          ? [`أُعيد ${formatUsd(refundedUsdUnits)} إلى رصيد محفظتك عن ما لم يُسلَّم.`]
+          : []),
+      ],
+      link: { label: 'عرض طلبات السلة', path: `/orders?checkout=${checkoutId}` },
+    };
+  },
 };
 
 const escapeHtml = (value: string) =>

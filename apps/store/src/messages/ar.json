@@ -154,7 +154,8 @@
         "order_delivered": "عند تسليم طلب",
         "order_partially_refunded": "عند تسليم جزء من طلب واسترداد الباقي",
         "order_refunded": "عند استرداد مبلغ طلب",
-        "order_cancelled": "عند إلغاء طلب محجوز"
+        "order_cancelled": "عند إلغاء طلب محجوز",
+        "checkout_finished": "عند اكتمال كل طلبات سلة"
       },
       "emailLabel": "البريد: {event}",
       "security": "رسائل الأمان (رموز التحقق، تغيير كلمة المرور، تسجيل دخول جديد)",
@@ -202,7 +203,8 @@
     },
     "orderKinds": {
       "purchase": "شراء: {product}",
-      "refund": "استرداد: {product}"
+      "refund": "استرداد: {product}",
+      "checkout": "شراء سلة: {count} طلبات"
     }
   },
   "deposits": {
@@ -454,7 +456,12 @@
       "order_refunded": "أُعيد {amount} إلى رصيدك عن طلبك {product} ({number}): {reason}.",
       "order_delayed": "تأخّر المورد في طلبك {product} ({number}). نتحقق منه وسنعلمك.",
       "order_paid": "تم دفع طلبك المحجوز {product} ({number}).",
-      "order_cancelled": "أُلغي طلبك المحجوز {product} ({number}): {reason}."
+      "order_cancelled": "أُلغي طلبك المحجوز {product} ({number}): {reason}.",
+      "checkout_finished": "اكتملت سلتك: {summary}.",
+      "checkout_finished_delivered": "سُلّم {count}",
+      "checkout_finished_partial": "سُلّم جزئياً {count}",
+      "checkout_finished_refunded": "استُرد {count}",
+      "checkout_finished_amount": "({amount} أُعيدت إلى رصيدك)"
     }
   },
   "errors": {
@@ -497,7 +504,9 @@
     "IDEMPOTENCY_KEY_REUSED": "أُرسل هذا الطلب من قبل ببيانات أخرى. حدّث الصفحة وأعد المحاولة.",
     "PLAYER_NOT_CONFIRMED": "لم نتمكن من التأكد من المعرّف. تأكّد منه بنفسك وأشّر على «أنا متأكد من المعرّف».",
     "RESERVATIONS_LIMIT_REACHED": "لديك 3 طلبات محجوزة. ألغِ أحدها أو اشحن رصيدك.",
-    "ORDER_NOT_CANCELLABLE": "لا يمكن إلغاء هذا الطلب، فقد دُفع أو انتهى."
+    "ORDER_NOT_CANCELLABLE": "لا يمكن إلغاء هذا الطلب، فقد دُفع أو انتهى.",
+    "CHECKOUT_REFUSED": "لم تُدفع السلة: بعض البنود تحتاج تعديلًا. راجع البنود المعلّمة ثم اسحب مجددًا.",
+    "ORDER_NOT_SHAREABLE": "لا يمكن مشاركة هذا الطلب الآن."
   },
   "notFound": {
     "title": "الصفحة غير موجودة",

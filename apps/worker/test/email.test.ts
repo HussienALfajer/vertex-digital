@@ -188,6 +188,41 @@ describe('the order emails (S08)', () => {
     expect(email.text).toContain('لم يُخصم من رصيدك شيء');
     expect(email.html).toContain(`href="${link}"`);
   });
+
+  it('sums up a finished checkout with its refund, never fields (S10 rule CT8)', () => {
+    const checkoutId = '01920000-0000-7000-8000-000000000099';
+    const email = renderEmail(
+      'customer_checkout_finished',
+      {
+        at: order.at,
+        checkoutId,
+        orderCount: 5,
+        delivered: 3,
+        partiallyRefunded: 1,
+        refunded: 1,
+        refundedUsdUnits: 2_500_000,
+      },
+      store,
+    );
+    expect(email.subject).toBe('اكتملت سلتك: سُلّم 3، سُلّم جزئياً 1، استُرد 1');
+    expect(email.text).toContain('أُعيد $2.50 إلى رصيد محفظتك');
+    expect(email.html).toContain(`href="${store}/orders?checkout=${checkoutId}"`);
+    const clean = renderEmail(
+      'customer_checkout_finished',
+      {
+        at: order.at,
+        checkoutId,
+        orderCount: 2,
+        delivered: 2,
+        partiallyRefunded: 0,
+        refunded: 0,
+        refundedUsdUnits: 0,
+      },
+      store,
+    );
+    expect(clean.subject).toBe('اكتملت سلتك: سُلّم 2');
+    expect(clean.text).not.toContain('أُعيد');
+  });
 });
 
 describe('email.send', () => {

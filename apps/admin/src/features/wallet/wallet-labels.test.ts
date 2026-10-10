@@ -29,6 +29,7 @@ const entry = (changes: Partial<AdminWalletEntry>): AdminWalletEntry => ({
   adjustment,
   deposit: null,
   order: null,
+  checkout: null,
   ...changes,
 });
 

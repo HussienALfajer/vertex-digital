@@ -24,8 +24,10 @@ import {
   type PollAttempt,
   pollAttemptSchema,
   type RefundOrder,
+  type RevokeShareLink,
   refundOrderSchema,
   resolveAttemptSchema,
+  revokeShareLinkSchema,
 } from '@vertex-digital/contracts';
 import type { Request } from 'express';
 import type { z } from 'zod';
@@ -35,6 +37,7 @@ import { ApiIdempotencyKey, IdempotencyKey } from '../../core/http/idempotency-k
 import { requestMeta } from '../../core/http/request-meta.js';
 import type { AdminIdentity } from '../admin/index.js';
 import { OrderDecisionsService } from './order-decisions.service.js';
+import { ShareLinksService } from './share-links.service.js';
 
 /**
  * The admin's orders (S08 rules D1–D6, C3): every decision, reveal and policy change needs a
@@ -44,7 +47,35 @@ import { OrderDecisionsService } from './order-decisions.service.js';
 @ApiTags('orders')
 @Controller('admin/orders')
 export class OrdersAdminController {
-  constructor(private readonly decisions: OrderDecisionsService) {}
+  constructor(
+    private readonly decisions: OrderDecisionsService,
+    private readonly shareLinks: ShareLinksService,
+  ) {}
+
+  /** S10 rule AD1: removes exposure only, so no re-authentication; audited with the reason. */
+  @Post(':id/share-links/:linkId/revoke')
+  @AdminRoute()
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: adminOrderSchema })
+  @ApiOkResponse({
+    description: 'The order with the link revoked',
+    standardSchema: adminOrderSchema,
+  })
+  revokeShareLink(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id') id: string,
+    @Param('linkId') linkId: string,
+    @Body({ schema: revokeShareLinkSchema }) body: RevokeShareLink,
+    @Req() request: Request,
+  ) {
+    return this.shareLinks.adminRevoke(
+      { adminId: admin.id, meta: requestMeta(request) },
+      id,
+      linkId,
+      body.reason,
+    );
+  }
 
   @Get()
   @AdminRoute()
