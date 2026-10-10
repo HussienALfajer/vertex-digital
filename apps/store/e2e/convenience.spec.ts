@@ -664,6 +664,8 @@ test.describe('"معرّفاتي" (SP5)', () => {
       .getByRole('alertdialog')
       .getByRole('button', { name: ar.players.deleteConfirm })
       .click();
+    // The closing dialog still names the ID: wait for it, then for the row.
+    await expect(page.getByRole('alertdialog')).toBeHidden();
     await expect(page.getByText('أخي الصغير')).toBeHidden();
 
     await page.getByRole('link', { name: ar.players.topUp }).click();
