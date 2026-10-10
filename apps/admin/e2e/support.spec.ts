@@ -257,7 +257,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
       await page.goto('/settings/support');
       await page.getByLabel(s.settings.telegram).fill('https://t.me/vertex_support');
-      await expect(page.getByText(s.settings.previewLabel)).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: new RegExp(s.settings.previewLabel) }),
+      ).toBeVisible();
       await screenshot(page, testInfo, `support-settings-${colorScheme}`);
     });
   });
