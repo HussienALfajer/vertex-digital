@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { isAbsolute, resolve } from 'node:path';
+import path, { isAbsolute, type PlatformPath, resolve } from 'node:path';
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import {
   QUEUES,
@@ -194,10 +194,9 @@ export class DepositCardJob implements OnApplicationBootstrap {
       .orderBy(desc(depositReceipts.createdAt), desc(depositReceipts.id))
       .limit(1);
     if (!receipt) return null;
-    const path = resolve(this.filesRoot, receipt.storageKey);
-    if (!path.startsWith(`${this.filesRoot}/`)) throw new Error('A file key left the files root');
+    const file = pathUnderRoot(this.filesRoot, receipt.storageKey);
     try {
-      return await sharp(await readFile(path))
+      return await sharp(await readFile(file))
         .jpeg({ quality: 85 })
         .toBuffer();
     } catch (error) {
@@ -320,4 +319,18 @@ function keyboard(message: RenderedTelegramMessage) {
   return (message.buttons ?? []).map((row) =>
     row.map((button) => ({ text: button.text, callback_data: button.data })),
   );
+}
+
+/**
+ * The absolute path of a key under the files root; throws when the key leaves it. `paths` is the
+ * platform's path module (posix or win32), so both separators are checked the same way. Same check
+ * as the API's file storage (apps/api/src/modules/files/file-storage.ts).
+ */
+export function pathUnderRoot(root: string, key: string, paths: PlatformPath = path): string {
+  const full = paths.resolve(root, key);
+  const relative = paths.relative(root, full);
+  if (relative === '' || relative.startsWith('..') || paths.isAbsolute(relative)) {
+    throw new Error('A file key left the files root');
+  }
+  return full;
 }
