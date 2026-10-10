@@ -28,6 +28,7 @@ Short records of decisions that shape the system. Each has a status: **Accepted*
 | [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) | Orders: polling then held for the admin after 30 minutes, unknown outcomes re-sent with the same key, four re-authenticated admin decisions, delivered is final, manual cards, input rejections refunded at once, test orders on `fake` and `manual` only, logged code reveal, delivery time over 50 orders (amends 0004, 0005) | Accepted |
 | [0023](0023-reservations-and-player-validation.md) | Reservations: 3 per customer for 24 hours, paid after a deposit at the lower of the saved and current price, skipping what the balance cannot cover; player validation cached and limited, a "not found" a warning the customer confirms (amends 0004) | Accepted |
 | [0024](0024-cart-checkout-saved-ids-and-share-links.md) | Cart checkout in one purchase journal shared by its orders, all or nothing, one summary email; saved player IDs as customer-confirmed; revocable public gift and receipt links that never show codes (amends 0003, 0004) | Accepted |
+| [0025](0025-live-operations-reroute-manual-fulfil-dashboard.md) | Live operations: admin reroute to an eligible profitable route and manual fulfil with a screenshot and the actual cost (held and manual orders only), refund of manual orders, dashboard sales and profit by delivered orders of real customers, today against yesterday to the same hour (amends 0004, 0022) | Accepted |
 
 Template:
 
