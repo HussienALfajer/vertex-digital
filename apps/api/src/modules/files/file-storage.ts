@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { access, link, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import path, { dirname, type PlatformPath, resolve } from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
 import { ENV, type Env } from '../../core/config/env.js';
 
@@ -64,8 +64,19 @@ export class FileStorage {
   }
 
   private path(key: string): string {
-    const path = resolve(this.root, key);
-    if (!path.startsWith(`${this.root}/`)) throw new Error('A file key left the files root');
-    return path;
+    return pathUnderRoot(this.root, key);
   }
+}
+
+/**
+ * The absolute path of a key under the files root; throws when the key leaves it. `paths` is the
+ * platform's path module (posix or win32), so both separators are checked the same way.
+ */
+export function pathUnderRoot(root: string, key: string, paths: PlatformPath = path): string {
+  const full = paths.resolve(root, key);
+  const relative = paths.relative(root, full);
+  if (relative === '' || relative.startsWith('..') || paths.isAbsolute(relative)) {
+    throw new Error('A file key left the files root');
+  }
+  return full;
 }
