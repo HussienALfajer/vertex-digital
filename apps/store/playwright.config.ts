@@ -1,5 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
-import { CATALOG_PORT, E2E_REVALIDATE_SECRET, EMPTY_STORE_URL } from './e2e/servers';
+import {
+  CATALOG_PORT,
+  CONTENT_STORE_URL,
+  E2E_REVALIDATE_SECRET,
+  EMPTY_STORE_URL,
+} from './e2e/servers';
 
 const baseURL = 'http://127.0.0.1:4001';
 
@@ -47,6 +52,12 @@ export default defineConfig({
       command: 'pnpm start --port 4003',
       url: EMPTY_STORE_URL,
       env: storeEnv(`http://127.0.0.1:${CATALOG_PORT}/empty`, 4003),
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: 'pnpm start --port 4004',
+      url: CONTENT_STORE_URL,
+      env: storeEnv(`http://127.0.0.1:${CATALOG_PORT}/content`, 4004),
       reuseExistingServer: !process.env.CI,
     },
   ],

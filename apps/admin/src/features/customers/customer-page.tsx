@@ -34,7 +34,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { errorMessage } from '../../lib/errors';
-import { formatDateTime } from '../../lib/format';
+import { formatDate, formatDateTime } from '../../lib/format';
 import { LimitsDialog, StateChangeDialog } from './customer-dialogs';
 import { CHIP_TONES, type CustomerChip, statusChips } from './customer-labels';
 import { NotesSection } from './customer-notes';
@@ -185,6 +185,7 @@ function Header({ customer }: { customer: AdminCustomer }) {
         <span dir="ltr" className="text-end text-muted-foreground tabular-nums">
           {customer.phone}
         </span>
+        <AcceptedVersions customer={customer} />
       </div>
       <div className="flex flex-col gap-1">
         <span className="text-sm text-muted-foreground">{t('customers.profile.balance')}</span>
@@ -193,6 +194,32 @@ function Header({ customer }: { customer: AdminCustomer }) {
         </span>
       </div>
     </Card>
+  );
+}
+
+/**
+ * S14 TA3: the terms and privacy versions in force at sign-up, or "قبل نشر …" for a customer who
+ * signed up before the page was published.
+ */
+function AcceptedVersions({ customer }: { customer: AdminCustomer }) {
+  const { t } = useTranslation();
+  const pages = [
+    ['terms', customer.termsVersion],
+    ['privacy', customer.privacyVersion],
+  ] as const;
+  return (
+    <ul className="flex flex-col text-sm text-muted-foreground" data-testid="accepted-versions">
+      {pages.map(([page, accepted]) => (
+        <li key={page}>
+          {accepted
+            ? t(`customers.profile.accepted.${page}`, {
+                version: accepted.version,
+                date: formatDate(accepted.publishedAt),
+              })
+            : t(`customers.profile.accepted.${page}Before`)}
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -1,6 +1,7 @@
 import { gzipSync } from 'node:zlib';
 import type { Page } from '@playwright/test';
 import ar from '../src/messages/ar.json' with { type: 'json' };
+import { CONTENT_STORE_URL } from './servers';
 import { expect, screenshot, test } from './test';
 
 const lightTheme = () => localStorage.setItem('vertex-theme', 'light');
@@ -102,8 +103,10 @@ for (const theme of ['dark', 'light'] as const) {
 // Script raised from 200 (S05 PR 2): the whole Arabic catalog (`src/messages/ar.json`) ships in
 // the first load, so each feature's strings add to it; the notification strings took it to 201.
 // Raised to 210 (S09 PR 3): the catalog, buy box, search and reservation strings took it to 206;
-// S10's strings and the header's cart button took it to 209 (S10 PR 2).
-const BUDGET_KB = { script: 210, stylesheet: 20 };
+// S10's strings and the header's cart button took it to 209 (S10 PR 2). Raised to 215 (S14 PR 2,
+// as S14 SL5 allows): the content strings (1 KB) and the banner carousel's and the announcement's
+// close button's client parts took it to 212.
+const BUDGET_KB = { script: 215, stylesheet: 20 };
 
 /**
  * The game page (S09): the home page's first load plus the buy box, the calculator and the
@@ -173,3 +176,26 @@ test('a share page stays within its performance budget', async ({ page, api: _ap
   expect(kb.script).toBeLessThanOrEqual(SHARE_BUDGET_KB.script);
   expect(kb.stylesheet).toBeLessThanOrEqual(SHARE_BUDGET_KB.stylesheet);
 });
+
+/**
+ * S14 SL5: the home page with the announcement, two banners and the activity card keeps the home
+ * budget (the carousel is the only client part added); the four pages and `/faq` render on the
+ * server with no client part of their own: 215 KB.
+ */
+const CONTENT_BUDGET_KB = { script: 215, stylesheet: 20 };
+
+test('the home page with content stays within the home budget', async ({ page, api: _api }) => {
+  test.skip(test.info().project.name !== 'desktop', 'measured once');
+  const kb = await firstLoad(page, `${CONTENT_STORE_URL}/`);
+  expect(kb.script).toBeLessThanOrEqual(BUDGET_KB.script);
+  expect(kb.stylesheet).toBeLessThanOrEqual(BUDGET_KB.stylesheet);
+});
+
+for (const path of ['/terms', '/faq']) {
+  test(`${path} stays within its performance budget`, async ({ page, api: _api }) => {
+    test.skip(test.info().project.name !== 'desktop', 'measured once');
+    const kb = await firstLoad(page, `${CONTENT_STORE_URL}${path}`);
+    expect(kb.script).toBeLessThanOrEqual(CONTENT_BUDGET_KB.script);
+    expect(kb.stylesheet).toBeLessThanOrEqual(CONTENT_BUDGET_KB.stylesheet);
+  });
+}

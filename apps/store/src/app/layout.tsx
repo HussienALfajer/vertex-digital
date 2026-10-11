@@ -1,10 +1,11 @@
 import { DirectionProvider } from '@vertex-digital/ui/components/direction-provider';
 import type { Metadata, Viewport } from 'next';
-import type { ReactNode } from 'react';
+import { type ReactNode, Suspense } from 'react';
 import { FrozenBanner } from '@/components/frozen-banner';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { StopBanner } from '@/components/stop-banner';
+import { SiteAnnouncement } from '@/features/content/announcement';
 import { t } from '@/lib/i18n';
 import { THEME_SCRIPT } from '@/lib/theme';
 // The brand files stay in brand/ (their single home); the build copies them with hashed names.
@@ -38,6 +39,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <SiteHeader />
           <StopBanner />
           <FrozenBanner />
+          <Suspense fallback={null}>
+            <SiteAnnouncement />
+          </Suspense>
           <main className="flex flex-1 flex-col">{children}</main>
           <SiteFooter />
         </DirectionProvider>

@@ -16,10 +16,16 @@ import { Route as SetupTwoFactorRouteImport } from './routes/setup-two-factor'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
+import { Route as AppContentRouteImport } from './routes/_app/content'
 import { Route as AppRatesRouteImport } from './routes/_app/rates'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppTestCustomersRouteImport } from './routes/_app/test-customers'
 import { Route as AppCatalogIndexRouteImport } from './routes/_app/catalog.index'
+import { Route as AppContentIndexRouteImport } from './routes/_app/content.index'
+import { Route as AppContentActivityRouteImport } from './routes/_app/content.activity'
+import { Route as AppContentAnnouncementsRouteImport } from './routes/_app/content.announcements'
+import { Route as AppContentBannersRouteImport } from './routes/_app/content.banners'
+import { Route as AppContentFaqRouteImport } from './routes/_app/content.faq'
 import { Route as AppCustomersIndexRouteImport } from './routes/_app/customers.index'
 import { Route as AppCustomersIdRouteImport } from './routes/_app/customers.$id'
 import { Route as AppDepositsIndexRouteImport } from './routes/_app/deposits.index'
@@ -46,6 +52,8 @@ import { Route as AppWalletsIndexRouteImport } from './routes/_app/wallets.index
 import { Route as AppWalletsCustomerIdRouteImport } from './routes/_app/wallets.$customerId'
 import { Route as AppCatalogGamesIdRouteImport } from './routes/_app/catalog.games.$id'
 import { Route as AppCatalogGamesNewRouteImport } from './routes/_app/catalog.games.new'
+import { Route as AppContentPagesIndexRouteImport } from './routes/_app/content.pages.index'
+import { Route as AppContentPagesPageRouteImport } from './routes/_app/content.pages.$page'
 import { Route as AppReconciliationRunsIdRouteImport } from './routes/_app/reconciliation.runs.$id'
 
 const AppRoute = AppRouteImport.update({
@@ -82,6 +90,11 @@ const AppAuditRoute = AppAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AppRoute,
 } as any)
+const AppContentRoute = AppContentRouteImport.update({
+  id: '/content',
+  path: '/content',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppRatesRoute = AppRatesRouteImport.update({
   id: '/rates',
   path: '/rates',
@@ -101,6 +114,31 @@ const AppCatalogIndexRoute = AppCatalogIndexRouteImport.update({
   id: '/catalog/',
   path: '/catalog/',
   getParentRoute: () => AppRoute,
+} as any)
+const AppContentIndexRoute = AppContentIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppContentRoute,
+} as any)
+const AppContentActivityRoute = AppContentActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AppContentRoute,
+} as any)
+const AppContentAnnouncementsRoute = AppContentAnnouncementsRouteImport.update({
+  id: '/announcements',
+  path: '/announcements',
+  getParentRoute: () => AppContentRoute,
+} as any)
+const AppContentBannersRoute = AppContentBannersRouteImport.update({
+  id: '/banners',
+  path: '/banners',
+  getParentRoute: () => AppContentRoute,
+} as any)
+const AppContentFaqRoute = AppContentFaqRouteImport.update({
+  id: '/faq',
+  path: '/faq',
+  getParentRoute: () => AppContentRoute,
 } as any)
 const AppCustomersIndexRoute = AppCustomersIndexRouteImport.update({
   id: '/customers/',
@@ -232,6 +270,16 @@ const AppCatalogGamesNewRoute = AppCatalogGamesNewRouteImport.update({
   path: '/catalog/games/new',
   getParentRoute: () => AppRoute,
 } as any)
+const AppContentPagesIndexRoute = AppContentPagesIndexRouteImport.update({
+  id: '/pages/',
+  path: '/pages/',
+  getParentRoute: () => AppContentRoute,
+} as any)
+const AppContentPagesPageRoute = AppContentPagesPageRouteImport.update({
+  id: '/pages/$page',
+  path: '/pages/$page',
+  getParentRoute: () => AppContentRoute,
+} as any)
 const AppReconciliationRunsIdRoute = AppReconciliationRunsIdRouteImport.update({
   id: '/reconciliation/runs/$id',
   path: '/reconciliation/runs/$id',
@@ -245,9 +293,14 @@ export interface FileRoutesByFullPath {
   '/setup-two-factor': typeof SetupTwoFactorRoute
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
+  '/content': typeof AppContentRouteWithChildren
   '/rates': typeof AppRatesRoute
   '/reports': typeof AppReportsRoute
   '/test-customers': typeof AppTestCustomersRoute
+  '/content/activity': typeof AppContentActivityRoute
+  '/content/announcements': typeof AppContentAnnouncementsRoute
+  '/content/banners': typeof AppContentBannersRoute
+  '/content/faq': typeof AppContentFaqRoute
   '/customers/$id': typeof AppCustomersIdRoute
   '/deposits/$id': typeof AppDepositsIdRoute
   '/deposits/transfers': typeof AppDepositsTransfersRoute
@@ -265,6 +318,7 @@ export interface FileRoutesByFullPath {
   '/support/new': typeof AppSupportNewRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/catalog/': typeof AppCatalogIndexRoute
+  '/content/': typeof AppContentIndexRoute
   '/customers/': typeof AppCustomersIndexRoute
   '/deposits/': typeof AppDepositsIndexRoute
   '/orders/': typeof AppOrdersIndexRoute
@@ -275,7 +329,9 @@ export interface FileRoutesByFullPath {
   '/wallets/': typeof AppWalletsIndexRoute
   '/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/catalog/games/new': typeof AppCatalogGamesNewRoute
+  '/content/pages/$page': typeof AppContentPagesPageRoute
   '/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
+  '/content/pages/': typeof AppContentPagesIndexRoute
 }
 export interface FileRoutesByTo {
   '/change-password': typeof ChangePasswordRoute
@@ -287,6 +343,10 @@ export interface FileRoutesByTo {
   '/reports': typeof AppReportsRoute
   '/test-customers': typeof AppTestCustomersRoute
   '/': typeof AppIndexRoute
+  '/content/activity': typeof AppContentActivityRoute
+  '/content/announcements': typeof AppContentAnnouncementsRoute
+  '/content/banners': typeof AppContentBannersRoute
+  '/content/faq': typeof AppContentFaqRoute
   '/customers/$id': typeof AppCustomersIdRoute
   '/deposits/$id': typeof AppDepositsIdRoute
   '/deposits/transfers': typeof AppDepositsTransfersRoute
@@ -304,6 +364,7 @@ export interface FileRoutesByTo {
   '/support/new': typeof AppSupportNewRoute
   '/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/catalog': typeof AppCatalogIndexRoute
+  '/content': typeof AppContentIndexRoute
   '/customers': typeof AppCustomersIndexRoute
   '/deposits': typeof AppDepositsIndexRoute
   '/orders': typeof AppOrdersIndexRoute
@@ -314,7 +375,9 @@ export interface FileRoutesByTo {
   '/wallets': typeof AppWalletsIndexRoute
   '/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/catalog/games/new': typeof AppCatalogGamesNewRoute
+  '/content/pages/$page': typeof AppContentPagesPageRoute
   '/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
+  '/content/pages': typeof AppContentPagesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -324,10 +387,15 @@ export interface FileRoutesById {
   '/setup-two-factor': typeof SetupTwoFactorRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/audit': typeof AppAuditRoute
+  '/_app/content': typeof AppContentRouteWithChildren
   '/_app/rates': typeof AppRatesRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/test-customers': typeof AppTestCustomersRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/content/activity': typeof AppContentActivityRoute
+  '/_app/content/announcements': typeof AppContentAnnouncementsRoute
+  '/_app/content/banners': typeof AppContentBannersRoute
+  '/_app/content/faq': typeof AppContentFaqRoute
   '/_app/customers/$id': typeof AppCustomersIdRoute
   '/_app/deposits/$id': typeof AppDepositsIdRoute
   '/_app/deposits/transfers': typeof AppDepositsTransfersRoute
@@ -345,6 +413,7 @@ export interface FileRoutesById {
   '/_app/support/new': typeof AppSupportNewRoute
   '/_app/wallets/$customerId': typeof AppWalletsCustomerIdRoute
   '/_app/catalog/': typeof AppCatalogIndexRoute
+  '/_app/content/': typeof AppContentIndexRoute
   '/_app/customers/': typeof AppCustomersIndexRoute
   '/_app/deposits/': typeof AppDepositsIndexRoute
   '/_app/orders/': typeof AppOrdersIndexRoute
@@ -355,7 +424,9 @@ export interface FileRoutesById {
   '/_app/wallets/': typeof AppWalletsIndexRoute
   '/_app/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/_app/catalog/games/new': typeof AppCatalogGamesNewRoute
+  '/_app/content/pages/$page': typeof AppContentPagesPageRoute
   '/_app/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
+  '/_app/content/pages/': typeof AppContentPagesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -366,9 +437,14 @@ export interface FileRouteTypes {
     | '/setup-two-factor'
     | '/account'
     | '/audit'
+    | '/content'
     | '/rates'
     | '/reports'
     | '/test-customers'
+    | '/content/activity'
+    | '/content/announcements'
+    | '/content/banners'
+    | '/content/faq'
     | '/customers/$id'
     | '/deposits/$id'
     | '/deposits/transfers'
@@ -386,6 +462,7 @@ export interface FileRouteTypes {
     | '/support/new'
     | '/wallets/$customerId'
     | '/catalog/'
+    | '/content/'
     | '/customers/'
     | '/deposits/'
     | '/orders/'
@@ -396,7 +473,9 @@ export interface FileRouteTypes {
     | '/wallets/'
     | '/catalog/games/$id'
     | '/catalog/games/new'
+    | '/content/pages/$page'
     | '/reconciliation/runs/$id'
+    | '/content/pages/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/change-password'
@@ -408,6 +487,10 @@ export interface FileRouteTypes {
     | '/reports'
     | '/test-customers'
     | '/'
+    | '/content/activity'
+    | '/content/announcements'
+    | '/content/banners'
+    | '/content/faq'
     | '/customers/$id'
     | '/deposits/$id'
     | '/deposits/transfers'
@@ -425,6 +508,7 @@ export interface FileRouteTypes {
     | '/support/new'
     | '/wallets/$customerId'
     | '/catalog'
+    | '/content'
     | '/customers'
     | '/deposits'
     | '/orders'
@@ -435,7 +519,9 @@ export interface FileRouteTypes {
     | '/wallets'
     | '/catalog/games/$id'
     | '/catalog/games/new'
+    | '/content/pages/$page'
     | '/reconciliation/runs/$id'
+    | '/content/pages'
   id:
     | '__root__'
     | '/_app'
@@ -444,10 +530,15 @@ export interface FileRouteTypes {
     | '/setup-two-factor'
     | '/_app/account'
     | '/_app/audit'
+    | '/_app/content'
     | '/_app/rates'
     | '/_app/reports'
     | '/_app/test-customers'
     | '/_app/'
+    | '/_app/content/activity'
+    | '/_app/content/announcements'
+    | '/_app/content/banners'
+    | '/_app/content/faq'
     | '/_app/customers/$id'
     | '/_app/deposits/$id'
     | '/_app/deposits/transfers'
@@ -465,6 +556,7 @@ export interface FileRouteTypes {
     | '/_app/support/new'
     | '/_app/wallets/$customerId'
     | '/_app/catalog/'
+    | '/_app/content/'
     | '/_app/customers/'
     | '/_app/deposits/'
     | '/_app/orders/'
@@ -475,7 +567,9 @@ export interface FileRouteTypes {
     | '/_app/wallets/'
     | '/_app/catalog/games/$id'
     | '/_app/catalog/games/new'
+    | '/_app/content/pages/$page'
     | '/_app/reconciliation/runs/$id'
+    | '/_app/content/pages/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -536,6 +630,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAuditRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/content': {
+      id: '/_app/content'
+      path: '/content'
+      fullPath: '/content'
+      preLoaderRoute: typeof AppContentRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/rates': {
       id: '/_app/rates'
       path: '/rates'
@@ -563,6 +664,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/catalog/'
       preLoaderRoute: typeof AppCatalogIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/content/': {
+      id: '/_app/content/'
+      path: '/'
+      fullPath: '/content/'
+      preLoaderRoute: typeof AppContentIndexRouteImport
+      parentRoute: typeof AppContentRoute
+    }
+    '/_app/content/activity': {
+      id: '/_app/content/activity'
+      path: '/activity'
+      fullPath: '/content/activity'
+      preLoaderRoute: typeof AppContentActivityRouteImport
+      parentRoute: typeof AppContentRoute
+    }
+    '/_app/content/announcements': {
+      id: '/_app/content/announcements'
+      path: '/announcements'
+      fullPath: '/content/announcements'
+      preLoaderRoute: typeof AppContentAnnouncementsRouteImport
+      parentRoute: typeof AppContentRoute
+    }
+    '/_app/content/banners': {
+      id: '/_app/content/banners'
+      path: '/banners'
+      fullPath: '/content/banners'
+      preLoaderRoute: typeof AppContentBannersRouteImport
+      parentRoute: typeof AppContentRoute
+    }
+    '/_app/content/faq': {
+      id: '/_app/content/faq'
+      path: '/faq'
+      fullPath: '/content/faq'
+      preLoaderRoute: typeof AppContentFaqRouteImport
+      parentRoute: typeof AppContentRoute
     }
     '/_app/customers/': {
       id: '/_app/customers/'
@@ -746,6 +882,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCatalogGamesNewRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/content/pages/': {
+      id: '/_app/content/pages/'
+      path: '/pages'
+      fullPath: '/content/pages/'
+      preLoaderRoute: typeof AppContentPagesIndexRouteImport
+      parentRoute: typeof AppContentRoute
+    }
+    '/_app/content/pages/$page': {
+      id: '/_app/content/pages/$page'
+      path: '/pages/$page'
+      fullPath: '/content/pages/$page'
+      preLoaderRoute: typeof AppContentPagesPageRouteImport
+      parentRoute: typeof AppContentRoute
+    }
     '/_app/reconciliation/runs/$id': {
       id: '/_app/reconciliation/runs/$id'
       path: '/reconciliation/runs/$id'
@@ -756,9 +906,34 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppContentRouteChildren {
+  AppContentActivityRoute: typeof AppContentActivityRoute
+  AppContentAnnouncementsRoute: typeof AppContentAnnouncementsRoute
+  AppContentBannersRoute: typeof AppContentBannersRoute
+  AppContentFaqRoute: typeof AppContentFaqRoute
+  AppContentIndexRoute: typeof AppContentIndexRoute
+  AppContentPagesPageRoute: typeof AppContentPagesPageRoute
+  AppContentPagesIndexRoute: typeof AppContentPagesIndexRoute
+}
+
+const AppContentRouteChildren: AppContentRouteChildren = {
+  AppContentActivityRoute: AppContentActivityRoute,
+  AppContentAnnouncementsRoute: AppContentAnnouncementsRoute,
+  AppContentBannersRoute: AppContentBannersRoute,
+  AppContentFaqRoute: AppContentFaqRoute,
+  AppContentIndexRoute: AppContentIndexRoute,
+  AppContentPagesPageRoute: AppContentPagesPageRoute,
+  AppContentPagesIndexRoute: AppContentPagesIndexRoute,
+}
+
+const AppContentRouteWithChildren = AppContentRoute._addFileChildren(
+  AppContentRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
   AppAuditRoute: typeof AppAuditRoute
+  AppContentRoute: typeof AppContentRouteWithChildren
   AppRatesRoute: typeof AppRatesRoute
   AppReportsRoute: typeof AppReportsRoute
   AppTestCustomersRoute: typeof AppTestCustomersRoute
@@ -796,6 +971,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
   AppAuditRoute: AppAuditRoute,
+  AppContentRoute: AppContentRouteWithChildren,
   AppRatesRoute: AppRatesRoute,
   AppReportsRoute: AppReportsRoute,
   AppTestCustomersRoute: AppTestCustomersRoute,

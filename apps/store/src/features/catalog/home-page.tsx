@@ -4,6 +4,8 @@ import { AscentBar } from '@vertex-digital/ui/components/page-header';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { StoreIcon } from 'lucide-react';
 import { connection } from 'next/server';
+import { Suspense } from 'react';
+import { ActivityCard } from '@/features/content/activity-card';
 import { SearchField } from '@/features/search/search-trigger';
 import { t } from '@/lib/i18n';
 import { getStorefront } from './data';
@@ -47,6 +49,9 @@ export async function StorefrontSections() {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
       <div className="flex flex-col gap-4">
         <ServiceLine service={storefront.service} />
+        <Suspense fallback={null}>
+          <ActivityCard />
+        </Suspense>
         <nav aria-label={t('catalog.categories')}>
           <ul className="flex flex-wrap gap-2">
             {categories.map((category) => (

@@ -15,12 +15,12 @@ Spec: `docs/specs/S14-content-and-live-activity.md` (F21, F25; ADRs 0002, 0008, 
 - [x] Checks (lint, typecheck, build, e2e, drift passed and recorded on c2ed6653ee10; tests passed but the known `reconciliation.test.ts` E3 case that fails against the local test database, on main too), reviewer (no blocking issues), owner acceptance (2026-10-11), PR with auto-merge
 
 ## PR 2 — RichText, admin screens and store (`feat/s14-content-ui`)
-- [ ] `packages/ui` `RichText` (server-compatible, parser nodes only) with tests
-- [ ] Admin `features/content/`: pages list, page editor (problems by line, preview at phone and desktop widths, Ctrl+S, unsaved guard, versions, stale dialog), FAQ (sections, questions, order, archive, publish bar), banners (upload with 2:1 guide, schedule, enable, order), announcements (replace confirm, live preview), activity (switch, count, preview); navigation "المحتوى"; i18n keys
-- [ ] Admin customer profile line (TA3)
-- [ ] Store cached content reads (`content` tag, 60 s), failure never cached
-- [ ] Store announcement bar with dismissal (no flash, inline script), footer links, home banner carousel, activity cards (home and game page), `/faq`, `/terms`, `/privacy`, `/refund`, `/about`, sign-up sentence, support callout, sitemap; i18n keys
-- [ ] Store unit tests (relative time and duration texts, dismissal key logic)
-- [ ] E2E: admin flows and screenshots (light and dark) on a content mock; store flows and screenshots (phone and desktop, dark and light); performance budgets (SL5)
-- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S14 done, `wiring.md` patterns, spec "Settled in implementation")
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+- [x] `packages/ui` `RichText` (server-compatible, parser nodes only) with tests
+- [x] Admin `features/content/`: pages list, page editor (problems by line, preview at phone and desktop widths, Ctrl+S, unsaved guard, versions, stale dialog), FAQ (sections, questions, order, archive, publish bar), banners (upload with 2:1 guide, schedule, enable, order), announcements (replace confirm, live preview), activity (switch, count, preview); navigation "المحتوى"; i18n keys
+- [x] Admin customer profile line (TA3)
+- [x] Store cached content reads (`content` tag, 60 s), failure never cached
+- [x] Store announcement bar with dismissal (no flash, inline script), footer links, home banner carousel, activity cards (home and game page), `/faq`, `/terms`, `/privacy`, `/refund`, `/about`, sign-up sentence, support callout, sitemap; i18n keys
+- [x] Store unit tests (relative time and duration texts, dismissal key logic)
+- [x] E2E: admin flows and screenshots (light and dark) on a content mock; store flows and screenshots (phone and desktop, dark and light); performance budgets (SL5)
+- [x] Wiring checklist, docs (`docs/ROADMAP.md` S14 done, `wiring.md` patterns, spec "Settled in implementation")
+- [x] Checks (lint, typecheck, build, e2e recorded on dca945a0c589; tests passed but the known E3 case in `packages/db/src/reconciliation/reconciliation.test.ts`, failing on main too), reviewer (one blocking finding, fixed: the carousel scrolled the page), owner acceptance (2026-10-11), PR with auto-merge

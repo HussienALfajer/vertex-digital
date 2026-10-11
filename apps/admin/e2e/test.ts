@@ -19,6 +19,7 @@ import {
 } from '@vertex-digital/contracts';
 import openapi from '../../api/openapi.json' with { type: 'json' };
 import { CatalogMock } from './catalog-mock';
+import { ContentMock } from './content-mock';
 import { CustomersMock } from './customers-mock';
 import { quietDashboard } from './dashboard-mock';
 import { OrdersMock } from './orders-mock';
@@ -304,6 +305,15 @@ export class AdminApi {
   );
   /** S13: the books, the treasury and the reports; no run yet by default. */
   readonly reconciliation = new ReconciliationMock(() => this.reauthenticationRequired);
+  /** S14: the pages, FAQ, banners, announcements and live activity; nothing published yet. */
+  readonly content = new ContentMock((fileId) =>
+    this.catalog.images.set(fileId, {
+      id: fileId,
+      url: `/api/catalog/images/${fileId}`,
+      width: 1600,
+      height: 800,
+    }),
+  );
   /** S11: the home page's read; null answers a quiet day with the current rate. */
   dashboard: Dashboard | null = null;
   /**
@@ -945,6 +955,10 @@ export class AdminApi {
       const answer = this.suppliers.answer(request.method(), url, body);
       if (answer && 'json' in answer) return json(answer.status, answer.json);
       if (answer) return route.fulfill({ status: answer.status });
+    }
+    if (path.startsWith('/api/admin/content/')) {
+      const answer = this.content.answer(request.method(), url, body);
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
     }
     if (
       path.startsWith('/api/admin/catalog') ||

@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { FooterContentLinks } from '@/features/content/site-links';
 import { telegramSupportUrl } from '@/features/support/data';
 import { t } from '@/lib/i18n';
 
 const LINK = 'inline-flex min-h-11 items-center underline-offset-4 hover:underline';
 
 /**
- * The footer: "الدعم" (S12), the support Telegram link when the panel sets one (SC2, read at
+ * The footer: "الدعم" (S12), the published pages and FAQ (S14 SL1), the support Telegram link when the panel sets one (SC2, read at
  * request time from the cached channels route, so the build never calls the API), the rights.
  */
 export function SiteFooter() {
@@ -21,6 +22,9 @@ export function SiteFooter() {
           </Link>
           <Suspense fallback={null}>
             <TelegramLink />
+          </Suspense>
+          <Suspense fallback={null}>
+            <FooterContentLinks className={LINK} />
           </Suspense>
         </nav>
         <Rights />

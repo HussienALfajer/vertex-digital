@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ACTIVITY_MINIMUM,
+  activityAge,
   activityVisible,
   announcementInputSchema,
   announcementState,
@@ -503,5 +504,22 @@ describe('live activity (LA3–LA5)', () => {
     [3 * 3600 + 59 * 60, { unit: 'hours', count: 3 }],
   ])('%s seconds read %o', (seconds, expected) => {
     expect(formatDeliveryDuration(seconds)).toEqual(expected);
+  });
+
+  it.each([
+    ['12:05', { unit: 'minutes', count: 5 }],
+    ['12:09', { unit: 'minutes', count: 5 }],
+    ['12:10', { unit: 'minutes', count: 10 }],
+    ['12:59', { unit: 'minutes', count: 55 }],
+    ['13:00', { unit: 'hours', count: 1 }],
+    ['23:59', { unit: 'hours', count: 11 }],
+  ])('a delivery at 12:00 read at %s is %o ago', (time, expected) => {
+    const deliveredAt = new Date('2026-10-11T12:00:00Z');
+    expect(activityAge(deliveredAt, new Date(`2026-10-11T${time}:00Z`))).toEqual(expected);
+  });
+
+  it('reads a time not yet 5 minutes old as 5 minutes', () => {
+    const now = new Date('2026-10-11T12:00:00Z');
+    expect(activityAge(now, now)).toEqual({ unit: 'minutes', count: 5 });
   });
 });

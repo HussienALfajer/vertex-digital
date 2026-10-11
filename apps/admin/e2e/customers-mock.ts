@@ -1,4 +1,5 @@
 import {
+  type AcceptedVersion,
   type AdminCustomer,
   type AdminCustomerRow,
   type AdminOrder,
@@ -182,6 +183,11 @@ export function multipart(request: RawRequest): { fields: Record<string, string>
 }
 
 export class CustomersMock {
+  /** S14 TA3: the terms and privacy versions a customer accepted at sign-up; none by default. */
+  readonly accepted = new Map<
+    string,
+    { terms: AcceptedVersion | null; privacy: AcceptedVersion | null }
+  >();
   customers: MockCustomer[] = [
     customer('sara', {
       name: 'سارة الأحمد',
@@ -485,8 +491,8 @@ export class CustomersMock {
         reservations: row.reservations,
       },
       signals: this.signals(row),
-      termsVersion: null,
-      privacyVersion: null,
+      termsVersion: this.accepted.get(row.id)?.terms ?? null,
+      privacyVersion: this.accepted.get(row.id)?.privacy ?? null,
     };
   }
 
