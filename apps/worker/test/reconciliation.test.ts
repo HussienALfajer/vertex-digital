@@ -410,10 +410,47 @@ describe('the nightly run (RN1, RN5, edge cases 4, 16)', () => {
         businessDate: date,
         adminId: null,
       });
-      // Another night waits while this one runs.
-      await expect(runner.nightlyRun(businessDate())).rejects.toThrow(/is running/);
+      // Another night waits while this one runs: two minutes on, or after its recheck.
+      const now = new Date();
+      expect(await runner.nightlyRun(businessDate(), now)).toEqual({
+        retryAt: new Date(now.getTime() + 2 * 60_000),
+      });
       await runner.execute(runId as string);
       expect(await runner.nightlyRun(date)).toBeNull();
+    });
+  });
+
+  it('sends the night again for after a manual run recheck, never losing it (RN1)', async () => {
+    await inRollback(async ({ tx, runner }) => {
+      await script(tx, { supplier: 5 * USD });
+      const manual = await manualRun(tx);
+      const now = new Date();
+      await runner.execute(manual, now);
+      const recheckAt = (await runOf(tx, manual))?.recheckAt as Date;
+      const job = new ReconciliationRunJob(pgBoss, runner);
+      const date = businessDate();
+      await job.handle({ businessDate: date }, 0, now);
+      expect(
+        await tx.select().from(reconciliationRuns).where(eq(reconciliationRuns.businessDate, date)),
+      ).toEqual([]);
+      const again = sent.filter((item) => item.queue === QUEUES.reconciliationRun);
+      expect(again).toEqual([
+        expect.objectContaining({
+          data: { businessDate: date },
+          options: expect.objectContaining({
+            startAfter: new Date(recheckAt.getTime() + 2 * 60_000),
+          }),
+        }),
+      ]);
+      // After the recheck, the night's run is created and runs.
+      await script(tx);
+      await runner.recheck(manual);
+      await job.handle(again[0]?.data, 0);
+      const [night] = await tx
+        .select()
+        .from(reconciliationRuns)
+        .where(eq(reconciliationRuns.businessDate, date));
+      expect(night?.status).toBe('finished');
     });
   });
 

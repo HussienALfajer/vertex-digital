@@ -43,14 +43,25 @@ export class ReconciliationRunJob implements OnApplicationBootstrap {
 
   async handle(data: unknown, retryCount: number, now = new Date()): Promise<void> {
     const payload = reconciliationRunPayloadSchema.parse(data);
-    const runId =
-      'runId' in payload
-        ? payload.runId
-        : await this.runner.nightlyRun(
-            'businessDate' in payload ? payload.businessDate : nightlyBusinessDate(now),
-            now,
-          );
-    if (runId === null) return;
+    if ('runId' in payload) return this.execute(payload.runId, retryCount, now);
+    const businessDate =
+      'businessDate' in payload ? payload.businessDate : nightlyBusinessDate(now);
+    const night = await this.runner.nightlyRun(businessDate, now);
+    if (night === null) return;
+    if (typeof night === 'string') return this.execute(night, retryCount, now);
+    // Another run is running (a manual run may wait 10 minutes for its recheck): the night's
+    // run is sent again for later, never lost (RN1); a stale blocker is failed after an hour.
+    await this.pgBoss.boss.send(
+      QUEUES.reconciliationRun,
+      { businessDate },
+      { ...RECONCILIATION_RUN_OPTIONS, startAfter: night.retryAt },
+    );
+    this.logger.log(
+      `Night ${businessDate} waits for a running run until ${night.retryAt.toISOString()}`,
+    );
+  }
+
+  private async execute(runId: string, retryCount: number, now: Date): Promise<void> {
     try {
       await this.runner.execute(runId, now);
     } catch (error) {

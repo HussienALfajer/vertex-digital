@@ -47,6 +47,9 @@ import { SupplierBalancesJob } from '../suppliers/balances.job.js';
 
 type RunRow = typeof reconciliationRuns.$inferSelect;
 
+/** A nightly run blocked by another run tries again this long after it may have ended. */
+const NIGHTLY_WAIT_MS = 2 * 60_000;
+
 /** One external check to run: what it reads, under the subject its result is stored. */
 interface ExternalTarget {
   check: ExternalCheck;
@@ -108,10 +111,13 @@ export class ReconciliationRunner {
 
   /**
    * Rules RN1, RN5, edge case 4: the nightly run of `businessDate`, created once (stale runs
-   * failed first); null when that night's run already ended. Throws while another run is running,
-   * so pg-boss tries again later.
+   * failed first); null when that night's run already ended. While another run is running, the
+   * time to try again: after its recheck (rule RN4) or in two minutes.
    */
-  async nightlyRun(businessDate: string, now = new Date()): Promise<string | null> {
+  async nightlyRun(
+    businessDate: string,
+    now = new Date(),
+  ): Promise<string | null | { retryAt: Date }> {
     return this.db.transaction(async (tx) => {
       await failStaleRuns(tx, now);
       // One nightly run per day: concurrent creations queue on the day's lock.
@@ -124,10 +130,13 @@ export class ReconciliationRunner {
         .where(eq(reconciliationRuns.businessDate, businessDate));
       if (existing) return existing.status === 'running' ? existing.id : null;
       const [running] = await tx
-        .select({ id: reconciliationRuns.id })
+        .select({ recheckAt: reconciliationRuns.recheckAt })
         .from(reconciliationRuns)
         .where(eq(reconciliationRuns.status, 'running'));
-      if (running) throw new Error(`Run ${running.id} is running: the nightly run waits for it`);
+      if (running) {
+        const after = Math.max(running.recheckAt?.getTime() ?? 0, now.getTime());
+        return { retryAt: new Date(after + NIGHTLY_WAIT_MS) };
+      }
       const [run] = await tx
         .insert(reconciliationRuns)
         .values({ trigger: 'schedule', businessDate })
