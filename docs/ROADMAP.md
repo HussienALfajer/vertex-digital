@@ -41,7 +41,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] S12 Customers and support: F19 Customers administration · F23 Support tickets; spec `docs/specs/S12-customers-and-support.md` (two PRs: contracts, db with the freeze and cap guards, api `customers` and `support` modules, worker jobs and Telegram; the admin customers, profile, support queue, thread and settings screens and the store frozen state and support pages with E2E)
 - [x] S13 Reconciliation and reports: F20 Daily reconciliation (A11) · F22 Reports; spec `docs/specs/S13-reconciliation-and-reports.md` (three PRs: contracts, db with the cost of goods sign fix and api; worker jobs and chain balance reads; the admin `/reconciliation` and `/reports` screens with E2E)
 - [x] S14 Content and live activity: F21 Content · F25 Live activity; spec `docs/specs/S14-content-and-live-activity.md` (two PRs, owner 2026-10-11: contracts, db and the api `content` module; the `RichText` renderer, the admin `/content` screens and the store announcement bar, banners, activity cards, `/faq` and the four pages, with E2E). The page texts stay unpublished until Q10 is answered before the pilot
-- [ ] S15 PWA and web push: F24 alone
+- [~] S15 PWA and web push: F24 alone; spec `docs/specs/S15-pwa-and-web-push.md`
 - [ ] Production deploy of Phase 3
 
 ## Pilot — open quiet launch
