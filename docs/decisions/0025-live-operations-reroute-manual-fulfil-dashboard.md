@@ -1,6 +1,6 @@
 # 0025 — Live operations: reroute, manual fulfil with proof, dashboard figures
 
-Status: Accepted · Date: 2026-10-10 · Amends [0004](0004-orders-and-fulfilment-state-machine.md) (admin-chosen attempts), [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) (held-order decisions, manual delivery)
+Status: Accepted · Date: 2026-10-10 · Amends [0004](0004-orders-and-fulfilment-state-machine.md) (admin-chosen attempts), [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) (held-order decisions, manual delivery) · Amended by [0027](0027-treasury-movements-reconciliation-and-reports.md) (reports by period)
 
 ## Context
 ADR 0022 gave the admin four decisions on held orders: poll again, confirm delivered, confirm failed, refund. F17 also asks for rerouting to another supplier and manual fulfilment with delivery proof, and F18 asks for today's sales and profit without defining them. Manual delivery so far recorded the manual offer's cost and no evidence. The owner settled these in the S11 interview (2026-10-10).
