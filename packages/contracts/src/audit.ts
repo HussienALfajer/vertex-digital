@@ -5,6 +5,7 @@ import {
   productKindSchema,
   selectOptionSchema,
 } from './catalog.js';
+import { announcementToneSchema, contentPageSchema } from './content.js';
 import {
   depositDeciderSchema,
   depositFlagCodeSchema,
@@ -90,6 +91,13 @@ export const AUDIT_ENTITY_TYPES = [
   'reconciliation_result',
   'reconciliation_settings',
   'report',
+  'content_page',
+  'faq_section',
+  'faq_item',
+  'faq',
+  'banner',
+  'announcement',
+  'content_settings',
 ] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
@@ -242,6 +250,34 @@ const treasuryMovement = {
   externalReference: z.string().nullable(),
   journalId: z.uuid(),
 };
+
+/** S14: content changes; bodies and answers by length (and a hash when published), never in full. */
+const pageDraft = z.strictObject({
+  page: contentPageSchema,
+  revision: z.int().nonnegative(),
+  title: z.string(),
+  bodyLength: z.int().nonnegative(),
+});
+const faqSectionChange = changed({ title: z.string() });
+const faqItemValues = {
+  sectionId: z.uuid(),
+  question: z.string(),
+  answerLength: z.int().nonnegative(),
+};
+const faqItemChange = changed(faqItemValues);
+const schedule = {
+  linkPath: z.string().nullable(),
+  startsAt: z.iso.datetime().nullable(),
+  endsAt: z.iso.datetime().nullable(),
+  enabled: z.boolean(),
+};
+const bannerChange = changed({ imageFileId: z.uuid(), altText: z.string(), ...schedule });
+const announcementChange = changed({
+  text: z.string(),
+  tone: announcementToneSchema,
+  revision: z.int().positive(),
+  ...schedule,
+});
 
 /**
  * Every audit action (`<entity>.<verb>`) with the shape of its `details`: before and after of the
@@ -610,6 +646,59 @@ export const AUDIT_DETAILS = {
     from: z.iso.date(),
     to: z.iso.date(),
     rows: z.int().nonnegative(),
+  }),
+  /** S14 PG3: the body by its length only. */
+  'content_page.draft_saved': pageDraft,
+  /** S14 PG5: the version, with the SHA-256 of its body. */
+  'content_page.published': z.strictObject({
+    page: contentPageSchema,
+    version: z.int().positive(),
+    title: z.string(),
+    bodyLength: z.int().positive(),
+    bodySha256: z.string(),
+  }),
+  /** S14 PG6: copied into the draft, nothing published. */
+  'content_page.version_restored': z.strictObject({
+    page: contentPageSchema,
+    version: z.int().positive(),
+    revision: z.int().nonnegative(),
+  }),
+  'faq_section.created': faqSectionChange,
+  'faq_section.updated': faqSectionChange,
+  'faq_section.archived': faqSectionChange,
+  'faq_section.restored': faqSectionChange,
+  'faq_item.created': faqItemChange,
+  'faq_item.updated': faqItemChange,
+  'faq_item.archived': faqItemChange,
+  'faq_item.restored': faqItemChange,
+  /** S14 FQ4: the sections in order, each with its questions in order. */
+  'faq.reordered': z.strictObject({
+    sections: z.array(z.strictObject({ id: z.uuid(), itemIds: z.array(z.uuid()) })),
+  }),
+  /** S14 FQ6. */
+  'faq.published': z.strictObject({
+    revision: z.int().nonnegative(),
+    sections: z.int().nonnegative(),
+    items: z.int().nonnegative(),
+  }),
+  'banner.created': bannerChange,
+  'banner.updated': bannerChange,
+  'banner.enabled': bannerChange,
+  'banner.disabled': bannerChange,
+  'banner.archived': bannerChange,
+  'banner.restored': bannerChange,
+  'banner.reordered': reordered({}),
+  'announcement.created': announcementChange,
+  'announcement.updated': announcementChange,
+  /** S14 AN2: enabling one also writes `disabled` for the one it replaced. */
+  'announcement.enabled': announcementChange,
+  'announcement.disabled': announcementChange,
+  'announcement.archived': announcementChange,
+  'announcement.restored': announcementChange,
+  /** S14 LA6. */
+  'content_settings.set': z.strictObject({
+    before: z.strictObject({ liveActivityEnabled: z.boolean() }),
+    after: z.strictObject({ liveActivityEnabled: z.boolean() }),
   }),
   /** `before` is the policy in force, the seed included. */
   'order_policy.set': z.strictObject({

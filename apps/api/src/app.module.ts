@@ -16,6 +16,7 @@ import { AdminModule } from './modules/admin/index.js';
 import { AuditModule } from './modules/audit/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { CatalogModule } from './modules/catalog/index.js';
+import { ContentModule } from './modules/content/index.js';
 import { CustomersModule } from './modules/customers/index.js';
 import { DashboardModule } from './modules/dashboard/index.js';
 import { DepositsModule } from './modules/deposits/index.js';
@@ -66,6 +67,7 @@ import { WalletModule } from './modules/wallet/index.js';
     ReconciliationModule,
     ReportsModule,
     CatalogModule,
+    ContentModule,
     PricingModule,
     SuppliersModule,
     OrdersModule,

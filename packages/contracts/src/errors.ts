@@ -203,6 +203,12 @@ export const ERROR_CODES = [
   'MOVEMENT_NOT_REVERSIBLE',
   /** The report period ends before it starts or is longer than 366 days (S13 RP1). */
   'REPORT_PERIOD_INVALID',
+  /** The draft or the FAQ changed since it was read: reload (S14 PG3, PG5, FQ6). */
+  'CONTENT_STALE',
+  /** Nothing to publish: the newest version or publication is already this (S14 PG5, FQ6). */
+  'CONTENT_UNCHANGED',
+  /** Too many FAQ sections or questions, banners or announcements (S14 FQ2, BN3, AN2). */
+  'CONTENT_LIMIT_REACHED',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

@@ -207,6 +207,7 @@ describe('module boundaries', () => {
     audit: 'audit',
     auth: 'auth',
     catalog: 'catalog',
+    content: 'content',
     customers: 'customers',
     deposits: 'deposits',
     files: 'files',

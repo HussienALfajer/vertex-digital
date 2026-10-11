@@ -7,6 +7,7 @@ import {
   passwordEqualsEmail,
 } from '@vertex-digital/contracts';
 import {
+  acceptedVersionsNow,
   customerAccounts,
   customerSessions,
   customers,
@@ -112,7 +113,14 @@ export class AuthAccountService {
     const id = newId();
     try {
       await this.db.transaction(async (tx) => {
-        await tx.insert(customers).values({ id, name: input.name, email, phone: input.phone });
+        // S14 TA2: the terms and privacy versions in force at this commit.
+        await tx.insert(customers).values({
+          id,
+          name: input.name,
+          email,
+          phone: input.phone,
+          ...(await acceptedVersionsNow(tx)),
+        });
         await tx.insert(customerAccounts).values({
           userId: id,
           accountId: id,

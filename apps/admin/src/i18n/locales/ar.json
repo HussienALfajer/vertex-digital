@@ -306,7 +306,10 @@
       "OPENING_BALANCE_EXISTS": "لهذا المكان حركات مسجلة: الرصيد الافتتاحي يكون أول حركة فقط.",
       "MOVEMENT_ALREADY_REVERSED": "عُكست هذه الحركة من قبل.",
       "MOVEMENT_NOT_REVERSIBLE": "لا يمكن عكس حركة عكسية.",
-      "REPORT_PERIOD_INVALID": "الفترة غير صحيحة: يجب أن تبدأ قبل نهايتها وألا تزيد على 366 يومًا."
+      "REPORT_PERIOD_INVALID": "الفترة غير صحيحة: يجب أن تبدأ قبل نهايتها وألا تزيد على 366 يومًا.",
+      "CONTENT_STALE": "تم تعديل المسودة في مكان آخر. أعد التحميل لترى آخر نسخة.",
+      "CONTENT_UNCHANGED": "لا تعديلات لنشرها: آخر نسخة منشورة مطابقة.",
+      "CONTENT_LIMIT_REACHED": "بلغت الحد الأقصى المسموح. أرشف عنصراً أو أوقفه أولاً."
     }
   },
   "changePassword": {
@@ -457,7 +460,14 @@
       "reconciliation_run": "مطابقة",
       "reconciliation_result": "نتيجة مطابقة",
       "reconciliation_settings": "إعدادات المطابقة",
-      "report": "تقرير"
+      "report": "تقرير",
+      "content_page": "صفحة محتوى",
+      "faq_section": "قسم أسئلة شائعة",
+      "faq_item": "سؤال شائع",
+      "faq": "الأسئلة الشائعة",
+      "banner": "بانر",
+      "announcement": "إعلان",
+      "content_settings": "إعدادات المحتوى"
     },
     "fields": {
       "name": "الاسم",
@@ -684,7 +694,34 @@
       "reconciliation_run.started": "تشغيل مطابقة",
       "reconciliation_result.explained": "شرح حالة عدم تطابق",
       "reconciliation_settings.changed": "تعديل إعدادات المطابقة",
-      "report.exported": "تصدير تقرير"
+      "report.exported": "تصدير تقرير",
+      "content_page.draft_saved": "حفظ مسودة صفحة",
+      "content_page.published": "نشر صفحة",
+      "content_page.version_restored": "استعادة نسخة صفحة إلى المسودة",
+      "faq_section.created": "إضافة قسم أسئلة",
+      "faq_section.updated": "تعديل قسم أسئلة",
+      "faq_section.archived": "أرشفة قسم أسئلة",
+      "faq_section.restored": "استعادة قسم أسئلة",
+      "faq_item.created": "إضافة سؤال شائع",
+      "faq_item.updated": "تعديل سؤال شائع",
+      "faq_item.archived": "أرشفة سؤال شائع",
+      "faq_item.restored": "استعادة سؤال شائع",
+      "faq.reordered": "إعادة ترتيب الأسئلة الشائعة",
+      "faq.published": "نشر الأسئلة الشائعة",
+      "banner.created": "إضافة بانر",
+      "banner.updated": "تعديل بانر",
+      "banner.enabled": "تفعيل بانر",
+      "banner.disabled": "إيقاف بانر",
+      "banner.archived": "أرشفة بانر",
+      "banner.restored": "استعادة بانر",
+      "banner.reordered": "إعادة ترتيب البانرات",
+      "announcement.created": "إضافة إعلان",
+      "announcement.updated": "تعديل إعلان",
+      "announcement.enabled": "تفعيل إعلان",
+      "announcement.disabled": "إيقاف إعلان",
+      "announcement.archived": "أرشفة إعلان",
+      "announcement.restored": "استعادة إعلان",
+      "content_settings.set": "تعديل إعدادات النشاط الحي"
     }
   },
   "testCustomers": {

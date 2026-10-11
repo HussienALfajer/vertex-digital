@@ -175,6 +175,10 @@ export const orders = pgTable(
       .on(table.finishedAt)
       .where(sql`${table.finishedAt} is not null`),
     /** Delivery time (rule T1). */
+    // S14 LA2: the store-wide live activity.
+    index('orders_activity_idx')
+      .on(table.deliveredAt.desc())
+      .where(sql`${table.status} = 'delivered' and not ${table.isTest}`),
     index('orders_delivery_stats_idx')
       .on(table.productId, table.deliveredAt.desc())
       .where(sql`${table.status} = 'delivered' and not ${table.isTest}`),
