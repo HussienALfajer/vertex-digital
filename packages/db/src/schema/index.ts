@@ -3,6 +3,7 @@ export * from './audit.js';
 export * from './auth.js';
 export * from './catalog.js';
 export { currencyEnum } from './columns.js';
+export * from './content.js';
 export * from './customers.js';
 export * from './deposits.js';
 export * from './files.js';

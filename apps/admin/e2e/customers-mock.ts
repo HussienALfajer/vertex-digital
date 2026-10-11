@@ -485,6 +485,8 @@ export class CustomersMock {
         reservations: row.reservations,
       },
       signals: this.signals(row),
+      termsVersion: null,
+      privacyVersion: null,
     };
   }
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { fullNameSchema, phoneSchema } from './auth.js';
+import { acceptedVersionSchema } from './content.js';
 import { customerStatusSchema } from './customer-status.js';
 import { type DepositLimitSettings, referenceCodeSchema } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
@@ -436,6 +437,9 @@ export const adminCustomerSchema = z
       reservations: z.int().nonnegative(),
     }),
     signals: customerSignalsSchema,
+    /** S14 TA3: the versions in force at sign-up; null before the page was published. */
+    termsVersion: acceptedVersionSchema.nullable(),
+    privacyVersion: acceptedVersionSchema.nullable(),
   })
   .meta({ id: 'AdminCustomer' });
 

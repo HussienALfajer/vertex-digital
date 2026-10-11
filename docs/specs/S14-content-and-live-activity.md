@@ -289,3 +289,16 @@ None blocking S14. Q10 (the texts of the terms, privacy, refund and about pages,
   1. Contracts (`content.ts`, error codes, audit types), db (tables, enums, seeds, grants, the activity index, the customer columns), the api `content` module with the public and admin routes, the sign-up versions (TA2), the S12 profile fields, the store revalidation of the `content` tag; OpenAPI and the admin client.
   2. `packages/ui` `RichText`; the admin `/content` screens and the profile line, with E2E.
   3. Store: the announcement bar, footer links, home banners and activity, the game page card, `/faq`, the four pages, the sign-up sentence, the support callout, the sitemap; E2E and the performance budgets.
+
+## Settled in implementation
+- The PR plan: the spec's PRs 2 and 3 (admin screens, then the store) ship as one PR (owner, 2026-10-11).
+- PR 1 (contracts, db, api):
+  - MD2's problems come back as validation issues at `path: [field, line]` with the reason as `message` (`html`, `image`, `table`, `code`, `rule`, `link`, `heading_level`, `list_depth`), the shape every other `VALIDATION_FAILED` has; `richTextSchema` reports them on save and the API the same way on publish.
+  - The parser: a single new line inside a paragraph is a line break; a list item indented 2 or more spaces past its parent's marker is a child, a third level is a `list_depth` problem kept as its parent's text; `text` followed by `---` is a refused rule (no setext `##`); inline code is plain text. Headings get the ids `section-1`, `section-2`, … in order (fragments must fit MD4's `A–Z a–z 0–9 - _`, so Arabic titles cannot be ids).
+  - A refused construct never becomes markup: raw HTML and tables stay text, images and code fences are dropped, a refused link keeps its text.
+  - The FAQ's working copy answers `changedAt`, the newest change of a section or question, for "تعديلات غير منشورة" (the spec's "since" would need a column the data model does not have). Every FAQ change takes the `content_settings` row's lock through the revision increment, so FAQ changes are serialized; banner and announcement changes are serialized by an advisory lock each, so AN2's concurrent enables never meet the unique index (it still answers `CONTENT_STALE` if they did).
+  - A customer's accepted versions are guarded by `customers_accepted_versions` (migration 0048): each is a version of its own page and never changes. Only the store's sign-up stores them; test customers created in the panel keep null.
+  - Enabling an archived banner or announcement answers `VALIDATION_FAILED`: restore it first. Archiving or restoring a row already in that state answers it unchanged.
+  - Audit entities without a UUID use fixed ids: the pages `…0c0001`–`…0c0004` (terms, privacy, refund, about), the FAQ `…0c0010`, the content settings `…0c0020` (all `00000000-0000-7000-8000-…`).
+  - The three new error codes are in the admin catalog only: the store never receives them (as S13's admin codes).
+  - The banner's minimum size is checked on the stored image (within 1600 px), which keeps the 2:1 ratio and is at least the minimum exactly when the upload is.

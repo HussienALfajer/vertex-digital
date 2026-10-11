@@ -12,6 +12,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { archivedAt, id, timestamps } from './columns.js';
+import { contentPageVersions } from './content.js';
 
 /*
  * Customer identity, owned by the api `auth` module: the tables of the customer Better Auth
@@ -36,10 +37,17 @@ export const customers = pgTable(
     isTest: boolean('is_test').notNull().default(false),
     /** S12 CF1: set while the admin keeps the customer from depositing and buying. */
     frozenAt: timestamp('frozen_at', { withTimezone: true }),
+    /** S14 TA2: the terms and privacy versions in force at sign-up; null before publication. */
+    termsVersionId: uuid('terms_version_id').references(() => contentPageVersions.id),
+    privacyVersionId: uuid('privacy_version_id').references(() => contentPageVersions.id),
     ...timestamps(),
     archivedAt: archivedAt(),
   },
-  (table) => [index('customers_phone_idx').on(table.phone)],
+  (table) => [
+    index('customers_phone_idx').on(table.phone),
+    index('customers_terms_version_id_idx').on(table.termsVersionId),
+    index('customers_privacy_version_id_idx').on(table.privacyVersionId),
+  ],
 );
 
 /**

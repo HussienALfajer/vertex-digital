@@ -1,38 +1,26 @@
-# TASKS — S13 Reconciliation and reports
+# TASKS — S14 Content and live activity
 
-Spec: `docs/specs/S13-reconciliation-and-reports.md` (F20, F22, A11; ADRs 0003, 0004, 0006, 0011, 0017, 0018, 0019, 0021, 0022, 0025, 0027). Three PRs, as the spec's implementation plan says; each leaves `main` green.
+Spec: `docs/specs/S14-content-and-live-activity.md` (F21, F25; ADRs 0002, 0008, 0011, 0012, 0015, 0016, 0022, 0026, 0028). Two PRs (the spec's PRs 2 and 3 merged into one, owner 2026-10-11); each leaves `main` green.
 
-## PR 1 — Contracts, db, api (`ccr-34597277-aed0k9`, the cloud session's branch) · Opus 5.5 `high`
-- [x] Contracts `reconciliation.ts` (new, re-exported): places map (T1) with currency and asset flag, outside categories (T4), movement kinds, checks, result statuses, run triggers and statuses, defaults; movement, supplier correction, reversal, movement, money places, overview, run, result, explanation, Sham Cash count and settings schemas with `.meta({ id })`; amount rules T3
-- [x] Contracts `reports.ts` (new, re-exported): kinds, breakdowns, `REPORT_MAX_DAYS`, `TOP_CUSTOMERS_LIMIT`, query schema (RP1 period rule), one response schema per report R1–R6
-- [x] Contracts extended: `wallet.ts` account kinds `outside_funds`, `transfer_fees`, `supplier_corrections` and journal kind `treasury`; `money.ts` `heldUnits`, `withinRange`, `impliedRate` (100% coverage); error codes (8 new) with Arabic admin text; audit entity types and actions with labels; `jobs.ts` `reconciliation.run`, `reconciliation.recheck` (Telegram, dashboard and USDT balance contracts moved to PR 2 and PR 3)
-- [x] Db (`/db-migration`): enums; `treasury_movements` (checks, currency trigger, unique reference per source, append-only); `reconciliation_runs` (one running, one per business date); `reconciliation_results` and `reconciliation_explanations` (append-only); `reconciliation_settings` (seeded); indexes `deposits (status, decided_at)`, `fulfilment_attempts (resolved_at)`; tests of checks, triggers and grants
-- [x] Db LS1: cost of goods journal signs corrected in `packages/db/src/orders` (S08 delivery and S11 manual fulfil) with regression tests
-- [x] Db write paths `packages/db/src/treasury`: movement postings M1–M4, supplier correction, reversal under lock, opening balance rule, idempotency; concurrency tests (parallel reversals, one key in parallel)
-- [x] Db `packages/db/src/reconciliation`: checks C1–C9 as SQL in one `REPEATABLE READ` snapshot, external check ranges (E2–E4) and books reads; tests: each check passes clean and fails with ids on a planted fault
-- [x] Api `treasury` module: places, movements list, create, supplier correction, reverse (re-auth, typed confirmation above $100, `Idempotency-Key`, audit)
-- [x] Api `reconciliation` module: overview, runs list and detail, manual run (one running, 5-minute rate), explanation, Sham Cash count run (E4 at once), settings (re-auth)
-- [x] Api `reports` module: R1–R6 queries (Damascus days, real customers only, R6 test share), Excel export (streamed, RTL, strings never formulas, audit, 10/minute)
-- [x] `TABLE_OWNERS` and the architecture test; `app.module.ts`
-- [x] Api tests `test/treasury.test.ts`, `test/reconciliation.test.ts`, `test/reports.test.ts` (every route: success, 401, guard codes, re-auth, replays, the spec's rules; R1 equals the dashboard)
+## PR 1 — Contracts, db, api (`feat/s14-content-api`)
+- [x] Contracts `content.ts` (new, re-exported): `CONTENT_PAGES`, `ANNOUNCEMENT_TONES`, limits and activity constants, `linkPathSchema` (MD4), `richTextSchema(max)` and `parseRichText` (MD1–MD3, MD5), `bannerState`/`announcementState` (BN4), `activityVisible` (LA3), `floorToFiveMinutes` (LA4), `formatDeliveryDuration` (LA5); request and response schemas with `.meta({ id })`; unit tests at 100%
+- [x] Contracts extended: error codes `CONTENT_STALE`, `CONTENT_UNCHANGED`, `CONTENT_LIMIT_REACHED` with Arabic text in both catalogs; audit entity types and actions with admin labels; customer profile `termsVersion`/`privacyVersion`
+- [x] Db (`/db-migration`): enums `content_page`, `announcement_tone`; `content_page_drafts` (seeded), `content_page_versions` and `faq_publications` (append-only), `faq_sections`, `faq_items`, `banners`, `announcements` (one-enabled index, checks), `content_settings` (seeded); `customers.terms_version_id`/`privacy_version_id`; activity index on `orders`; tests of checks, triggers, grants, seeds
+- [x] Api `content` module: public controller (site, page, FAQ, activity; `Cache-Control: public, max-age=60`), admin controller (pages, FAQ, banners with image upload, announcements, settings, activity preview) with `StoreRevalidateInterceptor`; audit in every transaction
+- [x] Api sign-up stores the newest terms and privacy versions (TA2); S12 customer profile returns them (TA3)
+- [x] Store revalidation route expires the `content` tag (CP1); `lib/cache-tags` gains `content`
+- [x] `TABLE_OWNERS`, `app.module.ts`; `test/content.test.ts` (every route: success, 401, 403, each error code, public routes leak nothing, activity rules LA1–LA6, concurrent announcement enables, sign-up versions)
 - [x] Bridge: build, OpenAPI export, admin client; mocks follow changed shapes
 - [x] Wiring checklist, docs (`docs/architecture.md` modules, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, test, build, drift, e2e: passed and recorded on 174687db9b75; PostgreSQL 16 in the session, CI runs 17), reviewer (two blocking findings fixed: a Sham Cash count before an opening lost its amount and its replay; negative pounds written as NaN in exports), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
+- [x] Checks (lint, typecheck, build, e2e, drift passed and recorded on c2ed6653ee10; tests passed but the known `reconciliation.test.ts` E3 case that fails against the local test database, on main too), reviewer (no blocking issues), owner acceptance (2026-10-11), PR with auto-merge
 
-## PR 2 — Worker (`claude/jolly-babbage-awoymj`, the cloud session's branch) · Opus 5.5
-- [x] Chain readers `getUsdtBalance` (TronGrid, BSC `eth_call`, fake with scripted offset); `usdt:fake-balance` command and the `AGENTS.md` table
-- [x] Jobs `reconciliation.run` (cron 00:30 Damascus, stale run failed, internal then external checks, recheck queueing) and `reconciliation.recheck`; supplier reads into `supplier_balance_reads`
-- [x] Contracts and enum value (migration 0046) for Telegram `reconciliation_alert` (NT1) and the daily summary line (NT2); the cron's `{}` payload. No `usdt.ts` type was needed: readers return raw units, converted with `rawToUsdUnits`. Shared in `packages/db`: warnings E5, alert, finish and fail of a run (the API's count alerts too)
-- [x] Worker tests (ok, mismatch, recheck clears and confirms, reader failure, alert rules, cron date, stale run)
-- [x] Wiring checklist, docs
-- [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 9a250e8dfb25), reviewer (one blocking finding fixed: a manual run in its recheck at 00:30 lost the night; the nightly job now sends itself again after the recheck), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
-
-## PR 3 — Admin screens and E2E (`feat/s13-admin-screens`)
-- [x] Admin `features/reconciliation/`: status card, open mismatches with explain dialog, money places, movement and correction dialogs, count dialog, movements tab with reverse, history tab and run page, settings drawer; navigation "المطابقة" with badge (`GET /api/admin/reconciliation/counts`)
-- [x] Admin `features/reports/`: tabs R1–R6, period presets, breakdown selector, tables with totals, lines on R1, Excel export; navigation "التقارير"
-- [x] Dashboard attention kinds `reconciliation_open`, `reconciliation_missing`, `sham_cash_count_due` (contracts, API with its test, panel); i18n keys
-- [x] Contracts: `parseUsd`/`formatAmountInput` sub-cent option (T3), `formatUsdCents` (RP9), with tests
-- [x] Bridge: build, OpenAPI export, admin client
-- [x] E2E flows and RTL screenshots (admin light and dark): `reconciliation.spec.ts`, `reports.spec.ts` on `e2e/reconciliation-mock.ts`
-- [x] Wiring checklist, docs (`docs/ROADMAP.md` S13 done, `wiring.md` patterns, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, build, e2e passed; tests passed but one db test that fails on main too against the local test database), reviewer (two blocking findings fixed: the empty state after a manual run or count, now `lastRun` on the overview; an outside row opening a self-transfer marked as an opening), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
+## PR 2 — RichText, admin screens and store (`feat/s14-content-ui`)
+- [ ] `packages/ui` `RichText` (server-compatible, parser nodes only) with tests
+- [ ] Admin `features/content/`: pages list, page editor (problems by line, preview at phone and desktop widths, Ctrl+S, unsaved guard, versions, stale dialog), FAQ (sections, questions, order, archive, publish bar), banners (upload with 2:1 guide, schedule, enable, order), announcements (replace confirm, live preview), activity (switch, count, preview); navigation "المحتوى"; i18n keys
+- [ ] Admin customer profile line (TA3)
+- [ ] Store cached content reads (`content` tag, 60 s), failure never cached
+- [ ] Store announcement bar with dismissal (no flash, inline script), footer links, home banner carousel, activity cards (home and game page), `/faq`, `/terms`, `/privacy`, `/refund`, `/about`, sign-up sentence, support callout, sitemap; i18n keys
+- [ ] Store unit tests (relative time and duration texts, dismissal key logic)
+- [ ] E2E: admin flows and screenshots (light and dark) on a content mock; store flows and screenshots (phone and desktop, dark and light); performance budgets (SL5)
+- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S14 done, `wiring.md` patterns, spec "Settled in implementation")
+- [ ] Checks, reviewer, acceptance, PR with auto-merge

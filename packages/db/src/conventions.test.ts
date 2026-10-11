@@ -85,6 +85,10 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   reconciliation_results: 'Append-only (S13): what a check found in a run',
   reconciliation_explanations: 'Append-only (S13 RN8): one note per result',
   reconciliation_settings: 'Append-only (S13): a save is a new version, the newest is in force',
+  content_page_drafts: 'One seeded row per fixed page (S14 PG1): saved in place, never archived',
+  content_page_versions: 'Append-only (S14 PG5): a publication is a new version, never changed',
+  faq_publications: 'Append-only (S14 FQ6): a publication is a new snapshot, never changed',
+  content_settings: 'One row of settings (S14 LA6, FQ6), changes audited',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -98,6 +102,8 @@ const NATURAL_KEYS: Record<string, string> = {
   customer_limits: 'Keyed by its customer: one row of overrides per customer (S12 LM5)',
   support_attachments: 'Keyed by message and position: up to 3 images per message (S12 TK11)',
   support_settings: 'One row, id 1 (S12 SC1)',
+  content_page_drafts: 'Keyed by its page: one draft per fixed page (S14 PG1)',
+  content_settings: 'One row, id 1 (S14)',
 };
 
 /**
@@ -134,6 +140,8 @@ const APPEND_ONLY_TABLES = [
   'reconciliation_results',
   'reconciliation_explanations',
   'reconciliation_settings',
+  'content_page_versions',
+  'faq_publications',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

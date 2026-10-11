@@ -19,9 +19,11 @@ import {
   type UpdateCustomerLimits,
 } from '@vertex-digital/contracts';
 import {
+  type AcceptedVersion,
   type AdminActor,
   archiveCustomer,
   CustomerError,
+  customerAcceptedVersions,
   customerActiveSessions,
   customerLimitOverrides,
   customerNotes,
@@ -50,6 +52,9 @@ import { JobsService } from '../../core/jobs/index.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { AuditService } from '../audit/index.js';
 import { DepositSettingsService } from '../deposits/index.js';
+
+const acceptedView = (accepted: AcceptedVersion | null) =>
+  accepted && { version: accepted.version, publishedAt: accepted.publishedAt.toISOString() };
 
 const isUuid = (value: string) => z.uuid().safeParse(value).success;
 
@@ -134,11 +139,12 @@ export class CustomersService {
   async profile(id: string): Promise<AdminCustomer> {
     const customer = isUuid(id) ? await findCustomer(this.db, id) : null;
     if (!customer) throw notFound();
-    const [facts, signals, overrides, pinned] = await Promise.all([
+    const [facts, signals, overrides, pinned, accepted] = await Promise.all([
       customerProfileFacts(this.db, customer),
       customerSignals(this.db, customer.id),
       customerLimitOverrides(this.db, customer.id),
       this.pinnedNote(customer.id),
+      customerAcceptedVersions(this.db, customer.id),
     ]);
     return {
       id: customer.id,
@@ -159,6 +165,8 @@ export class CustomersService {
       balanceUnits: facts.balanceUnits,
       counts: facts.counts,
       signals,
+      termsVersion: acceptedView(accepted.terms),
+      privacyVersion: acceptedView(accepted.privacy),
     };
   }
 
