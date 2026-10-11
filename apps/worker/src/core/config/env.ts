@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { hostname } from 'node:os';
-import { type UsdtMethod, usdtAddressSchemas } from '@vertex-digital/contracts';
+import {
+  base64UrlByteLength,
+  type UsdtMethod,
+  usdtAddressSchemas,
+} from '@vertex-digital/contracts';
 import { z } from 'zod';
 
 /** A value `.env.example` ships, never a real secret. */
@@ -146,6 +150,45 @@ export const envSchema = z
       .transform((value) => value === 'true'),
     /** The fake supplier's scripted state, written by `supplier:fake` (development). */
     FAKE_SUPPLIER_STATE_FILE: z.string().min(1).default('./.data/fake-supplier.json'),
+    /**
+     * The VAPID pair of web push (S15): base64url, the public key 65 bytes (the API's value), the
+     * private key 32 bytes and only here. Both or neither: unset, push is not configured and
+     * `push.send` drops its jobs.
+     */
+    VAPID_PUBLIC_KEY: optional().pipe(
+      z
+        .string()
+        .refine((value) => base64UrlByteLength(value) === 65, 'Expected base64url of 65 bytes')
+        .optional(),
+    ),
+    VAPID_PRIVATE_KEY: optional().pipe(
+      z
+        .string()
+        .refine((value) => base64UrlByteLength(value) === 32, 'Expected base64url of 32 bytes')
+        .optional(),
+    ),
+    /** The VAPID contact (`mailto:`); defaults to `EMAIL_FROM`. */
+    VAPID_SUBJECT: optional().pipe(
+      z
+        .string()
+        .regex(/^(mailto:|https:)/)
+        .optional(),
+    ),
+    /**
+     * How pushes leave (S15 PD7): `log` writes each would-be request (host, headers, payload) to
+     * a JSON Lines file per notification under PUSH_LOG_DIR and sends nothing (development and
+     * tests); `web-push` sends, the default and the only choice in production.
+     */
+    PUSH_TRANSPORT: z.enum(['log', 'web-push']).optional(),
+    PUSH_LOG_DIR: z.string().min(1).default('./.data/push'),
+  })
+  .refine((env) => Boolean(env.VAPID_PUBLIC_KEY) === Boolean(env.VAPID_PRIVATE_KEY), {
+    message: 'VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY go together',
+    path: ['VAPID_PRIVATE_KEY'],
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || env.PUSH_TRANSPORT !== 'log', {
+    message: 'Production sends pushes through the push services',
+    path: ['PUSH_TRANSPORT'],
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.TELEGRAM_TRANSPORT !== 'log', {
     message: 'Production sends Telegram messages through the Bot API',
@@ -223,6 +266,10 @@ export const envSchema = z
     TELEGRAM_TRANSPORT:
       env.TELEGRAM_TRANSPORT ??
       (env.NODE_ENV === 'production' ? ('api' as const) : ('log' as const)),
+    PUSH_TRANSPORT:
+      env.PUSH_TRANSPORT ??
+      (env.NODE_ENV === 'production' ? ('web-push' as const) : ('log' as const)),
+    VAPID_SUBJECT: env.VAPID_SUBJECT ?? `mailto:${env.EMAIL_FROM}`,
   }));
 
 export type Env = z.infer<typeof envSchema>;

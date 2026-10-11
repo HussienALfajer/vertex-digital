@@ -40,7 +40,7 @@ Run from the repository root (Node 24, pnpm via Corepack: `corepack enable`).
 | Task | Command |
 |---|---|
 | Install | `pnpm install` |
-| Local databases: `.env` with random passwords, the owner and app roles (ADR 0014), dev and test databases with the `pgboss` schema (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
+| Local databases: `.env` with random passwords and a local VAPID key pair for web push (S15), the owner and app roles (ADR 0014), dev and test databases with the `pgboss` schema (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
 | Dev: api, worker, store (http://127.0.0.1:3001) and admin (http://127.0.0.1:5173) in watch mode | `pnpm dev` |
 | Typecheck · lint · lint fix | `pnpm typecheck` · `pnpm lint` · `pnpm lint:fix` |
 | Unit + integration tests (need the test database URLs in `.env`) | `pnpm test` |

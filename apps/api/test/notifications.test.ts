@@ -201,9 +201,11 @@ describe('email preferences (rule NT8)', () => {
 
   it('are all on by default', async () => {
     const customer = await signedIn();
+    const allOn = Object.fromEntries(NOTIFICATION_EVENTS.map((event) => [event, true]));
     expect(await preferencesOf(customer.cookie)).toEqual({
       status: 200,
-      email: Object.fromEntries(NOTIFICATION_EVENTS.map((event) => [event, true])),
+      email: allOn,
+      push: allOn,
     });
   });
 

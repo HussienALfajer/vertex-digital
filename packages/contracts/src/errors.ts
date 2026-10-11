@@ -209,6 +209,10 @@ export const ERROR_CODES = [
   'CONTENT_UNCHANGED',
   /** Too many FAQ sections or questions, banners or announcements (S14 FQ2, BN3, AN2). */
   'CONTENT_LIMIT_REACHED',
+  /** The API has no VAPID public key: push is off in this environment (S15). */
+  'PUSH_NOT_CONFIGURED',
+  /** The endpoint is not `https:` on an allowed push service (S15 PS2). */
+  'PUSH_ENDPOINT_REFUSED',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

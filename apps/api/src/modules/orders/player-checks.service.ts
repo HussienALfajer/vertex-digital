@@ -24,6 +24,7 @@ import {
   type RouteState,
   type Transaction,
   validationsToday,
+  withinLimits,
 } from '@vertex-digital/db';
 import { and, desc, eq, gt } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -32,7 +33,7 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
-import { AuthService, withinLimits } from '../auth/index.js';
+import { AuthService } from '../auth/index.js';
 import { SupplierAdaptersService } from '../suppliers/index.js';
 import { asCodedException, orderRefusals } from './order-errors.js';
 

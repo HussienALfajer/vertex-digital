@@ -18,13 +18,13 @@ import {
   type ShareLinkRow,
   sharePath,
   type Transaction,
+  withinLimits,
 } from '@vertex-digital/db';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
-import { withinLimits } from '../auth/index.js';
 import { FilesService } from '../files/index.js';
 import { orderRefusals } from './order-errors.js';
 import { renderShareImage, type ShareImageFormat } from './share-image.js';

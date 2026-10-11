@@ -1,15 +1,23 @@
 import {
   type EmailParams,
   type EmailTemplate,
+  isPushNotificationEvent,
   NOTIFICATION_EMAIL_TEMPLATE,
   NOTIFICATION_PARAMS,
   type NotificationEvent,
   type NotificationParams,
+  QUEUES,
 } from '@vertex-digital/contracts';
 import { and, eq, sql } from 'drizzle-orm';
+import type { SendOptions } from 'pg-boss';
 import type { Transaction } from '../client.js';
 import { newId } from '../id.js';
-import { customerNotifications, customers, notificationPreferences } from '../schema/index.js';
+import {
+  customerNotifications,
+  customers,
+  notificationPreferences,
+  pushSubscriptions,
+} from '../schema/index.js';
 import { type JobSender, queueEmail } from './email-outbox.js';
 
 /** The `LISTEN` channel of new notifications; the payload is the notification id (rule NT6). */
@@ -28,8 +36,9 @@ export interface CustomerNotificationInput<Event extends NotificationEvent> {
  * The only writer of `customer_notifications` (S05 rule NT1), in the transaction of the change,
  * for the API and the worker: the row, the matching email unless the customer turned it off
  * (rule NT8) or the caller writes the center row only (`email: false`, S10 rule CT8: the orders
- * of a checkout), and a `pg_notify` that PostgreSQL delivers only at commit. A rolled-back change
- * leaves no row, no email and no event.
+ * of a checkout), a `push.send` job when the customer has a push device (S15 rule PD1; the worker
+ * reads the push preference at send time), and a `pg_notify` that PostgreSQL delivers only at
+ * commit. A rolled-back change leaves no row, no email, no push and no event.
  */
 export async function notifyCustomer<Event extends NotificationEvent>(
   tx: Transaction,
@@ -48,6 +57,8 @@ export async function notifyCustomer<Event extends NotificationEvent>(
   const template: EmailTemplate | null = NOTIFICATION_EMAIL_TEMPLATE[input.event];
   if (template === null || options.email === false)
     return { notificationId: row.id, emailId: null };
+
+  if (isPushNotificationEvent(input.event)) await queuePush(tx, jobs, input.customerId, row.id);
 
   const [customer] = await tx
     .select({ email: customers.email, emailOn: notificationPreferences.email })
@@ -72,4 +83,26 @@ export async function notifyCustomer<Event extends NotificationEvent>(
     customerId: input.customerId,
   });
   return { notificationId: row.id, emailId };
+}
+
+/** pg-boss retries off (S15 rule PD5): the job queues its own retry of the failed devices. */
+export const PUSH_SEND_OPTIONS: SendOptions = { retryLimit: 0 };
+
+/**
+ * S15 rule PD1: one `push.send` job when the customer has at least one device; none when push is
+ * not configured, since no device can exist then. The preference and the devices' sessions are
+ * read by the worker at send time (PD2), so a change between now and then applies.
+ */
+async function queuePush(
+  tx: Transaction,
+  jobs: JobSender,
+  customerId: string,
+  notificationId: string,
+): Promise<void> {
+  const [device] = await tx
+    .select({ id: pushSubscriptions.id })
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.customerId, customerId))
+    .limit(1);
+  if (device) await jobs.send(tx, QUEUES.pushSend, { notificationId }, PUSH_SEND_OPTIONS);
 }

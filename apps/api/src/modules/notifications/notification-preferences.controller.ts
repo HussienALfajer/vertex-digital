@@ -11,7 +11,7 @@ import { requestMeta } from '../../core/http/request-meta.js';
 import type { CustomerIdentity } from '../auth/index.js';
 import { NotificationsService } from './notifications.service.js';
 
-/** The customer's email choices (S05 rule NT8), on `/account`. */
+/** The customer's email and push choices (S05 rule NT8, S15 rule PP1), on `/account`. */
 @ApiTags('notifications')
 @Controller('account/notification-preferences')
 export class NotificationPreferencesController {
@@ -22,7 +22,7 @@ export class NotificationPreferencesController {
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: notificationPreferencesSchema })
   @ApiOkResponse({
-    description: 'The email choice per event',
+    description: 'The email and push choice per event',
     standardSchema: notificationPreferencesSchema,
   })
   preferences(@CurrentCustomer() customer: CustomerIdentity) {

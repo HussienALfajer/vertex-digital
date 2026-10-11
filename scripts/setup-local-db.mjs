@@ -11,7 +11,7 @@
 // role owns (from a single-role setup) is handed to the owner role.
 // Superuser name: --superuser=NAME (default "postgres").
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createECDH, randomBytes } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -54,6 +54,29 @@ if (!existsSync(envFile)) {
       `${separator}\n# Added by db:setup-local from .env.example\n${fillPasswords(missing.join('\n'), passwords)}\n`,
     );
     console.warn(`Added to .env: ${missing.map(keyOf).join(', ')}.`);
+  }
+}
+// S15: a local VAPID pair for web push, generated once when .env holds none (placeholders count
+// as none). The private key never leaves this machine; production generates its own.
+{
+  const current = readFileSync(envFile, 'utf8');
+  const unset = (key) => new RegExp(`^${key}=(replace-me)?$`, 'm').test(current);
+  if (unset('VAPID_PUBLIC_KEY') && unset('VAPID_PRIVATE_KEY')) {
+    const ecdh = createECDH('prime256v1');
+    ecdh.generateKeys();
+    const privateKey = Buffer.alloc(32);
+    ecdh.getPrivateKey().copy(privateKey, 32 - ecdh.getPrivateKey().length);
+    const publicKey = ecdh.getPublicKey().toString('base64url');
+    writeFileSync(
+      envFile,
+      current
+        .replace(/^VAPID_PUBLIC_KEY=.*$/m, `VAPID_PUBLIC_KEY=${publicKey}`)
+        .replace(
+          /^VAPID_PRIVATE_KEY=.*$/m,
+          `VAPID_PRIVATE_KEY=${privateKey.toString('base64url')}`,
+        ),
+    );
+    console.warn('Generated a local VAPID key pair for web push.');
   }
 }
 if (process.argv.includes('--env-only')) process.exit(0);

@@ -19,6 +19,7 @@ import { OrdersPayWaitingJob } from './jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from './jobs/orders/poll.job.js';
 import { OrdersSweepJob } from './jobs/orders/sweep.job.js';
 import { OrdersWaitingSweepJob } from './jobs/orders/waiting-sweep.job.js';
+import { SendPushJob } from './jobs/push/send.job.js';
 import { ReconciliationRecheckJob } from './jobs/reconciliation/recheck.job.js';
 import { ReconciliationRunner } from './jobs/reconciliation/reconciliation-runner.js';
 import { ReconciliationRunJob } from './jobs/reconciliation/run.job.js';
@@ -35,6 +36,7 @@ import { DailySummaryJob } from './jobs/telegram/daily-summary.job.js';
 import { DepositCardJob } from './jobs/telegram/deposit-card.job.js';
 import { ReviewReminderJob } from './jobs/telegram/review-reminder.job.js';
 import { SendTelegramJob } from './jobs/telegram/send.job.js';
+import { PushSender } from './push/push-sender.js';
 import { SupplierRegistry } from './suppliers/supplier-registry.js';
 import { TelegramBot } from './telegram/bot-api.js';
 import { LinkedChat } from './telegram/linked-chat.js';
@@ -65,6 +67,23 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
           botToken: env.TELEGRAM_BOT_TOKEN,
           apiUrl: env.TELEGRAM_API_URL,
           logDir: env.TELEGRAM_LOG_DIR,
+        }),
+    },
+    {
+      provide: PushSender,
+      inject: [ENV],
+      useFactory: (env: Env) =>
+        new PushSender({
+          transport: env.PUSH_TRANSPORT,
+          vapid:
+            env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
+              ? {
+                  publicKey: env.VAPID_PUBLIC_KEY,
+                  privateKey: env.VAPID_PRIVATE_KEY,
+                  subject: env.VAPID_SUBJECT,
+                }
+              : undefined,
+          logDir: env.PUSH_LOG_DIR,
         }),
     },
     { provide: LinkedChat, inject: [DATABASE], useFactory: (db: Database) => new LinkedChat(db) },
@@ -105,6 +124,7 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     StoreRevalidateJob,
     SupportAutoCloseJob,
     PurgeSignInsJob,
+    SendPushJob,
   ],
 })
 export class WorkerModule implements OnApplicationBootstrap {

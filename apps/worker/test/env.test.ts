@@ -194,4 +194,30 @@ describe('worker environment', () => {
       parseEnv({ ...production, STORE_REVALIDATE_SECRET: secret }).STORE_REVALIDATE_SECRET,
     ).toBe(secret);
   });
+  it('configures web push with both VAPID keys or neither (S15)', () => {
+    const publicKey = `B${'A'.repeat(86)}`;
+    const privateKey = 'P'.repeat(43);
+    expect(parseEnv({ DATABASE_URL }).VAPID_PUBLIC_KEY).toBeUndefined();
+    expect(parseEnv({ DATABASE_URL })).toMatchObject({
+      PUSH_TRANSPORT: 'log',
+      PUSH_LOG_DIR: './.data/push',
+      VAPID_SUBJECT: 'mailto:info@vertexmedia.pro',
+    });
+    expect(
+      parseEnv({ DATABASE_URL, VAPID_PUBLIC_KEY: 'replace-me', VAPID_PRIVATE_KEY: 'replace-me' })
+        .VAPID_PUBLIC_KEY,
+    ).toBeUndefined();
+    expect(() => parseEnv({ DATABASE_URL, VAPID_PUBLIC_KEY: publicKey })).toThrow(
+      'VAPID_PRIVATE_KEY',
+    );
+    expect(() =>
+      parseEnv({ DATABASE_URL, VAPID_PUBLIC_KEY: 'short', VAPID_PRIVATE_KEY: privateKey }),
+    ).toThrow('VAPID_PUBLIC_KEY');
+    expect(
+      parseEnv({ DATABASE_URL, VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: privateKey }),
+    ).toMatchObject({ VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: privateKey });
+    expect(() => parseEnv({ DATABASE_URL, NODE_ENV: 'production', PUSH_TRANSPORT: 'log' })).toThrow(
+      'PUSH_TRANSPORT',
+    );
+  });
 });

@@ -10,6 +10,7 @@ export * from './ledger/index.js';
 export * from './notifications/index.js';
 export * from './orders/index.js';
 export * from './pricing/index.js';
+export * from './rate-limits.js';
 export * from './reconciliation/index.js';
 export * from './reports/index.js';
 export * from './schema/index.js';

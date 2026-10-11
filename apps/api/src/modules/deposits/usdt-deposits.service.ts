@@ -31,6 +31,7 @@ import {
   usdtDeposits,
   usdtReserved,
   usdtTransfers,
+  withinLimits,
 } from '@vertex-digital/db';
 import { and, between, eq, ne, or, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -38,7 +39,6 @@ import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
-import { withinLimits } from '../auth/index.js';
 import { SettingsService } from '../settings/index.js';
 import {
   AlreadyCreated,

@@ -24,6 +24,7 @@ import {
   purchaseOrder,
   revealCode,
   type Transaction,
+  withinLimits,
 } from '@vertex-digital/db';
 import { z } from 'zod';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -32,7 +33,7 @@ import { DATABASE } from '../../core/database/database.module.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { decodeCursor, encodeCursor } from '../../core/lists/cursor.js';
-import { AuthService, withinLimits } from '../auth/index.js';
+import { AuthService } from '../auth/index.js';
 import { SettingsService } from '../settings/index.js';
 import { asCodedException, orderRefusals } from './order-errors.js';
 import { PlayerChecksService } from './player-checks.service.js';

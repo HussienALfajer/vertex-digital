@@ -24,6 +24,8 @@ export default defineConfig({
       // The Telegram bot is configured; a test turns it off to see the refusal.
       TELEGRAM_BOT_USERNAME: 'vertex_test_bot',
       TELEGRAM_WEBHOOK_SECRET: 'test-webhook-secret-0123456789abcdef',
+      // S15: push is configured with a fake public key (87 base64url characters, 65 bytes).
+      VAPID_PUBLIC_KEY: `BTest${'A'.repeat(82)}`,
       // S07: suppliers are tested with the fake supplier.
       SUPPLIER_FAKE_ENABLED: 'true',
       // S09: the fake's scripted state the player checks read, the tests' own (git-ignored).

@@ -233,3 +233,17 @@ None.
   - Worker: the job with the `log` transport (sent to live subscriptions only, preference off, expired session, old key, notification older than 24 hours), a mock push service answering 201, 410, 429 and 403 (row deleted, retried with only failed ids, Sentry once), the host re-check.
   - Store unit: the permission card's conditions (PC1), the URL check of the tap handler (SW7), the subscription refresh rule (PS6, PS7).
   - E2E: the manifest and `/sw.js` served with their headers; the offline page with the browser offline; the card flow with permission granted (Playwright `context.grantPermissions(['notifications'])`, `PUT` mocked), denied and the iOS hint; the preferences push column and the device switch; first-load budgets unchanged (`e2e/store.spec.ts`); the admin profile count; RTL screenshots listed under Screens.
+
+## Settled in implementation
+- PR plan: PR 1 is contracts, db, api and worker; PR 2 is the store (PWA, install, push client, card, switches, preferences column), the admin profile line and E2E.
+- PR 1:
+  - `PUSH_NOTIFICATION_EVENTS` and `isPushNotificationEvent` live in `notifications.ts` beside the email events (the preferences union needs them); `push.ts` holds the hosts, `pushEndpointAllowed` (PS2), `base64UrlByteLength`, `vapidKeyId` (PS7), the limits and the subscription, removal and config schemas. Both preference channels list every event, as `email` already did.
+  - Status codes: `PUSH_NOT_CONFIGURED` is 409, `PUSH_ENDPOINT_REFUSED` 400. `GET /api/push/config` is limited to 60 a minute per address. The store catalog explains both codes; the admin never receives them.
+  - The 20 changes an hour count registrations and removals together, per customer, in `customer_rate_limits`. The counter (`withinLimits`) moved from the api `auth` module to `packages/db/src/rate-limits.ts`, so `notifications`, which sits below `auth`, can count without an import cycle.
+  - PS1 and PS3 run under an advisory lock per customer; the cap deletes beyond the 10 newest by `updated_at`. A re-registration of the same endpoint clears `failures`.
+  - `push.send` carries `retry` (1 or 2) beside `subscriptionIds`, so a retry knows its delay and that the second is the last (PD5). pg-boss retries are off (`PUSH_SEND_OPTIONS`); a fault of ours still fails the job with the usual alert.
+  - `Topic` is limited by RFC 8030 to 32 base64url characters, fewer than a tag with a UUID: it is the first 32 characters of the tag's SHA-256 in base64url (PD3).
+  - `push_subscriptions.customer_id` has no cascade: test clean-ups delete devices before customers. The admin's `pushDevices` counts devices of unexpired sessions, whatever their key.
+  - A device whose endpoint fails the worker's host re-check is deleted (`host_refused`). Any answer outside PD4's lists (a 3xx: redirects are not followed) is transient.
+  - `PUSH_TRANSPORT=log` appends one JSON line per device to `<PUSH_LOG_DIR>/<notificationId>.jsonl`: the host, `TTL`, `Urgency`, `Topic` and the payload; never the keys or the VAPID JWT. `VAPID_SUBJECT` defaults to `mailto:` and `EMAIL_FROM`.
+  - The checkout text counts `delivered` as the event carries it, and adds "وأُعيد الباقي إلى رصيدك" when `refundedUsdUnits` is above 0. PT3's texts were checked against `brand/identity.md` §10: no exclamation marks, Latin digits.

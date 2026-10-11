@@ -12,9 +12,11 @@ import {
   customerSessions,
   customers,
   type Database,
+  type Limit,
   newId,
   recordAudit,
   type Transaction,
+  withinLimits,
 } from '@vertex-digital/db';
 import { hashPassword, verifyPassword } from 'better-auth/crypto';
 import { and, eq, isNull, ne } from 'drizzle-orm';
@@ -25,7 +27,6 @@ import type { RequestMeta } from '../../core/http/request-meta.js';
 import { NotificationsService } from '../notifications/index.js';
 import { SettingsService } from '../settings/index.js';
 import { type CodeCheck, checkCode, issueCode, issueDecoyCode } from './email-codes.js';
-import { type Limit, withinLimits } from './rate-counter.js';
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;

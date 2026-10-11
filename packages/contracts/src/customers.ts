@@ -435,6 +435,8 @@ export const adminCustomerSchema = z
       activeSessions: z.int().nonnegative(),
       /** What a freeze would cancel (CF1). */
       reservations: z.int().nonnegative(),
+      /** S15: the devices with push on. */
+      pushDevices: z.int().nonnegative(),
     }),
     signals: customerSignalsSchema,
     /** S14 TA3: the versions in force at sign-up; null before the page was published. */

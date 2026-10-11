@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
-import { type UsdtMethod, usdtAddressSchemas } from '@vertex-digital/contracts';
+import {
+  base64UrlByteLength,
+  type UsdtMethod,
+  usdtAddressSchemas,
+} from '@vertex-digital/contracts';
 import { z } from 'zod';
 
 /** Values `.env.example` ships: never secrets, so they count as unset. */
@@ -163,6 +167,21 @@ export const envSchema = z
      * read `--errors`); a relative path resolves from `apps/worker`, where the worker runs.
      */
     FAKE_SUPPLIER_STATE_FILE: z.string().min(1).default('./.data/fake-supplier.json'),
+    /**
+     * The VAPID public key of web push (S15): base64url of the 65-byte P-256 point, the worker's
+     * pair. Unset (or a placeholder), push is not configured: `GET /api/push/config` answers
+     * null and registrations are refused. The private key never reaches the API.
+     */
+    VAPID_PUBLIC_KEY: z
+      .string()
+      .optional()
+      .transform((value) => (value && !isPlaceholder(value) ? value : undefined))
+      .pipe(
+        z
+          .string()
+          .refine((value) => base64UrlByteLength(value) === 65, 'Expected base64url of 65 bytes')
+          .optional(),
+      ),
     /** Empty disables Sentry. */
     SENTRY_DSN: z
       .string()

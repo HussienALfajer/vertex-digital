@@ -79,13 +79,19 @@ export class MockApi {
     ['GET /api/altcha/challenge', { status: 200, body: ALTCHA_CHALLENGE }],
     // An empty wallet: the header's balance chip reads it on every page once signed in (S02 W8).
     ['GET /api/wallet', { status: 200, body: { balanceUnits: 0, syp: null } }],
-    // Every email on (S05 rule NT8): the account page reads the choices.
+    // Every email and push on (S05 rule NT8, S15 PP1): the account page reads the choices.
     [
       'GET /api/account/notification-preferences',
       {
         status: 200,
         body: {
           email: {
+            deposit_credited: true,
+            deposit_rejected: true,
+            deposit_receipt_requested: true,
+            wallet_adjusted: true,
+          },
+          push: {
             deposit_credited: true,
             deposit_rejected: true,
             deposit_receipt_requested: true,
