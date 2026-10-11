@@ -169,6 +169,12 @@ beforeAll(async () => {
     }),
     200,
   );
+  // Saving the credentials starts a sync no worker runs here: end it, as `live-operations` does,
+  // or the worker's sync tests find it running.
+  await test.db.execute(
+    sql`update supplier_sync_runs set status = 'failed', finished_at = now(), error_code = 'TEST'
+        where supplier_id = ${state.fake} and status = 'running'`,
+  );
   const category = await json<{ id: string }>(
     await client.post('/api/admin/catalog/categories', {
       cookie: admin.cookie,
