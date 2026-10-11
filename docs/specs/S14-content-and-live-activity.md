@@ -302,3 +302,13 @@ None blocking S14. Q10 (the texts of the terms, privacy, refund and about pages,
   - Audit entities without a UUID use fixed ids: the pages `…0c0001`–`…0c0004` (terms, privacy, refund, about), the FAQ `…0c0010`, the content settings `…0c0020` (all `00000000-0000-7000-8000-…`).
   - The three new error codes are in the admin catalog only: the store never receives them (as S13's admin codes).
   - The banner's minimum size is checked on the stored image (within 1600 px), which keeps the 2:1 ratio and is at least the minimum exactly when the upload is.
+- PR 2 (RichText, admin screens, store):
+  - `packages/ui` also holds the two presentational parts the store and the panel's previews share, so a preview is the store's own markup: `ActivityFeed` (LA7: three items, the rest in a native `<details>`, names isolated with `<bdi>` so "660 UC" keeps its order) and `AnnouncementBar` (AN1: the link stays outside the two clamped lines, so a long text never hides it). The texts come in translated.
+  - LA4's "منذ نحو N" is `activityAge` in the contracts (whole 5 minutes, at least 5, under an hour; whole hours after); the plural forms are picked with `Intl.PluralRules('ar')` in the store and by i18next in the panel.
+  - AN4 without a flash: the bar renders on the server, followed by a constant inline script that hides it when the stored `<id>:<revision>` matches (a root-attribute CSS rule would need the bar's key, which is API data, written into a style); only the close button is a client part, since Next loads a layout's client parts on every page.
+  - FQ7's fragment is the last 8 hex digits of the id (`/faq#q-xxxxxxxx`, sections `#s-xxxxxxxx`): the first digits of a UUIDv7 are its creation time and repeat for rows made in the same minute.
+  - The four pages and `/faq` are partially prerendered: the status is already 200 when the streamed part answers not found, so an unpublished page shows the not-found view with `noindex`, as the game pages have since S09.
+  - SL5: the home page's first load measured 212 KB (the content strings, 1 KB, and the carousel's and the close button's client parts); the home budget is 215 KB, as SL5 allows. `/terms` and `/faq` stay within their 215 KB.
+  - Schedules are entered in `datetime-local` fields read as Damascus wall-clock time (`apps/admin/src/features/content/damascus-time.ts`), whatever the viewer's zone.
+  - The page editor publishes only a saved draft: "نشر" is disabled while the editor holds unsaved changes or Markdown problems, so the revision sent is the one saved and previewed (PG5).
+  - E2E: a third store on port 4004 reads published content from `e2e/catalog-server.mjs` under `/content`; the default and empty stores read none, so the other specs' pages are unchanged.

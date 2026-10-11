@@ -534,6 +534,19 @@ export function floorToFiveMinutes(date: Date): Date {
   return new Date(Math.floor(date.getTime() / FIVE_MINUTES_MS) * FIVE_MINUTES_MS);
 }
 
+/**
+ * Rule LA4: how long ago a floored delivery time was, as the store says it: whole minutes in
+ * steps of 5 (at least 5) under an hour, whole hours after; the front ends pick the plural form.
+ */
+export function activityAge(
+  deliveredAt: Date,
+  now: Date,
+): { unit: 'minutes' | 'hours'; count: number } {
+  const minutes = Math.floor((now.getTime() - deliveredAt.getTime()) / 60_000);
+  if (minutes < 60) return { unit: 'minutes', count: Math.max(5, minutes - (minutes % 5)) };
+  return { unit: 'hours', count: Math.floor(minutes / 60) };
+}
+
 export type DurationUnit = 'seconds' | 'minutes' | 'hours';
 
 /**

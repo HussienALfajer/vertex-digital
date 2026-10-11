@@ -1,7 +1,9 @@
 export { AscentLines } from './brand/ascent-lines';
 export { VertexLogo, VertexMark } from './brand/logo';
 export { SuccessMark } from './brand/success-mark';
+export * from './components/activity-feed';
 export * from './components/alert-dialog';
+export * from './components/announcement-bar';
 export * from './components/autocomplete';
 export * from './components/avatar';
 export * from './components/badge';
@@ -25,6 +27,7 @@ export * from './components/pagination';
 export * from './components/password-input';
 export * from './components/popover';
 export * from './components/progress';
+export * from './components/rich-text';
 export * from './components/select';
 export * from './components/sheet';
 export * from './components/skeleton';

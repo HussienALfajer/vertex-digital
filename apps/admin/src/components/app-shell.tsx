@@ -30,6 +30,7 @@ import {
   type LucideIcon,
   MenuIcon,
   MessageCircleQuestionIcon,
+  NewspaperIcon,
   PercentIcon,
   RadioTowerIcon,
   ScaleIcon,
@@ -69,6 +70,7 @@ interface NavItem {
     | 'nav.support'
     | 'nav.supportSettings'
     | 'nav.catalog'
+    | 'nav.content'
     | 'nav.suppliers'
     | 'nav.pricing'
     | 'nav.priceReviews'
@@ -104,6 +106,7 @@ const navItems: NavItem[] = [
   { to: '/customers', label: 'nav.customers', icon: ContactRoundIcon },
   { to: '/support', label: 'nav.support', icon: LifeBuoyIcon },
   { to: '/catalog', label: 'nav.catalog', icon: Gamepad2Icon },
+  { to: '/content', label: 'nav.content', icon: NewspaperIcon },
   { to: '/suppliers', label: 'nav.suppliers', icon: TruckIcon },
   { to: '/pricing', label: 'nav.pricing', icon: PercentIcon, except: '/pricing/reviews' },
   { to: '/pricing/reviews', label: 'nav.priceReviews', icon: ScaleIcon },

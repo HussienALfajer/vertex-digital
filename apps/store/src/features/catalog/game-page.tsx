@@ -2,6 +2,8 @@ import type { StoreGame } from '@vertex-digital/contracts';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { Gamepad2Icon } from 'lucide-react';
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
+import { ActivityCard } from '@/features/content/activity-card';
 import { t } from '@/lib/i18n';
 import { CatalogPicture } from './catalog-picture';
 import { getGame } from './data';
@@ -79,6 +81,9 @@ export async function GamePage({ params }: { params: Promise<{ slug: string }> }
             ]),
           )}
         />
+        <Suspense fallback={null}>
+          <ActivityCard game={game.slug} />
+        </Suspense>
       </div>
     </div>
   );

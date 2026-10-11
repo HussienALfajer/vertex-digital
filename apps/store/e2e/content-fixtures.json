@@ -1,0 +1,144 @@
+{
+  "site": {
+    "announcement": {
+      "id": "0199e000-0000-7000-8000-0000000000a1",
+      "revision": 2,
+      "text": "الشحن يعمل كالمعتاد طوال أيام العيد، وقد تتأخر طلبات بطاقات iTunes حتى ساعة.",
+      "linkPath": "/faq",
+      "tone": "info"
+    },
+    "banners": [
+      {
+        "id": "0199e000-0000-7000-8000-0000000000b1",
+        "imageId": "0199e000-0000-7000-8000-0000000000c1",
+        "altText": "عرض شدات ببجي موبايل",
+        "linkPath": "/games/pubg-mobile"
+      },
+      {
+        "id": "0199e000-0000-7000-8000-0000000000b2",
+        "imageId": "0199e000-0000-7000-8000-0000000000c2",
+        "altText": "اشحن محفظتك بالدولار",
+        "linkPath": null
+      }
+    ],
+    "pages": [
+      {
+        "page": "terms",
+        "title": "الشروط والأحكام",
+        "updatedAt": "2026-10-10T22:30:00.000Z"
+      },
+      {
+        "page": "privacy",
+        "title": "سياسة الخصوصية",
+        "updatedAt": "2026-10-09T09:00:00.000Z"
+      }
+    ],
+    "faqPublished": true
+  },
+  "pages": {
+    "terms": {
+      "page": "terms",
+      "title": "الشروط والأحكام",
+      "version": 2,
+      "updatedAt": "2026-10-10T22:30:00.000Z",
+      "body": "تنظّم هذه الشروط استخدامك لمتجر Vertex Digital وشراءك منه.\n\n## المحفظة\nتُشحن المحفظة **بالدولار**، ولا يُسحب رصيدها نقداً.\n\n## الطلبات\n- يُنفَّذ الطلب فور الدفع من المحفظة.\n- الطلب المسلَّم نهائي.\n  - يُعاد المبلغ إلى المحفظة إن تعذّر التسليم.\n\n### الأكواد\nتظهر الأكواد للمشتري وحده.\n\n> لأي سؤال، راجع [الأسئلة الشائعة](/faq) أو [الدعم](/support)."
+    },
+    "privacy": {
+      "page": "privacy",
+      "title": "سياسة الخصوصية",
+      "version": 1,
+      "updatedAt": "2026-10-09T09:00:00.000Z",
+      "body": "نحفظ بريدك ورقم هاتفك ومعرّفات اللاعبين التي تستخدمها لتنفيذ طلباتك فقط.\n\n## ما لا نفعله\n1. لا نبيع بياناتك.\n2. لا نعرض اسمك أو معرّفك في النشاط الحي."
+    }
+  },
+  "faq": {
+    "updatedAt": "2026-10-11T08:00:00.000Z",
+    "sections": [
+      {
+        "id": "0199e000-0000-7000-8000-0000000000d1",
+        "title": "الشحن",
+        "items": [
+          {
+            "id": "0199e000-0000-7000-8000-0000000000e1",
+            "question": "كم يستغرق وصول الشحن؟",
+            "answer": "تصل أغلب الطلبات **خلال ثوانٍ**. إن تأخر طلبك، تابعه من [طلباتي](/orders)."
+          },
+          {
+            "id": "0199e000-0000-7000-8000-0000000000e2",
+            "question": "أين أجد معرّف اللاعب؟",
+            "answer": "في صفحة كل لعبة زر \"أين أجد المعرّف؟\" يشرح ذلك بالصور."
+          }
+        ]
+      },
+      {
+        "id": "0199e000-0000-7000-8000-0000000000d2",
+        "title": "المحفظة",
+        "items": [
+          {
+            "id": "0199e000-0000-7000-8000-0000000000e3",
+            "question": "هل يمكنني سحب رصيد المحفظة؟",
+            "answer": "لا. رصيد المحفظة للشراء من المتجر فقط:\n- يُعاد إليها مبلغ أي طلب تعذّر تسليمه.\n- لا يُحوَّل نقداً."
+          }
+        ]
+      }
+    ]
+  },
+  "activity": [
+    {
+      "gameSlug": "pubg-mobile",
+      "gameNameAr": "ببجي موبايل",
+      "productNameAr": "660 UC",
+      "quantity": 1,
+      "durationSeconds": 14,
+      "minutesAgo": 5
+    },
+    {
+      "gameSlug": "free-fire",
+      "gameNameAr": "فري فاير",
+      "productNameAr": "520 جوهرة",
+      "quantity": 2,
+      "durationSeconds": 9,
+      "minutesAgo": 10
+    },
+    {
+      "gameSlug": "pubg-mobile",
+      "gameNameAr": "ببجي موبايل",
+      "productNameAr": "60 UC",
+      "quantity": 1,
+      "durationSeconds": 3,
+      "minutesAgo": 25
+    },
+    {
+      "gameSlug": "itunes",
+      "gameNameAr": "بطاقات iTunes",
+      "productNameAr": "10 دولار",
+      "quantity": 1,
+      "durationSeconds": 190,
+      "minutesAgo": 40
+    },
+    {
+      "gameSlug": "pubg-mobile",
+      "gameNameAr": "ببجي موبايل",
+      "productNameAr": "325 UC",
+      "quantity": 3,
+      "durationSeconds": 22,
+      "minutesAgo": 75
+    },
+    {
+      "gameSlug": "pubg-mobile",
+      "gameNameAr": "ببجي موبايل",
+      "productNameAr": "1800 UC",
+      "quantity": 1,
+      "durationSeconds": 7300,
+      "minutesAgo": 190
+    },
+    {
+      "gameSlug": "pubg-mobile",
+      "gameNameAr": "ببجي موبايل",
+      "productNameAr": "60 UC",
+      "quantity": 1,
+      "durationSeconds": 11,
+      "minutesAgo": 300
+    }
+  ]
+}
