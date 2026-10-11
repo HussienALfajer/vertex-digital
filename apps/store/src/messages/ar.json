@@ -186,6 +186,7 @@
       "purchase": "شراء",
       "refund": "أُعيد المبلغ إلى المحفظة",
       "cost_of_goods": "تكلفة",
+      "treasury": "حركة خزينة",
       "adjustment": "تعديل الرصيد"
     },
     "categories": {

@@ -292,7 +292,15 @@
       "TICKETS_LIMIT_REACHED": "بلغ العميل الحد الأقصى من التذاكر.",
       "TICKET_ALREADY_OPEN": "لهذا الطلب أو الإيداع تذكرة مفتوحة بالفعل.",
       "TICKET_CLOSED": "هذه التذكرة مغلقة.",
-      "TICKET_LINK_INVALID": "الطلب أو الإيداع المختار لا يخص هذا العميل أو لا يناسب نوع التذكرة."
+      "TICKET_LINK_INVALID": "الطلب أو الإيداع المختار لا يخص هذا العميل أو لا يناسب نوع التذكرة.",
+      "RECONCILIATION_RUNNING": "تجري مطابقة الآن. انتظر انتهاءها ثم أعد المحاولة.",
+      "RESULT_NOT_EXPLAINABLE": "لا يمكن شرح هذه النتيجة: شُرحت من قبل أو ظهرت بعدها نتيجة أحدث.",
+      "TREASURY_PLACES_INVALID": "اختر مكانين مختلفين، ولا تكون الحركة من خارج المتجر إلى خارجه.",
+      "MOVEMENT_RECEIVED_EXCEEDS_SENT": "المبلغ الواصل أكبر من المرسل بالعملة نفسها.",
+      "OPENING_BALANCE_EXISTS": "لهذا المكان حركات مسجلة: الرصيد الافتتاحي يكون أول حركة فقط.",
+      "MOVEMENT_ALREADY_REVERSED": "عُكست هذه الحركة من قبل.",
+      "MOVEMENT_NOT_REVERSIBLE": "لا يمكن عكس حركة عكسية.",
+      "REPORT_PERIOD_INVALID": "الفترة غير صحيحة: يجب أن تبدأ قبل نهايتها وألا تزيد على 366 يومًا."
     }
   },
   "changePassword": {
@@ -438,7 +446,12 @@
       "order_policy": "سياسة الطلبات",
       "customer_note": "ملاحظة عميل",
       "support_ticket": "تذكرة دعم",
-      "support_settings": "إعدادات الدعم"
+      "support_settings": "إعدادات الدعم",
+      "treasury_movement": "حركة خزينة",
+      "reconciliation_run": "مطابقة",
+      "reconciliation_result": "نتيجة مطابقة",
+      "reconciliation_settings": "إعدادات المطابقة",
+      "report": "تقرير"
     },
     "fields": {
       "name": "الاسم",
@@ -659,7 +672,13 @@
       "ticket.replied": "رد على تذكرة",
       "ticket.closed": "إغلاق تذكرة",
       "ticket.reopened": "إعادة فتح تذكرة",
-      "support.settings_changed": "تعديل إعدادات الدعم"
+      "support.settings_changed": "تعديل إعدادات الدعم",
+      "treasury_movement.created": "تسجيل حركة خزينة",
+      "treasury_movement.reversed": "عكس حركة خزينة",
+      "reconciliation_run.started": "تشغيل مطابقة",
+      "reconciliation_result.explained": "شرح حالة عدم تطابق",
+      "reconciliation_settings.changed": "تعديل إعدادات المطابقة",
+      "report.exported": "تصدير تقرير"
     }
   },
   "testCustomers": {
@@ -731,7 +750,8 @@
       "purchase": "شراء",
       "refund": "استرداد إلى المحفظة",
       "cost_of_goods": "تكلفة البضاعة",
-      "adjustment": "تعديل الرصيد"
+      "adjustment": "تعديل الرصيد",
+      "treasury": "حركة خزينة"
     },
     "accountKinds": {
       "customer_wallet": "محفظة عميل",
@@ -743,7 +763,10 @@
       "refunds": "المبالغ المعادة",
       "adjustments": "التعديلات",
       "currency_exchange": "صرف العملات",
-      "deposit_rounding": "كسور الإيداع"
+      "deposit_rounding": "كسور الإيداع",
+      "outside_funds": "أموال من خارج المتجر",
+      "transfer_fees": "رسوم التحويل",
+      "supplier_corrections": "تصحيحات أرصدة الموردين"
     },
     "summary": {
       "title": "ما يدين به المتجر للعملاء",

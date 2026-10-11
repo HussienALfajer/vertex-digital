@@ -187,6 +187,22 @@ export const ERROR_CODES = [
   'TICKET_CLOSED',
   /** The ticket's order or deposit is missing for its type, given for another, or not the customer's (S12 TK1). */
   'TICKET_LINK_INVALID',
+  /** A reconciliation run is already running (S13 RN2, RN6). */
+  'RECONCILIATION_RUNNING',
+  /** Only the newest result of its check and subject, a mismatch not yet explained (S13 RN8). */
+  'RESULT_NOT_EXPLAINABLE',
+  /** The same place twice, or outside to outside (S13 T2). */
+  'TREASURY_PLACES_INVALID',
+  /** More received than sent in one currency (S13 T3). */
+  'MOVEMENT_RECEIVED_EXCEEDS_SENT',
+  /** The place already has a movement: an opening balance comes first (S13 T6). */
+  'OPENING_BALANCE_EXISTS',
+  /** The movement was already reversed (S13 T9). */
+  'MOVEMENT_ALREADY_REVERSED',
+  /** A reversal cannot itself be reversed (S13 T9). */
+  'MOVEMENT_NOT_REVERSIBLE',
+  /** The report period ends before it starts or is longer than 366 days (S13 RP1). */
+  'REPORT_PERIOD_INVALID',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

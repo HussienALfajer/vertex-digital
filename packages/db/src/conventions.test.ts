@@ -80,6 +80,11 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   support_messages: 'Append-only (S12 TK7): a ticket conversation is a record',
   support_attachments: 'Append-only (S12 TK11): the images of a message',
   support_settings: 'One row of settings (S12 SC1), changes audited',
+  treasury_movements: 'Append-only (S13 T9): corrected by a reversal, never changed',
+  reconciliation_runs: 'A run record (S13 RN5): updated from running to its end, never archived',
+  reconciliation_results: 'Append-only (S13): what a check found in a run',
+  reconciliation_explanations: 'Append-only (S13 RN8): one note per result',
+  reconciliation_settings: 'Append-only (S13): a save is a new version, the newest is in force',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -125,6 +130,10 @@ const APPEND_ONLY_TABLES = [
   'order_policy',
   'support_messages',
   'support_attachments',
+  'treasury_movements',
+  'reconciliation_results',
+  'reconciliation_explanations',
+  'reconciliation_settings',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

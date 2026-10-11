@@ -12,6 +12,8 @@ import {
   formatSyp,
   formatUsd,
   formatUsdtAmount,
+  heldUnits,
+  impliedRate,
   isSameRate,
   isWholeCents,
   parseUsd,
@@ -27,6 +29,7 @@ import {
   usdToSyp,
   usdtRawForUnits,
   walletSypValue,
+  withinRange,
 } from './money.js';
 
 describe('currencies and units', () => {
@@ -359,5 +362,41 @@ describe('USDT amounts (S04 rules U3, U7, M2)', () => {
     expect(() => rawToUsdUnits(1n, 37)).toThrow(RangeError);
     expect(() => usdtRawForUnits(1, 6.5)).toThrow(RangeError);
     expect(() => usdtRawForUnits(-1, 6)).toThrow(RangeError);
+  });
+});
+
+describe('S13 held amounts, ranges and implied rates', () => {
+  it('flips the balances of held and spent accounts (rule LS2)', () => {
+    expect(heldUnits('supplier_prepaid', -499_000_000)).toBe(499_000_000);
+    expect(heldUnits('usdt_receipts', 5_000_000)).toBe(-5_000_000);
+    expect(heldUnits('transfer_fees', -1_000_000)).toBe(1_000_000);
+    expect(Object.is(heldUnits('cost_of_goods', 0), 0)).toBe(true);
+    expect(heldUnits('outside_funds', 200_000_000)).toBe(200_000_000);
+    expect(heldUnits('customer_wallet', 25_000_000)).toBe(25_000_000);
+    expect(heldUnits('supplier_corrections', -3)).toBe(-3);
+    expect(() => heldUnits('refunds', 0.5)).toThrow(RangeError);
+  });
+
+  it('allows the range plus the tolerance on both sides (rule E1)', () => {
+    expect(withinRange(100, 100, 100, 0)).toBe(true);
+    expect(withinRange(99, 100, 120, 1)).toBe(true);
+    expect(withinRange(98, 100, 120, 1)).toBe(false);
+    expect(withinRange(121, 100, 120, 1)).toBe(true);
+    expect(withinRange(122, 100, 120, 1)).toBe(false);
+    expect(() => withinRange(0, 2, 1, 0)).toThrow(RangeError);
+    expect(() => withinRange(0, 1, 2, -1)).toThrow(RangeError);
+  });
+
+  it('implies a rate with 4 decimals, rounded half-up (rule M2)', () => {
+    // 1,305,000 SYP for $100.
+    expect(impliedRate(130_500_000, 100_000_000)).toBe('13050');
+    expect(impliedRate(11_850, 100_000_000)).toBe('1.185');
+    // 1 SYP for $3: 0.33333… → 0.3333; 2 SYP for $3: 0.66666… → 0.6667.
+    expect(impliedRate(100, 3_000_000)).toBe('0.3333');
+    expect(impliedRate(200, 3_000_000)).toBe('0.6667');
+    // Exactly half: 1 SYP for $16 is 0.0625 → 0.0625; 1 SYP for $32 is 0.03125 → 0.0313.
+    expect(impliedRate(100, 32_000_000)).toBe('0.0313');
+    expect(() => impliedRate(0, 1)).toThrow(RangeError);
+    expect(() => impliedRate(1, 0)).toThrow(RangeError);
   });
 });

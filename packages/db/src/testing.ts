@@ -1,4 +1,7 @@
+import { TREASURY_ACCOUNTS } from '@vertex-digital/contracts';
+import { createDatabase } from './client.js';
 import { loadRootEnv } from './env.js';
+import { ensureSystemAccount } from './ledger/wallet.js';
 import { runMigrations } from './migrate.js';
 
 function requireEnv(key: string): string {
@@ -18,7 +21,28 @@ export function testOwnerDatabaseUrl(): string {
   return requireEnv('TEST_DATABASE_OWNER_URL');
 }
 
+/**
+ * The treasury's accounts (S13 rule T1) and the fee and exchange accounts its journals post to.
+ * Created once before the tests, so tests in parallel never race to create one inside their
+ * transactions (two first inserts in opposite orders deadlock).
+ */
+const SHARED_ACCOUNTS = [
+  ...Object.values(TREASURY_ACCOUNTS),
+  ...(['USD', 'SYP'] as const).flatMap((currency) => [
+    { code: `transfer_fees:${currency}`, kind: 'transfer_fees' as const, currency },
+    { code: `currency_exchange:${currency}`, kind: 'currency_exchange' as const, currency },
+  ]),
+];
+
 /** Vitest global setup: bring the test database schema up to date before any test runs. */
 export async function setup(): Promise<void> {
   await runMigrations(testOwnerDatabaseUrl());
+  const connection = createDatabase(testDatabaseUrl());
+  try {
+    for (const account of SHARED_ACCOUNTS) {
+      await connection.db.transaction((tx) => ensureSystemAccount(tx, account));
+    }
+  } finally {
+    await connection.close();
+  }
 }

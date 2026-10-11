@@ -14,6 +14,8 @@ export * from './notifications.js';
 export * from './orders.js';
 export * from './pricing.js';
 export * from './rates.js';
+export * from './reconciliation.js';
+export * from './reports.js';
 export * from './settings.js';
 export * from './suppliers.js';
 export * from './support.js';

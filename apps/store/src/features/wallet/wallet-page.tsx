@@ -54,6 +54,7 @@ const KIND_ICONS: Record<JournalKind, LucideIcon> = {
   refund: Undo2Icon,
   cost_of_goods: ReceiptTextIcon,
   adjustment: SlidersHorizontalIcon,
+  treasury: SlidersHorizontalIcon,
 };
 
 /**

@@ -228,6 +228,9 @@ describe('append-only trigger', () => {
       'orders',
       'payment_references',
       'product_prices',
+      'reconciliation_explanations',
+      'reconciliation_results',
+      'reconciliation_settings',
       'store_switch_changes',
       'stored_files',
       'supplier_balance_reads',
@@ -242,6 +245,7 @@ describe('append-only trigger', () => {
       'support_messages',
       // Its TRUNCATE trigger: rows are guarded by `support_tickets_guard` (customers/customers.test.ts).
       'support_tickets',
+      'treasury_movements',
       // Its TRUNCATE trigger: rows are guarded by `usdt_deposits_guard` (deposits.test.ts).
       'usdt_deposits',
       'usdt_transfers',

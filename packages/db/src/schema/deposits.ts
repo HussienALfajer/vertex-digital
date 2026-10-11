@@ -218,6 +218,8 @@ export const deposits = pgTable(
     index('deposits_rate_id_idx').on(table.rateId),
     index('deposits_credit_rate_id_idx').on(table.creditRateId),
     index('deposits_admin_id_idx').on(table.adminId),
+    /** S13 R3: decisions by period. */
+    index('deposits_status_decided_at_idx').on(table.status, table.decidedAt),
     check(
       'deposits_reference_code_check',
       sql`${table.referenceCode} ~ '^VD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{5}$'`,

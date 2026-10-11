@@ -18,6 +18,7 @@ import { ensureCustomerWallet, ensureSystemAccount, findCustomerWallet } from '.
 import { postJournal } from '../ledger/post-journal.js';
 import { walletTimeline } from '../ledger/wallet.js';
 import { repriceProducts } from '../pricing/index.js';
+import { type CheckResult, internalChecks, runInternalChecks } from '../reconciliation/index.js';
 import {
   auditEntries,
   checkouts,
@@ -524,6 +525,72 @@ describe('outcomes (rules F1, F2, M2)', () => {
     expect(await balance(buyer)).toBe(usd(100) - item.price * 2);
   });
 
+  it('passes the reconciliation checks, which list planted faults on its journals (S13 C5–C7)', async () => {
+    const item = await product({ kind: 'code', cost: usd(9.6) });
+    const buyer = await customer({ funds: usd(100) });
+    const { order } = await buy(request(buyer, item, { quantity: 3, fields: {} }));
+    const attemptId = await send(order, item);
+    await apply(attemptId, {
+      status: 'delivered',
+      quantity: 2,
+      codes: ['RECO-NCIL-IATI-0001', 'RECO-NCIL-IATI-0002'],
+    });
+    const finished = await db.transaction(async (tx) =>
+      refundRemaining(
+        tx,
+        context(),
+        (await lockOrder(tx, order.id)) as OrderRow,
+        'routes_exhausted',
+        {
+          actor: 'system',
+          actorId: null,
+        },
+      ),
+    );
+    const [attempt] = await db
+      .select()
+      .from(fulfilmentAttempts)
+      .where(eq(fulfilmentAttempts.id, attemptId));
+    const ids = (results: CheckResult[], check: string) =>
+      results
+        .filter((result) => result.check === check)
+        .flatMap((result) => result.details.offending.map((item) => item.id));
+    const ours = [
+      order.id,
+      attemptId,
+      finished.purchaseJournalId,
+      finished.refundJournalId,
+      attempt?.costJournalId,
+    ];
+    const clean = (await runInternalChecks(db)).results;
+    for (const check of ['attempt_cost', 'order_purchase', 'order_refund', 'journal_balance']) {
+      for (const id of ours) expect(ids(clean, check)).not.toContain(id);
+    }
+
+    // A posting added to each journal by the owner, never committed.
+    class Rollback extends Error {}
+    await owner.db
+      .transaction(async (tx) => {
+        const wallet = await ensureCustomerWallet(tx, buyer);
+        for (const journal of [
+          attempt?.costJournalId,
+          finished.purchaseJournalId,
+          finished.refundJournalId,
+        ]) {
+          await tx.execute(sql`insert into ledger_postings (id, journal_id, account_id, currency, amount_units)
+            values (${newId()}, ${journal}, ${wallet}, 'USD', 10000)`);
+        }
+        const { results } = await internalChecks(tx);
+        expect(ids(results, 'attempt_cost')).toContain(attemptId);
+        expect(ids(results, 'order_purchase')).toContain(order.id);
+        expect(ids(results, 'order_refund')).toContain(order.id);
+        throw new Rollback();
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof Rollback)) throw error;
+      });
+  });
+
   it('refunds at once when the account fields are refused, without another route', async () => {
     const item = await product();
     const buyer = await customer({ funds: usd(10) });
@@ -738,6 +805,18 @@ describe('reads (S08 "API")', () => {
     ]);
     expect(admin?.journals.map((j) => j.kind)).toEqual(['purchase', 'cost_of_goods']);
     expect(admin?.attempts[0]).toMatchObject({ status: 'delivered', deliveredQuantity: 2 });
+    // S13 LS1 (ADR 0027): cost of goods −cost, the supplier's prepaid account +cost.
+    const { rows: costPostings } = await pool.query(
+      `select a.kind, p.amount_units::text as amount from ledger_postings p
+       join ledger_accounts a on a.id = p.account_id
+       join fulfilment_attempts f on f.cost_journal_id = p.journal_id
+       where f.id = $1 order by a.kind::text`,
+      [attemptId],
+    );
+    expect(costPostings).toEqual([
+      { kind: 'cost_of_goods', amount: String(-usd(19.2)) },
+      { kind: 'supplier_prepaid', amount: String(usd(19.2)) },
+    ]);
     expect(JSON.stringify(admin)).not.toContain('GIFT-CODE');
   });
 
@@ -2350,7 +2429,8 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
       decisionIdempotencyKey: key,
     });
     expect(attempt?.costJournalId).not.toBeNull();
-    expect(await accountBalance(db, prepaid)).toBe(prepaidBefore - usd(0.8));
+    // S13 LS1: the store holds less at the supplier: its account grows by the cost.
+    expect(await accountBalance(db, prepaid)).toBe(prepaidBefore + usd(0.8));
     expect(await balance(order.customerId)).toBe(before);
     const [delivered] = await db
       .select({ event: customerNotifications.event })

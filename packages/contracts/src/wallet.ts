@@ -26,6 +26,12 @@ export const LEDGER_ACCOUNT_KINDS = [
   'currency_exchange',
   /** The sub-cent part of USDT received, never credited to the customer (S04 rule M2). */
   'deposit_rounding',
+  /** S13: money outside the store's places (the owner and the rest of the world, rule T4). */
+  'outside_funds',
+  /** S13: fees lost moving money between places (rule M1). */
+  'transfer_fees',
+  /** S13: supplier balance changes that are not a delivery's cost (rule T5). */
+  'supplier_corrections',
 ] as const;
 
 export const ledgerAccountKindSchema = z
@@ -41,6 +47,8 @@ export const JOURNAL_KINDS = [
   'refund',
   'cost_of_goods',
   'adjustment',
+  /** S13: a treasury movement or supplier correction (rules M1–M4). */
+  'treasury',
 ] as const;
 
 export const journalKindSchema = z.enum(JOURNAL_KINDS).meta({ id: 'JournalKind' });

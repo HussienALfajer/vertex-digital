@@ -52,6 +52,10 @@ export const QUEUES = {
   supportAutoClose: 'support.auto-close',
   /** Deletes sign-ins older than 90 days, daily at 04:00 `Asia/Damascus` (S12 data). */
   customersPurgeSignIns: 'customers.purge-sign-ins',
+  /** The nightly reconciliation at 00:30 `Asia/Damascus`, or a manual run (S13 RN1–RN5). */
+  reconciliationRun: 'reconciliation.run',
+  /** Reads again a run's external checks that were off their range (S13 RN4). */
+  reconciliationRecheck: 'reconciliation.recheck',
 } as const;
 
 /**
@@ -60,7 +64,8 @@ export const QUEUES = {
  * successor (S04 rules U9, U12); a deposit's card is sent or edited by one job at a time, which
  * loads the deposit fresh (S05); an order is routed, and an attempt polled, by one job at a time
  * (S08 rules R1, F3); a customer's reservations are paid by one job at a time (S09 rule RS4).
- * `singleton`: one store refresh runs at a time (S09 rule SF4). The API and the worker create
+ * `singleton`: one store refresh runs at a time (S09 rule SF4), and one reconciliation run (S13);
+ * a run's recheck is `stately` by run. The API and the worker create
  * queues with these policies.
  */
 export const QUEUE_POLICIES: Readonly<Record<string, 'stately' | 'singleton'>> = {
@@ -71,6 +76,8 @@ export const QUEUE_POLICIES: Readonly<Record<string, 'stately' | 'singleton'>> =
   [QUEUES.ordersPoll]: 'stately',
   [QUEUES.ordersPayWaiting]: 'stately',
   [QUEUES.storeRevalidate]: 'singleton',
+  [QUEUES.reconciliationRun]: 'singleton',
+  [QUEUES.reconciliationRecheck]: 'stately',
 };
 
 /** A store refresh is queued at most once per this many seconds (S09 rule SF4). */
@@ -140,3 +147,19 @@ export type SuppliersWebhookPayload = z.infer<typeof suppliersWebhookPayloadSche
 export const ordersPayWaitingPayloadSchema = z.object({ customerId: z.uuid() });
 
 export type OrdersPayWaitingPayload = z.infer<typeof ordersPayWaitingPayloadSchema>;
+
+/**
+ * S13 RN1, RN2: the cron names the Damascus day that ended (`businessDate`); a manual run is
+ * created by the API first and named (`runId`).
+ */
+export const reconciliationRunPayloadSchema = z.union([
+  z.object({ businessDate: z.iso.date() }),
+  z.object({ runId: z.uuid() }),
+]);
+
+export type ReconciliationRunPayload = z.infer<typeof reconciliationRunPayloadSchema>;
+
+/** `singletonKey` is the run id, sent with `startAfter` = its `recheck_at` (S13 RN4). */
+export const reconciliationRecheckPayloadSchema = z.object({ runId: z.uuid() });
+
+export type ReconciliationRecheckPayload = z.infer<typeof reconciliationRecheckPayloadSchema>;
