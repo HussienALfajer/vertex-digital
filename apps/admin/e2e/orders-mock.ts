@@ -60,9 +60,18 @@ const ROUTES = [
   { routeId: id(252), code: 'manual', nameAr: 'يدوي', share: 0.8, tier: 'manual' },
 ] as const;
 
+/** The customer of most orders; S12: the customers mock's Sara, so her profile lists them. */
+export const ORDER_CUSTOMER_ID = id(90);
+
 /** S12 CS6: the customer panel's marks on the order page. */
 const marks = { status: 'active' as const, pinnedNote: null, signalsCount: 0 };
-const customer = { id: id(90), name: 'سارة', email: 'sara@example.com', isTest: false, marks };
+const customer = {
+  id: ORDER_CUSTOMER_ID,
+  name: 'سارة',
+  email: 'sara@example.com',
+  isTest: false,
+  marks,
+};
 const testCustomer = { id: id(91), name: 'تجربة', email: 'test@example.com', isTest: true, marks };
 const pubg = { id: id(80), nameAr: 'ببجي موبايل' };
 const itunes = { id: id(81), nameAr: 'آيتونز' };
@@ -508,6 +517,7 @@ export class OrdersMock {
       const supplier = url.searchParams.get('supplier');
       const status = url.searchParams.get('status');
       const productId = url.searchParams.get('productId');
+      const customerId = url.searchParams.get('customerId');
       const page = Number(url.searchParams.get('page') ?? 1);
       const pageSize = Number(url.searchParams.get('pageSize') ?? 50);
       const items = this.orders
@@ -528,7 +538,8 @@ export class OrdersMock {
         )
         .filter((row) => !supplier || row.supplierCode === supplier)
         .filter((row) => !status || row.status === status)
-        .filter((row) => !productId || row.product.id === productId);
+        .filter((row) => !productId || row.product.id === productId)
+        .filter((row) => !customerId || row.customer.id === customerId);
       return {
         status: 200,
         json: {

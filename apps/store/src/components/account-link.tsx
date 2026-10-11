@@ -5,8 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { t } from '@/lib/i18n';
-
-type Session = { user: { name: string; email: string } } | null;
+import { readSession, type Session } from '@/lib/session';
 
 // Only signed-in customers download the balance, the bell and the menu, as one chunk: the first
 // load stays within its budget.
@@ -26,15 +25,16 @@ export function AccountLink() {
 
   useEffect(() => {
     let active = true;
-    const read = <T,>(path: string) =>
-      fetch(path, { credentials: 'same-origin', cache: 'no-store' })
-        .then((response) => (response.ok ? (response.json() as Promise<T>) : null))
-        .catch(() => null);
-    read<Session>('/api/auth/get-session').then(async (value) => {
+    readSession().then(async (value) => {
       if (!active) return;
       setSession(value);
       if (value) return;
-      const registration = await read<{ open: boolean }>('/api/auth/registration');
+      const registration = await fetch('/api/auth/registration', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      })
+        .then((response) => (response.ok ? (response.json() as Promise<{ open: boolean }>) : null))
+        .catch(() => null);
       if (active) setCanSignUp(registration?.open === true);
     });
     return () => {

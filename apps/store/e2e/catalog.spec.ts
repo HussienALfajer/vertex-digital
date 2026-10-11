@@ -1,3 +1,4 @@
+import type { Locator, Page } from '@playwright/test';
 import { cheapestPackCombination, formatSyp, formatUsd } from '@vertex-digital/contracts';
 import ar from '../src/messages/ar.json' with { type: 'json' };
 import { CATALOG, PUBG, pack, searchIndex } from './catalog';
@@ -163,6 +164,17 @@ test.describe('crawlers and the cache (rules SF4, SF6)', () => {
   });
 });
 
+/**
+ * The shortcut listener is attached once the header hydrates, after `goto` returns: press again
+ * until the dialog opens (a press before hydration is lost; once open, no further press).
+ */
+async function pressUntilOpen(page: Page, dialog: Locator, key: string) {
+  await expect(async () => {
+    if (!(await dialog.isVisible())) await page.keyboard.press(key);
+    await expect(dialog).toBeVisible({ timeout: 1000 });
+  }).toPass();
+}
+
 test.describe('search (rules SR1–SR6)', () => {
   test('Ctrl+K finds games by English, Arabic search terms and typos, and packs by amount', async ({
     page,
@@ -170,8 +182,8 @@ test.describe('search (rules SR1–SR6)', () => {
   }) => {
     api.on('GET /api/catalog/search-index', 200, searchIndex());
     await page.goto('/');
-    await page.keyboard.press('Control+k');
     const dialog = page.getByRole('dialog', { name: ar.search.title });
+    await pressUntilOpen(page, dialog, 'Control+k');
     const input = dialog.getByRole('combobox');
     await expect(input).toBeFocused();
     const results = dialog.getByRole('option');
@@ -195,8 +207,8 @@ test.describe('search (rules SR1–SR6)', () => {
   }) => {
     api.on('GET /api/catalog/search-index', 200, searchIndex());
     await page.goto('/');
-    await page.keyboard.press('/');
     const dialog = page.getByRole('dialog', { name: ar.search.title });
+    await pressUntilOpen(page, dialog, '/');
     await expect(dialog.getByText(ar.search.hint)).toBeVisible();
     await dialog.getByRole('combobox').fill('itunes');
     await dialog.getByRole('option').first().click();

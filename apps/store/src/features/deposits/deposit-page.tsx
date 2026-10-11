@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useNotificationEvents } from '@/features/notifications/live';
+import { HelpButton } from '@/features/support/help-button';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { amountText, STATUS_TONES, statusText } from './amounts';
@@ -154,6 +155,7 @@ export function DepositPage() {
       ) : (
         <Outcome deposit={deposit} />
       )}
+      <HelpButton link={{ depositId: deposit.id }} />
     </div>
   );
 }

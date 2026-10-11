@@ -3,8 +3,9 @@
 // `API_INTERNAL_URL` from the store's process, which Playwright cannot intercept. Fixed answers
 // from catalog-fixtures.json; under `/empty` the store has no games yet. S10: the public gift and
 // receipt links from share-fixtures.json, and `/_seen` answers the `X-Forwarded-For` of the last
-// share read (the visitor's address the store must pass on). Started by playwright.config.ts; the
-// port is the first argument.
+// share read (the visitor's address the store must pass on). S12: the support channels, with a
+// Telegram link except under `/empty`. Started by playwright.config.ts; the port is the first
+// argument.
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 
@@ -14,6 +15,7 @@ const { storefront, games } = JSON.parse(
 const shares = JSON.parse(readFileSync(new URL('./share-fixtures.json', import.meta.url), 'utf8'));
 const port = Number(process.argv[2] ?? 4002);
 let lastForwardedFor = null;
+const TELEGRAM_URL = 'https://t.me/vertex_support_test';
 
 const json = (response, status, body) => {
   response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -28,6 +30,10 @@ createServer((request, response) => {
   if (path === '/health') return json(response, 200, { ok: true });
   if (path === '/api/catalog/storefront') {
     return json(response, 200, empty ? { service: 'normal', categories: [] } : storefront);
+  }
+  // S12 SC2: the footer and `/support` read the Telegram link; the empty store has none.
+  if (path === '/api/support/channels') {
+    return json(response, 200, { telegramUrl: empty ? null : TELEGRAM_URL });
   }
   if (path === '/_seen') return json(response, 200, { forwardedFor: lastForwardedFor });
   const share = /^\/api\/shares\/([A-Za-z0-9_-]{22})$/.exec(path);

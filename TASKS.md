@@ -20,11 +20,11 @@ Spec: `docs/specs/S12-customers-and-support.md` (F19, F23, F27 ticket replies; A
 - [x] Wiring checklist, docs (`docs/architecture.md` customers and support modules, `docs/open-questions.md` Q14, S05 notes, folder `CLAUDE.md` files, spec "Settled in implementation")
 - [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 69825e421930), reviewer (three blocking findings fixed: an archived customer let through the guard, `FOR UPDATE` on the customer deadlocking with foreign-key checks, the nginx ticket zone counting reads and sharing the receipt budget), owner acceptance (2026-10-10), PR with auto-merge
 
-## PR 2 — Admin and store screens, E2E (`feat/s12-customers-support-screens`) · Opus 5.5 `high`
-- [ ] Admin `features/customers/`: `/customers` (search and status tabs in the URL, table, link to test customers), `/customers/$id` (header, chips, actions menu and dialogs with re-authentication; tabs: summary, wallet, orders, deposits, tickets, devices, notes, history)
-- [ ] Admin customer panel on the deposit review and order pages: chips, pinned note, signals count (CS6)
-- [ ] Admin `features/support/`: `/support` queue (tabs and filters in the URL), `/support/$id` thread (attachments, reply with images, Ctrl+Enter, close, side panel), `/support/new?customer=`, `/settings/support`; navigation items "العملاء" and "الدعم" with the `open` badge; dashboard `tickets_waiting`; i18n keys
-- [ ] Store: frozen banner and disabled buy box, cart, deposit wizard and player check; footer links; `/support`, `/support/new` (type, picker, images), `/support/$id` (thread, reply, close, closed states, refetch on `ticket_replied`); "تحتاج مساعدة؟" on order and deposit pages; notification text; `/account` preference "ردود الدعم"; i18n keys
-- [ ] E2E flows and RTL screenshots (admin light and dark; store phone width, light and dark)
-- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S12 done, folder `CLAUDE.md` files, `wiring.md` patterns)
-- [ ] Checks, reviewer, owner acceptance (spec "Acceptance" steps), PR with auto-merge
+## PR 2 — Admin and store screens, E2E (`claude/dazzling-cray-84epeu`, the cloud session's branch) · Opus 5.5 `high`
+- [x] Admin `features/customers/`: `/customers` (search and status tabs in the URL, table, link to test customers), `/customers/$id` (header, chips, actions menu and dialogs with re-authentication; tabs: summary, wallet, orders, deposits, tickets, devices, notes, history)
+- [x] Admin customer panel on the deposit review and order pages: chips, pinned note, signals count (CS6)
+- [x] Admin `features/support/`: `/support` queue (tabs and filters in the URL), `/support/$id` thread (attachments, reply with images, Ctrl+Enter, close, side panel), `/support/new?customer=`, `/settings/support`; navigation items "العملاء" and "الدعم" with the `open` badge; dashboard `tickets_waiting`; i18n keys
+- [x] Store: frozen banner and disabled buy box, cart, deposit wizard and player check; footer links; `/support`, `/support/new` (type, picker, images), `/support/$id` (thread, reply, close, closed states, refetch on `ticket_replied`); "تحتاج مساعدة؟" on order and deposit pages; notification text; `/account` preference "ردود الدعم"; i18n keys
+- [x] E2E flows and RTL screenshots (admin light and dark; store phone width, light and dark)
+- [x] Wiring checklist, docs (`docs/ROADMAP.md` S12 done, folder `CLAUDE.md` files, `wiring.md` patterns)
+- [x] Checks (lint, typecheck, test, build, e2e: all pass; store e2e 274 passed on a quiet run after two load-only timeouts in the S10 screenshots that pass alone; db tests ran on the session's PostgreSQL 16 fallback, CI runs 17), reviewer (one blocking finding: an admin reply kept its `Idempotency-Key` after sending, so the same words sent again were replayed instead of posted; fixed with a new key per sent reply and an E2E test), owner acceptance waived by the owner (open the PR at once, 2026-10-10), PR with auto-merge

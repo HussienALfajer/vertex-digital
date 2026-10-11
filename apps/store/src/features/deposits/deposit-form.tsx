@@ -22,6 +22,7 @@ import { ArrowRightIcon, CircleAlertIcon, ClockIcon, LockIcon, WalletIcon } from
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
@@ -81,6 +82,8 @@ export function DepositFormPage() {
   const orderParam = useSearchParam('order');
   const orderId = orderParam && UUID.test(orderParam) ? orderParam : null;
   const [state, setState] = useState<State>({ status: 'loading' });
+  // S12 CF5: a frozen customer cannot create a deposit (one created before still opens).
+  const frozen = isFrozenCustomer(useCustomer());
 
   const load = useCallback(async () => {
     const [shamCash, usdt] = await Promise.all([getShamCashOptions(), getUsdtOptions()]);
@@ -104,6 +107,19 @@ export function DepositFormPage() {
     void load();
   }, [load]);
 
+  if (frozen && state.status === 'ready') {
+    return (
+      <EmptyState
+        icon={<LockIcon />}
+        title={errorText('ACCOUNT_FROZEN')}
+        action={
+          <Button size="xl" render={<Link href="/support/new?category=account" />}>
+            {t('frozen.contactButton')}
+          </Button>
+        }
+      />
+    );
+  }
   if (state.status === 'loading') return <FormSkeleton />;
   if (state.status === 'failed') {
     return (

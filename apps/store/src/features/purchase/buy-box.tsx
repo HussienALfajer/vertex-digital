@@ -64,9 +64,10 @@ import { checkFields, type FieldValues } from './fields';
 import { GiftBox, type GiftDraft, giftErrors, giftOf, NO_GIFT } from './gift-box';
 import { IdGuideButton } from './id-guide';
 import { usePlayerCheck } from './player-check';
+import { purchaseRefusalText } from './refusals';
 import { createOrder } from './requests';
 import { SavedChips } from './saved-chips';
-import type { Customer } from './session';
+import { type Customer, isFrozenCustomer } from './session';
 
 type Mode = 'buy' | 'reserve';
 
@@ -154,6 +155,8 @@ export function BuyBox({
 }) {
   const router = useRouter();
   const signedIn = customer.status === 'signedIn' && customer.verified;
+  // S12 CF5: a frozen customer cannot buy, reserve or check a player ID.
+  const frozen = isFrozenCustomer(customer);
   // The cart line being edited, read once from the device (CT6's "عدّل البيانات").
   const [editing] = useState<CartLine | null>(() =>
     intent?.kind === 'edit'
@@ -233,7 +236,7 @@ export function BuyBox({
       : null;
   const fieldsCheck = checkFields(fields, typed);
   const isTrusted = fieldsCheck.ok && trusted !== null && fieldsKey(fieldsCheck.values) === trusted;
-  const checkable = signedIn && product.kind === 'direct' && product.playerCheck;
+  const checkable = signedIn && !frozen && product.kind === 'direct' && product.playerCheck;
   const playerCheck = usePlayerCheck(
     product.id,
     fieldsCheck.ok ? fieldsCheck.values : null,
@@ -525,6 +528,13 @@ export function BuyBox({
         setStep('details');
         setSending({ status: 'idle' });
         return setNotice(errorText(reason));
+      case 'PURCHASE_LIMIT_EXCEEDED':
+        again();
+        return setSending({
+          status: 'failed',
+          message: purchaseRefusalText(reason, details),
+          retry: false,
+        });
       case 'UNAUTHORIZED':
         return signIn();
       case 'NETWORK':
@@ -682,7 +692,7 @@ export function BuyBox({
               key={slide}
               label={t(mode === 'reserve' ? 'purchase.slideReserve' : 'purchase.slidePay')}
               valueText={(percent) => t('purchase.slideValue', { percent })}
-              disabled={stopped}
+              disabled={stopped || frozen}
               onConfirm={() => void send(order)}
             />
           )
@@ -828,6 +838,7 @@ export function BuyBox({
         <Actions
           customer={customer}
           stopped={stopped}
+          frozen={frozen}
           balance={balance}
           total={total}
           shortfall={shortfall}
@@ -880,6 +891,7 @@ export function BuyBox({
 function Actions({
   customer,
   stopped,
+  frozen,
   balance,
   total,
   shortfall,
@@ -889,6 +901,7 @@ function Actions({
 }: {
   customer: Customer;
   stopped: boolean;
+  frozen: boolean;
   balance: ReturnType<typeof useBalance>['balance'];
   total: number;
   shortfall: number | null;
@@ -919,6 +932,7 @@ function Actions({
       </Button>
     );
   }
+  if (frozen) return <FormAlert>{errorText('ACCOUNT_FROZEN')}</FormAlert>;
   if (stopped) return <FormAlert>{t('purchase.stopped')}</FormAlert>;
   if (balance.status === 'loading') return <Skeleton className="h-24 w-full" />;
   if (shortfall !== null && balance.status === 'ready') {

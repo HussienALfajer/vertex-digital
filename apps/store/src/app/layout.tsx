@@ -1,6 +1,7 @@
 import { DirectionProvider } from '@vertex-digital/ui/components/direction-provider';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { FrozenBanner } from '@/components/frozen-banner';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { StopBanner } from '@/components/stop-banner';
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <DirectionProvider direction="rtl">
           <SiteHeader />
           <StopBanner />
+          <FrozenBanner />
           <main className="flex flex-1 flex-col">{children}</main>
           <SiteFooter />
         </DirectionProvider>
