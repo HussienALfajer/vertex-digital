@@ -95,6 +95,9 @@ test.describe('the profile (CS3–CS5)', () => {
     await expect(page.getByText(fill(c.signals.sharedIp, { count: 1 }))).toBeVisible();
     await expect(page.getByText(c.signals.natHint)).toBeVisible();
     await expect(page.getByRole('link', { name: 'ليلى حداد' }).first()).toBeVisible();
+    // S15: the devices with push on.
+    await expect(page.getByText(c.summary.push, { exact: true })).toBeVisible();
+    await expect(page.getByText(c.summary.pushOn_one)).toBeVisible();
 
     await page.getByRole('tab', { name: c.sections.orders }).click();
     await expect(page).toHaveURL(/tab=orders/);

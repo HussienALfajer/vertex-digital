@@ -6,6 +6,8 @@ import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { StopBanner } from '@/components/stop-banner';
 import { SiteAnnouncement } from '@/features/content/announcement';
+import { REGISTRATION_SCRIPT } from '@/features/pwa/registration';
+import { APP_NAME } from '@/features/pwa/service-worker';
 import { t } from '@/lib/i18n';
 import { THEME_SCRIPT } from '@/lib/theme';
 // The brand files stay in brand/ (their single home); the build copies them with hashed names.
@@ -19,10 +21,16 @@ export const metadata: Metadata = {
   title: { default: t('app.title'), template: `%s · ${t('app.name')}` },
   description: t('app.description'),
   icons: { icon: favicon.src, apple: appleTouchIcon.src },
+  // S15 PW2: an installed iPhone app opens full screen under a dark status bar. Next writes the
+  // standard `mobile-web-app-capable`; older iOS reads only the Apple name.
+  appleWebApp: { capable: true, title: APP_NAME, statusBarStyle: 'black' },
+  other: { 'apple-mobile-web-app-capable': 'yes' },
 };
 
 export const viewport: Viewport = {
   colorScheme: 'dark light',
+  // The dark theme's app background, as the manifest (PW1).
+  themeColor: '#031B17',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -33,6 +41,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a constant script, no input. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a constant script, no input (S15 SW2). */}
+        <script dangerouslySetInnerHTML={{ __html: REGISTRATION_SCRIPT }} />
       </head>
       <body className="flex min-h-dvh flex-col">
         <DirectionProvider direction="rtl">

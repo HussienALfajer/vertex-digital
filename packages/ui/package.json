@@ -9,6 +9,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./components/*": "./src/components/*.tsx",
+    "./brand/logo-shapes": "./src/brand/logo-shapes.ts",
     "./brand/*": "./src/brand/*.tsx",
     "./styles.css": "./src/styles/index.css",
     "./madani.css": "./src/styles/madani.css"

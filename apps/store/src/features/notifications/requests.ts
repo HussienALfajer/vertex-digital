@@ -38,14 +38,16 @@ export function getNotificationPreferences(fetcher: Fetcher = fetch) {
   return apiRequest<NotificationPreferences>('/api/account/notification-preferences', { fetcher });
 }
 
+/** One channel of one event per change (S15 PP1): `email`, or `push` for a push event. */
 export function setNotificationPreference(
   event: NotificationEvent,
-  email: boolean,
+  channel: 'email' | 'push',
+  on: boolean,
   fetcher: Fetcher = fetch,
 ) {
   return apiRequest<NotificationPreferences>('/api/account/notification-preferences', {
     method: 'PUT',
-    body: { event, email },
+    body: { event, [channel]: on },
     fetcher,
   });
 }

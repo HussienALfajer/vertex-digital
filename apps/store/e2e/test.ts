@@ -39,6 +39,22 @@ const ALTCHA_CHALLENGE = {
   signature: 'test',
 };
 
+/** Every event with an email (and a push): all on, as a customer without a choice has them. */
+const ALL_ON = Object.fromEntries(
+  [
+    'deposit_credited',
+    'deposit_rejected',
+    'deposit_receipt_requested',
+    'wallet_adjusted',
+    'order_delivered',
+    'order_partially_refunded',
+    'order_refunded',
+    'order_cancelled',
+    'checkout_finished',
+    'ticket_replied',
+  ].map((event) => [event, true]),
+);
+
 type Route = Parameters<Parameters<Page['route']>[1]>[0];
 type Answer =
   | { status: number; body: unknown }
@@ -82,24 +98,10 @@ export class MockApi {
     // Every email and push on (S05 rule NT8, S15 PP1): the account page reads the choices.
     [
       'GET /api/account/notification-preferences',
-      {
-        status: 200,
-        body: {
-          email: {
-            deposit_credited: true,
-            deposit_rejected: true,
-            deposit_receipt_requested: true,
-            wallet_adjusted: true,
-          },
-          push: {
-            deposit_credited: true,
-            deposit_rejected: true,
-            deposit_receipt_requested: true,
-            wallet_adjusted: true,
-          },
-        },
-      },
+      { status: 200, body: { email: ALL_ON, push: ALL_ON } },
     ],
+    // Push not configured (S15): no push control shows unless a test serves a key.
+    ['GET /api/push/config', { status: 200, body: { publicKey: null } }],
     // No saved player ID: the buy box reads them once signed in (S10 rule SP3).
     ['GET /api/saved-players', { status: 200, body: { items: [] } }],
     // No unread notification: the header's bell opens the stream once signed in (S05 NT6).

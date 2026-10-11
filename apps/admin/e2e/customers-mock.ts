@@ -97,6 +97,8 @@ interface MockCustomer {
   deliveredOrders: number;
   lastOrderAt: string | null;
   reservations: number;
+  /** S15: devices with push on, of unexpired sessions. */
+  pushDevices: number;
   openOrders: boolean;
   sessions: {
     id: string;
@@ -142,6 +144,7 @@ function customer(
     deliveredOrders: 0,
     lastOrderAt: null,
     reservations: 0,
+    pushDevices: 0,
     openOrders: false,
     sessions: [],
     signIns: [],
@@ -199,6 +202,7 @@ export class CustomersMock {
       deliveredOrders: 3,
       lastOrderAt: at(2),
       reservations: 1,
+      pushDevices: 1,
       sessions: [
         {
           id: id(401),
@@ -489,7 +493,7 @@ export class CustomersMock {
         ).length,
         activeSessions: row.sessions.length,
         reservations: row.reservations,
-        pushDevices: 0,
+        pushDevices: row.pushDevices,
       },
       signals: this.signals(row),
       termsVersion: this.accepted.get(row.id)?.terms ?? null,

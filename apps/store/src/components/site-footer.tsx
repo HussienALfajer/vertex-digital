@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { FooterContentLinks } from '@/features/content/site-links';
+import { InstallLink } from '@/features/pwa/install-button';
 import { telegramSupportUrl } from '@/features/support/data';
 import { t } from '@/lib/i18n';
 
@@ -8,7 +9,8 @@ const LINK = 'inline-flex min-h-11 items-center underline-offset-4 hover:underli
 
 /**
  * The footer: "الدعم" (S12), the published pages and FAQ (S14 SL1), the support Telegram link when the panel sets one (SC2, read at
- * request time from the cached channels route, so the build never calls the API), the rights.
+ * request time from the cached channels route, so the build never calls the API), "ثبّت التطبيق"
+ * when the browser can install the store (S15 IN1), the rights.
  */
 export function SiteFooter() {
   return (
@@ -26,6 +28,7 @@ export function SiteFooter() {
           <Suspense fallback={null}>
             <FooterContentLinks className={LINK} />
           </Suspense>
+          <InstallLink className={LINK} />
         </nav>
         <Rights />
       </div>
