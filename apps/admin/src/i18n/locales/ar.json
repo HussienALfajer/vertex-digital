@@ -1145,7 +1145,8 @@
       "order_conflict": "تعارض في طلب",
       "validation_quota_reached": "بلوغ حصة التحقق اليومية",
       "ticket_opened": "تذكرة دعم جديدة",
-      "ticket_reply": "ردّ عميل على تذكرة"
+      "ticket_reply": "ردّ عميل على تذكرة",
+      "reconciliation_alert": "تنبيه المطابقة"
     }
   },
   "rates": {

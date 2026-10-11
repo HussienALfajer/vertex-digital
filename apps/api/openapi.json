@@ -24111,7 +24111,8 @@
           "order_conflict",
           "validation_quota_reached",
           "ticket_opened",
-          "ticket_reply"
+          "ticket_reply",
+          "reconciliation_alert"
         ]
       },
       "TelegramMessageStatus": {

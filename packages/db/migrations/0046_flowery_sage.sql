@@ -1,0 +1,1 @@
+ALTER TYPE "public"."telegram_message_kind" ADD VALUE 'reconciliation_alert';

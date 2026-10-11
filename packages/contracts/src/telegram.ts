@@ -13,6 +13,14 @@ import {
 } from './deposits.js';
 import { currencySchema } from './money.js';
 import {
+  RECONCILIATION_ALERT_MAX_LINES,
+  reconciliationCheckSchema,
+  reconciliationResultStatusSchema,
+  reconciliationRunStatusSchema,
+  reconciliationRunTriggerSchema,
+  reconciliationSkipReasonSchema,
+} from './reconciliation.js';
+import {
   STORE_SWITCHES,
   type StoreSwitch,
   storeSwitchSchema,
@@ -84,6 +92,8 @@ export const TELEGRAM_MESSAGE_KINDS = [
   /** S12 TK8: a customer opened a ticket, or wrote in one (one per ticket per 10 minutes). */
   'ticket_opened',
   'ticket_reply',
+  /** S13 NT1: a reconciliation run failed or found a new problem (one per run). */
+  'reconciliation_alert',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -269,6 +279,16 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     /** S12 TK13: tickets opened today, and tickets waiting for the admin now. */
     ticketsOpened: z.int().nonnegative().default(0),
     ticketsWaiting: z.int().nonnegative().default(0),
+    /** S13 NT2: the newest nightly reconciliation, and the mismatches open now (null: none yet). */
+    reconciliation: z
+      .object({
+        date: z.iso.date(),
+        status: reconciliationRunStatusSchema,
+        mismatches: z.int().nonnegative(),
+        open: z.int().nonnegative(),
+      })
+      .nullable()
+      .default(null),
   }),
   bot_reply: telegramBotReplySchema,
   /** To the previous chat when another chat was linked (rule TG3). */
@@ -381,6 +401,32 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     subject: z.string().max(120),
     hasImages: z.boolean(),
     customerEmail: z.string(),
+  }),
+  /**
+   * S13 NT1: the run's Damascus date, "urgent" when an internal check failed, the results that
+   * made it alert (at most 10, the rest counted) and the mismatches open now. No customer data.
+   */
+  reconciliation_alert: z.object({
+    runId: z.uuid(),
+    trigger: reconciliationRunTriggerSchema,
+    date: z.iso.date(),
+    failed: z.boolean(),
+    urgent: z.boolean(),
+    lines: z
+      .array(
+        z.object({
+          check: reconciliationCheckSchema,
+          subject: z.string(),
+          status: reconciliationResultStatusSchema,
+          currency: currencySchema.nullable(),
+          differenceUnits: z.int().nullable(),
+          offendingCount: z.int().nonnegative(),
+          reason: reconciliationSkipReasonSchema.nullable(),
+        }),
+      )
+      .max(RECONCILIATION_ALERT_MAX_LINES),
+    moreLines: z.int().nonnegative(),
+    open: z.int().nonnegative(),
   }),
 } as const satisfies Record<TelegramMessageKind, z.ZodType>;
 

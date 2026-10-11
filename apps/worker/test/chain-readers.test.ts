@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { tronAddressFromHex, USDT_NETWORKS } from '@vertex-digital/contracts';
 import { describe, expect, it } from 'vitest';
@@ -9,7 +10,11 @@ import {
   BscReader,
 } from '../src/jobs/deposits/chain/bsc-reader.js';
 import { ChainReaderError } from '../src/jobs/deposits/chain/chain-reader.js';
-import { FakeReader, MemoryFakeChainStore } from '../src/jobs/deposits/chain/fake-reader.js';
+import {
+  FakeReader,
+  FileFakeChainStore,
+  MemoryFakeChainStore,
+} from '../src/jobs/deposits/chain/fake-reader.js';
 import {
   TRON_FIRST_LOOKBACK_MS,
   TRON_OVERLAP_MS,
@@ -235,6 +240,31 @@ describe('TRON reader (TronGrid)', () => {
   });
 });
 
+describe('TRON USDT balance (S13 E3)', () => {
+  it('reads the official USDT balance of the confirmed state, other tokens left out', async () => {
+    const { fetchFn, calls } = scripted(() => fixture('tron-account.json'));
+    const tron = new TronReader({ apiUrl: 'https://trongrid.test/', apiKey: 'k', fetch: fetchFn });
+    expect(await tron.getUsdtBalance(STORE_TRON)).toBe(1_250_003_700n);
+    expect(calls[0]?.url).toBe(
+      `https://trongrid.test/v1/accounts/${STORE_TRON}?only_confirmed=true`,
+    );
+  });
+
+  it('reads 0 for an account never activated or without USDT, and fails on an odd reply', async () => {
+    const empty = scripted(() => ({ success: true, data: [], meta: {} }));
+    const noToken = scripted(() => ({ success: true, data: [{ balance: 1 }], meta: {} }));
+    const odd = scripted(() => ({ success: true, data: [{ trc20: [{ x: '-1' }] }] }));
+    const read = (fetchFn: typeof fetch) =>
+      new TronReader({ apiUrl: 'https://trongrid.test', fetch: fetchFn }).getUsdtBalance(
+        STORE_TRON,
+      );
+    expect(await read(empty.fetchFn)).toBe(0n);
+    expect(await read(noToken.fetchFn)).toBe(0n);
+    await expect(read(odd.fetchFn)).rejects.toMatchObject({ kind: 'bad_response' });
+    await expect(read(scripted(() => timeout()).fetchFn)).rejects.toBeInstanceOf(ChainReaderError);
+  });
+});
+
 describe('BSC reader (JSON-RPC)', () => {
   const BLOCK = 0x3b9aca0;
 
@@ -433,6 +463,43 @@ describe('BSC listing finality', () => {
   });
 });
 
+describe('BSC USDT balance (S13 E3)', () => {
+  const word = (value: bigint) => `0x${value.toString(16).padStart(64, '0')}`;
+
+  it('calls balanceOf on the official contract at the finalized block', async () => {
+    const { fetchFn, calls } = scripted(() => ({
+      jsonrpc: '2.0',
+      id: 1,
+      result: word(25_003_700_000_000_000_000n),
+    }));
+    const bsc = new BscReader({ rpcUrl: 'https://bsc.test/key', fetch: fetchFn });
+    expect(await bsc.getUsdtBalance(`0x${'AB'.repeat(20)}`)).toBe(25_003_700_000_000_000_000n);
+    expect(calls[0]?.body).toMatchObject({
+      method: 'eth_call',
+      params: [
+        {
+          to: USDT_NETWORKS.usdt_bep20.contract,
+          data: `0x70a08231${'0'.repeat(24)}${'ab'.repeat(20)}`,
+        },
+        'finalized',
+      ],
+    });
+  });
+
+  it('refuses a reply that is not one word, and an error reply', async () => {
+    const short = scripted(() => ({ jsonrpc: '2.0', id: 1, result: '0x' }));
+    const failed = scripted(() => ({
+      jsonrpc: '2.0',
+      id: 1,
+      error: { code: -32000, message: 'header not found' },
+    }));
+    const read = (fetchFn: typeof fetch) =>
+      new BscReader({ rpcUrl: 'https://bsc.test', fetch: fetchFn }).getUsdtBalance(STORE_BSC);
+    await expect(read(short.fetchFn)).rejects.toMatchObject({ kind: 'bad_response' });
+    await expect(read(failed.fetchFn)).rejects.toMatchObject({ kind: 'unavailable' });
+  });
+});
+
 describe('fake reader', () => {
   it('reads what the store holds, per network, with the cursor as a block number', async () => {
     const store = new MemoryFakeChainStore();
@@ -486,5 +553,64 @@ describe('fake reader', () => {
       caughtUp: true,
     });
     expect((await reader.listIncoming(address, '2')).transfers).toEqual([]);
+  });
+});
+
+describe('fake USDT balance (S13)', () => {
+  it('sums the final transfers to and from the address, plus the scripted offset', async () => {
+    const store = new MemoryFakeChainStore();
+    const address = `0x${'ab'.repeat(20)}`;
+    const other = `0x${'cd'.repeat(20)}`;
+    const contract = USDT_NETWORKS.usdt_bep20.contract;
+    const add = (raw: string, from: string, to: string, extra = {}) =>
+      store.add({
+        method: 'usdt_bep20',
+        txid: Math.random().toString(16).slice(2).padEnd(64, '0').slice(0, 64),
+        status: 'succeeded',
+        final: true,
+        transfers: [{ contract, from, to, raw }],
+        ...extra,
+      });
+    await add('100', other, address.toUpperCase().replace('0X', '0x'));
+    await add('30', address, other);
+    // Not counted: not final, failed, another token, another network.
+    await add('7', other, address, { final: false });
+    await add('7', other, address, { status: 'failed' });
+    await store.add({
+      method: 'usdt_bep20',
+      txid: 'ef'.repeat(32),
+      status: 'succeeded',
+      final: true,
+      transfers: [{ contract: other, from: other, to: address, raw: '7' }],
+    });
+    const reader = new FakeReader('usdt_bep20', store);
+    expect(await reader.getUsdtBalance(address)).toBe(70n);
+    expect(await store.adjustOffset('usdt_bep20', 10n)).toBe(10n);
+    expect(await store.adjustOffset('usdt_bep20', -100n)).toBe(-90n);
+    expect(await reader.getUsdtBalance(address)).toBe(-20n);
+    expect(await new FakeReader('usdt_trc20', store).getUsdtBalance(address)).toBe(0n);
+    expect(await store.adjustOffset('usdt_bep20', null)).toBe(0n);
+    expect(await reader.getUsdtBalance(address)).toBe(70n);
+  });
+
+  it('keeps the offsets in the file, and reads a file of transactions only (before S13)', async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'fake-chain-')), 'chain.json');
+    writeFileSync(path, '[]');
+    const store = new FileFakeChainStore(path);
+    expect(await store.offset('usdt_trc20')).toBe(0n);
+    expect(await store.adjustOffset('usdt_trc20', 5_000_000n)).toBe(5_000_000n);
+    await store.add({
+      method: 'usdt_trc20',
+      txid: 'aa'.repeat(32),
+      status: 'succeeded',
+      final: true,
+      transfers: [],
+    });
+    const again = new FileFakeChainStore(path);
+    expect(await again.offset('usdt_trc20')).toBe(5_000_000n);
+    expect(await again.all()).toHaveLength(1);
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({
+      offsets: { usdt_trc20: '5000000' },
+    });
   });
 });

@@ -24,6 +24,8 @@ export const BSC_FIRST_LOOKBACK_BLOCKS = 5_000;
  */
 export const BSC_LOGS_RANGE = 1_000;
 const RANGES_PER_RUN = 10;
+/** The ERC-20 `balanceOf(address)` selector. */
+const BALANCE_OF = '0x70a08231';
 
 const quantity = z
   .string()
@@ -136,6 +138,21 @@ export class BscReader implements ChainReader {
       cursor: String(Math.max(0, last)),
       caughtUp: last >= finalized,
     };
+  }
+
+  /** `balanceOf(address)` on the official contract at the `finalized` block (S13 E3). */
+  async getUsdtBalance(address: string): Promise<bigint> {
+    const holder = address.slice(2).toLowerCase().padStart(64, '0');
+    const result = await this.call(
+      'eth_call',
+      [{ to: NETWORK.contract, data: `${BALANCE_OF}${holder}` }, 'finalized'],
+      data,
+    );
+    // A uint256: one 32-byte word.
+    if (result.length !== 66) {
+      throw new ChainReaderError('bad_response', 'BSC eth_call answered no balance word');
+    }
+    return BigInt(result);
   }
 
   private async block(tag: string) {

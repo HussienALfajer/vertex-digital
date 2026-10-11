@@ -20,7 +20,9 @@ import {
   currentReconciliationSettings,
   type Database,
   failStaleRuns,
+  finishReconciliationRun,
   newId,
+  RECONCILIATION_RUN_OPTIONS,
   reconciliationExplanations,
   reconciliationResults,
   reconciliationRuns,
@@ -207,7 +209,12 @@ export class ReconciliationService {
           .values({ trigger: 'manual', adminId })
           .returning();
         if (!run) throw new Error('The run was not written');
-        await this.jobs.send(tx, QUEUES.reconciliationRun, { runId: run.id });
+        await this.jobs.send(
+          tx,
+          QUEUES.reconciliationRun,
+          { runId: run.id },
+          RECONCILIATION_RUN_OPTIONS,
+        );
         await recordAudit(tx, {
           ...this.entry(adminId, meta, 'reconciliation_run', run.id),
           action: 'reconciliation_run.started',
@@ -255,17 +262,8 @@ export class ReconciliationService {
           toleranceUnits,
         });
         await tx.insert(reconciliationResults).values({ runId: id, ...result });
-        await tx
-          .update(reconciliationRuns)
-          .set({
-            status: 'finished',
-            finishedAt: new Date(),
-            mismatchCount: result.status === 'mismatch' ? 1 : 0,
-            warningCount: isWarningResult({ status: result.status, reason: result.details.reason })
-              ? 1
-              : 0,
-          })
-          .where(eq(reconciliationRuns.id, id));
+        // Rule NT1: a count alerts as any run does.
+        await finishReconciliationRun(tx, this.jobs, id);
         await recordAudit(tx, {
           ...this.entry(adminId, meta, 'reconciliation_run', id),
           action: 'reconciliation_run.started',

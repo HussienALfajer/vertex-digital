@@ -88,6 +88,10 @@ const flaky = (method: UsdtMethod): ChainReader => {
       check();
       return fake.listIncoming(address, cursor);
     },
+    getUsdtBalance: async (address) => {
+      check();
+      return fake.getUsdtBalance(address);
+    },
   };
 };
 const readers: ChainReaders = { usdt_trc20: flaky('usdt_trc20'), usdt_bep20: flaky('usdt_bep20') };

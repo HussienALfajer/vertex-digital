@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { USDT_NETWORKS, type UsdtMethod } from '@vertex-digital/contracts';
+import { USDT_METHODS, USDT_NETWORKS, type UsdtMethod } from '@vertex-digital/contracts';
 import { z } from 'zod';
 import {
   type ChainReader,
@@ -13,7 +13,9 @@ import {
  * The `fake` chain (S04, development and tests; refused in production by the environment check):
  * transactions written by `usdt:fake-transfer` (or a test) and read back as a reader would. In
  * development they live in a git-ignored JSON file (FAKE_CHAIN_FILE), never in a database, so no
- * fake transfer can exist where the live readers run. Tests use the in-memory store.
+ * fake transfer can exist where the live readers run. Tests use the in-memory store. A network's
+ * balance (S13) is its final transfers to and from the address plus a scripted offset: money moved
+ * in or out outside the deposit flow (`usdt:fake-balance`).
  */
 
 const fakeTransactionSchema = z.object({
@@ -40,11 +42,36 @@ export type NewFakeTransaction = Omit<FakeTransaction, 'blockNumber' | 'blockTim
   blockTime?: string;
 };
 
+const rawText = z.string().regex(/^-?\d+$/);
+
+type Offsets = Partial<Record<UsdtMethod, string>>;
+
+/** The file: the transactions and each network's balance offset in raw units (S13). */
+const fakeChainFileSchema = z.union([
+  // Before S13 the file held the transactions only.
+  z
+    .array(fakeTransactionSchema)
+    .transform((transactions) => ({ transactions, offsets: {} as Offsets })),
+  z.object({
+    transactions: z.array(fakeTransactionSchema),
+    offsets: z.partialRecord(z.enum(USDT_METHODS), rawText) as z.ZodType<Offsets>,
+  }),
+]);
+
+type FakeChainFile = z.infer<typeof fakeChainFileSchema>;
+
 export interface FakeChainStore {
   all(): Promise<FakeTransaction[]>;
   /** Adds a transaction (replacing one with the same network and TXID) and returns it. */
   add(transaction: NewFakeTransaction): Promise<FakeTransaction>;
+  /** The network's scripted balance offset in raw units (0 when never set). */
+  offset(method: UsdtMethod): Promise<bigint>;
+  /** Adds `raw` to the network's offset, or sets it back to 0 (null); returns the new offset. */
+  adjustOffset(method: UsdtMethod, raw: bigint | null): Promise<bigint>;
 }
+
+const adjusted = (offsets: FakeChainFile['offsets'], method: UsdtMethod, raw: bigint | null) =>
+  raw === null ? 0n : BigInt(offsets[method] ?? '0') + raw;
 
 function appended(list: FakeTransaction[], transaction: NewFakeTransaction): FakeTransaction {
   const sameNetwork = list.filter((item) => item.method === transaction.method);
@@ -62,6 +89,7 @@ const withReplaced = (list: FakeTransaction[], added: FakeTransaction) => [
 
 export class MemoryFakeChainStore implements FakeChainStore {
   private list: FakeTransaction[] = [];
+  private offsets: FakeChainFile['offsets'] = {};
 
   async all(): Promise<FakeTransaction[]> {
     return this.list;
@@ -72,28 +100,58 @@ export class MemoryFakeChainStore implements FakeChainStore {
     this.list = withReplaced(this.list, added);
     return added;
   }
+
+  async offset(method: UsdtMethod): Promise<bigint> {
+    return BigInt(this.offsets[method] ?? '0');
+  }
+
+  async adjustOffset(method: UsdtMethod, raw: bigint | null): Promise<bigint> {
+    const next = adjusted(this.offsets, method, raw);
+    this.offsets = { ...this.offsets, [method]: next.toString() };
+    return next;
+  }
 }
 
 export class FileFakeChainStore implements FakeChainStore {
   constructor(private readonly path: string) {}
 
   async all(): Promise<FakeTransaction[]> {
+    return (await this.read()).transactions;
+  }
+
+  async add(transaction: NewFakeTransaction): Promise<FakeTransaction> {
+    const file = await this.read();
+    const added = appended(file.transactions, transaction);
+    await this.write({ ...file, transactions: withReplaced(file.transactions, added) });
+    return added;
+  }
+
+  async offset(method: UsdtMethod): Promise<bigint> {
+    return BigInt((await this.read()).offsets[method] ?? '0');
+  }
+
+  async adjustOffset(method: UsdtMethod, raw: bigint | null): Promise<bigint> {
+    const file = await this.read();
+    const next = adjusted(file.offsets, method, raw);
+    await this.write({ ...file, offsets: { ...file.offsets, [method]: next.toString() } });
+    return next;
+  }
+
+  private async read(): Promise<FakeChainFile> {
     try {
-      return z.array(fakeTransactionSchema).parse(JSON.parse(await readFile(this.path, 'utf8')));
+      return fakeChainFileSchema.parse(JSON.parse(await readFile(this.path, 'utf8')));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+        return { transactions: [], offsets: {} };
       throw error;
     }
   }
 
-  async add(transaction: NewFakeTransaction): Promise<FakeTransaction> {
-    const list = await this.all();
-    const added = appended(list, transaction);
+  private async write(file: FakeChainFile): Promise<void> {
     await mkdir(dirname(this.path), { recursive: true });
     // Written aside, then renamed: the worker never reads half a file.
-    await writeFile(`${this.path}.tmp`, JSON.stringify(withReplaced(list, added), null, 2));
+    await writeFile(`${this.path}.tmp`, JSON.stringify(file, null, 2));
     await rename(`${this.path}.tmp`, this.path);
-    return added;
   }
 }
 
@@ -141,5 +199,23 @@ export class FakeReader implements ChainReader {
       cursor: String(last),
       caughtUp: true,
     };
+  }
+
+  /**
+   * The final official-USDT transfers to the address less those from it, plus the scripted
+   * offset (S13).
+   */
+  async getUsdtBalance(address: string): Promise<bigint> {
+    const contract = USDT_NETWORKS[this.method].contract;
+    let raw = await this.store.offset(this.method);
+    for (const item of await this.store.all()) {
+      if (item.method !== this.method || !item.final || item.status !== 'succeeded') continue;
+      for (const transfer of item.transfers) {
+        if (!sameAddress(this.method, transfer.contract, contract)) continue;
+        if (sameAddress(this.method, transfer.to, address)) raw += BigInt(transfer.raw);
+        if (sameAddress(this.method, transfer.from, address)) raw -= BigInt(transfer.raw);
+      }
+    }
+    return raw;
   }
 }

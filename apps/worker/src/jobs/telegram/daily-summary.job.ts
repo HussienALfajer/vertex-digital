@@ -17,10 +17,12 @@ import {
   deposits,
   fulfilmentAttempts,
   ledgerSummary,
+  openMismatchCount,
   orders,
   priceReviews,
   productRoutingStates,
   queueTelegramMessage,
+  reconciliationRuns,
   storeSwitchChanges,
   supplierCalls,
   supplierStates,
@@ -232,6 +234,24 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       ...(await this.reservationLines(db, dayStart)),
       ...(await this.checkoutLines(db, dayStart)),
       ...(await this.ticketLines(db, dayStart)),
+      reconciliation: await this.reconciliationLine(db),
+    };
+  }
+
+  /** S13 NT2: the newest nightly reconciliation's state, and the mismatches open now. */
+  private async reconciliationLine(db: Database | Transaction) {
+    const [run] = await db
+      .select()
+      .from(reconciliationRuns)
+      .where(eq(reconciliationRuns.trigger, 'schedule'))
+      .orderBy(desc(reconciliationRuns.startedAt), desc(reconciliationRuns.id))
+      .limit(1);
+    if (!run?.businessDate) return null;
+    return {
+      date: run.businessDate,
+      status: run.status,
+      mismatches: run.mismatchCount,
+      open: await openMismatchCount(db),
     };
   }
 

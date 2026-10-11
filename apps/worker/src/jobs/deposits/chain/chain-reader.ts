@@ -53,6 +53,11 @@ export interface ChainReader {
   getTransfer(txid: string): Promise<ChainTransfer>;
   /** Final official-USDT transfers to `address` from `cursor` on (null: the first read). */
   listIncoming(address: string, cursor: string | null): Promise<IncomingPage>;
+  /**
+   * The official-USDT balance of `address` in raw units, as of the latest final state (S13 E3):
+   * TRON's solidified state, BSC's `finalized` block.
+   */
+  getUsdtBalance(address: string): Promise<bigint>;
 }
 
 export type ChainReaderErrorKind = 'timeout' | 'rate_limited' | 'unavailable' | 'bad_response';
