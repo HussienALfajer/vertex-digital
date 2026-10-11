@@ -1,4 +1,5 @@
 import { DirectionProvider } from '@vertex-digital/ui/components/direction-provider';
+import { themeHex } from '@vertex-digital/ui/theme-hex';
 import type { Metadata, Viewport } from 'next';
 import { type ReactNode, Suspense } from 'react';
 import { FrozenBanner } from '@/components/frozen-banner';
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   colorScheme: 'dark light',
   // The dark theme's app background, as the manifest (PW1).
-  themeColor: '#031B17',
+  themeColor: themeHex['green-950'],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -1,3 +1,5 @@
+import { isAppleMobile, isSafari } from '@/features/pwa/platform';
+
 /*
  * The push rules the store decides on the device (S15 PC1, PS6, PS7), pure so they are tested
  * without a browser. No contracts import: the order and deposit pages load this before the card.
@@ -14,16 +16,6 @@ export type Permission = 'default' | 'granted' | 'denied';
 
 /** A closed card stays away this long on the device (PC1). */
 export const CARD_SNOOZE_MS = 30 * 24 * 60 * 60 * 1000;
-
-/** iPhone, iPod, or an iPad (which reports itself as a Mac with touch). */
-export function isAppleMobile(userAgent: string, maxTouchPoints: number): boolean {
-  return /iPhone|iPad|iPod/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
-}
-
-/** Safari itself, not Chrome, Firefox or Edge on iOS (each adds its own token). */
-export function isSafari(userAgent: string): boolean {
-  return /Safari\//.test(userAgent) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(userAgent);
-}
 
 export function pushSupport(device: {
   userAgent: string;

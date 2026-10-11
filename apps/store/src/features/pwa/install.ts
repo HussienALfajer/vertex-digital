@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { isAppleMobile, isSafari } from '@/features/push/rules';
+import { isAppleMobile, isSafari } from './platform';
 import { INSTALL_EVENT } from './registration';
 
 /*

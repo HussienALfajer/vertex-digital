@@ -12,6 +12,7 @@
     "./brand/logo-shapes": "./src/brand/logo-shapes.ts",
     "./brand/*": "./src/brand/*.tsx",
     "./styles.css": "./src/styles/index.css",
+    "./theme-hex": "./src/styles/theme-hex.ts",
     "./madani.css": "./src/styles/madani.css"
   },
   "scripts": {

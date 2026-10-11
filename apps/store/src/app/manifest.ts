@@ -1,3 +1,4 @@
+import { themeHex } from '@vertex-digital/ui/theme-hex';
 import type { MetadataRoute } from 'next';
 import { APP_NAME } from '@/features/pwa/service-worker';
 import { t } from '@/lib/i18n';
@@ -7,7 +8,7 @@ import icon512 from '../../../../brand/logo/png/icon-512.png';
 import maskable from '../../../../brand/logo/png/icon-maskable-512.png';
 
 /** The dark theme's app background (brand/identity.md §2): the installed app's splash and bars. */
-const BACKGROUND = '#031B17';
+const BACKGROUND = themeHex['green-950'];
 
 /** `/manifest.webmanifest` (S15 PW1): the installable store. */
 export default function manifest(): MetadataRoute.Manifest {

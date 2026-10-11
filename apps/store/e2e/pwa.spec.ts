@@ -27,8 +27,8 @@ test('serves the manifest with its icons, linked from every page (PW1, PW2)', as
     name: 'VERTEX DIGITAL',
     short_name: 'VERTEX DIGITAL',
     description: ar.app.description,
-    background_color: '#031B17',
-    theme_color: '#031B17',
+    background_color: '#031b17',
+    theme_color: '#031b17',
     shortcuts: [
       { name: ar.pwa.shortcutOrders, url: '/orders' },
       { name: ar.pwa.shortcutWallet, url: '/wallet' },
@@ -49,7 +49,7 @@ test('serves the manifest with its icons, linked from every page (PW1, PW2)', as
     'href',
     '/manifest.webmanifest',
   );
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#031B17');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#031b17');
   await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute(
     'content',
     'yes',

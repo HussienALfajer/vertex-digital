@@ -1,4 +1,5 @@
 import { logoShape } from '@vertex-digital/ui/brand/logo-shapes';
+import { themeHex } from '@vertex-digital/ui/theme-hex';
 import { t } from '@/lib/i18n';
 
 /**
@@ -8,23 +9,29 @@ import { t } from '@/lib/i18n';
  * from the catalog; nothing in it comes from a request.
  */
 export function offlinePage(): string {
+  const {
+    'green-950': background,
+    'gold-400': sand,
+    'neutral-100': text,
+    'neutral-300': muted,
+  } = themeHex;
   return `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#031B17">
+<meta name="theme-color" content="${background}">
 <title>${t('pwa.offline.title')}</title>
 <style>
-html,body{margin:0;height:100%;background:#031B17;color:#E7EFED}
+html,body{margin:0;height:100%;background:${background};color:${text}}
 body{display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,"Geeza Pro","Noto Sans Arabic",sans-serif;text-align:center}
 main{display:flex;flex-direction:column;align-items:center;gap:16px;max-width:28rem}
-svg{width:96px;height:auto;color:#B9A87A}
+svg{width:96px;height:auto;color:${sand}}
 h1{margin:8px 0 0;font-size:1.375rem}
-p{margin:0;line-height:1.7;color:#B8BFBE}
-button{margin-top:8px;min-height:44px;padding:0 24px;border:0;border-radius:8px;background:#B9A87A;color:#031B17;font:inherit;font-weight:700;cursor:pointer}
-button:focus-visible{outline:2px solid #E7EFED;outline-offset:2px}
+p{margin:0;line-height:1.7;color:${muted}}
+button{margin-top:8px;min-height:44px;padding:0 24px;border:0;border-radius:8px;background:${sand};color:${background};font:inherit;font-weight:700;cursor:pointer}
+button:focus-visible{outline:2px solid ${text};outline-offset:2px}
 </style>
 </head>
 <body>

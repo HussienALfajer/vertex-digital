@@ -56,10 +56,30 @@ export async function pushBrowser(page: Page, browser: PushBrowser): Promise<voi
           // Kept through a navigation of this tab (sign-out loads `/`).
           sessionStorage.setItem('e2e-push-unsubscribed', String(record.unsubscribed));
           held = null;
+          keep();
           return true;
         },
       });
-      if (heldKey) held = subscription(bytes(heldKey));
+      // The browser keeps its permission and subscription across loads of this tab.
+      const kept = JSON.parse(sessionStorage.getItem('e2e-push-state') ?? 'null') as {
+        permission: typeof permission;
+        heldKey: string | null;
+      } | null;
+      const keyText = (key: ArrayBuffer) =>
+        btoa(String.fromCharCode(...new Uint8Array(key)))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+      const startKey = kept ? kept.heldKey : heldKey;
+      if (startKey) held = subscription(bytes(startKey));
+      const keep = () =>
+        sessionStorage.setItem(
+          'e2e-push-state',
+          JSON.stringify({
+            permission: current,
+            heldKey: held ? keyText(held.options.applicationServerKey) : null,
+          }),
+        );
       const registration = {
         scope: `${location.origin}/`,
         pushManager: {
@@ -67,6 +87,7 @@ export async function pushBrowser(page: Page, browser: PushBrowser): Promise<voi
           subscribe: async (options: { applicationServerKey: Uint8Array }) => {
             record.subscribed++;
             held = subscription(options.applicationServerKey.slice().buffer);
+            keep();
             return held;
           },
         },
@@ -80,7 +101,7 @@ export async function pushBrowser(page: Page, browser: PushBrowser): Promise<voi
         configurable: true,
         get: () => container,
       });
-      let current = permission;
+      let current = kept ? kept.permission : permission;
       Object.defineProperty(window, 'Notification', {
         configurable: true,
         writable: true,
@@ -91,6 +112,7 @@ export async function pushBrowser(page: Page, browser: PushBrowser): Promise<voi
           requestPermission: async () => {
             record.asked++;
             current = answer ?? current;
+            keep();
             return current;
           },
         },

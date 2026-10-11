@@ -3,7 +3,7 @@
 The Vertex design system, shared by the store and the admin panel: shadcn/ui patterns on Base UI, Tailwind CSS v4 tokens, RTL (ADR 0002, ADR 0012). Copied from Vertex Hub and adapted; nothing is imported across repositories. Read `brand/identity.md` before changing anything visual.
 
 ## Layout
-- `src/styles/theme.css`: the only place colors and design tokens are defined (light and `.dark`). Tailwind's default palette, fonts, radii and shadows are reset, so an off-brand utility generates no CSS.
+- `src/styles/theme.css`: the only place colors and design tokens are defined (light and `.dark`). `src/styles/theme-hex.ts` (`@vertex-digital/ui/theme-hex`, S15) copies the few values needed where CSS cannot reach (the store's manifest, `theme-color`, the offline page); `tokens.test.ts` checks each against `theme.css`. Tailwind's default palette, fonts, radii and shadows are reset, so an off-brand utility generates no CSS.
 - `src/styles/fonts.css` (Montserrat and Noto Kufi Arabic from `@fontsource`), `base.css`, `index.css` (what apps import after Tailwind), `madani.css` (the licensed faces, imported by an app only when the files exist).
 - `src/components/<name>.tsx`: one component family per file, exported from `src/index.ts`. Pattern to copy: `src/components/button.tsx` (Base UI primitive + `cva` variants + `cn`).
 - `src/brand/`: `VertexLogo`, `VertexMark` (path data in `logo-shapes.ts`, checked against `brand/logo/svg` by `logo-shapes.test.ts`: change the SVG file first, then copy its `viewBox` and `d`), `AscentLines`, the 60° motif, and `SuccessMark` (S09: the three 60° strokes rising once, keyframes `vd-stroke-rise` in `base.css`).
@@ -12,7 +12,7 @@ The Vertex design system, shared by the store and the admin panel: shadcn/ui pat
 
 ## Rules the tests enforce (`src/conventions.test.ts`, `src/tokens.test.ts`)
 - Logical directions only: no `ml-`/`mr-`/`pl-`/`pr-`/`left-`/`right-`/`text-left`, here and in `apps/store/src` and `apps/admin/src`.
-- No hex, `rgb()` or `oklch()` values outside `theme.css`.
+- No hex, `rgb()` or `oklch()` values outside `theme.css` (and its checked copies in `theme-hex.ts`).
 - None of the patterns in `brand/identity.md` §9: gradients, backdrop blur, italic, letter spacing, uppercase, monospace.
 - Every tonal and status color equals `identity.md`, and the measured contrast pairs hold.
 
