@@ -47,10 +47,13 @@ function usd(units: number): number {
   return Number(`${sign}${whole}.${fraction}`);
 }
 
-/** SYP units as a number of pounds, from the exact decimal. */
+/** SYP units as a number of pounds, from the exact decimal (either sign). */
 function syp(units: number): number {
+  const sign = units < 0 ? '-' : '';
+  const magnitude = Math.abs(units);
   const scale = CURRENCY_SCALE.SYP;
-  return Number(`${Math.floor(units / scale)}.${String(units % scale).padStart(2, '0')}`);
+  const fraction = String(magnitude % scale).padStart(2, '0');
+  return Number(`${sign}${Math.floor(magnitude / scale)}.${fraction}`);
 }
 
 const date = (iso: string) => new Date(`${iso}T00:00:00Z`);

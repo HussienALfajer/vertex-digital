@@ -520,6 +520,13 @@ describe('external checks (E1–E4)', () => {
     await rolledBack(db, async (tx) => {
       const check = (countedUnits: number) =>
         shamCashCountCheck(tx, { currency: 'SYP', countedUnits, toleranceUnits: 13_000_00 });
+      // Before an opening the count is skipped, but keeps the amount typed (its replay reads it).
+      expect(await check(5_000_00)).toMatchObject({
+        status: 'skipped',
+        actualUnits: 5_000_00,
+        differenceUnits: null,
+        details: { reason: 'opening_missing' },
+      });
       await recordMovement(
         tx,
         transfer('outside_syp', 'sham_cash_syp', 1_000_000_00, { openingBalance: true }),

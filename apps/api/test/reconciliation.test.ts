@@ -173,6 +173,19 @@ describe('runs', () => {
 
 describe('Sham Cash counts and explanations', () => {
   it('checks a count at once, replays its key, opens a mismatch and explains it once (RN6–RN8)', async () => {
+    // Before an opening (rule T6) a count is skipped but kept, and its key replays it.
+    const early = randomUUID();
+    const skipped = await count('USD', 7 * USD, early);
+    expect(skipped.status).toBe(201);
+    const first = await body(skipped);
+    expect(first).toMatchObject({
+      results: [
+        { status: 'skipped', actualUnits: 7 * USD, details: { reason: 'opening_missing' } },
+      ],
+    });
+    const replayed = await count('USD', 7 * USD, early);
+    expect(replayed.status).toBe(200);
+    expect((await body(replayed)).id).toBe(first.id);
     const { movement } = await test.db.transaction((tx) =>
       recordMovement(
         tx,
