@@ -23,7 +23,7 @@ NestJS 12 HTTP API, a modular monolith (ADR 0001, 0002). Code shape: ADR 0011. A
 
 ## Protection (ADR 0008)
 - `sameOriginOnly`: `/api/admin/*` refuses browser requests from any origin but `ADMIN_URL`; other routes refuse state changes from any origin but `STORE_URL` (`403 CROSS_ORIGIN_REFUSED`).
-- Rate limits: a default per IP on every route; tighten one with `@RateLimit({ limit, perSeconds })`. Every new public route that changes state gets one, and a test that it refuses abuse. Counters that must survive a restart go in PostgreSQL: the email-code and sign-up limits use `modules/auth/rate-counter.ts` (`customer_rate_limits`).
+- Rate limits: a default per IP on every route; tighten one with `@RateLimit({ limit, perSeconds })`. Every new public route that changes state gets one, and a test that it refuses abuse. Counters that must survive a restart go in PostgreSQL: the email-code and sign-up limits use `withinLimits` / `countHit` from `@vertex-digital/db` (`packages/db/src/rate-limits.ts`, `customer_rate_limits`) (`customer_rate_limits`).
 - ALTCHA: `@RequireAltcha()` checks the `X-Altcha` header (sign-up, OTP requests, password reset, deposit and ticket creation). Challenges come from `GET /api/altcha/challenge`.
 
 ## Errors

@@ -1,3 +1,4 @@
+import { createECDH } from 'node:crypto';
 import { NOTIFICATION_EVENTS, PUSH_SUBSCRIPTIONS_MAX, vapidKeyId } from '@vertex-digital/contracts';
 import {
   auditEntries,
@@ -39,7 +40,11 @@ async function signedIn() {
   return { ...customer, cookie: await client.signInCustomer(customer.email) };
 }
 
-const p256dh = `B${'p'.repeat(86)}`;
+const p256dh = (() => {
+  const ecdh = createECDH('prime256v1');
+  ecdh.generateKeys();
+  return ecdh.getPublicKey().toString('base64url');
+})();
 const auth = 'a'.repeat(22);
 
 const subscription = (endpoint = `https://fcm.googleapis.com/fcm/send/${newId()}`) => ({
@@ -176,8 +181,16 @@ describe('registration (PS1–PS3)', () => {
     expect(await devicesOf(customer.id)).toEqual([]);
   });
 
-  it('refuses keys of the wrong length', async () => {
+  it('refuses keys of the wrong length or off the curve', async () => {
     const customer = await signedIn();
+    expect(
+      await body(
+        await register(customer.cookie, {
+          ...subscription(),
+          keys: { p256dh: `B${'p'.repeat(86)}`, auth },
+        }),
+      ),
+    ).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
     expect(
       await body(
         await register(customer.cookie, { ...subscription(), keys: { p256dh, auth: 'short' } }),

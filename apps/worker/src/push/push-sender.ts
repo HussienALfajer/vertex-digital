@@ -25,7 +25,11 @@ export interface PushRequest {
 }
 
 /** The push service's answer, or why there was none: a transient failure (PD4). */
-export type PushResponse = { status: number } | { error: 'timeout' | 'network' };
+export type PushResponse =
+  | { status: number }
+  | { error: 'timeout' | 'network' }
+  /** The stored keys cannot be encrypted for: the device is unusable. */
+  | { error: 'invalid_subscription' };
 
 /** Each request times out after 10 seconds (PD3). */
 const TIMEOUT_MS = 10_000;
@@ -59,7 +63,12 @@ export class PushSender {
       contentEncoding: 'aes128gcm' as const,
     };
     if (this.config.transport === 'log') return this.write(device, request, options);
-    const details = webPush.generateRequestDetails(device, request.payload, options);
+    let details: ReturnType<typeof webPush.generateRequestDetails>;
+    try {
+      details = webPush.generateRequestDetails(device, request.payload, options);
+    } catch {
+      return { error: 'invalid_subscription' };
+    }
     try {
       const response = await this.fetchFn(details.endpoint, {
         method: 'POST',

@@ -190,6 +190,7 @@ describe('delivery rules (PD3, PD4)', () => {
     for (const status of [429, 500, 503, 301]) expect(pushOutcome({ status })).toBe('transient');
     expect(pushOutcome({ error: 'timeout' })).toBe('transient');
     expect(pushOutcome({ error: 'network' })).toBe('transient');
+    expect(pushOutcome({ error: 'invalid_subscription' })).toBe('gone');
   });
 
   it('take the TTL from the age, and urgency by event', () => {
@@ -438,6 +439,20 @@ describe('push.send against a push service (PD3–PD5)', () => {
     expect(result.outcomes).toEqual({ [failing]: 'transient' });
     expect(result.retried).toEqual([]);
     expect(await rowsOf(customerId)).toEqual([]);
+  });
+
+  it('deletes a device whose keys cannot be encrypted for, and still serves the others', async () => {
+    const customerId = await customer();
+    const good = await device(customerId);
+    const broken = await device(customerId);
+    await db
+      .update(pushSubscriptions)
+      .set({ p256dh: `B${'p'.repeat(86)}` })
+      .where(eq(pushSubscriptions.id, broken));
+    const { job } = service({});
+    const result = await job.send({ notificationId: await notification(customerId) });
+    expect(result.outcomes).toEqual({ [good]: 'delivered', [broken]: 'gone' });
+    expect((await rowsOf(customerId)).map((row) => row.id)).toEqual([good]);
   });
 
   it('checks the host again before sending (PS2)', async () => {

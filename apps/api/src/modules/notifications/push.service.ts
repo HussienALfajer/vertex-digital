@@ -1,3 +1,4 @@
+import { createECDH } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   PUSH_CHANGES_PER_HOUR,
@@ -47,6 +48,11 @@ export class PushService {
     if (!pushEndpointAllowed(subscription.endpoint)) {
       throw new CodedException(400, 'PUSH_ENDPOINT_REFUSED', 'Not an allowed push service');
     }
+    if (!onCurve(subscription.keys.p256dh)) {
+      throw new CodedException(400, 'VALIDATION_FAILED', 'Invalid input', {
+        issues: [{ path: ['keys', 'p256dh'], message: 'Not a P-256 public key' }],
+      });
+    }
     await this.limit(customer.id);
     const keys = {
       customerId: customer.id,
@@ -61,10 +67,16 @@ export class PushService {
       );
       await tx
         .insert(pushSubscriptions)
-        .values({ id: newId(), endpoint: subscription.endpoint, ...keys })
+        // The lock's order, not the transaction's start, decides which device is the oldest.
+        .values({
+          id: newId(),
+          endpoint: subscription.endpoint,
+          ...keys,
+          updatedAt: sql`clock_timestamp()`,
+        })
         .onConflictDoUpdate({
           target: pushSubscriptions.endpoint,
-          set: { ...keys, failures: 0, updatedAt: sql`now()` },
+          set: { ...keys, failures: 0, updatedAt: sql`clock_timestamp()` },
         });
       await tx.execute(sql`
         delete from ${pushSubscriptions}
@@ -93,5 +105,17 @@ export class PushService {
       { key: `push:customer:${customerId}`, max: PUSH_CHANGES_PER_HOUR, windowMs: HOUR },
     ]);
     if (!allowed) throw new CodedException(429, 'RATE_LIMITED', 'Too many requests, try later');
+  }
+}
+
+/** The browser's key must be a point of P-256, or the worker could not encrypt for it. */
+function onCurve(p256dh: string): boolean {
+  try {
+    const ecdh = createECDH('prime256v1');
+    ecdh.generateKeys();
+    ecdh.computeSecret(Buffer.from(p256dh, 'base64url'));
+    return true;
+  } catch {
+    return false;
   }
 }

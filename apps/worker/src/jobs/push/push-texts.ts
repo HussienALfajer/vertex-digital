@@ -9,7 +9,7 @@ import {
  * under the same rules: Latin digits, no exclamation marks. A push never carries an amount, a
  * code, a player ID or any account field, a rejection reason, a ticket message, an admin note, or
  * the customer's name or email (PT2): only the order number, the pack's name and quantity, the
- * deposit's reference code, the ticket number and counts. `push-texts.test.ts` checks every event.
+ * deposit's reference code, the ticket number and counts. `test/push.test.ts` checks every event.
  */
 
 export interface PushPayload {

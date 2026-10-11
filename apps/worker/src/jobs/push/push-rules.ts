@@ -15,14 +15,15 @@ export const PUSH_FAILURES_MAX = 20;
 export const PUSH_CONCURRENCY = 5;
 
 /**
- * PD4: `delivered` (201, 202), `gone` (404, 410: delete the row), `refused` (400, 403, 413: a
+ * PD4: `delivered` (201, 202), `gone` (404, 410, or keys no payload can be encrypted for: delete
+ * the row), `refused` (400, 403, 413: a
  * bug or a key mismatch; the row stays and Sentry hears once per job), or `transient` (429, 5xx,
  * a timeout or a network error, and any other answer: counted and retried).
  */
 export type PushOutcome = 'delivered' | 'gone' | 'refused' | 'transient';
 
 export function pushOutcome(response: PushResponse): PushOutcome {
-  if ('error' in response) return 'transient';
+  if ('error' in response) return response.error === 'invalid_subscription' ? 'gone' : 'transient';
   if (response.status === 201 || response.status === 202) return 'delivered';
   if (response.status === 404 || response.status === 410) return 'gone';
   if ([400, 403, 413].includes(response.status)) return 'refused';
