@@ -1,6 +1,6 @@
 # S13 — Reconciliation and reports (F20, F22)
 
-Status: Draft · Date: 2026-10-11 · Scope: `docs/product/v1-scope.md` §F20, §F22, automation A11 · ADRs: 0003, 0004, 0006, 0011, 0017, 0018, 0019, 0021, 0022, 0025, 0027
+Status: Approved · Date: 2026-10-11 · Scope: `docs/product/v1-scope.md` §F20, §F22, automation A11 · ADRs: 0003, 0004, 0006, 0011, 0017, 0018, 0019, 0021, 0022, 0025, 0027
 
 ## Summary
 The books must prove themselves every night, and the owner must see where the money is and what the store earned. S13 adds three things. **Treasury movements** record money leaving or entering the store's money places (Sham Cash in SYP and USD, USDT per network, each supplier's prepaid balance, and the outside world), so supplier funding, the owner's withdrawals and conversions are in the ledger (ADR 0021 left this to S13). The **nightly reconciliation** (A11, 00:30 `Asia/Damascus`) runs exact internal checks on the ledger and compares the books with real balances: suppliers and USDT read automatically, Sham Cash counted by the admin; every mismatch stays open until the admin explains it, and a new one alerts on Telegram. **Reports** show sales and profit by delivery (as the dashboard) by day, game, product and supplier, deposits by method, refunds and failure rates, top customers and a ledger money-movement report, each exportable to Excel (owner, 2026-10-11).
