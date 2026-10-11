@@ -25,17 +25,19 @@ async function externalBalance(db: Executor, place: TreasuryPlace): Promise<Exte
   const supplier = supplierOfPlace(place);
   if (supplier === 'manual' || place.startsWith('outside_')) return null;
   if (supplier !== null) {
-    const { rows } = await db.execute<{ units: string; at: Date }>(sql`
-      select r.amount_units::text as units, r.created_at as at
+    const { rows } = await db.execute<{ units: string; at: string }>(sql`
+      select r.amount_units::text as units, r.created_at::text as at
       from supplier_balance_reads r join suppliers s on s.id = r.supplier_id
       where s.code = ${supplier} and r.currency = 'USD'
       order by r.created_at desc limit 1`);
     const row = rows[0];
-    return row ? { units: units(row.units), at: row.at.toISOString(), source: 'supplier' } : null;
+    return row
+      ? { units: units(row.units), at: new Date(row.at).toISOString(), source: 'supplier' }
+      : null;
   }
   const check = place.startsWith('usdt_') ? 'usdt_balance' : 'sham_cash_count';
-  const { rows } = await db.execute<{ units: string; at: Date }>(sql`
-    select actual_units::text as units, created_at as at from reconciliation_results
+  const { rows } = await db.execute<{ units: string; at: string }>(sql`
+    select actual_units::text as units, created_at::text as at from reconciliation_results
     where "check" = ${check} and subject = ${place} and actual_units is not null
     order by created_at desc limit 1`);
   const row = rows[0];

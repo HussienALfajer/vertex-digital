@@ -202,7 +202,13 @@ export async function shamCashCountCheck(
   const place: TreasuryPlace = input.currency === 'SYP' ? 'sham_cash_syp' : 'sham_cash_usd';
   const booksUnits = await placeBooks(db, place);
   if (!(await openingRecorded(db, place))) {
-    return skippedResult('sham_cash_count', place, 'opening_missing', booksUnits, input.countedUnits);
+    return skippedResult(
+      'sham_cash_count',
+      place,
+      'opening_missing',
+      booksUnits,
+      input.countedUnits,
+    );
   }
   const { rows } = await db.execute<{ id: string; amount: string }>(sql`
     select id, declared_amount_units::text as amount from deposits
