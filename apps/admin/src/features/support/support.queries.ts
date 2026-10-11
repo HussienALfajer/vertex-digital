@@ -112,11 +112,15 @@ export const supportSettingsQuery = queryOptions({
 });
 
 /** A ticket change shows in the queue and its badge, the customer's profile and the audit log. */
-function useSupportMutation<Input, Output>(request: (input: Input) => Promise<Output>) {
+function useSupportMutation<Input, Output>(
+  request: (input: Input) => Promise<Output>,
+  onSuccess?: (output: Output) => void,
+) {
   const queryClient = useQueryClient();
   const withReauthentication = useReauthentication();
   return useMutation({
     mutationFn: (input: Input) => withReauthentication(() => request(input)),
+    onSuccess,
     onSettled: () =>
       Promise.all(
         ['support', 'customers', 'audit'].map((key) =>
@@ -136,9 +140,14 @@ function multipart(fields: Record<string, string | undefined>, files: File[]): F
   return body;
 }
 
-/** TK5, TK7: a reply (it reopens a closed ticket), with the attempt's `Idempotency-Key`. */
-export const useReplyTicket = (id: string) =>
-  useSupportMutation(
+/**
+ * TK5, TK7: a reply (it reopens a closed ticket), with the attempt's `Idempotency-Key`. The
+ * answered ticket goes into the thread together with `onSent`, so the reply leaves the reply box
+ * in the same render it appears in the thread, not after the refetch.
+ */
+export const useReplyTicket = (id: string, onSent: () => void) => {
+  const queryClient = useQueryClient();
+  return useSupportMutation(
     ({ body, files, key }: { body: TicketMessageInput; files: File[]; key: string }) =>
       // openapi-fetch sends a FormData body as it is, with its multipart boundary.
       call<AdminTicket>(
@@ -147,7 +156,12 @@ export const useReplyTicket = (id: string) =>
           body: multipart({ body: body.body }, files) as never,
         }),
       ),
+    (ticket) => {
+      queryClient.setQueryData(ticketQuery(id).queryKey, ticket);
+      onSent();
+    },
   );
+};
 
 /** The fields of an admin-opened ticket, as `adminCreateTicketSchema` checked them (TK2). */
 export interface OpenTicketInput {

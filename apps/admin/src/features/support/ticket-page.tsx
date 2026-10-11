@@ -229,12 +229,16 @@ function MessageBubble({ ticket, message }: { ticket: AdminTicket; message: Tick
  */
 function ReplyBox({ ticket }: { ticket: AdminTicket }) {
   const { t } = useTranslation();
-  const reply = useReplyTicket(ticket.id);
   const keyFor = useIdempotencyKey();
   const sent = useRef(0);
   const form = useRef<HTMLFormElement>(null);
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  const reply = useReplyTicket(ticket.id, () => {
+    sent.current += 1;
+    setBody('');
+    setFiles([]);
+  });
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -253,9 +257,6 @@ function ReplyBox({ ticket }: { ticket: AdminTicket }) {
     });
     try {
       await reply.mutateAsync({ body: parsed.data, files, key });
-      sent.current += 1;
-      setBody('');
-      setFiles([]);
     } catch (error) {
       setFailure(errorMessage(t, error));
     }
