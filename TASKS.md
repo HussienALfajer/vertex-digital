@@ -10,7 +10,7 @@ Spec: `docs/specs/S15-pwa-and-web-push.md` (F24; ADRs 0002, 0007, 0008, 0009, 00
 - [x] `pnpm db:setup-local` generates the VAPID pair; `.env.example` fake values and `PUSH_TRANSPORT`/`PUSH_LOG_DIR`; no new nginx zone (the general `/api/` zone covers `/api/push/`, the API limits per customer)
 - [x] Bridge: build, OpenAPI export, admin client; mocks follow the changed shapes (preferences, admin customer counts)
 - [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, commands table, spec "Settled in implementation")
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift recorded on aa47df82cc67), reviewer (two blocking findings, fixed: keys off the curve, the stale rate-counter path), owner acceptance (2026-10-11), PR with auto-merge
 
 ## PR 2 — Store PWA and push UI, admin count, E2E
 - [ ] Brand: maskable 512 icon and monochrome badge in `brand/logo/png/`
@@ -21,4 +21,4 @@ Spec: `docs/specs/S15-pwa-and-web-push.md` (F24; ADRs 0002, 0007, 0008, 0009, 00
 - [ ] Admin customer profile push devices line; i18n
 - [ ] E2E: manifest and `/sw.js` headers, offline page, card flows (granted, denied, iOS), preferences push column and switch, first-load budgets, admin count; RTL screenshots (store phone and desktop, dark and light; admin light and dark)
 - [ ] Wiring checklist, docs (`docs/ROADMAP.md` S15 done, `wiring.md` patterns, spec "Settled in implementation")
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift recorded on aa47df82cc67), reviewer (two blocking findings, fixed: keys off the curve, the stale rate-counter path), owner acceptance (2026-10-11), PR with auto-merge
