@@ -342,6 +342,19 @@ test.describe('the subscription follows the session (PS5–PS7)', () => {
     await page.waitForTimeout(500);
     expect(api.requests.filter((r) => r.key === 'PUT /api/push/subscription')).toHaveLength(1);
     expect((await pushRecord(page)).subscribed).toBe(0);
+
+    // Signed in again in this tab (the session expired or was revoked elsewhere): rebound.
+    api.on('GET /api/auth/get-session', 200, {
+      user: { name: 'سارة الأحمد', email: 'sara@example.com' },
+      session: { token: 'a-new-session' },
+    });
+    await page.reload();
+    await expect
+      .poll(() => api.requests.filter((r) => r.key === 'PUT /api/push/subscription').length)
+      .toBe(2);
+    expect(await page.evaluate(() => sessionStorage.getItem('vd-push-refreshed'))).not.toContain(
+      'a-new-session',
+    );
   });
 
   test('a subscription made with another key is replaced without a prompt', async ({
@@ -394,15 +407,49 @@ test.describe('installing (IN1)', () => {
   });
 });
 
-// RTL screenshots in light too (dark is the default above).
-test('push screenshots (light)', async ({ page, api }, testInfo) => {
-  withPush(api);
-  await page.addInitScript(() => localStorage.setItem('vertex-theme', 'light'));
-  await pushBrowser(page, { permission: 'default', answer: 'granted' });
-  await page.goto(`/orders/${ORDER_ID}`);
-  await expect(card(page)).toContainText(p.card.order);
-  await screenshot(page, testInfo, 'push-card-offer-light');
-  await page.goto('/account');
-  await expect(page.getByText(p.device.off)).toBeVisible();
-  await screenshot(page, testInfo, 'push-preferences-light');
+// RTL screenshots in light too (dark is the default above): every state of the card, the
+// preferences and the iOS steps.
+test.describe('push screenshots (light)', () => {
+  test.beforeEach(async ({ page, api }) => {
+    withPush(api);
+    await page.addInitScript(() => localStorage.setItem('vertex-theme', 'light'));
+  });
+
+  test('offer, done and the preferences', async ({ page }, testInfo) => {
+    await pushBrowser(page, { permission: 'default', answer: 'granted' });
+    await page.goto(`/orders/${ORDER_ID}`);
+    await expect(card(page)).toContainText(p.card.order);
+    await screenshot(page, testInfo, 'push-card-offer-light');
+    await card(page).getByRole('button', { name: p.card.enable }).click();
+    await expect(card(page)).toContainText(p.card.done);
+    await screenshot(page, testInfo, 'push-card-done-light');
+    await page.goto('/account');
+    await expect(page.getByRole('switch', { name: p.device.label })).toBeChecked();
+    await screenshot(page, testInfo, 'push-preferences-on-light');
+  });
+
+  test('denied', async ({ page }, testInfo) => {
+    await pushBrowser(page, { permission: 'default', answer: 'denied' });
+    await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);
+    await card(page).getByRole('button', { name: p.card.enable }).click();
+    await expect(card(page)).toContainText(p.denied.title);
+    await screenshot(page, testInfo, 'push-card-denied-light');
+    await page.goto('/account');
+    await expect(page.getByText(p.denied.hint)).toBeVisible();
+    await screenshot(page, testInfo, 'push-preferences-light');
+  });
+
+  test.describe('iPhone', () => {
+    test.use({ userAgent: IPHONE_SAFARI });
+
+    test('the install hint and steps', async ({ page }, testInfo) => {
+      await iphoneSafari(page);
+      await page.goto(`/orders/${ORDER_ID}`);
+      await expect(card(page)).toContainText(p.card.ios);
+      await screenshot(page, testInfo, 'push-card-ios-light');
+      await card(page).getByRole('button', { name: p.card.iosSteps }).click();
+      await expect(page.getByTestId('install-steps')).toContainText(ar.pwa.ios.step2);
+      await screenshot(page, testInfo, 'install-steps-ios-light');
+    });
+  });
 });

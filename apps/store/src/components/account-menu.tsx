@@ -20,7 +20,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { clearStoredCart } from '@/features/cart/cart-keys';
-import { forgetDevice } from '@/features/push/device';
 import { useInstall } from '@/features/pwa/install-button';
 import { t } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
@@ -35,7 +34,8 @@ export function AccountMenu({ name, email }: { name: string; email: string }) {
   const install = useInstall();
   const signOut = async () => {
     clearStoredCart();
-    await forgetDevice();
+    // Its own chunk, as the header's refresh: fetched only on sign-out.
+    await import('@/features/push/device').then((device) => device.forgetDevice()).catch(() => {});
     await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin' }).catch(
       () => {},
     );

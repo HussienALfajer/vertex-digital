@@ -1,4 +1,5 @@
 import { apiRequest, type Failure } from '@/lib/api';
+import { readSession } from '@/lib/session';
 import {
   base64UrlBytes,
   type Permission,
@@ -139,15 +140,31 @@ export function forgetDevice(): Promise<void> {
 const REFRESHED_KEY = 'vd-push-refreshed';
 
 /**
+ * Which session this tab last registered the subscription with: a digest of the session token,
+ * never the token itself. A new sign-in in the same tab (after an expiry or a revoke elsewhere)
+ * has another digest, so the device is rebound to it (PS6).
+ */
+async function sessionDigest(): Promise<string | null> {
+  const token = (await readSession())?.session?.token;
+  if (!token) return null;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(digest).slice(0, 8), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
+/**
  * PS6, PS7 on a signed-in page load: a device that allowed push and holds a subscription
- * registers it again once per tab session (rebinding it to this session), or replaces one made
- * with another key. Nothing is asked of the customer.
+ * registers it again once per session in this tab (rebinding it to this session), or replaces
+ * one made with another key. Nothing is asked of the customer.
  */
 export async function refreshDevice(): Promise<void> {
   if (deviceSupport() !== 'push' || devicePermission() !== 'granted') return;
+  const session = await sessionDigest().catch(() => null);
+  if (!session) return;
   let refreshedThisTab = false;
   try {
-    refreshedThisTab = sessionStorage.getItem(REFRESHED_KEY) === '1';
+    refreshedThisTab = sessionStorage.getItem(REFRESHED_KEY) === session;
   } catch {}
   if (refreshedThisTab) return;
   const publicKey = await pushPublicKey();
@@ -168,7 +185,7 @@ export async function refreshDevice(): Promise<void> {
     const registered = await register(subscription);
     if (!registered.ok) return;
     try {
-      sessionStorage.setItem(REFRESHED_KEY, '1');
+      sessionStorage.setItem(REFRESHED_KEY, session);
     } catch {}
   } catch {}
 }
