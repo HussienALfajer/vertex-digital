@@ -12,12 +12,7 @@ import {
   Res,
   SerializeOptions,
 } from '@nestjs/common';
-import {
-  ApiAcceptedResponse,
-  ApiCreatedResponse,
-  ApiOkResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiAcceptedResponse, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
   explainResultSchema,
   type ReconciliationRunQuery,
@@ -53,7 +48,10 @@ export class ReconciliationAdminController {
   @AdminRoute()
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: reconciliationOverviewSchema })
-  @ApiOkResponse({ description: 'The state of the books', standardSchema: reconciliationOverviewSchema })
+  @ApiOkResponse({
+    description: 'The state of the books',
+    standardSchema: reconciliationOverviewSchema,
+  })
   overview() {
     return this.reconciliation.overview();
   }
@@ -72,7 +70,10 @@ export class ReconciliationAdminController {
   @AdminRoute()
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: reconciliationRunDetailSchema })
-  @ApiOkResponse({ description: 'A run and its results', standardSchema: reconciliationRunDetailSchema })
+  @ApiOkResponse({
+    description: 'A run and its results',
+    standardSchema: reconciliationRunDetailSchema,
+  })
   run(@Param('id') id: string) {
     return this.reconciliation.run(id);
   }
@@ -82,7 +83,10 @@ export class ReconciliationAdminController {
   @HttpCode(202)
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: reconciliationRunSchema })
-  @ApiAcceptedResponse({ description: 'Queued for the worker', standardSchema: reconciliationRunSchema })
+  @ApiAcceptedResponse({
+    description: 'Queued for the worker',
+    standardSchema: reconciliationRunSchema,
+  })
   start(@CurrentAdmin() admin: AdminIdentity, @Req() request: Request) {
     return this.reconciliation.startManual(admin.id, requestMeta(request));
   }
@@ -91,7 +95,10 @@ export class ReconciliationAdminController {
   @AdminRoute()
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: reconciliationResultSchema })
-  @ApiCreatedResponse({ description: 'The result, explained', standardSchema: reconciliationResultSchema })
+  @ApiCreatedResponse({
+    description: 'The result, explained',
+    standardSchema: reconciliationResultSchema,
+  })
   explain(
     @CurrentAdmin() admin: AdminIdentity,
     @Param('id') id: string,
@@ -131,7 +138,10 @@ export class ReconciliationAdminController {
   @AdminRoute()
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: reconciliationSettingsSchema })
-  @ApiOkResponse({ description: 'The settings in force', standardSchema: reconciliationSettingsSchema })
+  @ApiOkResponse({
+    description: 'The settings in force',
+    standardSchema: reconciliationSettingsSchema,
+  })
   settings() {
     return this.reconciliation.settings();
   }

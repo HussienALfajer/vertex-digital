@@ -43,7 +43,10 @@ export class TreasuryAdminController {
   @AdminRoute()
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: moneyPlacesSchema })
-  @ApiOkResponse({ description: 'Each place, books and outside', standardSchema: moneyPlacesSchema })
+  @ApiOkResponse({
+    description: 'Each place, books and outside',
+    standardSchema: moneyPlacesSchema,
+  })
   places() {
     return this.treasury.places();
   }
@@ -63,7 +66,10 @@ export class TreasuryAdminController {
   @Sensitive()
   @ApiIdempotencyKey()
   @SerializeOptions({ schema: treasuryMovementSchema })
-  @ApiCreatedResponse({ description: 'Written (200: a replay)', standardSchema: treasuryMovementSchema })
+  @ApiCreatedResponse({
+    description: 'Written (200: a replay)',
+    standardSchema: treasuryMovementSchema,
+  })
   async create(
     @CurrentAdmin() admin: AdminIdentity,
     @IdempotencyKey() idempotencyKey: string,
@@ -87,7 +93,10 @@ export class TreasuryAdminController {
   @Sensitive()
   @ApiIdempotencyKey()
   @SerializeOptions({ schema: treasuryMovementSchema })
-  @ApiCreatedResponse({ description: 'Written (200: a replay)', standardSchema: treasuryMovementSchema })
+  @ApiCreatedResponse({
+    description: 'Written (200: a replay)',
+    standardSchema: treasuryMovementSchema,
+  })
   async correct(
     @CurrentAdmin() admin: AdminIdentity,
     @IdempotencyKey() idempotencyKey: string,
@@ -111,7 +120,10 @@ export class TreasuryAdminController {
   @Sensitive()
   @ApiIdempotencyKey()
   @SerializeOptions({ schema: treasuryMovementSchema })
-  @ApiCreatedResponse({ description: 'The reversal (200: a replay)', standardSchema: treasuryMovementSchema })
+  @ApiCreatedResponse({
+    description: 'The reversal (200: a replay)',
+    standardSchema: treasuryMovementSchema,
+  })
   async reverse(
     @CurrentAdmin() admin: AdminIdentity,
     @Param('id') id: string,

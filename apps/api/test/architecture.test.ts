@@ -214,11 +214,13 @@ describe('module boundaries', () => {
     orders: 'orders',
     pricing: 'pricing',
     rates: 'rates',
+    reconciliation: 'reconciliation',
     settings: 'settings',
     suppliers: 'suppliers',
     support: 'support',
     system: null,
     telegram: 'telegram',
+    treasury: 'treasury',
     wallet: 'wallet',
   };
 

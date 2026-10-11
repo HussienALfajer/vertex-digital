@@ -31,8 +31,8 @@ import {
 import { z } from 'zod';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
-import { after, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
+import { after, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { AdminAuthService } from '../admin/index.js';
 import { RatesService } from '../rates/index.js';
 
@@ -127,7 +127,11 @@ export class TreasuryService {
     body: CreateSupplierCorrection,
     meta: RequestMeta,
   ): Promise<Written> {
-    await this.checkConfirmation('supplier_corrections', body.amountUnits, body.amountConfirmationUnits);
+    await this.checkConfirmation(
+      'supplier_corrections',
+      body.amountUnits,
+      body.amountConfirmationUnits,
+    );
     let orderId: string | null = null;
     if (body.orderNumber) {
       orderId = await orderIdByNumber(this.db, body.orderNumber);
@@ -160,7 +164,11 @@ export class TreasuryService {
     await this.checkConfirmation(original.from, original.sentUnits, body.amountConfirmationUnits);
     const result = await this.db
       .transaction((tx) =>
-        reverseMovement(tx, { movementId, idempotencyKey, reason: body.reason }, { adminId, ...meta }),
+        reverseMovement(
+          tx,
+          { movementId, idempotencyKey, reason: body.reason },
+          { adminId, ...meta },
+        ),
       )
       .catch((error: unknown) => {
         throw coded(error);

@@ -505,4 +505,3 @@ export class ReconciliationService {
 function detailsOf(row: ResultRow): ReconciliationDetails {
   return row.details as ReconciliationDetails;
 }
-
