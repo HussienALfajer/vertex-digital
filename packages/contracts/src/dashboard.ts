@@ -55,6 +55,12 @@ export const ATTENTION_KINDS = [
   'deposits_overdue',
   'deposits_flagged',
   'usdt_unmatched',
+  /** S13: open mismatches (rule RN7). */
+  'reconciliation_open',
+  /** S13: no finished nightly run in `RECONCILIATION_MISSING_HOURS`. */
+  'reconciliation_missing',
+  /** S13 rule E5: Sham Cash in use and no count for the stale days. */
+  'sham_cash_count_due',
   'supplier_down',
   'supplier_degraded',
   'supplier_balance_low',

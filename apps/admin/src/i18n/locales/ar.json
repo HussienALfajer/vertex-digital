@@ -59,7 +59,10 @@
     "customers": "العملاء",
     "support": "الدعم",
     "supportSettings": "إعدادات الدعم",
-    "supportBadge": "تذاكر بانتظار ردّك: {{open}}"
+    "supportBadge": "تذاكر بانتظار ردّك: {{open}}",
+    "reconciliation": "المطابقة",
+    "reconciliationBadge": "حالات عدم تطابق مفتوحة: {{open}}",
+    "reports": "التقارير"
   },
   "user": {
     "menu": "قائمة الحساب",
@@ -94,6 +97,9 @@
         "deposits_overdue": "إيداعات شام كاش تجاوزت 15 دقيقة في المراجعة: {{count}}",
         "deposits_flagged": "إيداعات عليها تنبيهات: {{count}}",
         "usdt_unmatched": "تحويلات USDT غير مطابقة: {{count}}",
+        "reconciliation_open": "حالات عدم تطابق مفتوحة في الدفاتر: {{count}}",
+        "reconciliation_missing": "لم تكتمل مطابقة ليلية منذ أكثر من 26 ساعة",
+        "sham_cash_count_due": "حان جرد رصيد شام كاش",
         "supplier_down": "المورد {{name}} متوقف",
         "supplier_degraded": "المورد {{name}} متراجع",
         "supplier_balance_low": "رصيد المورد {{name}} تحت الحد الأدنى",
@@ -3163,6 +3169,373 @@
       "save": "حفظ",
       "saving": "جارٍ الحفظ…",
       "saved": "حُفظ الرابط."
+    }
+  },
+  "reconciliation": {
+    "title": "المطابقة",
+    "subtitle": "هل تطابق الدفاتر المال الحقيقي؟ فحص كل ليلة، وأماكن المال وحركاتها.",
+    "saving": "جارٍ الحفظ…",
+    "tabs": {
+      "overview": "الحالة",
+      "movements": "الحركات",
+      "history": "السجل"
+    },
+    "runNow": "تشغيل الآن",
+    "runAvailable": "التشغيل اليدوي متاح بعد {{time}}",
+    "empty": {
+      "title": "لم تجرِ أي مطابقة بعد",
+      "description": "تجري المطابقة كل ليلة عند 00:30 بتوقيت دمشق، ويمكنك تشغيلها الآن."
+    },
+    "status": {
+      "last": "آخر مطابقة: ليلة {{night}}، {{time}}",
+      "noNightly": "لم تكتمل أي مطابقة ليلية بعد",
+      "clean": "الدفاتر سليمة",
+      "mismatches": "حالات عدم تطابق: {{count}}",
+      "warnings": "تنبيهات: {{count}}",
+      "failed": "فشلت المطابقة",
+      "running": "تجري مطابقة الآن، بدأت {{since}}",
+      "recheck": "تنتظر المطابقة إعادة القراءة عند {{time}}",
+      "count": "آخر جرد: {{amount}} {{since}}",
+      "lastRun": "آخر مطابقة {{trigger}}: {{time}}"
+    },
+    "open": {
+      "title": "حالات مفتوحة",
+      "none": "لا حالات مفتوحة"
+    },
+    "internalFault": "خطأ في الدفاتر: يحتاج مراجعة فنية",
+    "firstSeen": "ظهرت أول مرة {{since}}",
+    "range": "من {{low}} إلى {{high}}",
+    "offending": "السجلات المعنية: {{count}}",
+    "offendingKinds": {
+      "journal": "قيد",
+      "order": "طلب",
+      "attempt": "محاولة",
+      "deposit": "إيداع",
+      "adjustment": "تعديل",
+      "movement": "حركة",
+      "transfer": "تحويل",
+      "customer": "عميل"
+    },
+    "columns": {
+      "check": "الفحص",
+      "subject": "الموضوع",
+      "result": "النتيجة",
+      "books": "في الدفاتر",
+      "actual": "الفعلي",
+      "range": "المسموح",
+      "difference": "الفرق",
+      "explanation": "الشرح"
+    },
+    "checks": {
+      "journal_balance": "توازن القيود",
+      "ledger_total": "مجموع الدفتر",
+      "wallet_non_negative": "محافظ بالسالب",
+      "account_journal_kinds": "أنواع القيود والحسابات",
+      "attempt_cost": "تكلفة المحاولات",
+      "order_purchase": "قيود الشراء",
+      "order_refund": "قيود الاسترداد",
+      "deposit_credit": "قيود الإيداع",
+      "manual_journals": "قيود يدوية",
+      "supplier_balance": "رصيد المورد",
+      "usdt_balance": "رصيد USDT",
+      "sham_cash_count": "جرد شام كاش",
+      "count_stale": "جرد شام كاش متأخر",
+      "order_conflicts": "تعارضات الطلبات"
+    },
+    "statuses": {
+      "ok": "مطابق",
+      "mismatch": "عدم تطابق",
+      "warning": "تنبيه",
+      "skipped": "لم يُفحص"
+    },
+    "skipReasons": {
+      "opening_missing": "لا رصيد افتتاحي",
+      "reader_failed": "تعذّرت القراءة",
+      "currency_unsupported": "عملة غير مدعومة"
+    },
+    "subjects": {
+      "ledger": "الدفتر كله",
+      "shamCash": "شام كاش",
+      "orders": "طلبات اليوم",
+      "wallet": "محفظة عميل"
+    },
+    "triggers": {
+      "schedule": "ليلية",
+      "manual": "يدوية",
+      "count": "جرد"
+    },
+    "runStatuses": {
+      "running": "جارية",
+      "finished": "اكتملت",
+      "failed": "فشلت"
+    },
+    "sources": {
+      "supplier": "من المورد",
+      "chain": "من الشبكة",
+      "count": "جرد"
+    },
+    "currencies": {
+      "USD": "دولار",
+      "SYP": "ليرة"
+    },
+    "categories": {
+      "owner": "المالك",
+      "unclaimed_receipt": "مبلغ وصل دون طلب",
+      "return_to_sender": "إرجاع للمرسل",
+      "other": "غير ذلك"
+    },
+    "places": {
+      "title": "أماكن المال",
+      "place": "المكان",
+      "external": "آخر رصيد خارجي",
+      "actions": "الإجراءات",
+      "record": "تسجيل حركة",
+      "count": "جرد الرصيد",
+      "correct": "تصحيح",
+      "noOpening": "لا رصيد افتتاحي",
+      "owedToYou": "مستحق لك",
+      "supplier": "المورد {{name}}",
+      "sham_cash_syp": "شام كاش (ليرة)",
+      "sham_cash_usd": "شام كاش (دولار)",
+      "usdt_trc20": "USDT (TRC20)",
+      "usdt_bep20": "USDT (BEP20)",
+      "outside_usd": "خارج المتجر (دولار)",
+      "outside_syp": "خارج المتجر (ليرة)",
+      "supplier_corrections": "تصحيحات الموردين"
+    },
+    "movement": {
+      "title": "تسجيل حركة",
+      "description": "مال خرج من مكان أو دخل إليه. تُسجَّل في الدفتر وسجل التدقيق ولا تُحذف، وتُصحَّح بعكسها.",
+      "from": "من",
+      "to": "إلى",
+      "choosePlace": "اختر المكان",
+      "sent": "المبلغ المرسل ({{currency}})",
+      "received": "المبلغ الواصل ({{currency}})",
+      "receivedHint": "مثل المرسل ما لم تُقتطع رسوم.",
+      "fee": "الرسوم: {{fee}}",
+      "rate": "السعر الضمني: {{rate}} ليرة للدولار",
+      "category": "السبب",
+      "chooseCategory": "اختر السبب",
+      "opening": "رصيد افتتاحي",
+      "openingHint": "أول حركة إلى المكان، من خارج المتجر من المالك.",
+      "openingProposed": "المقترح ليطابق آخر رصيد خارجي: {{amount}}",
+      "reference": "رقم العملية أو المرجع (اختياري)",
+      "reason": "السبب الداخلي",
+      "submit": "سجّل الحركة",
+      "errors": {
+        "from": "اختر المكان الذي خرج منه المال.",
+        "to": "اختر المكان الذي وصل إليه المال.",
+        "sent": "اكتب مبلغًا أكبر من صفر بدقة هذا المكان.",
+        "received": "اكتب مبلغًا أكبر من صفر بدقة هذا المكان.",
+        "category": "اختر السبب عندما يكون أحد الطرفين خارج المتجر، فقط.",
+        "opening": "الرصيد الافتتاحي يأتي من خارج المتجر من المالك.",
+        "reference": "اكتب مرجعًا من 100 حرف على الأكثر، أو اتركه فارغًا.",
+        "order": "رقم الطلب غير صحيح.",
+        "reason": "اكتب سببًا من 5 إلى 500 حرف.",
+        "confirm": "المبلغان غير متطابقين."
+      }
+    },
+    "movements": {
+      "place": "المكان",
+      "allPlaces": "كل الأماكن",
+      "date": "التاريخ",
+      "fromTo": "من ← إلى",
+      "route": "{{from}} ← {{to}}",
+      "sent": "المرسل",
+      "received": "الواصل",
+      "feeOrRate": "الرسوم أو السعر",
+      "admin": "المسؤول",
+      "correction": "تصحيح مورد",
+      "opening": "افتتاحي",
+      "reversal": "عكس",
+      "reversed": "معكوسة",
+      "emptyTitle": "لا حركات بعد",
+      "emptyBody": "سجّل أول حركة من جدول أماكن المال."
+    },
+    "correction": {
+      "title": "تصحيح رصيد المورد",
+      "description": "فرق في {{place}} لا تفسّره الطلبات: أضافه المورد أو خصمه.",
+      "direction": "الاتجاه",
+      "directions": {
+        "increase": "أضاف المورد",
+        "decrease": "خصم المورد"
+      },
+      "amount": "المبلغ بالدولار",
+      "amountHint": "حتى 6 خانات عشرية، كما يعرضها المورد.",
+      "order": "رقم الطلب (اختياري)",
+      "submit": "سجّل التصحيح",
+      "errors": {
+        "sent": "اكتب مبلغًا أكبر من صفر بست خانات عشرية على الأكثر.",
+        "order": "رقم الطلب غير صحيح.",
+        "reference": "اكتب مرجعًا من 100 حرف على الأكثر، أو اتركه فارغًا.",
+        "reason": "اكتب سببًا من 5 إلى 500 حرف."
+      }
+    },
+    "count": {
+      "title": "جرد رصيد شام كاش",
+      "description": "اكتب الرصيد كما يظهر في تطبيق شام كاش الآن. يظهر رصيد الدفاتر بعد الحفظ.",
+      "currency": "العملة",
+      "amount": "الرصيد في التطبيق",
+      "hints": {
+        "USD": "بالدولار، بالسنتات على الأكثر، مثل 250.40.",
+        "SYP": "بالليرة، أرقام صحيحة، مثل 1500000."
+      },
+      "errors": {
+        "USD": "اكتب مبلغًا بخانتين عشريتين على الأكثر.",
+        "SYP": "اكتب عددًا صحيحًا من الليرات."
+      },
+      "submit": "احفظ الجرد",
+      "savedTitle": "حُفظ الجرد",
+      "savedDescription": "قورن الجرد بالدفاتر الآن."
+    },
+    "reverse": {
+      "open": "عكس",
+      "title": "عكس الحركة",
+      "description": "تُسجَّل حركة معاكسة تلغي أثر هذه الحركة. لا يمكن التراجع عن العكس.",
+      "original": "الحركة الأصلية",
+      "submit": "اعكس الحركة"
+    },
+    "explain": {
+      "open": "شرح",
+      "title": "شرح حالة عدم التطابق",
+      "description": "{{check}} · {{subject}}",
+      "note": "الشرح",
+      "noteHint": "يغلق الشرح الحالة. إن بقي الفرق في مطابقة لاحقة تُفتح من جديد.",
+      "error": "اكتب شرحًا من 5 إلى 500 حرف.",
+      "submit": "احفظ الشرح"
+    },
+    "history": {
+      "started": "البدء",
+      "trigger": "النوع",
+      "status": "الحالة",
+      "mismatches": "عدم تطابق",
+      "warnings": "تنبيهات",
+      "back": "المطابقة",
+      "notFound": "لا توجد هذه المطابقة",
+      "runTitle": "مطابقة {{when}}",
+      "runTitleLoading": "مطابقة",
+      "counts": "عدم تطابق: {{mismatches}} · تنبيهات: {{warnings}}",
+      "noResults": "لا نتائج لهذه المطابقة."
+    },
+    "settings": {
+      "open": "الإعدادات",
+      "title": "إعدادات المطابقة",
+      "description": "تُطبَّق من المطابقة التالية.",
+      "tolerance": "الفرق المسموح بالدولار",
+      "toleranceHint": "للأرصدة الخارجية فقط (الموردون، USDT، شام كاش). فحوص الدفاتر دقيقة دائمًا.",
+      "staleDays": "أيام بلا جرد قبل التنبيه",
+      "staleDaysHint": "من 1 إلى 60 يومًا.",
+      "submit": "احفظ الإعدادات",
+      "saved": "حُفظت إعدادات المطابقة",
+      "errors": {
+        "tolerance": "اكتب مبلغًا من 0 إلى 100 دولار بخانتين عشريتين على الأكثر.",
+        "days": "اكتب عددًا من 1 إلى 60."
+      }
+    }
+  },
+  "reports": {
+    "title": "التقارير",
+    "subtitle": "المبيعات والأرباح والإيداعات وحركة المال، بأيام دمشق، للعملاء الحقيقيين.",
+    "export": "تصدير Excel",
+    "exporting": "جارٍ التصدير…",
+    "empty": "لا بيانات في هذه الفترة",
+    "totals": "المجموع",
+    "kinds": {
+      "sales": "المبيعات والأرباح",
+      "breakdown": "حسب اللعبة والمورد",
+      "deposits": "الإيداعات",
+      "refunds": "الاستردادات والإخفاقات",
+      "customers": "أفضل العملاء",
+      "ledger": "حركة المال"
+    },
+    "presets": {
+      "today": "اليوم",
+      "yesterday": "أمس",
+      "last7": "آخر 7 أيام",
+      "thisMonth": "هذا الشهر",
+      "lastMonth": "الشهر الماضي",
+      "custom": "فترة أخرى"
+    },
+    "period": {
+      "label": "الفترة",
+      "from": "من",
+      "to": "إلى",
+      "apply": "اعرض",
+      "range": "من {{from}} إلى {{to}}"
+    },
+    "breakdown": {
+      "label": "التجميع",
+      "by": {
+        "game": "اللعبة",
+        "product": "المنتج",
+        "supplier": "المورد"
+      }
+    },
+    "sales": {
+      "salesLine": "المبيعات اليومية في الفترة",
+      "profitLine": "الربح اليومي في الفترة"
+    },
+    "deposits": {
+      "manual": "إيداعات مسجلة يدويًا: {{count}} · {{amount}}",
+      "minutes": "{{count}} دقيقة"
+    },
+    "refunds": {
+      "byReason": "الاستردادات حسب السبب",
+      "products": "نسبة الاسترداد حسب المنتج",
+      "suppliers": "نسبة الإخفاق حسب المورد"
+    },
+    "ledger": {
+      "totals": "مجموع الفترة",
+      "places": "أماكن المال في بداية الفترة ونهايتها",
+      "daily": "حسب اليوم",
+      "start": "البداية",
+      "end": "النهاية",
+      "lines": {
+        "deposit": "إيداعات",
+        "purchase": "مشتريات",
+        "refund": "استردادات",
+        "cost_of_goods": "تكلفة البضاعة",
+        "adjustment_credit": "تعديلات إضافة",
+        "adjustment_debit": "تعديلات خصم",
+        "treasury_funding": "تمويل الموردين",
+        "treasury_withdrawal": "سحب إلى الخارج",
+        "treasury_injection": "إدخال من الخارج",
+        "treasury_transfer": "تحويل بين الأماكن",
+        "transfer_fee": "رسوم التحويل",
+        "supplier_correction": "تصحيحات الموردين",
+        "rounding_gain": "فروق التقريب"
+      }
+    },
+    "columns": {
+      "date": "اليوم",
+      "delivered": "طلبات مسلّمة",
+      "units": "الوحدات",
+      "sales": "المبيعات",
+      "cost": "التكلفة",
+      "profit": "الربح",
+      "margin": "الهامش",
+      "attemptsSent": "محاولات مرسلة",
+      "attemptsFailed": "محاولات فاشلة",
+      "failureRate": "نسبة الإخفاق",
+      "method": "الطريقة",
+      "credited": "مضافة",
+      "creditedUsd": "المضاف بالدولار",
+      "receivedSyp": "الليرات الواصلة",
+      "rejected": "مرفوضة",
+      "expired": "منتهية",
+      "medianReview": "وسيط وقت المراجعة",
+      "reason": "السبب",
+      "orders": "الطلبات",
+      "refundedUsd": "المسترد بالدولار",
+      "finished": "طلبات منتهية",
+      "refunded": "مستردة",
+      "refundRate": "نسبة الاسترداد",
+      "resolved": "محاولات محسومة",
+      "customer": "العميل",
+      "depositsUsd": "الإيداعات",
+      "line": "البند",
+      "amount": "المبلغ",
+      "testShare": "حصة عملاء الاختبار"
     }
   }
 }

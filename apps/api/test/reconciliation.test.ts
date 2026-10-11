@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { CURRENCY_SCALE, RECONCILIATION_MANUAL_COOLDOWN_SECONDS } from '@vertex-digital/contracts';
+import {
+  CURRENCY_SCALE,
+  RECONCILIATION_MANUAL_COOLDOWN_SECONDS,
+  RECONCILIATION_MISSING_HOURS,
+} from '@vertex-digital/contracts';
 import {
   placeBooks,
   reconciliationRuns,
@@ -90,6 +94,7 @@ describe('access', () => {
     for (const options of [{}, { cookie }]) {
       for (const response of await Promise.all([
         client.get('/api/admin/reconciliation', options),
+        client.get('/api/admin/reconciliation/counts', options),
         client.get('/api/admin/reconciliation/runs', options),
         client.get(`/api/admin/reconciliation/runs/${id}`, options),
         client.post('/api/admin/reconciliation/runs', options),
@@ -261,6 +266,8 @@ describe('Sham Cash counts and explanations', () => {
     const overview = await body(
       await client.get('/api/admin/reconciliation', { cookie: admin.cookie }),
     );
+    // The newest finished run of any trigger: this count (S13 screens: no "no run yet" after it).
+    expect(overview.lastRun).toMatchObject({ id: short.id, trigger: 'count' });
     const open = overview.openMismatches as { id: string; firstSeenAt: string }[];
     expect(open.map((item) => item.id)).toContain(result?.id);
     expect(overview.shamCashCounts as { currency: string; countedUnits: number }[]).toContainEqual(
@@ -306,6 +313,41 @@ describe('Sham Cash counts and explanations', () => {
     expect((reopened.openMismatches as { id: string }[]).map((item) => item.id)).toContain(
       (again.results as { id: string }[])[0]?.id,
     );
+    // The navigation badge and the dashboard's items (S13 screens) count the same open mismatches.
+    const badge = await body(
+      await client.get('/api/admin/reconciliation/counts', { cookie: admin.cookie }),
+    );
+    expect(badge.open).toBe((reopened.openMismatches as unknown[]).length);
+    const dashboard = await body(
+      await client.get('/api/admin/dashboard', { cookie: admin.cookie }),
+    );
+    const attention = dashboard.attention as { kind: string; count: number; oldestAt: string }[];
+    expect(attention.find((item) => item.kind === 'reconciliation_open')).toMatchObject({
+      count: badge.open,
+      target: '/reconciliation',
+    });
+    // A count was entered just now: none is due (rule E5).
+    expect(attention.map((item) => item.kind)).not.toContain('sham_cash_count_due');
+    const [lastNightly] = await test.db
+      .select({ finishedAt: reconciliationRuns.finishedAt })
+      .from(reconciliationRuns)
+      .where(
+        and(eq(reconciliationRuns.trigger, 'schedule'), eq(reconciliationRuns.status, 'finished')),
+      )
+      .orderBy(desc(reconciliationRuns.finishedAt))
+      .limit(1);
+    const missing = attention.find((item) => item.kind === 'reconciliation_missing');
+    if (
+      lastNightly?.finishedAt &&
+      Date.now() - lastNightly.finishedAt.getTime() <= RECONCILIATION_MISSING_HOURS * 3_600_000
+    ) {
+      expect(missing).toBeUndefined();
+    } else {
+      expect(missing).toMatchObject({
+        count: 1,
+        oldestAt: lastNightly?.finishedAt?.toISOString() ?? null,
+      });
+    }
     expect(await body(await explain(randomUUID()))).toMatchObject({
       status: 404,
       code: 'NOT_FOUND',

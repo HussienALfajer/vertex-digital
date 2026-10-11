@@ -12,6 +12,18 @@ export const formatDateTime = (iso: string) => dateTime.format(new Date(iso));
 
 export const formatDate = (iso: string) => date.format(new Date(iso));
 
+const time = new Intl.DateTimeFormat(LOCALE, { timeStyle: 'short' });
+const day = new Intl.DateTimeFormat(LOCALE, { dateStyle: 'medium', timeZone: 'UTC' });
+
+/** The clock time alone: "00:31". */
+export const formatTime = (iso: string) => time.format(new Date(iso));
+
+/**
+ * A calendar day stored as `YYYY-MM-DD` (a Damascus business day, a report's period), shown as
+ * that same day wherever the viewer is.
+ */
+export const formatDay = (date: string) => day.format(new Date(`${date}T00:00:00Z`));
+
 /** To the second, for the audit entry's detail. */
 export const formatExactTime = (iso: string) => exact.format(new Date(iso));
 

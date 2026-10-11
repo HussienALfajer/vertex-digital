@@ -170,18 +170,31 @@ export function formatUsd(units: number): string {
   return `${units < 0 ? '-' : ''}$${whole}.${fraction}`;
 }
 
+/**
+ * S13 rule RP9: a report's amount rounded half-up to the cent (away from zero), as `formatUsd`
+ * shows it. Costs and profits keep sub-cent precision in the data; screens show cents.
+ */
+export function formatUsdCents(units: number): string {
+  const value = BigInt(unitsOrThrow(Math.abs(units)));
+  const cent = BigInt(USD_CENT);
+  const rounded = ((value + cent / 2n) / cent) * cent;
+  return formatUsd(units < 0 ? -toUnits(rounded) : toUnits(rounded));
+}
+
 const USD_INPUT_PATTERN = /^\d{1,9}(\.\d{1,2})?$/;
+const SUB_CENT_INPUT_PATTERN = /^\d{1,9}(\.\d{1,6})?$/;
 
 /**
  * A USD amount typed by the admin (`25`, `25.5`, `1250.00`; Latin digits, no separators) in USD
  * units, exact, or null when it is not dollars with at most 2 decimals. The inverse of
- * `formatUsd` for whole cents. Up to $999,999,999.99, well within the safe integers.
+ * `formatUsd` for whole cents. Up to $999,999,999.99, well within the safe integers. With
+ * `subCent` (S13: supplier balances, rule T3) up to 6 decimals, a micro-dollar.
  */
-export function parseUsd(text: string): number | null {
+export function parseUsd(text: string, options: { subCent?: boolean } = {}): number | null {
   const value = text.trim();
-  if (!USD_INPUT_PATTERN.test(value)) return null;
-  const [whole = '0', cents = ''] = value.split('.');
-  return toUnits(BigInt(whole) * USD_SCALE + BigInt(cents.padEnd(2, '0')) * BigInt(USD_CENT));
+  if (!(options.subCent ? SUB_CENT_INPUT_PATTERN : USD_INPUT_PATTERN).test(value)) return null;
+  const [whole = '0', fraction = ''] = value.split('.');
+  return toUnits(BigInt(whole) * USD_SCALE + BigInt(fraction.padEnd(6, '0')));
 }
 
 /** A signed movement for display: `+$25.00` in, `−$25.00` out (a real minus sign, U+2212). */
@@ -240,13 +253,22 @@ export function parseWholeSyp(text: string): number | null {
  * inverse of `parseWholeSyp` and `parseUsd`; an amount that is not whole pounds or whole cents is
  * refused, never rounded.
  */
-export function formatAmountInput(currency: Currency, units: number): string {
+export function formatAmountInput(
+  currency: Currency,
+  units: number,
+  options: { subCent?: boolean } = {},
+): string {
   const value = BigInt(unitsOrThrow(units));
   if (currency === 'SYP') {
     if (value % SYP_SCALE !== 0n) throw new RangeError(`Not whole pounds: ${units}`);
     return (value / SYP_SCALE).toString();
   }
-  if (!isWholeCents(units)) throw new RangeError(`Not whole cents: ${units}`);
+  if (!isWholeCents(units)) {
+    if (!options.subCent) throw new RangeError(`Not whole cents: ${units}`);
+    // S13: a supplier balance, the inverse of `parseUsd(text, { subCent: true })`.
+    const fraction = (value % USD_SCALE).toString().padStart(6, '0').replace(/0+$/, '');
+    return `${value / USD_SCALE}.${fraction}`;
+  }
   const cents = value / BigInt(USD_CENT);
   const whole = (cents / 100n).toString();
   return cents % 100n === 0n ? whole : `${whole}.${(cents % 100n).toString().padStart(2, '0')}`;

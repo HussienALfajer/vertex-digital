@@ -715,6 +715,8 @@ export const reconciliationOverviewSchema = z
   .object({
     /** The newest finished or failed nightly run; null before the first. */
     lastNightly: reconciliationRunSchema.nullable(),
+    /** The newest finished or failed run of any trigger; null before the first. */
+    lastRun: reconciliationRunSchema.nullable(),
     running: reconciliationRunSchema.nullable(),
     /** Internal checks first, then the newest first. */
     openMismatches: z.array(openMismatchSchema),
@@ -736,3 +738,10 @@ export const reconciliationOverviewSchema = z
   .meta({ id: 'ReconciliationOverview' });
 
 export type ReconciliationOverview = z.infer<typeof reconciliationOverviewSchema>;
+
+/** `GET /api/admin/reconciliation/counts`: the navigation badge, open mismatches (rule RN7). */
+export const reconciliationCountsSchema = z
+  .object({ open: z.int().nonnegative() })
+  .meta({ id: 'ReconciliationCounts' });
+
+export type ReconciliationCounts = z.infer<typeof reconciliationCountsSchema>;

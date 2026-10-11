@@ -1476,6 +1476,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/reconciliation/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReconciliationAdminController_counts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/reconciliation/runs": {
         parameters: {
             query?: never;
@@ -4648,6 +4664,7 @@ export interface components {
         };
         ReconciliationOverview: {
             lastNightly: components["schemas"]["ReconciliationRun"] | null;
+            lastRun: components["schemas"]["ReconciliationRun"] | null;
             running: components["schemas"]["ReconciliationRun"] | null;
             openMismatches: components["schemas"]["OpenMismatch"][];
             warnings: components["schemas"]["ReconciliationResult"][];
@@ -4757,6 +4774,9 @@ export interface components {
         ReconciliationSettings: {
             toleranceUsdUnits: number;
             countStaleDays: number;
+        };
+        ReconciliationCounts: {
+            open: number;
         };
         ReconciliationRunQuery: {
             cursor?: string;
@@ -6719,7 +6739,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        AttentionKind: "orders_review" | "orders_manual" | "deposits_overdue" | "deposits_flagged" | "usdt_unmatched" | "supplier_down" | "supplier_degraded" | "supplier_balance_low" | "supplier_sync_failing" | "validation_quota_reached" | "price_reviews" | "rate_stale" | "switches_active" | "order_conflicts" | "telegram_unlinked" | "tickets_waiting";
+        AttentionKind: "orders_review" | "orders_manual" | "deposits_overdue" | "deposits_flagged" | "usdt_unmatched" | "reconciliation_open" | "reconciliation_missing" | "sham_cash_count_due" | "supplier_down" | "supplier_degraded" | "supplier_balance_low" | "supplier_sync_failing" | "validation_quota_reached" | "price_reviews" | "rate_stale" | "switches_active" | "order_conflicts" | "telegram_unlinked" | "tickets_waiting";
         HealthResponse: {
             /** @enum {string} */
             status: "ok" | "error";
@@ -9166,6 +9186,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconciliationOverview"];
+                };
+            };
+        };
+    };
+    ReconciliationAdminController_counts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The navigation badge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationCounts"];
                 };
             };
         };

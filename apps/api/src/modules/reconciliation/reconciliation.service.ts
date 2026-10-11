@@ -5,6 +5,8 @@ import {
   type OpenMismatch,
   QUEUES,
   RECONCILIATION_MANUAL_COOLDOWN_SECONDS,
+  RECONCILIATION_MISSING_HOURS,
+  type ReconciliationCounts,
   type ReconciliationDetails,
   type ReconciliationOverview,
   type ReconciliationResult,
@@ -17,11 +19,13 @@ import {
   sypTolerance,
 } from '@vertex-digital/contracts';
 import {
+  countStaleCheck,
   currentReconciliationSettings,
   type Database,
   failStaleRuns,
   finishReconciliationRun,
   newId,
+  openMismatchCount,
   RECONCILIATION_RUN_OPTIONS,
   reconciliationExplanations,
   reconciliationResults,
@@ -93,6 +97,12 @@ export class ReconciliationService {
       )
       .orderBy(desc(reconciliationRuns.startedAt))
       .limit(1);
+    const [lastRun] = await this.db
+      .select()
+      .from(reconciliationRuns)
+      .where(sql`${reconciliationRuns.status} <> 'running'`)
+      .orderBy(desc(reconciliationRuns.startedAt))
+      .limit(1);
     const [runningRun] = await this.db
       .select()
       .from(reconciliationRuns)
@@ -139,6 +149,7 @@ export class ReconciliationService {
       : null;
     return {
       lastNightly: lastNightly ? toRun(lastNightly) : null,
+      lastRun: lastRun ? toRun(lastRun) : null,
       running: runningRun ? toRun(runningRun) : null,
       openMismatches: await this.openMismatches(),
       warnings: await this.withExplanations(warningRows),
@@ -150,6 +161,41 @@ export class ReconciliationService {
       })),
       settings: await currentReconciliationSettings(this.db),
       manualAvailableAt: availableAt && availableAt > new Date() ? availableAt.toISOString() : null,
+    };
+  }
+
+  /** The navigation badge: open mismatches (rule RN7). */
+  async counts(): Promise<ReconciliationCounts> {
+    return { open: await openMismatchCount(this.db) };
+  }
+
+  /**
+   * The dashboard's items (S13 screens): open mismatches; the newest finished nightly run when
+   * none finished in `RECONCILIATION_MISSING_HOURS` (`missing`); a Sham Cash count due (rule E5).
+   */
+  async attention(now: Date): Promise<{
+    open: number;
+    missing: { lastFinishedAt: Date | null } | null;
+    countDue: boolean;
+  }> {
+    const [lastFinished] = await this.db
+      .select({ finishedAt: reconciliationRuns.finishedAt })
+      .from(reconciliationRuns)
+      .where(
+        and(eq(reconciliationRuns.trigger, 'schedule'), eq(reconciliationRuns.status, 'finished')),
+      )
+      .orderBy(desc(reconciliationRuns.finishedAt))
+      .limit(1);
+    const lastFinishedAt = lastFinished?.finishedAt ?? null;
+    const missing =
+      lastFinishedAt === null ||
+      now.getTime() - lastFinishedAt.getTime() > RECONCILIATION_MISSING_HOURS * 3_600_000;
+    const settings = await currentReconciliationSettings(this.db);
+    const stale = await countStaleCheck(this.db, { now, staleDays: settings.countStaleDays });
+    return {
+      open: await openMismatchCount(this.db),
+      missing: missing ? { lastFinishedAt } : null,
+      countDue: stale.status === 'warning',
     };
   }
 

@@ -3934,6 +3934,27 @@
         ]
       }
     },
+    "/api/admin/reconciliation/counts": {
+      "get": {
+        "operationId": "ReconciliationAdminController_counts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The navigation badge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationCounts"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
     "/api/admin/reconciliation/runs": {
       "get": {
         "operationId": "ReconciliationAdminController_runs",
@@ -15287,6 +15308,14 @@
               }
             ]
           },
+          "lastRun": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconciliationRun"
+              }
+            ]
+          },
           "running": {
             "nullable": true,
             "allOf": [
@@ -15350,6 +15379,7 @@
         },
         "required": [
           "lastNightly",
+          "lastRun",
           "running",
           "openMismatches",
           "warnings",
@@ -15812,6 +15842,20 @@
         "required": [
           "toleranceUsdUnits",
           "countStaleDays"
+        ],
+        "additionalProperties": false
+      },
+      "ReconciliationCounts": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "open"
         ],
         "additionalProperties": false
       },
@@ -24613,6 +24657,9 @@
           "deposits_overdue",
           "deposits_flagged",
           "usdt_unmatched",
+          "reconciliation_open",
+          "reconciliation_missing",
+          "sham_cash_count_due",
           "supplier_down",
           "supplier_degraded",
           "supplier_balance_low",

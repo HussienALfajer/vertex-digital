@@ -12,6 +12,7 @@ import { DepositReviewService } from '../deposits/index.js';
 import { OrderActionsService } from '../orders/index.js';
 import { PricingService } from '../pricing/index.js';
 import { RatesService } from '../rates/index.js';
+import { ReconciliationService } from '../reconciliation/index.js';
 import { SettingsService } from '../settings/index.js';
 import { SuppliersService } from '../suppliers/index.js';
 import { SupportAdminService } from '../support/index.js';
@@ -36,22 +37,34 @@ export class DashboardService {
     private readonly settings: SettingsService,
     private readonly telegram: TelegramService,
     private readonly support: SupportAdminService,
+    private readonly reconciliation: ReconciliationService,
   ) {}
 
   async dashboard(now = new Date()): Promise<Dashboard> {
     const bounds = damascusDayBounds(now);
-    const [orders, deposits, suppliers, failing, reviews, rate, switches, telegram, tickets] =
-      await Promise.all([
-        this.orders.figures(bounds, now),
-        this.deposits.dashboardFigures(now, bounds.todayStart),
-        this.suppliers.list(),
-        this.suppliers.failingSyncs(),
-        this.pricing.reviews({ status: 'open', page: 1, pageSize: 1 }),
-        this.rates.current(),
-        this.settings.adminSwitches(),
-        this.telegram.status(),
-        this.support.waiting(),
-      ]);
+    const [
+      orders,
+      deposits,
+      suppliers,
+      failing,
+      reviews,
+      rate,
+      switches,
+      telegram,
+      tickets,
+      books,
+    ] = await Promise.all([
+      this.orders.figures(bounds, now),
+      this.deposits.dashboardFigures(now, bounds.todayStart),
+      this.suppliers.list(),
+      this.suppliers.failingSyncs(),
+      this.pricing.reviews({ status: 'open', page: 1, pageSize: 1 }),
+      this.rates.current(),
+      this.settings.adminSwitches(),
+      this.telegram.status(),
+      this.support.waiting(),
+      this.reconciliation.attention(now),
+    ]);
     const { today, yesterday, live } = orders;
     const profit = (period: typeof today) => period.salesUsdUnits - period.costUsdUnits;
     const rateStale = isRateStale(rate?.createdAt ?? null, now);
@@ -76,6 +89,21 @@ export class DashboardService {
         count: deposits.deposits.unmatchedTransfers,
         target: '/deposits/transfers',
       },
+      // S13: the books.
+      { kind: 'reconciliation_open', count: books.open, target: '/reconciliation' },
+      ...(books.missing
+        ? [
+            {
+              kind: 'reconciliation_missing' as const,
+              count: 1,
+              oldestAt: books.missing.lastFinishedAt,
+              target: '/reconciliation',
+            },
+          ]
+        : []),
+      ...(books.countDue
+        ? [{ kind: 'sham_cash_count_due' as const, count: 1, target: '/reconciliation' }]
+        : []),
       ...supplierItems(suppliers, failing),
       { kind: 'price_reviews', count: reviews.total, target: '/pricing/reviews' },
       ...(rateStale ? [{ kind: 'rate_stale' as const, count: 1, target: '/rates' }] : []),
