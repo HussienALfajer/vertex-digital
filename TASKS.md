@@ -16,8 +16,8 @@ Spec: `docs/specs/S13-reconciliation-and-reports.md` (F20, F22, A11; ADRs 0003, 
 - [x] `TABLE_OWNERS` and the architecture test; `app.module.ts`
 - [x] Api tests `test/treasury.test.ts`, `test/reconciliation.test.ts`, `test/reports.test.ts` (every route: success, 401, guard codes, re-auth, replays, the spec's rules; R1 equals the dashboard)
 - [x] Bridge: build, OpenAPI export, admin client; mocks follow changed shapes
-- [ ] Wiring checklist, docs (`docs/architecture.md` modules, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+- [x] Wiring checklist, docs (`docs/architecture.md` modules, folder `CLAUDE.md` files, spec "Settled in implementation")
+- [x] Checks (lint, typecheck, test, build, drift, e2e: passed and recorded on 174687db9b75; PostgreSQL 16 in the session, CI runs 17), reviewer (two blocking findings fixed: a Sham Cash count before an opening lost its amount and its replay; negative pounds written as NaN in exports), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
 
 ## PR 2 — Worker
 - [ ] Chain readers `getUsdtBalance` (TronGrid, BSC `eth_call`, fake with scripted offset); `usdt:fake-balance` command and the `AGENTS.md` table
