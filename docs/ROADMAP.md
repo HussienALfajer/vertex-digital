@@ -39,7 +39,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 ## Phase 3 — Operations
 - [x] S11 Live operations: F17 Live orders room · F18 Admin dashboard; spec `docs/specs/S11-live-operations.md` (two PRs: contracts, db, api with the admin stream and the dashboard read, worker guards; the admin dashboard home page, `/orders/live` with its side sheet, the reroute and manual fulfil dialogs with E2E)
 - [x] S12 Customers and support: F19 Customers administration · F23 Support tickets; spec `docs/specs/S12-customers-and-support.md` (two PRs: contracts, db with the freeze and cap guards, api `customers` and `support` modules, worker jobs and Telegram; the admin customers, profile, support queue, thread and settings screens and the store frozen state and support pages with E2E)
-- [ ] S13 Reconciliation and reports: F20 Daily reconciliation (A11) · F22 Reports
+- [~] S13 Reconciliation and reports: F20 Daily reconciliation (A11) · F22 Reports; spec `docs/specs/S13-reconciliation-and-reports.md` (three PRs: contracts, db with the cost of goods sign fix and api; worker jobs and chain balance reads; the admin `/reconciliation` and `/reports` screens with E2E)
 - [ ] S14 Content and live activity: F21 Content · F25 Live activity
 - [ ] S15 PWA and web push: F24 alone
 - [ ] Production deploy of Phase 3
