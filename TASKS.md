@@ -25,7 +25,7 @@ Spec: `docs/specs/S13-reconciliation-and-reports.md` (F20, F22, A11; ADRs 0003, 
 - [x] Contracts and enum value (migration 0046) for Telegram `reconciliation_alert` (NT1) and the daily summary line (NT2); the cron's `{}` payload. No `usdt.ts` type was needed: readers return raw units, converted with `rawToUsdUnits`. Shared in `packages/db`: warnings E5, alert, finish and fail of a run (the API's count alerts too)
 - [x] Worker tests (ok, mismatch, recheck clears and confirms, reader failure, alert rules, cron date, stale run)
 - [x] Wiring checklist, docs
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 9a250e8dfb25), reviewer (one blocking finding fixed: a manual run in its recheck at 00:30 lost the night; the nightly job now sends itself again after the recheck), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
 
 ## PR 3 — Admin screens and E2E
 - [ ] Admin `features/reconciliation/`: status card, open mismatches with explain dialog, money places, movement and correction dialogs, count dialog, movements tab with reverse, history tab and run page, settings drawer; navigation "المطابقة" with badge
@@ -33,4 +33,4 @@ Spec: `docs/specs/S13-reconciliation-and-reports.md` (F20, F22, A11; ADRs 0003, 
 - [ ] Dashboard attention kinds `reconciliation_open`, `reconciliation_missing`, `sham_cash_count_due` (contracts, API, panel); i18n keys
 - [ ] E2E flows and RTL screenshots (admin light and dark)
 - [ ] Wiring checklist, docs (`docs/ROADMAP.md` S13 done, `wiring.md` patterns)
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 9a250e8dfb25), reviewer (one blocking finding fixed: a manual run in its recheck at 00:30 lost the night; the nightly job now sends itself again after the recheck), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
