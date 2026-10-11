@@ -189,13 +189,19 @@ export class ReconciliationService {
           .where(eq(reconciliationRuns.trigger, 'manual'))
           .orderBy(desc(reconciliationRuns.startedAt))
           .limit(1);
+        await failStaleRuns(tx, now);
+        // Edge case 5: a run in progress is the answer, before the rate.
+        const [inProgress] = await tx
+          .select({ id: reconciliationRuns.id })
+          .from(reconciliationRuns)
+          .where(eq(reconciliationRuns.status, 'running'));
+        if (inProgress) throw running();
         if (
           last &&
           now.getTime() - last.startedAt.getTime() < RECONCILIATION_MANUAL_COOLDOWN_SECONDS * 1000
         ) {
           throw new CodedException(429, 'RATE_LIMITED', 'At most one manual run per 5 minutes');
         }
-        await failStaleRuns(tx, now);
         const [run] = await tx
           .insert(reconciliationRuns)
           .values({ trigger: 'manual', adminId })

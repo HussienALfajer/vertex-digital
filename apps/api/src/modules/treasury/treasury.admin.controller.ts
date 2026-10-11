@@ -65,6 +65,7 @@ export class TreasuryAdminController {
   @AdminRoute()
   @Sensitive()
   @ApiIdempotencyKey()
+  @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: treasuryMovementSchema })
   @ApiCreatedResponse({
     description: 'Written (200: a replay)',
@@ -92,6 +93,7 @@ export class TreasuryAdminController {
   @AdminRoute()
   @Sensitive()
   @ApiIdempotencyKey()
+  @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: treasuryMovementSchema })
   @ApiCreatedResponse({
     description: 'Written (200: a replay)',
@@ -119,6 +121,7 @@ export class TreasuryAdminController {
   @AdminRoute()
   @Sensitive()
   @ApiIdempotencyKey()
+  @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: treasuryMovementSchema })
   @ApiCreatedResponse({
     description: 'The reversal (200: a replay)',
