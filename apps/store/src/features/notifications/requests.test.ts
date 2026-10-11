@@ -34,7 +34,7 @@ describe('notification requests', () => {
     expect(await getUnreadCount(fetcher(401, { code: 'UNAUTHORIZED' }).fetch)).toBeNull();
   });
 
-  it('mark read up to an id and save one email choice', async () => {
+  it('mark read up to an id and save one choice per channel', async () => {
     const read = fetcher(200, { unreadCount: 0 });
     await markNotificationsRead('id-1', read.fetch);
     expect(read.calls[0]).toMatchObject({
@@ -42,10 +42,14 @@ describe('notification requests', () => {
       init: { method: 'POST', body: JSON.stringify({ upToId: 'id-1' }) },
     });
     const saved = fetcher(200, { email: {} });
-    await setNotificationPreference('deposit_rejected', false, saved.fetch);
+    await setNotificationPreference('deposit_rejected', 'email', false, saved.fetch);
+    await setNotificationPreference('order_delivered', 'push', true, saved.fetch);
     expect(saved.calls[0]).toMatchObject({
       url: '/api/account/notification-preferences',
       init: { method: 'PUT', body: JSON.stringify({ event: 'deposit_rejected', email: false }) },
+    });
+    expect(saved.calls[1]).toMatchObject({
+      init: { method: 'PUT', body: JSON.stringify({ event: 'order_delivered', push: true }) },
     });
   });
 });

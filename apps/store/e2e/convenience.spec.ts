@@ -486,6 +486,9 @@ test.describe('the cart (CT1–CT6)', () => {
     await page.getByRole('button', { name: ar.header.menu }).click();
     api.on('GET /api/auth/get-session', 200, null);
     await page.getByRole('menuitem', { name: ar.header.signOut }).click();
+    // Sign-out ends with a full load of `/` (after the browser forgets its push subscription,
+    // S15 PS5): read the device only once the signed-out page is there.
+    await expect(page.getByRole('link', { name: ar.header.signIn })).toBeVisible();
     await expect(page.getByRole('link', { name: ar.header.cart, exact: true })).toBeVisible();
     expect(await cartCount(page)).toBe(0);
   });

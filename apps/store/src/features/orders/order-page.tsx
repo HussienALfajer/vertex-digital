@@ -37,6 +37,7 @@ import { Line } from '@/features/deposits/panel';
 import { formatClock, useTimeLeft } from '@/features/deposits/use-time-left';
 import { useNotificationEvents, useVisibleAgain } from '@/features/notifications/live';
 import { useBalance } from '@/features/purchase/customer';
+import { PushCard } from '@/features/push/push-card';
 import { HelpButton } from '@/features/support/help-button';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
@@ -194,6 +195,7 @@ export function OrderPage() {
           onChange={load}
         />
       )}
+      <PushCard kind="order" />
 
       {order.stage === 'awaiting_balance' && <Reservation order={order} onChange={load} />}
 

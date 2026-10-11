@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { compile } from '@tailwindcss/node';
 import { describe, expect, it } from 'vitest';
+import { themeHex } from './styles/theme-hex';
 
 const srcDir = fileURLToPath(new URL('.', import.meta.url));
 const identity = readFileSync(new URL('../../../brand/identity.md', import.meta.url), 'utf8');
@@ -46,6 +47,10 @@ function contrast(a: string, b: string): number {
 }
 
 describe('design tokens', () => {
+  it('copies theme values exactly where CSS cannot reach (theme-hex.ts)', () => {
+    for (const [name, hex] of Object.entries(themeHex)) expect(themeColors[name], name).toBe(hex);
+  });
+
   it('match every tonal and status color in brand/identity.md', () => {
     const expected = {
       ...identityScale('### Tonal scales', ['green', 'gold', 'neutral']),

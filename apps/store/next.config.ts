@@ -22,12 +22,20 @@ const madaniDir =
   fileURLToPath(new URL('../../brand/fonts/private/', import.meta.url));
 const madaniAvailable = existsSync(join(madaniDir, 'MadaniArabic-Regular.woff2'));
 
+/**
+ * The build's id, written into `/sw.js` so every deploy installs a new service worker (S15 SW1).
+ * Inlined at build time; `next start` reads the built value.
+ */
+const buildId = process.env.STORE_BUILD_ID ?? `${Date.now().toString(36)}-${process.pid}`;
+
 const config: NextConfig = {
   cacheComponents: true,
   reactStrictMode: true,
   poweredByHeader: false,
   // nginx compresses (Brotli or gzip) in production.
   compress: false,
+  generateBuildId: () => buildId,
+  env: { STORE_BUILD_ID: buildId },
   transpilePackages: ['@vertex-digital/ui'],
   turbopack: {
     root: fileURLToPath(new URL('../../', import.meta.url)),

@@ -160,6 +160,12 @@ export function SummarySection({
           <Fact label={t('customers.summary.reservations')}>{counts.reservations}</Fact>
           <Fact label={t('customers.summary.openTickets')}>{counts.openTickets}</Fact>
           <Fact label={t('customers.summary.sessions')}>{counts.activeSessions}</Fact>
+          {/* S15: devices of unexpired sessions with push on. */}
+          <Fact label={t('customers.summary.push')}>
+            {counts.pushDevices > 0
+              ? t('customers.summary.pushOn', { count: counts.pushDevices })
+              : t('customers.summary.pushOff')}
+          </Fact>
         </dl>
       </Card>
       <Card className="gap-4">

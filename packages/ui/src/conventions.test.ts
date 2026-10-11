@@ -75,9 +75,12 @@ describe('UI conventions', () => {
     expect(violations(banned)).toEqual([]);
   });
 
-  it('keeps colors in tokens: no hex, rgb or oklch values outside the theme', () => {
+  it('keeps colors in tokens: no hex, rgb or oklch values outside the theme (and its checked copies)', () => {
     const offenders = violations(/#[0-9a-fA-F]{3,8}\b|rgba?\(|oklch\(/).filter(
-      (line) => !line.startsWith('packages/ui/src/styles/theme.css:'),
+      (line) =>
+        !line.startsWith('packages/ui/src/styles/theme.css:') &&
+        // Copies of theme values for manifests and standalone pages, checked by tokens.test.ts.
+        !line.startsWith('packages/ui/src/styles/theme-hex.ts:'),
     );
     expect(offenders).toEqual([]);
   });

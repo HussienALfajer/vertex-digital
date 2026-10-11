@@ -27,6 +27,9 @@ export default defineConfig({
     locale: 'ar',
     timezoneId: 'Asia/Damascus',
     trace: 'retain-on-failure',
+    // The store registers /sw.js on every page (S15 SW2). The API mock routes the page's
+    // requests; a service worker would sit between them, so only e2e/pwa.spec.ts allows it.
+    serviceWorkers: 'block',
   },
   // Phone width first (brand/identity.md §6), then desktop.
   projects: [

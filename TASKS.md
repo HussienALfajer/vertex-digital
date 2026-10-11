@@ -13,12 +13,12 @@ Spec: `docs/specs/S15-pwa-and-web-push.md` (F24; ADRs 0002, 0007, 0008, 0009, 00
 - [x] Checks (lint, typecheck, test, build, e2e, drift recorded on aa47df82cc67), reviewer (two blocking findings, fixed: keys off the curve, the stale rate-counter path), owner acceptance (2026-10-11), PR with auto-merge
 
 ## PR 2 — Store PWA and push UI, admin count, E2E
-- [ ] Brand: maskable 512 icon and monochrome badge in `brand/logo/png/`
-- [ ] Store: `manifest.ts` (PW1), layout meta (PW2), `/sw.js` route (SW1, SW3, SW6, SW7) with the build id, inline registration (SW2), `/offline` (SW5)
-- [ ] Store: install item in the account menu and footer, iOS steps sheet (IN1–IN2)
-- [ ] Store: push client (`features/push/`): config read, subscribe, refresh and key change (PS6, PS7), sign-out unsubscribe (PS5); permission card on order and deposit pages (PC1–PC3, `next/dynamic`); device switch on `/account` and `/notifications` (PC4); preferences "الهاتف" column (PP1–PP2); i18n keys
-- [ ] Store unit tests (PC1 conditions, SW7 URL check, PS6/PS7 refresh rule)
-- [ ] Admin customer profile push devices line; i18n
-- [ ] E2E: manifest and `/sw.js` headers, offline page, card flows (granted, denied, iOS), preferences push column and switch, first-load budgets, admin count; RTL screenshots (store phone and desktop, dark and light; admin light and dark)
-- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S15 done, `wiring.md` patterns, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, test, build, e2e, drift recorded on aa47df82cc67), reviewer (two blocking findings, fixed: keys off the curve, the stale rate-counter path), owner acceptance (2026-10-11), PR with auto-merge
+- [x] Brand: maskable 512 icon and monochrome badge in `brand/logo/png/`
+- [x] Store: `manifest.ts` (PW1), layout meta (PW2), `/sw.js` route (SW1, SW3, SW6, SW7) with the build id, inline registration (SW2), `/offline` (SW5)
+- [x] Store: install item in the account menu and footer, iOS steps sheet (IN1–IN2)
+- [x] Store: push client (`features/push/`): config read, subscribe, refresh and key change (PS6, PS7), sign-out unsubscribe (PS5); permission card on order and deposit pages (PC1–PC3, `next/dynamic`); device switch on `/account` and `/notifications` (PC4); preferences "الهاتف" column (PP1–PP2); i18n keys
+- [x] Store unit tests (PC1 conditions, SW7 URL check, PS6/PS7 refresh rule)
+- [x] Admin customer profile push devices line; i18n
+- [x] E2E: manifest and `/sw.js` headers, offline page, card flows (granted, denied, iOS), preferences push column and switch, first-load budgets, admin count; RTL screenshots (store phone and desktop, dark and light; admin light and dark)
+- [x] Wiring checklist, docs (`docs/ROADMAP.md` S15 done, `wiring.md` patterns, spec "Settled in implementation")
+- [x] Checks (lint, typecheck, test, build, e2e recorded on 3dd1d841f082), reviewer (two blocking findings, fixed: the same-tab rebind, the light screenshots), owner acceptance (2026-10-11), PR with auto-merge

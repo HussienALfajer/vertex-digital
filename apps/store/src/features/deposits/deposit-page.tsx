@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useNotificationEvents } from '@/features/notifications/live';
+import { PushCard } from '@/features/push/push-card';
 import { HelpButton } from '@/features/support/help-button';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
@@ -155,6 +156,7 @@ export function DepositPage() {
       ) : (
         <Outcome deposit={deposit} />
       )}
+      <PushCard kind="deposit" />
       <HelpButton link={{ depositId: deposit.id }} />
     </div>
   );
