@@ -21,4 +21,4 @@ Spec: `docs/specs/S15-pwa-and-web-push.md` (F24; ADRs 0002, 0007, 0008, 0009, 00
 - [x] Admin customer profile push devices line; i18n
 - [x] E2E: manifest and `/sw.js` headers, offline page, card flows (granted, denied, iOS), preferences push column and switch, first-load budgets, admin count; RTL screenshots (store phone and desktop, dark and light; admin light and dark)
 - [x] Wiring checklist, docs (`docs/ROADMAP.md` S15 done, `wiring.md` patterns, spec "Settled in implementation")
-- [ ] Checks (lint, typecheck, test, build, e2e), reviewer, owner acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e recorded on 3dd1d841f082), reviewer (two blocking findings, fixed: the same-tab rebind, the light screenshots), owner acceptance (2026-10-11), PR with auto-merge
