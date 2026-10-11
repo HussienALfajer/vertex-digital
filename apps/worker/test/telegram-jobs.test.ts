@@ -446,6 +446,7 @@ describe('the messages of PR 4', () => {
       checkoutOrders: 5,
       ticketsOpened: 3,
       ticketsWaiting: 2,
+      reconciliation: { date: '2029-12-31', status: 'finished', mismatches: 2, open: 3 },
     };
     const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
     for (const line of [
@@ -465,13 +466,120 @@ describe('the messages of PR 4', () => {
       'سلال اليوم: 2 (5 طلبات)',
       'تذاكر جديدة اليوم: 3 · بانتظار ردّك الآن: 2',
       'التحقق من المعرّف اليوم: SHOP2TOPUP 12، WDGZone 3',
+      'المطابقة الليلية 2029-12-31: 2 فروقات · مفتوحة الآن: 3',
     ]) {
       expect(text).toContain(line);
     }
+    // S13 NT2: the nightly run's state, or none yet.
+    const line = (reconciliation: (typeof summary)['reconciliation']) =>
+      renderTelegramMessage('daily_summary', { ...summary, reconciliation }, LINKS).text;
+    expect(line(null)).toContain('المطابقة الليلية: لم تجرِ بعد');
+    expect(line({ date: '2029-12-31', status: 'finished', mismatches: 0, open: 0 })).toContain(
+      'المطابقة الليلية 2029-12-31: سليمة ✅ · مفتوحة الآن: 0',
+    );
+    expect(line({ date: '2029-12-31', status: 'failed', mismatches: 0, open: 1 })).toContain(
+      'المطابقة الليلية 2029-12-31: فشلت ❌',
+    );
     // No player check today: no validation line (S09).
     expect(
       renderTelegramMessage('daily_summary', { ...summary, validations: [] }, LINKS).text,
     ).not.toContain('التحقق من المعرّف');
+  });
+
+  it('render a reconciliation alert: date, urgency, lines and the open count (S13 NT1)', () => {
+    const alert: TelegramMessageParams<'reconciliation_alert'> = {
+      runId: newId(),
+      trigger: 'schedule',
+      date: '2030-01-01',
+      failed: false,
+      urgent: true,
+      lines: [
+        {
+          check: 'journal_balance',
+          subject: 'ledger',
+          status: 'mismatch',
+          currency: null,
+          differenceUnits: null,
+          offendingCount: 2,
+          reason: null,
+        },
+        {
+          check: 'supplier_balance',
+          subject: 'supplier:fake',
+          status: 'mismatch',
+          currency: 'USD',
+          differenceUnits: -50 * USD,
+          offendingCount: 1,
+          reason: null,
+        },
+        {
+          check: 'sham_cash_count',
+          subject: 'sham_cash_syp',
+          status: 'mismatch',
+          currency: 'SYP',
+          differenceUnits: 1_300_000,
+          offendingCount: 1,
+          reason: null,
+        },
+        {
+          check: 'usdt_balance',
+          subject: 'usdt_bep20',
+          status: 'skipped',
+          currency: 'USD',
+          differenceUnits: null,
+          offendingCount: 0,
+          reason: 'opening_missing',
+        },
+        {
+          check: 'usdt_balance',
+          subject: 'usdt_trc20',
+          status: 'skipped',
+          currency: 'USD',
+          differenceUnits: null,
+          offendingCount: 0,
+          reason: 'reader_failed',
+        },
+        {
+          check: 'order_conflicts',
+          subject: 'orders',
+          status: 'warning',
+          currency: null,
+          differenceUnits: null,
+          offendingCount: 3,
+          reason: null,
+        },
+        {
+          check: 'count_stale',
+          subject: 'sham_cash',
+          status: 'warning',
+          currency: null,
+          differenceUnits: null,
+          offendingCount: 1,
+          reason: null,
+        },
+      ],
+      moreLines: 4,
+      open: 5,
+    };
+    expect(renderTelegramMessage('reconciliation_alert', alert, LINKS).text.split('\n')).toEqual([
+      '⚠️ عاجل: 🧮 المطابقة 2030-01-01: مشكلات جديدة',
+      '• توازن القيود: 2 مخالفة',
+      '• رصيد المورد (المورد التجريبي): الفرق -$50.00',
+      '• جرد شام كاش (شام كاش ل.س): الفرق +13,000 ل.س',
+      '• رصيد USDT (USDT BEP20): لا رصيد افتتاحي',
+      '• رصيد USDT (USDT TRC20): تعذّرت قراءة الرصيد',
+      '• تعارضات الطلبات: 3 طلب',
+      '• جرد شام كاش متأخر',
+      'و4 أخرى',
+      'فروقات مفتوحة الآن: 5',
+      'http://127.0.0.1:5173/reconciliation',
+    ]);
+    const failed = renderTelegramMessage(
+      'reconciliation_alert',
+      { ...alert, failed: true, urgent: false, lines: [], moreLines: 0 },
+      LINKS,
+    ).text;
+    expect(failed.split('\n')[0]).toBe('❌ فشلت المطابقة 2030-01-01');
   });
 
   it('render a ticket notice with its number, type, subject and email, never the message (S12 TK8)', () => {

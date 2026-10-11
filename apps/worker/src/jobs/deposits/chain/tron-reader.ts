@@ -77,6 +77,19 @@ const trc20PageSchema = z.looseObject({
   meta: z.looseObject({ fingerprint: z.string().optional() }),
 });
 
+/**
+ * `/v1/accounts/<address>?only_confirmed=true`: no item for an account never activated; each
+ * `trc20` entry maps one token contract to its raw balance.
+ */
+const accountSchema = z.looseObject({
+  success: z.literal(true),
+  data: z.array(
+    z.looseObject({
+      trc20: z.array(z.record(z.string(), z.string().regex(/^\d+$/))).optional(),
+    }),
+  ),
+});
+
 export interface TronReaderConfig extends Pick<ChainHttpConfig, 'fetch' | 'timeoutMs'> {
   apiUrl: string;
   apiKey?: string;
@@ -155,6 +168,22 @@ export class TronReader implements ChainReader {
       }
     }
     return { transfers: incoming(sums), cursor: String(latest), caughtUp: false };
+  }
+
+  async getUsdtBalance(address: string): Promise<bigint> {
+    const result = await this.http.request(
+      `${this.apiUrl}/v1/accounts/${address}?only_confirmed=true`,
+      accountSchema,
+      { method: 'GET', label: 'TronGrid account' },
+    );
+    let raw = 0n;
+    for (const account of result.data) {
+      for (const tokens of account.trc20 ?? []) {
+        const value = tokens[NETWORK.contract];
+        if (value !== undefined) raw += BigInt(value);
+      }
+    }
+    return raw;
   }
 
   private transactionInfo(node: 'wallet' | 'walletsolidity', txid: string) {

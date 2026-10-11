@@ -149,12 +149,14 @@ export const ordersPayWaitingPayloadSchema = z.object({ customerId: z.uuid() });
 export type OrdersPayWaitingPayload = z.infer<typeof ordersPayWaitingPayloadSchema>;
 
 /**
- * S13 RN1, RN2: the cron names the Damascus day that ended (`businessDate`); a manual run is
- * created by the API first and named (`runId`).
+ * S13 RN1, RN2: a manual run is created by the API first and named (`runId`); the nightly cron
+ * sends `{}` (a schedule's data is fixed), and the job names the Damascus day that ended
+ * (`businessDate`, also how a test or a replay names a night).
  */
 export const reconciliationRunPayloadSchema = z.union([
   z.object({ businessDate: z.iso.date() }),
   z.object({ runId: z.uuid() }),
+  z.strictObject({}),
 ]);
 
 export type ReconciliationRunPayload = z.infer<typeof reconciliationRunPayloadSchema>;

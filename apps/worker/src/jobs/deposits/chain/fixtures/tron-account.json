@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "data": [
+    {
+      "address": "41b2a6e3f0e5a9d5c7c1f6d4e3b2a1908f7e6d5c4b",
+      "balance": 21000000,
+      "trc20": [
+        { "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj": "999000000" },
+        { "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t": "1250003700" }
+      ]
+    }
+  ],
+  "meta": { "at": 1759900000000, "page_size": 1 }
+}

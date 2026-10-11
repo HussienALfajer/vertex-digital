@@ -19,13 +19,13 @@ Spec: `docs/specs/S13-reconciliation-and-reports.md` (F20, F22, A11; ADRs 0003, 
 - [x] Wiring checklist, docs (`docs/architecture.md` modules, folder `CLAUDE.md` files, spec "Settled in implementation")
 - [x] Checks (lint, typecheck, test, build, drift, e2e: passed and recorded on 174687db9b75; PostgreSQL 16 in the session, CI runs 17), reviewer (two blocking findings fixed: a Sham Cash count before an opening lost its amount and its replay; negative pounds written as NaN in exports), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
 
-## PR 2 — Worker
-- [ ] Chain readers `getUsdtBalance` (TronGrid, BSC `eth_call`, fake with scripted offset); `usdt:fake-balance` command and the `AGENTS.md` table
-- [ ] Jobs `reconciliation.run` (cron 00:30 Damascus, stale run failed, internal then external checks, recheck queueing) and `reconciliation.recheck`; supplier reads into `supplier_balance_reads`
-- [ ] Contracts and enum value for Telegram `reconciliation_alert` (NT1) and the daily summary line (NT2); `usdt.ts` balance read type
-- [ ] Worker tests (ok, mismatch, recheck clears and confirms, reader failure, alert rules, cron date, stale run)
-- [ ] Wiring checklist, docs
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+## PR 2 — Worker (`claude/jolly-babbage-awoymj`, the cloud session's branch) · Opus 5.5
+- [x] Chain readers `getUsdtBalance` (TronGrid, BSC `eth_call`, fake with scripted offset); `usdt:fake-balance` command and the `AGENTS.md` table
+- [x] Jobs `reconciliation.run` (cron 00:30 Damascus, stale run failed, internal then external checks, recheck queueing) and `reconciliation.recheck`; supplier reads into `supplier_balance_reads`
+- [x] Contracts and enum value (migration 0046) for Telegram `reconciliation_alert` (NT1) and the daily summary line (NT2); the cron's `{}` payload. No `usdt.ts` type was needed: readers return raw units, converted with `rawToUsdUnits`. Shared in `packages/db`: warnings E5, alert, finish and fail of a run (the API's count alerts too)
+- [x] Worker tests (ok, mismatch, recheck clears and confirms, reader failure, alert rules, cron date, stale run)
+- [x] Wiring checklist, docs
+- [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 9a250e8dfb25), reviewer (one blocking finding fixed: a manual run in its recheck at 00:30 lost the night; the nightly job now sends itself again after the recheck), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
 
 ## PR 3 — Admin screens and E2E
 - [ ] Admin `features/reconciliation/`: status card, open mismatches with explain dialog, money places, movement and correction dialogs, count dialog, movements tab with reverse, history tab and run page, settings drawer; navigation "المطابقة" with badge
@@ -33,4 +33,4 @@ Spec: `docs/specs/S13-reconciliation-and-reports.md` (F20, F22, A11; ADRs 0003, 
 - [ ] Dashboard attention kinds `reconciliation_open`, `reconciliation_missing`, `sham_cash_count_due` (contracts, API, panel); i18n keys
 - [ ] E2E flows and RTL screenshots (admin light and dark)
 - [ ] Wiring checklist, docs (`docs/ROADMAP.md` S13 done, `wiring.md` patterns)
-- [ ] Checks, reviewer, acceptance, PR with auto-merge
+- [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 9a250e8dfb25), reviewer (one blocking finding fixed: a manual run in its recheck at 00:30 lost the night; the nightly job now sends itself again after the recheck), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge

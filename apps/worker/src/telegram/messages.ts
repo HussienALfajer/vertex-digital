@@ -5,6 +5,7 @@ import {
   formatSyp,
   formatUsd,
   formatUsdtAmount,
+  type ReconciliationCheck,
   type StopScope,
   type StoreSwitch,
   type SupplierHealthState,
@@ -379,6 +380,89 @@ function orderText<Kind extends TelegramMessageKind>(
   }
 }
 
+const RECONCILIATION_CHECKS: Record<ReconciliationCheck, string> = {
+  journal_balance: 'توازن القيود',
+  ledger_total: 'مجموع الدفتر',
+  wallet_non_negative: 'محافظ بالسالب',
+  account_journal_kinds: 'حسابات القيود',
+  attempt_cost: 'تكلفة التسليمات',
+  order_purchase: 'مدفوعات الطلبات',
+  order_refund: 'استردادات الطلبات',
+  deposit_credit: 'الإيداعات المضافة',
+  manual_journals: 'التعديلات وحركات الخزينة',
+  supplier_balance: 'رصيد المورد',
+  usdt_balance: 'رصيد USDT',
+  sham_cash_count: 'جرد شام كاش',
+  count_stale: 'جرد شام كاش متأخر',
+  order_conflicts: 'تعارضات الطلبات',
+};
+
+const PLACES: Partial<Record<string, string>> = {
+  sham_cash_syp: 'شام كاش ل.س',
+  sham_cash_usd: 'شام كاش $',
+  usdt_trc20: 'USDT TRC20',
+  usdt_bep20: 'USDT BEP20',
+  'supplier:shop2topup': 'SHOP2TOPUP',
+  'supplier:wdgzone': 'WDGZone',
+  'supplier:manual': 'المورد اليدوي',
+  'supplier:fake': 'المورد التجريبي',
+  'ledger:USD': 'USD',
+  'ledger:SYP': 'SYP',
+};
+
+type ReconciliationLine = TelegramMessageParams<'reconciliation_alert'>['lines'][number];
+
+/** S13 NT1: what one result says: the difference, the count found, or the warning's reason. */
+function reconciliationLineText(line: ReconciliationLine): string {
+  const subject = PLACES[line.subject];
+  const label = `${RECONCILIATION_CHECKS[line.check]}${subject ? ` (${subject})` : ''}`;
+  if (line.status === 'mismatch') {
+    if (line.differenceUnits !== null && line.currency !== null) {
+      const amount =
+        line.currency === 'USD'
+          ? formatUsd(line.differenceUnits)
+          : `${formatSyp(line.differenceUnits)} ل.س`;
+      return `• ${label}: الفرق ${line.differenceUnits > 0 ? '+' : ''}${amount}`;
+    }
+    return `• ${label}: ${line.offendingCount} مخالفة`;
+  }
+  if (line.reason === 'opening_missing') return `• ${label}: لا رصيد افتتاحي`;
+  if (line.reason === 'reader_failed') return `• ${label}: تعذّرت قراءة الرصيد`;
+  if (line.check === 'order_conflicts') return `• ${label}: ${line.offendingCount} طلب`;
+  return `• ${label}`;
+}
+
+/** S13 NT1: a failed run, or the problems a run found new. */
+function reconciliationAlertText(
+  alert: TelegramMessageParams<'reconciliation_alert'>,
+  links: TelegramLinks,
+): string {
+  const headline = alert.failed
+    ? `❌ فشلت المطابقة ${alert.date}`
+    : `${alert.urgent ? '⚠️ عاجل: ' : ''}🧮 المطابقة ${alert.date}: مشكلات جديدة`;
+  return [
+    headline,
+    ...alert.lines.map(reconciliationLineText),
+    ...(alert.moreLines > 0 ? [`و${alert.moreLines} أخرى`] : []),
+    `فروقات مفتوحة الآن: ${alert.open}`,
+    `${links.admin}/reconciliation`,
+  ].join('\n');
+}
+
+const RUN_STATES = { running: 'جارية', failed: 'فشلت ❌' } as const;
+
+/** S13 NT2. */
+function reconciliationLine(state: TelegramMessageParams<'daily_summary'>['reconciliation']) {
+  if (state === null) return 'المطابقة الليلية: لم تجرِ بعد';
+  const status =
+    state.status !== 'finished'
+      ? RUN_STATES[state.status]
+      : state.mismatches > 0
+        ? `${state.mismatches} فروقات`
+        : 'سليمة ✅';
+  return `المطابقة الليلية ${state.date}: ${status} · مفتوحة الآن: ${state.open}`;
+}
+
 /** Rule AL3. */
 function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
   const credited =
@@ -426,6 +510,7 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
     ...(summary.suppressedAlerts > 0
       ? [`تنبيهات حُجبت بحد الإرسال: ${summary.suppressedAlerts}`]
       : []),
+    reconciliationLine(summary.reconciliation),
   ].join('\n');
 }
 
@@ -603,6 +688,13 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
         ].join('\n'),
       };
     }
+    case 'reconciliation_alert':
+      return {
+        text: reconciliationAlertText(
+          params as TelegramMessageParams<'reconciliation_alert'>,
+          links,
+        ),
+      };
     case 'link_changed':
       return {
         text: 'رُبط البوت بمحادثة أخرى، فلن تصل التنبيهات إلى هنا بعد الآن. إن لم تفعل ذلك بنفسك فألغِ الربط من اللوحة فوراً.',

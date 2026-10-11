@@ -5,6 +5,7 @@ import {
   reconciliationRuns,
   recordMovement,
   reverseMovement,
+  telegramMessages,
 } from '@vertex-digital/db';
 import { and, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -236,6 +237,27 @@ describe('Sham Cash counts and explanations', () => {
     expect(short).toMatchObject({ mismatchCount: 1 });
     const result = (short.results as { id: string; status: string }[])[0];
     expect(result?.status).toBe('mismatch');
+    // Rule NT1: a count alerts as any run does, once, with the difference.
+    const [alert] = await test.db
+      .select()
+      .from(telegramMessages)
+      .where(eq(telegramMessages.dedupeKey, `reconciliation:${short.id}`));
+    expect(alert).toMatchObject({
+      kind: 'reconciliation_alert',
+      params: {
+        trigger: 'count',
+        failed: false,
+        urgent: false,
+        lines: [
+          {
+            check: 'sham_cash_count',
+            subject: 'sham_cash_usd',
+            status: 'mismatch',
+            differenceUnits: -5 * USD,
+          },
+        ],
+      },
+    });
     const overview = await body(
       await client.get('/api/admin/reconciliation', { cookie: admin.cookie }),
     );

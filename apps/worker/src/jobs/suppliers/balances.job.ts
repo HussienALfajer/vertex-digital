@@ -30,10 +30,16 @@ export const SUPPLIERS_BALANCES_CRON = '*/5 * * * *';
 /** While a balance stays below its threshold, the message repeats every 6 hours (rule H5). */
 export const LOW_BALANCE_REPEAT_HOURS = 6;
 
-interface BalanceRead {
+export interface BalanceRead {
   currency: Currency;
   amountUnits: number;
 }
+
+/**
+ * One read: the balance, a failure (credentials that do not decrypt, a failed call), or null when
+ * the adapter has no balance capability.
+ */
+export type BalanceOutcome = { ok: true; balance: BalanceRead } | { ok: false } | null;
 
 /** A USD balance the route rule compares with costs (RT4); another currency limits nothing. */
 const usdLimit = (read: BalanceRead | undefined) =>
@@ -73,7 +79,12 @@ export class SupplierBalancesJob implements OnApplicationBootstrap {
     }
   }
 
-  private async read(db: Executor, supplier: SupplierState, now: Date): Promise<void> {
+  /**
+   * Reads the supplier's balance once, the call recorded, and appends it to
+   * `supplier_balance_reads` with rule H5's repricing and messages. Also the reconciliation's
+   * supplier read (S13 E2).
+   */
+  async read(db: Executor, supplier: SupplierState, now: Date): Promise<BalanceOutcome> {
     let connected: Awaited<ReturnType<SupplierRegistry['connect']>>;
     try {
       connected = await this.registry.connect(db, supplier);
@@ -81,14 +92,17 @@ export class SupplierBalancesJob implements OnApplicationBootstrap {
       this.logger.warn(
         `Cannot read the balance of ${supplier.code}: its credentials do not decrypt`,
       );
-      return;
+      return { ok: false };
     }
-    if (!connected?.adapter.capabilities.balance) return;
+    if (!connected?.adapter.capabilities.balance) return null;
     const { adapter } = connected;
     const call = await recordedCall(db, supplier.id, 'get_balance', () => adapter.getBalance());
     // A failed read is health's to judge (H1); the last balance stands.
-    if (!call.ok || !Number.isSafeInteger(call.value.amountUnits)) return;
-    const balance: BalanceRead = call.value;
+    if (!call.ok || !Number.isSafeInteger(call.value.amountUnits)) return { ok: false };
+    const balance: BalanceRead = {
+      currency: call.value.currency,
+      amountUnits: call.value.amountUnits,
+    };
     await db.transaction(async (tx) => {
       const [previous] = await tx
         .select({
@@ -115,6 +129,7 @@ export class SupplierBalancesJob implements OnApplicationBootstrap {
       }
       await this.notify(tx, supplier, read, previous, now);
     });
+    return { ok: true, balance };
   }
 
   /** The new balance and the previous one stand on two sides of a mapped offer's cost (RT4). */
