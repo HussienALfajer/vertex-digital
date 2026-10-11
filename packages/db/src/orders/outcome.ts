@@ -276,7 +276,8 @@ export async function storeCodes(
 
 /**
  * Rule M2: the cost of goods of an attempt's delivered units, `order:<id>:cost:<attempt>`, with
- * its audit entry; the journal's id. A zero cost (S11 MF-M1) posts nothing and answers null.
+ * its audit entry; the journal's id. Signs as S13 LS1 (ADR 0027): `cost_of_goods` −cost (spent),
+ * `supplier_prepaid` +cost (the store holds less at the supplier). A zero cost (S11 MF-M1) posts nothing and answers null.
  */
 export async function postCostOfGoods(
   tx: Transaction,
@@ -301,7 +302,7 @@ export async function postCostOfGoods(
           kind: 'cost_of_goods',
           currency: 'USD',
         }),
-        amountUnits: amount,
+        amountUnits: -amount,
       },
       {
         accountId: await ensureSystemAccount(tx, {
@@ -309,7 +310,7 @@ export async function postCostOfGoods(
           kind: 'supplier_prepaid',
           currency: 'USD',
         }),
-        amountUnits: -amount,
+        amountUnits: amount,
       },
     ],
   });

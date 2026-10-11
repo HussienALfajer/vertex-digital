@@ -1009,6 +1009,12 @@
                 "ticket.closed",
                 "ticket.reopened",
                 "support.settings_changed",
+                "treasury_movement.created",
+                "treasury_movement.reversed",
+                "reconciliation_run.started",
+                "reconciliation_result.explained",
+                "reconciliation_settings.changed",
+                "report.exported",
                 "order_policy.set"
               ]
             }
@@ -1042,7 +1048,12 @@
                 "order_policy",
                 "customer_note",
                 "support_ticket",
-                "support_settings"
+                "support_settings",
+                "treasury_movement",
+                "reconciliation_run",
+                "reconciliation_result",
+                "reconciliation_settings",
+                "report"
               ]
             }
           },
@@ -3683,6 +3694,866 @@
         },
         "tags": [
           "support"
+        ]
+      }
+    },
+    "/api/admin/treasury/places": {
+      "get": {
+        "operationId": "TreasuryAdminController_places",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Each place, books and outside",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoneyPlaces"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "treasury"
+        ]
+      }
+    },
+    "/api/admin/treasury/movements": {
+      "get": {
+        "operationId": "TreasuryAdminController_movements",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "place",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sham_cash_syp",
+                "sham_cash_usd",
+                "usdt_trc20",
+                "usdt_bep20",
+                "supplier:shop2topup",
+                "supplier:wdgzone",
+                "supplier:manual",
+                "supplier:fake",
+                "outside_usd",
+                "outside_syp"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreasuryMovementPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "treasury"
+        ]
+      },
+      "post": {
+        "operationId": "TreasuryAdminController_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTreasuryMovement"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Written (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreasuryMovement"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "treasury"
+        ]
+      }
+    },
+    "/api/admin/treasury/supplier-corrections": {
+      "post": {
+        "operationId": "TreasuryAdminController_correct",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSupplierCorrection"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Written (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreasuryMovement"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "treasury"
+        ]
+      }
+    },
+    "/api/admin/treasury/movements/{id}/reverse": {
+      "post": {
+        "operationId": "TreasuryAdminController_reverse",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReverseTreasuryMovement"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The reversal (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreasuryMovement"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "treasury"
+        ]
+      }
+    },
+    "/api/admin/reconciliation": {
+      "get": {
+        "operationId": "ReconciliationAdminController_overview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The state of the books",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationOverview"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/api/admin/reconciliation/runs": {
+      "get": {
+        "operationId": "ReconciliationAdminController_runs",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "trigger",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "schedule",
+                "manual",
+                "count"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationRunPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reconciliation"
+        ]
+      },
+      "post": {
+        "operationId": "ReconciliationAdminController_start",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "Queued for the worker",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationRun"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/api/admin/reconciliation/runs/{id}": {
+      "get": {
+        "operationId": "ReconciliationAdminController_run",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A run and its results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationRunDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/api/admin/reconciliation/results/{id}/explanation": {
+      "post": {
+        "operationId": "ReconciliationAdminController_explain",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplainResult"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The result, explained",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationResult"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/api/admin/reconciliation/sham-cash-counts": {
+      "post": {
+        "operationId": "ReconciliationAdminController_count",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShamCashCount"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The count run and its result (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationRunDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/api/admin/reconciliation/settings": {
+      "get": {
+        "operationId": "ReconciliationAdminController_settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The settings in force",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reconciliation"
+        ]
+      },
+      "put": {
+        "operationId": "ReconciliationAdminController_updateSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconciliationSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The new settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/api/admin/reports/sales": {
+      "get": {
+        "operationId": "ReportsAdminController_sales",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "by",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "game",
+                "product",
+                "supplier"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "R1: sales and profit by day",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesReport"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/admin/reports/breakdown": {
+      "get": {
+        "operationId": "ReportsAdminController_breakdown",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "by",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "game",
+                "product",
+                "supplier"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "R2: by game, product or supplier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakdownReport"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/admin/reports/deposits": {
+      "get": {
+        "operationId": "ReportsAdminController_deposits",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "by",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "game",
+                "product",
+                "supplier"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "R3: deposits by method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositsReport"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/admin/reports/refunds": {
+      "get": {
+        "operationId": "ReportsAdminController_refunds",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "by",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "game",
+                "product",
+                "supplier"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "R4: refunds and failures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundsReport"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/admin/reports/customers": {
+      "get": {
+        "operationId": "ReportsAdminController_customers",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "by",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "game",
+                "product",
+                "supplier"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "R5: the top customers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomersReport"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/admin/reports/ledger": {
+      "get": {
+        "operationId": "ReportsAdminController_ledger",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "by",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "game",
+                "product",
+                "supplier"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "R6: the money movement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerReport"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/admin/reports/{kind}/export": {
+      "get": {
+        "operationId": "ReportsAdminController_export",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "by",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "game",
+                "product",
+                "supplier"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The report as an .xlsx file"
+          }
+        },
+        "tags": [
+          "reports"
         ]
       }
     },
@@ -8937,6 +9808,12 @@
           "ticket.closed",
           "ticket.reopened",
           "support.settings_changed",
+          "treasury_movement.created",
+          "treasury_movement.reversed",
+          "reconciliation_run.started",
+          "reconciliation_result.explained",
+          "reconciliation_settings.changed",
+          "report.exported",
           "order_policy.set"
         ]
       },
@@ -8965,7 +9842,12 @@
           "order_policy",
           "customer_note",
           "support_ticket",
-          "support_settings"
+          "support_settings",
+          "treasury_movement",
+          "reconciliation_run",
+          "reconciliation_result",
+          "reconciliation_settings",
+          "report"
         ]
       },
       "AuditPage": {
@@ -9422,7 +10304,8 @@
           "purchase",
           "refund",
           "cost_of_goods",
-          "adjustment"
+          "adjustment",
+          "treasury"
         ]
       },
       "DepositMethod": {
@@ -10068,7 +10951,10 @@
           "refunds",
           "adjustments",
           "currency_exchange",
-          "deposit_rounding"
+          "deposit_rounding",
+          "outside_funds",
+          "transfer_fees",
+          "supplier_corrections"
         ]
       },
       "Currency": {
@@ -13954,6 +14840,2026 @@
         ],
         "additionalProperties": false
       },
+      "MoneyPlaces": {
+        "type": "object",
+        "properties": {
+          "places": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "place": {
+                  "$ref": "#/components/schemas/TreasuryPlace"
+                },
+                "currency": {
+                  "$ref": "#/components/schemas/Currency"
+                },
+                "booksUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "external": {
+                  "nullable": true,
+                  "type": "object",
+                  "properties": {
+                    "units": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "supplier",
+                        "chain",
+                        "count"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "units",
+                    "at",
+                    "source"
+                  ],
+                  "additionalProperties": false
+                },
+                "differenceUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "openingRecorded": {
+                  "type": "boolean"
+                },
+                "proposedOpeningUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "place",
+                "currency",
+                "booksUnits",
+                "external",
+                "differenceUnits",
+                "openingRecorded",
+                "proposedOpeningUnits"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "places"
+        ],
+        "additionalProperties": false
+      },
+      "TreasuryPlace": {
+        "type": "string",
+        "enum": [
+          "sham_cash_syp",
+          "sham_cash_usd",
+          "usdt_trc20",
+          "usdt_bep20",
+          "supplier:shop2topup",
+          "supplier:wdgzone",
+          "supplier:manual",
+          "supplier:fake",
+          "outside_usd",
+          "outside_syp"
+        ]
+      },
+      "TreasuryMovementQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "place": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TreasuryPlace"
+              }
+            ]
+          }
+        }
+      },
+      "TreasuryMovementPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TreasuryMovement"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "TreasuryMovement": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TreasuryMovementKind"
+          },
+          "from": {
+            "$ref": "#/components/schemas/TreasuryEndpoint"
+          },
+          "to": {
+            "$ref": "#/components/schemas/TreasuryEndpoint"
+          },
+          "sentUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sentCurrency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "receivedUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "receivedCurrency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "feeUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "rate": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExchangeRate"
+              }
+            ]
+          },
+          "outsideCategory": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutsideCategory"
+              }
+            ]
+          },
+          "openingBalance": {
+            "type": "boolean"
+          },
+          "order": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "number": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "number"
+            ],
+            "additionalProperties": false
+          },
+          "externalReference": {
+            "nullable": true,
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reversesMovementId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "reversedByMovementId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "journalId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "adminName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "from",
+          "to",
+          "sentUnits",
+          "sentCurrency",
+          "receivedUnits",
+          "receivedCurrency",
+          "feeUnits",
+          "rate",
+          "outsideCategory",
+          "openingBalance",
+          "order",
+          "externalReference",
+          "reason",
+          "reversesMovementId",
+          "reversedByMovementId",
+          "journalId",
+          "adminName",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "TreasuryMovementKind": {
+        "type": "string",
+        "enum": [
+          "transfer",
+          "supplier_correction"
+        ]
+      },
+      "TreasuryEndpoint": {
+        "type": "string",
+        "enum": [
+          "sham_cash_syp",
+          "sham_cash_usd",
+          "usdt_trc20",
+          "usdt_bep20",
+          "supplier:shop2topup",
+          "supplier:wdgzone",
+          "supplier:manual",
+          "supplier:fake",
+          "outside_usd",
+          "outside_syp",
+          "supplier_corrections"
+        ]
+      },
+      "OutsideCategory": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "unclaimed_receipt",
+          "return_to_sender",
+          "other"
+        ]
+      },
+      "CreateTreasuryMovement": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/TreasuryPlace"
+          },
+          "to": {
+            "$ref": "#/components/schemas/TreasuryPlace"
+          },
+          "sentUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "receivedUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "outsideCategory": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutsideCategory"
+              }
+            ]
+          },
+          "openingBalance": {
+            "default": false,
+            "type": "boolean"
+          },
+          "externalReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500
+          },
+          "amountConfirmationUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "sentUnits",
+          "receivedUnits",
+          "reason"
+        ]
+      },
+      "CreateSupplierCorrection": {
+        "type": "object",
+        "properties": {
+          "supplier": {
+            "$ref": "#/components/schemas/SupplierCode"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/SupplierCorrectionDirection"
+          },
+          "amountUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "orderNumber": {
+            "type": "string"
+          },
+          "externalReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500
+          },
+          "amountConfirmationUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "supplier",
+          "direction",
+          "amountUnits",
+          "reason"
+        ]
+      },
+      "SupplierCode": {
+        "type": "string",
+        "enum": [
+          "shop2topup",
+          "wdgzone",
+          "manual",
+          "fake"
+        ]
+      },
+      "SupplierCorrectionDirection": {
+        "type": "string",
+        "enum": [
+          "increase",
+          "decrease"
+        ]
+      },
+      "ReverseTreasuryMovement": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500
+          },
+          "amountConfirmationUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "ReconciliationOverview": {
+        "type": "object",
+        "properties": {
+          "lastNightly": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconciliationRun"
+              }
+            ]
+          },
+          "running": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconciliationRun"
+              }
+            ]
+          },
+          "openMismatches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenMismatch"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReconciliationResult"
+            }
+          },
+          "shamCashCounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "currency": {
+                  "$ref": "#/components/schemas/Currency"
+                },
+                "countedUnits": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/ReconciliationResultStatus"
+                }
+              },
+              "required": [
+                "currency",
+                "countedUnits",
+                "at",
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ReconciliationSettings"
+          },
+          "manualAvailableAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "lastNightly",
+          "running",
+          "openMismatches",
+          "warnings",
+          "shamCashCounts",
+          "settings",
+          "manualAvailableAt"
+        ],
+        "additionalProperties": false
+      },
+      "ReconciliationRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ReconciliationRunTrigger"
+          },
+          "businessDate": {
+            "nullable": true,
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReconciliationRunStatus"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "finishedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "mismatchCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "warningCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "recheckAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "failure": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trigger",
+          "businessDate",
+          "status",
+          "startedAt",
+          "finishedAt",
+          "mismatchCount",
+          "warningCount",
+          "recheckAt",
+          "failure"
+        ],
+        "additionalProperties": false
+      },
+      "ReconciliationRunTrigger": {
+        "type": "string",
+        "enum": [
+          "schedule",
+          "manual",
+          "count"
+        ]
+      },
+      "ReconciliationRunStatus": {
+        "type": "string",
+        "enum": [
+          "running",
+          "finished",
+          "failed"
+        ]
+      },
+      "OpenMismatch": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "check": {
+            "$ref": "#/components/schemas/ReconciliationCheck"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReconciliationResultStatus"
+          },
+          "currency": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              }
+            ]
+          },
+          "booksUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "actualUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "differenceUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "allowedLowUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "allowedHighUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "offendingCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "details": {
+            "$ref": "#/components/schemas/ReconciliationDetails"
+          },
+          "explanation": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconciliationExplanation"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "firstSeenAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "runId",
+          "check",
+          "subject",
+          "status",
+          "currency",
+          "booksUnits",
+          "actualUnits",
+          "differenceUnits",
+          "allowedLowUnits",
+          "allowedHighUnits",
+          "offendingCount",
+          "details",
+          "explanation",
+          "createdAt",
+          "firstSeenAt"
+        ],
+        "additionalProperties": false
+      },
+      "ReconciliationCheck": {
+        "type": "string",
+        "enum": [
+          "journal_balance",
+          "ledger_total",
+          "wallet_non_negative",
+          "account_journal_kinds",
+          "attempt_cost",
+          "order_purchase",
+          "order_refund",
+          "deposit_credit",
+          "manual_journals",
+          "supplier_balance",
+          "usdt_balance",
+          "sham_cash_count",
+          "count_stale",
+          "order_conflicts"
+        ]
+      },
+      "ReconciliationResultStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "mismatch",
+          "warning",
+          "skipped"
+        ]
+      },
+      "ReconciliationDetails": {
+        "type": "object",
+        "properties": {
+          "offending": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "$ref": "#/components/schemas/OffendingKind"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              "required": [
+                "kind",
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "lines": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "in_flight_attempt",
+                    "uncredited_transfer",
+                    "deposit_in_review"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "amountUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "kind",
+                "id",
+                "amountUnits"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "reason": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconciliationSkipReason"
+              }
+            ]
+          }
+        },
+        "required": [
+          "offending",
+          "lines",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "OffendingKind": {
+        "type": "string",
+        "enum": [
+          "journal",
+          "order",
+          "attempt",
+          "deposit",
+          "adjustment",
+          "movement",
+          "transfer",
+          "customer"
+        ]
+      },
+      "ReconciliationSkipReason": {
+        "type": "string",
+        "enum": [
+          "opening_missing",
+          "reader_failed",
+          "currency_unsupported"
+        ]
+      },
+      "ReconciliationExplanation": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "adminName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "note",
+          "adminName",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ReconciliationResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "check": {
+            "$ref": "#/components/schemas/ReconciliationCheck"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReconciliationResultStatus"
+          },
+          "currency": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              }
+            ]
+          },
+          "booksUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "actualUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "differenceUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "allowedLowUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "allowedHighUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "offendingCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "details": {
+            "$ref": "#/components/schemas/ReconciliationDetails"
+          },
+          "explanation": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconciliationExplanation"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "runId",
+          "check",
+          "subject",
+          "status",
+          "currency",
+          "booksUnits",
+          "actualUnits",
+          "differenceUnits",
+          "allowedLowUnits",
+          "allowedHighUnits",
+          "offendingCount",
+          "details",
+          "explanation",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ReconciliationSettings": {
+        "type": "object",
+        "properties": {
+          "toleranceUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "countStaleDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          }
+        },
+        "required": [
+          "toleranceUsdUnits",
+          "countStaleDays"
+        ],
+        "additionalProperties": false
+      },
+      "ReconciliationRunQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "trigger": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconciliationRunTrigger"
+              }
+            ]
+          }
+        }
+      },
+      "ReconciliationRunPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReconciliationRun"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "ReconciliationRunDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ReconciliationRunTrigger"
+          },
+          "businessDate": {
+            "nullable": true,
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReconciliationRunStatus"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "finishedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "mismatchCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "warningCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "recheckAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "failure": {
+            "nullable": true,
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReconciliationResult"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "trigger",
+          "businessDate",
+          "status",
+          "startedAt",
+          "finishedAt",
+          "mismatchCount",
+          "warningCount",
+          "recheckAt",
+          "failure",
+          "results"
+        ],
+        "additionalProperties": false
+      },
+      "ExplainResult": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "note"
+        ]
+      },
+      "ShamCashCount": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "countedUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "currency",
+          "countedUnits"
+        ]
+      },
+      "ReportQuery": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "by": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReportBreakdown"
+              }
+            ]
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      },
+      "ReportBreakdown": {
+        "type": "string",
+        "enum": [
+          "game",
+          "product",
+          "supplier"
+        ]
+      },
+      "SalesReport": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "delivered": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "salesUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "costUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "profitUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "marginPercent": {
+                  "nullable": true,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "date",
+                "delivered",
+                "salesUsdUnits",
+                "costUsdUnits",
+                "profitUsdUnits",
+                "marginPercent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "delivered": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "salesUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "profitUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "marginPercent": {
+                "nullable": true,
+                "type": "number"
+              }
+            },
+            "required": [
+              "delivered",
+              "salesUsdUnits",
+              "costUsdUnits",
+              "profitUsdUnits",
+              "marginPercent"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "generatedAt",
+          "rows",
+          "totals"
+        ],
+        "additionalProperties": false
+      },
+      "BreakdownReport": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "by": {
+            "$ref": "#/components/schemas/ReportBreakdown"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "nameAr": {
+                  "type": "string"
+                },
+                "gameNameAr": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "gameId": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "supplier": {
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SupplierCode"
+                    }
+                  ]
+                },
+                "delivered": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "salesUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "costUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "profitUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "marginPercent": {
+                  "nullable": true,
+                  "type": "number"
+                },
+                "deliveredUnits": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "attemptsSent": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "attemptsFailed": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "failureRatePercent": {
+                  "nullable": true,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key",
+                "nameAr",
+                "gameNameAr",
+                "gameId",
+                "supplier",
+                "delivered",
+                "salesUsdUnits",
+                "costUsdUnits",
+                "profitUsdUnits",
+                "marginPercent",
+                "deliveredUnits",
+                "attemptsSent",
+                "attemptsFailed",
+                "failureRatePercent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "delivered": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "salesUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "profitUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "marginPercent": {
+                "nullable": true,
+                "type": "number"
+              },
+              "deliveredUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "attemptsSent": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "attemptsFailed": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "failureRatePercent": {
+                "nullable": true,
+                "type": "number"
+              }
+            },
+            "required": [
+              "delivered",
+              "salesUsdUnits",
+              "costUsdUnits",
+              "profitUsdUnits",
+              "marginPercent",
+              "deliveredUnits",
+              "attemptsSent",
+              "attemptsFailed",
+              "failureRatePercent"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "generatedAt",
+          "by",
+          "rows",
+          "totals"
+        ],
+        "additionalProperties": false
+      },
+      "DepositsReport": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "$ref": "#/components/schemas/DepositMethod"
+                },
+                "credited": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "creditedUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "rejected": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "expired": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "receivedSypUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "medianReviewMinutes": {
+                  "nullable": true,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "method",
+                "credited",
+                "creditedUsdUnits",
+                "rejected",
+                "expired",
+                "receivedSypUnits",
+                "medianReviewMinutes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "manualDeposits": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "usdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "count",
+              "usdUnits"
+            ],
+            "additionalProperties": false
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "credited": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "creditedUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "rejected": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "expired": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "credited",
+              "creditedUsdUnits",
+              "rejected",
+              "expired"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "generatedAt",
+          "rows",
+          "manualDeposits",
+          "totals"
+        ],
+        "additionalProperties": false
+      },
+      "RefundsReport": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "byReason": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "$ref": "#/components/schemas/RefundReason"
+                },
+                "orders": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "usdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "reason",
+                "orders",
+                "usdUnits"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "nameAr": {
+                  "type": "string"
+                },
+                "gameNameAr": {
+                  "type": "string"
+                },
+                "gameId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "finished": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "refunded": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "refundRatePercent": {
+                  "nullable": true,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "productId",
+                "nameAr",
+                "gameNameAr",
+                "gameId",
+                "finished",
+                "refunded",
+                "refundRatePercent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "suppliers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "supplier": {
+                  "$ref": "#/components/schemas/SupplierCode"
+                },
+                "nameAr": {
+                  "type": "string"
+                },
+                "resolved": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "failed": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "failureRatePercent": {
+                  "nullable": true,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "supplier",
+                "nameAr",
+                "resolved",
+                "failed",
+                "failureRatePercent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "orders": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "usdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "orders",
+              "usdUnits"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "generatedAt",
+          "byReason",
+          "products",
+          "suppliers",
+          "totals"
+        ],
+        "additionalProperties": false
+      },
+      "CustomersReport": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "customerId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "delivered": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "salesUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "profitUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "depositsUsdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "customerId",
+                "name",
+                "email",
+                "delivered",
+                "salesUsdUnits",
+                "profitUsdUnits",
+                "depositsUsdUnits"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "delivered": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "salesUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "profitUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "depositsUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "delivered",
+              "salesUsdUnits",
+              "profitUsdUnits",
+              "depositsUsdUnits"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "generatedAt",
+          "rows",
+          "totals"
+        ],
+        "additionalProperties": false
+      },
+      "LedgerReport": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "line": {
+                  "$ref": "#/components/schemas/LedgerReportLine"
+                },
+                "detail": {
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DepositMethod"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdjustmentCategory"
+                    }
+                  ]
+                },
+                "usdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "testUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "date",
+                "line",
+                "detail",
+                "usdUnits",
+                "testUsdUnits"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "$ref": "#/components/schemas/LedgerReportLine"
+                },
+                "detail": {
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DepositMethod"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdjustmentCategory"
+                    }
+                  ]
+                },
+                "usdUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "testUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "line",
+                "detail",
+                "usdUnits",
+                "testUsdUnits"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "places": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "place": {
+                  "$ref": "#/components/schemas/TreasuryPlace"
+                },
+                "currency": {
+                  "$ref": "#/components/schemas/Currency"
+                },
+                "startUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "endUnits": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "place",
+                "currency",
+                "startUnits",
+                "endUnits"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "generatedAt",
+          "rows",
+          "totals",
+          "places"
+        ],
+        "additionalProperties": false
+      },
+      "LedgerReportLine": {
+        "type": "string",
+        "enum": [
+          "deposit",
+          "purchase",
+          "refund",
+          "cost_of_goods",
+          "adjustment_credit",
+          "adjustment_debit",
+          "treasury_funding",
+          "treasury_withdrawal",
+          "treasury_injection",
+          "treasury_transfer",
+          "transfer_fee",
+          "supplier_correction",
+          "rounding_gain"
+        ]
+      },
       "Storefront": {
         "type": "object",
         "properties": {
@@ -16048,15 +18954,6 @@
           "margin_adjusted",
           "paused",
           "superseded"
-        ]
-      },
-      "SupplierCode": {
-        "type": "string",
-        "enum": [
-          "shop2topup",
-          "wdgzone",
-          "manual",
-          "fake"
         ]
       },
       "PriceReviewPage": {

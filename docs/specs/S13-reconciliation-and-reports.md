@@ -283,3 +283,18 @@ Three PRs, each with its checks:
 1. Contracts, db (new tables and migration, the LS1 sign fix with its tests, treasury posting functions, the checks as queries in `packages/db/src/reconciliation`) and api (`reconciliation`, `treasury`, `reports` modules, the Excel writer).
 2. Worker: the run and recheck jobs, chain balance reads (live and fake) and the `usdt:fake-balance` command, Telegram alert and daily summary line.
 3. Admin: `/reconciliation` (status, open mismatches, places, movements, counts, history, settings), `/reports` with export, dashboard items, E2E.
+
+## Settled in implementation
+- PR 1 (contracts, db, api):
+  - `outside_funds` is shown as stored, not flipped: a transfer from outside posts +sent on it (M1), so its balance is what the owner and others brought in, net. LS2's "−balance" for it contradicted M1 and its own label; `heldUnits` flips the asset and expense accounts only.
+  - `treasury_movements` lives in its own schema file, owned by the api `treasury` module; the reconciliation tables are the `reconciliation` module's. A movement's currencies are tied to its accounts by composite foreign keys on `(account, currency)`, as postings are, instead of a trigger; `treasury_movements_guard` (migration 0045) checks the account kinds, the outside category, the opening and the reversal.
+  - A reversal repeats its original's kind, accounts and amounts, with mirrored postings (M4) and no external reference, so the reference stays claimed by the original.
+  - Rule T6 with edge case 12: a movement and its reversal cancel out, so a place whose movements are all reversed counts as empty and may take an opening.
+  - `reconciliation_runs.idempotency_key` holds a count's `Idempotency-Key` (set exactly for `count` runs).
+  - Warnings are results: `count_stale` and `order_conflicts` are checks answering `ok` or `warning`; a skipped external check carries its reason (`opening_missing`, `reader_failed`, `currency_unsupported`) in `details.reason`, and every reason but the currency counts as a warning.
+  - The implied rate is SYP per USD with 4 decimals, rounded half-up, as the store's rates; the postings carry the exact amounts.
+  - A failing check lists its 50 newest offending ids (UUIDv7 order).
+  - A manual run asked while a run is running answers `RECONCILIATION_RUNNING` before the 5-minute rate.
+  - R6 counts a treasury movement at its USD side; a movement in pounds only (Sham Cash SYP from or to outside in pounds) is left out of R6, as RP9 keeps reports in USD.
+  - The Excel export uses `exceljs` (streamed); text is written as string cells, which `exceljs` never turns into formulas.
+  - Moved to the PR that first uses them: the `reconciliation_alert` Telegram kind, the daily summary line and the chain readers' balance read (PR 2); the dashboard's attention kinds (PR 3, with the `/reconciliation` page they link to).

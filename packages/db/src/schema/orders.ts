@@ -504,6 +504,8 @@ export const fulfilmentAttempts = pgTable(
     index('fulfilment_attempts_route_id_idx').on(table.routeId),
     index('fulfilment_attempts_supplier_id_idx').on(table.supplierId),
     index('fulfilment_attempts_offer_id_idx').on(table.offerId),
+    /** S13 R4: failure rates by resolution time. */
+    index('fulfilment_attempts_resolved_at_idx').on(table.resolvedAt),
     check('fulfilment_attempts_quantity_check', sql`${table.quantity} between 1 and 50`),
     check(
       'fulfilment_attempts_delivered_check',

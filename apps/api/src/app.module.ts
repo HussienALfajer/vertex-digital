@@ -25,10 +25,13 @@ import { NotificationsModule } from './modules/notifications/index.js';
 import { OrdersModule } from './modules/orders/index.js';
 import { PricingModule } from './modules/pricing/index.js';
 import { RatesModule } from './modules/rates/index.js';
+import { ReconciliationModule } from './modules/reconciliation/index.js';
+import { ReportsModule } from './modules/reports/index.js';
 import { SettingsModule } from './modules/settings/index.js';
 import { SuppliersModule } from './modules/suppliers/index.js';
 import { SupportModule } from './modules/support/index.js';
 import { TelegramModule } from './modules/telegram/index.js';
+import { TreasuryModule } from './modules/treasury/index.js';
 import { WalletModule } from './modules/wallet/index.js';
 
 @Module({
@@ -59,6 +62,9 @@ import { WalletModule } from './modules/wallet/index.js';
     DepositsModule,
     CustomersModule,
     SupportModule,
+    TreasuryModule,
+    ReconciliationModule,
+    ReportsModule,
     CatalogModule,
     PricingModule,
     SuppliersModule,

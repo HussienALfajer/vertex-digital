@@ -1396,6 +1396,278 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/treasury/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TreasuryAdminController_places"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/treasury/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TreasuryAdminController_movements"];
+        put?: never;
+        post: operations["TreasuryAdminController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/treasury/supplier-corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TreasuryAdminController_correct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/treasury/movements/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TreasuryAdminController_reverse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReconciliationAdminController_overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reconciliation/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReconciliationAdminController_runs"];
+        put?: never;
+        post: operations["ReconciliationAdminController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reconciliation/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReconciliationAdminController_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reconciliation/results/{id}/explanation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReconciliationAdminController_explain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reconciliation/sham-cash-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReconciliationAdminController_count"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reconciliation/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReconciliationAdminController_settings"];
+        put: operations["ReconciliationAdminController_updateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/sales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReportsAdminController_sales"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReportsAdminController_breakdown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/deposits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReportsAdminController_deposits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReportsAdminController_refunds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReportsAdminController_customers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReportsAdminController_ledger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/{kind}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReportsAdminController_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/catalog/storefront": {
         parameters: {
             query?: never;
@@ -3123,9 +3395,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "order_policy.set";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "order_policy.set";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -3232,7 +3504,7 @@ export interface components {
             } | null;
         };
         /** @enum {string} */
-        JournalKind: "deposit" | "purchase" | "refund" | "cost_of_goods" | "adjustment";
+        JournalKind: "deposit" | "purchase" | "refund" | "cost_of_goods" | "adjustment" | "treasury";
         /** @enum {string} */
         DepositMethod: "sham_cash" | "usdt_trc20" | "usdt_bep20";
         WalletSearchQuery: {
@@ -3378,7 +3650,7 @@ export interface components {
             balanceUnits: number;
         };
         /** @enum {string} */
-        LedgerAccountKind: "customer_wallet" | "sham_cash_receipts" | "usdt_receipts" | "supplier_prepaid" | "sales_revenue" | "cost_of_goods" | "refunds" | "adjustments" | "currency_exchange" | "deposit_rounding";
+        LedgerAccountKind: "customer_wallet" | "sham_cash_receipts" | "usdt_receipts" | "supplier_prepaid" | "sales_revenue" | "cost_of_goods" | "refunds" | "adjustments" | "currency_exchange" | "deposit_rounding" | "outside_funds" | "transfer_fees" | "supplier_corrections";
         /** @enum {string} */
         Currency: "USD" | "SYP";
         ShamCashOptions: {
@@ -4279,6 +4551,434 @@ export interface components {
         SupportSettings: {
             telegramUrl: string | null;
         };
+        MoneyPlaces: {
+            places: {
+                place: components["schemas"]["TreasuryPlace"];
+                currency: components["schemas"]["Currency"];
+                booksUnits: number;
+                external: {
+                    units: number;
+                    /** Format: date-time */
+                    at: string;
+                    /** @enum {string} */
+                    source: "supplier" | "chain" | "count";
+                } | null;
+                differenceUnits: number | null;
+                openingRecorded: boolean;
+                proposedOpeningUnits: number | null;
+            }[];
+        };
+        /** @enum {string} */
+        TreasuryPlace: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:shop2topup" | "supplier:wdgzone" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp";
+        TreasuryMovementQuery: {
+            cursor?: string;
+            /** @default 50 */
+            limit: number;
+            place?: components["schemas"]["TreasuryPlace"];
+        };
+        TreasuryMovementPage: {
+            items: components["schemas"]["TreasuryMovement"][];
+            nextCursor: string | null;
+        };
+        TreasuryMovement: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["TreasuryMovementKind"];
+            from: components["schemas"]["TreasuryEndpoint"];
+            to: components["schemas"]["TreasuryEndpoint"];
+            sentUnits: number;
+            sentCurrency: components["schemas"]["Currency"];
+            receivedUnits: number;
+            receivedCurrency: components["schemas"]["Currency"];
+            feeUnits: number | null;
+            rate: components["schemas"]["ExchangeRate"] | null;
+            outsideCategory: components["schemas"]["OutsideCategory"] | null;
+            openingBalance: boolean;
+            order: {
+                /** Format: uuid */
+                id: string;
+                number: string;
+            } | null;
+            externalReference: string | null;
+            reason: string;
+            /** Format: uuid */
+            reversesMovementId: string | null;
+            /** Format: uuid */
+            reversedByMovementId: string | null;
+            /** Format: uuid */
+            journalId: string;
+            adminName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        TreasuryMovementKind: "transfer" | "supplier_correction";
+        /** @enum {string} */
+        TreasuryEndpoint: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:shop2topup" | "supplier:wdgzone" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp" | "supplier_corrections";
+        /** @enum {string} */
+        OutsideCategory: "owner" | "unclaimed_receipt" | "return_to_sender" | "other";
+        CreateTreasuryMovement: {
+            from: components["schemas"]["TreasuryPlace"];
+            to: components["schemas"]["TreasuryPlace"];
+            sentUnits: number;
+            receivedUnits: number;
+            outsideCategory?: components["schemas"]["OutsideCategory"];
+            /** @default false */
+            openingBalance: boolean;
+            externalReference?: string;
+            reason: string;
+            amountConfirmationUnits?: number;
+        };
+        CreateSupplierCorrection: {
+            supplier: components["schemas"]["SupplierCode"];
+            direction: components["schemas"]["SupplierCorrectionDirection"];
+            amountUnits: number;
+            orderNumber?: string;
+            externalReference?: string;
+            reason: string;
+            amountConfirmationUnits?: number;
+        };
+        /** @enum {string} */
+        SupplierCode: "shop2topup" | "wdgzone" | "manual" | "fake";
+        /** @enum {string} */
+        SupplierCorrectionDirection: "increase" | "decrease";
+        ReverseTreasuryMovement: {
+            reason: string;
+            amountConfirmationUnits?: number;
+        };
+        ReconciliationOverview: {
+            lastNightly: components["schemas"]["ReconciliationRun"] | null;
+            running: components["schemas"]["ReconciliationRun"] | null;
+            openMismatches: components["schemas"]["OpenMismatch"][];
+            warnings: components["schemas"]["ReconciliationResult"][];
+            shamCashCounts: {
+                currency: components["schemas"]["Currency"];
+                countedUnits: number;
+                /** Format: date-time */
+                at: string;
+                status: components["schemas"]["ReconciliationResultStatus"];
+            }[];
+            settings: components["schemas"]["ReconciliationSettings"];
+            /** Format: date-time */
+            manualAvailableAt: string | null;
+        };
+        ReconciliationRun: {
+            /** Format: uuid */
+            id: string;
+            trigger: components["schemas"]["ReconciliationRunTrigger"];
+            /** Format: date */
+            businessDate: string | null;
+            status: components["schemas"]["ReconciliationRunStatus"];
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            finishedAt: string | null;
+            mismatchCount: number;
+            warningCount: number;
+            /** Format: date-time */
+            recheckAt: string | null;
+            failure: string | null;
+        };
+        /** @enum {string} */
+        ReconciliationRunTrigger: "schedule" | "manual" | "count";
+        /** @enum {string} */
+        ReconciliationRunStatus: "running" | "finished" | "failed";
+        OpenMismatch: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            runId: string;
+            check: components["schemas"]["ReconciliationCheck"];
+            subject: string;
+            status: components["schemas"]["ReconciliationResultStatus"];
+            currency: components["schemas"]["Currency"] | null;
+            booksUnits: number | null;
+            actualUnits: number | null;
+            differenceUnits: number | null;
+            allowedLowUnits: number | null;
+            allowedHighUnits: number | null;
+            offendingCount: number;
+            details: components["schemas"]["ReconciliationDetails"];
+            explanation: components["schemas"]["ReconciliationExplanation"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            firstSeenAt: string;
+        };
+        /** @enum {string} */
+        ReconciliationCheck: "journal_balance" | "ledger_total" | "wallet_non_negative" | "account_journal_kinds" | "attempt_cost" | "order_purchase" | "order_refund" | "deposit_credit" | "manual_journals" | "supplier_balance" | "usdt_balance" | "sham_cash_count" | "count_stale" | "order_conflicts";
+        /** @enum {string} */
+        ReconciliationResultStatus: "ok" | "mismatch" | "warning" | "skipped";
+        ReconciliationDetails: {
+            offending: {
+                kind: components["schemas"]["OffendingKind"];
+                /** Format: uuid */
+                id: string;
+            }[];
+            lines: {
+                /** @enum {string} */
+                kind: "in_flight_attempt" | "uncredited_transfer" | "deposit_in_review";
+                /** Format: uuid */
+                id: string;
+                amountUnits: number;
+            }[];
+            reason: components["schemas"]["ReconciliationSkipReason"] | null;
+        };
+        /** @enum {string} */
+        OffendingKind: "journal" | "order" | "attempt" | "deposit" | "adjustment" | "movement" | "transfer" | "customer";
+        /** @enum {string} */
+        ReconciliationSkipReason: "opening_missing" | "reader_failed" | "currency_unsupported";
+        ReconciliationExplanation: {
+            note: string;
+            adminName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ReconciliationResult: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            runId: string;
+            check: components["schemas"]["ReconciliationCheck"];
+            subject: string;
+            status: components["schemas"]["ReconciliationResultStatus"];
+            currency: components["schemas"]["Currency"] | null;
+            booksUnits: number | null;
+            actualUnits: number | null;
+            differenceUnits: number | null;
+            allowedLowUnits: number | null;
+            allowedHighUnits: number | null;
+            offendingCount: number;
+            details: components["schemas"]["ReconciliationDetails"];
+            explanation: components["schemas"]["ReconciliationExplanation"] | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ReconciliationSettings: {
+            toleranceUsdUnits: number;
+            countStaleDays: number;
+        };
+        ReconciliationRunQuery: {
+            cursor?: string;
+            /** @default 50 */
+            limit: number;
+            trigger?: components["schemas"]["ReconciliationRunTrigger"];
+        };
+        ReconciliationRunPage: {
+            items: components["schemas"]["ReconciliationRun"][];
+            nextCursor: string | null;
+        };
+        ReconciliationRunDetail: {
+            /** Format: uuid */
+            id: string;
+            trigger: components["schemas"]["ReconciliationRunTrigger"];
+            /** Format: date */
+            businessDate: string | null;
+            status: components["schemas"]["ReconciliationRunStatus"];
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            finishedAt: string | null;
+            mismatchCount: number;
+            warningCount: number;
+            /** Format: date-time */
+            recheckAt: string | null;
+            failure: string | null;
+            results: components["schemas"]["ReconciliationResult"][];
+        };
+        ExplainResult: {
+            note: string;
+        };
+        ShamCashCount: {
+            currency: components["schemas"]["Currency"];
+            countedUnits: number;
+        };
+        ReportQuery: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            by?: components["schemas"]["ReportBreakdown"];
+        };
+        /** @enum {string} */
+        ReportBreakdown: "game" | "product" | "supplier";
+        SalesReport: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** Format: date-time */
+            generatedAt: string;
+            rows: {
+                /** Format: date */
+                date: string;
+                delivered: number;
+                salesUsdUnits: number;
+                costUsdUnits: number;
+                profitUsdUnits: number;
+                marginPercent: number | null;
+            }[];
+            totals: {
+                delivered: number;
+                salesUsdUnits: number;
+                costUsdUnits: number;
+                profitUsdUnits: number;
+                marginPercent: number | null;
+            };
+        };
+        BreakdownReport: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** Format: date-time */
+            generatedAt: string;
+            by: components["schemas"]["ReportBreakdown"];
+            rows: {
+                key: string;
+                nameAr: string;
+                gameNameAr: string | null;
+                /** Format: uuid */
+                gameId: string | null;
+                supplier: components["schemas"]["SupplierCode"] | null;
+                delivered: number;
+                salesUsdUnits: number;
+                costUsdUnits: number;
+                profitUsdUnits: number;
+                marginPercent: number | null;
+                deliveredUnits: number;
+                attemptsSent: number | null;
+                attemptsFailed: number | null;
+                failureRatePercent: number | null;
+            }[];
+            totals: {
+                delivered: number;
+                salesUsdUnits: number;
+                costUsdUnits: number;
+                profitUsdUnits: number;
+                marginPercent: number | null;
+                deliveredUnits: number;
+                attemptsSent: number | null;
+                attemptsFailed: number | null;
+                failureRatePercent: number | null;
+            };
+        };
+        DepositsReport: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** Format: date-time */
+            generatedAt: string;
+            rows: {
+                method: components["schemas"]["DepositMethod"];
+                credited: number;
+                creditedUsdUnits: number;
+                rejected: number;
+                expired: number;
+                receivedSypUnits: number | null;
+                medianReviewMinutes: number | null;
+            }[];
+            manualDeposits: {
+                count: number;
+                usdUnits: number;
+            };
+            totals: {
+                credited: number;
+                creditedUsdUnits: number;
+                rejected: number;
+                expired: number;
+            };
+        };
+        RefundsReport: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** Format: date-time */
+            generatedAt: string;
+            byReason: {
+                reason: components["schemas"]["RefundReason"];
+                orders: number;
+                usdUnits: number;
+            }[];
+            products: {
+                /** Format: uuid */
+                productId: string;
+                nameAr: string;
+                gameNameAr: string;
+                /** Format: uuid */
+                gameId: string;
+                finished: number;
+                refunded: number;
+                refundRatePercent: number | null;
+            }[];
+            suppliers: {
+                supplier: components["schemas"]["SupplierCode"];
+                nameAr: string;
+                resolved: number;
+                failed: number;
+                failureRatePercent: number | null;
+            }[];
+            totals: {
+                orders: number;
+                usdUnits: number;
+            };
+        };
+        CustomersReport: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** Format: date-time */
+            generatedAt: string;
+            rows: {
+                /** Format: uuid */
+                customerId: string;
+                name: string;
+                email: string;
+                delivered: number;
+                salesUsdUnits: number;
+                profitUsdUnits: number;
+                depositsUsdUnits: number;
+            }[];
+            totals: {
+                delivered: number;
+                salesUsdUnits: number;
+                profitUsdUnits: number;
+                depositsUsdUnits: number;
+            };
+        };
+        LedgerReport: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** Format: date-time */
+            generatedAt: string;
+            rows: {
+                /** Format: date */
+                date: string;
+                line: components["schemas"]["LedgerReportLine"];
+                detail: (components["schemas"]["DepositMethod"] | components["schemas"]["AdjustmentCategory"]) | null;
+                usdUnits: number;
+                testUsdUnits: number | null;
+            }[];
+            totals: {
+                line: components["schemas"]["LedgerReportLine"];
+                detail: (components["schemas"]["DepositMethod"] | components["schemas"]["AdjustmentCategory"]) | null;
+                usdUnits: number;
+                testUsdUnits: number | null;
+            }[];
+            places: {
+                place: components["schemas"]["TreasuryPlace"];
+                currency: components["schemas"]["Currency"];
+                startUnits: number;
+                endUnits: number;
+            }[];
+        };
+        /** @enum {string} */
+        LedgerReportLine: "deposit" | "purchase" | "refund" | "cost_of_goods" | "adjustment_credit" | "adjustment_debit" | "treasury_funding" | "treasury_withdrawal" | "treasury_injection" | "treasury_transfer" | "transfer_fee" | "supplier_correction" | "rounding_gain";
         Storefront: {
             service: components["schemas"]["StoreServiceState"];
             categories: {
@@ -4747,8 +5447,6 @@ export interface components {
         };
         /** @enum {string} */
         PriceReviewStatus: "open" | "accepted" | "margin_adjusted" | "paused" | "superseded";
-        /** @enum {string} */
-        SupplierCode: "shop2topup" | "wdgzone" | "manual" | "fake";
         PriceReviewPage: {
             items: components["schemas"]["PriceReview"][];
             total: number;
@@ -6714,8 +7412,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "order_policy.set";
-                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "order_policy.set";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report";
                 entityId?: string;
                 from?: string;
                 to?: string;
@@ -8322,6 +9020,484 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SupportSettings"];
                 };
+            };
+        };
+    };
+    TreasuryAdminController_places: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Each place, books and outside */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneyPlaces"];
+                };
+            };
+        };
+    };
+    TreasuryAdminController_movements: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                place?: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:shop2topup" | "supplier:wdgzone" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreasuryMovementPage"];
+                };
+            };
+        };
+    };
+    TreasuryAdminController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTreasuryMovement"];
+            };
+        };
+        responses: {
+            /** @description Written (200: a replay) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreasuryMovement"];
+                };
+            };
+        };
+    };
+    TreasuryAdminController_correct: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierCorrection"];
+            };
+        };
+        responses: {
+            /** @description Written (200: a replay) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreasuryMovement"];
+                };
+            };
+        };
+    };
+    TreasuryAdminController_reverse: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseTreasuryMovement"];
+            };
+        };
+        responses: {
+            /** @description The reversal (200: a replay) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreasuryMovement"];
+                };
+            };
+        };
+    };
+    ReconciliationAdminController_overview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state of the books */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationOverview"];
+                };
+            };
+        };
+    };
+    ReconciliationAdminController_runs: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                trigger?: "schedule" | "manual" | "count";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationRunPage"];
+                };
+            };
+        };
+    };
+    ReconciliationAdminController_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued for the worker */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationRun"];
+                };
+            };
+        };
+    };
+    ReconciliationAdminController_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A run and its results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationRunDetail"];
+                };
+            };
+        };
+    };
+    ReconciliationAdminController_explain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplainResult"];
+            };
+        };
+        responses: {
+            /** @description The result, explained */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationResult"];
+                };
+            };
+        };
+    };
+    ReconciliationAdminController_count: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShamCashCount"];
+            };
+        };
+        responses: {
+            /** @description The count run and its result (200: a replay) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationRunDetail"];
+                };
+            };
+        };
+    };
+    ReconciliationAdminController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings in force */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationSettings"];
+                };
+            };
+        };
+    };
+    ReconciliationAdminController_updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconciliationSettings"];
+            };
+        };
+        responses: {
+            /** @description The new settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationSettings"];
+                };
+            };
+        };
+    };
+    ReportsAdminController_sales: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                by?: "game" | "product" | "supplier";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description R1: sales and profit by day */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesReport"];
+                };
+            };
+        };
+    };
+    ReportsAdminController_breakdown: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                by?: "game" | "product" | "supplier";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description R2: by game, product or supplier */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakdownReport"];
+                };
+            };
+        };
+    };
+    ReportsAdminController_deposits: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                by?: "game" | "product" | "supplier";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description R3: deposits by method */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositsReport"];
+                };
+            };
+        };
+    };
+    ReportsAdminController_refunds: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                by?: "game" | "product" | "supplier";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description R4: refunds and failures */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundsReport"];
+                };
+            };
+        };
+    };
+    ReportsAdminController_customers: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                by?: "game" | "product" | "supplier";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description R5: the top customers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomersReport"];
+                };
+            };
+        };
+    };
+    ReportsAdminController_ledger: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                by?: "game" | "product" | "supplier";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description R6: the money movement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerReport"];
+                };
+            };
+        };
+    };
+    ReportsAdminController_export: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                by?: "game" | "product" | "supplier";
+            };
+            header?: never;
+            path: {
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as an .xlsx file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

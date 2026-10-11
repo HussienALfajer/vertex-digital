@@ -122,11 +122,11 @@ describe('postJournal', () => {
       idempotencyKey: newKey(),
       kind: 'cost_of_goods',
       postings: [
-        { accountId: cost, amountUnits: 889_000 },
-        { accountId: prepaid, amountUnits: -889_000 },
+        { accountId: cost, amountUnits: -889_000 },
+        { accountId: prepaid, amountUnits: 889_000 },
       ],
     });
-    expect(await balance(prepaid)).toBe(-889_000);
+    expect(await balance(prepaid)).toBe(889_000);
   });
 
   it('posts journals in several currencies, balanced in each', async () => {

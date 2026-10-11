@@ -1,30 +1,36 @@
-# TASKS — S12 Customers and support
+# TASKS — S13 Reconciliation and reports
 
-Spec: `docs/specs/S12-customers-and-support.md` (F19, F23, F27 ticket replies; ADRs 0003, 0004, 0006, 0007, 0011, 0016, 0018, 0019, 0023, 0024, 0026). Two PRs, as the spec's implementation notes suggest; each leaves `main` green.
+Spec: `docs/specs/S13-reconciliation-and-reports.md` (F20, F22, A11; ADRs 0003, 0004, 0006, 0011, 0017, 0018, 0019, 0021, 0022, 0025, 0027). Three PRs, as the spec's implementation plan says; each leaves `main` green.
 
-## PR 1 — Contracts, db, purchase and deposit guards, api, worker, bridge (`feat/s12-customers-support-api`) · Opus 5.5 `high`
-- [x] Contracts `customers.ts`: `CUSTOMER_STATUSES`, `customerStatus`, search query (CS1 classifier with phone normalization), row/page/profile, signals, limits, state change, notes, sign-ins schemas; `effectiveDepositLimitSettings` (LM2), `purchaseCapBreach` (LM4)
-- [x] Contracts `support.ts` (new, re-exported): categories, statuses, authors, closers, `TICKET_LIMITS`, subject/body/create/message/ticket/page/admin schemas, channels and settings schemas; `ticketTransition`, `customerCanReply` (TK3–TK6)
-- [x] Contracts extended: `STORED_FILE_KINDS` + `ticket_attachment`; `NOTIFICATION_EVENTS` + `ticket_replied` (email template, preference on by default); `TELEGRAM_MESSAGE_KINDS` + `ticket_opened`, `ticket_reply`; `ATTENTION_KINDS` + `tickets_waiting`; reservation cancel reason `frozen`; session user `frozen`; jobs `support.auto_close`, `customers.purge_sign_ins`
-- [x] Error codes `ACCOUNT_FROZEN`, `PURCHASE_LIMIT_EXCEEDED`, `CUSTOMER_STATE_INVALID`, `CUSTOMER_NOT_ARCHIVABLE`, `TICKETS_LIMIT_REACHED`, `TICKET_ALREADY_OPEN`, `TICKET_CLOSED`, `TICKET_LINK_INVALID` with Arabic store and admin text; audit actions AU1 with labels; 100% coverage of the pure rules
-- [x] Db (`/db-migration`): `customers.frozen_at`; `customer_sign_ins`; `customer_limits` (checks); `customer_notes` (one pinned, body trigger); `support_tickets` (enums, checks, partial unique per order and deposit, indexes); `support_messages` and `support_attachments` (append-only triggers, grants); `support_settings` (seeded row); file kind; tests of checks, indexes and triggers
-- [x] Db write paths: one customer guard helper (`FOR SHARE`, `ACCOUNT_FROZEN`, cap LM4) used by `purchase.ts`, `checkout.ts`, `reservations.ts` (create refusal, payment skip under the cap) and deposit creation; freeze/archive locks; concurrency tests (freeze vs purchase both orders, freeze vs checkout, two freezes, cap with refunds and the 24-hour edge, reservation skip, archive blockers)
-- [x] Api `auth`: `customer_sign_ins` written with every session creation; `frozen` in the session payload; player check refuses a frozen customer
-- [x] Api deposits: effective limits (LM2) in creation and the wizard's limits read; `ACCOUNT_FROZEN` on creation; Telegram deposit card without Approve for a frozen customer and refusal of an older Approve (CF4)
-- [x] Api `customers` module (admin): search (CS1, CS2), profile (CS3, CS5), sign-ins, sessions, notes, history tabs; freeze/unfreeze (CF1, CF6), limits (LM5), archive/unarchive (AR1–AR3), sessions revoke (SN1), notes (SN2); `customerId` filter on admin orders and deposits; pinned note, status and signals count on the deposit and order admin pages (CS6)
-- [x] Api `support` module: customer routes (list, create multipart, read, message, close, attachment), admin routes (queue with `open` count, create, read, message, close, attachment, settings), public channels; idempotency per ticket and author; limits and rate limit; Telegram outbox (TK8) and `ticket_replied` (TK9) in the transaction; nginx rate zone and body size for the multipart routes (`deploy/`)
-- [x] Dashboard `tickets_waiting` (TK13); `TABLE_OWNERS` and the architecture test
-- [x] Api tests: `test/customers.test.ts`, `test/support.test.ts` (every route: success, 401, 403, other customer's 404, re-auth, every error code, `no-store`), every purchase and deposit route refusing a frozen customer, the Telegram approval refusal
-- [x] Worker: `support.auto_close` (hourly), `customers.purge_sign_ins` (daily 04:00 Damascus); Telegram templates `ticket_opened`, `ticket_reply`, deposit card frozen; email `ticket_replied` (once per ticket per 10 minutes); daily summary lines; tests
-- [x] Bridge: build, OpenAPI export, admin client; admin and store E2E mocks follow changed shapes
-- [x] Wiring checklist, docs (`docs/architecture.md` customers and support modules, `docs/open-questions.md` Q14, S05 notes, folder `CLAUDE.md` files, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 69825e421930), reviewer (three blocking findings fixed: an archived customer let through the guard, `FOR UPDATE` on the customer deadlocking with foreign-key checks, the nginx ticket zone counting reads and sharing the receipt budget), owner acceptance (2026-10-10), PR with auto-merge
+## PR 1 — Contracts, db, api (`ccr-34597277-aed0k9`, the cloud session's branch) · Opus 5.5 `high`
+- [x] Contracts `reconciliation.ts` (new, re-exported): places map (T1) with currency and asset flag, outside categories (T4), movement kinds, checks, result statuses, run triggers and statuses, defaults; movement, supplier correction, reversal, movement, money places, overview, run, result, explanation, Sham Cash count and settings schemas with `.meta({ id })`; amount rules T3
+- [x] Contracts `reports.ts` (new, re-exported): kinds, breakdowns, `REPORT_MAX_DAYS`, `TOP_CUSTOMERS_LIMIT`, query schema (RP1 period rule), one response schema per report R1–R6
+- [x] Contracts extended: `wallet.ts` account kinds `outside_funds`, `transfer_fees`, `supplier_corrections` and journal kind `treasury`; `money.ts` `heldUnits`, `withinRange`, `impliedRate` (100% coverage); error codes (8 new) with Arabic admin text; audit entity types and actions with labels; `jobs.ts` `reconciliation.run`, `reconciliation.recheck` (Telegram, dashboard and USDT balance contracts moved to PR 2 and PR 3)
+- [x] Db (`/db-migration`): enums; `treasury_movements` (checks, currency trigger, unique reference per source, append-only); `reconciliation_runs` (one running, one per business date); `reconciliation_results` and `reconciliation_explanations` (append-only); `reconciliation_settings` (seeded); indexes `deposits (status, decided_at)`, `fulfilment_attempts (resolved_at)`; tests of checks, triggers and grants
+- [x] Db LS1: cost of goods journal signs corrected in `packages/db/src/orders` (S08 delivery and S11 manual fulfil) with regression tests
+- [x] Db write paths `packages/db/src/treasury`: movement postings M1–M4, supplier correction, reversal under lock, opening balance rule, idempotency; concurrency tests (parallel reversals, one key in parallel)
+- [x] Db `packages/db/src/reconciliation`: checks C1–C9 as SQL in one `REPEATABLE READ` snapshot, external check ranges (E2–E4) and books reads; tests: each check passes clean and fails with ids on a planted fault
+- [x] Api `treasury` module: places, movements list, create, supplier correction, reverse (re-auth, typed confirmation above $100, `Idempotency-Key`, audit)
+- [x] Api `reconciliation` module: overview, runs list and detail, manual run (one running, 5-minute rate), explanation, Sham Cash count run (E4 at once), settings (re-auth)
+- [x] Api `reports` module: R1–R6 queries (Damascus days, real customers only, R6 test share), Excel export (streamed, RTL, strings never formulas, audit, 10/minute)
+- [x] `TABLE_OWNERS` and the architecture test; `app.module.ts`
+- [x] Api tests `test/treasury.test.ts`, `test/reconciliation.test.ts`, `test/reports.test.ts` (every route: success, 401, guard codes, re-auth, replays, the spec's rules; R1 equals the dashboard)
+- [x] Bridge: build, OpenAPI export, admin client; mocks follow changed shapes
+- [x] Wiring checklist, docs (`docs/architecture.md` modules, folder `CLAUDE.md` files, spec "Settled in implementation")
+- [x] Checks (lint, typecheck, test, build, drift, e2e: passed and recorded on 174687db9b75; PostgreSQL 16 in the session, CI runs 17), reviewer (two blocking findings fixed: a Sham Cash count before an opening lost its amount and its replay; negative pounds written as NaN in exports), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
 
-## PR 2 — Admin and store screens, E2E (`claude/dazzling-cray-84epeu`, the cloud session's branch) · Opus 5.5 `high`
-- [x] Admin `features/customers/`: `/customers` (search and status tabs in the URL, table, link to test customers), `/customers/$id` (header, chips, actions menu and dialogs with re-authentication; tabs: summary, wallet, orders, deposits, tickets, devices, notes, history)
-- [x] Admin customer panel on the deposit review and order pages: chips, pinned note, signals count (CS6)
-- [x] Admin `features/support/`: `/support` queue (tabs and filters in the URL), `/support/$id` thread (attachments, reply with images, Ctrl+Enter, close, side panel), `/support/new?customer=`, `/settings/support`; navigation items "العملاء" and "الدعم" with the `open` badge; dashboard `tickets_waiting`; i18n keys
-- [x] Store: frozen banner and disabled buy box, cart, deposit wizard and player check; footer links; `/support`, `/support/new` (type, picker, images), `/support/$id` (thread, reply, close, closed states, refetch on `ticket_replied`); "تحتاج مساعدة؟" on order and deposit pages; notification text; `/account` preference "ردود الدعم"; i18n keys
-- [x] E2E flows and RTL screenshots (admin light and dark; store phone width, light and dark)
-- [x] Wiring checklist, docs (`docs/ROADMAP.md` S12 done, folder `CLAUDE.md` files, `wiring.md` patterns)
-- [x] Checks (lint, typecheck, test, build, e2e: all pass; store e2e 274 passed on a quiet run after two load-only timeouts in the S10 screenshots that pass alone; db tests ran on the session's PostgreSQL 16 fallback, CI runs 17), reviewer (one blocking finding: an admin reply kept its `Idempotency-Key` after sending, so the same words sent again were replayed instead of posted; fixed with a new key per sent reply and an E2E test), owner acceptance waived by the owner (open the PR at once, 2026-10-10), PR with auto-merge
+## PR 2 — Worker
+- [ ] Chain readers `getUsdtBalance` (TronGrid, BSC `eth_call`, fake with scripted offset); `usdt:fake-balance` command and the `AGENTS.md` table
+- [ ] Jobs `reconciliation.run` (cron 00:30 Damascus, stale run failed, internal then external checks, recheck queueing) and `reconciliation.recheck`; supplier reads into `supplier_balance_reads`
+- [ ] Contracts and enum value for Telegram `reconciliation_alert` (NT1) and the daily summary line (NT2); `usdt.ts` balance read type
+- [ ] Worker tests (ok, mismatch, recheck clears and confirms, reader failure, alert rules, cron date, stale run)
+- [ ] Wiring checklist, docs
+- [ ] Checks, reviewer, acceptance, PR with auto-merge
+
+## PR 3 — Admin screens and E2E
+- [ ] Admin `features/reconciliation/`: status card, open mismatches with explain dialog, money places, movement and correction dialogs, count dialog, movements tab with reverse, history tab and run page, settings drawer; navigation "المطابقة" with badge
+- [ ] Admin `features/reports/`: tabs R1–R6, period presets, breakdown selector, tables with totals, chart on R1, Excel export; navigation "التقارير"
+- [ ] Dashboard attention kinds `reconciliation_open`, `reconciliation_missing`, `sham_cash_count_due` (contracts, API, panel); i18n keys
+- [ ] E2E flows and RTL screenshots (admin light and dark)
+- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S13 done, `wiring.md` patterns)
+- [ ] Checks, reviewer, acceptance, PR with auto-merge

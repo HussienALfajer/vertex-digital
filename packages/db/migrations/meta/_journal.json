@@ -309,6 +309,20 @@
       "when": 1791647020269,
       "tag": "0043_s12_customers_support_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791682718952,
+      "tag": "0044_quick_power_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1791682720121,
+      "tag": "0045_s13_reconciliation_guards",
+      "breakpoints": true
     }
   ]
 }

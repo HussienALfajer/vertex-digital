@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { LedgerAccountKind } from './wallet.js';
 
 /**
  * Currencies of the ledger (ADR 0003). USD is the base currency; `SYP` is the new Syrian pound.
@@ -283,4 +284,64 @@ export function rawToUsdUnits(raw: bigint, decimals: number): number {
 /** The exact raw on-chain amount of `units` USD units for a token with `decimals` (rule U7). */
 export function usdtRawForUnits(units: number, decimals: number): bigint {
   return unitsOrThrow(units) * scaleOrThrow(decimals);
+}
+
+/*
+ * S13: held amounts, ranges and implied rates (rules LS2, E1, M2).
+ */
+
+/**
+ * Accounts whose balance is shown flipped (rule LS2): money the store holds (receipts, supplier
+ * prepaid) and money spent (cost of goods, refunds, adjustments, transfer fees) grow negative, so
+ * the panel shows −balance. `outside_funds` is shown as stored: a transfer from outside posts
+ * +sent on it (rule M1), so its balance is what the owner and others brought in, net.
+ */
+const FLIPPED_ACCOUNT_KINDS: ReadonlySet<LedgerAccountKind> = new Set<LedgerAccountKind>([
+  'sham_cash_receipts',
+  'usdt_receipts',
+  'supplier_prepaid',
+  'cost_of_goods',
+  'refunds',
+  'adjustments',
+  'transfer_fees',
+]);
+
+/** The amount the panel shows for an account's raw balance (rule LS2): held, spent or as stored. */
+export function heldUnits(kind: LedgerAccountKind, balanceUnits: number): number {
+  if (!Number.isSafeInteger(balanceUnits)) {
+    throw new RangeError(`Expected a safe integer balance, got ${balanceUnits}`);
+  }
+  return FLIPPED_ACCOUNT_KINDS.has(kind) ? -balanceUnits || 0 : balanceUnits;
+}
+
+/**
+ * Rule E1: true when `low − tolerance ≤ actual ≤ high + tolerance`. All amounts in units of one
+ * currency; `low ≤ high` and a tolerance at or above zero.
+ */
+export function withinRange(actual: number, low: number, high: number, tolerance: number): boolean {
+  if (low > high || tolerance < 0) throw new RangeError('Expected low ≤ high and a tolerance ≥ 0');
+  return actual >= low - tolerance && actual <= high + tolerance;
+}
+
+/** Decimals of an implied rate: as many as a store rate (`exchangeRateSchema`). */
+const IMPLIED_RATE_DECIMALS = 4n;
+
+/**
+ * Rule M2: the SYP per USD implied by a two-currency movement, `sypUnits` against `usdUnits`, as a
+ * decimal string with up to 4 decimals, rounded half-up (`"13050.25"`, `"118.5"`). Computed in
+ * BigInt; the postings carry the exact amounts, the rate is what the panel shows beside today's.
+ */
+export function impliedRate(sypUnits: number, usdUnits: number): string {
+  const syp = unitsOrThrow(sypUnits);
+  const usd = unitsOrThrow(usdUnits);
+  if (syp === 0n || usd === 0n) throw new RangeError('Expected both amounts above zero');
+  const factor = 10n ** IMPLIED_RATE_DECIMALS;
+  // (syp ÷ SYP scale) ÷ (usd ÷ USD scale), × 10⁴, rounded half-up.
+  const numerator = syp * USD_SCALE * factor * 2n;
+  const denominator = usd * SYP_SCALE;
+  const scaled = (numerator / denominator + 1n) / 2n;
+  const whole = scaled / factor;
+  let fraction = (scaled % factor).toString().padStart(Number(IMPLIED_RATE_DECIMALS), '0');
+  while (fraction.endsWith('0')) fraction = fraction.slice(0, -1);
+  return fraction === '' ? whole.toString() : `${whole}.${fraction}`;
 }

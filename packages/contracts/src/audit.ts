@@ -25,6 +25,15 @@ import {
 } from './orders.js';
 import { marginRuleValuesSchema, marginScopeSchema } from './pricing.js';
 import { displayStepSchema } from './rates.js';
+import {
+  outsideCategorySchema,
+  reconciliationCheckSchema,
+  reconciliationRunTriggerSchema,
+  reconciliationSettingsSchema,
+  treasuryEndpointSchema,
+  treasuryMovementKindSchema,
+} from './reconciliation.js';
+import { reportBreakdownSchema, reportKindSchema } from './reports.js';
 import { storeSwitchSchema } from './settings.js';
 import { supplierCodeSchema, supplierPolicySchema } from './suppliers.js';
 import { ticketCategorySchema, ticketStatusSchema } from './support.js';
@@ -76,6 +85,11 @@ export const AUDIT_ENTITY_TYPES = [
   'customer_note',
   'support_ticket',
   'support_settings',
+  'treasury_movement',
+  'reconciliation_run',
+  'reconciliation_result',
+  'reconciliation_settings',
+  'report',
 ] as const;
 
 export const auditEntityTypeSchema = z.enum(AUDIT_ENTITY_TYPES).meta({ id: 'AuditEntityType' });
@@ -210,6 +224,24 @@ const ticketMessage = z.strictObject({
   after: ticketStatusSchema,
   images: z.int().min(0).max(3),
 });
+
+/** S13: a treasury movement in audit details; the reason is the entry's `reason`. */
+const treasuryMovement = {
+  movementId: z.uuid(),
+  kind: treasuryMovementKindSchema,
+  from: treasuryEndpointSchema,
+  to: treasuryEndpointSchema,
+  sentUnits: z.int().positive(),
+  sentCurrency: currencySchema,
+  receivedUnits: z.int().positive(),
+  receivedCurrency: currencySchema,
+  rate: z.string().nullable(),
+  outsideCategory: outsideCategorySchema.nullable(),
+  openingBalance: z.boolean(),
+  orderId: z.uuid().nullable(),
+  externalReference: z.string().nullable(),
+  journalId: z.uuid(),
+};
 
 /**
  * Every audit action (`<entity>.<verb>`) with the shape of its `details`: before and after of the
@@ -545,6 +577,39 @@ export const AUDIT_DETAILS = {
   'support.settings_changed': z.strictObject({
     before: z.strictObject({ telegramUrl: z.string().nullable() }),
     after: z.strictObject({ telegramUrl: z.string().nullable() }),
+  }),
+  /** S13: a transfer or supplier correction (rules T2–T8), re-authenticated. */
+  'treasury_movement.created': z.strictObject(treasuryMovement),
+  /** S13 T9: on the reversal's row. */
+  'treasury_movement.reversed': z.strictObject({
+    ...treasuryMovement,
+    reversedMovementId: z.uuid(),
+  }),
+  /** S13: a manual or count run; a count names its currency and amount (RN2, RN6). */
+  'reconciliation_run.started': z.strictObject({
+    runId: z.uuid(),
+    trigger: reconciliationRunTriggerSchema,
+    currency: currencySchema.nullable(),
+    countedUnits: z.int().nonnegative().nullable(),
+  }),
+  /** S13 RN8: the note is the entry's `reason`. */
+  'reconciliation_result.explained': z.strictObject({
+    resultId: z.uuid(),
+    check: reconciliationCheckSchema,
+    subject: z.string(),
+    differenceUnits: z.int().nullable(),
+  }),
+  'reconciliation_settings.changed': z.strictObject({
+    before: reconciliationSettingsSchema.strict(),
+    after: reconciliationSettingsSchema.strict(),
+  }),
+  /** S13 X4. */
+  'report.exported': z.strictObject({
+    kind: reportKindSchema,
+    breakdown: reportBreakdownSchema.nullable(),
+    from: z.iso.date(),
+    to: z.iso.date(),
+    rows: z.int().nonnegative(),
   }),
   /** `before` is the policy in force, the seed included. */
   'order_policy.set': z.strictObject({
