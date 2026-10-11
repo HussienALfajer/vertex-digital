@@ -615,8 +615,10 @@ test.describe('gift and receipt links (GF4, GF5, RC1–RC3, SH5, SH6)', () => {
       'content',
       /\/api\/shares\/G1ftT0kenAAAAAAAAAAAAA\/image\?format=og$/,
     );
-    const seen = await request.get(`http://127.0.0.1:${CATALOG_PORT}/_seen`);
-    expect(await seen.json()).toEqual({ forwardedFor: '203.0.113.9' });
+    const seen = await request.get(
+      `http://127.0.0.1:${CATALOG_PORT}/_seen?token=G1ftT0kenAAAAAAAAAAAAA`,
+    );
+    expect((await seen.json()).forwardedFor).toContain('203.0.113.9');
     expect(shares.G1ftT0kenAAAAAAAAAAAAA.price).toBeNull();
 
     await page.goto('/r/R3ceiptT0kenAAAAAAAAAA');

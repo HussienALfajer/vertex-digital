@@ -272,22 +272,29 @@ test.describe('announcements (AN1, AN2)', () => {
   });
 });
 
-const ACTIVITY_ITEMS = [
-  ['ببجي موبايل', '660 UC', 1, 14, 5],
-  ['فري فاير', '520 جوهرة', 2, 9, 10],
-  ['ببجي موبايل', '60 UC', 1, 3, 25],
-  ['بطاقات iTunes', '10 دولار', 1, 190, 40],
-  ['ببجي موبايل', '325 UC', 1, 7300, 190],
-].map(([gameNameAr, productNameAr, quantity, durationSeconds, minutesAgo]) => ({
-  gameSlug: 'pubg-mobile',
-  gameNameAr: gameNameAr as string,
-  productNameAr: productNameAr as string,
-  quantity: quantity as number,
-  durationSeconds: durationSeconds as number,
-  deliveredAt: new Date(
-    Math.floor((Date.now() - (minutesAgo as number) * 60_000) / 300_000) * 300_000,
-  ).toISOString(),
-}));
+/*
+ * Delivery times as the API answers them (LA4: floored to 5 minutes), relative to when a test sets
+ * them. The newest is in the current 5 minutes, so it reads "منذ نحو 5 دقائق" for 5 minutes at
+ * least ("at least 5" covers 0 to 10 minutes): a delivery floored from 5 minutes ago would turn
+ * into "10" as soon as the next 5-minute mark passed before the preview rendered.
+ */
+const activityItems = () =>
+  [
+    ['ببجي موبايل', '660 UC', 1, 14, 0],
+    ['فري فاير', '520 جوهرة', 2, 9, 10],
+    ['ببجي موبايل', '60 UC', 1, 3, 25],
+    ['بطاقات iTunes', '10 دولار', 1, 190, 40],
+    ['ببجي موبايل', '325 UC', 1, 7300, 190],
+  ].map(([gameNameAr, productNameAr, quantity, durationSeconds, minutesAgo]) => ({
+    gameSlug: 'pubg-mobile',
+    gameNameAr: gameNameAr as string,
+    productNameAr: productNameAr as string,
+    quantity: quantity as number,
+    durationSeconds: durationSeconds as number,
+    deliveredAt: new Date(
+      Math.floor((Date.now() - (minutesAgo as number) * 60_000) / 300_000) * 300_000,
+    ).toISOString(),
+  }));
 
 test.describe('live activity (LA3, LA6)', () => {
   test('below the minimum it says why; above, the card as the store shows it; the switch', async ({
@@ -298,7 +305,7 @@ test.describe('live activity (LA3, LA6)', () => {
     await expect(page.getByText(fill(c.activity.belowMinimum, { minimum: 5 }))).toBeVisible();
     await expect(page.getByTestId('activity-count')).toContainText('2');
 
-    admin.content.activity = { qualifyingLast24h: 5, items: ACTIVITY_ITEMS };
+    admin.content.activity = { qualifyingLast24h: 5, items: activityItems() };
     await page.reload();
     const preview = page.getByTestId('store-preview');
     await expect(preview).toContainText('خلال 14 ثانية');
@@ -406,7 +413,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/content/activity');
       await expect(page.getByText(fill(c.activity.belowMinimum, { minimum: 5 }))).toBeVisible();
       await screenshot(page, testInfo, `content-activity-below-${colorScheme}`);
-      admin.content.activity = { qualifyingLast24h: 9, items: ACTIVITY_ITEMS };
+      admin.content.activity = { qualifyingLast24h: 9, items: activityItems() };
       await page.reload();
       await expect(page.getByTestId('store-preview')).toBeVisible();
       await screenshot(page, testInfo, `content-activity-${colorScheme}`, { fullPage: true });

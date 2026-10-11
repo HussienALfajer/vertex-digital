@@ -2,12 +2,16 @@
 // SF4): the browser's requests are mocked per test (e2e/test.ts), but server components fetch
 // `API_INTERNAL_URL` from the store's process, which Playwright cannot intercept. Fixed answers
 // from catalog-fixtures.json; under `/empty` the store has no games yet. S10: the public gift and
-// receipt links from share-fixtures.json, and `/_seen` answers the `X-Forwarded-For` of the last
-// share read (the visitor's address the store must pass on). S12: the support channels, with a
+// receipt links from share-fixtures.json, and `/_seen?token=` answers every `X-Forwarded-For` a
+// read of that share carried (the visitor's address the store must pass on; every value, not the
+// last one, since tests in other workers read shares at the same time). S12: the support channels, with a
 // Telegram link except under `/empty`. S14: the content routes answer nothing published except
 // under `/content`, the store with an announcement, banners, two pages, the FAQ and live activity
-// (content-fixtures.json; delivery times relative to now, floored to 5 minutes). Started by
-// playwright.config.ts; the port is the first argument.
+// (content-fixtures.json; delivery times relative to now, floored to 5 minutes: the newest is in
+// the current 5 minutes, so it reads "منذ نحو 5 دقائق" for 5 minutes at least, while the store's
+// 60-second content cache serves it; one floored from 5 minutes ago turned into "10" whenever the
+// next 5-minute mark passed in between). Started by playwright.config.ts; the port is the first
+// argument.
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 
@@ -19,7 +23,8 @@ const content = JSON.parse(
 );
 const shares = JSON.parse(readFileSync(new URL('./share-fixtures.json', import.meta.url), 'utf8'));
 const port = Number(process.argv[2] ?? 4002);
-let lastForwardedFor = null;
+/** Share token → the `X-Forwarded-For` values its reads carried. */
+const forwardedFor = new Map();
 const TELEGRAM_URL = 'https://t.me/vertex_support_test';
 
 const NO_CONTENT = { announcement: null, banners: [], pages: [], faqPublished: false };
@@ -64,10 +69,15 @@ createServer((request, response) => {
   if (path === '/api/content/faq' && full) return json(response, 200, content.faq);
   const page = /^\/api\/content\/pages\/([a-z]+)$/.exec(path);
   if (page && full && content.pages[page[1]]) return json(response, 200, content.pages[page[1]]);
-  if (path === '/_seen') return json(response, 200, { forwardedFor: lastForwardedFor });
+  if (path === '/_seen') {
+    const seen = forwardedFor.get(url.searchParams.get('token')) ?? new Set();
+    return json(response, 200, { forwardedFor: [...seen] });
+  }
   const share = /^\/api\/shares\/([A-Za-z0-9_-]{22})$/.exec(path);
   if (share) {
-    lastForwardedFor = request.headers['x-forwarded-for'] ?? null;
+    const seen = forwardedFor.get(share[1]) ?? new Set();
+    seen.add(request.headers['x-forwarded-for'] ?? null);
+    forwardedFor.set(share[1], seen);
     if (shares[share[1]]) return json(response, 200, shares[share[1]]);
   }
   const game = /^\/api\/catalog\/games\/([a-z0-9-]+)$/.exec(path);
