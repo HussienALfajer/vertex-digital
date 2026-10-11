@@ -5,9 +5,11 @@ import { createDatabase } from '../client.js';
 import { newId } from '../id.js';
 import {
   customerNotifications,
+  customerSessions,
   customers,
   emailOutbox,
   notificationPreferences,
+  pushSubscriptions,
 } from '../schema/index.js';
 import { type JobSender, notifyCustomer } from './index.js';
 import { CUSTOMER_NOTIFICATIONS_CHANNEL } from './notify-customer.js';
@@ -165,6 +167,122 @@ describe('notifyCustomer', () => {
         }),
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe('push (S15)', () => {
+  async function device(customerId: string): Promise<{ sessionId: string; deviceId: string }> {
+    const sessionId = newId();
+    await db.insert(customerSessions).values({
+      id: sessionId,
+      userId: customerId,
+      token: `test-${sessionId}`,
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
+    const deviceId = newId();
+    await db.insert(pushSubscriptions).values({
+      id: deviceId,
+      customerId,
+      sessionId,
+      endpoint: `https://fcm.googleapis.com/fcm/send/${deviceId}`,
+      p256dh: 'p256dh',
+      auth: 'auth',
+      vapidKeyId: 'key',
+    });
+    return { sessionId, deviceId };
+  }
+
+  const delivered = () => ({
+    orderId: newId(),
+    orderNumber: 'VD-1000001',
+    productNameAr: 'شدات',
+    quantity: 1,
+  });
+
+  it('queues one push.send only when the customer has a device (rule PD1)', async () => {
+    const { id: customerId } = await customer();
+    const before = recordingJobs();
+    await db.transaction((tx) =>
+      notifyCustomer(tx, before, { customerId, event: 'deposit_credited', params: credited() }),
+    );
+    expect(before.sent.map((job) => job.queue)).toEqual(['email.send']);
+
+    await device(customerId);
+    // The email turned off decides nothing about push, and the reverse.
+    await db
+      .insert(notificationPreferences)
+      .values({ customerId, event: 'deposit_credited', email: false });
+    const after = recordingJobs();
+    const { notificationId } = await db.transaction((tx) =>
+      notifyCustomer(tx, after, { customerId, event: 'deposit_credited', params: credited() }),
+    );
+    expect(after.sent).toEqual([{ queue: 'push.send', data: { notificationId } }]);
+  });
+
+  it('queues no push for center-only events and calls (rule PD1, S10 CT8)', async () => {
+    const { id: customerId } = await customer();
+    await device(customerId);
+    const jobs = recordingJobs();
+    await db.transaction(async (tx) => {
+      await notifyCustomer(
+        tx,
+        jobs,
+        {
+          customerId,
+          event: 'order_delivered',
+          params: delivered(),
+        },
+        { email: false },
+      );
+      await notifyCustomer(tx, jobs, {
+        customerId,
+        event: 'order_delayed',
+        params: { orderId: newId(), orderNumber: 'VD-1000002', productNameAr: 'شدات' },
+      });
+    });
+    expect(jobs.sent).toEqual([]);
+  });
+
+  it('removes a device with its session (rule PS4)', async () => {
+    const { id: customerId } = await customer();
+    const { sessionId, deviceId } = await device(customerId);
+    await db.delete(customerSessions).where(eq(customerSessions.id, sessionId));
+    expect(
+      await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.id, deviceId)),
+    ).toEqual([]);
+  });
+
+  it('keeps one row per endpoint and checks its bounds', async () => {
+    const { id: customerId } = await customer();
+    const { deviceId } = await device(customerId);
+    const [row] = await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.id, deviceId));
+    const { sessionId } = await device(customerId);
+    await expect(
+      db
+        .insert(pushSubscriptions)
+        .values({ ...(row as typeof pushSubscriptions.$inferSelect), id: newId(), sessionId }),
+    ).rejects.toThrow();
+    await expect(
+      db
+        .update(pushSubscriptions)
+        .set({ endpoint: `https://fcm.googleapis.com/${'a'.repeat(1_024)}` })
+        .where(eq(pushSubscriptions.id, deviceId)),
+    ).rejects.toThrow();
+    await expect(
+      db.update(pushSubscriptions).set({ failures: -1 }).where(eq(pushSubscriptions.id, deviceId)),
+    ).rejects.toThrow();
+  });
+
+  it('defaults the push choice to on when a row is made for email (rule PP1)', async () => {
+    const { id: customerId } = await customer();
+    const [row] = await db
+      .insert(notificationPreferences)
+      .values({ customerId, event: 'order_refunded', email: false })
+      .returning();
+    expect(row).toMatchObject({ email: false, push: true });
   });
 });
 

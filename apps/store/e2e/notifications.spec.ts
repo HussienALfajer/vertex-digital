@@ -143,6 +143,12 @@ test.describe('notifications', () => {
           deposit_receipt_requested: true,
           wallet_adjusted: true,
         },
+        push: {
+          deposit_credited: true,
+          deposit_rejected: true,
+          deposit_receipt_requested: true,
+          wallet_adjusted: true,
+        },
       });
     await page.goto('/account');
     const rejected = page.getByRole('switch', {

@@ -140,60 +140,61 @@ export class NotificationsService {
     return { unreadCount: await this.unreadCount(customerId) };
   }
 
-  /** The email choice per event; a missing row means on (rule NT8). */
+  /** The email and push choice per event; a missing row means both on (NT8, S15 PP1). */
   async preferences(
     customerId: string,
     db: Database | Transaction = this.db,
   ): Promise<NotificationPreferences> {
     const rows = await db
-      .select({ event: notificationPreferences.event, email: notificationPreferences.email })
+      .select({
+        event: notificationPreferences.event,
+        email: notificationPreferences.email,
+        push: notificationPreferences.push,
+      })
       .from(notificationPreferences)
       .where(eq(notificationPreferences.customerId, customerId));
-    const chosen = new Map(rows.map((row) => [row.event, row.email]));
-    return {
-      email: Object.fromEntries(
-        NOTIFICATION_EVENTS.map((event) => [event, chosen.get(event) ?? true]),
-      ) as NotificationPreferences['email'],
-    };
+    const chosen = new Map(rows.map((row) => [row.event, row]));
+    const channel = (pick: 'email' | 'push') =>
+      Object.fromEntries(
+        NOTIFICATION_EVENTS.map((event) => [event, chosen.get(event)?.[pick] ?? true]),
+      ) as NotificationPreferences['email'];
+    return { email: channel('email'), push: channel('push') };
   }
 
   /**
-   * One email choice (rule NT8), with its audit entry; the same value again changes nothing. It
-   * applies to emails queued after it.
+   * One choice of one channel (S05 rule NT8, S15 rule PP1), with its audit entry; the same value
+   * again changes nothing. It applies to emails and pushes sent after it (PP3).
    */
   async setPreference(
     customerId: string,
     input: UpdateNotificationPreference,
     meta: RequestMeta,
   ): Promise<NotificationPreferences> {
+    const change =
+      'email' in input
+        ? ({ channel: 'email', on: input.email } as const)
+        : ({ channel: 'push', on: input.push } as const);
     return this.db.transaction(async (tx) => {
-      // The default as a row first, so the row lock serializes two first changes of one choice.
+      const thisPreference = and(
+        eq(notificationPreferences.customerId, customerId),
+        eq(notificationPreferences.event, input.event),
+      );
+      // The defaults as a row first, so the row lock serializes two first changes of one choice.
       await tx
         .insert(notificationPreferences)
-        .values({ customerId, event: input.event, email: true })
+        .values({ customerId, event: input.event, email: true, push: true })
         .onConflictDoNothing();
       const [current] = await tx
-        .select({ email: notificationPreferences.email })
+        .select({ email: notificationPreferences.email, push: notificationPreferences.push })
         .from(notificationPreferences)
-        .where(
-          and(
-            eq(notificationPreferences.customerId, customerId),
-            eq(notificationPreferences.event, input.event),
-          ),
-        )
+        .where(thisPreference)
         .for('update');
-      if (current?.email !== input.email) {
+      if (current?.[change.channel] !== change.on) {
         await tx
           .update(notificationPreferences)
-          .set({ email: input.email })
-          .where(
-            and(
-              eq(notificationPreferences.customerId, customerId),
-              eq(notificationPreferences.event, input.event),
-            ),
-          );
+          .set({ [change.channel]: change.on })
+          .where(thisPreference);
         await recordAudit(tx, {
-          action: 'customer.notification_preference_changed',
           actorKind: 'customer',
           actorId: customerId,
           channel: 'store',
@@ -201,7 +202,15 @@ export class NotificationsService {
           entityId: customerId,
           ipAddress: meta.ipAddress,
           userAgent: meta.userAgent,
-          details: { event: input.event, email: input.email },
+          ...(change.channel === 'email'
+            ? {
+                action: 'customer.notification_preference_changed',
+                details: { event: input.event, email: change.on },
+              }
+            : {
+                action: 'customer.push_preference_changed',
+                details: { event: input.event, push: change.on },
+              }),
         });
       }
       return this.preferences(customerId, tx);

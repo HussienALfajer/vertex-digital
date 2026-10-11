@@ -7,11 +7,13 @@ import {
   EMAIL_PARAMS,
   EMAIL_TEMPLATES,
   isCodeEmail,
+  isPushNotificationEvent,
   NOTIFICATION_EMAIL_TEMPLATE,
   NOTIFICATION_EVENTS,
   NOTIFICATION_PARAMS,
   notificationListQuerySchema,
   notificationPreferencesSchema,
+  PUSH_NOTIFICATION_EVENTS,
   updateNotificationPreferenceSchema,
 } from './notifications.js';
 
@@ -87,15 +89,36 @@ describe('notifications (S05 F27)', () => {
     expect(notificationListQuerySchema.safeParse({ limit: '51' }).success).toBe(false);
   });
 
-  it('keep one email choice per event', () => {
-    const email = Object.fromEntries(NOTIFICATION_EVENTS.map((event) => [event, true]));
-    expect(notificationPreferencesSchema.parse({ email }).email).toEqual(email);
+  it('keep one email and one push choice per event (NT8, PP1)', () => {
+    const all = Object.fromEntries(NOTIFICATION_EVENTS.map((event) => [event, true]));
+    expect(notificationPreferencesSchema.parse({ email: all, push: all })).toEqual({
+      email: all,
+      push: all,
+    });
     expect(
-      notificationPreferencesSchema.safeParse({ email: { deposit_credited: true } }).success,
+      notificationPreferencesSchema.safeParse({ email: { deposit_credited: true }, push: all })
+        .success,
     ).toBe(false);
     expect(
       updateNotificationPreferenceSchema.safeParse({ event: 'customer_new_sign_in', email: false })
         .success,
     ).toBe(false);
+  });
+
+  it('change one channel at a time, push only for events that send one (PP1)', () => {
+    const parse = (body: object) => updateNotificationPreferenceSchema.safeParse(body).success;
+    expect(parse({ event: 'order_delivered', email: false })).toBe(true);
+    expect(parse({ event: 'order_delivered', push: false })).toBe(true);
+    expect(parse({ event: 'order_delayed', email: false })).toBe(true);
+    expect(parse({ event: 'order_delayed', push: false })).toBe(false);
+    expect(parse({ event: 'order_paid', push: true })).toBe(false);
+    expect(parse({ event: 'order_delivered', email: false, push: false })).toBe(false);
+    expect(parse({ event: 'order_delivered' })).toBe(false);
+  });
+
+  it('push exactly the events that email (PD1)', () => {
+    expect(PUSH_NOTIFICATION_EVENTS).toEqual(EMAIL_NOTIFICATION_EVENTS);
+    expect(isPushNotificationEvent('checkout_finished')).toBe(true);
+    expect(isPushNotificationEvent('order_delayed')).toBe(false);
   });
 });

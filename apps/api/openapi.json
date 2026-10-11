@@ -109,7 +109,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "The email choice per event",
+            "description": "The email and push choice per event",
             "content": {
               "application/json": {
                 "schema": {
@@ -160,6 +160,73 @@
         "responses": {
           "200": {
             "description": "Server-sent events: `order` `{ orderId, status }`, `resync`, and `replaced` before a newer stream closes this one (rule LR4)"
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/push/config": {
+      "get": {
+        "operationId": "PushController_config",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The VAPID public key, or null when push is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushConfig"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/push/subscription": {
+      "put": {
+        "operationId": "PushController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSubscription"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "This device receives pushes for this session"
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      },
+      "delete": {
+        "operationId": "PushController_remove",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemovePushSubscription"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "This device no longer receives pushes"
           }
         },
         "tags": [
@@ -933,6 +1000,7 @@
                 "customer.note_unpinned",
                 "customer.note_archived",
                 "customer.notification_preference_changed",
+                "customer.push_preference_changed",
                 "wallet_adjustment.created",
                 "wallet_adjustment.reversed",
                 "exchange_rate.changed",
@@ -10274,26 +10342,72 @@
               "checkout_finished",
               "ticket_replied"
             ]
+          },
+          "push": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "required": [
+              "deposit_credited",
+              "deposit_rejected",
+              "deposit_receipt_requested",
+              "wallet_adjusted",
+              "order_delivered",
+              "order_partially_refunded",
+              "order_refunded",
+              "order_delayed",
+              "order_paid",
+              "order_cancelled",
+              "checkout_finished",
+              "ticket_replied"
+            ]
           }
         },
         "required": [
-          "email"
+          "email",
+          "push"
         ],
         "additionalProperties": false
       },
       "UpdateNotificationPreference": {
-        "type": "object",
-        "properties": {
-          "event": {
-            "$ref": "#/components/schemas/NotificationEvent"
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "$ref": "#/components/schemas/NotificationEvent"
+              },
+              "email": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "event",
+              "email"
+            ],
+            "additionalProperties": false
           },
-          "email": {
-            "type": "boolean"
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/NotificationEvent"
+                  }
+                ]
+              },
+              "push": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "event",
+              "push"
+            ],
+            "additionalProperties": false
           }
-        },
-        "required": [
-          "event",
-          "email"
         ]
       },
       "NotificationEvent": {
@@ -10311,6 +10425,67 @@
           "order_cancelled",
           "checkout_finished",
           "ticket_replied"
+        ]
+      },
+      "PushConfig": {
+        "type": "object",
+        "properties": {
+          "publicKey": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "publicKey"
+        ],
+        "additionalProperties": false
+      },
+      "PushSubscription": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "expirationTime": {
+            "nullable": true,
+            "type": "number"
+          },
+          "keys": {
+            "type": "object",
+            "properties": {
+              "p256dh": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "auth": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "p256dh",
+              "auth"
+            ]
+          }
+        },
+        "required": [
+          "endpoint",
+          "keys"
+        ]
+      },
+      "RemovePushSubscription": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "endpoint"
         ]
       },
       "StoreStatus": {
@@ -11067,6 +11242,7 @@
           "customer.note_unpinned",
           "customer.note_archived",
           "customer.notification_preference_changed",
+          "customer.push_preference_changed",
           "wallet_adjustment.created",
           "wallet_adjustment.reversed",
           "exchange_rate.changed",
@@ -14849,6 +15025,11 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "pushDevices": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               }
             },
             "required": [
@@ -14859,7 +15040,8 @@
               "creditedTotalUsdUnits",
               "openTickets",
               "activeSessions",
-              "reservations"
+              "reservations",
+              "pushDevices"
             ],
             "additionalProperties": false
           },

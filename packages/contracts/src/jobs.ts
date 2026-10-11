@@ -56,6 +56,8 @@ export const QUEUES = {
   reconciliationRun: 'reconciliation.run',
   /** Reads again a run's external checks that were off their range (S13 RN4). */
   reconciliationRecheck: 'reconciliation.recheck',
+  /** Sends one customer notification to the customer's push devices (S15 PD1–PD5). */
+  pushSend: 'push.send',
 } as const;
 
 /**
@@ -165,3 +167,15 @@ export type ReconciliationRunPayload = z.infer<typeof reconciliationRunPayloadSc
 export const reconciliationRecheckPayloadSchema = z.object({ runId: z.uuid() });
 
 export type ReconciliationRecheckPayload = z.infer<typeof reconciliationRecheckPayloadSchema>;
+
+/**
+ * S15 PD1, PD5: queued by `notifyCustomer` with the notification only; a retry names the devices
+ * whose send failed for a transient reason and which retry it is (1, then 2, then dropped).
+ */
+export const pushSendPayloadSchema = z.object({
+  notificationId: z.uuid(),
+  subscriptionIds: z.array(z.uuid()).min(1).optional(),
+  retry: z.int().min(1).max(2).optional(),
+});
+
+export type PushSendPayload = z.infer<typeof pushSendPayloadSchema>;

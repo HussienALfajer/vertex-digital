@@ -1,8 +1,11 @@
-import { customerRateLimits, type Database, newId } from '@vertex-digital/db';
 import { lt, sql } from 'drizzle-orm';
+import type { Database } from './client.js';
+import { newId } from './id.js';
+import { customerRateLimits } from './schema/index.js';
 
 /*
- * Counters that survive a restart (ADR 0008, S01 rule C5), in `customer_rate_limits`: fixed
+ * Counters that survive a restart (ADR 0008, S01 rule C5), in `customer_rate_limits`, for every
+ * API module (here so a module below `auth`, such as `notifications`, can count too): fixed
  * windows per key, `last_request` holding the window's start in milliseconds. Each hit counts,
  * refused or not, so a client hammering a limit stays refused until the window ends.
  */

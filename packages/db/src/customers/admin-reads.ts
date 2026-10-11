@@ -26,6 +26,7 @@ import {
   customers,
   deposits,
   orders,
+  pushSubscriptions,
   supportTickets,
 } from '../schema/index.js';
 
@@ -189,6 +190,7 @@ export interface CustomerProfileFacts {
     openTickets: number;
     activeSessions: number;
     reservations: number;
+    pushDevices: number;
   };
 }
 
@@ -198,7 +200,7 @@ export async function customerProfileFacts(
   customer: { id: string; frozenAt: Date | null; archivedAt: Date | null },
 ): Promise<CustomerProfileFacts> {
   const status = customerStatus(customer);
-  const [[orderFacts], [depositFacts], [tickets], [sessions], balances, [change]] =
+  const [[orderFacts], [depositFacts], [tickets], [sessions], [devices], balances, [change]] =
     await Promise.all([
       db
         .select({
@@ -230,6 +232,17 @@ export async function customerProfileFacts(
         .from(customerSessions)
         .where(
           and(eq(customerSessions.userId, customer.id), gt(customerSessions.expiresAt, sql`now()`)),
+        ),
+      // S15: the devices the worker would send to (PD2), whatever their VAPID key.
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(pushSubscriptions)
+        .innerJoin(customerSessions, eq(customerSessions.id, pushSubscriptions.sessionId))
+        .where(
+          and(
+            eq(pushSubscriptions.customerId, customer.id),
+            gt(customerSessions.expiresAt, sql`now()`),
+          ),
         ),
       customerWalletBalances(db, [customer.id]),
       status === 'active'
@@ -264,6 +277,7 @@ export async function customerProfileFacts(
       openTickets: tickets?.open ?? 0,
       activeSessions: sessions?.active ?? 0,
       reservations: orderFacts?.reservations ?? 0,
+      pushDevices: devices?.count ?? 0,
     },
   };
 }

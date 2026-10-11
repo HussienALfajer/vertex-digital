@@ -147,4 +147,17 @@ describe('API environment', () => {
       'ADMIN_AUTH_SECRET',
     );
   });
+  it('takes a 65-byte VAPID public key; empty or a placeholder leaves push off (S15)', () => {
+    const publicKey = `B${'A'.repeat(86)}`;
+    expect(parseEnv({ DATABASE_URL }).VAPID_PUBLIC_KEY).toBeUndefined();
+    expect(
+      parseEnv({ DATABASE_URL, VAPID_PUBLIC_KEY: 'replace-me' }).VAPID_PUBLIC_KEY,
+    ).toBeUndefined();
+    expect(parseEnv({ DATABASE_URL, VAPID_PUBLIC_KEY: publicKey }).VAPID_PUBLIC_KEY).toBe(
+      publicKey,
+    );
+    expect(() => parseEnv({ DATABASE_URL, VAPID_PUBLIC_KEY: 'A'.repeat(40) })).toThrow(
+      'VAPID_PUBLIC_KEY',
+    );
+  });
 });

@@ -4,9 +4,10 @@ import {
   EMAIL_TEMPLATES,
   NOTIFICATION_EVENTS,
 } from '@vertex-digital/contracts';
-import { isNull } from 'drizzle-orm';
+import { isNull, sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -15,9 +16,10 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { customers } from './auth.js';
+import { customerSessions, customers } from './auth.js';
 import { id, timestamps } from './columns.js';
 
 /*
@@ -88,7 +90,10 @@ export const customerNotifications = pgTable(
   ],
 );
 
-/** The customer's email choice per event (rule NT8); a missing row means on. */
+/**
+ * The customer's email and push choice per event (S05 rule NT8, S15 rule PP1); a missing row
+ * means both on, and a row created by changing one channel takes the default for the other.
+ */
 export const notificationPreferences = pgTable(
   'notification_preferences',
   {
@@ -97,10 +102,48 @@ export const notificationPreferences = pgTable(
       .references(() => customers.id),
     event: notificationEventEnum('event').notNull(),
     email: boolean('email').notNull(),
+    push: boolean('push').notNull().default(true),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
   (table) => [primaryKey({ columns: [table.customerId, table.event] })],
+);
+
+/*
+ * Web push devices (S15 rules PS1–PS8), owned by the api `notifications` module: the API registers
+ * and removes them, the worker sends to them. A device registration, not a business record: it goes
+ * with the session that registered it (the foreign key), when the customer turns push off on the
+ * device, or when the push service says it is gone. `p256dh` and `auth` let a browser decrypt,
+ * not anyone push: never logged all the same.
+ */
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: id(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => customerSessions.id, { onDelete: 'cascade' }),
+    /** An allowed push service URL (rule PS2), checked by the API and again by the worker. */
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    /** The first 16 characters of the VAPID public key it was made with (rule PS7). */
+    vapidKeyId: text('vapid_key_id').notNull(),
+    /** Consecutive transient failures (rule PD5): 20 deletes the row. */
+    failures: integer('failures').notNull().default(0),
+    lastSentAt: timestamp('last_sent_at', { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex('push_subscriptions_endpoint_idx').on(table.endpoint),
+    index('push_subscriptions_customer_id_idx').on(table.customerId),
+    index('push_subscriptions_session_id_idx').on(table.sessionId),
+    check('push_subscriptions_endpoint_length', sql`char_length(${table.endpoint}) <= 1024`),
+    check('push_subscriptions_failures', sql`${table.failures} >= 0`),
+  ],
 );

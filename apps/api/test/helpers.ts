@@ -21,6 +21,7 @@ import {
   newId,
   notificationPreferences,
   playerChecks,
+  pushSubscriptions,
   storeSwitchChanges,
   supportTickets,
 } from '@vertex-digital/db';
@@ -153,6 +154,8 @@ export async function removeAccounts(db: Database, ids: string[]): Promise<void>
   await db.delete(notificationPreferences).where(inArray(notificationPreferences.customerId, ids));
   // S09: the player-check cache is not a record.
   await db.delete(playerChecks).where(inArray(playerChecks.customerId, ids));
+  // S15: push devices are device state, not records.
+  await db.delete(pushSubscriptions).where(inArray(pushSubscriptions.customerId, ids));
   // S12: the sign-in log and the limit overrides are not records.
   await db.delete(customerSignIns).where(inArray(customerSignIns.customerId, ids));
   await db.delete(customerLimits).where(inArray(customerLimits.customerId, ids));
@@ -178,6 +181,7 @@ export async function removeLeftovers(db: Database): Promise<void> {
     .delete(notificationPreferences)
     .where(inArray(notificationPreferences.customerId, leftovers));
   await db.delete(playerChecks).where(inArray(playerChecks.customerId, leftovers));
+  await db.delete(pushSubscriptions).where(inArray(pushSubscriptions.customerId, leftovers));
   await db.delete(customerSignIns).where(inArray(customerSignIns.customerId, leftovers));
   await db.delete(customerLimits).where(inArray(customerLimits.customerId, leftovers));
   await db

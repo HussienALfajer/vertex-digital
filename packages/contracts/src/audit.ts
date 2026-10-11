@@ -338,6 +338,11 @@ export const AUDIT_DETAILS = {
     event: notificationEventSchema,
     email: z.boolean(),
   }),
+  /** S15 PP1: one push choice changed on `/account`. */
+  'customer.push_preference_changed': z.strictObject({
+    event: notificationEventSchema,
+    push: z.boolean(),
+  }),
   /** A wallet adjustment by the admin (S02); the internal reason is the entry's `reason`. */
   'wallet_adjustment.created': z.strictObject({
     ...adjustment,

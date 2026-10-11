@@ -43,7 +43,10 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   usdt_transfers: 'Append-only (S04): what the chain showed, never changed',
   usdt_scan_cursors: "A scanner's position (S04): overwritten each run, safe to move back",
   customer_notifications: 'A delivery record (S05 NT1): only read_at changes, never archived',
-  notification_preferences: "A customer's email choice (S05 NT8): overwritten, never archived",
+  notification_preferences:
+    "A customer's email and push choice (S05 NT8, S15 PP1): overwritten, never archived",
+  push_subscriptions:
+    'A device registration (S15 PS): deleted when its session ends or the push service refuses it, never archived',
   store_switch_changes: 'Append-only (S05): a change is a new row, the newest is the value',
   telegram_links: 'A link history (S05 TG3): ended by unlinked_at, never archived',
   telegram_link_codes: 'Short-lived one-time codes (S05 TG3): used once or expired',

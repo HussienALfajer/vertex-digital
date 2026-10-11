@@ -242,6 +242,18 @@ export const EMAIL_NOTIFICATION_EVENTS = NOTIFICATION_EVENTS.filter(
   (event): event is EmailNotificationEvent => NOTIFICATION_EMAIL_TEMPLATE[event] !== null,
 );
 
+/**
+ * The events that also send a push (S15 rule PD1): every event that has an email, nothing more
+ * (owner, 2026-10-11).
+ */
+export const PUSH_NOTIFICATION_EVENTS = EMAIL_NOTIFICATION_EVENTS;
+
+export type PushNotificationEvent = EmailNotificationEvent;
+
+export function isPushNotificationEvent(event: NotificationEvent): event is PushNotificationEvent {
+  return (PUSH_NOTIFICATION_EVENTS as readonly NotificationEvent[]).includes(event);
+}
+
 const notificationBase = {
   id: z.uuid(),
   readAt: z.iso.datetime().nullable(),
@@ -324,15 +336,30 @@ export const notificationStreamItemSchema = z.object({
 
 export type NotificationStreamItem = z.infer<typeof notificationStreamItemSchema>;
 
-/** The customer's email choice per event (rule NT8): on unless turned off. */
+/**
+ * The customer's choice per event and channel (S05 rule NT8, S15 rule PP1): on unless turned off.
+ * Both channels list every event; `push` matters only for `PUSH_NOTIFICATION_EVENTS`.
+ */
 export const notificationPreferencesSchema = z
-  .object({ email: z.record(notificationEventSchema, z.boolean()) })
+  .object({
+    email: z.record(notificationEventSchema, z.boolean()),
+    push: z.record(notificationEventSchema, z.boolean()),
+  })
   .meta({ id: 'NotificationPreferences' });
 
 export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
 
+/** One channel per change (S15 rule PP1); push only for an event that sends one. */
 export const updateNotificationPreferenceSchema = z
-  .object({ event: notificationEventSchema, email: z.boolean() })
+  .union([
+    z.strictObject({ event: notificationEventSchema, email: z.boolean() }),
+    z.strictObject({
+      event: notificationEventSchema.refine(isPushNotificationEvent, {
+        message: 'This event sends no push',
+      }),
+      push: z.boolean(),
+    }),
+  ])
   .meta({ id: 'UpdateNotificationPreference' });
 
 export type UpdateNotificationPreference = z.infer<typeof updateNotificationPreferenceSchema>;

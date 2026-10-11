@@ -489,6 +489,7 @@ export class CustomersMock {
         ).length,
         activeSessions: row.sessions.length,
         reservations: row.reservations,
+        pushDevices: 0,
       },
       signals: this.signals(row),
       termsVersion: this.accepted.get(row.id)?.terms ?? null,

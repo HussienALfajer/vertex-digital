@@ -28,6 +28,7 @@ import {
   recordAudit,
   type Transaction,
   usdtDeposits,
+  withinLimits,
 } from '@vertex-digital/db';
 import { and, count, desc, eq, ne, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -36,7 +37,7 @@ import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
-import { AuthService, withinLimits } from '../auth/index.js';
+import { AuthService } from '../auth/index.js';
 import { FilesService, type ServedFile } from '../files/index.js';
 import { type CurrentRate, RatesService } from '../rates/index.js';
 import { SettingsService } from '../settings/index.js';
