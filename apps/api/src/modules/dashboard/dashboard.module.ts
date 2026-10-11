@@ -3,6 +3,7 @@ import { DepositsModule } from '../deposits/index.js';
 import { OrdersModule } from '../orders/index.js';
 import { PricingModule } from '../pricing/index.js';
 import { RatesModule } from '../rates/index.js';
+import { ReconciliationModule } from '../reconciliation/index.js';
 import { SettingsModule } from '../settings/index.js';
 import { SuppliersModule } from '../suppliers/index.js';
 import { SupportModule } from '../support/index.js';
@@ -12,7 +13,8 @@ import { DashboardService } from './dashboard.service.js';
 
 /**
  * The panel's home page (S11, F18): a read module above `orders`, `deposits`, `suppliers`,
- * `pricing`, `rates`, `settings`, `support` and `telegram`, reading each through its service. Owns no table.
+ * `pricing`, `rates`, `reconciliation`, `settings`, `support` and
+ * `telegram`, reading each through its service. Owns no table.
  */
 @Module({
   imports: [
@@ -20,6 +22,7 @@ import { DashboardService } from './dashboard.service.js';
     OrdersModule,
     PricingModule,
     RatesModule,
+    ReconciliationModule,
     SettingsModule,
     SuppliersModule,
     SupportModule,

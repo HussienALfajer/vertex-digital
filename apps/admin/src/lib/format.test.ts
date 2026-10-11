@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, formatSince } from './format';
+import { formatDay, formatDuration, formatSince } from './format';
 
 describe('formatSince', () => {
   const now = new Date('2026-10-08T12:00:00.000Z');
@@ -23,5 +23,14 @@ describe('formatDuration (S08 rule T1)', () => {
     expect(formatDuration(210_000)).toBe('3.5 د');
     expect(formatDuration(60_000)).toBe('1 د');
     expect(formatDuration(7_200_000)).toBe('2 س');
+  });
+});
+
+describe('formatDay (S13)', () => {
+  it('shows a stored calendar day as that day, with Latin digits', () => {
+    const shown = formatDay('2026-10-10');
+    expect(shown).toContain('10');
+    expect(shown).toContain('2026');
+    expect(formatDay('2026-10-01')).not.toContain('30');
   });
 });

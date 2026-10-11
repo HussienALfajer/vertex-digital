@@ -17,6 +17,7 @@ import {
   explainResultSchema,
   type ReconciliationRunQuery,
   type ReconciliationSettings,
+  reconciliationCountsSchema,
   reconciliationOverviewSchema,
   reconciliationResultSchema,
   reconciliationRunDetailSchema,
@@ -54,6 +55,18 @@ export class ReconciliationAdminController {
   })
   overview() {
     return this.reconciliation.overview();
+  }
+
+  @Get('counts')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: reconciliationCountsSchema })
+  @ApiOkResponse({
+    description: 'The navigation badge',
+    standardSchema: reconciliationCountsSchema,
+  })
+  counts() {
+    return this.reconciliation.counts();
   }
 
   @Get('runs')

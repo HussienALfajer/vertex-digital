@@ -27,10 +27,12 @@ Spec: `docs/specs/S13-reconciliation-and-reports.md` (F20, F22, A11; ADRs 0003, 
 - [x] Wiring checklist, docs
 - [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 9a250e8dfb25), reviewer (one blocking finding fixed: a manual run in its recheck at 00:30 lost the night; the nightly job now sends itself again after the recheck), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
 
-## PR 3 — Admin screens and E2E
-- [ ] Admin `features/reconciliation/`: status card, open mismatches with explain dialog, money places, movement and correction dialogs, count dialog, movements tab with reverse, history tab and run page, settings drawer; navigation "المطابقة" with badge
-- [ ] Admin `features/reports/`: tabs R1–R6, period presets, breakdown selector, tables with totals, chart on R1, Excel export; navigation "التقارير"
-- [ ] Dashboard attention kinds `reconciliation_open`, `reconciliation_missing`, `sham_cash_count_due` (contracts, API, panel); i18n keys
-- [ ] E2E flows and RTL screenshots (admin light and dark)
-- [ ] Wiring checklist, docs (`docs/ROADMAP.md` S13 done, `wiring.md` patterns)
-- [x] Checks (lint, typecheck, test, build, e2e, drift: passed and recorded on 9a250e8dfb25), reviewer (one blocking finding fixed: a manual run in its recheck at 00:30 lost the night; the nightly job now sends itself again after the recheck), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge
+## PR 3 — Admin screens and E2E (`feat/s13-admin-screens`)
+- [x] Admin `features/reconciliation/`: status card, open mismatches with explain dialog, money places, movement and correction dialogs, count dialog, movements tab with reverse, history tab and run page, settings drawer; navigation "المطابقة" with badge (`GET /api/admin/reconciliation/counts`)
+- [x] Admin `features/reports/`: tabs R1–R6, period presets, breakdown selector, tables with totals, lines on R1, Excel export; navigation "التقارير"
+- [x] Dashboard attention kinds `reconciliation_open`, `reconciliation_missing`, `sham_cash_count_due` (contracts, API with its test, panel); i18n keys
+- [x] Contracts: `parseUsd`/`formatAmountInput` sub-cent option (T3), `formatUsdCents` (RP9), with tests
+- [x] Bridge: build, OpenAPI export, admin client
+- [x] E2E flows and RTL screenshots (admin light and dark): `reconciliation.spec.ts`, `reports.spec.ts` on `e2e/reconciliation-mock.ts`
+- [x] Wiring checklist, docs (`docs/ROADMAP.md` S13 done, `wiring.md` patterns, folder `CLAUDE.md` files, spec "Settled in implementation")
+- [x] Checks (lint, typecheck, build, e2e passed; tests passed but one db test that fails on main too against the local test database), reviewer (two blocking findings fixed: the empty state after a manual run or count, now `lastRun` on the overview; an outside row opening a self-transfer marked as an opening), owner acceptance waived by the owner (open the PR at once, 2026-10-11), PR with auto-merge

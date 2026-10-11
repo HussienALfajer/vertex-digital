@@ -11,6 +11,7 @@ import {
   formatSignedUsd,
   formatSyp,
   formatUsd,
+  formatUsdCents,
   formatUsdtAmount,
   heldUnits,
   impliedRate,
@@ -215,6 +216,16 @@ describe('formatUsd', () => {
   });
 });
 
+describe('formatUsdCents (S13 rule RP9)', () => {
+  it('rounds half-up to the cent, away from zero', () => {
+    expect(formatUsdCents(1_234_565_000)).toBe('$1,234.57');
+    expect(formatUsdCents(1_234_564_999)).toBe('$1,234.56');
+    expect(formatUsdCents(-5_000)).toBe('-$0.01');
+    expect(formatUsdCents(4_999)).toBe('$0.00');
+    expect(formatUsdCents(25_000_000)).toBe('$25.00');
+  });
+});
+
 describe('parseUsd', () => {
   it('reads dollars with up to 2 decimals, exactly', () => {
     expect(parseUsd('25')).toBe(25_000_000);
@@ -228,6 +239,13 @@ describe('parseUsd', () => {
     for (const text of ['', '.5', '1.', '1.234', '-1', '1,000', '1e3', '١٢', '1000000000']) {
       expect(parseUsd(text)).toBeNull();
     }
+  });
+
+  it('reads up to 6 decimals for a supplier balance (S13 rule T3)', () => {
+    expect(parseUsd('199.345678', { subCent: true })).toBe(199_345_678);
+    expect(parseUsd('0.5', { subCent: true })).toBe(500_000);
+    expect(parseUsd('1.2345678', { subCent: true })).toBeNull();
+    expect(parseUsd('1.234')).toBeNull();
   });
 });
 
@@ -329,6 +347,14 @@ describe('formatAmountInput (S03)', () => {
     expect(() => formatAmountInput('SYP', 200_050)).toThrow(RangeError);
     expect(() => formatAmountInput('USD', 25_000_001)).toThrow(RangeError);
     expect(() => formatAmountInput('USD', -1)).toThrow(RangeError);
+  });
+
+  it('writes a sub-cent dollar amount when asked, the inverse of the sub-cent parse (S13)', () => {
+    expect(formatAmountInput('USD', 199_345_600, { subCent: true })).toBe('199.3456');
+    expect(formatAmountInput('USD', 25_000_000, { subCent: true })).toBe('25');
+    expect(
+      parseUsd(formatAmountInput('USD', 1_000_001, { subCent: true }), { subCent: true }),
+    ).toBe(1_000_001);
   });
 });
 

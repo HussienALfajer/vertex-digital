@@ -22,6 +22,7 @@ import { CatalogMock } from './catalog-mock';
 import { CustomersMock } from './customers-mock';
 import { quietDashboard } from './dashboard-mock';
 import { OrdersMock } from './orders-mock';
+import { ReconciliationMock } from './reconciliation-mock';
 import { SuppliersMock } from './suppliers-mock';
 
 /*
@@ -301,6 +302,8 @@ export class AdminApi {
       this.auditEntries = [entry, ...this.auditEntries];
     },
   );
+  /** S13: the books, the treasury and the reports; no run yet by default. */
+  readonly reconciliation = new ReconciliationMock(() => this.reauthenticationRequired);
   /** S11: the home page's read; null answers a quiet day with the current rate. */
   dashboard: Dashboard | null = null;
   /**
@@ -892,6 +895,26 @@ export class AdminApi {
     }
     if (key === 'GET /api/admin/dashboard') {
       return json(200, this.dashboard ?? quietDashboard(this.rates[0] ?? null));
+    }
+    if (
+      path.startsWith('/api/admin/reconciliation') ||
+      path.startsWith('/api/admin/treasury') ||
+      path.startsWith('/api/admin/reports')
+    ) {
+      if (request.method() === 'GET' && path.endsWith('/export')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          body: Buffer.from('PK'),
+        });
+      }
+      const answer = this.reconciliation.answer(
+        request.method(),
+        url,
+        body,
+        request.headers()['idempotency-key'] ?? null,
+      );
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
     }
     if (path.startsWith('/api/admin/orders')) {
       this.orders.idempotencyKey = request.headers()['idempotency-key'] ?? null;

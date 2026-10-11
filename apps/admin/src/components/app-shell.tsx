@@ -19,6 +19,7 @@ import {
 import {
   ArrowDownToLineIcon,
   ArrowLeftRightIcon,
+  ChartColumnIcon,
   ChevronDownIcon,
   CoinsIcon,
   ContactRoundIcon,
@@ -32,6 +33,7 @@ import {
   PercentIcon,
   RadioTowerIcon,
   ScaleIcon,
+  ScanSearchIcon,
   ScrollTextIcon,
   SendIcon,
   SettingsIcon,
@@ -48,6 +50,7 @@ import { depositCountsQuery } from '../features/deposits/deposits.queries';
 import { orderCountsQuery } from '../features/orders/orders.queries';
 import { openReviewCountQuery } from '../features/pricing/pricing.queries';
 import { StaleRateBanner } from '../features/rates/stale-rate-banner';
+import { reconciliationCountsQuery } from '../features/reconciliation/reconciliation.queries';
 import { SwitchesBanner } from '../features/settings/switches-banner';
 import { supportOpenCountQuery } from '../features/support/support.queries';
 import { type AdminSession, authClient, leaveSession, useSession } from '../lib/auth';
@@ -73,6 +76,8 @@ interface NavItem {
     | 'nav.depositSettings'
     | 'nav.switches'
     | 'nav.telegram'
+    | 'nav.reconciliation'
+    | 'nav.reports'
     | 'nav.audit'
     | 'nav.testCustomers'
     | 'nav.account';
@@ -102,6 +107,8 @@ const navItems: NavItem[] = [
   { to: '/suppliers', label: 'nav.suppliers', icon: TruckIcon },
   { to: '/pricing', label: 'nav.pricing', icon: PercentIcon, except: '/pricing/reviews' },
   { to: '/pricing/reviews', label: 'nav.priceReviews', icon: ScaleIcon },
+  { to: '/reconciliation', label: 'nav.reconciliation', icon: ScanSearchIcon },
+  { to: '/reports', label: 'nav.reports', icon: ChartColumnIcon },
   { to: '/rates', label: 'nav.rates', icon: ArrowLeftRightIcon },
   { to: '/settings/deposits', label: 'nav.depositSettings', icon: SettingsIcon },
   { to: '/settings/switches', label: 'nav.switches', icon: ToggleRightIcon },
@@ -182,6 +189,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             {to === '/deposits/transfers' && <TransfersBadge />}
             {to === '/pricing/reviews' && <ReviewsBadge />}
             {to === '/support' && <SupportBadge />}
+            {to === '/reconciliation' && <ReconciliationBadge />}
           </Link>
         ))}
       </nav>
@@ -249,6 +257,23 @@ function OrdersBadge() {
       aria-label={t('nav.ordersBadge', { needsReview, manualWaiting })}
     >
       {total}
+    </Badge>
+  );
+}
+
+/** S13: the open mismatches, read every minute in the background; always red (rule RN7). */
+function ReconciliationBadge() {
+  const { t } = useTranslation();
+  const counts = useQuery(reconciliationCountsQuery);
+  const open = counts.data?.open ?? 0;
+  if (open === 0) return null;
+  return (
+    <Badge
+      tone="danger"
+      className="ms-auto tabular-nums"
+      aria-label={t('nav.reconciliationBadge', { open })}
+    >
+      {open}
     </Badge>
   );
 }

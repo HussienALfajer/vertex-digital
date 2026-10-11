@@ -12,5 +12,6 @@ import { ReconciliationService } from './reconciliation.service.js';
   imports: [AdminModule, RatesModule],
   controllers: [ReconciliationAdminController],
   providers: [ReconciliationService],
+  exports: [ReconciliationService],
 })
 export class ReconciliationModule {}
