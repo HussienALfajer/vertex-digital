@@ -60,7 +60,7 @@ server {
     }
 
     # Delivery proofs of a manual fulfil (S11 rule MF2): images up to 10 MB.
-    location ~* ^/api/admin/orders/[0-9a-f-]{36}/proof/?$ {
+    location ~* "^/api/admin/orders/[0-9a-f-]{36}/proof/?$" {
         client_max_body_size 11m;
         client_body_timeout 60s;
         proxy_pass http://127.0.0.1:3060;
@@ -68,7 +68,7 @@ server {
     }
 
     # Support tickets and replies (S12 TK11): up to 3 images of 5 MB, 16 MB a request.
-    location ~* ^/api/admin/support/tickets(?:/[0-9a-f-]{36}/messages)?/?$ {
+    location ~* "^/api/admin/support/tickets(?:/[0-9a-f-]{36}/messages)?/?$" {
         client_max_body_size 16m;
         client_body_timeout 60s;
         proxy_pass http://127.0.0.1:3060;
@@ -94,7 +94,7 @@ server {
 
     # Catalog images (S06): the panel's previews come from its own host (CSP `img-src 'self'`).
     # The API serves catalog images only on this route; nginx sends the file after its check.
-    location ~* ^/api/catalog/images/[0-9a-f-]{36}$ {
+    location ~* "^/api/catalog/images/[0-9a-f-]{36}$" {
         proxy_pass http://127.0.0.1:3060;
         include snippets/vertexdigital-proxy.conf;
     }
