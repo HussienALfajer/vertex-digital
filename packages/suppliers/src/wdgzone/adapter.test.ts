@@ -14,7 +14,7 @@ import { WDG_SIGNATURE_HEADER, WdgzoneAdapter } from './adapter.js';
 
 const API_KEY = 'wdg_live_test_key_for_fixtures_only';
 const NOW = new Date('2026-08-07T12:31:00Z');
-const KEY = '0190f1c2-7a3b-7c4d-8e5f-0123456789ab';
+const ATTEMPT_ID = '0190f1c2-7a3b-7c4d-8e5f-0123456789ab';
 
 const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
@@ -36,7 +36,7 @@ const adapter = (options: { callbackUrl?: string; timeoutMs?: number } = {}) =>
   });
 
 const order = (overrides: Partial<Parameters<WdgzoneAdapter['placeOrder']>[0]> = {}) => ({
-  idempotencyKey: KEY,
+  idempotencyKey: ATTEMPT_ID,
   offerId: '235203',
   quantity: 1,
   fields: { player_id: '5000000001' },
@@ -243,7 +243,7 @@ describe('WdgzoneAdapter placeOrder', () => {
     });
     const sent = server.requests.at(-1);
     expect(sent).toMatchObject({ method: 'POST', path: '/api/v1/products/8451/purchase' });
-    expect(sent?.headers['x-idempotency-key']).toBe(KEY);
+    expect(sent?.headers['x-idempotency-key']).toBe(ATTEMPT_ID);
     expect(sent?.headers['x-api-key']).toBe(API_KEY);
     expect(JSON.parse(sent?.body ?? '')).toEqual({
       quantity: 1,
@@ -267,7 +267,7 @@ describe('WdgzoneAdapter placeOrder', () => {
     expect(again).toEqual(first);
     expect(
       server.requests.slice(-2).map((request) => request.headers['x-idempotency-key']),
-    ).toEqual([KEY, KEY]);
+    ).toEqual([ATTEMPT_ID, ATTEMPT_ID]);
   });
 
   it('sends no player for a code and no callback without a public URL', async () => {
@@ -368,7 +368,7 @@ describe('WdgzoneAdapter getOrder', () => {
 
   it('polls the delivery by WDG’s order id', async () => {
     server.reply({ status: 202, body: { success: true, data: { status: 'processing' } } });
-    expect(await adapter().getOrder(KEY, placed)).toEqual({
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toEqual({
       status: 'pending',
       supplierOrderId: '1024',
     });
@@ -380,7 +380,7 @@ describe('WdgzoneAdapter getOrder', () => {
     server.reply({
       body: { success: true, data: { delivery_items: ['TEST-CODE-0001', 'TEST-CODE-0002'] } },
     });
-    expect(await adapter().getOrder(KEY, placed)).toEqual({
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toEqual({
       status: 'delivered',
       supplierOrderId: '1024',
       quantity: 2,
@@ -390,14 +390,16 @@ describe('WdgzoneAdapter getOrder', () => {
 
   it('maps 410 as failed and refunded', async () => {
     server.reply({ status: 410, body: { success: false, error: { code: 'ORDER_REFUNDED' } } });
-    expect(await adapter().getOrder(KEY, placed)).toEqual({
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toEqual({
       status: 'failed_definitive',
       supplierOrderId: '1024',
       supplierCode: 'ORDER_REFUNDED',
       reason: 'Failed and refunded by WDGZone',
     });
     server.reply({ status: 410, body: '' });
-    expect(await adapter().getOrder(KEY, placed)).toMatchObject({ supplierCode: 'ORDER_FAILED' });
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toMatchObject({
+      supplierCode: 'ORDER_FAILED',
+    });
   });
 
   it.each([
@@ -411,7 +413,7 @@ describe('WdgzoneAdapter getOrder', () => {
     ['other units', { status: 200, body: { success: true, data: { quantity: 1 } } }],
   ])('maps %s as unknown', async (_, reply) => {
     server.reply(reply);
-    expect(await adapter().getOrder(KEY, placed)).toMatchObject({
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toMatchObject({
       status: 'unknown',
       supplierOrderId: '1024',
     });
@@ -420,7 +422,7 @@ describe('WdgzoneAdapter getOrder', () => {
   it('asks nothing without WDG’s order id', async () => {
     const before = server.requests.length;
     for (const known of [undefined, { quantity: 1 }, { supplierOrderId: '1/../2', quantity: 1 }]) {
-      expect(await adapter().getOrder(KEY, known)).toMatchObject({ status: 'unknown' });
+      expect(await adapter().getOrder(ATTEMPT_ID, known)).toMatchObject({ status: 'unknown' });
     }
     expect(server.requests.length).toBe(before);
   });
