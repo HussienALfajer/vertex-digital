@@ -4,7 +4,7 @@ Production runs on the owner's VPS (`ssh vertex`), shared with other sites, foll
 
 Server work needs the owner's explicit approval in the current conversation (AGENTS.md). Deploys happen once per phase, in their own session (`docs/workflow.md`).
 
-Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`); the health timer is on. Sentry (Q15) is not configured yet: add its DSN to `shared/.env` when decided. The Telegram bot (S05, ADR 0019) is set up as "Telegram admin bot" below says.
+Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`); Phases 1–3 deployed together on 2026-10-12 (commit `6230b05`); the health timer is on. Sentry (Q15) is configured (`SENTRY_DSN` in `shared/.env`). Customer registration stays closed until the pilot. The Telegram bot (S05, ADR 0019) is set up as "Telegram admin bot" below says.
 
 ## Layout
 

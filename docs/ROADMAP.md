@@ -24,7 +24,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] S04 USDT deposits: F06 alone; spec `docs/specs/S04-usdt-deposits.md` (three PRs: contracts, db and api; chain readers and worker jobs; store and admin screens)
 - [x] S05 Alerts and control: F07 Telegram admin bot · F27 Customer notifications (email and notification center; deposit events) · F26 Store switches and emergency stop (registration closed by default); spec `docs/specs/S05-alerts-and-control.md` (four PRs: F26 switches, F27 notifications, the Telegram bot foundation, then the deposit cards, decisions from Telegram, the review reminder and the daily summary)
 - Automations A01, A09, A10, A12, A13, A16, A17: each is specified and built inside the spec it belongs to, not as a separate item
-- [ ] Production deploy of Phase 1 (registration closed: test customers only)
+- [x] Production deploy of Phase 1 (registration closed: test customers only): deployed on 2026-10-12 in one release with Phases 2 and 3 (commit `6230b05`, all of `main`)
 
 ## Phase 2 — Selling
 - [x] S06 Catalog and pricing: F08 Catalog · F10 Pricing engine; spec `docs/specs/S06-catalog-and-pricing.md` (two PRs: contracts, db and the `catalog` and `pricing` API modules, then the admin `/catalog`, game and `/pricing` screens with E2E)
@@ -34,7 +34,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] S09 Storefront and purchase: F12 Store home and game pages · F13 Purchase flow and live order tracking · F15 Smart search; spec `docs/specs/S09-storefront-and-purchase.md` (three PRs: contracts, db and api with player checks and reservations; worker jobs; store pages, buy box, search and admin additions with E2E)
 - [x] S10 Convenience: F14 Saved player IDs and one-tap recharge · F16 Cart, gift top-up and shareable receipt; spec `docs/specs/S10-convenience.md` (two PRs: contracts, db and api with checkouts, saved IDs, share links and images; store cart, buy box additions, share pages and admin additions with E2E)
 - Automations A02–A08, A14, A15 (order notifications through F27): inside the spec they belong to
-- [ ] Production deploy of Phase 2 (registration still closed)
+- [x] Production deploy of Phase 2 (registration still closed): deployed on 2026-10-12 in one release with Phases 1 and 3 (commit `6230b05`)
 
 ## Phase 3 — Operations
 - [x] S11 Live operations: F17 Live orders room · F18 Admin dashboard; spec `docs/specs/S11-live-operations.md` (two PRs: contracts, db, api with the admin stream and the dashboard read, worker guards; the admin dashboard home page, `/orders/live` with its side sheet, the reroute and manual fulfil dialogs with E2E)
@@ -42,7 +42,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] S13 Reconciliation and reports: F20 Daily reconciliation (A11) · F22 Reports; spec `docs/specs/S13-reconciliation-and-reports.md` (three PRs: contracts, db with the cost of goods sign fix and api; worker jobs and chain balance reads; the admin `/reconciliation` and `/reports` screens with E2E)
 - [x] S14 Content and live activity: F21 Content · F25 Live activity; spec `docs/specs/S14-content-and-live-activity.md` (two PRs, owner 2026-10-11: contracts, db and the api `content` module; the `RichText` renderer, the admin `/content` screens and the store announcement bar, banners, activity cards, `/faq` and the four pages, with E2E). The page texts stay unpublished until Q10 is answered before the pilot
 - [x] S15 PWA and web push: F24 alone; spec `docs/specs/S15-pwa-and-web-push.md` (two PRs, owner 2026-10-11: contracts, db, the api push routes and the worker's `push.send`; the store manifest, `/sw.js`, `/offline`, install, the permission card, the device switch and the "الهاتف" preferences column, the admin profile's device count, with E2E). Pushes reaching phones in Syria are checked by the owner after the Phase 3 deploy
-- [ ] Production deploy of Phase 3
+- [x] Production deploy of Phase 3: deployed on 2026-10-12 in one release with Phases 1 and 2 (commit `6230b05`, all of `main`); the server was rebooted afterwards and every site's health check passed. The owner still checks pushes on real phones in Syria (S15)
 
 ## Pilot — open quiet launch
 - [ ] Launch checklist done (below)
@@ -59,7 +59,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 
 ## Launch checklist
 - [ ] Off-server backups configured and a restore tested
-- [ ] Domains and TLS for both hosts
+- [x] Domains and TLS for both hosts (checked 2026-10-12)
 - [ ] Production secrets on the server only; supplier keys entered in the panel
 - [ ] SPF, DKIM and DMARC for the sending mailbox
 - [ ] VPS IP registered in supplier allowlists; one small live order per supplier approved by the owner
