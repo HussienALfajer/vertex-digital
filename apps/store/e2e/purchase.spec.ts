@@ -308,7 +308,8 @@ test.describe('buy box', () => {
     await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
     await idField(page).fill('51234567');
     await buyBox(page).getByRole('button', { name: p.continue }).click();
-    await buyBox(page).getByRole('slider').focus();
+    // The slide takes the focus from the button it replaced, in a dialog on phones too.
+    await expect(buyBox(page).getByRole('slider')).toBeFocused();
     await page.keyboard.press('End');
     // The lost answer first: switching the mock before the request leaves would answer it 429.
     const retry = buyBox(page).getByRole('button', { name: p.retry });
@@ -318,7 +319,7 @@ test.describe('buy box', () => {
     await retry.click();
     await expect(buyBox(page).getByText(ar.errors.RATE_LIMITED)).toBeVisible();
     api.on('POST /api/orders', 200, order(p60)).on(`GET /api/orders/${ORDER_ID}`, 200, order(p60));
-    await buyBox(page).getByRole('slider').focus();
+    await expect(buyBox(page).getByRole('slider')).toBeFocused();
     await page.keyboard.press('End');
     await expect(page).toHaveURL(`/orders/${ORDER_ID}`);
     const keys = api.requests
