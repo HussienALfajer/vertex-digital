@@ -43,7 +43,7 @@ Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`)
 
 | Host | Path | Goes to |
 |---|---|---|
-| store | `/_next/static/*` | disk, cached a year |
+| store | `/_next/static/*` | disk, cached a year; 100 a second per address (burst 400, `vdstatic`) instead of the server-wide `general` zone |
 | store | `/api/admin/*` (any case), `/api/docs`, `/_internal/*` (any case, S09: the store's cache refresh, for the worker on 127.0.0.1 only) | 404 |
 | store | `/api/auth/sign-in/email` | API, 30 a minute per address (burst 10) |
 | store | `/api/deposits/{sham-cash,usdt}`, `/api/deposits/:id/txid` | API, 10 a minute per address (burst 5) |
@@ -55,7 +55,7 @@ Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`)
 | store | `/api/webhooks/telegram` (any case) | API from Telegram's webhook ranges only (149.154.160.0/20, 91.108.4.0/22), bodies up to 64 KB |
 | store | `/api/*` | API |
 | store | everything else | store (Next.js) |
-| admin | `/assets/*` | disk, cached a year |
+| admin | `/assets/*` | disk, cached a year; 100 a second per address (burst 400, `vdstatic`): the panel preloads 100+ chunks on its first load |
 | admin | `/api/admin/auth/{sign-in/email,two-factor/verify-*}` | API, 30 a minute per address (burst 10) |
 | admin | `/api/admin/*` | API |
 | admin | `/api/altcha/challenge` | API (the admin sign-in's proof of work), same limit |
