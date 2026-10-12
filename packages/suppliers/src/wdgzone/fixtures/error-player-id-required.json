@@ -1,0 +1,5 @@
+{
+  "request_id": "req_000000000000000000000009",
+  "success": false,
+  "error": { "code": "PLAYER_ID_REQUIRED", "message": "player_id is required for this product" }
+}

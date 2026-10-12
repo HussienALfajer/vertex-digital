@@ -377,6 +377,8 @@ for (const theme of ['dark', 'light'] as const) {
     });
     await page.goto(`/games/pubg-mobile?pack=${p660.id}`);
     await idField(page).fill('51234567');
+    // The check settles first, as in the flow above: a press while it runs can be lost.
+    await expect(buyBox(page).getByText(p.playerValid)).toBeVisible();
     await expect(buyBox(page).getByRole('button', { name: p.reserve })).toBeVisible();
     await screenshot(page, testInfo, `buy-box-short-${theme}`);
     await buyBox(page).getByRole('button', { name: p.reserve }).click();

@@ -36,6 +36,7 @@ import {
   SupplierError,
   type SupplierMoney,
   type SupplierOffer,
+  WdgzoneAdapter,
 } from '@vertex-digital/suppliers';
 import {
   and,
@@ -83,7 +84,7 @@ const offerKey = (name: string) => `w-${run}-${name}`;
 const SECRET = `sk-${run}-do-not-leak-0123456789`;
 const LINKS = { admin: 'http://127.0.0.1:5173' };
 
-const ids = { fake: '', manual: '', wdgzone: '' };
+const ids = { fake: '', manual: '', wdgzone: '', shop2topup: '' };
 
 interface Sent {
   queue: string;
@@ -150,9 +151,7 @@ const payload = (extra: { runId?: string; supplierId?: string } = {}) => ({
 beforeAll(async () => {
   const rows = await db.select({ id: suppliers.id, code: suppliers.code }).from(suppliers);
   for (const row of rows) {
-    if (row.code === 'fake' || row.code === 'manual' || row.code === 'wdgzone') {
-      ids[row.code] = row.id;
-    }
+    ids[row.code] = row.id;
   }
 });
 
@@ -781,18 +780,23 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
     isolated(async (tx) => {
       await tx.insert(supplierCredentials).values({
         id: newId(),
-        supplierId: ids.wdgzone,
+        supplierId: ids.shop2topup,
         ciphertext: Buffer.from([0]),
         hints: {},
         adminId: newId(),
       });
       const [run] = await tx
         .insert(supplierSyncRuns)
-        .values({ id: newId(), supplierId: ids.wdgzone, trigger: 'admin' })
+        .values({ id: newId(), supplierId: ids.shop2topup, trigger: 'admin' })
         .returning();
       expect(
         await sync.sync(
-          { supplierId: ids.wdgzone, supplierCode: 'wdgzone', trigger: 'admin', runId: run?.id },
+          {
+            supplierId: ids.shop2topup,
+            supplierCode: 'shop2topup',
+            trigger: 'admin',
+            runId: run?.id,
+          },
           tx,
         ),
       ).toMatchObject({ status: 'failed', errorCode: 'SUPPLIER_UNAVAILABLE' });
@@ -1120,6 +1124,8 @@ describe('the supplier registry (rules SP1, SP2)', () => {
       });
       await expect(real.connect(tx, { id: ids.wdgzone, code: 'wdgzone' })).rejects.toThrow();
       expect(await real.get('wdgzone', {})).toBeNull();
+      expect(await real.get('wdgzone', { apiKey: SECRET })).toBeInstanceOf(WdgzoneAdapter);
+      expect(await real.get('shop2topup', { apiKey: SECRET })).toBeNull();
       expect(await real.get('manual', {})).toBeNull();
       await rm(env.FAKE_SUPPLIER_STATE_FILE, { force: true });
       expect((await (await real.get('fake', {}))?.listOffers())?.length).toBe(10);

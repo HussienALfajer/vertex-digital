@@ -837,6 +837,12 @@ describe('polling, the hard limit and the sweep (rules F3, F6, F7)', () => {
       await tx.execute(
         sql`update orders set updated_at = now() where status in ('paid', 'failed') and id <> ${lost.id}`,
       );
+      // The same for open attempts other runs committed: the sweep takes the oldest 100 first.
+      await tx.execute(
+        sql`update fulfilment_attempts set sent_at = now(), next_poll_at = now() + interval '1 hour'
+            where status in ('sending', 'pending', 'unknown')
+              and id not in (${sendingId}, ${pending?.id as string})`,
+      );
       sent.length = 0;
       const result = await sweep.sweep(now, tx);
       expect(result.resent).toContain(sendingId);
@@ -1006,6 +1012,43 @@ describe('supplier webhooks (rule F5)', () => {
       expect(await webhooks.process(broken, tx)).toBe('malformed');
       const digest = await stored(tx, 'not json', `malformed:${unique()}`);
       expect(await webhooks.process(digest, tx)).toBe('malformed');
+    });
+  });
+
+  it('finds the attempt by the supplier order id when the webhook has no key (WDGZone)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      script('fake-uc-60', 'pending');
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [attempt] = await attemptsOf(tx, order.id);
+      const byOrderId = (supplierOrderId: string) =>
+        JSON.stringify({ eventId: `evt-${unique()}`, supplierOrderId, status: 'delivered' });
+
+      const other = await stored(tx, byOrderId(`fake-${unique()}`));
+      expect(await webhooks.process(other, tx)).toBe('unknown_key');
+      // Two attempts with one supplier order id: neither is picked.
+      const second = await buy(tx, item);
+      await fulfil.fulfil(second.id, tx);
+      const [twin] = await attemptsOf(tx, second.id);
+      const twinOrderId = twin?.supplierOrderId as string;
+      const setTwin = (supplierOrderId: string) =>
+        tx
+          .update(fulfilmentAttempts)
+          .set({ supplierOrderId })
+          .where(eq(fulfilmentAttempts.id, twin?.id as string));
+      await setTwin(attempt?.supplierOrderId as string);
+      const ambiguous = await stored(tx, byOrderId(attempt?.supplierOrderId as string));
+      expect(await webhooks.process(ambiguous, tx)).toBe('unknown_key');
+      await setTwin(twinOrderId);
+
+      const event = await stored(tx, byOrderId(attempt?.supplierOrderId as string));
+      expect(await webhooks.process(event, tx)).toBe('applied');
+      expect(await eventRow(tx, event)).toMatchObject({
+        result: 'applied',
+        attemptId: attempt?.id,
+      });
+      expect(await orderOf(tx, order.id)).toMatchObject({ status: 'delivered' });
     });
   });
 

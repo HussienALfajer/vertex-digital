@@ -11,7 +11,7 @@ Goods come from wholesale suppliers with different APIs, prices, features and re
 | Code | Role | API | Notes |
 |---|---|---|---|
 | `shop2topup` | Primary | REST, base `https://shop2topup.com/api/endpoints/v1`, `Authorization: Bearer <keyId>.<secret>` | Player validation with in-game name; HMAC-signed webhooks; idempotent `order_id`; automatic refunds on their side; price protection; IP allowlist (register the VPS outbound IP) |
-| `wdgzone` | Backup, cheaper on some packs | REST, base `https://wdgzone.tech/api/v1`, `X-API-Key` header, `X-Idempotency-Key` | HMAC-signed webhooks; automatic refunds; no player validation |
+| `wdgzone` | Backup, cheaper on some packs | REST, base `https://wdgzone.tech/api/v1`, `X-API-Key` header, `X-Idempotency-Key` | HMAC-signed webhooks (secret derived from the API key; they name WDG's order id, not our key); polling by WDG's order id; automatic refunds; no player validation; 60 requests a minute (`docs/suppliers/wdgzone.md`) |
 | `manual` | Staff fulfil by hand | — | Orders wait in the live orders room (F17) for an operator to deliver and confirm |
 | `fake` | Development, tests, E2E | In-process | Scripted outcomes: delivered, slow, pending then webhook, definitive failure, unknown/timeout, wrong signature |
 

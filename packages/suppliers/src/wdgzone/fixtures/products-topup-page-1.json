@@ -1,0 +1,64 @@
+{
+  "request_id": "req_000000000000000000000002",
+  "success": true,
+  "data": [
+    {
+      "id": 235203,
+      "name": "60 UC",
+      "description": null,
+      "category_id": 14693,
+      "category": "Auto",
+      "brand": "PUBG Mobile",
+      "type": "topup",
+      "price": 0.881,
+      "original_price": 0.881,
+      "discount_percent": 0,
+      "currency": "USD",
+      "stock": 999999,
+      "available": true,
+      "requires_player_id": true,
+      "required_fields": [{ "key": "player_id", "label": "Player ID", "type": "text" }],
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=PUBG%20Mobile"
+    },
+    {
+      "id": 264294,
+      "name": "Golden Spin",
+      "description": null,
+      "category_id": 14845,
+      "category": "8 Ball Pool",
+      "brand": "8 Ball Pool",
+      "type": "topup",
+      "price": 0.751,
+      "original_price": 0.751,
+      "discount_percent": 0,
+      "currency": "USD",
+      "stock": 999999,
+      "available": true,
+      "requires_player_id": true,
+      "required_fields": [{ "key": "user_id", "label": "Unique ID", "type": "text" }],
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=8%20Ball%20Pool"
+    },
+    {
+      "id": 264322,
+      "name": "65 Tokens",
+      "description": null,
+      "category_id": 14847,
+      "category": "Ace Racer",
+      "brand": "Ace Racer",
+      "type": "topup",
+      "price": 1.023,
+      "original_price": 1.023,
+      "discount_percent": 0,
+      "currency": "USD",
+      "stock": 999999,
+      "available": true,
+      "requires_player_id": true,
+      "required_fields": [
+        { "key": "user_id", "label": "User ID", "type": "text" },
+        { "key": "server_id", "label": "Server ID", "type": "text" }
+      ],
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=Ace%20Racer"
+    }
+  ],
+  "pagination": { "page": 1, "limit": 3, "total": 4, "total_pages": 2 }
+}

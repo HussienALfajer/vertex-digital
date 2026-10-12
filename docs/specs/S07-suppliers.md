@@ -15,7 +15,7 @@ S06 built the catalog and the price math, but nothing has a cost, so everything 
   - The ADR 0003 rule refusing a display step that adds more than 2% to the cheapest available product (S03, S06 deferred it here).
   - The `fake` adapter's catalog scripting and a dev CLI for it; the supplier policy settings page.
 - Out (later or never):
-  - The `shop2topup` and `wdgzone` adapters: one PR each through `/supplier-adapter` when the owner shares their documentation (Q12, ADR 0021). Their credential fields below are provisional and may be renamed by that PR.
+  - The `shop2topup` and `wdgzone` adapters: one PR each through `/supplier-adapter` when the owner shares their documentation (Q12, ADR 0021). Their credential fields below are provisional and may be renamed by that PR. The `wdgzone` adapter is built (`docs/suppliers/wdgzone.md`).
   - Orders, routing an order, fulfilment attempts, the supplier webhook endpoint and its events, polling, cost of goods: S08 (F11). S08 records its order calls into `supplier_calls`, so they count toward health.
   - Player validation, its cache and quota display: S09 (F13), through the same adapters and `supplier_calls`.
   - Showing service status and measured delivery times on the store: S09 (F12), from the health and availability built here.
@@ -42,7 +42,7 @@ New tables are owned by the api `suppliers` module (stored prices and reviews by
 
 ### Contracts (`suppliers.ts`, new; `pricing.ts`, `catalog.ts`, `settings.ts`, `telegram.ts` extended)
 - `SUPPLIER_CODES` (`shop2topup`, `wdgzone`, `manual`, `fake`); `SUPPLIER_HEALTH_STATES` (`healthy`, `degraded`, `down`); `SUPPLIER_CALL_OPERATIONS` (`list_offers`, `get_balance`, `validate_player`, `place_order`, `get_order`); `SUPPLIER_CALL_RESULTS` (`ok`, `refused`, `error`): `ok` answered, `refused` a definitive refusal (the supplier is working), `error` no trustworthy answer (timeout, connection, 5xx, unreadable reply, `unknown` order outcome).
-- `SUPPLIER_CREDENTIAL_FIELDS`: per code, the named secret fields the panel asks for. Provisional: `shop2topup` `apiKey` (the `<keyId>.<secret>` token, ADR 0005) and `webhookSecret`; `wdgzone` `apiKey` and `webhookSecret`; `fake` `webhookSecret`; `manual` none.
+- `SUPPLIER_CREDENTIAL_FIELDS`: per code, the named secret fields the panel asks for. Provisional: `shop2topup` `apiKey` (the `<keyId>.<secret>` token, ADR 0005) and `webhookSecret`; `wdgzone` `apiKey` (its PR: WDG derives the webhook secret from the key); `fake` `webhookSecret`; `manual` none.
 - `SYNC_RUN_TRIGGERS` (`schedule`, `admin`); `SYNC_RUN_STATUSES` (`running`, `succeeded`, `failed`); `PRICE_CHANGE_CAUSES` (`cost_sync`, `route_change`, `rule_change`, `review_accepted`, `margin_adjusted`); `PRICE_REVIEW_STATUSES` (`open`, `accepted`, `margin_adjusted`, `paused`, `superseded`).
 - Pure functions (100% coverage): `supplierHealth(window, policy, previous)` (H1–H5), `routeUsability(route, facts, now, policy)` (RT4), `priceBasis(routes)` (P1), `needsReview(basisCostThen, costNow, thresholdBp)` (P3), `productAvailability` extended with routes and price (P6), `displayStepAllowed(stepUnits, rate, cheapestPriceUnits)` (P9). Schemas for every request and response below.
 - `STORE_SWITCHES` gains `shop2topup_paused`, `wdgzone_paused`, `manual_paused` (default `false`), as S05 planned.
@@ -98,7 +98,7 @@ New tables are owned by the api `suppliers` module (stored prices and reviews by
 ## States and rules
 
 ### Suppliers and credentials
-- SP1. A supplier is **configured** when it needs no credentials (`manual`) or has a credentials row, and **available** when the running app has its adapter: `manual` always; `fake` only when `SUPPLIER_FAKE_ENABLED=true`, which the api and worker refuse to start with in production; `shop2topup` and `wdgzone` once their adapter PRs land. An unavailable supplier shows "المحوّل غير جاهز" and its routes are unusable.
+- SP1. A supplier is **configured** when it needs no credentials (`manual`) or has a credentials row, and **available** when the running app has its adapter: `manual` always; `fake` only when `SUPPLIER_FAKE_ENABLED=true`, which the api and worker refuse to start with in production; `shop2topup` once its adapter PR lands; `wdgzone` since its adapter PR. An unavailable supplier shows "المحوّل غير جاهز" and its routes are unusable.
 - SP2. Setting credentials writes a new `supplier_credentials` row (all fields of that supplier, each 1–500 characters, trimmed) and enqueues an `admin` sync, which is the connection test: its run reports success or the error code. Credentials are never returned, logged, put in jobs, audit details or Sentry; the panel shows the hints only ("…a1b2").
 - SP3. The supplier switch (`<code>_paused`) uses the S05 write path (re-authentication, history, `switch_changed` Telegram notice). A paused supplier is still synced and its balance read; its routes are unusable (RT4).
 

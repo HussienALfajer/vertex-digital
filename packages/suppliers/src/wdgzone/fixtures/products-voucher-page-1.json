@@ -1,0 +1,38 @@
+{
+  "request_id": "req_000000000000000000000004",
+  "success": true,
+  "data": [
+    {
+      "id": 8451,
+      "name": "Steam Wallet 10 USD",
+      "category_id": 124,
+      "category": "USA / USD",
+      "type": "voucher",
+      "price": 10.475,
+      "currency": "USD",
+      "stock": 48,
+      "available": true,
+      "requires_player_id": false,
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=Steam%20Wallet"
+    },
+    {
+      "id": 306788,
+      "name": "7 Days to Die",
+      "description": null,
+      "category_id": 4011391,
+      "category": "7 Days to Die",
+      "brand": "Steam Game Keys",
+      "type": "voucher",
+      "price": 17.975,
+      "original_price": 17.975,
+      "discount_percent": 0,
+      "currency": "USD",
+      "stock": 143,
+      "available": false,
+      "requires_player_id": false,
+      "required_fields": [],
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=Steam%20Game%20Keys"
+    }
+  ],
+  "pagination": { "page": 1, "limit": 2, "total": 2, "total_pages": 1 }
+}

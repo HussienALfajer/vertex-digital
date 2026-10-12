@@ -485,9 +485,19 @@ describe('outcomes (rules F1, F2, M2)', () => {
     const attemptId = await send(order, item);
     const codes = ['AAAA-BBBB-CCCC-0001', 'AAAA-BBBB-CCCC-0002'];
 
-    // Codes missing for a code product: kept open, polled (edge case 10).
-    const missing = await apply(attemptId, { status: 'delivered', quantity: 2, codes: ['X'] });
-    expect(missing.attempt).toMatchObject({ status: 'unknown', failureReason: 'codes_missing' });
+    // Codes missing for a code product: kept open, polled (edge case 10), with the supplier's
+    // order id, by which a webhook that carries only it finds the attempt (WDGZone).
+    const missing = await apply(attemptId, {
+      status: 'delivered',
+      quantity: 2,
+      codes: ['X'],
+      supplierOrderId: `s-${attemptId}`,
+    });
+    expect(missing.attempt).toMatchObject({
+      status: 'unknown',
+      failureReason: 'codes_missing',
+      supplierOrderId: `s-${attemptId}`,
+    });
 
     const result = await apply(attemptId, { status: 'delivered', quantity: 2, codes }, 'poll');
     expect(result.order).toMatchObject({ status: 'failed', deliveredQuantity: 2 });

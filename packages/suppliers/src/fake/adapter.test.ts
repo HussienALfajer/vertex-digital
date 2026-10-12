@@ -170,15 +170,18 @@ describe('fake supplier', () => {
 
     const webhook = await fake.completePending(request.idempotencyKey);
     expect(fake.verifyWebhook(webhook)).toBe(true);
+    const { supplierOrderId } = placed as { supplierOrderId: string };
     expect(fake.parseWebhook(webhook)).toEqual({
       eventId: expect.stringMatching(/^evt-/),
       idempotencyKey: request.idempotencyKey,
-      outcome: {
-        status: 'delivered',
-        supplierOrderId: (placed as { supplierOrderId: string }).supplierOrderId,
-        quantity: 1,
-      },
+      supplierOrderId,
+      outcome: { status: 'delivered', supplierOrderId, quantity: 1 },
     });
+    // A body without the key names its order by the supplier's id alone (as WDGZone's do).
+    const { idempotencyKey: _, ...byOrderId } = JSON.parse(webhook.rawBody);
+    expect(
+      fake.parseWebhook({ headers: {}, rawBody: JSON.stringify(byOrderId) }),
+    ).not.toHaveProperty('idempotencyKey');
     expect(await fake.getOrder(request.idempotencyKey)).toMatchObject({ status: 'delivered' });
     await expect(fake.completePending(request.idempotencyKey)).rejects.toThrow();
   });

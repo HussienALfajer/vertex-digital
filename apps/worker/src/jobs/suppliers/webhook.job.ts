@@ -70,17 +70,25 @@ export class SupplierWebhookJob implements OnApplicationBootstrap {
 
     const parsed = await this.parse(db, event.event, event.supplierCode);
     if (parsed === 'malformed') return this.finish(db, eventId, 'malformed', null);
-    const [attempt] = z.uuid().safeParse(parsed.event.idempotencyKey).success
+    const { idempotencyKey, supplierOrderId } = parsed.event;
+    // By the key the attempt was sent with, or by the supplier's own order id when its webhooks
+    // carry only that (WDGZone). Two attempts with one supplier order id answer nothing.
+    const match =
+      idempotencyKey !== undefined
+        ? z.uuid().safeParse(idempotencyKey).success
+          ? eq(fulfilmentAttempts.id, idempotencyKey)
+          : null
+        : supplierOrderId
+          ? eq(fulfilmentAttempts.supplierOrderId, supplierOrderId)
+          : null;
+    const matches = match
       ? await db
           .select({ id: fulfilmentAttempts.id })
           .from(fulfilmentAttempts)
-          .where(
-            and(
-              eq(fulfilmentAttempts.id, parsed.event.idempotencyKey),
-              eq(fulfilmentAttempts.supplierId, supplierId),
-            ),
-          )
+          .where(and(match, eq(fulfilmentAttempts.supplierId, supplierId)))
+          .limit(2)
       : [];
+    const attempt = matches.length === 1 ? matches[0] : undefined;
     // Another environment's or an old order: kept, nothing changes (edge case 19).
     if (!attempt) return this.finish(db, eventId, 'unknown_key', null);
 

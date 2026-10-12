@@ -507,6 +507,14 @@ export const fulfilmentAttempts = pgTable(
     index('fulfilment_attempts_status_next_poll_at_idx').on(table.status, table.nextPollAt),
     index('fulfilment_attempts_route_id_idx').on(table.routeId),
     index('fulfilment_attempts_supplier_id_idx').on(table.supplierId),
+    /**
+     * A supplier's own order id, by which webhooks that carry only it find the attempt (F5). Not
+     * unique: that is the supplier's promise, so a repeat is refused by the webhook job, never by
+     * the outcome's write.
+     */
+    index('fulfilment_attempts_supplier_order_id_idx')
+      .on(table.supplierId, table.supplierOrderId)
+      .where(sql`${table.supplierOrderId} is not null`),
     index('fulfilment_attempts_offer_id_idx').on(table.offerId),
     /** S13 R4: failure rates by resolution time. */
     index('fulfilment_attempts_resolved_at_idx').on(table.resolvedAt),
