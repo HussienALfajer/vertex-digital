@@ -1,0 +1,5 @@
+{
+  "request_id": "req_000000000000000000000001",
+  "success": true,
+  "data": { "account_id": 1000001, "name": "Test Reseller", "balance": 125.75, "currency": "USD" }
+}

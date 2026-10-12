@@ -1,0 +1,1 @@
+CREATE INDEX "fulfilment_attempts_supplier_order_id_idx" ON "fulfilment_attempts" USING btree ("supplier_id","supplier_order_id") WHERE "fulfilment_attempts"."supplier_order_id" is not null;

@@ -1,0 +1,8 @@
+{
+  "success": false,
+  "error": {
+    "code": "OUT_OF_STOCK",
+    "message": "Requested quantity is not available",
+    "available_stock": 0
+  }
+}

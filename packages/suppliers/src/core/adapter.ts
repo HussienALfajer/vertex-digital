@@ -88,17 +88,30 @@ export type SupplierOutcome =
 
 export type SupplierOutcomeStatus = SupplierOutcome['status'];
 
+/**
+ * What the caller knows of an order it placed, for suppliers that look orders up by their own id
+ * and do not report the units (WDGZone): the supplier's order id from an earlier answer, and the
+ * units asked.
+ */
+export interface PlacedOrder {
+  supplierOrderId?: string;
+  quantity: number;
+}
+
 /** A webhook as the API received it: the raw body is what the signature covers. */
 export interface WebhookRequest {
   headers: Record<string, string | undefined>;
   rawBody: string;
 }
 
+/** Names its order by the idempotency key, the supplier's order id, or both. */
 export interface SupplierWebhookEvent {
   /** Unique per supplier: stored once against replays (ADR 0005). */
   eventId: string;
-  /** The idempotency key the order was placed with. */
-  idempotencyKey: string;
+  /** The idempotency key the order was placed with, when the supplier sends it back. */
+  idempotencyKey?: string;
+  /** The supplier's own order id, for suppliers whose webhooks carry only that (WDGZone). */
+  supplierOrderId?: string;
   outcome: SupplierOutcome;
 }
 
@@ -111,8 +124,11 @@ export interface SupplierAdapter {
   validatePlayer(input: { offerId: string; fields: OrderFields }): Promise<PlayerValidation>;
   /** Never throws: every failure is classified into the outcome. */
   placeOrder(request: PlaceOrderRequest): Promise<SupplierOutcome>;
-  /** The current result of an order placed with `idempotencyKey`; never throws. */
-  getOrder(idempotencyKey: string): Promise<SupplierOutcome>;
+  /**
+   * The current result of an order placed with `idempotencyKey`; never throws. `placed` is what
+   * the caller kept of it, for suppliers that need their own order id to find it.
+   */
+  getOrder(idempotencyKey: string, placed?: PlacedOrder): Promise<SupplierOutcome>;
   /** HMAC with a timing-safe compare and a timestamp tolerance. */
   verifyWebhook(request: WebhookRequest, now?: Date): boolean;
   /** Parses a verified webhook; throws a definitive `SupplierError` on a malformed one. */

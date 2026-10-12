@@ -132,7 +132,10 @@ export async function askSupplier(
             quantity: attempt.quantity,
             fields,
           })
-        : adapter.getOrder(attempt.id),
+        : adapter.getOrder(attempt.id, {
+            ...(attempt.supplierOrderId !== null && { supplierOrderId: attempt.supplierOrderId }),
+            quantity: attempt.quantity,
+          }),
     callResult,
   );
   return attemptOutcome(answer.ok ? answer.value : outcomeOfOrderError(answer.error), secrets);

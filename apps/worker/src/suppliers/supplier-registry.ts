@@ -7,7 +7,11 @@ import {
   supplierKey,
   type Transaction,
 } from '@vertex-digital/db';
-import { FakeSupplierAdapter, type SupplierAdapter } from '@vertex-digital/suppliers';
+import {
+  FakeSupplierAdapter,
+  type SupplierAdapter,
+  WdgzoneAdapter,
+} from '@vertex-digital/suppliers';
 import { desc, eq } from 'drizzle-orm';
 import { ENV, type Env } from '../core/config/env.js';
 import { keepFakeOrder, readFakeSupplierState } from './fake-state-file.js';
@@ -27,8 +31,15 @@ export interface ConnectedSupplier {
 export class SupplierRegistry {
   private readonly key: Buffer;
 
+  /** Where suppliers post order results (S08 rule F4): only a public HTTPS store has one. */
+  private readonly webhookUrl: (code: SupplierCode) => string | undefined;
+
   constructor(@Inject(ENV) private readonly env: Env) {
     this.key = supplierKey(env.SUPPLIER_KEYS_SECRET);
+    this.webhookUrl = (code) =>
+      env.STORE_URL.startsWith('https://')
+        ? new URL(`/api/webhooks/suppliers/${code}`, env.STORE_URL).href
+        : undefined;
   }
 
   get fakeEnabled(): boolean {
@@ -41,6 +52,14 @@ export class SupplierRegistry {
     credentials: Record<string, string>,
   ): Promise<SupplierAdapter | null> {
     if (!supplierAvailable(code, { fakeEnabled: this.fakeEnabled })) return null;
+    if (code === 'wdgzone') {
+      if (!credentials.apiKey) return null;
+      const callbackUrl = this.webhookUrl(code);
+      return new WdgzoneAdapter({
+        apiKey: credentials.apiKey,
+        ...(callbackUrl && { callbackUrl }),
+      });
+    }
     if (code !== 'fake') return null;
     const file = this.env.FAKE_SUPPLIER_STATE_FILE;
     return new FakeSupplierAdapter({

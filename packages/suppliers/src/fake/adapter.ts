@@ -175,7 +175,8 @@ const OFFERS: readonly FakeOffer[] = [
 
 const webhookBodySchema = z.object({
   eventId: z.string().min(1),
-  idempotencyKey: z.string().min(1),
+  /** Left out, the order is named by `supplierOrderId` alone, as WDGZone's webhooks do. */
+  idempotencyKey: z.string().min(1).optional(),
   supplierOrderId: z.string().min(1),
   status: z.enum(['delivered', 'failed']),
   /** The units delivered (S08). */
@@ -432,7 +433,12 @@ export class FakeSupplierAdapter implements SupplierAdapter {
             supplierOrderId: parsed.supplierOrderId,
             reason: 'Failed by the fake supplier',
           };
-    return { eventId: parsed.eventId, idempotencyKey: parsed.idempotencyKey, outcome };
+    return {
+      eventId: parsed.eventId,
+      ...(parsed.idempotencyKey !== undefined && { idempotencyKey: parsed.idempotencyKey }),
+      supplierOrderId: parsed.supplierOrderId,
+      outcome,
+    };
   }
 
   /** The catalog with the scripted costs, stock and removals. */

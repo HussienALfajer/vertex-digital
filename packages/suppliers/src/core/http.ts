@@ -25,6 +25,15 @@ export interface SupplierRequest<T> {
    */
   errorCode?: (body: unknown) => string | undefined;
   definitiveCodes?: string[];
+  /** Overrides the client's timeout for this request (a purchase may take longer). */
+  timeoutMs?: number;
+}
+
+/** A successful reply with its status and headers, for suppliers that answer through them. */
+export interface SupplierReply<T> {
+  status: number;
+  headers: Headers;
+  data: T;
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -40,6 +49,11 @@ export class SupplierHttp {
   }
 
   async request<T>(request: SupplierRequest<T>): Promise<T> {
+    return (await this.send(request)).data;
+  }
+
+  /** As `request`, with the reply's status and headers (polling by status, rate-limit headers). */
+  async send<T>(request: SupplierRequest<T>): Promise<SupplierReply<T>> {
     let response: Response;
     try {
       response = await this.fetchFn(new URL(request.path, this.options.baseUrl), {
@@ -51,7 +65,9 @@ export class SupplierHttp {
           ...request.headers,
         },
         body: request.body === undefined ? undefined : JSON.stringify(request.body),
-        signal: AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+        signal: AbortSignal.timeout(
+          request.timeoutMs ?? this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        ),
       });
     } catch (cause) {
       const timedOut = cause instanceof DOMException && cause.name === 'TimeoutError';
@@ -93,6 +109,6 @@ export class SupplierHttp {
         cause: parsed.error,
       });
     }
-    return parsed.data;
+    return { status: response.status, headers: response.headers, data: parsed.data };
   }
 }

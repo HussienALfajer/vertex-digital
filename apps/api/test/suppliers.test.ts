@@ -323,14 +323,14 @@ describe('access', () => {
 });
 
 describe('suppliers (rules SP1–SP3)', () => {
-  it('lists the four suppliers: adapters missing for SHOP2TOPUP and WDGZone', async () => {
+  it('lists the four suppliers: the adapter missing for SHOP2TOPUP', async () => {
     const list = await json<{ code: string; available: boolean; configured: boolean }[]>(
       await get('/api/admin/suppliers'),
       200,
     );
     expect(list.map((item) => [item.code, item.available])).toEqual([
       ['shop2topup', false],
-      ['wdgzone', false],
+      ['wdgzone', true],
       ['manual', true],
       ['fake', true],
     ]);

@@ -43,12 +43,13 @@ export type SupplierCallOperation = (typeof SUPPLIER_CALL_OPERATIONS)[number];
 export type SupplierCallResult = (typeof SUPPLIER_CALL_RESULTS)[number];
 
 /**
- * The secret fields the panel asks for, per supplier (rule SP2). Provisional for `shop2topup` and
- * `wdgzone`: their adapter PRs may rename them (Q12).
+ * The secret fields the panel asks for, per supplier (rule SP2). Provisional for `shop2topup`: its
+ * adapter PR may rename them (Q12). WDGZone signs its webhooks with a secret derived from the API
+ * key, so the key is its only field (docs/suppliers/wdgzone.md).
  */
 export const SUPPLIER_CREDENTIAL_FIELDS: Record<SupplierCode, readonly string[]> = {
   shop2topup: ['apiKey', 'webhookSecret'],
-  wdgzone: ['apiKey', 'webhookSecret'],
+  wdgzone: ['apiKey'],
   manual: [],
   fake: ['webhookSecret'],
 };
@@ -57,7 +58,7 @@ export const SUPPLIER_CREDENTIAL_FIELDS: Record<SupplierCode, readonly string[]>
  * Suppliers whose adapter this build has (rule SP1). `manual` needs none; `fake` counts only where
  * `SUPPLIER_FAKE_ENABLED=true`. Each real adapter's PR adds its code here.
  */
-const ADAPTERS_READY: readonly SupplierCode[] = ['manual', 'fake'];
+const ADAPTERS_READY: readonly SupplierCode[] = ['wdgzone', 'manual', 'fake'];
 
 /** Rule SP1: the running app has this supplier's adapter. */
 export function supplierAvailable(code: SupplierCode, options: { fakeEnabled: boolean }): boolean {

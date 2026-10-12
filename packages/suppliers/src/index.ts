@@ -8,7 +8,12 @@ export {
   verifyHmacSignature,
   WEBHOOK_TOLERANCE_SECONDS,
 } from './core/hmac.js';
-export { SupplierHttp, type SupplierHttpOptions, type SupplierRequest } from './core/http.js';
+export {
+  SupplierHttp,
+  type SupplierHttpOptions,
+  type SupplierReply,
+  type SupplierRequest,
+} from './core/http.js';
 export {
   FAKE_SIGNATURE_HEADER,
   FAKE_SUPPLIER_CODE,
@@ -21,3 +26,10 @@ export {
   fakeOrderScriptSchema,
   fakeSupplierStateSchema,
 } from './fake/adapter.js';
+export {
+  WDG_SIGNATURE_HEADER,
+  WDGZONE_BASE_URL,
+  WDGZONE_SUPPLIER_CODE,
+  WdgzoneAdapter,
+  type WdgzoneAdapterOptions,
+} from './wdgzone/adapter.js';

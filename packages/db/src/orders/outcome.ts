@@ -135,10 +135,13 @@ export async function applyOutcome(
   if (outcome.status === 'delivered') {
     const { quantity, codes = [] } = outcome;
     const units = Number.isSafeInteger(quantity) && quantity >= 1 && quantity <= attempt.quantity;
+    // The supplier's order id is kept: a supplier whose webhooks carry only it (WDGZone) still
+    // finds the attempt when it reports the result later.
+    const kept = { supplierOrderId: received.supplierOrderId ?? null };
     if (!units) {
-      outcome = { status: 'unknown', reason: 'quantity_invalid' };
+      outcome = { status: 'unknown', reason: 'quantity_invalid', ...kept };
     } else if (order.kind === 'code' ? codes.length !== quantity : codes.length > 0) {
-      outcome = { status: 'unknown', reason: 'codes_missing' };
+      outcome = { status: 'unknown', reason: 'codes_missing', ...kept };
     }
   }
 

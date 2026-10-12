@@ -1,0 +1,5 @@
+{
+  "request_id": "req_000000000000000000000009",
+  "success": false,
+  "error": { "code": "UNAUTHORIZED", "message": "Missing or invalid X-API-Key" }
+}

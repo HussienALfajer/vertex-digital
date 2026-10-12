@@ -54,7 +54,7 @@ describe('suppliers (rule SP1)', () => {
     expect(supplierAvailable('fake', { fakeEnabled: true })).toBe(true);
     expect(supplierAvailable('fake', { fakeEnabled: false })).toBe(false);
     expect(supplierAvailable('shop2topup', { fakeEnabled: true })).toBe(false);
-    expect(supplierAvailable('wdgzone', { fakeEnabled: true })).toBe(false);
+    expect(supplierAvailable('wdgzone', { fakeEnabled: false })).toBe(true);
   });
 
   it('list offers except the manual supplier', () => {
@@ -64,6 +64,7 @@ describe('suppliers (rule SP1)', () => {
   it('ask for credentials except the manual supplier', () => {
     expect(SUPPLIER_CREDENTIAL_FIELDS.manual).toEqual([]);
     expect(SUPPLIER_CREDENTIAL_FIELDS.fake).toEqual(['webhookSecret']);
+    expect(SUPPLIER_CREDENTIAL_FIELDS.wdgzone).toEqual(['apiKey']);
   });
 
   it('take a low-balance threshold of whole cents up to $100,000', () => {

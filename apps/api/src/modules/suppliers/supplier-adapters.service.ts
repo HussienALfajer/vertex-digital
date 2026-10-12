@@ -22,6 +22,7 @@ import {
   type FakeSupplierState,
   fakeSupplierStateSchema,
   type SupplierAdapter,
+  WdgzoneAdapter,
 } from '@vertex-digital/suppliers';
 import { desc, eq } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -69,6 +70,10 @@ export class SupplierAdaptersService {
       .limit(1);
     if (!row) return null;
     const credentials = decryptCredentials(this.key, supplier.id, row.ciphertext);
+    // The API only verifies and reads webhooks: no callback URL is needed here.
+    if (supplier.code === 'wdgzone') {
+      return credentials.apiKey ? new WdgzoneAdapter({ apiKey: credentials.apiKey }) : null;
+    }
     if (supplier.code !== 'fake') return null;
     return new FakeSupplierAdapter({
       webhookSecret: credentials.webhookSecret ?? '',

@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "order_id": 1024,
+    "status": "completed",
+    "delivery_items": ["TEST-CODE-0001"],
+    "total": 10.475
+  }
+}

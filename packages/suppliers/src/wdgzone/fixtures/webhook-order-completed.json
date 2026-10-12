@@ -1,0 +1,15 @@
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "event": "order.completed",
+  "created_at": "2026-08-07T12:30:00Z",
+  "data": {
+    "order_id": 1024,
+    "product_id": 8451,
+    "quantity": 1,
+    "total": 10.475,
+    "currency": "USD",
+    "status": "COMPLETED",
+    "delivery_items": ["TEST-CODE-0001"],
+    "refunded": false
+  }
+}
