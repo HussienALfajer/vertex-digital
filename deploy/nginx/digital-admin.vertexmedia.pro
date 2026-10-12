@@ -121,6 +121,7 @@ server {
     # --- Static files ----------------------------------------------------------------------
     # Hashed build assets never change: cache them for a year.
     location /assets/ {
+        limit_req zone=vdstatic burst=400 nodelay;
         try_files $uri =404;
         include snippets/vertexdigital-admin-headers.conf;
         add_header Cache-Control "public, max-age=31536000, immutable" always;

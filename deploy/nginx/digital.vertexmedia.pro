@@ -192,6 +192,7 @@ server {
     # --- Store -----------------------------------------------------------------------------
     # Hashed build assets never change: served from disk, cached for a year.
     location /_next/static/ {
+        limit_req zone=vdstatic burst=400 nodelay;
         alias /srv/digital.vertexmedia.pro/current/apps/store/.next/static/;
         try_files $uri =404;
         include snippets/vertexdigital-store-headers.conf;
