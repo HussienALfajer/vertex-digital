@@ -16,6 +16,7 @@ The admin panel at `digital-admin.vertexmedia.pro`: React 19 + Vite SPA, TanStac
 - Server state in TanStack Query; query keys start with the module name. API calls through `api` and `call()`, typed from `apps/api/openapi.json` (`src/lib/api/schema.gen.ts`, generated: never edit). After an API change: `pnpm --filter @vertex-digital/api openapi:export`, then `pnpm --filter @vertex-digital/admin api:generate` (CI fails when either is stale). Admin auth goes through `authClient` (`/api/admin/auth`).
 - Forms validate with the schema from `@vertex-digital/contracts` the API uses.
 - The panel's host serves only `/api/admin/*`, the ALTCHA challenge and the catalog image previews (`/api/catalog/images/*`, S06) (nginx): never call a customer route from here.
+- Route files are eager (only their component is split off): what they import besides the page component (search parsers, tab lists) lives in a light module such as `<module>-search.ts`, never in a page module, which would pull the page and its dialogs into the entry. `vite.config.ts` bundles everything the entry imports statically into one `app` chunk.
 - One admin, full access (ADR 0016): no permission checks in the UI; the API enforces access.
 - The inline theme script in `index.html` has its hash in the CSP (`deploy/nginx/vertexdigital-admin-csp.conf`); `src/csp.test.ts` fails until both match.
 
