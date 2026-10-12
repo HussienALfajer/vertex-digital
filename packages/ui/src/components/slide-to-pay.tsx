@@ -5,6 +5,7 @@ import {
   type ComponentProps,
   type KeyboardEvent,
   type PointerEvent,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -55,6 +56,12 @@ interface SlideToPayProps extends Omit<ComponentProps<'div'>, 'children' | 'onCh
   /** Called once when the slide confirms; remount the component (`key`) to slide again. */
   onConfirm: () => void;
   disabled?: boolean;
+  /**
+   * Focus the handle when it mounts: for a slide that replaces the control that had focus (the
+   * buy box's "متابعة", "إعادة المحاولة"), so focus is not lost to the page, which a dialog would
+   * otherwise pull back to its popup a frame later, after a key press may already be on its way.
+   */
+  autoFocus?: boolean;
 }
 
 /**
@@ -68,6 +75,7 @@ function SlideToPay({
   valueText = (percent) => `${percent}%`,
   onConfirm,
   disabled = false,
+  autoFocus = false,
   className,
   ...props
 }: SlideToPayProps) {
@@ -79,6 +87,13 @@ function SlideToPay({
   const [dragging, setDragging] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const locked = disabled || confirmed;
+
+  // A layout effect runs in the same commit that removed the focused control, before the dialog's
+  // focus check (a microtask) sees focus on the page.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, on mount.
+  useLayoutEffect(() => {
+    if (autoFocus && !locked) handle.current?.focus();
+  }, []);
 
   function travel(): number {
     const width = track.current?.clientWidth ?? 0;
