@@ -118,7 +118,7 @@ server {
     }
 
     # Code reveals (S08 rule C2), on top of the API's per-customer counter.
-    location ~* ^/api/orders/[0-9a-f-]{36}/codes/[0-9a-f-]{36}/reveal/?$ {
+    location ~* "^/api/orders/[0-9a-f-]{36}/codes/[0-9a-f-]{36}/reveal/?$" {
         limit_req zone=vdreveal burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;
@@ -138,7 +138,7 @@ server {
 
     # Deposit creation (S03, S04) and USDT TXIDs (S04 rule U8): a tight limit on top of the API's
     # per-customer counters.
-    location ~* ^/api/deposits/(?:sham-cash|usdt|[0-9a-f-]{36}/txid)/?$ {
+    location ~* "^/api/deposits/(?:sham-cash|usdt|[0-9a-f-]{36}/txid)/?$" {
         limit_req zone=vddeposit burst=5 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3060;
@@ -146,7 +146,7 @@ server {
     }
 
     # Receipt uploads (S03 rule SC8): images up to 5 MB, the only large bodies the store takes.
-    location ~* ^/api/deposits/[0-9a-f-]{36}/receipt/?$ {
+    location ~* "^/api/deposits/[0-9a-f-]{36}/receipt/?$" {
         client_max_body_size 6m;
         client_body_timeout 60s;
         limit_req zone=vdupload burst=5 nodelay;
@@ -156,7 +156,7 @@ server {
     }
 
     # Support tickets and messages (S12 TK11): up to 3 images of 5 MB, 16 MB a request.
-    location ~* ^/api/support/tickets(?:/[0-9a-f-]{36}/messages)?/?$ {
+    location ~* "^/api/support/tickets(?:/[0-9a-f-]{36}/messages)?/?$" {
         client_max_body_size 16m;
         client_body_timeout 60s;
         limit_req zone=vdticket burst=5 nodelay;
