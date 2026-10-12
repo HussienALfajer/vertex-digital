@@ -693,6 +693,7 @@ export function BuyBox({
               label={t(mode === 'reserve' ? 'purchase.slideReserve' : 'purchase.slidePay')}
               valueText={(percent) => t('purchase.slideValue', { percent })}
               disabled={stopped || frozen}
+              autoFocus
               onConfirm={() => void send(order)}
             />
           )
