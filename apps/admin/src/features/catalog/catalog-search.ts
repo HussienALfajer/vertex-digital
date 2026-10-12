@@ -16,6 +16,14 @@ export interface CatalogSearch {
   q?: string;
 }
 
+/**
+ * The game page's tabs, in order. Here and not in the page so the route's search validation does
+ * not pull the page into the entry bundle.
+ */
+export const GAME_TABS = ['data', 'fields', 'products', 'pricing'] as const;
+
+export type GameTab = (typeof GAME_TABS)[number];
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Keeps only what is valid; anything else in the URL is dropped. */

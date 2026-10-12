@@ -68,6 +68,20 @@ export default defineConfig({
     strictPort: true,
     proxy: { '/api': `http://${apiHost}:${apiPort}` },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          // Everything the entry imports statically (the shell, the router and every route's
+          // search validation) in one chunk. Rolldown's automatic chunking otherwise splits it
+          // into one small chunk per set of importers, and the entry preloads each of them: 117
+          // requests on the first load, which tripped the server's rate limit. Route components
+          // stay in their own lazy chunks. `$initial` captures nothing without a `test`.
+          groups: [{ name: 'app', test: /./, tags: ['$initial'] }],
+        },
+      },
+    },
+  },
   preview: {
     host: '127.0.0.1',
     port: 4173,

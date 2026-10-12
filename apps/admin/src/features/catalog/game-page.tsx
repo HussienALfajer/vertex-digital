@@ -21,13 +21,10 @@ import { errorMessage } from '../../lib/errors';
 import { GamePricing } from '../pricing/game-pricing';
 import { gameQuery, useArchiveGame } from './catalog.queries';
 import { StatusBadge } from './catalog-parts';
+import { GAME_TABS, type GameTab } from './catalog-search';
 import { FieldsTab } from './fields-tab';
 import { GameForm } from './game-form';
 import { ProductsTab } from './products-tab';
-
-export const GAME_TABS = ['data', 'fields', 'products', 'pricing'] as const;
-
-export type GameTab = (typeof GAME_TABS)[number];
 
 /** "/catalog/games/new" (S06 screens): the data tab only, until the game exists. */
 export function NewGamePage({ categoryId }: { categoryId?: string }) {

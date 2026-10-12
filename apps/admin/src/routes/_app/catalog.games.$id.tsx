@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { GAME_TABS, GamePage, type GameTab } from '../../features/catalog/game-page';
+import { GAME_TABS, type GameTab } from '../../features/catalog/catalog-search';
+import { GamePage } from '../../features/catalog/game-page';
 
 /** `?tab=`: the open tab; absent for the data tab. */
 export const Route = createFileRoute('/_app/catalog/games/$id')({
