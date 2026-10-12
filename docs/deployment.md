@@ -195,3 +195,12 @@ ssh vertex "systemctl enable --now vertexdigital-health.timer"
 4. In the panel, `/settings/telegram` → "ربط تيليجرام" (re-authentication), then open the link on the owner's phone and press Start. The page turns to linked; "إرسال رسالة اختبار" checks the whole path.
 
 nginx accepts the webhook only from Telegram's published ranges (`deploy/nginx/digital.vertexmedia.pro`); recheck them at core.telegram.org/bots/webhooks when Telegram announces a change, then re-run `provision.sh`. Rotating the secret: change it in `shared/.env` and reload; the worker registers the new one. A leaked token: revoke it in BotFather (`/revoke`), set the new one and reload.
+
+### Web push (S15, F24)
+1. Generate the VAPID pair once, on any machine with Node (never in the repository, a log or chat):
+   ```bash
+   node -e "const e=require('crypto').createECDH('prime256v1');e.generateKeys();const d=Buffer.alloc(32);e.getPrivateKey().copy(d,32-e.getPrivateKey().length);console.log('VAPID_PUBLIC_KEY='+e.getPublicKey().toString('base64url'));console.log('VAPID_PRIVATE_KEY='+d.toString('base64url'))"
+   ```
+2. In `shared/.env`: `VAPID_PUBLIC_KEY` (read by the API, which serves it to the store, and the worker), `VAPID_PRIVATE_KEY` (the worker only; the API never reads it), `VAPID_SUBJECT=mailto:info@vertexmedia.pro` (defaults to `mailto:` and `EMAIL_FROM`) and `PUSH_TRANSPORT=web-push` (its default in production; `log` is refused there). The worker refuses to start with one key of the pair and not the other. Without both, push stays off: the store shows no push controls and the worker drops push jobs; email and the notification center are unaffected.
+3. `pm2 reload all --update-env`. Then, in the store, signed in as a test customer, turn push on from the preferences ("الهاتف" column) and place a test deposit: the device gets a push. The store's `/sw.js` needs nothing from nginx (the store sends its headers).
+4. Never change the pair without a reason: a new pair drops every device's subscription. Devices re-subscribe on their next signed-in visit; until then the worker skips and deletes the rows made with the old key (S15 PS7). A leaked private key: generate a new pair, set both and reload.
