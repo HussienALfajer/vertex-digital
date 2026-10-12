@@ -1,6 +1,6 @@
 # Vertex Digital — V1 Scope
 
-Status: Approved by the owner on 2026-10-06 (drafted from the brief, revised after the owner's review: code products, partial delivery, validation guard, store switches, customer notifications), and on 2026-10-07 to one admin account without staff or roles (ADR 0016) and to notify customers of wallet adjustments (S02), and on 2026-10-08 to detect USDT transfers automatically besides the TXID (S04, ADR 0018). Changes to this file need the owner's approval.
+Status: Approved by the owner on 2026-10-06 (drafted from the brief, revised after the owner's review: code products, partial delivery, validation guard, store switches, customer notifications), and on 2026-10-07 to one admin account without staff or roles (ADR 0016) and to notify customers of wallet adjustments (S02), and on 2026-10-08 to detect USDT transfers automatically besides the TXID (S04, ADR 0018), and on 2026-10-12 to add purchases from the panel and the supplier catalog browser and import (S16, ADR 0030). Changes to this file need the owner's approval.
 
 ## 1. Business context
 
@@ -119,6 +119,7 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - Supplier connections: SHOP2TOPUP (primary), WDGZone (backup), Manual, Fake (development and tests) (ADR 0005). API keys entered in the admin panel and stored encrypted; balance shown per supplier.
 - Mapping: each store product maps to one or more supplier offers, with priority and per-offer enable switch.
 - Price sync: supplier costs refreshed on a schedule; changes beyond a threshold go to the **price change review queue** (accept new price, adjust margin, pause).
+- **Supplier catalog browser** (S16): the supplier's category tree with images, counts and a state per category; import a category as a new game (paused, mapped, priced) or link it to a game; ignore; new-pack notices; stock with low-stock alerts; the supplier's wallet transactions and order history matched to our orders.
 
 #### F10 — Pricing engine
 - Price = cost of the preferred route + margin rule (per category, game or product: percent and/or fixed, minimum margin), rounded up to whole cents.
@@ -133,6 +134,7 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - **Code delivery:** codes received from the supplier are stored encrypted, shown only to the buying customer on the order page (reveal and copy, each reveal logged), never in emails, push messages, shareable receipts, logs or the Telegram bot; the admin sees them masked and reveals one only with re-authentication and audit.
 - Measured delivery time per product (median and p90 of recent orders).
 - Admin: order list and detail with the full attempt history; refund.
+- **Admin purchases** (S16): walk-in (no customer), on behalf of a customer from their wallet, and gifts or compensation from the owner's funds (owner drawings, daily cap).
 
 #### F12 — Store home and game pages
 - Home: games grid, featured banners (F21), live service status, real anonymized live activity (F25 data).

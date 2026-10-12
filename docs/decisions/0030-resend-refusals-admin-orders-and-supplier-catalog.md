@@ -1,0 +1,21 @@
+# 0030 — Re-send refusals, admin orders from owner drawings, and the supplier catalog import
+
+Status: Accepted · Date: 2026-10-12 · Amends [0003](0003-money-currencies-and-ledger.md) (a new account kind), [0004](0004-orders-and-fulfilment-state-machine.md) (re-send outcomes, orders without a customer), [0021](0021-supplier-sync-price-review-and-health.md) (categories and unsupported offers in the sync), [0027](0027-treasury-movements-reconciliation-and-reports.md) (owner drawings in reports and checks)
+
+## Context
+The WDGZone adapter (PR #74) met three problems. WDG may check balance and stock before it looks up an idempotency key (Q18): a re-send of a bought order's key after the wallet ran out could answer `INSUFFICIENT_BALANCE`, which the engine took as definitive, so the next route would buy the order again. The owner also sells to people who are not store customers, gifts and compensates customers with goods, and buys for customers who ask by phone: the store has no way to place those orders or to book money that is the owner's own. And WDG lists about 9,600 automatic offers under 3,500 categories with images, stock and field definitions, which an offers table cannot turn into games one by one. The owner settled the choices in the S16 interview (2026-10-12).
+
+## Decision
+- **Only the first send of an attempt can fail it.** When the engine re-sends an attempt with its key (an `unknown` attempt, or one left `sending` after a crash), any refusal is applied as `unknown`, whatever the supplier and its code; the attempt is polled and then held for the admin. This resolves Q18 without waiting for WDG's answer (owner, 2026-10-12).
+- **Admin orders** in three modes: walk-in (no customer), on behalf of a customer (paid from that customer's wallet under the customer's own rules: freeze, daily cap, balance), gift or compensation to a customer (owner's funds). At the store's current price, through the normal fulfilment engine, with re-authentication, an idempotency key, a reason and a Telegram notice per order. The emergency stop stops them too (owner, 2026-10-12).
+- **Owner drawings:** an owner-funded order debits a system account `owner_drawings:USD` instead of a wallet, and credits sales as any purchase; a refund credits it back. It needs no funding step and is never settled: it is the value the owner took in goods at store prices. The cash a walk-in buyer hands the owner stays outside the books. A daily cap ($100, editable with re-authentication) on owner-funded orders, enforced under a lock, limits what a stolen session can take (owner, 2026-10-12).
+- **Reports:** customer sales (dashboard, sales reports, top customers) exclude owner-funded orders, which appear on their own line; the ledger report shows owner drawings.
+- **Supplier catalog:** the sync also mirrors the supplier's category tree. A root category is imported as one game (any node may be imported alone), through a dialog that suggests names, fields and packs; products are created paused, mapped and priced; a category may instead be linked to an existing game; categories and offers may be ignored; new packs in a linked category show in the panel and the daily summary only (owner, 2026-10-12). Offers the store cannot order yet (two fields, select fields) are kept and shown as unsupported instead of being dropped.
+- **Supplier images** are never loaded by a browser from the supplier: the API fetches them only from hosts the adapter declares, re-encodes them, and stores the imported cover as a catalog image.
+- **Low stock:** a mapped, active offer below 10 units (editable) alerts once per level on Telegram (owner, 2026-10-12).
+
+## Consequences
+- A supplier that refuses re-sends delays some orders to the admin instead of risking a double purchase; the panel shows the supplier's nearby orders so the decision is quick.
+- Orders may have no customer; every customer-facing path must handle owner-funded and walk-in orders, and reconciliation checks owner drawings like wallets.
+- Owner drawings grow without bound by design; the owner reads them as goods taken, not as a debt.
+- Turning a supplier category into a sellable game takes one dialog and one "activate all", and the store never depends on a supplier's image host.
