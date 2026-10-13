@@ -29,6 +29,7 @@ import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, ltr } from '../../lib/format';
 import { CustomerMarks } from '../customers/customer-marks';
+import { NearbySupplierOrders, showsNearbyOrders } from './nearby-supplier-orders';
 import {
   hasActions,
   type OrderAction,
@@ -491,6 +492,9 @@ function Attempts({ orderId, attempts }: { orderId: string; attempts: Fulfilment
             )}
           </dl>
           {attempt.proofFileId && <ProofThumbnail orderId={orderId} fileId={attempt.proofFileId} />}
+          {showsNearbyOrders(attempt) && (
+            <NearbySupplierOrders orderId={orderId} attempt={attempt} />
+          )}
           {attempt.candidates.length > 0 && (
             <div className="flex flex-col gap-2">
               <h3 className="text-sm font-bold">{t('orders.attempts.candidates')}</h3>

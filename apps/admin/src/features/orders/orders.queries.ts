@@ -40,6 +40,23 @@ export const orderListQuery = (search: OrderSearch) =>
     placeholderData: keepPreviousData,
   });
 
+/**
+ * S16 SF4: the supplier's orders near an attempt's send, read live on the admin's request (one
+ * read per 5 seconds per supplier); never retried, never applied by itself.
+ */
+export const nearbySupplierOrdersQuery = (orderId: string, attemptId: string) =>
+  queryOptions({
+    queryKey: ['orders', 'nearby', orderId, attemptId],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/orders/{id}/attempts/{attemptId}/supplier-orders', {
+          params: { path: { id: orderId, attemptId } },
+        }),
+      ),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+
 export const orderQuery = (id: string) =>
   queryOptions({
     queryKey: ['orders', 'order', id],

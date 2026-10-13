@@ -7,12 +7,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { BalanceLine, LastRun, SupplierChips } from './supplier-parts';
+import { BalanceLine, LastRun, PlatformStatusLine, SupplierChips } from './supplier-parts';
 import { suppliersQuery, useRequestSync } from './suppliers.queries';
 
 /**
- * "/suppliers" (S07 screens): a card per supplier with its state, balance, last sync and counts,
- * and "مزامنة الآن". The API leaves out `fake` where it is not enabled.
+ * "/suppliers" (S07 screens, S16 SC11, SF2, SF5): a card per supplier with its state, its own
+ * platform status, balance, last sync, counts, new packs and low stock, and "مزامنة الآن". The
+ * API leaves out `fake` where it is not enabled.
  */
 export function SuppliersPage() {
   const { t } = useTranslation();
@@ -78,6 +79,7 @@ function SupplierCard({ supplier }: { supplier: SupplierSummary }) {
             <bdi>{supplier.nameAr}</bdi>
           </CardTitle>
           <SupplierChips supplier={supplier} />
+          {supplier.capabilities.platformStatus && <PlatformStatusLine code={supplier.code} />}
         </div>
         <Button
           variant="outline"
@@ -111,6 +113,42 @@ function SupplierCard({ supplier }: { supplier: SupplierSummary }) {
           <dt className="text-muted-foreground">{t('suppliers.counts.mapped')}</dt>
           <dd className="text-lg font-bold tabular-nums">{supplier.mappedCount}</dd>
         </div>
+        {supplier.capabilities.categories && (
+          <div className="flex flex-col gap-1">
+            <dt className="text-muted-foreground">{t('suppliers.counts.newPacks')}</dt>
+            <dd className="flex items-center gap-2">
+              <span className="text-lg font-bold tabular-nums">{supplier.newOfferCount}</span>
+              {supplier.newOfferCount > 0 && (
+                <Link
+                  to="/suppliers/$code"
+                  params={{ code: supplier.code }}
+                  search={{ tab: 'catalog', state: 'new_packs' }}
+                  className="text-sm underline-offset-4 hover:underline"
+                >
+                  {t('suppliers.counts.showNewPacks')}
+                </Link>
+              )}
+            </dd>
+          </div>
+        )}
+        {catalog && (
+          <div className="flex flex-col gap-1">
+            <dt className="text-muted-foreground">{t('suppliers.counts.lowStock')}</dt>
+            <dd className="flex items-center gap-2">
+              <span className="text-lg font-bold tabular-nums">{supplier.lowStockCount}</span>
+              {supplier.lowStockCount > 0 && (
+                <Link
+                  to="/suppliers/$code"
+                  params={{ code: supplier.code }}
+                  search={{ tab: 'offers', lowStock: 'true' }}
+                  className="text-sm underline-offset-4 hover:underline"
+                >
+                  {t('suppliers.counts.showLowStock')}
+                </Link>
+              )}
+            </dd>
+          </div>
+        )}
       </dl>
       {failure && <FormAlert>{failure}</FormAlert>}
       {catalog && (

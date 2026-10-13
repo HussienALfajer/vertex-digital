@@ -54,6 +54,7 @@ import { AvailabilityBadge } from '../catalog/catalog-parts';
 import { AddRouteDialog } from './add-route-dialog';
 import { type FieldMapEntry, fieldMapEntries, toFieldMap, unmappedOf } from './field-map';
 import { FieldMapEditor } from './field-map-editor';
+import { StockChip } from './offer-cells';
 import { UnusableReason } from './supplier-parts';
 import {
   priceHistoryQuery,
@@ -273,6 +274,9 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
             {route.unusableReason && <UnusableReason reason={route.unusableReason} />}
             {route.requirementsUnknown && (
               <Badge tone="outline">{t('suppliers.routes.requirementsUnknown')}</Badge>
+            )}
+            {!manual && (
+              <StockChip level={route.offer.stockLevel} stock={route.offer.stock} quiet />
             )}
           </span>
           <span className="text-sm text-muted-foreground">

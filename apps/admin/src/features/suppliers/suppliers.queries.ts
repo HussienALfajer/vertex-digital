@@ -6,9 +6,13 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type {
+  CoverFromSupplier,
   CreateRoute,
+  ImportCategory,
   ImportOffers,
+  LinkCategory,
   SetSupplierCredentials,
+  SupplierCategoryState,
   SupplierCode,
   SupplierDetail,
   SupplierPolicy,
@@ -105,6 +109,10 @@ export const offersQuery = (code: SupplierCode, search: OfferSearch) =>
               mapped: search.mapped,
               missing: search.missing,
               inStock: search.inStock,
+              categoryId: search.categoryId,
+              supported: search.supported,
+              ignored: search.ignored,
+              lowStock: search.lowStock,
               page: search.page ?? 1,
               pageSize: LIST_PAGE_SIZE,
             },
@@ -122,6 +130,114 @@ export const offerCostsQuery = (offerId: string) =>
       call(
         api.GET('/api/admin/suppliers/offers/{id}/costs', {
           params: { path: { id: offerId }, query: { pageSize: LIST_PAGE_SIZE } },
+        }),
+      ),
+  });
+
+// Supplier catalog (S16) -----------------------------------------------------------------------
+
+/** One level or one search of the category tree: 100 nodes a page (rule SC4 allows 200). */
+export const CATEGORY_PAGE_SIZE = 100;
+
+/** How often the navigation badge and the cards read the new packs count (rule SC11). */
+const NEW_PACKS_REFRESH_MS = 60_000;
+
+/** Rule SF5: the API caches the supplier's status a minute; the panel keeps it as long. */
+const PLATFORM_STATUS_STALE_MS = 60_000;
+
+export interface CategoryQuery {
+  /** A level under this node; absent for the roots. */
+  parentId?: string;
+  state?: SupplierCategoryState;
+  kind?: 'direct' | 'code';
+  q?: string;
+  page: number;
+}
+
+export const categoriesQuery = (code: SupplierCode, query: CategoryQuery) =>
+  queryOptions({
+    queryKey: ['suppliers', 'categories', code, query],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/suppliers/{code}/categories', {
+          params: { path: { code }, query: { ...query, pageSize: CATEGORY_PAGE_SIZE } },
+        }),
+      ),
+    placeholderData: keepPreviousData,
+  });
+
+/** Rule IM1: the thumbnail through the API, on the panel's own origin (its CSP is unchanged). */
+export const categoryImageUrl = (code: SupplierCode, categoryId: string) =>
+  `/api/admin/suppliers/${code}/categories/${encodeURIComponent(categoryId)}/image`;
+
+/** The import draft, or with `gameId` the link draft (rules SC7, SC8, SC12–SC14). */
+export const importDraftQuery = (code: SupplierCode, categoryId: string, gameId?: string) =>
+  queryOptions({
+    queryKey: ['suppliers', 'draft', code, categoryId, gameId ?? null],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/suppliers/{code}/categories/{categoryId}/import-draft', {
+          params: { path: { code, categoryId }, query: gameId ? { gameId } : {} },
+        }),
+      ),
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+/** The new packs count for the navigation badge (rule SC11), read in the background. */
+export const newPacksQuery = queryOptions({
+  queryKey: ['suppliers', 'new-packs'],
+  queryFn: () => call(api.GET('/api/admin/suppliers', { headers: BACKGROUND_REQUEST })),
+  select: (list: SupplierSummary[]) => list.reduce((sum, item) => sum + item.newOfferCount, 0),
+  refetchInterval: NEW_PACKS_REFRESH_MS,
+});
+
+/** Rule SF5: the supplier's own status, read on the page's request, cached a minute. */
+export const platformStatusQuery = (code: SupplierCode) =>
+  queryOptions({
+    queryKey: ['suppliers', 'platform', code],
+    queryFn: () =>
+      call(api.GET('/api/admin/suppliers/{code}/platform-status', { params: { path: { code } } })),
+    staleTime: PLATFORM_STATUS_STALE_MS,
+    retry: false,
+  });
+
+/** Rule SF3: one page of the supplier's orders, read live; never retried (5 s limit). */
+export const statementOrdersQuery = (code: SupplierCode, page: number) =>
+  queryOptions({
+    queryKey: ['suppliers', 'statement', code, 'orders', page],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/suppliers/{code}/statement/orders', {
+          params: { path: { code }, query: { page } },
+        }),
+      ),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+
+/** Rule SF3: one page of the supplier's wallet movements, read live; never retried. */
+export const statementTransactionsQuery = (code: SupplierCode, page: number) =>
+  queryOptions({
+    queryKey: ['suppliers', 'statement', code, 'transactions', page],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/suppliers/{code}/statement/transactions', {
+          params: { path: { code }, query: { page } },
+        }),
+      ),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+
+/** The supplier categories linked to a game (its page: SC9, IM3). */
+export const gameCategoriesQuery = (gameId: string) =>
+  queryOptions({
+    queryKey: ['suppliers', 'game-categories', gameId],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/catalog/games/{id}/supplier-categories', {
+          params: { path: { id: gameId } },
         }),
       ),
   });
@@ -269,6 +385,74 @@ export const useSetManualCost = () =>
       api.PUT('/api/admin/routes/{id}/manual-cost', {
         params: { path: { id } },
         body: { costUsdUnits },
+      }),
+    ),
+  );
+
+// Supplier catalog changes (S16) ---------------------------------------------------------------
+
+/** Rule SC7: all or nothing; refused rows in `details.rows`. */
+export const useImportCategory = (code: SupplierCode, categoryId: string) =>
+  useSuppliersMutation((body: ImportCategory) =>
+    call(
+      api.POST('/api/admin/suppliers/{code}/categories/{categoryId}/import', {
+        params: { path: { code, categoryId } },
+        body: body as never,
+      }),
+    ),
+  );
+
+/** Rule SC8: all or nothing; refused rows in `details.rows`. */
+export const useLinkCategory = (code: SupplierCode, categoryId: string) =>
+  useSuppliersMutation((body: LinkCategory) =>
+    call(
+      api.POST('/api/admin/suppliers/{code}/categories/{categoryId}/link', {
+        params: { path: { code, categoryId } },
+        body: body as never,
+      }),
+    ),
+  );
+
+export type CategoryChange = 'unlink' | 'ignore' | 'unignore';
+
+/** Rules SC6, SC9: unlink, ignore or unignore a node. */
+export const useCategoryChange = (code: SupplierCode) =>
+  useSuppliersMutation(({ categoryId, change }: { categoryId: string; change: CategoryChange }) => {
+    const params = { params: { path: { code, categoryId } } };
+    return call(
+      change === 'unlink'
+        ? api.POST('/api/admin/suppliers/{code}/categories/{categoryId}/unlink', params)
+        : change === 'ignore'
+          ? api.POST('/api/admin/suppliers/{code}/categories/{categoryId}/ignore', params)
+          : api.POST('/api/admin/suppliers/{code}/categories/{categoryId}/unignore', params),
+    );
+  });
+
+/** Rule SC6: one offer no longer counts as new, or counts again. */
+export const useOfferIgnored = () =>
+  useSuppliersMutation(({ id, ignored }: { id: string; ignored: boolean }) =>
+    call(
+      ignored
+        ? api.POST('/api/admin/suppliers/offers/{id}/ignore', { params: { path: { id } } })
+        : api.POST('/api/admin/suppliers/offers/{id}/unignore', { params: { path: { id } } }),
+    ),
+  );
+
+/** Rule SC10: the game and every paused pack that can serve, with the skipped ones. */
+export const useActivateAll = (gameId: string) =>
+  useSuppliersMutation(() =>
+    call(
+      api.POST('/api/admin/catalog/games/{id}/activate-all', { params: { path: { id: gameId } } }),
+    ),
+  );
+
+/** Rule IM3: the linked category's image, downloaded again, as the cover. */
+export const useCoverFromSupplier = (gameId: string) =>
+  useSuppliersMutation((body: CoverFromSupplier) =>
+    call(
+      api.POST('/api/admin/catalog/games/{id}/cover/from-supplier', {
+        params: { path: { id: gameId } },
+        body,
       }),
     ),
   );

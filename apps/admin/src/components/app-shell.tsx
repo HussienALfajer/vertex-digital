@@ -53,6 +53,7 @@ import { openReviewCountQuery } from '../features/pricing/pricing.queries';
 import { StaleRateBanner } from '../features/rates/stale-rate-banner';
 import { reconciliationCountsQuery } from '../features/reconciliation/reconciliation.queries';
 import { SwitchesBanner } from '../features/settings/switches-banner';
+import { newPacksQuery } from '../features/suppliers/suppliers.queries';
 import { supportOpenCountQuery } from '../features/support/support.queries';
 import { type AdminSession, authClient, leaveSession, useSession } from '../lib/auth';
 import { ThemeToggle } from './theme-toggle';
@@ -191,6 +192,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             {to === '/deposits' && <DepositsBadge />}
             {to === '/deposits/transfers' && <TransfersBadge />}
             {to === '/pricing/reviews' && <ReviewsBadge />}
+            {to === '/suppliers' && <SuppliersBadge />}
             {to === '/support' && <SupportBadge />}
             {to === '/reconciliation' && <ReconciliationBadge />}
           </Link>
@@ -277,6 +279,23 @@ function ReconciliationBadge() {
       aria-label={t('nav.reconciliationBadge', { open })}
     >
       {open}
+    </Badge>
+  );
+}
+
+/** S16 SC11: the new packs in imported categories, read every minute in the background. */
+function SuppliersBadge() {
+  const { t } = useTranslation();
+  const count = useQuery(newPacksQuery);
+  const packs = count.data ?? 0;
+  if (packs === 0) return null;
+  return (
+    <Badge
+      tone="gold"
+      className="ms-auto tabular-nums"
+      aria-label={t('nav.suppliersBadge', { packs })}
+    >
+      {packs}
     </Badge>
   );
 }

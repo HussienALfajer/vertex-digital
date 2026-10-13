@@ -27,6 +27,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { formatDuration } from '../../lib/format';
+import { StockChip } from '../suppliers/offer-cells';
 import { RoutesDrawer } from '../suppliers/routes-drawer';
 import { useArchiveProduct, useReorderProducts, useUpdateProduct } from './catalog.queries';
 import { AvailabilityBadge, catalogFailure, MoveButton, StatusBadge } from './catalog-parts';
@@ -293,6 +294,7 @@ function ProductPrice({ product }: { product: Product }) {
           {t('catalog.products.basis', { supplier: product.basisSupplierNameAr })}
         </span>
       )}
+      {product.basisStockLevel && <StockChip level={product.basisStockLevel} quiet />}
     </span>
   );
 }
