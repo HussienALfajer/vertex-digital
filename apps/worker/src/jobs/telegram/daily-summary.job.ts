@@ -18,6 +18,8 @@ import {
   deposits,
   fulfilmentAttempts,
   ledgerSummary,
+  lowStockCounts,
+  newOfferCounts,
   openMismatchCount,
   orders,
   priceReviews,
@@ -408,7 +410,28 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       context,
     );
     const inUse = states.filter((state) => state.available && state.code !== 'manual');
+    const [newPacks, stock] = await Promise.all([
+      newOfferCounts(
+        db,
+        inUse.map((state) => state.id),
+      ),
+      lowStockCounts(
+        db,
+        inUse.map((state) => state.id),
+      ),
+    ]);
+    const stockLow = { low: 0, out: 0 };
+    for (const count of stock.values()) {
+      stockLow.low += count.low;
+      stockLow.out += count.out;
+    }
     return {
+      // S16 SC11, SF2.
+      newPacks: inUse.flatMap((state) => {
+        const count = newPacks.get(state.id) ?? 0;
+        return count > 0 ? [{ supplierNameAr: state.nameAr, count }] : [];
+      }),
+      stockLow,
       openReviews: open.length,
       marginGuarded: [...routing.values()].filter(
         (state) => state.availability === 'paused_by_margin_guard',

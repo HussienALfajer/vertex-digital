@@ -59,6 +59,9 @@ export const refusals = {
     }),
   offerMissing: () =>
     new CodedException(409, 'OFFER_MISSING', 'The supplier no longer lists the offer'),
+  offerUnsupported: () =>
+    new CodedException(409, 'OFFER_UNSUPPORTED', 'The offer has fields this build cannot send'),
+  offerIgnored: () => new CodedException(409, 'OFFER_IGNORED', 'The offer is ignored'),
 };
 
 /** The refusal a route's unique index raised (rule RT1), or null for any other error. */

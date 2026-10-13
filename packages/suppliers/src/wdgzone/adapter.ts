@@ -1,28 +1,47 @@
 import { createHash } from 'node:crypto';
-import { parseUsd } from '@vertex-digital/contracts';
+import {
+  type FieldSpec,
+  MAX_FIELD_SPEC_OPTIONS,
+  MAX_FIELD_SPECS,
+  parseUsd,
+} from '@vertex-digital/contracts';
 import { z } from 'zod';
 import type {
+  ImageLimits,
   PlacedOrder,
   PlaceOrderRequest,
   PlayerValidation,
   SupplierAdapter,
   SupplierCapabilities,
+  SupplierCategory,
   SupplierMoney,
   SupplierOffer,
+  SupplierOrderRow,
   SupplierOutcome,
+  SupplierPlatformStatus,
+  SupplierStatementPage,
+  SupplierTransactionRow,
   SupplierWebhookEvent,
   WebhookRequest,
 } from '../core/adapter.js';
 import { outcomeOfOrderError, SupplierError } from '../core/errors.js';
 import { verifyHmacSignature } from '../core/hmac.js';
 import { SupplierHttp, type SupplierRequest } from '../core/http.js';
+import { fetchImageFromHosts, imageUrlAllowed } from '../core/image.js';
 import { WDG_DEFINITIVE_PURCHASE_CODES, WDG_OUT_OF_STOCK, wdgErrorCode } from './errors.js';
 import {
+  categoriesReplySchema,
+  categorySchema,
   deliveryReplySchema,
+  healthReplySchema,
   meReplySchema,
+  orderRowSchema,
   productSchema,
   productsPageSchema,
   purchaseReplySchema,
+  statementReplySchema,
+  transactionRowSchema,
+  type WdgCategory,
   type WdgProduct,
   webhookBodySchema,
   webhookTimeSchema,
@@ -60,6 +79,14 @@ const WDG_ID_PATTERN = /^[1-9]\d{0,17}$/;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 100;
 
 const CATALOG_TYPES = { topup: 'direct', voucher: 'code' } as const;
+/** WDG writes unlimited stock as 999999 (S16 SF2). */
+const UNLIMITED_STOCK = 999_999;
+/** At most this many pages of categories, should WDG ever page them (3,573 on 2026-10-12). */
+const MAX_CATEGORY_PAGES = 100;
+/** Statement rows per page (S16 SF3). */
+const STATEMENT_PAGE_SIZE = 50;
+/** The hosts WDG serves category images from (S16 IM1). */
+const IMAGE_HOSTS = ['wdgzone.tech'] as const;
 
 export interface WdgzoneAdapterOptions {
   apiKey: string;
@@ -93,7 +120,12 @@ export class WdgzoneAdapter implements SupplierAdapter {
     webhooks: true,
     balance: true,
     catalog: true,
+    categories: true,
+    statement: true,
+    platformStatus: true,
   };
+
+  readonly imageHosts: readonly string[] = IMAGE_HOSTS;
 
   private readonly http: SupplierHttp;
   private readonly webhookSecret: string;
@@ -136,6 +168,130 @@ export class WdgzoneAdapter implements SupplierAdapter {
       }
     }
     return offers;
+  }
+
+  /** S16 SC1: the tree of `topup` and `voucher` categories (WDG's `manual` ones are left out). */
+  async listCategories(): Promise<SupplierCategory[]> {
+    const categories: SupplierCategory[] = [];
+    for (let page = 1; ; page += 1) {
+      const reply = await this.paced({
+        method: 'GET',
+        path: page === 1 ? 'categories' : `categories?page=${page}`,
+        schema: categoriesReplySchema,
+        errorCode: wdgErrorCode,
+      });
+      for (const item of reply.data) {
+        const node = categorySchema.safeParse(item);
+        const category = node.success ? this.toCategory(node.data) : null;
+        if (category) categories.push(category);
+      }
+      const pages = reply.pagination;
+      if (!pages || reply.data.length === 0 || page >= pages.total_pages) break;
+      if (page >= MAX_CATEGORY_PAGES) {
+        throw new SupplierError('retryable', 'WDGZone category tree is larger than expected');
+      }
+    }
+    return categories;
+  }
+
+  /** S16 SF3: `GET /transactions`, newest first. */
+  async listTransactions(page: number): Promise<SupplierStatementPage<SupplierTransactionRow>> {
+    const reply = await this.http.request({
+      method: 'GET',
+      path: `transactions?limit=${STATEMENT_PAGE_SIZE}&page=${page}`,
+      schema: statementReplySchema,
+      errorCode: wdgErrorCode,
+    });
+    const items = reply.data.flatMap((item): SupplierTransactionRow[] => {
+      const row = transactionRowSchema.safeParse(item);
+      if (!row.success || (row.data.currency != null && row.data.currency !== 'USD')) return [];
+      const { data } = row;
+      const amount = signedUsd(data.amount);
+      const balanceAfter = signedUsd(data.balance_after);
+      const createdAt = dateOf(data.created_at);
+      const reference = (data.reference ?? data.description)?.trim().slice(0, 200);
+      return [
+        {
+          id: data.id.slice(0, 64),
+          ...(data.type && { type: data.type.slice(0, 64) }),
+          ...(amount && { amount }),
+          ...(balanceAfter && { balanceAfter }),
+          ...(reference && { reference }),
+          ...(data.order_id && { supplierOrderId: data.order_id.slice(0, 64) }),
+          ...(createdAt && { createdAt }),
+        },
+      ];
+    });
+    return { items, hasMore: hasMore(page, reply) };
+  }
+
+  /** S16 SF3: `GET /orders`, newest first. */
+  async listOrders(page: number): Promise<SupplierStatementPage<SupplierOrderRow>> {
+    const reply = await this.http.request({
+      method: 'GET',
+      path: `orders?limit=${STATEMENT_PAGE_SIZE}&page=${page}`,
+      schema: statementReplySchema,
+      errorCode: wdgErrorCode,
+    });
+    const items = reply.data.flatMap((item): SupplierOrderRow[] => {
+      const row = orderRowSchema.safeParse(item);
+      if (!row.success) return [];
+      const { data } = row;
+      const total = data.currency == null || data.currency === 'USD' ? signedUsd(data.total) : null;
+      const createdAt = dateOf(data.created_at);
+      const offerName = (data.product_name ?? data.product)?.trim().slice(0, 200);
+      return [
+        {
+          supplierOrderId: data.id.slice(0, 64),
+          ...(data.product_id && { offerId: data.product_id.slice(0, 64) }),
+          ...(offerName && { offerName }),
+          ...(data.quantity != null && { quantity: data.quantity }),
+          ...(data.status && { status: data.status.slice(0, 64) }),
+          ...(total && { total }),
+          ...(createdAt && { createdAt }),
+        },
+      ];
+    });
+    return { items, hasMore: hasMore(page, reply) };
+  }
+
+  /** S16 SF5: `GET /health`, which needs no key. */
+  async getPlatformStatus(): Promise<SupplierPlatformStatus> {
+    const reply = await this.http.request({
+      method: 'GET',
+      path: 'health',
+      schema: healthReplySchema,
+      errorCode: wdgErrorCode,
+    });
+    const catalogUpdatedAt = dateOf(reply.catalog_updated_at);
+    return { status: reply.status, ...(catalogUpdatedAt && { catalogUpdatedAt }) };
+  }
+
+  /** S16 IM1: without the API key, from `wdgzone.tech` only. */
+  fetchImage(url: string, limits: ImageLimits): Promise<Uint8Array> {
+    return fetchImageFromHosts(url, this.imageHosts, limits, this.options.fetch);
+  }
+
+  /** A node as a category; WDG's `manual` ones are left out, as their products are. */
+  private toCategory(node: WdgCategory): SupplierCategory | null {
+    if (node.type === 'manual') return null;
+    const kind = node.type ? CATALOG_TYPES[node.type as keyof typeof CATALOG_TYPES] : undefined;
+    const name = node.name.trim().slice(0, 200);
+    if (!name) return null;
+    const imageUrl = node.image_url?.trim();
+    const imageOk =
+      imageUrl !== undefined &&
+      imageUrl.length <= 500 &&
+      imageUrlAllowed(imageUrl, this.imageHosts);
+    return {
+      categoryId: String(node.id),
+      ...(node.parent_id != null && { parentCategoryId: String(node.parent_id) }),
+      name,
+      ...(kind && { kind }),
+      ...(node.product_count != null && { productCount: node.product_count }),
+      ...(node.in_stock_products != null && { inStockCount: node.in_stock_products }),
+      ...(imageOk && { imageUrl }),
+    };
   }
 
   async getBalance(): Promise<SupplierMoney> {
@@ -305,20 +461,50 @@ export class WdgzoneAdapter implements SupplierAdapter {
   }
 }
 
-/** A WDG product as an offer, or null when it cannot be sold through this adapter. */
+/** A WDG product's account fields as field specs (S16 SC3), bounded; null when unreadable. */
+function fieldSpecsOf(product: WdgProduct): FieldSpec[] | null {
+  const fields = product.required_fields ?? [];
+  if (fields.length === 0) {
+    return product.requires_player_id
+      ? [{ key: 'player_id', label: 'Player ID', type: 'text' }]
+      : [];
+  }
+  if (fields.length > MAX_FIELD_SPECS) return null;
+  const specs: FieldSpec[] = [];
+  for (const field of fields) {
+    if (!/^[A-Za-z0-9_.-]{1,32}$/.test(field.key)) return null;
+    const type = field.type == null || field.type === 'text' ? 'text' : 'select';
+    const options = (field.options ?? []).slice(0, MAX_FIELD_SPEC_OPTIONS).flatMap((option) => {
+      const value = String(option.value).slice(0, 64);
+      return value ? [{ label: (option.label ?? value).slice(0, 64), value }] : [];
+    });
+    specs.push({
+      key: field.key,
+      label: (field.label ?? field.key).trim().slice(0, 64),
+      type,
+      ...(type === 'select' && { options }),
+    });
+  }
+  return specs;
+}
+
+/** A WDG product as an offer, or null when it cannot be listed through this adapter. */
 function toOffer(product: WdgProduct): SupplierOffer | null {
   const kind = CATALOG_TYPES[product.type as keyof typeof CATALOG_TYPES];
   const amountUnits = usdUnits(product.price);
   if (!kind || product.currency !== 'USD' || amountUnits === null) return null;
-  const fields = product.required_fields ?? [];
-  // One free-text field, sent as `player_id`; a list (`select`: region, server) is not a player id.
-  if (fields.length > 1 || fields.some((field) => field.type != null && field.type !== 'text')) {
-    return null;
-  }
-  const listed = fields.map((field) => field.key);
-  const requiredFields = listed.length === 0 && product.requires_player_id ? ['player_id'] : listed;
+  const fieldSpecs = fieldSpecsOf(product);
+  if (fieldSpecs === null) return null;
+  // One free-text field, sent as `player_id`. Two fields or a list (`select`: region, server) are
+  // kept, but unsupported until WDG says how they are sent (S16 SC3, Q19).
+  const unsupported = fieldSpecs.length > 1 || fieldSpecs.some((field) => field.type !== 'text');
   const group = product.brand?.trim() || product.category?.trim() || undefined;
   const category = product.category?.trim();
+  const original = product.original_price == null ? null : usdUnits(product.original_price);
+  const stock =
+    product.stock == null || product.stock < 0 || product.stock >= UNLIMITED_STOCK
+      ? undefined
+      : product.stock;
   return {
     offerId: String(product.id),
     name:
@@ -329,8 +515,40 @@ function toOffer(product: WdgProduct): SupplierOffer | null {
     inStock: product.available && (product.stock == null || product.stock > 0),
     ...(group && { group }),
     kind,
-    requiredFields,
+    requiredFields: fieldSpecs.map((field) => field.key),
+    ...(product.category_id != null && { categoryId: String(product.category_id) }),
+    ...(stock !== undefined && { stock }),
+    ...(original !== null &&
+      original > 0 && { originalCost: { currency: 'USD', amountUnits: original } }),
+    fieldSpecs,
+    ...(unsupported && { unsupportedReason: 'fields_unsupported' as const }),
   };
+}
+
+/** A signed WDG amount in USD (a purchase is negative on the statement), or null. */
+function signedUsd(value: number | string | null | undefined): SupplierMoney | null {
+  if (value == null) return null;
+  const text = String(value).trim();
+  const negative = text.startsWith('-');
+  const units = usdUnits(negative ? text.slice(1) : text);
+  return units === null ? null : { currency: 'USD', amountUnits: negative ? -units : units };
+}
+
+/** A WDG time, or null when it does not parse. */
+function dateOf(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const time = Date.parse(value);
+  return Number.isFinite(time) ? new Date(time) : null;
+}
+
+/** Whether a statement page has a next one: by `pagination`, else by a full page. */
+function hasMore(
+  page: number,
+  reply: { data: unknown[]; pagination?: { total_pages: number } | null | undefined },
+): boolean {
+  return reply.pagination
+    ? page < reply.pagination.total_pages
+    : reply.data.length >= STATEMENT_PAGE_SIZE;
 }
 
 function delivered(

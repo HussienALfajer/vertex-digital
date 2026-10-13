@@ -1,20 +1,28 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { USD_CENT } from '@vertex-digital/contracts';
+import { crc32, deflateSync } from 'node:zlib';
+import { type FieldSpec, type ProductKind, USD_CENT } from '@vertex-digital/contracts';
 import { z } from 'zod';
 import type {
+  ImageLimits,
   OrderFields,
   PlaceOrderRequest,
   PlayerValidation,
   SupplierAdapter,
   SupplierCapabilities,
+  SupplierCategory,
   SupplierMoney,
   SupplierOffer,
+  SupplierOrderRow,
   SupplierOutcome,
+  SupplierPlatformStatus,
+  SupplierStatementPage,
+  SupplierTransactionRow,
   SupplierWebhookEvent,
   WebhookRequest,
 } from '../core/adapter.js';
 import { SupplierError } from '../core/errors.js';
 import { hmacSha256, verifyHmacSignature } from '../core/hmac.js';
+import { imageUrlAllowed } from '../core/image.js';
 
 /*
  * The `fake` supplier (ADR 0005): in-process, for development, tests and E2E. Nothing leaves the
@@ -40,6 +48,11 @@ import { hmacSha256, verifyHmacSignature } from '../core/hmac.js';
  * first send buys but answers unknown, a re-send of its key is refused). Orders are kept in the
  * state (`orders`): each change is handed to `onOrder`, which the worker persists, so a poll, a
  * repeated key and `supplier:fake --resolve` find them across calls and processes.
+ *
+ * S16: a category tree (PUBG Mobile and Free Fire with subcategories, gift cards) whose images are
+ * bundled PNGs on `fake-supplier.invalid`, offers with stock, original prices and field specs, a
+ * statement built from its own orders and a platform status. The state scripts stock counts
+ * (`--stock-count`), missing categories (`--category-missing`) and added offers (`--add-offer`).
  */
 
 export const FAKE_SUPPLIER_CODE = 'fake';
@@ -101,6 +114,8 @@ const fakeOrderSchema = z.object({
   settled: outcomeSchema,
   /** S16: a re-send of this key is refused (the `resend-refused` script). */
   refuseResend: z.boolean().optional(),
+  /** S16 SF3: when it was placed, for the statement. */
+  placedAt: z.iso.datetime().optional(),
 });
 
 export type FakeOrder = z.infer<typeof fakeOrderSchema>;
@@ -121,6 +136,21 @@ export const fakeSupplierStateSchema = z.object({
   orderScripts: z.record(z.string(), fakeOrderScriptSchema).default({}),
   /** S08: the orders placed so far, by idempotency key. */
   orders: z.record(z.string(), fakeOrderSchema).default({}),
+  /** S16 SF2: offer id → units in stock (0 is out of stock), or null for unlimited. */
+  stockCounts: z.record(z.string(), z.int().min(0).max(1_000_000).nullable()).default({}),
+  /** S16 SC2: categories left out of the tree. */
+  missingCategories: z.array(z.string()).default([]),
+  /** S16 SC11: offers added under a category of the tree. */
+  addedOffers: z
+    .array(
+      z.object({
+        offerId: z.string().regex(/^fake-added-\d{1,6}$/),
+        categoryId: z.string().min(1).max(64),
+        name: z.string().min(1).max(100),
+        costUsdUnits: z.int().min(1).max(Number.MAX_SAFE_INTEGER),
+      }),
+    )
+    .default([]),
 });
 
 export type FakeSupplierState = z.infer<typeof fakeSupplierStateSchema>;
@@ -152,7 +182,16 @@ const usd = (cents: number): SupplierMoney => ({ currency: 'USD', amountUnits: c
 
 type FakeOffer = SupplierOffer & { delivers: 'topup' | 'code' };
 
-const topUp = (offerId: string, name: string, group: string, cents: number): FakeOffer => ({
+const PLAYER_FIELD: FieldSpec = { key: 'playerId', label: 'Player ID', type: 'text' };
+
+const topUp = (
+  offerId: string,
+  name: string,
+  group: string,
+  cents: number,
+  categoryId: string,
+  originalCents?: number,
+): FakeOffer => ({
   offerId,
   name,
   cost: usd(cents),
@@ -160,6 +199,9 @@ const topUp = (offerId: string, name: string, group: string, cents: number): Fak
   group,
   kind: 'direct',
   requiredFields: ['playerId'],
+  categoryId,
+  ...(originalCents !== undefined && { originalCost: usd(originalCents) }),
+  fieldSpecs: [PLAYER_FIELD],
   delivers: 'topup',
 });
 
@@ -171,22 +213,94 @@ const giftCard = (offerId: string, name: string, cents: number): FakeOffer => ({
   group: 'iTunes',
   kind: 'code',
   requiredFields: [],
+  categoryId: 'fake-itunes',
+  stock: 40,
+  fieldSpecs: [],
   delivers: 'code',
 });
 
 /** The fake catalog: PUBG Mobile and Free Fire top-ups, and iTunes codes. */
 const OFFERS: readonly FakeOffer[] = [
-  topUp('fake-uc-60', 'Fake UC 60', 'PUBG Mobile', 88),
-  topUp('fake-uc-325', 'Fake UC 325', 'PUBG Mobile', 440),
-  topUp('fake-uc-660', 'Fake UC 660', 'PUBG Mobile', 870),
-  topUp('fake-uc-1800', 'Fake UC 1800', 'PUBG Mobile', 2_190),
-  topUp('fake-ff-100', 'Fake Free Fire 100', 'Free Fire', 95),
-  topUp('fake-ff-310', 'Fake Free Fire 310', 'Free Fire', 290),
-  topUp('fake-ff-520', 'Fake Free Fire 520', 'Free Fire', 480),
-  topUp('fake-ff-1060', 'Fake Free Fire 1060', 'Free Fire', 950),
+  topUp('fake-uc-60', 'Fake UC 60', 'PUBG Mobile', 88, 'fake-pubg-global', 99),
+  topUp('fake-uc-325', 'Fake UC 325', 'PUBG Mobile', 440, 'fake-pubg-global', 499),
+  topUp('fake-uc-660', 'Fake UC 660', 'PUBG Mobile', 870, 'fake-pubg-mena'),
+  topUp('fake-uc-1800', 'Fake UC 1800', 'PUBG Mobile', 2_190, 'fake-pubg-mena'),
+  topUp('fake-ff-100', 'Fake Free Fire 100', 'Free Fire', 95, 'fake-ff-auto'),
+  topUp('fake-ff-310', 'Fake Free Fire 310', 'Free Fire', 290, 'fake-ff-auto'),
+  topUp('fake-ff-520', 'Fake Free Fire 520', 'Free Fire', 480, 'fake-ff-auto'),
+  topUp('fake-ff-1060', 'Fake Free Fire 1060', 'Free Fire', 950, 'fake-ff-auto'),
   giftCard('fake-gift-10', 'Fake gift card 10', 960),
   giftCard('fake-itunes-25', 'Fake iTunes 25', 2_400),
 ];
+
+/** The host of the fake's category images (rule IM1); `.invalid` never resolves. */
+export const FAKE_IMAGE_HOST = 'fake-supplier.invalid';
+
+const imageUrl = (categoryId: string) => `https://${FAKE_IMAGE_HOST}/images/${categoryId}.png`;
+
+/** The fake category tree (S16 SC1), each with the color of its bundled image. */
+const CATEGORIES: readonly (SupplierCategory & { color: [number, number, number] })[] = [
+  { categoryId: 'fake-pubg', name: 'PUBG Mobile', kind: 'direct', color: [214, 160, 40] },
+  {
+    categoryId: 'fake-pubg-global',
+    parentCategoryId: 'fake-pubg',
+    name: 'Global',
+    kind: 'direct',
+    color: [190, 140, 30],
+  },
+  {
+    categoryId: 'fake-pubg-mena',
+    parentCategoryId: 'fake-pubg',
+    name: 'MENA',
+    kind: 'direct',
+    color: [170, 120, 20],
+  },
+  { categoryId: 'fake-ff', name: 'Free Fire', kind: 'direct', color: [220, 80, 40] },
+  {
+    categoryId: 'fake-ff-auto',
+    parentCategoryId: 'fake-ff',
+    name: 'Auto',
+    kind: 'direct',
+    color: [200, 60, 30],
+  },
+  { categoryId: 'fake-gift', name: 'Gift cards', kind: 'code', color: [60, 120, 200] },
+  {
+    categoryId: 'fake-itunes',
+    parentCategoryId: 'fake-gift',
+    name: 'iTunes',
+    kind: 'code',
+    color: [40, 100, 180],
+  },
+];
+
+/** A solid 64×64 PNG, so the fake needs no image files (rule IM1's bundled images). */
+function solidPng([red, green, blue]: [number, number, number]): Uint8Array {
+  const size = 64;
+  const chunk = (type: string, data: Buffer) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, 'latin1');
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
+    return Buffer.concat([head, data, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header.writeUInt8(8, 8); // bit depth
+  header.writeUInt8(2, 9); // RGB
+  const row = Buffer.alloc(1 + size * 3);
+  for (let x = 0; x < size; x += 1) row.set([red, green, blue], 1 + x * 3);
+  const pixels = Buffer.concat(Array.from({ length: size }, () => row));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(pixels)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const STATEMENT_PAGE_SIZE = 50;
 
 const webhookBodySchema = z.object({
   eventId: z.string().min(1),
@@ -231,7 +345,12 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     webhooks: true,
     balance: true,
     catalog: true,
+    categories: true,
+    statement: true,
+    platformStatus: true,
   };
+
+  readonly imageHosts: readonly string[] = [FAKE_IMAGE_HOST];
 
   private readonly orders: Map<string, FakeOrder>;
   private readonly state: FakeSupplierState;
@@ -253,6 +372,76 @@ export class FakeSupplierAdapter implements SupplierAdapter {
   async getBalance(): Promise<SupplierMoney> {
     this.failIfScripted();
     return { currency: 'USD', amountUnits: this.balanceUnits };
+  }
+
+  /** S16 SC1: the tree without the categories scripted missing. */
+  async listCategories(): Promise<SupplierCategory[]> {
+    this.failIfScripted();
+    const offers = this.catalog();
+    return CATEGORIES.filter(
+      (category) => !this.state.missingCategories.includes(category.categoryId),
+    ).map(({ color: _, ...category }) => {
+      const under = offers.filter(
+        (offer) =>
+          offer.categoryId === category.categoryId ||
+          CATEGORIES.some(
+            (child) =>
+              child.parentCategoryId === category.categoryId &&
+              child.categoryId === offer.categoryId,
+          ),
+      );
+      return {
+        ...category,
+        productCount: under.length,
+        inStockCount: under.filter((offer) => offer.inStock).length,
+        imageUrl: imageUrl(category.categoryId),
+      };
+    });
+  }
+
+  /** S16 SF3: one purchase per order it took, newest first. */
+  async listTransactions(page: number): Promise<SupplierStatementPage<SupplierTransactionRow>> {
+    this.failIfScripted();
+    const { items, hasMore } = this.statementPage(page);
+    return {
+      items: items.map((row) => ({
+        id: `txn-${row.supplierOrderId}`,
+        type: 'purchase',
+        ...(row.total && {
+          amount: { currency: 'USD' as const, amountUnits: -row.total.amountUnits },
+        }),
+        reference: `Order ${row.supplierOrderId}`,
+        supplierOrderId: row.supplierOrderId,
+        ...(row.createdAt && { createdAt: row.createdAt }),
+      })),
+      hasMore,
+    };
+  }
+
+  /** S16 SF3: the orders it took (those with an order id), newest first. */
+  async listOrders(page: number): Promise<SupplierStatementPage<SupplierOrderRow>> {
+    this.failIfScripted();
+    return this.statementPage(page);
+  }
+
+  /** S16 SF5: down while every call fails (`--errors on`). */
+  async getPlatformStatus(): Promise<SupplierPlatformStatus> {
+    return {
+      status: this.state.errors ? 'maintenance' : 'operational',
+      catalogUpdatedAt: new Date(),
+    };
+  }
+
+  /** S16 IM1: the bundled image of a category on the fake's host; nothing leaves the machine. */
+  async fetchImage(url: string, _limits: ImageLimits): Promise<Uint8Array> {
+    const category = CATEGORIES.find((item) => imageUrl(item.categoryId) === url);
+    if (!imageUrlAllowed(url, this.imageHosts) || !category) {
+      throw new SupplierError('definitive', 'No such fake image', {
+        supplierCode: 'IMAGE_FETCH_FAILED',
+        status: 404,
+      });
+    }
+    return solidPng(category.color);
   }
 
   async validatePlayer(input: { offerId: string; fields: OrderFields }): Promise<PlayerValidation> {
@@ -401,7 +590,7 @@ export class FakeSupplierAdapter implements SupplierAdapter {
       ('supplierOrderId' in order.outcome && order.outcome.supplierOrderId) ||
       `fake-${randomUUID()}`;
     const delivers =
-      OFFERS.find((offer) => offer.offerId === order.request.offerId)?.delivers ?? 'topup';
+      this.catalog().find((offer) => offer.offerId === order.request.offerId)?.delivers ?? 'topup';
     const result: SupplierOutcome =
       status === 'failed'
         ? { status: 'failed_definitive', supplierOrderId, reason: 'Failed by the fake supplier' }
@@ -472,14 +661,78 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     };
   }
 
-  /** The catalog with the scripted costs, stock and removals. */
+  /** The catalog with the scripted costs, stock, removals and added offers. */
   private catalog(): FakeOffer[] {
-    const { costs, outOfStock, removed } = this.state;
-    return OFFERS.filter((offer) => !removed.includes(offer.offerId)).map((offer) => ({
-      ...offer,
-      cost: { currency: 'USD', amountUnits: costs[offer.offerId] ?? offer.cost.amountUnits },
-      inStock: !outOfStock.includes(offer.offerId),
-    }));
+    const { costs, outOfStock, removed, stockCounts } = this.state;
+    const added = this.state.addedOffers.flatMap((added): FakeOffer[] => {
+      const category = CATEGORIES.find((item) => item.categoryId === added.categoryId);
+      if (!category) return [];
+      const root =
+        CATEGORIES.find((item) => item.categoryId === category.parentCategoryId) ?? category;
+      const kind: ProductKind = category.kind ?? 'direct';
+      const offer =
+        kind === 'code'
+          ? giftCard(added.offerId, added.name, 1)
+          : topUp(added.offerId, added.name, root.name, 1, added.categoryId);
+      return [
+        {
+          ...offer,
+          group: root.name,
+          categoryId: added.categoryId,
+          cost: { currency: 'USD', amountUnits: added.costUsdUnits },
+        },
+      ];
+    });
+    return [...OFFERS, ...added]
+      .filter((offer) => !removed.includes(offer.offerId))
+      .map(({ stock: listed, ...offer }) => {
+        const count = Object.hasOwn(stockCounts, offer.offerId)
+          ? stockCounts[offer.offerId]
+          : listed;
+        return {
+          ...offer,
+          cost: { currency: 'USD', amountUnits: costs[offer.offerId] ?? offer.cost.amountUnits },
+          inStock: !outOfStock.includes(offer.offerId) && count !== 0,
+          ...(count !== null && count !== undefined && { stock: count }),
+        };
+      });
+  }
+
+  /** The orders with a supplier order id, newest first, a page of 50. */
+  private statementPage(page: number): SupplierStatementPage<SupplierOrderRow> {
+    const catalog = this.catalog();
+    const rows = [...this.orders.values()]
+      .flatMap((order): SupplierOrderRow[] => {
+        const placed = [order.outcome, order.settled].find(
+          (outcome) => 'supplierOrderId' in outcome && outcome.supplierOrderId,
+        );
+        const supplierOrderId =
+          placed && 'supplierOrderId' in placed ? placed.supplierOrderId : undefined;
+        if (!supplierOrderId) return [];
+        const offer = catalog.find((item) => item.offerId === order.request.offerId);
+        return [
+          {
+            supplierOrderId,
+            offerId: order.request.offerId,
+            ...(offer && {
+              offerName: offer.name,
+              total: {
+                currency: 'USD' as const,
+                amountUnits: offer.cost.amountUnits * order.request.quantity,
+              },
+            }),
+            quantity: order.request.quantity,
+            status: order.settled.status,
+            ...(order.placedAt && { createdAt: new Date(order.placedAt) }),
+          },
+        ];
+      })
+      .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+    const start = (page - 1) * STATEMENT_PAGE_SIZE;
+    return {
+      items: rows.slice(start, start + STATEMENT_PAGE_SIZE),
+      hasMore: rows.length > start + STATEMENT_PAGE_SIZE,
+    };
   }
 
   /** A supplier that is down: no answer (S07 acceptance, `--errors on`). */
@@ -496,7 +749,10 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     return outcome;
   }
 
-  private async keep(idempotencyKey: string, order: FakeOrder): Promise<void> {
+  private async keep(idempotencyKey: string, update: FakeOrder): Promise<void> {
+    const placedAt =
+      update.placedAt ?? this.orders.get(idempotencyKey)?.placedAt ?? new Date().toISOString();
+    const order = { ...update, placedAt };
     this.orders.set(idempotencyKey, order);
     await this.options.onOrder?.(idempotencyKey, order);
   }

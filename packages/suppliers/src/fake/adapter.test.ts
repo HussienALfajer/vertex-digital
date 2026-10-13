@@ -43,6 +43,9 @@ describe('fake supplier', () => {
       group: 'PUBG Mobile',
       kind: 'direct',
       requiredFields: ['playerId'],
+      categoryId: 'fake-pubg-global',
+      originalCost: { currency: 'USD', amountUnits: 990_000 },
+      fieldSpecs: [{ key: 'playerId', label: 'Player ID', type: 'text' }],
     });
     expect(offers).toHaveLength(10);
     expect(new Set(offers.map((offer) => offer.group))).toEqual(
@@ -361,5 +364,144 @@ describe('fake supplier', () => {
       }),
     });
     expect(event.outcome).toMatchObject({ status: 'failed_definitive', supplierOrderId: 's1' });
+  });
+});
+
+describe('fake supplier catalog tree, stock, statement and status (S16)', () => {
+  it('lists its tree with counts and images it serves itself', async () => {
+    const fake = adapter();
+    const categories = await fake.listCategories();
+    expect(categories.map((category) => category.categoryId)).toEqual([
+      'fake-pubg',
+      'fake-pubg-global',
+      'fake-pubg-mena',
+      'fake-ff',
+      'fake-ff-auto',
+      'fake-gift',
+      'fake-itunes',
+    ]);
+    expect(categories[0]).toEqual({
+      categoryId: 'fake-pubg',
+      name: 'PUBG Mobile',
+      kind: 'direct',
+      productCount: 4,
+      inStockCount: 4,
+      imageUrl: 'https://fake-supplier.invalid/images/fake-pubg.png',
+    });
+    const png = await fake.fetchImage(categories[0]?.imageUrl as string, {
+      maxBytes: 1_000,
+      timeoutMs: 1_000,
+    });
+    expect([...png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    for (const url of [
+      'https://fake-supplier.invalid/images/none.png',
+      'https://evil.test/images/fake-pubg.png',
+    ]) {
+      await expect(fake.fetchImage(url, { maxBytes: 1_000, timeoutMs: 1_000 })).rejects.toThrow(
+        SupplierError,
+      );
+    }
+  });
+
+  it('follows scripted stock counts, missing categories and added offers', async () => {
+    const fake = adapter({
+      state: {
+        stockCounts: { 'fake-uc-60': 5, 'fake-uc-325': 0, 'fake-gift-10': null },
+        missingCategories: ['fake-pubg-mena'],
+        addedOffers: [
+          {
+            offerId: 'fake-added-1',
+            categoryId: 'fake-pubg-global',
+            name: 'Fake UC 120',
+            costUsdUnits: 1_700_000,
+          },
+          {
+            offerId: 'fake-added-2',
+            categoryId: 'fake-itunes',
+            name: 'Fake iTunes 5',
+            costUsdUnits: 4_800_000,
+          },
+          { offerId: 'fake-added-3', categoryId: 'nowhere', name: 'Lost', costUsdUnits: 1 },
+        ],
+      },
+    });
+    const offers = await fake.listOffers();
+    const byId = new Map(offers.map((offer) => [offer.offerId, offer]));
+    expect(byId.get('fake-uc-60')).toMatchObject({ inStock: true, stock: 5 });
+    expect(byId.get('fake-uc-325')).toMatchObject({ inStock: false, stock: 0 });
+    expect(byId.get('fake-gift-10')?.stock).toBeUndefined();
+    expect(byId.get('fake-itunes-25')?.stock).toBe(40);
+    expect(byId.get('fake-added-1')).toMatchObject({
+      group: 'PUBG Mobile',
+      kind: 'direct',
+      categoryId: 'fake-pubg-global',
+      cost: { currency: 'USD', amountUnits: 1_700_000 },
+      requiredFields: ['playerId'],
+    });
+    expect(byId.get('fake-added-2')).toMatchObject({ group: 'Gift cards', kind: 'code' });
+    expect(byId.has('fake-added-3')).toBe(false);
+    const tree = await fake.listCategories();
+    expect(tree.map((category) => category.categoryId)).not.toContain('fake-pubg-mena');
+    expect(tree.find((category) => category.categoryId === 'fake-pubg')).toMatchObject({
+      // The supplier's own figures still count the hidden child's packs.
+      productCount: 5,
+      inStockCount: 4,
+    });
+    // An added offer is ordered as any other.
+    expect((await fake.placeOrder(order('5000', { offerId: 'fake-added-1' }))).status).toBe(
+      'delivered',
+    );
+  });
+
+  it('builds its statement from the orders it took, newest first', async () => {
+    const kept: string[] = [];
+    const fake = new FakeSupplierAdapter({
+      webhookSecret,
+      state: fakeSupplierStateSchema.parse({}),
+      onOrder: async (key, placed) => {
+        expect(placed.placedAt).toMatch(/^\d{4}-/);
+        kept.push(key);
+      },
+    });
+    const first = await fake.placeOrder(order('5001'));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await fake.placeOrder(order('5002', { offerId: 'fake-gift-10', fields: {} }));
+    await fake.placeOrder(order('fail-5003'));
+    const orders = await fake.listOrders(1);
+    expect(orders.hasMore).toBe(false);
+    expect(orders.items.map((row) => row.supplierOrderId)).toEqual([
+      (second as { supplierOrderId: string }).supplierOrderId,
+      (first as { supplierOrderId: string }).supplierOrderId,
+    ]);
+    expect(orders.items[1]).toMatchObject({
+      offerId: 'fake-uc-60',
+      offerName: 'Fake UC 60',
+      quantity: 1,
+      status: 'delivered',
+      total: { currency: 'USD', amountUnits: 880_000 },
+    });
+    const transactions = await fake.listTransactions(1);
+    expect(transactions.items[1]).toMatchObject({
+      type: 'purchase',
+      amount: { currency: 'USD', amountUnits: -880_000 },
+      supplierOrderId: (first as { supplierOrderId: string }).supplierOrderId,
+    });
+    expect((await fake.listOrders(2)).items).toEqual([]);
+    expect(kept).toHaveLength(3);
+  });
+
+  it('reports its platform status, in maintenance while every call fails', async () => {
+    expect((await adapter().getPlatformStatus()).status).toBe('operational');
+    expect((await adapter({ state: { errors: true } }).getPlatformStatus()).status).toBe(
+      'maintenance',
+    );
+    expect(adapter().capabilities).toMatchObject({
+      categories: true,
+      statement: true,
+      platformStatus: true,
+    });
+    await expect(adapter({ state: { errors: true } }).listCategories()).rejects.toThrow(
+      SupplierError,
+    );
   });
 });

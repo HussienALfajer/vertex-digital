@@ -1,22 +1,32 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import {
   FAILING_SYNC_RUNS,
+  type FieldSpec,
+  fieldSpecSchema,
   formatSyp,
   formatUsd,
   isCostStale,
+  MAX_FIELD_SPECS,
+  type OfferUnsupportedReason,
+  offerUnsupportedReasonSchema,
   type ProductKind,
   productKindSchema,
   QUEUES,
+  type StockLevel,
   SUPPLIER_COST_MAX_USD_UNITS,
   type SuppliersSyncPayload,
+  stockAlertChange,
+  supplierCategoryIdSchema,
   supplierHasCatalog,
   suppliersSyncPayloadSchema,
+  TELEGRAM_STOCK_LOW_MAX_LINES,
 } from '@vertex-digital/contracts';
 import {
   bossJobSender,
   currentSupplierPolicy,
   type Database,
   failedRunStreak,
+  mappedStockOffers,
   newId,
   productPrices,
   productRoutes,
@@ -25,6 +35,7 @@ import {
   queueTelegramMessage,
   repriceProducts,
   type SupplierState,
+  supplierCategories,
   supplierCostChanges,
   supplierOffers,
   supplierStates,
@@ -32,8 +43,12 @@ import {
   type Transaction,
   withoutQueryParameters,
 } from '@vertex-digital/db';
-import { SupplierError, type SupplierOffer } from '@vertex-digital/suppliers';
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne } from 'drizzle-orm';
+import {
+  type SupplierCategory,
+  SupplierError,
+  type SupplierOffer,
+} from '@vertex-digital/suppliers';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -59,6 +74,56 @@ export interface ListedOffer {
   costUsdUnits: number | null;
   costRaw: string | null;
   inStock: boolean;
+  /** S16 SC3, SF1, SF2. */
+  categoryId: string | null;
+  stock: number | null;
+  originalCostUsdUnits: number | null;
+  fieldSpecs: FieldSpec[] | null;
+  unsupportedReason: OfferUnsupportedReason | null;
+}
+
+/** A category as stored (rule SC2): ids, text and counts bounded. */
+export interface ListedCategory {
+  categoryId: string;
+  parentCategoryId: string | null;
+  name: string;
+  kind: ProductKind | null;
+  productCount: number | null;
+  inStockCount: number | null;
+  imageUrl: string | null;
+}
+
+/** A count the supplier reports, or null when it is not a bounded whole number. */
+const countOf = (value: number | undefined): number | null =>
+  value !== undefined && Number.isSafeInteger(value) && value >= 0 && value <= 2_147_483_647
+    ? value
+    : null;
+
+const categoryIdOf = (value: string | undefined): string | null =>
+  supplierCategoryIdSchema.safeParse(value).data ?? null;
+
+/**
+ * Rule SC2: each category checked on its own: a usable id once (the first kept), a name of 1–200
+ * characters, counts that are bounded whole numbers, an HTTPS image URL of at most 500.
+ */
+export function listedCategories(categories: readonly SupplierCategory[]): ListedCategory[] {
+  const listed = new Map<string, ListedCategory>();
+  for (const category of categories) {
+    const categoryId = categoryIdOf(category.categoryId);
+    const name = category.name?.trim().slice(0, 200);
+    if (!categoryId || !name || listed.has(categoryId)) continue;
+    const image = category.imageUrl;
+    listed.set(categoryId, {
+      categoryId,
+      parentCategoryId: categoryIdOf(category.parentCategoryId),
+      name,
+      kind: productKindSchema.safeParse(category.kind).data ?? null,
+      productCount: countOf(category.productCount),
+      inStockCount: countOf(category.inStockCount),
+      imageUrl: image?.startsWith('https://') && image.length <= 500 ? image : null,
+    });
+  }
+  return [...listed.values()];
 }
 
 function rawCost(cost: SupplierOffer['cost']): string {
@@ -87,6 +152,13 @@ export function listedOffers(offers: readonly SupplierOffer[]): ListedOffer[] {
       amountUnits <= SUPPLIER_COST_MAX_USD_UNITS;
     const group = offer.group?.trim().slice(0, 200);
     const fields = offer.requiredFields;
+    const original = offer.originalCost;
+    const originalUsable =
+      original?.currency === 'USD' &&
+      Number.isSafeInteger(original.amountUnits) &&
+      original.amountUnits > 0 &&
+      original.amountUnits <= SUPPLIER_COST_MAX_USD_UNITS;
+    const specs = fieldSpecSchema.array().max(MAX_FIELD_SPECS).safeParse(offer.fieldSpecs);
     listed.set(offerId, {
       offerId,
       name: (offer.name?.trim() || offerId).slice(0, 200),
@@ -99,6 +171,12 @@ export function listedOffers(offers: readonly SupplierOffer[]): ListedOffer[] {
       costUsdUnits: usable ? amountUnits : null,
       costRaw: usable ? null : rawCost(offer.cost),
       inStock: offer.inStock === true,
+      categoryId: categoryIdOf(offer.categoryId),
+      stock: countOf(offer.stock),
+      originalCostUsdUnits: originalUsable ? original.amountUnits : null,
+      fieldSpecs: specs.success && offer.fieldSpecs !== undefined ? specs.data : null,
+      unsupportedReason:
+        offerUnsupportedReasonSchema.safeParse(offer.unsupportedReason).data ?? null,
     });
   }
   return [...listed.values()];
@@ -156,6 +234,15 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
         return this.fail(db, supplier, run, 'SUPPLIER_UNAVAILABLE', 'No adapter in this build');
       }
       secrets = connected.secrets;
+      // Rule SC2: categories first; a failed or empty read keeps the previous tree.
+      let categories: ListedCategory[] | null = null;
+      if (connected.adapter.capabilities.categories) {
+        const read = await recordedCall(db, supplier.id, 'list_categories', () =>
+          connected.adapter.listCategories(),
+        );
+        const listed = read.ok ? listedCategories(read.value) : [];
+        if (listed.length > 0) categories = listed;
+      }
       const call = await recordedCall(db, supplier.id, 'list_offers', () =>
         connected.adapter.listOffers(),
       );
@@ -167,7 +254,12 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
             : 'SUPPLIER_ERROR';
         return this.fail(db, supplier, run, code, sanitizedMessage(call.error, secrets));
       }
-      return await this.apply(db, supplier, run, listedOffers(call.value));
+      const closed = await this.apply(db, supplier, run, listedOffers(call.value), {
+        categories,
+        skipped: connected.adapter.capabilities.categories === true && categories === null,
+      });
+      await this.alertLowStock(db, supplier, closed);
+      return closed;
     } catch (error) {
       if (error instanceof SuspiciousCatalog) {
         return this.fail(db, supplier, run, 'CATALOG_SUSPICIOUS', error.message);
@@ -257,12 +349,119 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
     });
   }
 
+  /**
+   * S16 SF2, after the run's commit: the mapped offers of active products whose stock level rose
+   * since their stored alert get one `supplier_stock_low` message (up to 10 named, then a count);
+   * an offer back at or above the threshold clears its alert. Offers no longer mapped to an active
+   * product lose theirs, so a later drop alerts again.
+   */
+  private async alertLowStock(db: Executor, supplier: SupplierState, run: SyncRunRow) {
+    await db.transaction(async (tx) => {
+      const offers = await mappedStockOffers(tx, { supplierIds: [supplier.id], lock: true });
+      const alerts: typeof offers = [];
+      const changes = new Map<StockLevel | null, string[]>();
+      for (const offer of offers) {
+        const change = stockAlertChange(offer.stockAlert, offer.level);
+        if (change.alert) alerts.push(offer);
+        if (change.next !== offer.stockAlert) {
+          changes.set(change.next, [...(changes.get(change.next) ?? []), offer.id]);
+        }
+      }
+      for (const [level, ids] of changes) {
+        await tx
+          .update(supplierOffers)
+          .set({ stockAlert: level })
+          .where(inArray(supplierOffers.id, ids));
+      }
+      const mapped = offers.map((offer) => offer.id);
+      await tx
+        .update(supplierOffers)
+        .set({ stockAlert: null })
+        .where(
+          and(
+            eq(supplierOffers.supplierId, supplier.id),
+            isNotNull(supplierOffers.stockAlert),
+            mapped.length > 0
+              ? sql`${supplierOffers.id} <> all(${sql.param(mapped)}::uuid[])`
+              : undefined,
+          ),
+        );
+      if (alerts.length === 0) return;
+      await queueTelegramMessage(tx, bossJobSender(this.pgBoss.boss), {
+        kind: 'supplier_stock_low',
+        params: {
+          supplier: supplier.code,
+          supplierNameAr: supplier.nameAr,
+          runId: run.id,
+          offers: alerts.slice(0, TELEGRAM_STOCK_LOW_MAX_LINES).map((offer) => ({
+            gameNameAr: offer.gameNameAr,
+            productNameAr: offer.productNameAr,
+            level: offer.level === 'out' ? 'out' : 'low',
+            stock: offer.stock,
+          })),
+          more: Math.max(0, alerts.length - TELEGRAM_STOCK_LOW_MAX_LINES),
+        },
+        dedupeKey: `stock:${run.id}`,
+      });
+    });
+  }
+
+  /**
+   * Rule SC2: the tree upserted by `(supplier, category id)`, every listed node seen at the run's
+   * start, and the nodes the read no longer lists marked missing since then. Links and ignores stay.
+   */
+  private async mirrorCategories(
+    tx: Transaction,
+    supplier: SupplierState,
+    run: SyncRunRow,
+    categories: ListedCategory[],
+  ) {
+    const seenAt = run.startedAt;
+    for (let start = 0; start < categories.length; start += 500) {
+      await tx
+        .insert(supplierCategories)
+        .values(
+          categories.slice(start, start + 500).map((category) => ({
+            id: newId(),
+            supplierId: supplier.id,
+            ...category,
+            lastSeenAt: seenAt,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [supplierCategories.supplierId, supplierCategories.categoryId],
+          set: {
+            parentCategoryId: sql`excluded.parent_category_id`,
+            name: sql`excluded.name`,
+            kind: sql`excluded.kind`,
+            productCount: sql`excluded.product_count`,
+            inStockCount: sql`excluded.in_stock_count`,
+            imageUrl: sql`excluded.image_url`,
+            lastSeenAt: sql`excluded.last_seen_at`,
+            missingSince: null,
+            updatedAt: new Date(),
+          },
+        });
+    }
+    await tx
+      .update(supplierCategories)
+      .set({ missingSince: seenAt })
+      .where(
+        and(
+          eq(supplierCategories.supplierId, supplier.id),
+          isNull(supplierCategories.missingSince),
+          lt(supplierCategories.lastSeenAt, seenAt),
+        ),
+      );
+  }
+
   /** Rules SY3, SY4 and P2 in one transaction; throws `SuspiciousCatalog` to change nothing. */
   private async apply(
     db: Executor,
     supplier: SupplierState,
     run: SyncRunRow,
     listed: ListedOffer[],
+    tree: { categories: ListedCategory[] | null; skipped: boolean },
   ): Promise<SyncRunRow> {
     const context = () => ({ now: new Date(), fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED });
     return db.transaction(async (tx) => {
@@ -307,6 +506,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
           row.inStock !== offer.inStock ||
           row.missingSince !== null ||
           row.kind !== offer.kind ||
+          row.unsupportedReason !== offer.unsupportedReason ||
           !sameFields(row.requiredFields, offer.requiredFields) ||
           isCostStale(supplier.code, row.costConfirmedAt, now, policy);
         if (moved) changed.push(row.id);
@@ -374,6 +574,11 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
             costUsdUnits: offer.costUsdUnits,
             costRaw: offer.costRaw,
             inStock: offer.inStock,
+            categoryId: offer.categoryId,
+            stock: offer.stock,
+            originalCostUsdUnits: offer.originalCostUsdUnits,
+            fieldSpecs: offer.fieldSpecs,
+            unsupportedReason: offer.unsupportedReason,
             lastSeenAt: run.startedAt,
             ...(offer.costUsdUnits !== null && { costConfirmedAt: run.startedAt }),
             missingSince: null,
@@ -404,6 +609,8 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
         counts.mappedMissing = missing.filter((row) => mapped.has(row.id)).length;
       }
 
+      if (tree.categories) await this.mirrorCategories(tx, supplier, run, tree.categories);
+
       const repriced = await repriceProducts(tx, {
         productIds,
         cause: 'cost_sync',
@@ -426,6 +633,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
           offersMissing: counts.offersMissing,
           reviewsOpened: repriced.reviewsOpened,
           productsRepriced: repriced.repriced,
+          categoriesSkipped: tree.skipped,
         })
         .where(and(eq(supplierSyncRuns.id, run.id), eq(supplierSyncRuns.status, 'running')))
         .returning();

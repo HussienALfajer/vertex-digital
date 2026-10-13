@@ -1944,3 +1944,98 @@ export const DELIVERY_PROOF_MAX_BYTES = 10 * 1024 * 1024;
 export const deliveryProofSchema = storedFileRefSchema.meta({ id: 'DeliveryProof' });
 
 export type DeliveryProof = z.infer<typeof deliveryProofSchema>;
+
+// The supplier's statement matched to our attempts (S16 SF3, SF4) -----------------------------
+
+/** A supplier order or transaction named by an attempt of ours (`supplier_order_id`). */
+export const supplierOrderMatchSchema = z
+  .object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    orderStatus: orderStatusSchema,
+    attemptId: z.uuid(),
+    attemptStatus: attemptStatusSchema,
+  })
+  .meta({ id: 'SupplierOrderMatch' });
+
+export type SupplierOrderMatch = z.infer<typeof supplierOrderMatchSchema>;
+
+/**
+ * One order of the supplier's history, read live (rule SF3). Fields the supplier does not send
+ * are null and hidden in the panel; supplier text is shown as text.
+ */
+export const supplierOrderSchema = z
+  .object({
+    supplierOrderId: z.string(),
+    offerId: z.string().nullable(),
+    offerName: z.string().nullable(),
+    quantity: z.int().positive().nullable(),
+    status: z.string().nullable(),
+    totalUsdUnits: z.int().nullable(),
+    createdAt: z.iso.datetime().nullable(),
+    /** Null: "غير مطابق لطلب عندنا", a possible double purchase. */
+    match: supplierOrderMatchSchema.nullable(),
+  })
+  .meta({ id: 'SupplierOrder' });
+
+export type SupplierOrder = z.infer<typeof supplierOrderSchema>;
+
+/** One movement of the supplier's wallet, read live (rule SF3). */
+export const supplierTransactionSchema = z
+  .object({
+    id: z.string(),
+    type: z.string().nullable(),
+    amountUsdUnits: z.int().nullable(),
+    balanceAfterUsdUnits: z.int().nullable(),
+    reference: z.string().nullable(),
+    supplierOrderId: z.string().nullable(),
+    createdAt: z.iso.datetime().nullable(),
+    match: supplierOrderMatchSchema.nullable(),
+  })
+  .meta({ id: 'SupplierTransaction' });
+
+export type SupplierTransaction = z.infer<typeof supplierTransactionSchema>;
+
+const statementPage = <Item extends z.ZodType>(item: Item, id: string) =>
+  z.object({ items: z.array(item), page: z.int().min(1), hasMore: z.boolean() }).meta({ id });
+
+export const supplierOrderPageSchema = statementPage(supplierOrderSchema, 'SupplierOrderPage');
+
+export type SupplierOrderPage = z.infer<typeof supplierOrderPageSchema>;
+
+export const supplierTransactionPageSchema = statementPage(
+  supplierTransactionSchema,
+  'SupplierTransactionPage',
+);
+
+export type SupplierTransactionPage = z.infer<typeof supplierTransactionPageSchema>;
+
+/** Rule SF4: the supplier's orders this close to an attempt's send are shown beside it. */
+export const NEARBY_SUPPLIER_ORDER_MINUTES = 15;
+
+/**
+ * Rule SF4: a supplier order may be the attempt's when it is for the same offer and quantity and
+ * within 15 minutes of the attempt's send, as far as the supplier says: a field it leaves out
+ * never rules an order out (the admin judges it).
+ */
+export function isNearbySupplierOrder(
+  order: Pick<SupplierOrder, 'offerId' | 'quantity' | 'createdAt'>,
+  attempt: { supplierOfferId: string; quantity: number; sentAt: Date },
+): boolean {
+  if (order.offerId !== null && order.offerId !== attempt.supplierOfferId) return false;
+  if (order.quantity !== null && order.quantity !== attempt.quantity) return false;
+  if (order.createdAt === null) return true;
+  const gap = Math.abs(Date.parse(order.createdAt) - attempt.sentAt.getTime());
+  return gap <= NEARBY_SUPPLIER_ORDER_MINUTES * 60_000;
+}
+
+/**
+ * `GET /api/admin/orders/:id/attempts/:attemptId/supplier-orders` (SF4): `complete` is false when
+ * the read stopped before the supplier's history reached the window, or a row carried no time:
+ * then an empty list does not mean the supplier holds no such order.
+ */
+export const nearbySupplierOrdersSchema = z
+  .object({ items: z.array(supplierOrderSchema), complete: z.boolean() })
+  .meta({ id: 'NearbySupplierOrders' });
+
+export type NearbySupplierOrders = z.infer<typeof nearbySupplierOrdersSchema>;

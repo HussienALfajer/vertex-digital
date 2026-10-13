@@ -8,6 +8,7 @@ import {
   SUPPLIER_POLICY_DEFAULTS,
   TELEGRAM_MESSAGE_PARAMS,
   type TelegramMessageKind,
+  type TelegramMessageParams,
 } from '@vertex-digital/contracts';
 import {
   createDatabase,
@@ -20,6 +21,7 @@ import {
   repriceProducts,
   supplierBalanceReads,
   supplierCalls,
+  supplierCategories,
   supplierCostChanges,
   supplierCredentials,
   supplierHealthChanges,
@@ -1113,6 +1115,9 @@ describe('the supplier registry (rules SP1, SP2)', () => {
         orderScripts: {},
         orders: {},
         errors: false,
+        stockCounts: {},
+        missingCategories: [],
+        addedOffers: [],
       });
       const connected = await real.connect(tx, { id: ids.fake, code: 'fake' });
       expect(connected?.secrets).toEqual([SECRET]);
@@ -1252,4 +1257,203 @@ describe('the supplier messages', () => {
       text('supplier_sync_failing', { ...name, reason: 'costs_stale', unavailableProducts: 14 })[0],
     ).toBe('⛔ أسعار WDGZone قديمة: 14 باقة غير متوفرة');
   });
+});
+
+describe('suppliers.sync: categories, offer fields and stock (S16 SC2, SC3, SF2)', () => {
+  const tree = (...extra: { categoryId: string; parentCategoryId?: string; name: string }[]) => [
+    {
+      categoryId: `c-${run}-root`,
+      name: 'PUBG Mobile',
+      kind: 'direct' as const,
+      productCount: 2,
+      inStockCount: 1,
+      imageUrl: 'https://fake-supplier.invalid/images/root.png',
+    },
+    { categoryId: `c-${run}-leaf`, parentCategoryId: `c-${run}-root`, name: 'Global' },
+    ...extra,
+  ];
+  const catalogAdapter = (
+    categories: () => Promise<unknown[]>,
+    ...offers: SupplierOffer[]
+  ): Partial<SupplierAdapter> => ({
+    capabilities: {
+      balance: true,
+      catalog: true,
+      categories: true,
+      statement: false,
+      platformStatus: false,
+      validatePlayer: false,
+      webhooks: false,
+    },
+    listCategories: categories as SupplierAdapter['listCategories'],
+    listOffers: async () => offers,
+  });
+  const categoryRows = (tx: Transaction) =>
+    tx
+      .select()
+      .from(supplierCategories)
+      .where(like(supplierCategories.categoryId, `c-${run}-%`))
+      .orderBy(asc(supplierCategories.categoryId));
+
+  it('reads categories before offers, mirrors them and marks missing ones', () =>
+    isolated(async (tx) => {
+      const leafOffer = offer('tree', 1, {
+        categoryId: `c-${run}-leaf`,
+        stock: 7,
+        originalCost: { currency: 'USD', amountUnits: usd(1.2) },
+        fieldSpecs: [{ key: 'playerId', label: 'Player ID', type: 'text' }],
+      });
+      const twoFields = offer('two', 1, {
+        categoryId: `c-${run}-leaf`,
+        requiredFields: ['user_id', 'server_id'],
+        unsupportedReason: 'fields_unsupported',
+      });
+      const calls: string[] = [];
+      current = {
+        ...catalogAdapter(
+          async () => {
+            calls.push('categories');
+            return tree(
+              { categoryId: `c-${run}-gone`, name: 'Old' },
+              { categoryId: '', name: 'x' },
+            );
+          },
+          leafOffer,
+          twoFields,
+        ),
+      };
+      const listOffers = current.listOffers as () => Promise<SupplierOffer[]>;
+      current.listOffers = async () => {
+        calls.push('offers');
+        return listOffers();
+      };
+      const first = await sync.sync(payload(), tx);
+      expect(first).toMatchObject({ status: 'succeeded', categoriesSkipped: false });
+      expect(calls).toEqual(['categories', 'offers']);
+      const rows = await categoryRows(tx);
+      expect(rows.map((row) => [row.categoryId, row.parentCategoryId, row.missingSince])).toEqual([
+        [`c-${run}-gone`, null, null],
+        [`c-${run}-leaf`, `c-${run}-root`, null],
+        [`c-${run}-root`, null, null],
+      ]);
+      expect(rows[2]).toMatchObject({
+        name: 'PUBG Mobile',
+        kind: 'direct',
+        productCount: 2,
+        inStockCount: 1,
+        imageUrl: 'https://fake-supplier.invalid/images/root.png',
+        lastSeenAt: first?.startedAt,
+      });
+      expect(await offerRow(tx, 'tree')).toMatchObject({
+        categoryId: `c-${run}-leaf`,
+        stock: 7,
+        originalCostUsdUnits: usd(1.2),
+        fieldSpecs: [{ key: 'playerId', label: 'Player ID', type: 'text' }],
+        unsupportedReason: null,
+      });
+      expect(await offerRow(tx, 'two')).toMatchObject({ unsupportedReason: 'fields_unsupported' });
+      const calledCategories = await tx
+        .select()
+        .from(supplierCalls)
+        .where(
+          and(
+            eq(supplierCalls.supplierId, ids.fake),
+            eq(supplierCalls.operation, 'list_categories'),
+          ),
+        );
+      expect(calledCategories.length).toBeGreaterThan(0);
+
+      // The node is no longer listed: kept, missing since this run; the link would stay.
+      await tx
+        .update(supplierCategories)
+        .set({ ignoredAt: new Date() })
+        .where(eq(supplierCategories.categoryId, `c-${run}-gone`));
+      current = catalogAdapter(async () => tree(), leafOffer, twoFields);
+      const second = await sync.sync(payload(), tx);
+      const gone = (await categoryRows(tx))[0];
+      expect(gone?.missingSince).toEqual(second?.startedAt);
+      expect(gone?.ignoredAt).not.toBeNull();
+
+      // A failed or empty category read keeps the tree; the run goes on with offers.
+      for (const read of [
+        async () => {
+          throw new SupplierError('retryable', 'Categories timed out');
+        },
+        async () => [],
+      ]) {
+        current = catalogAdapter(read, leafOffer, twoFields);
+        const skipped = await sync.sync(payload(), tx);
+        expect(skipped).toMatchObject({ status: 'succeeded', categoriesSkipped: true });
+        expect((await categoryRows(tx)).map((row) => row.missingSince === null)).toEqual([
+          false,
+          true,
+          true,
+        ]);
+      }
+    }));
+
+  it('alerts low and out stock of mapped active packs once per level, again after recovery', () =>
+    isolated(async (tx) => {
+      const p = await product(tx);
+      await tx.execute(sql`update catalog_products set status = 'active' where id = ${p}`);
+      const stocked = (stock: number | undefined, inStock = true) =>
+        listing(offer('stock', 1, { stock, inStock }), offer('plain', 1));
+      current = stocked(50);
+      await sync.sync(payload(), tx);
+      await route(tx, p, (await offerRow(tx, 'stock')).id);
+      // A paused product's offer never alerts.
+      const pausedProduct = await product(tx);
+      await tx.execute(
+        sql`update catalog_products set status = 'paused' where id = ${pausedProduct}`,
+      );
+      await route(tx, pausedProduct, (await offerRow(tx, 'plain')).id);
+
+      const runs: (typeof supplierSyncRuns.$inferSelect | null)[] = [];
+      for (const [stock, inStock] of [
+        [5, true],
+        [4, true],
+        [20, true],
+        [5, true],
+        [0, true],
+        [undefined, false],
+      ] as const) {
+        current = stocked(stock, inStock);
+        runs.push(await sync.sync(payload(), tx));
+      }
+      const alerted = await Promise.all(
+        runs.map(async (one) => (await message(tx, `stock:${one?.id}`))?.params),
+      );
+      expect(alerted.map((params) => params !== undefined)).toEqual([
+        true, // ok → low
+        false, // low stays low
+        false, // back at the threshold: cleared
+        true, // low again
+        true, // low → out
+        false, // out stays out
+      ]);
+      expect(alerted[0]).toMatchObject({
+        supplier: 'fake',
+        offers: [{ level: 'low', stock: 5 }],
+        more: 0,
+      });
+      expect(alerted[4]).toMatchObject({ offers: [{ level: 'out', stock: 0 }] });
+      expect((await offerRow(tx, 'stock')).stockAlert).toBe('out');
+      expect((await offerRow(tx, 'plain')).stockAlert).toBeNull();
+      const text = renderTelegramMessage(
+        'supplier_stock_low',
+        alerted[0] as TelegramMessageParams<'supplier_stock_low'>,
+        LINKS,
+      ).text;
+      expect(text).toContain('مخزون منخفض في مورد تجريبي');
+      expect(text).toContain('(5 متبقية)');
+
+      // The route is archived: the offer no longer counts and its alert is cleared.
+      await tx
+        .update(productRoutes)
+        .set({ archivedAt: new Date() })
+        .where(eq(productRoutes.productId, p));
+      current = stocked(5);
+      await sync.sync(payload(), tx);
+      expect((await offerRow(tx, 'stock')).stockAlert).toBeNull();
+    }));
 });

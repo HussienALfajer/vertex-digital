@@ -1,4 +1,6 @@
 import {
+  type FieldSpec,
+  STOCK_LEVELS,
   SUPPLIER_CALL_OPERATIONS,
   SUPPLIER_CALL_RESULTS,
   SUPPLIER_CODES,
@@ -21,7 +23,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { catalogProducts, productKindEnum } from './catalog.js';
+import { catalogGames, catalogProducts, productKindEnum } from './catalog.js';
 import { amountUnits, archivedAt, bytea, currencyEnum, id, timestamps } from './columns.js';
 import { fulfilmentAttempts } from './orders.js';
 
@@ -49,6 +51,8 @@ export const syncRunTriggerEnum = pgEnum('sync_run_trigger', SYNC_RUN_TRIGGERS);
 export const syncRunStatusEnum = pgEnum('sync_run_status', SYNC_RUN_STATUSES);
 
 export const webhookEventResultEnum = pgEnum('webhook_event_result', WEBHOOK_EVENT_RESULTS);
+
+export const stockLevelEnum = pgEnum('stock_level', STOCK_LEVELS);
 
 /** The time of the insert, not of its transaction's start. */
 const insertedAt = () =>
@@ -127,10 +131,47 @@ export const supplierOffers = pgTable(
     costConfirmedAt: timestamp('cost_confirmed_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
     missingSince: timestamp('missing_since', { withTimezone: true }),
+    /** S16 SC3: the supplier's leaf category id (`supplier_categories.category_id`). */
+    categoryId: text('category_id'),
+    /** S16 SF2: null when unlimited or not reported (WDG's 999999 and above). */
+    stock: integer('stock'),
+    /** S16 SF1: the supplier's price before its discount. */
+    originalCostUsdUnits: amountUnits('original_cost_usd_units'),
+    /** S16 SC3: the supplier's account fields with labels, types and options. */
+    fieldSpecs: jsonb('field_specs').$type<FieldSpec[]>(),
+    /** S16 SC3: `fields_unsupported` until Q19 (never usable by RT4). */
+    unsupportedReason: text('unsupported_reason'),
+    /** S16 SC6: no longer counted as new; reversible. */
+    ignoredAt: timestamp('ignored_at', { withTimezone: true }),
+    ignoredAdminId: uuid('ignored_admin_id'),
+    /** S16 SF2: the last stock level alerted; null once back at or above the threshold. */
+    stockAlert: stockLevelEnum('stock_alert'),
     ...timestamps(),
   },
   (table) => [
     uniqueIndex('supplier_offers_supplier_id_offer_id_idx').on(table.supplierId, table.offerId),
+    index('supplier_offers_supplier_id_category_id_idx').on(table.supplierId, table.categoryId),
+    check(
+      'supplier_offers_category_id_check',
+      sql`char_length(${table.categoryId}) between 1 and 64`,
+    ),
+    check('supplier_offers_stock_check', sql`${table.stock} >= 0`),
+    check(
+      'supplier_offers_original_cost_check',
+      sql`${table.originalCostUsdUnits} between 1 and 10000000000`,
+    ),
+    check(
+      'supplier_offers_field_specs_check',
+      sql`jsonb_typeof(${table.fieldSpecs}) = 'array' and jsonb_array_length(${table.fieldSpecs}) <= 10`,
+    ),
+    check(
+      'supplier_offers_unsupported_reason_check',
+      sql`${table.unsupportedReason} in ('fields_unsupported')`,
+    ),
+    check(
+      'supplier_offers_ignored_check',
+      sql`(${table.ignoredAt} is null) = (${table.ignoredAdminId} is null)`,
+    ),
     index('supplier_offers_supplier_id_group_name_idx').on(table.supplierId, table.groupName),
     index('supplier_offers_supplier_id_missing_since_idx').on(table.supplierId, table.missingSince),
     check('supplier_offers_offer_id_check', sql`char_length(${table.offerId}) between 1 and 128`),
@@ -162,6 +203,8 @@ export const supplierSyncRuns = pgTable(
     offersMissing: integer('offers_missing').notNull().default(0),
     reviewsOpened: integer('reviews_opened').notNull().default(0),
     productsRepriced: integer('products_repriced').notNull().default(0),
+    /** S16 SC2: the category read failed or was empty; the previous tree was kept. */
+    categoriesSkipped: boolean('categories_skipped').notNull().default(false),
     /** Sanitized: never credentials, URLs with keys or raw bodies. */
     errorCode: text('error_code'),
     errorMessage: text('error_message'),
@@ -298,6 +341,8 @@ export const supplierPolicy = pgTable(
     downSuccessBp: integer('down_success_bp').notNull(),
     downConsecutiveErrors: integer('down_consecutive_errors').notNull(),
     probeAfterMinutes: integer('probe_after_minutes').notNull(),
+    /** S16 SF2: a count of units in stock, bigint as every `*_units` column; 10 on older rows. */
+    lowStockUnits: amountUnits('low_stock_units').notNull().default(10),
     /** Null for the seed. */
     adminId: uuid('admin_id'),
     createdAt: insertedAt(),
@@ -316,6 +361,76 @@ export const supplierPolicy = pgTable(
         and ${table.downSuccessBp} < ${table.degradedSuccessBp}
         and ${table.downConsecutiveErrors} between 1 and 20
         and ${table.probeAfterMinutes} between 1 and 120`,
+    ),
+    check('supplier_policy_low_stock_check', sql`${table.lowStockUnits} between 1 and 1000`),
+  ],
+);
+
+/**
+ * S16 SC1, SC2: a mirror of each supplier's category tree, upserted by the sync, with our link to
+ * a game and the admin's ignore. Never deleted (no delete for the app role, migration 0057): a
+ * category the supplier stops listing gets `missing_since`.
+ */
+export const supplierCategories = pgTable(
+  'supplier_categories',
+  {
+    id: id(),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id),
+    /** The supplier's own id. */
+    categoryId: text('category_id').notNull(),
+    /** The supplier's parent id; no foreign key, so a tree read out of order still stores. */
+    parentCategoryId: text('parent_category_id'),
+    name: text('name').notNull(),
+    kind: productKindEnum('kind'),
+    productCount: integer('product_count'),
+    inStockCount: integer('in_stock_count'),
+    /** HTTPS on a host the adapter declares, else null (rule IM1). */
+    imageUrl: text('image_url'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+    missingSince: timestamp('missing_since', { withTimezone: true }),
+    gameId: uuid('game_id').references(() => catalogGames.id),
+    linkedAt: timestamp('linked_at', { withTimezone: true }),
+    ignoredAt: timestamp('ignored_at', { withTimezone: true }),
+    /** The admin who last linked, unlinked, ignored or unignored it; no foreign key. */
+    stateAdminId: uuid('state_admin_id'),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex('supplier_categories_supplier_id_category_id_idx').on(
+      table.supplierId,
+      table.categoryId,
+    ),
+    index('supplier_categories_supplier_id_parent_category_id_idx').on(
+      table.supplierId,
+      table.parentCategoryId,
+    ),
+    index('supplier_categories_game_id_idx').on(table.gameId),
+    index('supplier_categories_supplier_id_missing_since_idx').on(
+      table.supplierId,
+      table.missingSince,
+    ),
+    check(
+      'supplier_categories_category_id_check',
+      sql`char_length(${table.categoryId}) between 1 and 64`,
+    ),
+    check(
+      'supplier_categories_parent_category_id_check',
+      sql`char_length(${table.parentCategoryId}) between 1 and 64`,
+    ),
+    check('supplier_categories_name_check', sql`char_length(${table.name}) between 1 and 200`),
+    check(
+      'supplier_categories_counts_check',
+      sql`${table.productCount} >= 0 and ${table.inStockCount} >= 0`,
+    ),
+    check(
+      'supplier_categories_image_url_check',
+      sql`char_length(${table.imageUrl}) <= 500 and ${table.imageUrl} like 'https://%'`,
+    ),
+    check(
+      'supplier_categories_linked_check',
+      sql`(${table.gameId} is null) = (${table.linkedAt} is null)`,
     ),
   ],
 );

@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { productAvailabilitySchema, productKindSchema } from './catalog.js';
+import {
+  createGameSchema,
+  createInputFieldSchema,
+  MAX_INPUT_FIELDS_PER_GAME,
+  productAvailabilitySchema,
+  productKindSchema,
+} from './catalog.js';
 import { pagedListSchema, pageQuerySchema } from './lists.js';
 import { CURRENCY_SCALE, currencySchema, USD_CENT, usdCentsSchema } from './money.js';
 
@@ -30,7 +36,22 @@ export const SUPPLIER_CALL_OPERATIONS = [
   'validate_player',
   'place_order',
   'get_order',
+  /** S16 SC2: the category tree, read by the sync before the offers. */
+  'list_categories',
+  /** S16 SF3–SF5, IM1–IM3: the panel's live reads, recorded but left out of health (SF6). */
+  'list_transactions',
+  'list_orders',
+  'platform_status',
+  'fetch_image',
 ] as const;
+
+/** S16 SF6: calls the panel makes on request; health counts the operations orders depend on. */
+export const PANEL_READ_OPERATIONS: readonly SupplierCallOperation[] = [
+  'list_transactions',
+  'list_orders',
+  'platform_status',
+  'fetch_image',
+];
 
 /**
  * `ok`: answered; `refused`: a definitive refusal (the supplier is working); `error`: no
@@ -124,6 +145,8 @@ export const supplierPolicySchema = z
     downSuccessBp: z.int().min(0).max(9_999),
     downConsecutiveErrors: z.int().min(1).max(20),
     probeAfterMinutes: z.int().min(1).max(120),
+    /** S16 SF2: a mapped offer's reported stock below this is low (owner, 2026-10-12: 10). */
+    lowStockUnits: z.int().min(1).max(1_000),
   })
   .refine((policy) => policy.downSuccessBp < policy.degradedSuccessBp, {
     message: 'Expected downSuccessBp below degradedSuccessBp',
@@ -144,6 +167,7 @@ export const SUPPLIER_POLICY_DEFAULTS: SupplierPolicy = {
   downSuccessBp: 5_000,
   downConsecutiveErrors: 3,
   probeAfterMinutes: 10,
+  lowStockUnits: 10,
 };
 
 // Health (H1–H3) -------------------------------------------------------------------------------
@@ -207,7 +231,7 @@ export function supplierHealth(
   const answered = calls.filter((call) => call.result !== 'error').length;
   const successBp = total === 0 ? null : Math.floor((answered * 10_000) / total);
   const latencies = calls
-    .filter((call) => call.operation !== 'list_offers')
+    .filter((call) => call.operation !== 'list_offers' && call.operation !== 'list_categories')
     .map((call) => call.latencyMs)
     .sort((a, b) => a - b);
   // Nearest rank: the smallest latency at or above 90% of the calls.
@@ -279,6 +303,8 @@ export const ROUTE_UNUSABLE_REASONS = [
   'supplier_paused',
   'supplier_down',
   'offer_missing',
+  /** S16 SC3: the offer has fields this build cannot send yet (Q19). */
+  'offer_unsupported',
   'out_of_stock',
   'cost_unknown',
   'cost_stale',
@@ -309,6 +335,8 @@ export interface RouteFacts {
   supplierPaused: boolean;
   health: SupplierHealthState;
   offerMissing: boolean;
+  /** S16 SC3: the offer has an `unsupported_reason`. */
+  offerUnsupported: boolean;
   inStock: boolean;
   costUsdUnits: number | null;
   costConfirmedAt: Date | null;
@@ -355,6 +383,7 @@ export function routeUnusableReason(
   if (route.supplierPaused) return 'supplier_paused';
   if (route.health === 'down') return 'supplier_down';
   if (route.offerMissing) return 'offer_missing';
+  if (route.offerUnsupported) return 'offer_unsupported';
   if (!route.inStock) return 'out_of_stock';
   if (route.costUsdUnits === null) return 'cost_unknown';
   if (isCostStale(route.supplierCode, route.costConfirmedAt, now, policy)) return 'cost_stale';
@@ -404,6 +433,327 @@ export function priceBasis<Route extends OrderedRoute>(
   usableRoutes: readonly Route[],
 ): Route | null {
   return orderRoutes(usableRoutes)[0] ?? null;
+}
+
+// Supplier catalog (S16 SC1–SC14, SF1–SF6) -----------------------------------------------------
+
+/** The supplier's category id: its own text, as it gives it (WDG: digits). */
+export const supplierCategoryIdSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9_.-]{1,64}$/)
+  .meta({ id: 'SupplierCategoryId' });
+
+/** Rule SC5: a category's state in the browser. */
+export const SUPPLIER_CATEGORY_STATES = ['not_imported', 'linked', 'new_packs', 'ignored'] as const;
+
+export const supplierCategoryStateSchema = z
+  .enum(SUPPLIER_CATEGORY_STATES)
+  .meta({ id: 'SupplierCategoryState' });
+
+export type SupplierCategoryState = z.infer<typeof supplierCategoryStateSchema>;
+
+/** Rule SF2: `unlimited` when the supplier reports no figure. */
+export const STOCK_LEVELS = ['ok', 'low', 'out', 'unlimited'] as const;
+
+export const stockLevelSchema = z.enum(STOCK_LEVELS).meta({ id: 'StockLevel' });
+
+export type StockLevel = z.infer<typeof stockLevelSchema>;
+
+/** Rule SC3: why an offer cannot be imported or routed yet (two fields or a select: Q19). */
+export const OFFER_UNSUPPORTED_REASONS = ['fields_unsupported'] as const;
+
+export const offerUnsupportedReasonSchema = z
+  .enum(OFFER_UNSUPPORTED_REASONS)
+  .meta({ id: 'OfferUnsupportedReason' });
+
+export type OfferUnsupportedReason = z.infer<typeof offerUnsupportedReasonSchema>;
+
+/** At most 10 fields per offer, 50 options per field (S16 Data). */
+export const MAX_FIELD_SPECS = 10;
+export const MAX_FIELD_SPEC_OPTIONS = 50;
+
+/** One account field as the supplier describes it; text is the supplier's, shown as text. */
+export const fieldSpecSchema = z
+  .object({
+    key: z.string().regex(/^[A-Za-z0-9_.-]{1,32}$/),
+    label: z.string().max(64),
+    type: z.enum(['text', 'select']),
+    options: z
+      .array(z.object({ label: z.string().max(64), value: z.string().min(1).max(64) }))
+      .max(MAX_FIELD_SPEC_OPTIONS)
+      .optional(),
+  })
+  .meta({ id: 'FieldSpec' });
+
+export type FieldSpec = z.infer<typeof fieldSpecSchema>;
+
+/** S16 SF5: the supplier's own status and catalog time, as it reports them. */
+export const platformStatusSchema = z
+  .object({
+    status: z.string().max(64),
+    catalogUpdatedAt: z.iso.datetime().nullable(),
+    checkedAt: z.iso.datetime(),
+  })
+  .meta({ id: 'PlatformStatus' });
+
+export type PlatformStatus = z.infer<typeof platformStatusSchema>;
+
+/** What the panel may read from a supplier's adapter (S16: `categories`, `statement`, SF5). */
+export const supplierPanelCapabilitiesSchema = z
+  .object({ categories: z.boolean(), statement: z.boolean(), platformStatus: z.boolean() })
+  .meta({ id: 'SupplierPanelCapabilities' });
+
+export type SupplierPanelCapabilities = z.infer<typeof supplierPanelCapabilitiesSchema>;
+
+/** The adapters that declare the S16 capabilities (`wdgzone`, `fake`); SHOP2TOPUP has none yet. */
+export function supplierPanelCapabilities(code: SupplierCode): SupplierPanelCapabilities {
+  const has = code === 'wdgzone' || code === 'fake';
+  return { categories: has, statement: has, platformStatus: has };
+}
+
+/** What rule SC5 reads of a category node. */
+export interface CategoryNodeFacts {
+  categoryId: string;
+  parentCategoryId: string | null;
+  /** Our game linked to this node itself. */
+  gameId: string | null;
+  ignored: boolean;
+}
+
+/** What rule SC5 reads of an offer under a leaf. */
+export interface CategoryOfferFacts {
+  categoryId: string | null;
+  mapped: boolean;
+  ignored: boolean;
+  supported: boolean;
+  inStock: boolean;
+  missing: boolean;
+}
+
+/** A node's facts for the browser (rules SC4, SC5): its state, effective game and counts. */
+export interface CategoryStanding {
+  state: SupplierCategoryState;
+  /** Its own link or its nearest linked ancestor's. */
+  effectiveGameId: string | null;
+  /** Counts of the offers in its subtree. */
+  mapped: number;
+  unmapped: number;
+  ignored: number;
+  unsupported: number;
+  newPacks: number;
+}
+
+/**
+ * Rule SC5 for every node at once (`categoryState` of the spec): the effective game is a node's
+ * own link or its nearest linked ancestor's; `ignored` when it or an ancestor is ignored; else
+ * `not_imported` without an effective game; `new_packs` when an offer of its subtree whose leaf
+ * has an effective game is unmapped, not ignored, supported, in stock and not missing; else
+ * `linked`. A parent the tree does not hold ends the walk up; a cycle stops at the first repeat.
+ */
+export function categoryStandings(
+  nodes: readonly CategoryNodeFacts[],
+  offers: readonly CategoryOfferFacts[],
+): Map<string, CategoryStanding> {
+  const byId = new Map(nodes.map((node) => [node.categoryId, node]));
+  const lines = new Map<string, CategoryNodeFacts[]>();
+  const standings = new Map<string, CategoryStanding>();
+  for (const node of nodes) {
+    // The node and its ancestors, nearest first.
+    const chain: CategoryNodeFacts[] = [];
+    const seen = new Set<string>();
+    let link: CategoryNodeFacts | undefined = node;
+    while (link && !seen.has(link.categoryId)) {
+      seen.add(link.categoryId);
+      chain.push(link);
+      link = link.parentCategoryId === null ? undefined : byId.get(link.parentCategoryId);
+    }
+    lines.set(node.categoryId, chain);
+    standings.set(node.categoryId, {
+      state: 'not_imported',
+      effectiveGameId: chain.find((item) => item.gameId !== null)?.gameId ?? null,
+      mapped: 0,
+      unmapped: 0,
+      ignored: 0,
+      unsupported: 0,
+      newPacks: 0,
+    });
+  }
+  for (const offer of offers) {
+    const chain = offer.categoryId === null ? undefined : lines.get(offer.categoryId);
+    if (!chain) continue;
+    const leaf = standings.get(offer.categoryId as string) as CategoryStanding;
+    const isNew =
+      !offer.mapped &&
+      !offer.ignored &&
+      offer.supported &&
+      offer.inStock &&
+      !offer.missing &&
+      leaf.effectiveGameId !== null;
+    for (const link of chain) {
+      const standing = standings.get(link.categoryId) as CategoryStanding;
+      if (offer.mapped) standing.mapped += 1;
+      else standing.unmapped += 1;
+      if (offer.ignored) standing.ignored += 1;
+      if (!offer.supported) standing.unsupported += 1;
+      if (isNew) standing.newPacks += 1;
+    }
+  }
+  for (const [id, standing] of standings) {
+    const chain = lines.get(id) as CategoryNodeFacts[];
+    standing.state = chain.some((link) => link.ignored)
+      ? 'ignored'
+      : standing.effectiveGameId === null
+        ? 'not_imported'
+        : standing.newPacks > 0
+          ? 'new_packs'
+          : 'linked';
+  }
+  return standings;
+}
+
+/** An input field the import proposes for a supplier field (rule SC12). */
+export interface SuggestedInputField {
+  supplierKey: string;
+  key: string;
+  labelAr: string;
+  type: 'digits' | 'text';
+  minLength: number;
+  maxLength: number;
+  required: true;
+}
+
+const FIELD_LABELS_AR: Readonly<Record<string, string>> = {
+  player_id: 'معرّف اللاعب',
+  user_id: 'معرّف اللاعب',
+  uid: 'معرّف اللاعب',
+  server_id: 'السيرفر',
+  server: 'السيرفر',
+  zone_id: 'رقم المنطقة',
+  role_id: 'معرّف الشخصية',
+  riot_id: 'Riot ID',
+  region: 'المنطقة',
+};
+
+const DIGIT_FIELDS = new Set(['player_id', 'user_id', 'uid', 'zone_id', 'server_id', 'role_id']);
+
+/**
+ * Rule SC12, per supplier field (each key once): our key is the supplier key lower-cased with
+ * characters outside `[a-z0-9_]` turned to `_`, prefixed `f_` when it does not start with a
+ * letter, cut to 32, given `_f` when shorter than 2 (S06 keys have 2 or more) and made unique
+ * with `_2`, `_3`…; the Arabic label from the dictionary, else the supplier's label (cut to 40),
+ * else the key; type `digits` (1–32) for id fields, else `text` (1–64); always required.
+ */
+export function suggestInputFields(specs: readonly Pick<FieldSpec, 'key' | 'label'>[]): {
+  fields: SuggestedInputField[];
+  fieldMap: Record<string, string>;
+} {
+  const fields: SuggestedInputField[] = [];
+  const fieldMap: Record<string, string> = {};
+  const taken = new Set<string>();
+  for (const spec of specs) {
+    if (Object.hasOwn(fieldMap, spec.key)) continue;
+    const canonical = spec.key.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    let base = /^[a-z]/.test(canonical) ? canonical : `f_${canonical}`;
+    base = base.slice(0, 32);
+    if (base.length < 2) base = `${base}_f`;
+    let key = base;
+    for (let n = 2; taken.has(key); n += 1) {
+      const suffix = `_${n}`;
+      key = `${base.slice(0, 32 - suffix.length)}${suffix}`;
+    }
+    taken.add(key);
+    const digits = DIGIT_FIELDS.has(canonical);
+    fields.push({
+      supplierKey: spec.key,
+      key,
+      labelAr: FIELD_LABELS_AR[canonical] ?? (spec.label.trim().slice(0, 40).trim() || key),
+      type: digits ? 'digits' : 'text',
+      minLength: 1,
+      maxLength: digits ? 32 : 64,
+      required: true,
+    });
+    fieldMap[spec.key] = key;
+  }
+  return { fields, fieldMap };
+}
+
+/** A product name is at most 60 characters (S06). */
+const PRODUCT_NAME_MAX = 60;
+
+/**
+ * Rule SC13: the supplier's pack name, with ` · <leaf name>` when the chosen packs span more than
+ * one leaf and the leaf name is not already in it, cut to 60.
+ */
+export function suggestProductName(
+  offerName: string,
+  leafName: string,
+  spansLeaves: boolean,
+): string {
+  const name = offerName.trim();
+  const leaf = leafName.trim();
+  const named = spansLeaves && leaf !== '' && !name.includes(leaf) ? `${name} · ${leaf}` : name;
+  return named.slice(0, PRODUCT_NAME_MAX).trim();
+}
+
+/** A game amount is 1 to 1,000,000,000 (S06). */
+const GAME_AMOUNT_MAX = 1_000_000_000;
+
+/**
+ * Rule SC13: the first whole number in the pack name (thousands separated by commas read as one
+ * number), when it is a valid game amount; else null.
+ */
+export function parseGameAmount(name: string): number | null {
+  const match = /\d{1,3}(?:,\d{3})+(?!\d)|\d+/.exec(name);
+  if (!match) return null;
+  const amount = Number(match[0].replaceAll(',', ''));
+  return amount >= 1 && amount <= GAME_AMOUNT_MAX ? amount : null;
+}
+
+/**
+ * Rule SF1: `⌊(original − cost) × 100 / original⌋` %, only when the original is known and above
+ * the cost (and the discount is at least 1%); else null.
+ */
+export function discountPercent(
+  costUsdUnits: number | null,
+  originalUsdUnits: number | null,
+): number | null {
+  if (costUsdUnits === null || originalUsdUnits === null || originalUsdUnits <= costUsdUnits) {
+    return null;
+  }
+  const percent = Math.floor(((originalUsdUnits - costUsdUnits) * 100) / originalUsdUnits);
+  return percent >= 1 ? percent : null;
+}
+
+/**
+ * Rule SF2: `out` when not in stock or at 0, `unlimited` when no figure is reported, `low` below
+ * the threshold, else `ok`.
+ */
+export function stockLevel(
+  stock: number | null,
+  inStock: boolean,
+  thresholdUnits: number,
+): StockLevel {
+  if (!inStock || stock === 0) return 'out';
+  if (stock === null) return 'unlimited';
+  return stock < thresholdUnits ? 'low' : 'ok';
+}
+
+const STOCK_RANK: Readonly<Record<StockLevel, number>> = { ok: 0, unlimited: 0, low: 1, out: 2 };
+
+/**
+ * Rule SF2's alert: a level that rose since the stored alert (`ok` → `low`, `ok` or `low` → `out`)
+ * alerts and is stored; a level back at or above the threshold clears the stored one, so the next
+ * drop alerts again; anything else keeps it (`out` → `low` stays `out`).
+ */
+export function stockAlertChange(
+  stored: StockLevel | null,
+  current: StockLevel,
+): { alert: boolean; next: StockLevel | null } {
+  const now = STOCK_RANK[current];
+  const before = stored === null ? 0 : STOCK_RANK[stored];
+  if (now > before) return { alert: true, next: current };
+  if (now === 0) return { alert: false, next: null };
+  return { alert: false, next: stored };
 }
 
 // Schemas ---------------------------------------------------------------------------------------
@@ -501,6 +851,14 @@ export const supplierSummarySchema = z
     /** S09 rule AD2: the daily validation quota and today's calls (since 00:00 Damascus). */
     validationQuota: z.int().nonnegative(),
     validationsToday: z.int().nonnegative(),
+    /** S16: what the supplier's adapter can read for the panel. */
+    capabilities: supplierPanelCapabilitiesSchema,
+    /** S16 SC11: offers counted new in imported categories (rule SC5). */
+    newOfferCount: z.int().nonnegative(),
+    /** S16 SF2: mapped offers of active products that are low or out of stock. */
+    lowStockCount: z.int().nonnegative(),
+    /** S16 SF5: the supplier's own status when the API read it in the last minute. */
+    platformStatus: platformStatusSchema.nullable(),
   })
   .meta({ id: 'SupplierSummary' });
 
@@ -559,6 +917,12 @@ export const offerListQuerySchema = pageQuerySchema
     mapped: booleanFilter,
     missing: booleanFilter,
     inStock: booleanFilter,
+    /** S16 SF1: offers whose leaf category is this supplier category or one below it. */
+    categoryId: supplierCategoryIdSchema.optional(),
+    supported: booleanFilter,
+    ignored: booleanFilter,
+    /** Mapped offers whose stock level is `low` or `out` (rule SF2). */
+    lowStock: booleanFilter,
   })
   .meta({ id: 'OfferListQuery' });
 
@@ -582,6 +946,19 @@ export const supplierOfferSchema = z
     costStale: z.boolean(),
     lastSeenAt: z.iso.datetime(),
     missingSince: z.iso.datetime().nullable(),
+    /** S16 SF1: the supplier's leaf category and its names from the root; null when unknown. */
+    categoryId: z.string().nullable(),
+    categoryPath: z.array(z.string()),
+    /** The reported stock; null when unlimited or not reported (rule SF2). */
+    stock: z.int().nonnegative().nullable(),
+    stockLevel: stockLevelSchema,
+    /** The supplier's price before its discount, and the discount (rule SF1). */
+    originalCostUsdUnits: z.int().nullable(),
+    discountPercent: z.int().min(1).max(100).nullable(),
+    fieldSpecs: z.array(fieldSpecSchema).nullable(),
+    /** Not usable until PR4 (rule SC3). */
+    unsupportedReason: offerUnsupportedReasonSchema.nullable(),
+    ignoredAt: z.iso.datetime().nullable(),
     /** The product its unarchived route serves (rule RT1). */
     mapped: z
       .object({
@@ -762,3 +1139,246 @@ export const productRoutingSchema = z
   .meta({ id: 'ProductRouting' });
 
 export type ProductRouting = z.infer<typeof productRoutingSchema>;
+
+// Supplier catalog schemas (S16) ---------------------------------------------------------------
+
+/** At most 200 categories per page (rule SC4). */
+export const MAX_CATEGORY_PAGE_SIZE = 200;
+
+/**
+ * `GET /api/admin/suppliers/:code/categories` (rule SC4): a level of the tree (the roots without
+ * `parentId`), or, with `q` or `state`, matching nodes at any depth shown with their path.
+ */
+export const supplierCategoryListQuerySchema = pageQuerySchema
+  .extend({
+    pageSize: z.coerce.number().int().min(1).max(MAX_CATEGORY_PAGE_SIZE).default(100),
+    parentId: supplierCategoryIdSchema.optional(),
+    state: supplierCategoryStateSchema.optional(),
+    kind: productKindSchema.optional(),
+    q: z.string().trim().min(1).max(100).optional(),
+  })
+  .meta({ id: 'SupplierCategoryListQuery' });
+
+export type SupplierCategoryListQuery = z.infer<typeof supplierCategoryListQuerySchema>;
+
+/** One node of a supplier's tree with our link, ignore state and counts (rules SC4, SC5). */
+export const supplierCategoryNodeSchema = z
+  .object({
+    supplierCode: supplierCodeSchema,
+    categoryId: z.string(),
+    parentCategoryId: z.string().nullable(),
+    name: z.string(),
+    /** The names of its ancestors, root first. */
+    path: z.array(z.string()),
+    kind: productKindSchema.nullable(),
+    /** The supplier's own figures. */
+    productCount: z.int().nonnegative().nullable(),
+    inStockCount: z.int().nonnegative().nullable(),
+    hasImage: z.boolean(),
+    childCount: z.int().nonnegative(),
+    /** Our counts of its subtree's offers. */
+    counts: z.object({
+      mapped: z.int().nonnegative(),
+      unmapped: z.int().nonnegative(),
+      ignored: z.int().nonnegative(),
+      unsupported: z.int().nonnegative(),
+      newPacks: z.int().nonnegative(),
+    }),
+    state: supplierCategoryStateSchema,
+    /** Its effective game: its own link or its nearest linked ancestor's. */
+    game: z.object({ id: z.uuid(), nameAr: z.string() }).nullable(),
+    /** The game is linked to this node itself (it can be unlinked here). */
+    linkedHere: z.boolean(),
+    ignoredAt: z.iso.datetime().nullable(),
+    missingSince: z.iso.datetime().nullable(),
+    lastSeenAt: z.iso.datetime(),
+  })
+  .meta({ id: 'SupplierCategoryNode' });
+
+export type SupplierCategoryNode = z.infer<typeof supplierCategoryNodeSchema>;
+
+export const supplierCategoryPageSchema = pagedListSchema(
+  supplierCategoryNodeSchema,
+  'SupplierCategoryPage',
+);
+
+export type SupplierCategoryPage = z.infer<typeof supplierCategoryPageSchema>;
+
+/** `GET …/import-draft`: with `gameId`, a draft to link the node to that game (rule SC8). */
+export const importDraftQuerySchema = z
+  .object({ gameId: z.uuid().optional() })
+  .meta({ id: 'ImportDraftQuery' });
+
+export type ImportDraftQuery = z.infer<typeof importDraftQuerySchema>;
+
+/** Why a pack row cannot be imported or linked (rules SC3, SC7, RT1, RT2). */
+export const IMPORT_PACK_REFUSALS = [
+  'OFFER_UNSUPPORTED',
+  'OFFER_IGNORED',
+  'OFFER_ALREADY_MAPPED',
+  'OFFER_MISSING',
+  'ROUTE_KIND_MISMATCH',
+] as const;
+
+/** A pack of the node's subtree as the import and link dialogs show it (rules SC7, SC8, SF1). */
+export const importDraftPackSchema = z
+  .object({
+    /** The offer's id in `supplier_offers`. */
+    offerId: z.uuid(),
+    supplierOfferId: z.string(),
+    name: z.string(),
+    leafCategoryId: z.string(),
+    leafName: z.string(),
+    kind: productKindSchema.nullable(),
+    costUsdUnits: z.int().nullable(),
+    originalCostUsdUnits: z.int().nullable(),
+    discountPercent: z.int().nullable(),
+    stock: z.int().nonnegative().nullable(),
+    stockLevel: stockLevelSchema,
+    requiredFields: z.array(z.string()).nullable(),
+    /** Why the row cannot be chosen, or null. */
+    refusal: z.enum(IMPORT_PACK_REFUSALS).nullable(),
+    suggestedNameAr: z.string(),
+    suggestedGameAmount: z.int().nullable(),
+    /** The price the store would charge at the margin rule that would govern it; null: no cost. */
+    pricePreviewUsdUnits: z.int().nullable(),
+    /** A link draft: the existing product with the same game amount or name (rule SC8). */
+    match: z.object({ productId: z.uuid(), nameAr: z.string() }).nullable(),
+  })
+  .meta({ id: 'ImportDraftPack' });
+
+export type ImportDraftPack = z.infer<typeof importDraftPackSchema>;
+
+/** A suggested input field beside the supplier field it comes from (rule SC12). */
+export const suggestedInputFieldSchema = z
+  .object({
+    supplierKey: z.string(),
+    supplierLabel: z.string(),
+    supplierType: z.enum(['text', 'select']),
+    key: z.string(),
+    labelAr: z.string(),
+    type: z.enum(['digits', 'text']),
+    minLength: z.int(),
+    maxLength: z.int(),
+    required: z.boolean(),
+  })
+  .meta({ id: 'SuggestedInputField' });
+
+/** `GET …/import-draft` (rules SC7, SC8, SC12–SC14). */
+export const importDraftSchema = z
+  .object({
+    category: supplierCategoryNodeSchema,
+    /** The kind most packs of the subtree have; null when the supplier gives none. */
+    kind: productKindSchema.nullable(),
+    /** SC14: the new game's suggested names, store category and slug. */
+    game: z.object({
+      nameAr: z.string(),
+      nameEn: z.string(),
+      slug: z.string(),
+      categoryId: z.uuid().nullable(),
+    }),
+    /** A link draft: the game and its unarchived fields. */
+    linkGame: z
+      .object({
+        id: z.uuid(),
+        nameAr: z.string(),
+        fields: z.array(z.object({ key: z.string(), labelAr: z.string() })),
+      })
+      .nullable(),
+    fields: z.array(suggestedInputFieldSchema),
+    fieldMap: z.record(z.string(), z.string()),
+    packs: z.array(importDraftPackSchema),
+  })
+  .meta({ id: 'ImportDraft' });
+
+export type ImportDraft = z.infer<typeof importDraftSchema>;
+
+const packName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .regex(/^[^\p{Cc}]+$/u);
+
+/** A pack row that creates a new paused product (rules SC7, SC8). */
+const newPackRowSchema = z.object({
+  offerId: z.uuid(),
+  nameAr: packName,
+  gameAmount: z.int().min(1).max(1_000_000_000).nullable().optional(),
+});
+
+const eachOfferOnce = (rows: { offerId: string }[]) =>
+  new Set(rows.map((row) => row.offerId)).size === rows.length;
+
+/** `POST …/import` (rule SC7): a new paused game with its fields, packs, routes and prices. */
+export const importCategorySchema = z
+  .object({
+    game: createGameSchema.pick({
+      slug: true,
+      categoryId: true,
+      nameAr: true,
+      nameEn: true,
+      accentColor: true,
+      regionNotesAr: true,
+    }),
+    /** IM2: the supplier's image, or a file uploaded through S06's image route. */
+    cover: z.union([
+      z.object({ supplierImage: z.literal(true) }),
+      z.object({ coverFileId: z.uuid() }),
+    ]),
+    fields: z.array(createInputFieldSchema).max(MAX_INPUT_FIELDS_PER_GAME),
+    fieldMap: fieldMapSchema.default({}),
+    rows: z.array(newPackRowSchema).min(1).max(MAX_IMPORT_ROWS).refine(eachOfferOnce, {
+      message: 'Expected each offer once',
+    }),
+  })
+  .meta({ id: 'ImportCategory' });
+
+export type ImportCategory = z.input<typeof importCategorySchema>;
+
+/** `POST …/link` (rule SC8): rows that route an existing product or create a new one. */
+export const linkCategorySchema = z
+  .object({
+    gameId: z.uuid(),
+    fieldMap: fieldMapSchema.default({}),
+    rows: z
+      .array(z.union([z.object({ offerId: z.uuid(), productId: z.uuid() }), newPackRowSchema]))
+      .max(MAX_IMPORT_ROWS)
+      .refine(eachOfferOnce, { message: 'Expected each offer once' }),
+  })
+  .meta({ id: 'LinkCategory' });
+
+export type LinkCategory = z.input<typeof linkCategorySchema>;
+
+/** The answer of an import or a link: the game and each row's product, route and price. */
+export const categoryImportResultSchema = z
+  .object({
+    gameId: z.uuid(),
+    products: z.array(
+      z.object({
+        id: z.uuid(),
+        nameAr: z.string(),
+        routeId: z.uuid(),
+        /** The row added a route to an existing product (rule SC8). */
+        existing: z.boolean(),
+        priceUsdUnits: z.int().nullable(),
+      }),
+    ),
+  })
+  .meta({ id: 'CategoryImportResult' });
+
+export type CategoryImportResult = z.infer<typeof categoryImportResultSchema>;
+
+/** `POST /api/admin/catalog/games/:id/cover/from-supplier` (rule IM3). */
+export const coverFromSupplierSchema = z
+  .object({ supplier: supplierCodeSchema, categoryId: supplierCategoryIdSchema })
+  .meta({ id: 'CoverFromSupplier' });
+
+export type CoverFromSupplier = z.infer<typeof coverFromSupplierSchema>;
+
+/** A page of the supplier's statement (rule SF3), read live one page at a time. */
+export const statementQuerySchema = z
+  .object({ page: z.coerce.number().int().min(1).max(1_000).default(1) })
+  .meta({ id: 'StatementQuery' });
+
+export type StatementQuery = z.infer<typeof statementQuerySchema>;

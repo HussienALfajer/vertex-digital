@@ -81,6 +81,7 @@ export const AUDIT_ENTITY_TYPES = [
   'supplier',
   'supplier_policy',
   'supplier_offer',
+  'supplier_category',
   'product_route',
   'price_review',
   'order',
@@ -202,6 +203,7 @@ const marginTarget = { scope: marginScopeSchema, targetId: z.uuid().nullable() }
 const marginValues = marginRuleValuesSchema.strict();
 /** Supplier values in audit details (S07): never a credential, only field names and hints. */
 const supplier = { supplier: supplierCodeSchema };
+const supplierCategory = { ...supplier, categoryId: z.string() };
 const routeValues = {
   priority: z.int(),
   enabled: z.boolean(),
@@ -469,6 +471,12 @@ export const AUDIT_DETAILS = {
   'catalog_game.archived': named({}),
   'catalog_game.restored': named({}),
   'catalog_game.reordered': reordered({ categoryId: z.uuid() }),
+  /** S16 SC10: with S06's status changes per row; the counts of the answer's two lists. */
+  'catalog_game.activated_all': z.strictObject({
+    gameId: z.uuid(),
+    activated: z.int().nonnegative(),
+    skipped: z.int().nonnegative(),
+  }),
   'catalog_input_field.created': z.strictObject({ gameId: z.uuid(), ...inputFieldValues }),
   'catalog_input_field.updated': changed(inputFieldValues),
   'catalog_input_field.archived': z.strictObject({ gameId: z.uuid(), identifier: z.string() }),
@@ -510,6 +518,27 @@ export const AUDIT_DETAILS = {
     before: supplierPolicySchema.strict(),
     after: supplierPolicySchema.strict(),
   }),
+  /**
+   * S16 SC7: the entity is the category row; with S06's created entries per game, field and
+   * product, and S07's `product_route.created` per row.
+   */
+  'supplier.category_imported': z.strictObject({
+    ...supplierCategory,
+    gameId: z.uuid(),
+    count: z.int().nonnegative(),
+  }),
+  /** S16 SC8: the rows that routed existing products or created new ones. */
+  'supplier_category.linked': z.strictObject({
+    ...supplierCategory,
+    gameId: z.uuid(),
+    count: z.int().nonnegative(),
+  }),
+  'supplier_category.unlinked': z.strictObject({ ...supplierCategory, gameId: z.uuid() }),
+  'supplier_category.ignored': z.strictObject(supplierCategory),
+  'supplier_category.unignored': z.strictObject(supplierCategory),
+  /** S16 SC6: the supplier's own offer id. */
+  'supplier_offer.ignored': z.strictObject({ ...supplier, offerId: z.string() }),
+  'supplier_offer.unignored': z.strictObject({ ...supplier, offerId: z.string() }),
   /** Rule RT7: `before` is null for a new manual offer. */
   'supplier_offer.manual_cost_set': z.strictObject({
     productId: z.uuid(),

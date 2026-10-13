@@ -13,6 +13,7 @@ import {
   type PriceReviewListQuery,
   type PriceReviewPage,
   type PriceReviewStatus,
+  type PricingPath,
   type PricingPreview,
   type PricingPreviewRequest,
   type ProductPricePage,
@@ -229,6 +230,18 @@ export class PricingService {
       officialPriceUsdUnits: official,
       savings: savings(price, official),
     };
+  }
+
+  /**
+   * S16 SC7: the prices the rule governing `path` gives these costs, as the first price of a new
+   * product would be (rule P2); writes nothing. Null for an unknown cost.
+   */
+  async pricesFor(
+    path: PricingPath,
+    costs: readonly (number | null)[],
+  ): Promise<(number | null)[]> {
+    const rule = valuesOf(resolveMarginRule(await this.liveRules(), path));
+    return costs.map((cost) => (cost === null ? null : priceFromCost(cost, rule)));
   }
 
   // Stored prices and reviews (S07 rules P2–P5) -------------------------------------------------

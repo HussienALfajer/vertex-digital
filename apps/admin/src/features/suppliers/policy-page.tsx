@@ -36,7 +36,7 @@ const PERCENT_FIELDS: readonly PolicyField[] = [
 
 /** The form's sections, in order (ADR 0021). */
 const SECTIONS: { title: 'prices' | 'health'; fields: PolicyField[] }[] = [
-  { title: 'prices', fields: ['priceReviewThresholdBp', 'costStaleMinutes'] },
+  { title: 'prices', fields: ['priceReviewThresholdBp', 'costStaleMinutes', 'lowStockUnits'] },
   {
     title: 'health',
     fields: [

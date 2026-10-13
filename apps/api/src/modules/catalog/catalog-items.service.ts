@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  type ActivateAllResult,
+  type ActivateSkipReason,
   type createInputFieldSchema,
   type createProductSchema,
   DEFAULT_MAX_QUANTITY,
@@ -14,10 +16,13 @@ import {
   type UpdateProduct,
 } from '@vertex-digital/contracts';
 import {
+  catalogGames,
   catalogInputFields,
   catalogProducts,
   type Database,
   newId,
+  type ProductRoutingState,
+  productRoutingStates,
   repriceProducts,
   type Transaction,
 } from '@vertex-digital/db';
@@ -92,37 +97,108 @@ export class CatalogItemsService {
     input: z.output<typeof createInputFieldSchema>,
   ): Promise<InputField> {
     return mapTaken(() =>
-      this.db.transaction(async (tx) => {
-        const game = await this.liveGame(tx, gameId);
-        await this.checkLimit(tx, catalogInputFields, game.id, MAX_INPUT_FIELDS_PER_GAME);
-        const [row] = await tx
-          .insert(catalogInputFields)
-          .values({
-            id: newId(),
-            gameId: game.id,
-            key: input.key,
-            labelAr: input.labelAr,
-            helpAr: input.helpAr ?? null,
-            type: input.type,
-            required: input.required,
-            minLength: input.minLength,
-            maxLength: input.maxLength,
-            options: input.options,
-            sortOrder: await nextSortOrder(
-              tx,
-              catalogInputFields,
-              eq(catalogInputFields.gameId, game.id),
-            ),
-          })
-          .returning();
-        const field = row as FieldRow;
-        await auditCatalog(tx, actor, 'catalog_input_field.created', fieldEntity(field.id), {
-          gameId: game.id,
-          ...fieldValues(field),
-        });
-        return toInputField(field);
-      }),
+      this.db.transaction((tx) => this.createFieldIn(tx, actor, gameId, input)),
     );
+  }
+
+  /** `createField` in the caller's transaction (S16 SC7's import); keys taken raise. */
+  async createFieldIn(
+    tx: Transaction,
+    actor: Actor,
+    gameId: string,
+    input: z.output<typeof createInputFieldSchema>,
+  ): Promise<InputField> {
+    const game = await this.liveGame(tx, gameId);
+    await this.checkLimit(tx, catalogInputFields, game.id, MAX_INPUT_FIELDS_PER_GAME);
+    const [row] = await tx
+      .insert(catalogInputFields)
+      .values({
+        id: newId(),
+        gameId: game.id,
+        key: input.key,
+        labelAr: input.labelAr,
+        helpAr: input.helpAr ?? null,
+        type: input.type,
+        required: input.required,
+        minLength: input.minLength,
+        maxLength: input.maxLength,
+        options: input.options,
+        sortOrder: await nextSortOrder(
+          tx,
+          catalogInputFields,
+          eq(catalogInputFields.gameId, game.id),
+        ),
+      })
+      .returning();
+    const field = row as FieldRow;
+    await auditCatalog(tx, actor, 'catalog_input_field.created', fieldEntity(field.id), {
+      gameId: game.id,
+      ...fieldValues(field),
+    });
+    return toInputField(field);
+  }
+
+  /**
+   * S16 SC10, "تفعيل الكل": in one transaction the game becomes `active` when rule CT3 allows it
+   * (else `CATALOG_INCOMPLETE`, nothing changes), and every paused, unarchived product of it that
+   * would be `available` once resumed (a current price and a usable profitable route, no open
+   * review) becomes `active`, each with its audit entry. The others are listed with their reason.
+   */
+  async activateAll(actor: Actor, gameId: string): Promise<ActivateAllResult> {
+    return this.db.transaction(async (tx) => {
+      const game = await this.catalog.lockGame(tx, gameId);
+      if (game.archivedAt) throw refusals.parentArchived();
+      const gameActivated = game.status === 'paused';
+      if (gameActivated) {
+        await assertComplete(tx, { ...game, status: 'active' });
+        await tx.update(catalogGames).set({ status: 'active' }).where(eq(catalogGames.id, game.id));
+        await auditCatalog(tx, actor, 'catalog_game.updated', gameEntity(game.id), {
+          before: { status: 'paused' },
+          after: { status: 'active' },
+        });
+      }
+      const paused = await tx
+        .select()
+        .from(catalogProducts)
+        .where(
+          and(
+            eq(catalogProducts.gameId, game.id),
+            eq(catalogProducts.status, 'paused'),
+            isNull(catalogProducts.archivedAt),
+          ),
+        )
+        .orderBy(asc(catalogProducts.sortOrder), asc(catalogProducts.id))
+        .for('update');
+      const states = await productRoutingStates(
+        tx,
+        paused.map((row) => row.id),
+        routingContext(this.env),
+      );
+      const activated: ActivateAllResult['activated'] = [];
+      const skipped: ActivateAllResult['skipped'] = [];
+      for (const row of paused) {
+        const reason = resumeBlocker(states.get(row.id));
+        if (reason) {
+          skipped.push({ productId: row.id, nameAr: row.nameAr, reason });
+          continue;
+        }
+        await tx
+          .update(catalogProducts)
+          .set({ status: 'active' })
+          .where(eq(catalogProducts.id, row.id));
+        await auditCatalog(tx, actor, 'catalog_product.updated', productEntity(row.id), {
+          before: { status: 'paused' },
+          after: { status: 'active' },
+        });
+        activated.push({ productId: row.id, nameAr: row.nameAr });
+      }
+      await auditCatalog(tx, actor, 'catalog_game.activated_all', gameEntity(game.id), {
+        gameId: game.id,
+        activated: activated.length,
+        skipped: skipped.length,
+      });
+      return { gameId: game.id, gameActivated, activated, skipped };
+    });
   }
 
   /**
@@ -399,9 +475,10 @@ export class CatalogItemsService {
     tx: Transaction,
     actor: Actor,
     gameId: string,
-    rows: readonly { nameAr: string; kind: ProductKind }[],
+    rows: readonly { nameAr: string; kind: ProductKind; gameAmount?: number | null }[],
   ): Promise<ProductRow[]> {
     const game = await this.liveGame(tx, gameId);
+    if (rows.length === 0) return [];
     const live = await tx
       .select({ nameAr: catalogProducts.nameAr })
       .from(catalogProducts)
@@ -430,6 +507,7 @@ export class CatalogItemsService {
           gameId: game.id,
           kind: row.kind,
           nameAr: row.nameAr,
+          gameAmount: row.gameAmount ?? null,
           maxQuantity: DEFAULT_MAX_QUANTITY[row.kind],
           status: 'paused' as const,
           sortOrder: sortOrder++,
@@ -526,4 +604,23 @@ export class CatalogItemsService {
     );
     await rewriteOrder(tx, table, ids);
   }
+}
+
+/**
+ * S16 SC10: why a paused product would not be `available` once resumed, or null: a price review
+ * holds it, no usable route can serve it at a profit, or it has no price yet.
+ */
+function resumeBlocker(state: ProductRoutingState | undefined): ActivateSkipReason | null {
+  if (!state) return 'no_route';
+  if (state.openReview) return 'review_pending';
+  const usable = state.routes.filter((route) => route.unusableReason === null);
+  if (usable.length === 0) return 'no_route';
+  if (!state.current) return 'no_price';
+  const price = state.current.priceUsdUnits;
+  const profitable = usable.some(
+    (route) =>
+      route.costUsdUnits !== null &&
+      price - route.costUsdUnits >= state.rule.values.minMarginUsdUnits,
+  );
+  return profitable ? null : 'no_route';
 }

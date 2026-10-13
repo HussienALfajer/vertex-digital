@@ -2,4 +2,4 @@
 export { CatalogModule } from './catalog.module.js';
 export { CatalogService, type PricingTarget } from './catalog.service.js';
 export { CatalogItemsService } from './catalog-items.service.js';
-export type { Actor } from './catalog-records.js';
+export { type Actor, mapTaken } from './catalog-records.js';

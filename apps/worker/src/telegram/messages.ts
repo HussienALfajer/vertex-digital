@@ -503,6 +503,13 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
       (supplier) =>
         `💰 رصيد ${supplier.supplierNameAr} تحت الحد: ${balanceText(supplier.currency, supplier.amountUnits)}`,
     ),
+    ...summary.newPacks.map(
+      (supplier) =>
+        `📦 باقات جديدة في فئات مستوردة: ${supplier.count} (${supplier.supplierNameAr})`,
+    ),
+    ...(summary.stockLow.low + summary.stockLow.out > 0
+      ? [`📉 مخزون الباقات المربوطة: ${summary.stockLow.low} منخفض، ${summary.stockLow.out} نافد`]
+      : []),
     `الطلبات اليوم: ${summary.ordersDelivered} مُسلّمة، ${summary.ordersPartiallyRefunded} جزئية، ${summary.ordersRefunded} مستردة`,
     `بحاجة لمراجعة: ${summary.ordersInReview} · يدوي بانتظارك: ${summary.manualWaiting}`,
     ...(summary.medianDeliveryMs === null
@@ -699,6 +706,24 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
         text: [
           `⚠️ بلغت حصة التحقق اليومية لدى ${quota.supplierNameAr} (${quota.quota}). العملاء يؤكدون المعرّف بأنفسهم حتى منتصف الليل.`,
           `${links.admin}/suppliers/${quota.supplier}`,
+        ].join('\n'),
+      };
+    }
+    case 'supplier_stock_low': {
+      // S16 SF2: one message per sync run, up to 10 offers named.
+      const stock = params as TelegramMessageParams<'supplier_stock_low'>;
+      const named = stock.offers.map(
+        (offer) =>
+          `${offer.gameNameAr} · ${offer.productNameAr} (${
+            offer.level === 'out' ? 'نفد' : `${offer.stock ?? 0} متبقية`
+          })`,
+      );
+      return {
+        text: [
+          `📉 مخزون منخفض في ${stock.supplierNameAr}: ${named.join('، ')}${
+            stock.more > 0 ? ` و ${stock.more} غيرها` : ''
+          }`,
+          `${links.admin}/suppliers/${stock.supplier}`,
         ].join('\n'),
       };
     }

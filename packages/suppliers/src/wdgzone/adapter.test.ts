@@ -71,6 +71,7 @@ describe('WdgzoneAdapter catalog', () => {
       '/api/v1/products?type=voucher&limit=100&page=1',
     ]);
     expect(server.requests.at(-1)?.headers['x-api-key']).toBe(API_KEY);
+    const player = (key: string, label: string) => [{ key, label, type: 'text' }];
     expect(offers).toEqual([
       {
         offerId: '235203',
@@ -80,6 +81,10 @@ describe('WdgzoneAdapter catalog', () => {
         group: 'PUBG Mobile',
         kind: 'direct',
         requiredFields: ['player_id'],
+        // 999999 is unlimited: no stock figure (S16 SF2).
+        categoryId: '14693',
+        originalCost: { currency: 'USD', amountUnits: 881_000 },
+        fieldSpecs: player('player_id', 'Player ID'),
       },
       {
         // The category is the game itself: no repeat in the name.
@@ -90,8 +95,27 @@ describe('WdgzoneAdapter catalog', () => {
         group: '8 Ball Pool',
         kind: 'direct',
         requiredFields: ['user_id'],
+        categoryId: '14845',
+        originalCost: { currency: 'USD', amountUnits: 751_000 },
+        fieldSpecs: player('user_id', 'Unique ID'),
       },
-      // 264322 needs two account fields: left out (FIELDS_UNSUPPORTED).
+      {
+        // Two account fields: kept, unsupported until Q19 (S16 SC3).
+        offerId: '264322',
+        name: '65 Tokens',
+        cost: { currency: 'USD', amountUnits: 1_023_000 },
+        inStock: true,
+        group: 'Ace Racer',
+        kind: 'direct',
+        requiredFields: ['user_id', 'server_id'],
+        categoryId: '14847',
+        originalCost: { currency: 'USD', amountUnits: 1_023_000 },
+        fieldSpecs: [
+          { key: 'user_id', label: 'User ID', type: 'text' },
+          { key: 'server_id', label: 'Server ID', type: 'text' },
+        ],
+        unsupportedReason: 'fields_unsupported',
+      },
       {
         // No fields listed but a player is required; no stock.
         offerId: '264179',
@@ -101,9 +125,13 @@ describe('WdgzoneAdapter catalog', () => {
         group: 'Free Fire',
         kind: 'direct',
         requiredFields: ['player_id'],
+        categoryId: '14685',
+        stock: 0,
+        originalCost: { currency: 'USD', amountUnits: 920_000 },
+        fieldSpecs: player('player_id', 'Player ID'),
       },
       {
-        // The documented example: no brand, no fields.
+        // The documented example: no brand, no fields, no original price.
         offerId: '8451',
         name: 'Steam Wallet 10 USD',
         cost: { currency: 'USD', amountUnits: 10_475_000 },
@@ -111,6 +139,9 @@ describe('WdgzoneAdapter catalog', () => {
         group: 'USA / USD',
         kind: 'code',
         requiredFields: [],
+        categoryId: '124',
+        stock: 48,
+        fieldSpecs: [],
       },
       {
         offerId: '306788',
@@ -120,6 +151,10 @@ describe('WdgzoneAdapter catalog', () => {
         group: 'Steam Game Keys',
         kind: 'code',
         requiredFields: [],
+        categoryId: '4011391',
+        stock: 143,
+        originalCost: { currency: 'USD', amountUnits: 17_975_000 },
+        fieldSpecs: [],
       },
     ]);
     expect(sleeps).toEqual([]);
@@ -166,11 +201,18 @@ describe('WdgzoneAdapter catalog', () => {
       },
     );
     const offers = await adapter().listOffers();
-    expect(offers.map((offer) => [offer.offerId, offer.cost.amountUnits])).toEqual([
-      ['1', 1],
-      ['2', 4_344_032_000],
-      ['3', 100_000],
-      ['4', 999_999_999_999_999],
+    expect(
+      offers.map((offer) => [offer.offerId, offer.cost.amountUnits, offer.unsupportedReason]),
+    ).toEqual([
+      ['1', 1, undefined],
+      ['2', 4_344_032_000, undefined],
+      ['3', 100_000, undefined],
+      ['4', 999_999_999_999_999, undefined],
+      // A select field: kept, unsupported (S16 SC3), with its options.
+      ['11', 1_500_000, 'fields_unsupported'],
+    ]);
+    expect(offers.at(-1)?.fieldSpecs).toEqual([
+      { key: 'region', label: 'Region', type: 'select', options: [] },
     ]);
   });
 
@@ -223,6 +265,9 @@ describe('WdgzoneAdapter balance and players', () => {
       webhooks: true,
       balance: true,
       catalog: true,
+      categories: true,
+      statement: true,
+      platformStatus: true,
     });
     await expect(wdg.validatePlayer()).rejects.toBeInstanceOf(SupplierError);
   });
@@ -507,5 +552,152 @@ describe('WdgzoneAdapter webhooks', () => {
     ]) {
       expect(() => adapter().parseWebhook({ headers: {}, rawBody })).toThrow(SupplierError);
     }
+  });
+});
+
+describe('WdgzoneAdapter catalog tree, statement and status (S16)', () => {
+  it('lists categories with ids, kinds, counts and only images on its own host', async () => {
+    const before = server.requests.length;
+    server.reply({ body: fixture('categories') });
+    const categories = await adapter().listCategories();
+    expect(sentSince(before).map((request) => request.path)).toEqual(['/api/v1/categories']);
+    expect(categories).toEqual([
+      {
+        categoryId: '120',
+        name: 'Steam Wallet',
+        kind: 'code',
+        productCount: 165,
+        inStockCount: 142,
+        imageUrl: 'https://wdgzone.tech/panel/category-image.php?name=Steam%20Wallet',
+      },
+      {
+        categoryId: '124',
+        parentCategoryId: '120',
+        name: 'USA / USD',
+        kind: 'code',
+        productCount: 12,
+        inStockCount: 10,
+        imageUrl: 'https://wdgzone.tech/panel/category-image.php?name=Steam%20Wallet',
+      },
+      // An image on another host is dropped (rule IM1).
+      {
+        categoryId: '14690',
+        name: 'PUBG Mobile',
+        kind: 'direct',
+        productCount: 14,
+        inStockCount: 14,
+      },
+      { categoryId: '14693', parentCategoryId: '14690', name: 'Auto', kind: 'direct' },
+      // `manual` categories are left out, as their products are.
+    ]);
+  });
+
+  it('follows category pages when WDG sends them, and refuses a runaway tree', async () => {
+    const node = (id: number) => ({ id, name: `C${id}`, type: 'topup' });
+    server.reply(
+      { body: { success: true, data: [node(1)], pagination: { page: 1, total_pages: 2 } } },
+      {
+        body: {
+          success: true,
+          data: [node(2), { id: 'x' }],
+          pagination: { page: 2, total_pages: 2 },
+        },
+      },
+    );
+    const before = server.requests.length;
+    expect((await adapter().listCategories()).map((category) => category.categoryId)).toEqual([
+      '1',
+      '2',
+    ]);
+    expect(sentSince(before).map((request) => request.path)).toEqual([
+      '/api/v1/categories',
+      '/api/v1/categories?page=2',
+    ]);
+    server.reply({
+      body: { success: true, data: [node(1)], pagination: { page: 1, total_pages: 10_000 } },
+    });
+    await expect(adapter().listCategories()).rejects.toThrow('larger than expected');
+  });
+
+  it('reads transactions leniently: signed amounts, matches by order id, others left out', async () => {
+    const before = server.requests.length;
+    server.reply({ body: fixture('transactions-page-1') });
+    const page = await adapter().listTransactions(1);
+    expect(sentSince(before)[0]?.path).toBe('/api/v1/transactions?limit=50&page=1');
+    expect(page).toEqual({
+      items: [
+        {
+          id: '9001',
+          type: 'purchase',
+          amount: { currency: 'USD', amountUnits: -881_000 },
+          balanceAfter: { currency: 'USD', amountUnits: 24_119_000 },
+          reference: 'Order #1024',
+          supplierOrderId: '1024',
+          createdAt: new Date('2026-10-12T10:00:00Z'),
+        },
+        {
+          id: '9000',
+          type: 'deposit',
+          amount: { currency: 'USD', amountUnits: 25_000_000 },
+          createdAt: new Date('2026-10-12T09:00:00Z'),
+        },
+      ],
+      hasMore: true,
+    });
+  });
+
+  it('reads orders leniently, and ends the list on a short page without paging', async () => {
+    server.reply({ body: fixture('orders-page-1') });
+    expect(await adapter().listOrders(2)).toEqual({
+      items: [
+        {
+          supplierOrderId: '1024',
+          offerId: '235203',
+          offerName: '60 UC',
+          quantity: 1,
+          status: 'completed',
+          total: { currency: 'USD', amountUnits: 881_000 },
+          createdAt: new Date('2026-10-12T10:00:00Z'),
+        },
+        // Another currency: the total is left out.
+        { supplierOrderId: '1023', offerName: 'Steam Wallet 10 USD' },
+      ],
+      hasMore: false,
+    });
+    const full = Array.from({ length: 50 }, (_, index) => ({ id: index + 1, total: 'x' }));
+    server.reply({ body: { success: true, data: full } });
+    expect((await adapter().listOrders(1)).hasMore).toBe(true);
+  });
+
+  it('reads the platform status at the top or in data', async () => {
+    server.reply({ body: fixture('health') });
+    expect(await adapter().getPlatformStatus()).toEqual({
+      status: 'operational',
+      catalogUpdatedAt: new Date('2026-10-12T09:41:07Z'),
+    });
+    server.reply({
+      body: { success: true, data: { status: 'maintenance', catalog_updated_at: 'x' } },
+    });
+    expect(await adapter().getPlatformStatus()).toEqual({ status: 'maintenance' });
+  });
+
+  it('fetches images from wdgzone.tech only, never sending the key', async () => {
+    const calls: { url: string; headers: RequestInit['headers'] }[] = [];
+    const wdg = new WdgzoneAdapter({
+      apiKey: API_KEY,
+      fetch: async (input, init) => {
+        calls.push({ url: String(input), headers: init?.headers });
+        return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+      },
+    });
+    const limits = { maxBytes: 10, timeoutMs: 1_000 };
+    expect(wdg.imageHosts).toEqual(['wdgzone.tech']);
+    expect(await wdg.fetchImage('https://wdgzone.tech/panel/a.png', limits)).toEqual(
+      new Uint8Array([1, 2, 3]),
+    );
+    expect(JSON.stringify(calls[0]?.headers)).not.toContain(API_KEY);
+    await expect(wdg.fetchImage('https://evil.test/a.png', limits)).rejects.toMatchObject({
+      kind: 'definitive',
+    });
   });
 });

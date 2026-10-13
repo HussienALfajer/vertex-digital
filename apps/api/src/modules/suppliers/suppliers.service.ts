@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  discountPercent,
   FAILING_SYNC_RUNS,
   type ImportOffers,
   type ImportResult,
@@ -15,6 +16,7 @@ import {
   SUPPLIER_CREDENTIAL_FIELDS,
   type SupplierCode,
   type SupplierDetail,
+  type SupplierOffer,
   type SupplierOfferPage,
   type SupplierPolicy,
   type SupplierSummary,
@@ -22,7 +24,9 @@ import {
   SYNC_REQUEST_INTERVAL_SECONDS,
   type SyncRun,
   type SyncRunPage,
+  stockLevel,
   supplierHasCatalog,
+  supplierPanelCapabilities,
   type UpdateSupplier,
   unmappedFields,
   type ValidationQuota,
@@ -33,13 +37,17 @@ import {
   type Database,
   encryptCredentials,
   failedRunStreak,
+  lowStockCounts,
+  mappedStockOffers,
   newId,
+  newOfferCounts,
   productRoutes,
   productRoutingStates,
   repriceProducts,
   routedProducts,
   type SupplierState,
   supplierBalanceReads,
+  supplierCategories,
   supplierCostChanges,
   supplierCredentials,
   supplierHealthChanges,
@@ -73,6 +81,7 @@ import { CodedException } from '../../core/errors/index.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { type Actor, CatalogItemsService, CatalogService } from '../catalog/index.js';
 import { SupplierAdaptersService } from './supplier-adapters.service.js';
+import { SupplierLiveService } from './supplier-live.service.js';
 import {
   auditSuppliers,
   type OfferRow,
@@ -107,6 +116,7 @@ export class SuppliersService {
     private readonly catalog: CatalogService,
     private readonly items: CatalogItemsService,
     private readonly adapters: SupplierAdaptersService,
+    private readonly live: SupplierLiveService,
   ) {}
 
   /** `GET /api/admin/suppliers`: `fake` only where it is enabled. */
@@ -322,11 +332,29 @@ export class SuppliersService {
     };
   }
 
-  /** `GET /api/admin/suppliers/:code/offers`: by name, with the product each one serves. */
+  /**
+   * `GET /api/admin/suppliers/:code/offers`: by name, with the product each one serves; S16 SF1:
+   * a category's subtree, supported, ignored and low-stock filters.
+   */
   async offers(code: string, query: OfferListQuery): Promise<SupplierOfferPage> {
     const state = await this.state(code);
     const flag = (value: 'true' | 'false' | undefined, when: SQL) =>
       value === undefined ? undefined : value === 'true' ? when : sql`not (${when})`;
+    const tree = await this.db
+      .select({
+        categoryId: supplierCategories.categoryId,
+        parentCategoryId: supplierCategories.parentCategoryId,
+        name: supplierCategories.name,
+      })
+      .from(supplierCategories)
+      .where(eq(supplierCategories.supplierId, state.id));
+    const lowIds =
+      query.lowStock === undefined
+        ? []
+        : (await mappedStockOffers(this.db, { supplierIds: [state.id] }))
+            .filter((offer) => offer.level === 'low' || offer.level === 'out')
+            .map((offer) => offer.id);
+    const lowStock = lowIds.length === 0 ? sql`false` : inArray(supplierOffers.id, lowIds);
     const where = and(
       eq(supplierOffers.supplierId, state.id),
       query.q
@@ -336,11 +364,17 @@ export class SuppliersService {
           )
         : undefined,
       query.group ? eq(supplierOffers.groupName, query.group) : undefined,
+      query.categoryId
+        ? inArray(supplierOffers.categoryId, [...subtreeIds(tree, query.categoryId)])
+        : undefined,
       flag(query.mapped, mapped),
       flag(query.missing, isNotNull(supplierOffers.missingSince)),
       flag(query.inStock, eq(supplierOffers.inStock, true)),
+      flag(query.supported, isNull(supplierOffers.unsupportedReason)),
+      flag(query.ignored, isNotNull(supplierOffers.ignoredAt)),
+      flag(query.lowStock, lowStock),
     );
-    const [rows, [total], policy] = await Promise.all([
+    const [rows, [total]] = await Promise.all([
       this.db
         .select()
         .from(supplierOffers)
@@ -349,8 +383,39 @@ export class SuppliersService {
         .limit(query.pageSize)
         .offset((query.page - 1) * query.pageSize),
       this.db.select({ total: count() }).from(supplierOffers).where(where),
-      currentSupplierPolicy(this.db),
     ]);
+    return {
+      items: await this.toOffers(state, rows, tree),
+      total: total?.total ?? 0,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
+  }
+
+  /** One offer as the offers table shows it (S16 SC6's answers). */
+  async offer(id: string): Promise<SupplierOffer> {
+    const [row] = await this.db.select().from(supplierOffers).where(eq(supplierOffers.id, id));
+    if (!row) throw refusals.notFound('offer');
+    const states = await supplierStates(this.db, routingContext(this.env));
+    const state = states.find((item) => item.id === row.supplierId) as SupplierState;
+    const tree = await this.db
+      .select({
+        categoryId: supplierCategories.categoryId,
+        parentCategoryId: supplierCategories.parentCategoryId,
+        name: supplierCategories.name,
+      })
+      .from(supplierCategories)
+      .where(eq(supplierCategories.supplierId, row.supplierId));
+    const [offer] = await this.toOffers(state, [row], tree);
+    return offer as SupplierOffer;
+  }
+
+  private async toOffers(
+    state: SupplierState,
+    rows: OfferRow[],
+    tree: readonly CategoryName[],
+  ): Promise<SupplierOffer[]> {
+    const policy = await currentSupplierPolicy(this.db);
     const routes =
       rows.length === 0
         ? []
@@ -372,42 +437,48 @@ export class SuppliersService {
             );
     const names = await this.catalog.productNames(routes.map((route) => route.productId));
     const routeOf = new Map(routes.map((route) => [route.offerId, route]));
+    const byId = new Map(tree.map((node) => [node.categoryId, node]));
     const now = new Date();
-    return {
-      items: rows.map((row) => {
-        const route = routeOf.get(row.id);
-        const product = route && names.get(route.productId);
-        return {
-          id: row.id,
-          supplierCode: state.code,
-          offerId: row.offerId,
-          name: row.name,
-          groupName: row.groupName,
-          kind: row.kind,
-          requiredFields: row.requiredFields,
-          costUsdUnits: row.costUsdUnits,
-          costRaw: row.costRaw,
-          inStock: row.inStock,
-          costConfirmedAt: row.costConfirmedAt?.toISOString() ?? null,
-          costStale: isCostStale(state.code, row.costConfirmedAt, now, policy),
-          lastSeenAt: row.lastSeenAt.toISOString(),
-          missingSince: row.missingSince?.toISOString() ?? null,
-          mapped:
-            route && product
-              ? {
-                  routeId: route.id,
-                  productId: route.productId,
-                  productNameAr: product.nameAr,
-                  gameId: product.gameId,
-                  gameNameAr: product.gameNameAr,
-                }
-              : null,
-        };
-      }),
-      total: total?.total ?? 0,
-      page: query.page,
-      pageSize: query.pageSize,
-    };
+    return rows.map((row) => {
+      const route = routeOf.get(row.id);
+      const product = route && names.get(route.productId);
+      return {
+        id: row.id,
+        supplierCode: state.code,
+        offerId: row.offerId,
+        name: row.name,
+        groupName: row.groupName,
+        kind: row.kind,
+        requiredFields: row.requiredFields,
+        costUsdUnits: row.costUsdUnits,
+        costRaw: row.costRaw,
+        inStock: row.inStock,
+        costConfirmedAt: row.costConfirmedAt?.toISOString() ?? null,
+        costStale: isCostStale(state.code, row.costConfirmedAt, now, policy),
+        lastSeenAt: row.lastSeenAt.toISOString(),
+        missingSince: row.missingSince?.toISOString() ?? null,
+        categoryId: row.categoryId,
+        categoryPath: categoryPath(byId, row.categoryId),
+        stock: row.stock,
+        stockLevel: stockLevel(row.stock, row.inStock, policy.lowStockUnits),
+        originalCostUsdUnits: row.originalCostUsdUnits,
+        discountPercent: discountPercent(row.costUsdUnits, row.originalCostUsdUnits),
+        fieldSpecs: row.fieldSpecs,
+        unsupportedReason:
+          row.unsupportedReason === null ? null : (row.unsupportedReason as 'fields_unsupported'),
+        ignoredAt: row.ignoredAt?.toISOString() ?? null,
+        mapped:
+          route && product
+            ? {
+                routeId: route.id,
+                productId: route.productId,
+                productNameAr: product.nameAr,
+                gameId: product.gameId,
+                gameNameAr: product.gameNameAr,
+              }
+            : null,
+      };
+    });
   }
 
   /** `GET /api/admin/suppliers/offers/:id/costs`: newest first. */
@@ -644,7 +715,7 @@ export class SuppliersService {
   private async summaries(states: SupplierState[]): Promise<SupplierSummary[]> {
     if (states.length === 0) return [];
     const ids = states.map((state) => state.id);
-    const [runs, offers, mappedCounts, validations] = await Promise.all([
+    const [runs, offers, mappedCounts, validations, newOffers, lowStock] = await Promise.all([
       this.db
         .selectDistinctOn([supplierSyncRuns.supplierId])
         .from(supplierSyncRuns)
@@ -665,6 +736,8 @@ export class SuppliersService {
         .where(and(inArray(productRoutes.supplierId, ids), isNull(productRoutes.archivedAt)))
         .groupBy(productRoutes.supplierId),
       validationsToday(this.db, ids),
+      newOfferCounts(this.db, ids),
+      lowStockCounts(this.db, ids),
     ]);
     const runOf = new Map(runs.map((run) => [run.supplierId, run]));
     const offersOf = new Map(offers.map((row) => [row.supplierId, row.total]));
@@ -699,6 +772,10 @@ export class SuppliersService {
         canValidatePlayer: this.adapters.canValidatePlayer(state.code),
         validationQuota: state.validationDailyQuota,
         validationsToday: validations.get(state.id) ?? 0,
+        capabilities: supplierPanelCapabilities(state.code),
+        newOfferCount: newOffers.get(state.id) ?? 0,
+        lowStockCount: (lowStock.get(state.id)?.low ?? 0) + (lowStock.get(state.id)?.out ?? 0),
+        platformStatus: this.live.cachedStatus(state.id),
       };
     });
   }
@@ -726,9 +803,54 @@ function importRowError(
   if (!offer) return { code: 'NOT_FOUND' };
   if (mappedIds.has(offer.id)) return { code: 'OFFER_ALREADY_MAPPED' };
   if (offer.missingSince) return { code: 'OFFER_MISSING' };
+  // S16 SC3, SC6: unsupported offers wait for Q19; an ignored one is unignored first.
+  if (offer.unsupportedReason) return { code: 'OFFER_UNSUPPORTED' };
+  if (offer.ignoredAt) return { code: 'OFFER_IGNORED' };
   if (offer.kind && input.kind && offer.kind !== input.kind) return { code: 'ROUTE_KIND_MISMATCH' };
   const fields = unmappedFields(offer.requiredFields, input.fieldMap ?? {});
   if (fields.length > 0) return { code: 'ROUTE_FIELDS_UNMAPPED', fields };
   if (!offer.kind && !input.kind) return { code: 'VALIDATION_FAILED' };
   return null;
+}
+
+/** A supplier category's name and parent, for offer paths and subtrees. */
+interface CategoryName {
+  categoryId: string;
+  parentCategoryId: string | null;
+  name: string;
+}
+
+/** The names from the root down to the leaf; empty when the leaf is unknown (rule SF1). */
+function categoryPath(
+  byId: ReadonlyMap<string, CategoryName>,
+  categoryId: string | null,
+): string[] {
+  const path: string[] = [];
+  const seen = new Set<string>();
+  let node = categoryId === null ? undefined : byId.get(categoryId);
+  while (node && !seen.has(node.categoryId)) {
+    seen.add(node.categoryId);
+    path.unshift(node.name);
+    node = node.parentCategoryId === null ? undefined : byId.get(node.parentCategoryId);
+  }
+  return path;
+}
+
+/** The category and every category below it (rule SF1's filter). */
+function subtreeIds(tree: readonly CategoryName[], categoryId: string): Set<string> {
+  const ids = new Set([categoryId]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const node of tree) {
+      if (
+        node.parentCategoryId !== null &&
+        ids.has(node.parentCategoryId) &&
+        !ids.has(node.categoryId)
+      ) {
+        ids.add(node.categoryId);
+        grew = true;
+      }
+    }
+  }
+  return ids;
 }

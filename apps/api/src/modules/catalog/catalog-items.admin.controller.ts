@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
+  activateAllResultSchema,
   createInputFieldSchema,
   createProductSchema,
   inputFieldSchema,
@@ -60,6 +61,21 @@ export class CatalogItemsAdminController {
     @Req() request: Request,
   ) {
     return this.items.createField(actor(admin, request), id, body);
+  }
+
+  /** S16 SC10: the game and its paused products that can serve, activated together. */
+  @Post('games/:id/activate-all')
+  @AdminRoute()
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: activateAllResultSchema })
+  @ApiOkResponse({ description: 'Activated and skipped', standardSchema: activateAllResultSchema })
+  activateAll(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: Request,
+  ) {
+    return this.items.activateAll(actor(admin, request), id);
   }
 
   @Put('games/:id/fields/order')

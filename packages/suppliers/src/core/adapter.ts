@@ -1,4 +1,9 @@
-import type { Currency, ProductKind } from '@vertex-digital/contracts';
+import type {
+  Currency,
+  FieldSpec,
+  OfferUnsupportedReason,
+  ProductKind,
+} from '@vertex-digital/contracts';
 
 /*
  * The one interface every supplier adapter implements (ADR 0005). Adapters are pure HTTP
@@ -17,6 +22,12 @@ export interface SupplierCapabilities {
   balance: boolean;
   /** Lists offers with costs (price sync, A06). */
   catalog: boolean;
+  /** S16 SC1: lists its category tree (`listCategories`). */
+  categories: boolean;
+  /** S16 SF3: reads its wallet transactions and order history (`listTransactions`, `listOrders`). */
+  statement: boolean;
+  /** S16 SF5: reports its own status (`getPlatformStatus`). */
+  platformStatus: boolean;
 }
 
 /** A money amount in integer units of a currency (ADR 0003). */
@@ -37,6 +48,68 @@ export interface SupplierOffer {
   kind?: ProductKind;
   /** The supplier's own names of the order fields, when it publishes them (rule RT3). */
   requiredFields?: string[];
+  /** S16 SC3: the supplier's leaf category id. */
+  categoryId?: string;
+  /** S16 SF2: units in stock; absent when unlimited or not reported. */
+  stock?: number;
+  /** S16 SF1: the supplier's price before its discount. */
+  originalCost?: SupplierMoney;
+  /** S16 SC3: the account fields with labels, types and options. */
+  fieldSpecs?: FieldSpec[];
+  /** S16 SC3: kept in the catalog but not usable by this build (two fields, a select). */
+  unsupportedReason?: OfferUnsupportedReason;
+}
+
+/** S16 SC1: one node of the supplier's category tree. */
+export interface SupplierCategory {
+  categoryId: string;
+  parentCategoryId?: string;
+  name: string;
+  kind?: ProductKind;
+  productCount?: number;
+  inStockCount?: number;
+  /** HTTPS on one of the adapter's `imageHosts`; left out otherwise (rule IM1). */
+  imageUrl?: string;
+}
+
+/** S16 SF3: a page of the supplier's statement, newest first. */
+export interface SupplierStatementPage<Item> {
+  items: Item[];
+  hasMore: boolean;
+}
+
+/** S16 SF3: one movement of the supplier's wallet; what it does not say is left out. */
+export interface SupplierTransactionRow {
+  id: string;
+  type?: string;
+  amount?: SupplierMoney;
+  balanceAfter?: SupplierMoney;
+  reference?: string;
+  supplierOrderId?: string;
+  createdAt?: Date;
+}
+
+/** S16 SF3: one order of the supplier's history; what it does not say is left out. */
+export interface SupplierOrderRow {
+  supplierOrderId: string;
+  offerId?: string;
+  offerName?: string;
+  quantity?: number;
+  status?: string;
+  total?: SupplierMoney;
+  createdAt?: Date;
+}
+
+/** S16 SF5. */
+export interface SupplierPlatformStatus {
+  status: string;
+  catalogUpdatedAt?: Date;
+}
+
+/** S16 IM1, IM2: how much of an image is read, and for how long. */
+export interface ImageLimits {
+  maxBytes: number;
+  timeoutMs: number;
 }
 
 export interface PlayerValidation {
@@ -138,4 +211,18 @@ export interface SupplierAdapter {
   verifyWebhook(request: WebhookRequest, now?: Date): boolean;
   /** Parses a verified webhook; throws a definitive `SupplierError` on a malformed one. */
   parseWebhook(request: WebhookRequest): SupplierWebhookEvent;
+  /** S16 IM1: the HTTPS hosts its category images may be fetched from. */
+  readonly imageHosts: readonly string[];
+  /** S16 SC1, behind `categories`. */
+  listCategories(): Promise<SupplierCategory[]>;
+  /** S16 SF3, behind `statement`: pages from 1, newest first. */
+  listTransactions(page: number): Promise<SupplierStatementPage<SupplierTransactionRow>>;
+  listOrders(page: number): Promise<SupplierStatementPage<SupplierOrderRow>>;
+  /** S16 SF5, behind `platformStatus`. */
+  getPlatformStatus(): Promise<SupplierPlatformStatus>;
+  /**
+   * S16 IM1, IM2: a category image's bytes, only from `imageHosts` over HTTPS, never through a
+   * redirect to another host, within the limits; throws a `SupplierError` otherwise.
+   */
+  fetchImage(url: string, limits: ImageLimits): Promise<Uint8Array>;
 }

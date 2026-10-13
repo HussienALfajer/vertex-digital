@@ -125,6 +125,7 @@ export async function currentSupplierPolicy(db: Executor): Promise<SupplierPolic
     downSuccessBp: row.downSuccessBp,
     downConsecutiveErrors: row.downConsecutiveErrors,
     probeAfterMinutes: row.probeAfterMinutes,
+    lowStockUnits: row.lowStockUnits,
   };
 }
 
@@ -274,6 +275,7 @@ export async function productRoutingStates(
             supplierPaused: supplier.paused,
             health: supplier.health,
             offerMissing: offer.missingSince !== null,
+            offerUnsupported: offer.unsupportedReason !== null,
             inStock: offer.inStock,
             costUsdUnits: offer.costUsdUnits,
             costConfirmedAt: offer.costConfirmedAt,

@@ -1972,6 +1972,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/catalog/games/{id}/activate-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CatalogItemsAdminController_activateAll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/catalog/games/{id}/fields/order": {
         parameters: {
             query?: never;
@@ -3076,6 +3092,230 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/suppliers/{code}/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierCatalogAdminController_categories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/categories/{categoryId}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierCatalogAdminController_image"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/categories/{categoryId}/import-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierCatalogAdminController_draft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/categories/{categoryId}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierCatalogAdminController_importCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/categories/{categoryId}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierCatalogAdminController_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/categories/{categoryId}/unlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierCatalogAdminController_unlink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/categories/{categoryId}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierCatalogAdminController_ignore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/categories/{categoryId}/unignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierCatalogAdminController_unignore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/offers/{id}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierCatalogAdminController_ignoreOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/offers/{id}/unignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierCatalogAdminController_unignoreOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/games/{id}/cover/from-supplier": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierCatalogAdminController_cover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/statement/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierCatalogAdminController_transactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/statement/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierCatalogAdminController_orders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/{code}/platform-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierCatalogAdminController_platformStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/player-checks": {
         parameters: {
             query?: never;
@@ -3356,6 +3596,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["OrdersAdminController_order"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orders/{id}/attempts/{attemptId}/supplier-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersAdminController_supplierOrders"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4105,9 +4361,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_game.activated_all" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier.category_imported" | "supplier_category.linked" | "supplier_category.unlinked" | "supplier_category.ignored" | "supplier_category.unignored" | "supplier_offer.ignored" | "supplier_offer.unignored" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "supplier_category" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -6083,6 +6339,23 @@ export interface components {
              */
             options: null;
         };
+        ActivateAllResult: {
+            /** Format: uuid */
+            gameId: string;
+            gameActivated: boolean;
+            activated: {
+                /** Format: uuid */
+                productId: string;
+                nameAr: string;
+            }[];
+            skipped: {
+                /** Format: uuid */
+                productId: string;
+                nameAr: string;
+                /** @enum {string} */
+                reason: "no_route" | "review_pending" | "no_price";
+            }[];
+        };
         UpdateInputField: {
             labelAr?: string;
             helpAr?: string | null;
@@ -6582,6 +6855,10 @@ export interface components {
             canValidatePlayer: boolean;
             validationQuota: number;
             validationsToday: number;
+            capabilities: components["schemas"]["SupplierPanelCapabilities"];
+            newOfferCount: number;
+            lowStockCount: number;
+            platformStatus: components["schemas"]["PlatformStatus"] | null;
         };
         /** @enum {string} */
         SupplierHealthState: "healthy" | "degraded" | "down";
@@ -6616,6 +6893,18 @@ export interface components {
         SyncRunTrigger: "schedule" | "admin";
         /** @enum {string} */
         SyncRunStatus: "running" | "succeeded" | "failed";
+        SupplierPanelCapabilities: {
+            categories: boolean;
+            statement: boolean;
+            platformStatus: boolean;
+        };
+        PlatformStatus: {
+            status: string;
+            /** Format: date-time */
+            catalogUpdatedAt: string | null;
+            /** Format: date-time */
+            checkedAt: string;
+        };
         SupplierPolicy: {
             priceReviewThresholdBp: number;
             costStaleMinutes: number;
@@ -6626,6 +6915,7 @@ export interface components {
             downSuccessBp: number;
             downConsecutiveErrors: number;
             probeAfterMinutes: number;
+            lowStockUnits: number;
         };
         OfferCostChangePage: {
             items: components["schemas"]["OfferCostChange"][];
@@ -6662,6 +6952,10 @@ export interface components {
             canValidatePlayer: boolean;
             validationQuota: number;
             validationsToday: number;
+            capabilities: components["schemas"]["SupplierPanelCapabilities"];
+            newOfferCount: number;
+            lowStockCount: number;
+            platformStatus: components["schemas"]["PlatformStatus"] | null;
             credentialFields: string[];
             credentials: {
                 hints: {
@@ -6714,7 +7008,15 @@ export interface components {
             missing?: "true" | "false";
             /** @enum {string} */
             inStock?: "true" | "false";
+            categoryId?: components["schemas"]["SupplierCategoryId"];
+            /** @enum {string} */
+            supported?: "true" | "false";
+            /** @enum {string} */
+            ignored?: "true" | "false";
+            /** @enum {string} */
+            lowStock?: "true" | "false";
         };
+        SupplierCategoryId: string;
         SupplierOfferPage: {
             items: components["schemas"]["SupplierOffer"][];
             total: number;
@@ -6740,6 +7042,16 @@ export interface components {
             lastSeenAt: string;
             /** Format: date-time */
             missingSince: string | null;
+            categoryId: string | null;
+            categoryPath: string[];
+            stock: number | null;
+            stockLevel: components["schemas"]["StockLevel"];
+            originalCostUsdUnits: number | null;
+            discountPercent: number | null;
+            fieldSpecs: components["schemas"]["FieldSpec"][] | null;
+            unsupportedReason: components["schemas"]["OfferUnsupportedReason"] | null;
+            /** Format: date-time */
+            ignoredAt: string | null;
             mapped: {
                 /** Format: uuid */
                 routeId: string;
@@ -6751,6 +7063,20 @@ export interface components {
                 gameNameAr: string;
             } | null;
         };
+        /** @enum {string} */
+        StockLevel: "ok" | "low" | "out" | "unlimited";
+        FieldSpec: {
+            key: string;
+            label: string;
+            /** @enum {string} */
+            type: "text" | "select";
+            options?: {
+                label: string;
+                value: string;
+            }[];
+        };
+        /** @enum {string} */
+        OfferUnsupportedReason: "fields_unsupported";
         ImportOffers: {
             /** Format: uuid */
             gameId: string;
@@ -6835,7 +7161,7 @@ export interface components {
         /** @enum {string} */
         RouteTier: "healthy" | "degraded" | "manual";
         /** @enum {string} */
-        RouteUnusableReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low";
+        RouteUnusableReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "offer_unsupported" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low";
         CreateRoute: {
             /** Format: uuid */
             offerId: string;
@@ -6853,6 +7179,231 @@ export interface components {
             fieldMap?: components["schemas"]["FieldMap"];
         };
         SetManualCost: components["schemas"]["CreateManualRoute"];
+        SupplierCategoryListQuery: {
+            /** @default 1 */
+            page: number;
+            /** @default 100 */
+            pageSize: number;
+            parentId?: components["schemas"]["SupplierCategoryId"];
+            state?: components["schemas"]["SupplierCategoryState"];
+            kind?: components["schemas"]["ProductKind"];
+            q?: string;
+        };
+        /** @enum {string} */
+        SupplierCategoryState: "not_imported" | "linked" | "new_packs" | "ignored";
+        SupplierCategoryPage: {
+            items: components["schemas"]["SupplierCategoryNode"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        SupplierCategoryNode: {
+            supplierCode: components["schemas"]["SupplierCode"];
+            categoryId: string;
+            parentCategoryId: string | null;
+            name: string;
+            path: string[];
+            kind: components["schemas"]["ProductKind"] | null;
+            productCount: number | null;
+            inStockCount: number | null;
+            hasImage: boolean;
+            childCount: number;
+            counts: {
+                mapped: number;
+                unmapped: number;
+                ignored: number;
+                unsupported: number;
+                newPacks: number;
+            };
+            state: components["schemas"]["SupplierCategoryState"];
+            game: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+            } | null;
+            linkedHere: boolean;
+            /** Format: date-time */
+            ignoredAt: string | null;
+            /** Format: date-time */
+            missingSince: string | null;
+            /** Format: date-time */
+            lastSeenAt: string;
+        };
+        ImportDraftQuery: {
+            /** Format: uuid */
+            gameId?: string;
+        };
+        ImportDraft: {
+            category: components["schemas"]["SupplierCategoryNode"];
+            kind: components["schemas"]["ProductKind"] | null;
+            game: {
+                nameAr: string;
+                nameEn: string;
+                slug: string;
+                /** Format: uuid */
+                categoryId: string | null;
+            };
+            linkGame: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+                fields: {
+                    key: string;
+                    labelAr: string;
+                }[];
+            } | null;
+            fields: components["schemas"]["SuggestedInputField"][];
+            fieldMap: {
+                [key: string]: string;
+            };
+            packs: components["schemas"]["ImportDraftPack"][];
+        };
+        SuggestedInputField: {
+            supplierKey: string;
+            supplierLabel: string;
+            /** @enum {string} */
+            supplierType: "text" | "select";
+            key: string;
+            labelAr: string;
+            /** @enum {string} */
+            type: "digits" | "text";
+            minLength: number;
+            maxLength: number;
+            required: boolean;
+        };
+        ImportDraftPack: {
+            /** Format: uuid */
+            offerId: string;
+            supplierOfferId: string;
+            name: string;
+            leafCategoryId: string;
+            leafName: string;
+            kind: components["schemas"]["ProductKind"] | null;
+            costUsdUnits: number | null;
+            originalCostUsdUnits: number | null;
+            discountPercent: number | null;
+            stock: number | null;
+            stockLevel: components["schemas"]["StockLevel"];
+            requiredFields: string[] | null;
+            /** @enum {string|null} */
+            refusal: "OFFER_UNSUPPORTED" | "OFFER_IGNORED" | "OFFER_ALREADY_MAPPED" | "OFFER_MISSING" | "ROUTE_KIND_MISMATCH" | null;
+            suggestedNameAr: string;
+            suggestedGameAmount: number | null;
+            pricePreviewUsdUnits: number | null;
+            match: {
+                /** Format: uuid */
+                productId: string;
+                nameAr: string;
+            } | null;
+        };
+        ImportCategory: {
+            game: {
+                slug: string;
+                /** Format: uuid */
+                categoryId: string;
+                nameAr: string;
+                nameEn: string & (string);
+                accentColor?: string | null;
+                regionNotesAr?: string | null;
+            };
+            cover: {
+                /** @enum {boolean} */
+                supplierImage: true;
+            } | {
+                /** Format: uuid */
+                coverFileId: string;
+            };
+            fields: components["schemas"]["CreateInputField"][];
+            /** @default {} */
+            fieldMap: components["schemas"]["FieldMap"];
+            rows: {
+                /** Format: uuid */
+                offerId: string;
+                nameAr: string;
+                gameAmount?: number | null;
+            }[];
+        };
+        CategoryImportResult: {
+            /** Format: uuid */
+            gameId: string;
+            products: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+                /** Format: uuid */
+                routeId: string;
+                existing: boolean;
+                priceUsdUnits: number | null;
+            }[];
+        };
+        LinkCategory: {
+            /** Format: uuid */
+            gameId: string;
+            /** @default {} */
+            fieldMap: components["schemas"]["FieldMap"];
+            rows: ({
+                /** Format: uuid */
+                offerId: string;
+                /** Format: uuid */
+                productId: string;
+            } | {
+                /** Format: uuid */
+                offerId: string;
+                nameAr: string;
+                gameAmount?: number | null;
+            })[];
+        };
+        CoverFromSupplier: {
+            supplier: components["schemas"]["SupplierCode"];
+            categoryId: components["schemas"]["SupplierCategoryId"];
+        };
+        StatementQuery: {
+            /** @default 1 */
+            page: number;
+        };
+        SupplierTransactionPage: {
+            items: components["schemas"]["SupplierTransaction"][];
+            page: number;
+            hasMore: boolean;
+        };
+        SupplierTransaction: {
+            id: string;
+            type: string | null;
+            amountUsdUnits: number | null;
+            balanceAfterUsdUnits: number | null;
+            reference: string | null;
+            supplierOrderId: string | null;
+            /** Format: date-time */
+            createdAt: string | null;
+            match: components["schemas"]["SupplierOrderMatch"] | null;
+        };
+        SupplierOrderMatch: {
+            /** Format: uuid */
+            orderId: string;
+            orderNumber: string;
+            orderStatus: components["schemas"]["OrderStatus"];
+            /** Format: uuid */
+            attemptId: string;
+            attemptStatus: components["schemas"]["AttemptStatus"];
+        };
+        /** @enum {string} */
+        AttemptStatus: "sending" | "pending" | "unknown" | "delivered" | "failed";
+        SupplierOrderPage: {
+            items: components["schemas"]["SupplierOrder"][];
+            page: number;
+            hasMore: boolean;
+        };
+        SupplierOrder: {
+            supplierOrderId: string;
+            offerId: string | null;
+            offerName: string | null;
+            quantity: number | null;
+            status: string | null;
+            totalUsdUnits: number | null;
+            /** Format: date-time */
+            createdAt: string | null;
+            match: components["schemas"]["SupplierOrderMatch"] | null;
+        };
         PlayerCheckRequest: {
             /** Format: uuid */
             productId: string;
@@ -7359,8 +7910,6 @@ export interface components {
         };
         /** @enum {string} */
         AttemptKind: "routed" | "admin_fulfil";
-        /** @enum {string} */
-        AttemptStatus: "sending" | "pending" | "unknown" | "delivered" | "failed";
         RouteCandidate: {
             /** Format: uuid */
             routeId: string;
@@ -7371,7 +7920,7 @@ export interface components {
             skipReason: components["schemas"]["RouteSkipReason"] | null;
         };
         /** @enum {string} */
-        RouteSkipReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low" | "test_customer" | "already_tried" | "unprofitable" | "balance_below_order";
+        RouteSkipReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "offer_unsupported" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low" | "test_customer" | "already_tried" | "unprofitable" | "balance_below_order";
         /** @enum {string} */
         AttemptResolver: "supplier" | "poll" | "webhook" | "admin";
         /** @enum {string} */
@@ -7603,6 +8152,10 @@ export interface components {
             manualReminderMinutes: number;
             ownerDailyCapUsdUnits: number;
         };
+        NearbySupplierOrders: {
+            items: components["schemas"]["SupplierOrder"][];
+            complete: boolean;
+        };
         PollAttempt: {
             reason: string;
         };
@@ -7728,7 +8281,7 @@ export interface components {
             } | null;
         };
         /** @enum {string} */
-        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test" | "supplier_sync_summary" | "supplier_health" | "supplier_balance_low" | "supplier_sync_failing" | "manual_order" | "manual_order_reminder" | "order_needs_review" | "order_conflict" | "validation_quota_reached" | "ticket_opened" | "ticket_reply" | "reconciliation_alert" | "admin_order_placed";
+        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test" | "supplier_sync_summary" | "supplier_health" | "supplier_balance_low" | "supplier_sync_failing" | "manual_order" | "manual_order_reminder" | "order_needs_review" | "order_conflict" | "validation_quota_reached" | "ticket_opened" | "ticket_reply" | "reconciliation_alert" | "admin_order_placed" | "supplier_stock_low";
         /** @enum {string} */
         TelegramMessageStatus: "pending" | "sent" | "failed" | "skipped";
         TelegramLinkCode: {
@@ -8592,8 +9145,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set";
-                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_game.activated_all" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier.category_imported" | "supplier_category.linked" | "supplier_category.unlinked" | "supplier_category.ignored" | "supplier_category.unignored" | "supplier_offer.ignored" | "supplier_offer.unignored" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "supplier" | "supplier_policy" | "supplier_offer" | "supplier_category" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
                 entityId?: string;
                 from?: string;
                 to?: string;
@@ -11147,6 +11700,28 @@ export interface operations {
             };
         };
     };
+    CatalogItemsAdminController_activateAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activated and skipped */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivateAllResult"];
+                };
+            };
+        };
+    };
     CatalogItemsAdminController_reorderFields: {
         parameters: {
             query?: never;
@@ -12720,6 +13295,10 @@ export interface operations {
                 mapped?: "true" | "false";
                 missing?: "true" | "false";
                 inStock?: "true" | "false";
+                categoryId?: string;
+                supported?: "true" | "false";
+                ignored?: "true" | "false";
+                lowStock?: "true" | "false";
             };
             header?: never;
             path: {
@@ -12932,6 +13511,344 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProductRouting"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_categories: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                parentId?: string;
+                state?: "not_imported" | "linked" | "new_packs" | "ignored";
+                kind?: "direct" | "code";
+                q?: string;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule SC4 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCategoryPage"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_image: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A thumbnail (WebP, at most 256 px) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SupplierCatalogAdminController_draft: {
+        parameters: {
+            query?: {
+                gameId?: string;
+            };
+            header?: never;
+            path: {
+                code: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rules SC7, SC8, SC12–SC14 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDraft"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_importCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCategory"];
+            };
+        };
+        responses: {
+            /** @description A paused game with its packs (rule SC7) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryImportResult"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkCategory"];
+            };
+        };
+        responses: {
+            /** @description The node linked to the game (rule SC8) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryImportResult"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_unlink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule SC9 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCategoryNode"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_ignore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule SC6 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCategoryNode"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_unignore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule SC6 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCategoryNode"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_ignoreOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule SC6 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierOffer"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_unignoreOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule SC6 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierOffer"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverFromSupplier"];
+            };
+        };
+        responses: {
+            /** @description Rule IM3 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameDetail"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_transactions: {
+        parameters: {
+            query?: {
+                page?: number;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule SF3 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierTransactionPage"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_orders: {
+        parameters: {
+            query?: {
+                page?: number;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule SF3 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierOrderPage"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_platformStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule SF5 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformStatus"];
                 };
             };
         };
@@ -13459,6 +14376,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminOrder"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_supplierOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule SF4 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NearbySupplierOrders"];
                 };
             };
         };
