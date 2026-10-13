@@ -215,6 +215,18 @@ export const ERROR_CODES = [
   'PUSH_ENDPOINT_REFUSED',
   /** Beyond today's owner cap for owner-funded admin orders; `details.remainingUsdUnits` (S16 AP7). */
   'OWNER_DAILY_CAP_EXCEEDED',
+  /** The offer has two fields or a select field: not usable until Q19 is answered (S16 SC3). */
+  'OFFER_UNSUPPORTED',
+  /** The offer is ignored: unignore it first (S16 SC6). */
+  'OFFER_IGNORED',
+  /** The category, an ancestor or a descendant is linked to another game; `details.gameId` (S16 SC7). */
+  'CATEGORY_LINKED',
+  /** The supplier no longer lists the category (S16 SC7). */
+  'CATEGORY_MISSING',
+  /** The supplier's image could not be downloaded or decoded: upload one instead (S16 IM2). */
+  'IMAGE_FETCH_FAILED',
+  /** The supplier's adapter cannot do this (categories, statement, platform status; S16). */
+  'CAPABILITY_UNSUPPORTED',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

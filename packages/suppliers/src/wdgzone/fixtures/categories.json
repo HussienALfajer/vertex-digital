@@ -1,0 +1,35 @@
+{
+  "request_id": "req_000000000000000000000010",
+  "success": true,
+  "data": [
+    {
+      "id": 120,
+      "parent_id": null,
+      "name": "Steam Wallet",
+      "type": "voucher",
+      "product_count": 165,
+      "in_stock_products": 142,
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=Steam%20Wallet"
+    },
+    {
+      "id": 124,
+      "parent_id": 120,
+      "name": "USA / USD",
+      "type": "voucher",
+      "product_count": 12,
+      "in_stock_products": 10,
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=Steam%20Wallet"
+    },
+    {
+      "id": 14690,
+      "parent_id": null,
+      "name": "PUBG Mobile",
+      "type": "topup",
+      "product_count": 14,
+      "in_stock_products": 14,
+      "image_url": "https://cdn.example.test/pubg.png"
+    },
+    { "id": 14693, "parent_id": 14690, "name": "Auto", "type": "topup" },
+    { "id": 50001, "parent_id": null, "name": "Steam Gifts", "type": "manual" }
+  ]
+}

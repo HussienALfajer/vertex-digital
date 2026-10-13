@@ -448,6 +448,8 @@ describe('the messages of PR 4', () => {
       ticketsWaiting: 2,
       reconciliation: { date: '2029-12-31', status: 'finished', mismatches: 2, open: 3 },
       ownerOrders: { count: 2, usedUsdUnits: 12_500_000, capUsdUnits: 100_000_000 },
+      newPacks: [{ supplierNameAr: 'WDGZone', count: 7 }],
+      stockLow: { low: 2, out: 1 },
     };
     const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
     for (const line of [
@@ -467,6 +469,8 @@ describe('the messages of PR 4', () => {
       'سلال اليوم: 2 (5 طلبات)',
       'تذاكر جديدة اليوم: 3 · بانتظار ردّك الآن: 2',
       'التحقق من المعرّف اليوم: SHOP2TOPUP 12، WDGZone 3',
+      '📦 باقات جديدة في فئات مستوردة: 7 (WDGZone)',
+      '📉 مخزون الباقات المربوطة: 2 منخفض، 1 نافد',
       'المطابقة الليلية 2029-12-31: 2 فروقات · مفتوحة الآن: 3',
       'طلبات من مال المالك اليوم: 2 بقيمة $12.50 من سقف $100.00',
     ]) {

@@ -77,6 +77,11 @@ export {
 export { decryptSecret, encryptSecret, orderCodesKey } from './secrets.js';
 export { createShareLink, type ShareLinkRow, shareToken } from './share-links.js';
 export {
+  type AttemptSupplierFacts,
+  attemptSupplierFacts,
+  supplierOrderMatches,
+} from './supplier-matches.js';
+export {
   type AttemptRow,
   addOrderEvent,
   currentOrderPolicy,

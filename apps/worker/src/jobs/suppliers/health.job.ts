@@ -5,6 +5,7 @@ import {
   type HealthStanding,
   type HealthVerdict,
   healthWindowStart,
+  PANEL_READ_OPERATIONS,
   probeOutcome,
   QUEUES,
   type SupplierPolicy,
@@ -33,7 +34,7 @@ import {
   type Transaction,
   telegramMessages,
 } from '@vertex-digital/db';
-import { and, asc, desc, eq, gte, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, lt, ne, notInArray, or } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -128,6 +129,8 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
           and(
             eq(supplierCalls.supplierId, supplier.id),
             gte(supplierCalls.createdAt, healthWindowStart(previous, now, policy)),
+            // S16 SF6: the panel's live reads never make a supplier degraded or down.
+            notInArray(supplierCalls.operation, [...PANEL_READ_OPERATIONS]),
           ),
         )
         .orderBy(asc(supplierCalls.createdAt), asc(supplierCalls.id));
@@ -141,6 +144,7 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
           and(
             eq(supplierCalls.supplierId, supplier.id),
             gte(supplierCalls.createdAt, previous.since),
+            notInArray(supplierCalls.operation, [...PANEL_READ_OPERATIONS]),
           ),
         )
         .orderBy(asc(supplierCalls.createdAt), asc(supplierCalls.id));

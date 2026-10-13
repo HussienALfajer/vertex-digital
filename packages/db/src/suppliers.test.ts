@@ -337,3 +337,134 @@ describe('append-only supplier tables', () => {
       ).toBe('supplier_policy_bounds_check');
     }));
 });
+
+describe('the supplier catalog (S16 SC1–SC3, SF1, SF2)', () => {
+  it('seeds the low-stock threshold on the current policy', async () => {
+    const { rows } = await connection.pool.query<{ low_stock_units: string }>(
+      `select low_stock_units from supplier_policy order by created_at desc, id desc limit 1`,
+    );
+    expect(rows[0]?.low_stock_units).toBe('10');
+  });
+
+  it('keeps one category per supplier id, bounded text and an HTTPS image', () =>
+    rolledBack(async (client) => {
+      const fake = await supplierId(client, 'fake');
+      const categoryId = `c-${unique()}`;
+      const insert = `insert into supplier_categories (id, supplier_id, category_id,
+        parent_category_id, name, product_count, image_url, last_seen_at)
+        values ($1, $2, $3, $4, $5, $6, $7, now())`;
+      const row = (extra: Partial<Record<string, unknown>> = {}) => {
+        const values = {
+          categoryId: `c-${unique()}`,
+          parent: null,
+          name: 'Category',
+          count: 1,
+          image: 'https://example.test/image.png',
+          ...extra,
+        };
+        return [
+          newId(),
+          fake,
+          values.categoryId,
+          values.parent,
+          values.name,
+          values.count,
+          values.image,
+        ];
+      };
+      expect(await violation(client, insert, row({ categoryId }))).toBeNull();
+      expect(await violation(client, insert, row({ categoryId }))).toBe(
+        'supplier_categories_supplier_id_category_id_idx',
+      );
+      expect(await violation(client, insert, row({ parent: 'gone' }))).toBeNull();
+      expect(await violation(client, insert, row({ name: '' }))).toBe(
+        'supplier_categories_name_check',
+      );
+      expect(await violation(client, insert, row({ count: -1 }))).toBe(
+        'supplier_categories_counts_check',
+      );
+      expect(await violation(client, insert, row({ image: 'http://example.test/a.png' }))).toBe(
+        'supplier_categories_image_url_check',
+      );
+      expect(
+        await violation(
+          client,
+          `update supplier_categories set game_id = null, linked_at = now()
+           where supplier_id = $1 and category_id = $2`,
+          [fake, categoryId],
+        ),
+      ).toBe('supplier_categories_linked_check');
+    }));
+
+  it('gives the app role no DELETE on categories', async () => {
+    const { rows } = await connection.pool.query<{ privileges: Record<string, boolean> }>(
+      `select json_object_agg(p, has_table_privilege(current_user, 'supplier_categories', p))
+         as privileges
+       from unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE']) as p`,
+    );
+    expect(rows[0]?.privileges).toEqual({
+      SELECT: true,
+      INSERT: true,
+      UPDATE: true,
+      DELETE: false,
+      TRUNCATE: false,
+    });
+  });
+
+  it('bounds the offer fields of S16', () =>
+    rolledBack(async (client) => {
+      const fake = await supplierId(client, 'fake');
+      const insert = `insert into supplier_offers (id, supplier_id, offer_id, name, in_stock,
+        cost_usd_units, last_seen_at, category_id, stock, original_cost_usd_units, field_specs,
+        unsupported_reason, ignored_at, ignored_admin_id, stock_alert)
+        values ($1, $2, $3, 'Offer', true, 1000000, now(), $4, $5, $6, $7, $8, $9, $10, $11)`;
+      const row = (extra: Partial<Record<string, unknown>> = {}) => {
+        const values = {
+          category: 'leaf',
+          stock: 5,
+          original: 1_100_000,
+          specs: JSON.stringify([{ key: 'player_id', label: 'Player ID', type: 'text' }]),
+          unsupported: null,
+          ignoredAt: null,
+          ignoredBy: null,
+          alert: 'low',
+          ...extra,
+        };
+        return [
+          newId(),
+          fake,
+          `o-${unique()}`,
+          values.category,
+          values.stock,
+          values.original,
+          values.specs,
+          values.unsupported,
+          values.ignoredAt,
+          values.ignoredBy,
+          values.alert,
+        ];
+      };
+      expect(await violation(client, insert, row())).toBeNull();
+      expect(
+        await violation(client, insert, row({ unsupported: 'fields_unsupported' })),
+      ).toBeNull();
+      expect(await violation(client, insert, row({ stock: -1 }))).toBe(
+        'supplier_offers_stock_check',
+      );
+      expect(await violation(client, insert, row({ original: 0 }))).toBe(
+        'supplier_offers_original_cost_check',
+      );
+      expect(await violation(client, insert, row({ specs: '{}' }))).toBe(
+        'supplier_offers_field_specs_check',
+      );
+      expect(await violation(client, insert, row({ unsupported: 'other' }))).toBe(
+        'supplier_offers_unsupported_reason_check',
+      );
+      expect(await violation(client, insert, row({ ignoredAt: new Date() }))).toBe(
+        'supplier_offers_ignored_check',
+      );
+      expect(await violation(client, insert, row({ category: '' }))).toBe(
+        'supplier_offers_category_id_check',
+      );
+    }));
+});

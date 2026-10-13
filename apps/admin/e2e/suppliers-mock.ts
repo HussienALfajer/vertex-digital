@@ -28,6 +28,7 @@ import {
   type SyncRun,
   supplierAvailable,
   supplierHasCatalog,
+  supplierPanelCapabilities,
 } from '@vertex-digital/contracts';
 import { type Answer, type CatalogMock, nextId } from './catalog-mock';
 
@@ -75,7 +76,19 @@ interface StoredSupplier {
   runs: SyncRun[];
 }
 
-type StoredOffer = Omit<SupplierOffer, 'costStale' | 'mapped'>;
+/** S16's supplier catalog fields: the panel of PR 3 shows them; this mock leaves them empty. */
+type CatalogFields =
+  | 'categoryId'
+  | 'categoryPath'
+  | 'stock'
+  | 'stockLevel'
+  | 'originalCostUsdUnits'
+  | 'discountPercent'
+  | 'fieldSpecs'
+  | 'unsupportedReason'
+  | 'ignoredAt';
+
+type StoredOffer = Omit<SupplierOffer, 'costStale' | 'mapped' | CatalogFields>;
 
 interface StoredRoute {
   id: string;
@@ -264,6 +277,7 @@ export class SuppliersMock {
         supplierPaused: this.paused(route.supplierCode),
         health: this.health(route.supplierCode),
         offerMissing: offer.missingSince !== null,
+        offerUnsupported: false,
         inStock: offer.inStock,
         costUsdUnits: offer.costUsdUnits,
         costConfirmedAt: offer.costConfirmedAt ? new Date(offer.costConfirmedAt) : null,
@@ -543,6 +557,10 @@ export class SuppliersMock {
       canValidatePlayer: row.code === 'fake',
       validationQuota: row.validationQuota ?? 1_000,
       validationsToday: row.code === 'fake' ? 312 : 0,
+      capabilities: supplierPanelCapabilities(row.code),
+      newOfferCount: 0,
+      lowStockCount: 0,
+      platformStatus: null,
     };
   }
 
@@ -562,6 +580,15 @@ export class SuppliersMock {
     const game = product && this.catalog.games.find((item) => item.id === product.gameId);
     return {
       ...row,
+      categoryId: null,
+      categoryPath: [],
+      stock: null,
+      stockLevel: row.inStock ? 'unlimited' : 'out',
+      originalCostUsdUnits: null,
+      discountPercent: null,
+      fieldSpecs: null,
+      unsupportedReason: null,
+      ignoredAt: null,
       costStale: isCostStale(
         row.supplierCode,
         row.costConfirmedAt ? new Date(row.costConfirmedAt) : null,

@@ -1,4 +1,12 @@
 export {
+  lowStockCounts,
+  type MappedStockOffer,
+  mappedStockOffers,
+  newOfferCounts,
+  type SupplierCategoryRow,
+  supplierCategoryTree,
+} from './catalog.js';
+export {
   credentialHints,
   decryptCredentials,
   encryptCredentials,

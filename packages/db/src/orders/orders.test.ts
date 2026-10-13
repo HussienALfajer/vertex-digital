@@ -66,6 +66,7 @@ import {
 } from './reservations.js';
 import { savedPlayerHash } from './saved-players.js';
 import { decryptSecret } from './secrets.js';
+import { attemptSupplierFacts, supplierOrderMatches } from './supplier-matches.js';
 import { lockOrder, type OrderContext, type OrderRow, transitionOrder } from './transition.js';
 
 /*
@@ -3295,5 +3296,40 @@ describe('admin purchases (S16 AP1–AP15, AM1–AM3)', () => {
          expires_at) values ($1, $2, $3, 'valid', $4, $5, now() + interval '1 hour')`,
       [newId(), item.game, 'b'.repeat(64), suppliers.fake, adminId],
     );
+  });
+});
+
+describe('the supplier statement matched to attempts (S16 SF3, SF4)', () => {
+  it('names the newest attempt of a supplier order id, and the facts of an attempt', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    const { order } = await buy(request(buyer, item));
+    const attemptId = await send(order, item);
+    const supplierOrderId = `m-${unique()}`;
+    await apply(attemptId, { status: 'pending', supplierOrderId });
+    const matches = await supplierOrderMatches(db, suppliers.fake, [
+      supplierOrderId,
+      supplierOrderId,
+      `none-${unique()}`,
+      '',
+    ]);
+    expect([...matches.keys()]).toEqual([supplierOrderId]);
+    expect(matches.get(supplierOrderId)).toEqual({
+      orderId: order.id,
+      orderNumber: order.number,
+      orderStatus: 'sent_to_supplier',
+      attemptId,
+      attemptStatus: 'pending',
+    });
+    expect((await supplierOrderMatches(db, suppliers.shop2topup, [supplierOrderId])).size).toBe(0);
+    expect((await supplierOrderMatches(db, suppliers.fake, [])).size).toBe(0);
+    expect(await attemptSupplierFacts(db, order.id, attemptId)).toMatchObject({
+      attemptId,
+      supplierId: suppliers.fake,
+      supplierCode: 'fake',
+      supplierOfferId: 'o-test',
+      quantity: 1,
+    });
+    expect(await attemptSupplierFacts(db, newId(), attemptId)).toBeNull();
   });
 });

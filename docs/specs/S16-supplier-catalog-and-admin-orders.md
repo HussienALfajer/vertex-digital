@@ -160,7 +160,7 @@ Admin responses are `Cache-Control: no-store` except images (IM1). `:code` is a 
 | `POST /api/admin/player-checks` | Admin, 30 supplier calls per 10 min | `adminPlayerCheckSchema` (`productId`, `fields`) | S09 PV6 answer | `VALIDATION_FAILED`, `RATE_LIMITED` |
 | `GET /api/admin/orders` (S08) | Admin | adds `placedBy?`, `payer?`, `purpose?` | rows add mode, payer, admin | — |
 | `GET` · `PUT /api/admin/orders/policy` (S08) | Admin; `PUT` re-authentication | adds `ownerDailyCapUsdUnits` | same | `REAUTHENTICATION_REQUIRED`, `VALIDATION_FAILED` |
-| `GET /api/admin/orders/:id/attempts/:attemptId/supplier-orders` | Admin, 1 per 5 s per supplier | — | nearby `supplierOrderSchema[]` (SF4) | `NOT_FOUND`, `CAPABILITY_UNSUPPORTED`, `SUPPLIER_UNAVAILABLE`, `RATE_LIMITED` |
+| `GET /api/admin/orders/:id/attempts/:attemptId/supplier-orders` | Admin, 1 per 5 s per supplier | — | nearby `{ items: supplierOrderSchema[], complete }` (SF4) | `NOT_FOUND`, `CAPABILITY_UNSUPPORTED`, `SUPPLIER_UNAVAILABLE`, `RATE_LIMITED` |
 | `GET /api/admin/suppliers/:code/categories` | Admin | `categoryListQuerySchema` (`parentId?`, `state?`, `kind?`, `q?`, page) | paged `supplierCategoryNodeSchema` | `CAPABILITY_UNSUPPORTED` |
 | `GET /api/admin/suppliers/:code/categories/:categoryId/image` | Admin, 120 per min | — | WebP | `404` |
 | `GET /api/admin/suppliers/:code/categories/:categoryId/import-draft` | Admin | `gameId?` (a link draft) | `importDraftSchema` | `NOT_FOUND`, `CATEGORY_MISSING` |
@@ -291,6 +291,20 @@ Admin (Arabic, RTL, light and dark). Store (phone width first, RTL, dark default
   - Stock levels on packs (SF2) and the stock line of the purchase dialog arrive with PR 2's offer fields.
   - Owner-funded orders stay out of the dashboard, R1, R2, R5 and the customer's daily cap; R6 shows `owner_drawing` and `owner_drawing_refund` lines and owner drawings at the start and end of the period.
   - Owner acceptance (2026-10-13): the store's order page names a failed gift or compensation "تعذّر تنفيذ الطلب" without the wallet or an amount (AM3), as the notification does; switching report tabs never draws another report's data in a view.
+- PR 2 (2026-10-13):
+  - The reply shapes of WDG's `GET /transactions` and `GET /orders` are not documented and no live call was made in PR 2 (the owner's key was not used; a $0 wallet would have answered empty lists): rows are read leniently field by field (`id`, `type`, `amount`, `balance_after`, `reference` or `description`, `order_id`, `product_id`, `product_name` or `product`, `quantity`, `status`, `total`, `currency`, `created_at`), anything else is left out and hidden in the panel, and a page ends the list by `pagination` when WDG sends it, else when it holds fewer than 50 rows. `GET /categories` follows a `pagination` object if WDG ever sends one. The fixtures for them are synthetic; recording them from read-only live calls stays open (`docs/suppliers/wdgzone.md`).
+  - `categoryState` is `categoryStandings(nodes, offers)` in the contracts: every node's state, effective game and counts at once, so a page of 200 nodes reads the tree once.
+  - The supplier's category list query is `supplierCategoryListQuerySchema` (`categoryListQuerySchema` is S06's store categories).
+  - Rule SF2's alert levels compare by rank (`ok` and `unlimited` 0, `low` 1, `out` 2): `out` back to `low` keeps the stored `out`, so only a recovery at or above the threshold re-arms the alert (`stockAlertChange`). Offers no longer mapped to an active product lose their stored alert.
+  - `supplier_policy.low_stock_units` is a `bigint` like every `*_units` column (migration 0058 widens 0056's integer; nothing was deployed between them).
+  - Rule SC12 gives a supplier key shorter than two characters `_f` (S06 keys have 2 to 32), and looks the dictionary up by the sanitized key (`Zone-ID` reads as `zone_id`).
+  - Routes and imports refuse an unsupported offer (`OFFER_UNSUPPORTED`) and an ignored one (`OFFER_IGNORED`); RT4 also makes an existing route on an offer that became unsupported unusable (`offer_unsupported`).
+  - A route created by an import or a link keeps only the field map entries of its own offer's fields, so a supplier is never sent a field it did not ask for.
+  - Rule SC8's link of a node already linked to the same game adds its rows without a new link; the per-row refusals of new packs come back numbered as the request's rows.
+  - Rule SC10's skipped reasons: `review_pending` when a review holds the price, `no_route` without a usable route or none profitable at the current price, `no_price` without a price.
+  - Rule SF3's limit is one read per 5 seconds per supplier and list (transactions, orders, nearby orders each), so the two tabs of "كشف الحساب" do not block each other. Panel reads (`list_transactions`, `list_orders`, `platform_status`, `fetch_image`) are recorded and left out of health; `list_categories` counts like `list_offers` (success rate, not p90).
+  - Rule SF4 answers `{ items, complete }` (`nearbySupplierOrdersSchema`) instead of a bare list: `complete` is false when the three pages read did not reach the attempt's window or a supplier order carried no time, so an empty list is never read as "the supplier has no such order" (reviewer, 2026-10-13: confirming failed on an incomplete read could buy twice). A supplier order without a time, offer or quantity stays listed as a possible match.
+  - Rule IM1's thumbnails come from the adapter's `fetchImage` (WDGZone: HTTPS on `wdgzone.tech`, redirects followed by hand only to declared hosts, without the API key; the fake: bundled PNGs on `fake-supplier.invalid`), so the API never calls a supplier host the adapter does not declare.
 
 ## Implementation plan
 Owner preference: few PRs, each safe on its own.

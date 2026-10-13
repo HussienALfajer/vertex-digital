@@ -24,17 +24,24 @@ const requiredFieldSchema = z.object({
   key: z.string().min(1).max(64),
   label: z.string().nullish(),
   type: z.string().nullish(),
+  /** A `select` field's choices. */
+  options: z
+    .array(z.object({ label: z.string().nullish(), value: z.union([z.string(), z.number()]) }))
+    .nullish(),
 });
 
 /** One product of `GET /products`. */
 export const productSchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
+  category_id: z.number().int().positive().nullish(),
   category: z.string().nullish(),
   brand: z.string().nullish(),
   /** `voucher`, `topup` or `manual` (fulfilled by hand at WDG). */
   type: z.string(),
   price: decimalSchema,
+  /** The price before WDG's discount (S16 SF1). */
+  original_price: decimalSchema.nullish(),
   currency: z.string(),
   stock: z.number().int().nullish(),
   available: z.boolean(),
@@ -90,3 +97,84 @@ export const webhookBodySchema = z.object({
     refunded: z.boolean().optional(),
   }),
 });
+
+/**
+ * `GET /categories` (S16 SC1): the documented example is one array; a `pagination` object, if
+ * WDG sends one, is followed page by page. Each node is parsed on its own.
+ */
+export const categoriesReplySchema = z.object({
+  success: z.literal(true),
+  data: z.array(z.unknown()),
+  pagination: z
+    .object({
+      page: z.number().int().positive(),
+      total_pages: z.number().int().nonnegative(),
+    })
+    .nullish(),
+});
+
+/** One category node (docs: `id`, `parent_id`, `name`, `type`, counts, `image_url`). */
+export const categorySchema = z.object({
+  id: z.number().int().positive(),
+  parent_id: z.number().int().positive().nullish(),
+  name: z.string().min(1),
+  type: z.string().nullish(),
+  product_count: z.number().int().nonnegative().nullish(),
+  in_stock_products: z.number().int().nonnegative().nullish(),
+  image_url: z.string().nullish(),
+});
+
+export type WdgCategory = z.infer<typeof categorySchema>;
+
+/**
+ * `GET /transactions` and `GET /orders` (S16 SF3): paged lists whose rows WDG does not document.
+ * Each row is read leniently on its own; what it does not carry is left out (docs, "Open
+ * questions"). The page ends the list when `pagination` says so, else when it is short.
+ */
+export const statementReplySchema = z.object({
+  success: z.literal(true),
+  data: z.array(z.unknown()),
+  pagination: z
+    .object({
+      page: z.number().int().positive(),
+      total_pages: z.number().int().nonnegative(),
+    })
+    .nullish(),
+});
+
+const text = z.union([z.string(), z.number()]).transform(String);
+
+export const transactionRowSchema = z.object({
+  id: text,
+  type: z.string().nullish(),
+  amount: decimalSchema.nullish(),
+  balance_after: decimalSchema.nullish(),
+  reference: z.string().nullish(),
+  description: z.string().nullish(),
+  order_id: text.nullish(),
+  currency: z.string().nullish(),
+  created_at: z.string().nullish(),
+});
+
+export const orderRowSchema = z.object({
+  id: text,
+  product_id: text.nullish(),
+  product_name: z.string().nullish(),
+  product: z.string().nullish(),
+  quantity: z.number().int().positive().nullish(),
+  status: z.string().nullish(),
+  total: decimalSchema.nullish(),
+  currency: z.string().nullish(),
+  created_at: z.string().nullish(),
+});
+
+/** `GET /health` (no key): `{ status, catalog_updated_at, time }`, at the top or in `data`. */
+const healthBodySchema = z.object({
+  status: z.string().min(1).max(64),
+  catalog_updated_at: z.string().nullish(),
+});
+
+export const healthReplySchema = z.union([
+  healthBodySchema,
+  z.object({ data: healthBodySchema }).transform((reply) => reply.data),
+]);

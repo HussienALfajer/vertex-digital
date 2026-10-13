@@ -27,8 +27,12 @@ Sources: the public documentation at https://wdgzone.tech/docs/ and its OpenAPI 
 | Purchase (`placeOrder`) | `POST /products/{id}/purchase` with `X-Idempotency-Key` | Body `{ quantity, player_id?, callback_url? }`. `201` new order, `200` a replay of the key. |
 | Poll (`getOrder`) | `GET /orders/{id}/delivery` | By WDG's own order id. `200` ready, `202` processing, `410` failed and refunded, `404` not found. WDG suggests every 2–5 s; the order engine polls on its own schedule (S08 rule F7). |
 | Player check (`validatePlayer`) | — | WDG does not check player ids. The capability is off; the store never asks WDG. |
+| Category tree (`listCategories`, S16 SC1) | `GET /categories` | The whole active tree in one array (3,573 nodes on 2026-10-12): `id`, `parent_id`, `name`, `type`, `product_count`, `in_stock_products`, `image_url`. A `pagination` object, should WDG send one, is followed page by page within the rate limit. `manual` nodes are left out, as their products are. |
+| Statement (`listTransactions`, `listOrders`, S16 SF3) | `GET /transactions?limit=50&page=N`, `GET /orders?limit=50&page=N` | Newest first. Their rows are not documented: each is read leniently (see "Statement"). |
+| Platform status (`getPlatformStatus`, S16 SF5) | `GET /health` | `{ status: "operational", catalog_updated_at, time }`, no key needed; read at the top or in `data`. |
+| Category images (`fetchImage`, S16 IM1) | the node's `image_url` | HTTPS on `wdgzone.tech` only, without the API key; redirects followed by hand, at most 3, only to `wdgzone.tech`. Any other host's URL is stored as none. |
 
-Not used: `GET /catalog`, `/catalog/{type}/categories`, `/catalog/{type}/categories/{id}/products` (the guided tree: `SUBCATEGORY_REQUIRED` 409 until a leaf), `GET /categories` (3,573 categories), `GET /products/{id}`, `GET /orders`, `GET /orders/{id}`, `GET /transactions`, `GET /health` (`{ status: "operational", catalog_updated_at, time }`, no key needed).
+Not used: `GET /catalog`, `/catalog/{type}/categories`, `/catalog/{type}/categories/{id}/products` (the guided tree: `SUBCATEGORY_REQUIRED` 409 until a leaf), `GET /products/{id}`, `GET /orders/{id}`.
 
 ## Catalog
 
@@ -48,7 +52,8 @@ A product:
 
 - `type`: `topup` (5,602 products on 2026-10-12), `voucher` (5,975) or `manual` (about 64,500: fulfilled by hand at WDG, often Steam gifts, some with a placeholder price of `999`). Only `topup` (kind `direct`) and `voucher` (kind `code`) are listed; `manual` is left out (V1 sells automatic delivery).
 - Offer: id `String(id)`; group `brand` (the game), else `category`; name `"<category> · <name>"` when the category is neither the brand nor the name (`Auto · 60 UC`, `MENA · 110 Diamonds`), else `name`; in stock when `available` and `stock` is missing or above 0.
-- `required_fields`: the account fields, each `{ key, label, type: text | select, options? }` (`select` lists `{ label, value }`). Keys seen: `user_id`, `player_id`, `server_id`, `server`, `riot_id`, `region`, `uid`, `role_id`, `zone_id`… A product with `requires_player_id` and no listed field asks for `player_id`. Products with more than one field, or whose one field is a `select`, are left out (see "Open questions"); on 2026-10-12 that left 3,669 top-ups and 5,975 vouchers, 9,644 offers.
+- `required_fields`: the account fields, each `{ key, label, type: text | select, options? }` (`select` lists `{ label, value }`). Keys seen: `user_id`, `player_id`, `server_id`, `server`, `riot_id`, `region`, `uid`, `role_id`, `zone_id`… A product with `requires_player_id` and no listed field asks for `player_id`. Products with more than one field, or whose one field is a `select`, are kept since S16 with `unsupported_reason = fields_unsupported`: shown in the panel, never routed or imported until WDG says how they are sent (Q19, "Open questions"); on 2026-10-12 the supported ones were 3,669 top-ups and 5,975 vouchers, 9,644 offers.
+- S16: the offer keeps `category_id` (its leaf), `stock` (`999999` and above, or none, is unlimited), `original_price` (the price before WDG's discount) and `required_fields` as field specs (key, label, type, a select's options).
 - A product that does not parse, has another currency or an unreadable price is skipped; the rest of the page is kept.
 - WDG does not say how the list is sorted. A product that moves between pages while a read runs can be missed by that run (it reappears in the next one, 15 minutes later).
 - A full read is about 117 requests. The adapter waits for the rate-limit window to reset whenever 20 or fewer requests are left in it, so orders keep room; a read took 85 s against the live API (two waits).
@@ -116,9 +121,13 @@ Seen live: checks run as key, product, `player_id`, then the balance; `quantity`
 - A failed order is refunded to the WDG wallet by WDG (`410` "Failed and refunded"); the order engine refunds the customer on `failed_definitive` as for any route.
 - Prices and the balance are JSON numbers in USD with up to 3 decimals (`10.475`); read exactly into micro-dollars through `parseUsd(String(value), { subCent: true })` (the number's shortest decimal form; exponent forms, negatives, more than 6 decimals or more than 9 whole digits are refused). Prices move by a few tenths of a cent between reads (`60 UC` went 0.881 → 0.889 within minutes on 2026-10-12): the review threshold (ADR 0021) absorbs that.
 
+## Statement (S16 SF3)
+
+`GET /transactions` and `GET /orders` answered empty lists on the $0 trial wallet: their row shapes are not known. Each row is read on its own, and only what it carries is kept: a transaction's `id`, `type`, `amount` (signed, USD), `balance_after`, `reference` or `description`, `order_id`; an order's `id` (WDG's order id), `product_id`, `product_name` or `product`, `quantity`, `status`, `total`, `created_at`; a row in another currency keeps no amount. A row without an id is skipped. A page has a next one by `pagination`, else when it holds 50 rows. The API matches rows to our attempts by `supplier_order_id`.
+
 ## Fixtures
 
-`packages/suppliers/src/wdgzone/fixtures/`, sanitized: `products-*.json` and the `error-*.json` replies recorded from the live API on 2026-10-12 (request ids replaced, pages cut to a few products); `me.json` recorded with the account id, name and balance replaced; `purchase-completed.json` and `webhook-order-completed.json` from the documentation's examples with the code replaced (`TEST-CODE-0001`). Poll replies (`202`, `200`, `410`) are written in the tests from the documented status codes: their bodies are not documented. Webhook signatures in tests use a test key.
+`packages/suppliers/src/wdgzone/fixtures/`, sanitized: `products-*.json` and the `error-*.json` replies recorded from the live API on 2026-10-12 (request ids replaced, pages cut to a few products); `me.json` recorded with the account id, name and balance replaced; `purchase-completed.json` and `webhook-order-completed.json` from the documentation's examples with the code replaced (`TEST-CODE-0001`). Poll replies (`202`, `200`, `410`) are written in the tests from the documented status codes: their bodies are not documented. Webhook signatures in tests use a test key. S16: `categories.json` is the documentation's example with a child, a `manual` node and an image on another host added; `health.json` the shape seen live on 2026-10-12; `transactions-page-1.json` and `orders-page-1.json` are synthetic (see "Statement").
 
 ## Live checks done (2026-10-12, owner's trial key, $0 wallet)
 
@@ -135,3 +144,4 @@ Seen live: checks run as key, product, `player_id`, then the balance; `quantity`
 7. **Webhook source addresses**, to add an nginx allow list.
 8. **Sandbox:** its base URL and keys, for a funded test without real money.
 9. **Catalog order:** the sort order of `GET /products`, so a read cannot miss a product that moves between pages.
+10. **Statement and tree shapes (S16):** the rows of `GET /transactions` and `GET /orders`, and whether `GET /categories` pages. To record from read-only live calls on a funded account (owner's approval), then the fixtures replaced by sanitized recordings.

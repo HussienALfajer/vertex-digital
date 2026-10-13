@@ -73,6 +73,9 @@ export const TELEGRAM_REMINDER_MAX_LINES = 10;
  * Parameters hold what the message says and nothing more: no tokens, receipts or notes.
  */
 
+/** S16 SF2: offers named in one `supplier_stock_low` message; the rest are counted. */
+export const TELEGRAM_STOCK_LOW_MAX_LINES = 10;
+
 export const TELEGRAM_MESSAGE_KINDS = [
   'switch_changed',
   'usdt_unmatched',
@@ -97,6 +100,8 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'reconciliation_alert',
   /** S16 AP13: every order placed from the panel, so a stolen session shows at once. */
   'admin_order_placed',
+  /** S16 SF2: mapped offers whose stock fell to low or out in a sync run (one per run). */
+  'supplier_stock_low',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -292,6 +297,14 @@ export const TELEGRAM_MESSAGE_PARAMS = {
       })
       .nullable()
       .default(null),
+    /** S16 SC11: offers counted new in imported categories, per supplier with any. */
+    newPacks: z
+      .array(z.object({ supplierNameAr: z.string(), count: z.int().positive() }))
+      .default([]),
+    /** S16 SF2: mapped offers of active products low or out of stock now. */
+    stockLow: z
+      .object({ low: z.int().nonnegative(), out: z.int().nonnegative() })
+      .default({ low: 0, out: 0 }),
     /** S16: owner-funded admin orders paid today (net of refunds) against the owner cap. */
     ownerOrders: z
       .object({
@@ -453,6 +466,24 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     quantity: z.int().positive(),
     totalUsdUnits: z.int().positive(),
     owner: z.object({ usedUsdUnits: z.int(), capUsdUnits: z.int().nonnegative() }).nullable(),
+  }),
+  /** S16 SF2: up to 10 offers named, then a count; never field values. */
+  supplier_stock_low: z.object({
+    supplier: supplierCodeSchema,
+    supplierNameAr: z.string(),
+    runId: z.uuid(),
+    offers: z
+      .array(
+        z.object({
+          gameNameAr: z.string(),
+          productNameAr: z.string(),
+          level: z.enum(['low', 'out']),
+          stock: z.int().nonnegative().nullable(),
+        }),
+      )
+      .min(1)
+      .max(TELEGRAM_STOCK_LOW_MAX_LINES),
+    more: z.int().nonnegative(),
   }),
 } as const satisfies Record<TelegramMessageKind, z.ZodType>;
 

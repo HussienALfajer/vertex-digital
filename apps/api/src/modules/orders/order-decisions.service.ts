@@ -5,6 +5,7 @@ import {
   type AdminOrderListQuery,
   type AdminOrderPage,
   type AdminRevealedCode,
+  type NearbySupplierOrders,
   type OrderPolicy,
   orderDecisions,
   QUEUES,
@@ -16,6 +17,7 @@ import {
   adminOrderCounts,
   adminOrderPage,
   applyOutcome,
+  attemptSupplierFacts,
   closeForAdminRefund,
   currentOrderPolicy,
   type Database,
@@ -38,6 +40,7 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
+import { SupplierLiveService } from '../suppliers/index.js';
 import { asCodedException, orderRefusals } from './order-errors.js';
 
 const isUuid = (value: string) => z.uuid().safeParse(value).success;
@@ -64,8 +67,22 @@ export class OrderDecisionsService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(ENV) env: Env,
     private readonly jobs: JobsService,
+    private readonly live: SupplierLiveService,
   ) {
     this.codesKey = orderCodesKey(env.ORDER_CODES_SECRET as string);
+  }
+
+  /**
+   * S16 SF4 (RS3): the supplier's orders near an attempt (same offer and quantity, within 15
+   * minutes of its send), read live for the admin to judge it; never applied.
+   */
+  async nearbySupplierOrders(orderId: string, attemptId: string): Promise<NearbySupplierOrders> {
+    const facts =
+      isUuid(orderId) && isUuid(attemptId)
+        ? await attemptSupplierFacts(this.db, orderId, attemptId)
+        : null;
+    if (!facts) throw orderRefusals.notFound();
+    return this.live.nearby(facts);
   }
 
   async list(query: AdminOrderListQuery): Promise<AdminOrderPage> {

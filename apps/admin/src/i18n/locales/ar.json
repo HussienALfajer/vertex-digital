@@ -295,6 +295,12 @@
       "ACCOUNT_FROZEN": "العميل مجمّد: لا يمكنه الإيداع أو الشراء.",
       "PURCHASE_LIMIT_EXCEEDED": "تجاوز العميل حد الشراء اليومي.",
       "OWNER_DAILY_CAP_EXCEEDED": "تجاوز هذا الشراء سقف المالك اليومي لطلبات مال المالك.",
+      "OFFER_UNSUPPORTED": "هذه الباقة غير مدعومة حتى يرد WDG: تطلب أكثر من حقل أو حقل اختيار.",
+      "OFFER_IGNORED": "هذا العرض متجاهل. ألغِ التجاهل أولًا.",
+      "CATEGORY_LINKED": "هذه الفئة أو فئة فوقها أو تحتها مربوطة بلعبة أخرى.",
+      "CATEGORY_MISSING": "اختفت هذه الفئة من المورد.",
+      "IMAGE_FETCH_FAILED": "تعذّر تنزيل صورة المورد. ارفع صورة أخرى.",
+      "CAPABILITY_UNSUPPORTED": "هذا المورد لا يتيح هذه الميزة.",
       "CUSTOMER_STATE_INVALID": "حالة العميل تغيّرت ولم يعد هذا الإجراء متاحاً. حدّث الصفحة.",
       "CUSTOMER_NOT_ARCHIVABLE": "لا يمكن أرشفة العميل: يجب أن يكون رصيده صفراً ولا طلبات أو إيداعات مفتوحة.",
       "TICKETS_LIMIT_REACHED": "بلغ العميل الحد الأقصى من التذاكر.",
@@ -451,6 +457,7 @@
       "supplier": "مورد",
       "supplier_policy": "سياسة الموردين",
       "supplier_offer": "عرض مورد",
+      "supplier_category": "فئة مورد",
       "product_route": "مسار باقة",
       "price_review": "مراجعة سعر",
       "order": "طلب",
@@ -564,6 +571,9 @@
       "downSuccessBp": "نجاح أدنى من (متوقف)",
       "downConsecutiveErrors": "أخطاء متتالية (متوقف)",
       "probeAfterMinutes": "الفحص بعد (دقائق)",
+      "lowStockUnits": "حد المخزون المنخفض",
+      "activated": "فُعّلت",
+      "skipped": "لم تُفعّل",
       "number": "رقم الطلب",
       "quantity": "الكمية",
       "totalUsdUnits": "الإجمالي",
@@ -635,6 +645,7 @@
       "catalog_game.archived": "أرشفة لعبة",
       "catalog_game.restored": "استعادة لعبة",
       "catalog_game.reordered": "ترتيب الألعاب",
+      "catalog_game.activated_all": "تفعيل كل باقات لعبة",
       "catalog_input_field.created": "إضافة حقل إدخال",
       "catalog_input_field.updated": "تعديل حقل إدخال",
       "catalog_input_field.archived": "أرشفة حقل إدخال",
@@ -652,6 +663,13 @@
       "supplier.sync_requested": "طلب مزامنة مورد",
       "supplier.validation_quota_set": "تعديل حصة التحقق اليومية",
       "supplier.import": "استيراد عروض مورد",
+      "supplier.category_imported": "استيراد فئة مورد كلعبة",
+      "supplier_category.linked": "ربط فئة مورد بلعبة",
+      "supplier_category.unlinked": "فك ربط فئة مورد",
+      "supplier_category.ignored": "تجاهل فئة مورد",
+      "supplier_category.unignored": "إلغاء تجاهل فئة مورد",
+      "supplier_offer.ignored": "تجاهل عرض مورد",
+      "supplier_offer.unignored": "إلغاء تجاهل عرض مورد",
       "supplier_policy.set": "تعديل سياسة الموردين",
       "supplier_offer.manual_cost_set": "تعيين تكلفة يدوية",
       "product_route.created": "إضافة مسار",
@@ -1194,7 +1212,8 @@
       "ticket_opened": "تذكرة دعم جديدة",
       "ticket_reply": "ردّ عميل على تذكرة",
       "reconciliation_alert": "تنبيه المطابقة",
-      "admin_order_placed": "شراء من اللوحة"
+      "admin_order_placed": "شراء من اللوحة",
+      "supplier_stock_low": "مخزون منخفض لدى مورد"
     }
   },
   "rates": {
@@ -2348,6 +2367,7 @@
         "supplier_paused": "المورد موقوف",
         "supplier_down": "المورد متوقف",
         "offer_missing": "العرض اختفى من المورد",
+        "offer_unsupported": "العرض غير مدعوم حتى يرد WDG",
         "out_of_stock": "العرض نافد",
         "cost_unknown": "التكلفة غير صالحة",
         "cost_stale": "السعر قديم",
@@ -2455,6 +2475,11 @@
           "label": "الفحص بعد التوقف (دقائق)",
           "hint": "من 1 إلى 120.",
           "error": "عدد دقائق من 1 إلى 120."
+        },
+        "lowStockUnits": {
+          "label": "حد المخزون المنخفض (وحدات)",
+          "hint": "باقة مربوطة مخزونها أقل من هذا العدد تُنبَّه عليها. من 1 إلى 1000.",
+          "error": "عدد وحدات من 1 إلى 1000."
         }
       }
     }
@@ -2555,6 +2580,7 @@
       "supplier_paused": "المورد موقوف",
       "supplier_down": "المورد متوقف",
       "offer_missing": "العرض اختفى من المورد",
+      "offer_unsupported": "العرض غير مدعوم حتى يرد WDG",
       "out_of_stock": "العرض نافد",
       "cost_unknown": "التكلفة غير صالحة",
       "cost_stale": "السعر قديم",

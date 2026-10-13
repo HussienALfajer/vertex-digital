@@ -520,6 +520,30 @@ export const gamePageSchema = pagedListSchema(gameSchema, 'GamePage');
 
 export type GamePage = z.infer<typeof gamePageSchema>;
 
+/** Why "تفعيل الكل" leaves a paused product paused (S16 SC10). */
+export const ACTIVATE_SKIP_REASONS = ['no_route', 'review_pending', 'no_price'] as const;
+
+export type ActivateSkipReason = (typeof ACTIVATE_SKIP_REASONS)[number];
+
+/** `POST /api/admin/catalog/games/:id/activate-all` (S16 SC10). */
+export const activateAllResultSchema = z
+  .object({
+    gameId: z.uuid(),
+    /** The game itself was paused and is now active. */
+    gameActivated: z.boolean(),
+    activated: z.array(z.object({ productId: z.uuid(), nameAr: z.string() })),
+    skipped: z.array(
+      z.object({
+        productId: z.uuid(),
+        nameAr: z.string(),
+        reason: z.enum(ACTIVATE_SKIP_REASONS),
+      }),
+    ),
+  })
+  .meta({ id: 'ActivateAllResult' });
+
+export type ActivateAllResult = z.infer<typeof activateAllResultSchema>;
+
 /** What a game lacks to be `active` (rule CT3); empty when it may be activated. */
 export function missingForActivation(game: {
   hasCover: boolean;

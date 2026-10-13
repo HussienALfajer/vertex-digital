@@ -58,6 +58,8 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   suppliers: 'Four seeded rows (S07): never archived, only their threshold changes',
   supplier_credentials: 'Append-only (S07 SP2): a new row replaces the keys, the newest in force',
   supplier_offers: "A mirror of a supplier's catalog (S07 SY4): missing_since, never archived",
+  supplier_categories:
+    "A mirror of a supplier's category tree (S16 SC2): missing_since, never archived or deleted",
   supplier_cost_changes: 'Append-only (S07 SY4): the history of each offer cost',
   supplier_sync_runs: 'A run record (S07 SY1): updated once from running to its end',
   supplier_calls: 'Append-only (S07 H1): every adapter call, which health is computed from',

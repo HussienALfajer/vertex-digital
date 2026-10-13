@@ -139,6 +139,9 @@ export class RoutesService {
         throw refusals.invalid('A manual offer serves only the product it was created for');
       }
       if (offer.missingSince) throw refusals.offerMissing();
+      // S16 SC3, SC6: not until Q19 is answered; an ignored offer is unignored first.
+      if (offer.unsupportedReason) throw refusals.offerUnsupported();
+      if (offer.ignoredAt) throw refusals.offerIgnored();
       if (offer.kind && offer.kind !== product.kind) throw refusals.kindMismatch();
       await this.checkFields(tx, product.gameId, offer.requiredFields, input.fieldMap, true);
       await this.checkFree(tx, product.id, offer.supplierId, offer.id);

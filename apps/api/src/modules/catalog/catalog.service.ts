@@ -346,35 +346,70 @@ export class CatalogService {
   /** A new game starts paused, last in its category (rules CT3, CT5). */
   createGame(actor: Actor, input: CreateGame & { slug: string }): Promise<GameDetail> {
     return mapTaken(() =>
-      this.db.transaction(async (tx) => {
-        await this.lockLiveCategory(tx, input.categoryId);
-        const values = {
-          categoryId: input.categoryId,
-          slug: input.slug,
-          nameAr: input.nameAr,
-          nameEn: input.nameEn,
-          status: 'paused' as const,
-          coverFileId: input.coverFileId ?? null,
-          idGuideFileId: input.idGuideFileId ?? null,
-          accentColor: input.accentColor ?? null,
-          regionNotesAr: input.regionNotesAr ?? null,
-        };
-        await this.checkImages(values);
-        checkAccent(values.accentColor);
-        const id = newId();
-        await tx.insert(catalogGames).values({
-          id,
-          ...values,
-          sortOrder: await nextSortOrder(
-            tx,
-            catalogGames,
-            eq(catalogGames.categoryId, values.categoryId),
-          ),
-        });
-        await auditCatalog(tx, actor, 'catalog_game.created', gameEntity(id), values);
-        return this.game(id, tx);
-      }),
+      this.db.transaction(async (tx) => this.game(await this.createGameIn(tx, actor, input), tx)),
     );
+  }
+
+  /**
+   * `createGame` in the caller's transaction (S16 SC7's import); its id. A taken name or slug
+   * raises the unique violation: the caller maps it with `mapTaken`.
+   */
+  async createGameIn(
+    tx: Transaction,
+    actor: Actor,
+    input: CreateGame & { slug: string },
+  ): Promise<string> {
+    await this.lockLiveCategory(tx, input.categoryId);
+    const values = {
+      categoryId: input.categoryId,
+      slug: input.slug,
+      nameAr: input.nameAr,
+      nameEn: input.nameEn,
+      status: 'paused' as const,
+      coverFileId: input.coverFileId ?? null,
+      idGuideFileId: input.idGuideFileId ?? null,
+      accentColor: input.accentColor ?? null,
+      regionNotesAr: input.regionNotesAr ?? null,
+    };
+    await this.checkImages(values);
+    checkAccent(values.accentColor);
+    const id = newId();
+    await tx.insert(catalogGames).values({
+      id,
+      ...values,
+      sortOrder: await nextSortOrder(
+        tx,
+        catalogGames,
+        eq(catalogGames.categoryId, values.categoryId),
+      ),
+    });
+    await auditCatalog(tx, actor, 'catalog_game.created', gameEntity(id), values);
+    return id;
+  }
+
+  /** S16 IM3: a stored catalog image as the game's cover, audited as any cover change. */
+  setCover(actor: Actor, id: string, coverFileId: string): Promise<GameDetail> {
+    return this.updateGame(actor, id, { coverFileId });
+  }
+
+  /** The slugs among `candidates` no game holds, archived games included (rule CT1). */
+  async freeSlugs(candidates: readonly string[]): Promise<Set<string>> {
+    if (candidates.length === 0) return new Set();
+    const taken = await this.db
+      .select({ slug: catalogGames.slug })
+      .from(catalogGames)
+      .where(inArray(catalogGames.slug, [...candidates]));
+    const held = new Set(taken.map((row) => row.slug));
+    return new Set(candidates.filter((slug) => !held.has(slug)));
+  }
+
+  /** The unarchived store category with this slug, or null (S16 SC14's suggestion). */
+  async categoryIdBySlug(slug: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: catalogCategories.id })
+      .from(catalogCategories)
+      .where(and(eq(catalogCategories.slug, slug), isNull(catalogCategories.archivedAt)));
+    return row?.id ?? null;
   }
 
   /**
@@ -662,6 +697,16 @@ export class CatalogService {
       .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
       .where(inArray(catalogProducts.id, [...ids]));
     return new Map(rows.map(({ id, ...names }) => [id, names]));
+  }
+
+  /** Games' Arabic names by id (S16: a supplier category's linked game). */
+  async gameNames(ids: readonly string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.db
+      .select({ id: catalogGames.id, nameAr: catalogGames.nameAr })
+      .from(catalogGames)
+      .where(inArray(catalogGames.id, [...new Set(ids)]));
+    return new Map(rows.map((row) => [row.id, row.nameAr]));
   }
 
   /** The unarchived input field keys of a game (S07 rule RT3: what a field map may name). */

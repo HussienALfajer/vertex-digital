@@ -40,6 +40,7 @@ import {
   fulfilOrderSchema,
   liveBoardQuerySchema,
   liveBoardSchema,
+  nearbySupplierOrdersSchema,
   type OrderPolicy,
   orderPolicySchema,
   type PollAttempt,
@@ -217,6 +218,16 @@ export class OrdersAdminController {
   @ApiOkResponse({ description: 'The order, codes masked', standardSchema: adminOrderSchema })
   order(@Param('id') id: string) {
     return this.decisions.order(id);
+  }
+
+  /** S16 SF4: the supplier's orders near the attempt, read live (1 per 5 s per supplier). */
+  @Get(':id/attempts/:attemptId/supplier-orders')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: nearbySupplierOrdersSchema })
+  @ApiOkResponse({ description: 'Rule SF4', standardSchema: nearbySupplierOrdersSchema })
+  supplierOrders(@Param('id') id: string, @Param('attemptId') attemptId: string) {
+    return this.decisions.nearbySupplierOrders(id, attemptId);
   }
 
   @Post(':id/attempts/:attemptId/poll')

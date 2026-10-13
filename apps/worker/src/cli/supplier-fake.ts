@@ -7,6 +7,12 @@
  *     | --remove <offer> | --fail-sync on|off | --errors on|off | --balance <usd> | --reset
  *     | --order <offer> delivered|pending|failed|invalid|unknown|resend-refused|partial:<n>|slow:<seconds>
  *     | --resolve <order number> delivered|failed --via poll|webhook
+ *     | --stock-count <offer> <n>|unlimited | --category-missing <category> on|off
+ *     | --add-offer <category> <name> <usd>
+ *
+ * S16: `--stock-count` sets an offer's reported stock (0 is out of stock), `--category-missing`
+ * leaves a category out of the tree, `--add-offer` adds a pack under a category (named
+ * `fake-added-<n>`); the next sync reads them.
  *
  * S08: `--order` scripts how the offer's next orders answer; `--resolve` settles the order's open
  * fake attempt, so the next poll finds it (`--via poll`), or posts its signed webhook to the local
@@ -30,7 +36,9 @@ import { SupplierRegistry } from '../suppliers/supplier-registry.js';
 const USAGE = `Usage: supplier:fake --cost <offer> <usd> | --stock <offer> on|off | --remove <offer>
   | --fail-sync on|off | --errors on|off | --balance <usd> | --reset
   | --order <offer> delivered|pending|failed|invalid|unknown|resend-refused|partial:<n>|slow:<seconds>
-  | --resolve <order number> delivered|failed --via poll|webhook`;
+  | --resolve <order number> delivered|failed --via poll|webhook
+  | --stock-count <offer> <n>|unlimited | --category-missing <category> on|off
+  | --add-offer <category> <name> <usd>`;
 
 function fail(message: string): never {
   console.error(`${message}\n${USAGE}`);
@@ -63,6 +71,9 @@ const { values, positionals } = parseArgs({
     order: { type: 'string' },
     resolve: { type: 'string' },
     via: { type: 'string' },
+    'stock-count': { type: 'string' },
+    'category-missing': { type: 'string' },
+    'add-offer': { type: 'string' },
   },
 });
 const { via, ...changes } = values;
@@ -101,6 +112,39 @@ if (values.cost !== undefined) {
       'Expected delivered, pending, failed, invalid, unknown, resend-refused, partial:<n> or slow:<s>',
     );
   next = { ...state, orderScripts: { ...state.orderScripts, [values.order]: script.data } };
+} else if (values['stock-count'] !== undefined) {
+  const count = positionals[0];
+  const units =
+    count === 'unlimited'
+      ? null
+      : count !== undefined && /^\d{1,7}$/.test(count) && Number(count) <= 1_000_000
+        ? Number(count)
+        : fail('Expected a whole number of units up to 1000000, or unlimited');
+  next = { ...state, stockCounts: { ...state.stockCounts, [values['stock-count']]: units } };
+} else if (values['category-missing'] !== undefined) {
+  const category = values['category-missing'];
+  next = {
+    ...state,
+    missingCategories: onOff(positionals[0])
+      ? [...without(state.missingCategories, category), category]
+      : without(state.missingCategories, category),
+  };
+} else if (values['add-offer'] !== undefined) {
+  const [name, price] = positionals;
+  if (!name) fail('Expected the pack name');
+  next = {
+    ...state,
+    addedOffers: [
+      ...state.addedOffers,
+      {
+        offerId: `fake-added-${state.addedOffers.length + 1}`,
+        categoryId: values['add-offer'],
+        name,
+        costUsdUnits: dollars(price),
+      },
+    ],
+  };
+  next = fakeSupplierStateSchema.parse(next);
 } else {
   next = fakeSupplierStateSchema.parse({});
 }
