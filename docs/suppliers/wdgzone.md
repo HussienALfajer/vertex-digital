@@ -77,6 +77,7 @@ WDG support (2026-10-13): standard games take `player_id`. Products that need a 
 The owner's decisions (2026-10-13, S16 MF1–MF2), applied since S16 PR 4:
 - One field: sent as `player_id`, as before.
 - Several fields: every field under its own key, plus `player_id` with the account field's value (the field keyed `player_id`, else the first present of `user_id`, `uid`, `role_id`, `riot_id`, `id`). A product with several fields and none of those keys stays unsupported, and an order with several fields and none of them is refused before sending (`FIELDS_UNSUPPORTED`, ours). The delimiter form is never sent. Empty values are left out of the body.
+- A field asking for a password (`password`, `pass`…) keeps the offer unsupported until the owner decides (`docs/open-questions.md` Q20), and so does a field named `quantity` or `callback_url` (the purchase body's own keys, which are always ours: no account field can replace them).
 - A `select` is sent as the supplier's option `value` (never its label) under its key; the route's option map (`product_routes.option_map`, kept on the attempt) turns the customer's choice into that value. A select with fewer than 2 or more than 50 options (S06's bounds), or with an empty, repeated or over-64-character value, stays unsupported.
 
 Read-only scan of every top-up on 2026-10-13 (57 pages of `GET /products?type=topup&limit=100`, then one `GET /products/{id}` for a select product), counted with the adapter's rules:
@@ -87,10 +88,10 @@ Read-only scan of every top-up on 2026-10-13 (57 pages of `GET /products?type=to
 | With a `select` field | 883 |
 | With several fields (at most 3) | 1,933 |
 | Supported before S16 PR 4 (one text field) | 3,669 |
-| Supported from S16 PR 4 (MF1–MF2) | 4,953 (1,284 with several fields, 427 with a select) |
-| Still unsupported | 649: 354 several fields without an account field (`email` and `password`, `character_id`, `account`…), 126 a select with one option, 149 a select with 51–72 options (LifeAfter, Lineage W, Lineage2M), 20 option values over 64 characters (Ragnarok Origin) |
+| Supported from S16 PR 4 (MF1–MF2) | 4,944 (1,275 with several fields, 427 with a select) |
+| Still unsupported | 658: 354 several fields without an account field (`email` and `password`, `character_id`, `account`…), 126 a select with one option, 149 a select with 51–72 options (LifeAfter, Lineage W, Lineage2M), 20 option values over 64 characters (Ragnarok Origin), 9 a password beside an account field (Q20) |
 
-Selects within one game (rule MF3, `FIELD_OPTIONS_DIFFER`): among the supported packs, 25 game and select-key pairs, none with packs whose option values differ, so an import of a game's packs refuses no row today. Over all top-ups, 3 of 41 pairs differ: Love and Deepspace only in the labels' case (same values: no refusal), Sword of Justice and Undawn only between one-option selects (unsupported anyway). Of the supported packs, 9 ask for an `email` and a `password` beside an account field (see "Open questions" 11).
+Selects within one game (rule MF3, `FIELD_OPTIONS_DIFFER`): among the supported packs, 25 game and select-key pairs, none with packs whose option values differ, so an import of a game's packs refuses no row today. Over all top-ups, 3 of 41 pairs differ: Love and Deepspace only in the labels' case (same values: no refusal), Sword of Justice and Undawn only between one-option selects (unsupported anyway). Nine more ask for an `email` and a `password` beside an account field: MF1 could send them, but they stay unsupported until the owner decides (Q20).
 
 ## Status mapping
 
@@ -170,4 +171,4 @@ Seen live: checks run as key, product, `player_id`, then the balance; `quantity`
 8. **Sandbox:** its base URL and keys, for a funded test without real money.
 9. **Catalog order:** the sort order of `GET /products`, so a read cannot miss a product that moves between pages.
 10. **Statement and tree shapes (S16):** the rows of `GET /transactions` and `GET /orders`, and whether `GET /categories` pages. To record from read-only live calls on a funded account (owner's approval), then the fixtures replaced by sanitized recordings.
-11. **Account passwords (owner):** 9 supported top-ups ask for an `email` and a `password` beside an account field (MF1 sends them). Importing them would ask customers for their game account's password; the panel imports them like any pack. Whether to sell them is the owner's call (ignore them in the catalog meanwhile).
+11. **Account passwords (owner, `docs/open-questions.md` Q20):** 9 top-ups ask for an `email` and a `password` beside an account field. The adapter keeps them unsupported until the owner decides.

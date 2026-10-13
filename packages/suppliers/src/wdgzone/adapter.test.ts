@@ -210,6 +210,47 @@ describe('WdgzoneAdapter catalog', () => {
     ]);
   });
 
+  it('keeps unsupported a password, or a field named as the body’s own keys', async () => {
+    const product = (id: number, key: string) => ({
+      id,
+      name: 'Pack',
+      category_id: 1,
+      brand: 'Game',
+      type: 'topup',
+      price: 1,
+      currency: 'USD',
+      available: true,
+      requires_player_id: true,
+      required_fields: [
+        { key: 'user_id', label: 'ID', type: 'text' },
+        { key, label: key, type: 'text' },
+      ],
+    });
+    const page = (data: unknown[]) => ({
+      success: true,
+      data,
+      pagination: { page: 1, total_pages: 1 },
+    });
+    server.reply(
+      {
+        body: page([
+          product(1, 'password'),
+          product(2, 'quantity'),
+          product(3, 'callback_url'),
+          product(4, 'server'),
+        ]),
+      },
+      { body: page([]) },
+    );
+    const offers = await adapter().listOffers();
+    expect(offers.map((offer) => offer.unsupportedReason ?? null)).toEqual([
+      'fields_unsupported',
+      'fields_unsupported',
+      'fields_unsupported',
+      null,
+    ]);
+  });
+
   it('keeps unsupported a select with duplicate or unreadable values', async () => {
     const product = (id: number, options: unknown[]) => ({
       id,
@@ -458,6 +499,10 @@ describe('WdgzoneAdapter placeOrder', () => {
       player_id: '9',
     });
     expect(await body({ user_id: '', server: 'eu' })).toEqual({ quantity: 1, server: 'eu' });
+    // No field takes the body's own keys: the quantity paid for is the one sent.
+    expect(
+      await body({ user_id: '7', quantity: '100', callback_url: 'https://evil.test' }),
+    ).toEqual({ quantity: 1, user_id: '7', player_id: '7' });
   });
 
   it('reads codes with pins on the purchase reply (MF4)', async () => {

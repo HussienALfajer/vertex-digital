@@ -12,6 +12,7 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Q15 | Sentry: account owner and organization for the three apps | Phase 0 deploy skeleton | Free plan under the owner's email |
 | Q16 | Who draws the final VERTEX DIGITAL wordmark (agent in Phase 0 from the Vertex Media style, or a designer) | Phase 0 design system | Agent draft in Phase 0 (done: `brand/logo/svg/vertex-logo.svg`, the DIGITAL mark over the Vertex Media VERTEX wordmark), designer files later replace it |
 | Q17 | S07 rule P3: a large cost change seen through another basis route (a non-basis supplier drops its cost to near zero, so its route becomes the basis) reprices at once without review. Should such a basis switch also go to review when the price moves more than the threshold? | The second real adapter (`shop2topup` or `wdgzone`); it cannot happen with only `fake` and `manual` | Review it too: the spec's abuse row says a cost dropped near zero is held for review |
+| Q20 | WDGZone lists top-ups that ask for the customer's game account email and password beside its id (9 supported by S16 MF1 on 2026-10-13, e.g. Genshin Impact's account top-ups). Sell them, asking customers for their password? | Importing such a pack (S16 PR 4 keeps every offer with a password field unsupported until then) | Do not sell them in V1: a password is personal data the store must never hold; if sold later, it needs its own spec (encrypted at rest, removed after delivery, never shown in the panel) |
 
 ## Resolved
 

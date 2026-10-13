@@ -1,5 +1,6 @@
 import {
   isResendRefusal,
+  OPTION_UNMAPPED_REASON,
   RESEND_REFUSED_REASON,
   type SupplierCallResult,
 } from '@vertex-digital/contracts';
@@ -136,13 +137,28 @@ export async function askSupplier(
   // is the same request whatever the route's maps became. An attempt written before the option
   // map has none (read as `{}`); one written before the field map follows the route's maps.
   const optionMap = attempt.fieldMap ? (attempt.optionMap ?? {}) : row.optionMap;
+  const unmapped: string[] = [];
   const fields = Object.fromEntries(
     Object.entries(attempt.fieldMap ?? row.fieldMap).map(([name, key]) => {
       const value = row.fields[key] ?? '';
       const options = Object.hasOwn(optionMap, name) ? optionMap[name] : undefined;
-      return [name, options && Object.hasOwn(options, value) ? (options[value] as string) : value];
+      if (!options || value === '') return [name, value];
+      if (!Object.hasOwn(options, value)) unmapped.push(name);
+      return [name, options[value] ?? value];
     }),
   );
+  // S16 MF2: a supplier select is only ever sent a value from its own list. An order's option the
+  // attempt's map lacks (renamed or removed since it was paid) is refused here, before anything is
+  // sent: the attempt's map is fixed, so no earlier send of this key went out either.
+  if (call !== 'get' && unmapped.length > 0) {
+    return {
+      status: 'failed',
+      reason: OPTION_UNMAPPED_REASON,
+      inputRejected: false,
+      supplierErrorCode: null,
+      supplierOrderId: null,
+    };
+  }
   const answer = await recordedCall(
     db,
     attempt.supplierId,

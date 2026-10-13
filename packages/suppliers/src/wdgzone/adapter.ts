@@ -342,9 +342,10 @@ export class WdgzoneAdapter implements SupplierAdapter {
         method: 'POST',
         path: `products/${request.offerId}/purchase`,
         headers: { 'x-idempotency-key': request.idempotencyKey },
+        // Ours last: no account field can stand in for the quantity or the callback.
         body: {
-          quantity: request.quantity,
           ...fields,
+          quantity: request.quantity,
           ...(this.options.callbackUrl && { callback_url: this.options.callbackUrl }),
         },
         schema: purchaseReplySchema,
@@ -553,8 +554,22 @@ function fieldSpecsOf(product: WdgProduct): { specs: FieldSpec[]; sendable: bool
   return { specs, sendable };
 }
 
-/** S16 MF1: the field keys WDG can be sent; several fields need an account field. */
+/** Body keys of ours that an account field must never take (the purchase's own). */
+const RESERVED_KEYS = new Set(['quantity', 'callback_url']);
+/**
+ * Fields asking for an account's password: kept unsupported until the owner decides whether to
+ * sell such packs (`docs/open-questions.md` Q20): a customer's password is never asked for.
+ */
+const PASSWORD_KEY = /pass(word|wd)?/i;
+
+/**
+ * S16 MF1: the field keys WDG can be sent; several fields need an account field; none may take
+ * one of the body's own keys or ask for a password.
+ */
 function sendableFields(specs: readonly FieldSpec[]): boolean {
+  if (specs.some((spec) => RESERVED_KEYS.has(spec.key) || PASSWORD_KEY.test(spec.key))) {
+    return false;
+  }
   if (specs.length <= 1) return true;
   return specs.some((spec) => (ACCOUNT_FIELD_KEYS as readonly string[]).includes(spec.key));
 }
@@ -573,7 +588,9 @@ function accountFields(fields: Readonly<Record<string, string>>): Record<string,
   }
   const account = ACCOUNT_FIELD_KEYS.find((key) => Object.hasOwn(fields, key));
   if (account === undefined) return null;
-  const body = Object.fromEntries(entries.filter(([, value]) => value !== ''));
+  const body = Object.fromEntries(
+    entries.filter(([key, value]) => value !== '' && !RESERVED_KEYS.has(key)),
+  );
   const playerId = fields[account];
   return { ...body, ...(playerId && { player_id: playerId }) };
 }

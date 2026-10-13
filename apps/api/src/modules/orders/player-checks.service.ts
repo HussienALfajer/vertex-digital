@@ -248,6 +248,20 @@ export class PlayerChecksService {
   ): Promise<PlayerCheck> {
     const adapter = await this.adapters.connect(route.supplier);
     if (!adapter?.capabilities.validatePlayer) return { result: 'not_supported' };
+    // As the order would send them (S16 MF2: a select as the supplier's option value); an option
+    // the route cannot send is never sent to check.
+    let sendable = true;
+    const mapped = Object.fromEntries(
+      Object.entries(route.fieldMap).map(([supplierField, key]) => {
+        const value = fields[key] ?? '';
+        const options = route.optionMap[supplierField];
+        if (!options || value === '') return [supplierField, value];
+        const sent = Object.hasOwn(options, value) ? options[value] : undefined;
+        if (sent === undefined) sendable = false;
+        return [supplierField, sent ?? value];
+      }),
+    );
+    if (!sendable) return { result: 'not_supported' };
     // Rule PV4: only a request that is about to call a supplier counts (S16 AP8: the admin's own).
     const allowed = await withinLimits(
       this.db,
@@ -260,15 +274,6 @@ export class PlayerChecksService {
           ],
     );
     if (!allowed) throw orderRefusals.rateLimited();
-    // As the order would send them (S16 MF2: a select as the supplier's option value).
-    const mapped = Object.fromEntries(
-      Object.entries(route.fieldMap).map(([supplierField, key]) => {
-        const value = fields[key] ?? '';
-        const options = route.optionMap[supplierField];
-        const sent = options && Object.hasOwn(options, value) ? options[value] : undefined;
-        return [supplierField, sent ?? value];
-      }),
-    );
     const started = performance.now();
     let answer: { valid: boolean; playerName?: string } | null = null;
     let timer: NodeJS.Timeout | undefined;

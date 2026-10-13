@@ -775,6 +775,12 @@ export function isResendRefusal(outcome: { status: string }, resend: boolean): b
 /** Rule RS1: the open attempt's reason after a refused re-send (RS3 shows it with the code). */
 export const RESEND_REFUSED_REASON = 'resend_refused';
 
+/**
+ * S16 MF2: the order's select option has no supplier value in the attempt's option map (renamed
+ * or removed after it was paid): refused before anything is sent, the next route may be tried.
+ */
+export const OPTION_UNMAPPED_REASON = 'option_unmapped';
+
 // Policy and polling (F7, MN2) ------------------------------------------------------------------
 
 /** The order policy (owner, 2026-10-09): the newest `order_policy` row is in force. */

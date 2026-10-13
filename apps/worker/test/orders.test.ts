@@ -954,6 +954,39 @@ describe('re-sends and late answers (rules F3, F5, F6)', () => {
     });
   });
 
+  it('never sends an option the attempt’s map lacks: refused before sending (S16 MF2)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, { offerId: 'fake-gi-60', manualCost: usd(0.9) });
+      const [game] = await tx
+        .select({ gameId: catalogProducts.gameId })
+        .from(catalogProducts)
+        .where(eq(catalogProducts.id, item.id));
+      await tx.execute(sql`insert into catalog_input_fields (id, game_id, key, label_ar, type,
+        required, options, sort_order) values (${newId()}, ${game?.gameId}, 'region', 'المنطقة',
+        'select', true, ${JSON.stringify([
+          { value: 'asia', labelAr: 'آسيا' },
+          { value: 'eu', labelAr: 'أوروبا' },
+        ])}::jsonb, 2)`);
+      await tx
+        .update(productRoutes)
+        .set({
+          fieldMap: { playerId: 'player_id', region: 'region' },
+          // The admin dropped `eu` from the map after the order was paid.
+          optionMap: { region: { asia: 'os_asia' } },
+        })
+        .where(eq(productRoutes.id, item.fakeRoute as string));
+      const order = await buy(tx, item, { fields: { region: 'eu' } });
+      await fulfil.fulfil(order.id, tx);
+      const [refused] = await attemptsOf(tx, order.id);
+      expect(refused).toMatchObject({ status: 'failed', failureReason: 'option_unmapped' });
+      // Nothing reached the supplier; the next route serves the order.
+      expect(fakeState.orders[refused?.id as string]).toBeUndefined();
+      expect((await fulfil.fulfil(order.id, tx)).kind).toBe('sent');
+      const [, manual] = await attemptsOf(tx, order.id);
+      expect(manual).toMatchObject({ routeId: item.manualRoute, status: 'pending' });
+    });
+  });
+
   it('delivers a select order the fake checks against its own options (S16 MF2)', async () => {
     await isolated(async (tx) => {
       const item = await product(tx, { offerId: 'fake-gi-330' });
