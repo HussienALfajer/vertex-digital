@@ -72,6 +72,6 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] SPF, DKIM and DMARC for the sending mailbox
 - [ ] VPS IP registered in supplier allowlists; one small live order per supplier approved by the owner
 - [ ] Madani Arabic web license and files in place
-- [ ] Terms, privacy and refund policies published
+- [x] Terms, privacy and refund policies published (with "من نحن", version 1 of each, 2026-10-13; texts in `docs/content/`)
 - [x] Admin account with 2FA; Telegram bot linked (2026-10-12: `info@vertexmedia.pro`, TOTP enrolled, the bot linked and its test message received)
 - [ ] USDT receiving addresses and chain-reader keys in the server environment; one small live USDT deposit per network approved by the owner (S04)
