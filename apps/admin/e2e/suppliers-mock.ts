@@ -334,6 +334,7 @@ export class SuppliersMock {
         : null,
       usableRouteCostsUsdUnits: usable.map((item) => item.costUsdUnits),
       basisSupplierNameAr: basis ? NAMES[basis.supplierCode] : null,
+      basisStockLevel: basis ? this.offer(this.offerOf(basis)).stockLevel : null,
       reviewOpen: this.openReview(productId) !== null,
     };
   }
@@ -625,6 +626,8 @@ export class SuppliersMock {
         costConfirmedAt: offer.costConfirmedAt,
         inStock: offer.inStock,
         missingSince: offer.missingSince,
+        stock: this.offer(offer).stock,
+        stockLevel: this.offer(offer).stockLevel,
       },
       priority: row.priority,
       enabled: row.enabled,

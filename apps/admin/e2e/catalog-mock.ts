@@ -46,6 +46,7 @@ type Row<T> = Omit<
   | 'priceUsdUnits'
   | 'priceSypUnits'
   | 'basisSupplierNameAr'
+  | 'basisStockLevel'
   | 'reviewOpen'
   | 'deliveryStats'
 >;
@@ -62,6 +63,7 @@ export interface ProductPricing {
   price: { priceUsdUnits: number; minMarginUsdUnits: number } | null;
   usableRouteCostsUsdUnits: number[];
   basisSupplierNameAr: string | null;
+  basisStockLevel: Product['basisStockLevel'];
   reviewOpen: boolean;
 }
 
@@ -281,6 +283,7 @@ export class CatalogMock {
           ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
           : null,
       basisSupplierNameAr: pricing?.basisSupplierNameAr ?? null,
+      basisStockLevel: pricing?.basisStockLevel ?? null,
       reviewOpen: pricing?.reviewOpen ?? false,
       // S08: no delivered orders in the mock.
       deliveryStats: null,

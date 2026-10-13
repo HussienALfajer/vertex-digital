@@ -5,6 +5,8 @@ import {
   MAX_INPUT_FIELDS_PER_GAME,
   productAvailabilitySchema,
   productKindSchema,
+  type StockLevel,
+  stockLevelSchema,
 } from './catalog.js';
 import { pagedListSchema, pageQuerySchema } from './lists.js';
 import { CURRENCY_SCALE, currencySchema, USD_CENT, usdCentsSchema } from './money.js';
@@ -451,13 +453,6 @@ export const supplierCategoryStateSchema = z
   .meta({ id: 'SupplierCategoryState' });
 
 export type SupplierCategoryState = z.infer<typeof supplierCategoryStateSchema>;
-
-/** Rule SF2: `unlimited` when the supplier reports no figure. */
-export const STOCK_LEVELS = ['ok', 'low', 'out', 'unlimited'] as const;
-
-export const stockLevelSchema = z.enum(STOCK_LEVELS).meta({ id: 'StockLevel' });
-
-export type StockLevel = z.infer<typeof stockLevelSchema>;
 
 /** Rule SC3: why an offer cannot be imported or routed yet (two fields or a select: Q19). */
 export const OFFER_UNSUPPORTED_REASONS = ['fields_unsupported'] as const;
@@ -1091,6 +1086,8 @@ export const routeSchema = z
       costConfirmedAt: true,
       inStock: true,
       missingSince: true,
+      stock: true,
+      stockLevel: true,
     }),
     priority: z.int(),
     enabled: z.boolean(),

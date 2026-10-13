@@ -8549,6 +8549,39 @@
         ]
       }
     },
+    "/api/admin/catalog/games/{id}/supplier-categories": {
+      "get": {
+        "operationId": "SupplierCatalogAdminController_gameCategories",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nodes linked to the game itself",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SupplierCategoryNode"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      }
+    },
     "/api/admin/catalog/games/{id}/cover/from-supplier": {
       "post": {
         "operationId": "SupplierCatalogAdminController_cover",
@@ -20726,6 +20759,14 @@
             "nullable": true,
             "type": "string"
           },
+          "basisStockLevel": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StockLevel"
+              }
+            ]
+          },
           "reviewOpen": {
             "type": "boolean"
           },
@@ -20776,6 +20817,7 @@
           "priceUsdUnits",
           "priceSypUnits",
           "basisSupplierNameAr",
+          "basisStockLevel",
           "reviewOpen",
           "deliveryStats"
         ],
@@ -20789,6 +20831,15 @@
           "paused_by_margin_guard",
           "out_of_stock",
           "available"
+        ]
+      },
+      "StockLevel": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "low",
+          "out",
+          "unlimited"
         ]
       },
       "UpdateGame": {
@@ -24315,15 +24366,6 @@
         ],
         "additionalProperties": false
       },
-      "StockLevel": {
-        "type": "string",
-        "enum": [
-          "ok",
-          "low",
-          "out",
-          "unlimited"
-        ]
-      },
       "FieldSpec": {
         "type": "object",
         "properties": {
@@ -24659,6 +24701,15 @@
                 "type": "string",
                 "format": "date-time",
                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "stock": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "stockLevel": {
+                "$ref": "#/components/schemas/StockLevel"
               }
             },
             "required": [
@@ -24670,7 +24721,9 @@
               "costUsdUnits",
               "costConfirmedAt",
               "inStock",
-              "missingSince"
+              "missingSince",
+              "stock",
+              "stockLevel"
             ],
             "additionalProperties": false
           },

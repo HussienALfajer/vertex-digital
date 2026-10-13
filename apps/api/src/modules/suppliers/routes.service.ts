@@ -3,10 +3,12 @@ import {
   type createRouteSchema,
   type ProductRouting,
   type Route,
+  stockLevel,
   type UpdateRoute,
   unmappedFields,
 } from '@vertex-digital/contracts';
 import {
+  currentSupplierPolicy,
   type Database,
   newId,
   type ProductRoutingState,
@@ -38,7 +40,7 @@ const routeValues = (row: Pick<RouteRow, 'priority' | 'enabled' | 'fieldMap'>) =
   fieldMap: row.fieldMap,
 });
 
-function toRoute(route: RouteState, basisId: string | null): Route {
+function toRoute(route: RouteState, basisId: string | null, lowStockUnits: number): Route {
   const { offer } = route;
   return {
     id: route.id,
@@ -54,6 +56,8 @@ function toRoute(route: RouteState, basisId: string | null): Route {
       costConfirmedAt: offer.costConfirmedAt?.toISOString() ?? null,
       inStock: offer.inStock,
       missingSince: offer.missingSince?.toISOString() ?? null,
+      stock: offer.stock,
+      stockLevel: stockLevel(offer.stock, offer.inStock, lowStockUnits),
     },
     priority: route.priority,
     enabled: route.enabled,
@@ -66,12 +70,12 @@ function toRoute(route: RouteState, basisId: string | null): Route {
   };
 }
 
-function toRouting(state: ProductRoutingState): ProductRouting {
+function toRouting(state: ProductRoutingState, lowStockUnits: number): ProductRouting {
   const basisId = state.basis?.id ?? null;
   const { current, openReview } = state;
   return {
     productId: state.productId,
-    routes: state.routes.map((route) => toRoute(route, basisId)),
+    routes: state.routes.map((route) => toRoute(route, basisId, lowStockUnits)),
     basisRouteId: basisId,
     currentPrice: current
       ? {
@@ -112,11 +116,13 @@ export class RoutesService {
 
   /** `GET /api/admin/catalog/products/:id/routes`. */
   async routing(productId: string, executor: Database | Transaction = this.db) {
-    const state = (await productRoutingStates(executor, [productId], routingContext(this.env))).get(
-      productId,
-    );
+    const [states, policy] = await Promise.all([
+      productRoutingStates(executor, [productId], routingContext(this.env)),
+      currentSupplierPolicy(executor),
+    ]);
+    const state = states.get(productId);
     if (!state) throw refusals.notFound('product');
-    return toRouting(state);
+    return toRouting(state, policy.lowStockUnits);
   }
 
   /** Rules RT1–RT3: a route to an offer of an automatic supplier, enabled; never a manual one. */

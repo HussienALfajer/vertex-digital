@@ -11,6 +11,7 @@ import {
   missingForActivation,
   type Product,
   type ProductAvailability,
+  type StockLevel,
 } from '@vertex-digital/contracts';
 import {
   catalogCategories,
@@ -87,6 +88,7 @@ export interface ProductPricing {
   priceUsdUnits: number | null;
   priceSypUnits: number | null;
   basisSupplierNameAr: string | null;
+  basisStockLevel: StockLevel | null;
   reviewOpen: boolean;
   deliveryStats: DeliveryStats | null;
 }
