@@ -4,7 +4,7 @@ Production runs on the owner's VPS (`ssh vertex`), shared with other sites, foll
 
 Server work needs the owner's explicit approval in the current conversation (AGENTS.md). Deploys happen once per phase, in their own session (`docs/workflow.md`).
 
-Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`); Phases 1–3 deployed together on 2026-10-12 (commit `6230b05`); the health timer is on. Sentry (Q15) is configured (`SENTRY_DSN` in `shared/.env`). Customer registration stays closed until the pilot. The Telegram bot (S05, ADR 0019) is set up as "Telegram admin bot" below says.
+Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`); Phases 1–3 deployed together on 2026-10-12 (commit `6230b05`); S16 deployed on 2026-10-13 (commit `0495047`); the health timer is on. Sentry (Q15) is configured (`SENTRY_DSN` in `shared/.env`). Customer registration stays closed until the pilot. The Telegram bot (S05, ADR 0019) is set up as "Telegram admin bot" below says.
 
 ## Layout
 
@@ -83,6 +83,15 @@ What it does, in order, stopping at the first failure:
 The running site is untouched until step 4. A failed build or migration leaves the previous release serving.
 
 Deploy another ref: `ssh vertex "vertexdigital-deploy <sha-or-origin/branch>"`.
+
+Over an unstable connection, run it detached from the SSH session, so a dropped link cannot kill it mid-migration, then follow its journal:
+
+```bash
+ssh vertex "systemd-run --unit=vertexdigital-deploy-<date> --collect --property=TimeoutStartSec=infinity /usr/local/bin/vertexdigital-deploy"
+ssh vertex "journalctl -u vertexdigital-deploy-<date> --no-pager -o cat | tail -40"
+```
+
+The migrate step prints "Migrations are up to date." whether it applied migrations or not: to confirm, count the applied ones (`select count(*) from drizzle.__drizzle_migrations`, one per file in `packages/db/migrations`).
 
 ### Migrations must stay backward compatible
 

@@ -46,10 +46,11 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] S15 PWA and web push: F24 alone; spec `docs/specs/S15-pwa-and-web-push.md` (two PRs, owner 2026-10-11: contracts, db, the api push routes and the worker's `push.send`; the store manifest, `/sw.js`, `/offline`, install, the permission card, the device switch and the "الهاتف" preferences column, the admin profile's device count, with E2E). Pushes reaching phones in Syria are checked by the owner after the Phase 3 deploy
 - [x] S16 Supplier catalog and admin orders (added by the owner on 2026-10-12, before the pilot; extends F08, F09, F11): the re-send safety net (Q18), admin purchases (walk-in, on behalf, gift, compensation) with owner drawings, the supplier catalog browser and category import, supplier images and fields; spec `docs/specs/S16-supplier-catalog-and-admin-orders.md` (four PRs: re-send rule and admin purchases; catalog back end; catalog panel; two fields and select fields); PR 1 (re-send rule and admin purchases), PR 2 (supplier catalog back end: category mirror, import and link, images, statement, platform status, low-stock alerts) and PR 3 (the panel: the catalog tab, import and link sheets, offer fields, the statement, cards and badge, "تفعيل الكل", the game page's links and supplier cover, stock chips, nearby supplier orders) and PR 4 (two fields and select fields with option maps on routes and attempts, WDG delivery replies with pins, the poll's 202 read through the order's state; Q19 answered on 2026-10-13: 4,944 of WDG's 5,602 top-ups now supported) done
   - [x] PR 1: the re-send safety net (RS1–RS4) and purchases from the panel (AP1–AP15, AM1–AM4): `/orders/new` in four modes, owner drawings and the owner daily cap, the customer's chips, reports and reconciliation
-  - [ ] PR 2: supplier catalog, back end (SC, IM, SF rules; nearby supplier orders of RS3/SF4)
-  - [ ] PR 3: supplier catalog, panel
-  - [ ] PR 4: two fields and select fields, WDG delivery replies (MF1–MF5; Q19 answered on 2026-10-13)
+  - [x] PR 2: supplier catalog, back end (SC, IM, SF rules; nearby supplier orders of RS3/SF4)
+  - [x] PR 3: supplier catalog, panel
+  - [x] PR 4: two fields and select fields, WDG delivery replies (MF1–MF5; Q19 answered on 2026-10-13)
 - [x] Production deploy of Phase 3: deployed on 2026-10-12 in one release with Phases 1 and 2 (commit `6230b05`, all of `main`); the server was rebooted afterwards and every site's health check passed. The owner still checks pushes on real phones in Syria (S15)
+- [x] Production deploy of S16: deployed on 2026-10-13 (commit `0495047`, all of `main`: migrations 0050–0059, no new secret and no `deploy/` change, so `provision.sh` was not re-run); the health checks passed and no error was logged after the switch
 
 ## Pilot — open quiet launch
 - [ ] Launch checklist done (below)
