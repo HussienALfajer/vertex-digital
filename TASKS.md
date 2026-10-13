@@ -1,6 +1,6 @@
 # TASKS — S16 Supplier catalog and admin orders
 
-Spec: `docs/specs/S16-supplier-catalog-and-admin-orders.md` (F08, F09, F11 amended; ADRs 0003, 0004, 0005, 0011, 0016, 0020, 0021, 0022, 0023, 0025, 0026, 0027, 0030). Four PRs as the spec's implementation plan; PR4 waits for Q19. Each leaves `main` green.
+Spec: `docs/specs/S16-supplier-catalog-and-admin-orders.md` (F08, F09, F11 amended; ADRs 0003, 0004, 0005, 0011, 0016, 0020, 0021, 0022, 0023, 0025, 0026, 0027, 0030). Four PRs as the spec's implementation plan; Q19 answered on 2026-10-13 (MF1–MF5). Each leaves `main` green.
 
 ## PR 1 — Re-send safety net and admin purchases (RS1–RS4, AP1–AP15, AM1–AM4) · `feat/s16-admin-orders`
 - [x] Contracts: `ORDER_PAYERS`, `ORDER_PLACERS`, `ADMIN_ORDER_PURPOSES`, `adminOrderShape`; `owner_drawings` account kind and `heldUnits` label; `ORDER_POLICY.ownerDailyCapUsdUnits`, `ownerCapRemaining`; `isResendRefusal`; `PlaceOrderRequest.resend`; schemas `createAdminOrderSchema`, `adminPurchaseContextSchema`, `adminPlayerCheckSchema`, admin order list filters and row fields, customer order `placedByStore`/`customerNote`; error `OWNER_DAILY_CAP_EXCEEDED`; notification `order_placed_for_you`; Telegram kind `admin_order_placed`; audit details; reports and reconciliation shapes; unit tests at 100%
@@ -44,5 +44,5 @@ Spec: `docs/specs/S16-supplier-catalog-and-admin-orders.md` (F08, F09, F11 amend
 - [x] Docs: ROADMAP (S16 PR 3), admin `CLAUDE.md` patterns, `wiring.md` patterns, spec "Settled in implementation" (PR 3), architecture if routes changed
 - [x] Checks, reviewer (three blocking findings fixed: nearby orders read kept current, link capped at 100, icon tooltips), owner acceptance (2026-10-13), PR with auto-merge
 
-## PR 4 — Two fields and select fields (MF1), only after Q19
-- [ ] Waits for WDG's answer
+## PR 4 — Two fields and select fields, WDG delivery replies (MF1–MF5)
+- Planned in the spec's implementation plan, item 4; this checklist is filled when PR 4 starts.
