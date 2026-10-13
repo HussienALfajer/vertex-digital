@@ -113,7 +113,7 @@ test.describe('suppliers', () => {
     const { game } = seed(admin);
     admin.suppliers.connectFake();
     await page.goto('/suppliers/fake?tab=offers');
-    await page.getByRole('button', { name: 'PUBG Mobile' }).first().click();
+    await page.getByRole('button', { name: 'PUBG Mobile', exact: true }).first().click();
     await expect(page).toHaveURL(/group=PUBG/);
     await expect(page.getByText('Fake Free Fire 100')).toBeHidden();
     for (const name of ['Fake UC 325', 'Fake UC 660', 'Fake UC 1800']) {

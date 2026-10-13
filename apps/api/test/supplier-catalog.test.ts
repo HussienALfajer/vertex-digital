@@ -237,6 +237,7 @@ describe('access', () => {
     ['POST', `/api/admin/suppliers/offers/${id}/unignore`],
     ['POST', `/api/admin/catalog/games/${id}/activate-all`],
     ['POST', `/api/admin/catalog/games/${id}/cover/from-supplier`],
+    ['GET', `/api/admin/catalog/games/${id}/supplier-categories`],
     ['GET', '/api/admin/suppliers/fake/statement/transactions'],
     ['GET', '/api/admin/suppliers/fake/statement/orders'],
     ['GET', '/api/admin/suppliers/fake/platform-status'],
@@ -719,6 +720,48 @@ describe('import and link (rules SC7–SC14, IM2)', () => {
       categoryId: node('ff'),
     });
     expect(unlinked.status).toBe(404);
+  });
+});
+
+describe('the game page reads (rules SC9, IM3, SF2)', () => {
+  it('lists the categories linked to the game itself', async () => {
+    const linked = await json<SupplierCategoryNode[]>(
+      await get(`/api/admin/catalog/games/${ids.game}/supplier-categories`),
+      200,
+    );
+    // Earlier tests linked more nodes to this game; every one is linked here, by name.
+    expect(linked.map((item) => item.categoryId)).toContain(node('pubg'));
+    expect(linked.every((item) => item.linkedHere && item.game?.id === ids.game)).toBe(true);
+    const unknown = await get(
+      '/api/admin/catalog/games/0199a000-0000-7000-8000-000000000001/supplier-categories',
+    );
+    expect(unknown.status).toBe(404);
+  });
+
+  it('shows the basis offer stock level on packs and routes', async () => {
+    const level = async () => {
+      const game = await json<{ products: { id: string; basisStockLevel: string | null }[] }>(
+        await get(`/api/admin/catalog/games/${ids.game}`),
+        200,
+      );
+      const routing = await json<{
+        routes: { id: string; offer: { stock: number | null; stockLevel: string } }[];
+      }>(await get(`/api/admin/catalog/products/${ids.product}/routes`), 200);
+      return {
+        product: game.products.find((item) => item.id === ids.product)?.basisStockLevel,
+        route: routing.routes.find((route) => route.id === ids.route)?.offer,
+      };
+    };
+    expect(await level()).toMatchObject({ product: 'ok', route: { stock: 50, stockLevel: 'ok' } });
+    await test.db
+      .update(supplierOffers)
+      .set({ stock: 5 })
+      .where(eq(supplierOffers.id, offers.uc60 as string));
+    expect(await level()).toMatchObject({ product: 'low', route: { stock: 5, stockLevel: 'low' } });
+    await test.db
+      .update(supplierOffers)
+      .set({ stock: 50 })
+      .where(eq(supplierOffers.id, offers.uc60 as string));
   });
 });
 

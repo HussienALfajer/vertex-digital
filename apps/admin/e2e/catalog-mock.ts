@@ -46,6 +46,7 @@ type Row<T> = Omit<
   | 'priceUsdUnits'
   | 'priceSypUnits'
   | 'basisSupplierNameAr'
+  | 'basisStockLevel'
   | 'reviewOpen'
   | 'deliveryStats'
 >;
@@ -62,6 +63,7 @@ export interface ProductPricing {
   price: { priceUsdUnits: number; minMarginUsdUnits: number } | null;
   usableRouteCostsUsdUnits: number[];
   basisSupplierNameAr: string | null;
+  basisStockLevel: Product['basisStockLevel'];
   reviewOpen: boolean;
 }
 
@@ -206,7 +208,7 @@ export class CatalogMock {
     return field;
   }
 
-  private upload(): CatalogImage {
+  upload(): CatalogImage {
     const id = nextId();
     const image = { id, url: `/api/catalog/images/${id}`, width: 1200, height: 675 };
     this.images.set(id, image);
@@ -281,6 +283,7 @@ export class CatalogMock {
           ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
           : null,
       basisSupplierNameAr: pricing?.basisSupplierNameAr ?? null,
+      basisStockLevel: pricing?.basisStockLevel ?? null,
       reviewOpen: pricing?.reviewOpen ?? false,
       // S08: no delivered orders in the mock.
       deliveryStats: null,
@@ -293,7 +296,7 @@ export class CatalogMock {
     return row ? this.product(row) : null;
   }
 
-  private detail(row: StoredGame) {
+  detail(row: StoredGame) {
     const bySort = <T extends { sortOrder: number }>(items: T[]) =>
       [...items].sort((a, b) => a.sortOrder - b.sortOrder);
     return {

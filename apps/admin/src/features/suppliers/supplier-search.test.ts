@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { offerFilters, parseSupplierSearch, supplierCodeOf } from './supplier-search';
+import {
+  categoryFilters,
+  offerFilters,
+  parseSupplierSearch,
+  supplierCodeOf,
+} from './supplier-search';
 
 describe('parseSupplierSearch', () => {
   it('keeps a tab, the filters and a page', () => {
@@ -40,8 +45,62 @@ describe('parseSupplierSearch', () => {
 });
 
 describe('offerFilters', () => {
-  it('leaves the tab out', () => {
-    expect(offerFilters({ tab: 'offers', q: 'uc', page: 2 })).toEqual({ q: 'uc', page: 2 });
+  it('leaves the tab and the other tabs out', () => {
+    expect(
+      offerFilters({ tab: 'offers', q: 'uc', page: 2, lowStock: 'true', cq: 'pubg', spage: 3 }),
+    ).toEqual({ q: 'uc', page: 2, lowStock: 'true' });
+  });
+});
+
+describe('the S16 filters', () => {
+  it('keeps the offer, catalog and statement filters', () => {
+    expect(
+      parseSupplierSearch({
+        tab: 'catalog',
+        categoryId: '12',
+        supported: 'false',
+        ignored: true,
+        lowStock: 'true',
+        cq: ' ببجي ',
+        state: 'new_packs',
+        kind: 'code',
+        node: 'pubg-1',
+        cpage: '2',
+        list: 'transactions',
+        spage: 4,
+      }),
+    ).toEqual({
+      tab: 'catalog',
+      categoryId: '12',
+      supported: 'false',
+      ignored: 'true',
+      lowStock: 'true',
+      cq: 'ببجي',
+      state: 'new_packs',
+      kind: 'code',
+      node: 'pubg-1',
+      cpage: 2,
+      list: 'transactions',
+      spage: 4,
+    });
+    expect(categoryFilters({ tab: 'catalog', cq: 'x', node: 'a', q: 'uc' })).toEqual({
+      cq: 'x',
+      node: 'a',
+    });
+  });
+
+  it('drops invalid catalog and statement values', () => {
+    expect(
+      parseSupplierSearch({
+        categoryId: 'a b',
+        state: 'gone',
+        kind: 'voucher',
+        node: 'x'.repeat(65),
+        cpage: 1,
+        list: 'orders',
+        spage: 'two',
+      }),
+    ).toEqual({});
   });
 });
 

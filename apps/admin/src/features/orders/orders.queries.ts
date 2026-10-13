@@ -40,6 +40,26 @@ export const orderListQuery = (search: OrderSearch) =>
     placeholderData: keepPreviousData,
   });
 
+/**
+ * S16 SF4: the supplier's orders near an attempt's send, read live on the admin's request (one
+ * read per 5 seconds per supplier); never retried, never applied by itself. Its key is outside
+ * `orders`, so an order decision does not read the supplier again, and a read is dropped once
+ * the panel closes, so an old read never shows as current.
+ */
+export const nearbySupplierOrdersQuery = (orderId: string, attemptId: string) =>
+  queryOptions({
+    queryKey: ['supplier-orders', orderId, attemptId],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/orders/{id}/attempts/{attemptId}/supplier-orders', {
+          params: { path: { id: orderId, attemptId } },
+        }),
+      ),
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 0,
+    retry: false,
+  });
+
 export const orderQuery = (id: string) =>
   queryOptions({
     queryKey: ['orders', 'order', id],

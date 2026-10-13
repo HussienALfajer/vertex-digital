@@ -1,5 +1,7 @@
 import {
   costChangeBasisPoints,
+  discountPercent,
+  type FieldSpec,
   isCostStale,
   MAX_IMPORT_ROWS,
   needsReview,
@@ -14,6 +16,7 @@ import {
   type RouteUnusableReason,
   routeTier,
   routeUnusableReason,
+  type StockLevel,
   SUPPLIER_CODES,
   SUPPLIER_CREDENTIAL_FIELDS,
   SUPPLIER_POLICY_DEFAULTS,
@@ -26,6 +29,7 @@ import {
   type SupplierPolicy,
   type SupplierSummary,
   type SyncRun,
+  stockLevel,
   supplierAvailable,
   supplierHasCatalog,
   supplierPanelCapabilities,
@@ -52,6 +56,26 @@ const NAMES: Record<SupplierCode, string> = {
 const USD = 1_000_000;
 
 /** The fake supplier's catalog (`packages/suppliers/src/fake/adapter.ts`), costs in cents. */
+/**
+ * S16: the fake's leaf categories, original prices (cents) and stock, as its adapter reports
+ * them (`--stock-count` changes the stock through `script`).
+ */
+const FAKE_FIELDS: Record<string, { categoryId: string; originalCents?: number; stock?: number }> =
+  {
+    'fake-uc-60': { categoryId: 'fake-pubg-global', originalCents: 99 },
+    'fake-uc-325': { categoryId: 'fake-pubg-global', originalCents: 499 },
+    'fake-uc-660': { categoryId: 'fake-pubg-mena' },
+    'fake-uc-1800': { categoryId: 'fake-pubg-mena' },
+    'fake-ff-100': { categoryId: 'fake-ff-auto' },
+    'fake-ff-310': { categoryId: 'fake-ff-auto' },
+    'fake-ff-520': { categoryId: 'fake-ff-auto' },
+    'fake-ff-1060': { categoryId: 'fake-ff-auto' },
+    'fake-gift-10': { categoryId: 'fake-itunes', stock: 40 },
+    'fake-itunes-25': { categoryId: 'fake-itunes', stock: 40 },
+  };
+
+const PLAYER_FIELD: FieldSpec = { key: 'playerId', label: 'Player ID', type: 'text' };
+
 const FAKE_CATALOG: [string, string, string, ProductKind, number][] = [
   ['fake-uc-60', 'Fake UC 60', 'PUBG Mobile', 'direct', 88],
   ['fake-uc-325', 'Fake UC 325', 'PUBG Mobile', 'direct', 440],
@@ -76,19 +100,18 @@ interface StoredSupplier {
   runs: SyncRun[];
 }
 
-/** S16's supplier catalog fields: the panel of PR 3 shows them; this mock leaves them empty. */
-type CatalogFields =
-  | 'categoryId'
-  | 'categoryPath'
-  | 'stock'
-  | 'stockLevel'
-  | 'originalCostUsdUnits'
-  | 'discountPercent'
-  | 'fieldSpecs'
-  | 'unsupportedReason'
-  | 'ignoredAt';
+/** What the API derives from an offer's row: its path, stock level and discount (S16 SF1, SF2). */
+type DerivedFields = 'categoryPath' | 'stockLevel' | 'discountPercent';
 
-type StoredOffer = Omit<SupplierOffer, 'costStale' | 'mapped' | CatalogFields>;
+export type StoredOffer = Omit<SupplierOffer, 'costStale' | 'mapped' | DerivedFields>;
+
+/** The S16 catalog panel: the category paths and the new packs count the offers read (SC5). */
+export interface CategoryReader {
+  path(code: SupplierCode, categoryId: string | null): string[];
+  /** The category and every category below it. */
+  subtree(code: SupplierCode, categoryId: string): Set<string>;
+  newOfferCount(code: SupplierCode): number;
+}
 
 interface StoredRoute {
   id: string;
@@ -121,6 +144,8 @@ interface Script {
   costUsdUnits?: number;
   inStock?: boolean;
   removed?: boolean;
+  /** S16 `--stock-count`: a figure, or null for unlimited. */
+  stock?: number | null;
 }
 
 const error = (status: number, code: string, details?: unknown): Answer => ({
@@ -159,6 +184,8 @@ export class SuppliersMock {
   readonly scripts = new Map<string, Script>();
   /** The next sync of `fake` fails with this code (`--fail-sync on`). */
   failNextSync: string | null = null;
+  /** S16: set by the catalog panel's mock. */
+  categories: CategoryReader | null = null;
 
   constructor(
     private readonly catalog: CatalogMock,
@@ -292,7 +319,7 @@ export class SuppliersMock {
   }
 
   /** The product's usable routes in tier, cost, priority and supplier order (RT5, RT6). */
-  private usable(productId: string) {
+  usable(productId: string) {
     return orderRoutes(
       this.routes
         .filter((route) => route.productId === productId && this.unusable(route) === null)
@@ -306,15 +333,15 @@ export class SuppliersMock {
     );
   }
 
-  private offerOf(route: StoredRoute): StoredOffer {
+  offerOf(route: StoredRoute): StoredOffer {
     return this.offers.find((item) => item.id === route.offerId) as StoredOffer;
   }
 
-  private currentPrice(productId: string): StoredPrice | null {
+  currentPrice(productId: string): StoredPrice | null {
     return this.prices.find((price) => price.productId === productId) ?? null;
   }
 
-  private openReview(productId: string): StoredReview | null {
+  openReview(productId: string): StoredReview | null {
     return (
       this.reviews.find((review) => review.productId === productId && review.status === 'open') ??
       null
@@ -334,12 +361,13 @@ export class SuppliersMock {
         : null,
       usableRouteCostsUsdUnits: usable.map((item) => item.costUsdUnits),
       basisSupplierNameAr: basis ? NAMES[basis.supplierCode] : null,
+      basisStockLevel: basis ? this.stockLevelOf(this.offerOf(basis)) : null,
       reviewOpen: this.openReview(productId) !== null,
     };
   }
 
   /** Rule P2 (with P3 and P5) for the given products. */
-  private reprice(productIds: string[], cause: PriceChangeCause): number {
+  reprice(productIds: string[], cause: PriceChangeCause): number {
     let repriced = 0;
     for (const productId of productIds) {
       const basis = this.usable(productId)[0];
@@ -418,7 +446,7 @@ export class SuppliersMock {
     });
   }
 
-  private addRoute(
+  addRoute(
     productId: string,
     code: SupplierCode,
     offerId: string,
@@ -484,6 +512,7 @@ export class SuppliersMock {
       run.offersSeen += 1;
       const cost = script.costUsdUnits ?? offer?.costUsdUnits ?? cents * 10_000;
       if (!offer) {
+        const fields = FAKE_FIELDS[offerId];
         offer = {
           id: nextId(),
           supplierCode: code,
@@ -498,6 +527,13 @@ export class SuppliersMock {
           costConfirmedAt: now,
           lastSeenAt: now,
           missingSince: null,
+          categoryId: fields?.categoryId ?? null,
+          stock: fields?.stock ?? null,
+          originalCostUsdUnits:
+            fields?.originalCents === undefined ? null : fields.originalCents * 10_000,
+          fieldSpecs: kind === 'direct' ? [PLAYER_FIELD] : [],
+          unsupportedReason: null,
+          ignoredAt: null,
         };
         this.offers.push(offer);
         run.offersNew += 1;
@@ -507,6 +543,7 @@ export class SuppliersMock {
         run.costsChanged += 1;
         changed.add(offer.id);
       }
+      if (script.stock !== undefined) offer.stock = script.stock;
       if (script.inStock !== undefined && offer.inStock !== script.inStock) {
         offer.inStock = script.inStock;
         changed.add(offer.id);
@@ -558,8 +595,13 @@ export class SuppliersMock {
       validationQuota: row.validationQuota ?? 1_000,
       validationsToday: row.code === 'fake' ? 312 : 0,
       capabilities: supplierPanelCapabilities(row.code),
-      newOfferCount: 0,
-      lowStockCount: 0,
+      newOfferCount: this.categories?.newOfferCount(row.code) ?? 0,
+      lowStockCount: this.offers.filter(
+        (offer) =>
+          offer.supplierCode === row.code &&
+          ['low', 'out'].includes(this.stockLevelOf(offer)) &&
+          this.servesActive(offer),
+      ).length,
       platformStatus: null,
     };
   }
@@ -574,21 +616,15 @@ export class SuppliersMock {
     };
   }
 
-  private offer(row: StoredOffer): SupplierOffer {
+  offer(row: StoredOffer): SupplierOffer {
     const route = this.routes.find((item) => item.offerId === row.id && !item.archivedAt);
     const product = route && this.catalog.products.find((item) => item.id === route.productId);
     const game = product && this.catalog.games.find((item) => item.id === product.gameId);
     return {
       ...row,
-      categoryId: null,
-      categoryPath: [],
-      stock: null,
-      stockLevel: row.inStock ? 'unlimited' : 'out',
-      originalCostUsdUnits: null,
-      discountPercent: null,
-      fieldSpecs: null,
-      unsupportedReason: null,
-      ignoredAt: null,
+      categoryPath: this.categories?.path(row.supplierCode, row.categoryId) ?? [],
+      stockLevel: this.stockLevelOf(row),
+      discountPercent: discountPercent(row.costUsdUnits, row.originalCostUsdUnits),
       costStale: isCostStale(
         row.supplierCode,
         row.costConfirmedAt ? new Date(row.costConfirmedAt) : null,
@@ -608,6 +644,21 @@ export class SuppliersMock {
     };
   }
 
+  /** Rule SF2's level with the policy's threshold. */
+  stockLevelOf(row: StoredOffer): StockLevel {
+    return stockLevel(row.stock, row.inStock, this.policy.lowStockUnits);
+  }
+
+  /** Rule SF2: an enabled, unarchived route maps the offer to an active product of an active game. */
+  private servesActive(offer: StoredOffer): boolean {
+    return this.routes.some((route) => {
+      if (route.offerId !== offer.id || route.archivedAt || !route.enabled) return false;
+      const product = this.catalog.products.find((item) => item.id === route.productId);
+      const game = product && this.catalog.games.find((item) => item.id === product.gameId);
+      return product?.status === 'active' && game?.status === 'active';
+    });
+  }
+
   private route(row: StoredRoute, basisId: string | null): Route {
     const offer = this.offerOf(row);
     const reason = this.unusable(row);
@@ -625,6 +676,8 @@ export class SuppliersMock {
         costConfirmedAt: offer.costConfirmedAt,
         inStock: offer.inStock,
         missingSince: offer.missingSince,
+        stock: offer.stock,
+        stockLevel: this.stockLevelOf(offer),
       },
       priority: row.priority,
       enabled: row.enabled,
@@ -842,6 +895,27 @@ export class SuppliersMock {
             (offer) => !flag('missing') || String(offer.missingSince !== null) === flag('missing'),
           )
           .filter((offer) => !flag('inStock') || String(offer.inStock) === flag('inStock'))
+          .filter((offer) => {
+            const categoryId = url.searchParams.get('categoryId');
+            if (!categoryId || !this.categories) return true;
+            return (
+              offer.categoryId !== null &&
+              this.categories.subtree(code, categoryId).has(offer.categoryId)
+            );
+          })
+          .filter(
+            (offer) =>
+              !flag('supported') || String(offer.unsupportedReason === null) === flag('supported'),
+          )
+          .filter(
+            (offer) => !flag('ignored') || String(offer.ignoredAt !== null) === flag('ignored'),
+          )
+          .filter(
+            (offer) =>
+              !flag('lowStock') ||
+              String(offer.mapped !== null && ['low', 'out'].includes(offer.stockLevel)) ===
+                flag('lowStock'),
+          )
           .sort(
             (a, b) =>
               (a.groupName ?? '').localeCompare(b.groupName ?? '') || a.name.localeCompare(b.name),
@@ -916,6 +990,12 @@ export class SuppliersMock {
           costConfirmedAt: now,
           lastSeenAt: now,
           missingSince: null,
+          categoryId: null,
+          stock: null,
+          originalCostUsdUnits: null,
+          fieldSpecs: null,
+          unsupportedReason: null,
+          ignoredAt: null,
         };
         this.offers.push(offer);
         this.addRoute(productId, 'manual', offer.id, {});

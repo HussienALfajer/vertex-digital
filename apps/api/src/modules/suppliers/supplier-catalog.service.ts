@@ -136,6 +136,30 @@ export class SupplierCatalogService {
     return node as SupplierCategoryNode;
   }
 
+  /**
+   * The nodes linked to a game itself, across suppliers, as the tree shows them (the game page's
+   * "فك الربط" and IM3's cover); `NOT_FOUND` for an unknown game.
+   */
+  async gameCategories(gameId: string): Promise<SupplierCategoryNode[]> {
+    const names = await this.catalog.gameNames([gameId]);
+    if (!names.has(gameId)) throw refusals.notFound('game');
+    const linked = await this.db
+      .selectDistinct({ supplierId: supplierCategories.supplierId })
+      .from(supplierCategories)
+      .where(eq(supplierCategories.gameId, gameId));
+    const nodes: SupplierCategoryNode[] = [];
+    for (const { supplierId } of linked) {
+      const supplier = await this.live.supplierById(supplierId);
+      if (supplier.code === 'fake' && !this.env.SUPPLIER_FAKE_ENABLED) continue;
+      const view = await this.tree(supplier.id);
+      const rows = view.rows
+        .filter((row) => row.gameId === gameId)
+        .sort((a, b) => a.name.localeCompare(b.name) || a.categoryId.localeCompare(b.categoryId));
+      nodes.push(...(await this.nodes(supplier.code, view, rows)));
+    }
+    return nodes;
+  }
+
   // Import and link drafts (SC7, SC8, SC12–SC14) -------------------------------------------------
 
   /**

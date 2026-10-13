@@ -44,6 +44,7 @@ import { ltr } from '../../lib/format';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import { allGamesQuery, gameQuery } from '../catalog/catalog.queries';
 import { customerListQuery } from '../customers/customers.queries';
+import { StockChip } from '../suppliers/offer-cells';
 import type { NewOrderSearch } from './new-order-search';
 import { purchaseContextQuery, useAdminPlayerCheck, useCreateAdminOrder } from './orders.queries';
 
@@ -610,6 +611,7 @@ function Packs({
               )}
               {item.basisSupplierNameAr &&
                 t('orders.buy.basis', { supplier: item.basisSupplierNameAr })}
+              {item.basisStockLevel && <StockChip level={item.basisStockLevel} quiet />}
             </span>
           </label>
         );

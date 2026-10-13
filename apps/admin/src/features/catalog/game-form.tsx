@@ -32,6 +32,7 @@ import { FormAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
+import { SupplierCoverButton } from '../suppliers/game-supplier-links';
 import { categoriesQuery, useCreateGame, useUpdateGame } from './catalog.queries';
 import { catalogFailure } from './catalog-parts';
 import { ImageUpload } from './image-upload';
@@ -198,12 +199,15 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <ImageUpload
-              label={t('catalog.fields.cover')}
-              hint={t('catalog.fields.coverHint')}
-              image={cover}
-              onChange={setCover}
-            />
+            <div className="flex flex-col gap-2">
+              <ImageUpload
+                label={t('catalog.fields.cover')}
+                hint={t('catalog.fields.coverHint')}
+                image={cover}
+                onChange={setCover}
+              />
+              {game && <SupplierCoverButton gameId={game.id} onCover={setCover} />}
+            </div>
             <ImageUpload
               label={t('catalog.fields.idGuide')}
               hint={t('catalog.fields.idGuideHint')}

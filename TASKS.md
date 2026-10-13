@@ -27,8 +27,22 @@ Spec: `docs/specs/S16-supplier-catalog-and-admin-orders.md` (F08, F09, F11 amend
 - [x] Docs: `docs/suppliers/wdgzone.md`, architecture, folder `CLAUDE.md`s, commands table (`supplier:fake` flags), spec "Settled in implementation", ROADMAP
 - [x] Checks, reviewer, PR with auto-merge (owner gave full authority on 2026-10-13: acceptance by the endpoint summary in the report)
 
-## PR 3 — Supplier catalog, panel
-- [ ] Planned when PR 2 is merged
+## PR 3 — Supplier catalog, panel (screens of SC4–SC11, IM3, SF1–SF5) · `claude/wonderful-davinci-x01xov` (the session's designated branch)
+- [x] Api (small reads the screens need, PR 2 left them out): route offers carry `stock` and `stockLevel` (route drawer chips, SF2); admin product rows (game page, `/orders/new` pack picker) carry the basis offer's `stockLevel` (SF2; the PR 1 deferral); `GET /api/admin/catalog/games/:id/supplier-categories` (the game page's linked categories with "فك الربط", SC9, IM3); tests in `test/supplier-catalog.test.ts`
+- [x] Bridge: build, OpenAPI export, admin client; mocks follow the changed shapes
+- [x] Admin queries: `suppliers.queries.ts` categories (paged per parent), import draft, import, link, unlink, ignore and unignore (categories and offers), statement transactions and orders, platform status, nearby supplier orders; `catalog.queries.ts` activate-all, cover from the supplier, linked categories; invalidations (supplier summary, badge, game)
+- [x] `/suppliers` cards (SC11, SF2, SF5): platform status and catalog update time (read on demand, 60 s cache), new packs and low-stock counts; navigation badge "الموردون" with the new packs count (background read every minute)
+- [x] `/suppliers/$code` "الكتالوج" tab (SC4–SC6, SC9, IM1): the tree (roots, children on expand, 200 per level with "load more"), thumbnails through the image route with a placeholder, counts, state chips, missing mark, linked game; filters state, kind, search with paths in the URL; per node import, link, ignore/unignore, unlink; the selected node's packs (SF1) with per-pack ignore; empty and no-capability states
+- [x] Import dialog (SC7, SC12–SC14, IM2): game section (names, store category, slug, supplier cover preview or upload), suggested input fields (editable, supplier label/type/key beside), packs grouped by leaf with select all, names, amounts, cost, original and discount, stock, price preview, refused rows disabled with the reason; per-row errors in place; success with links to the game and "تفعيل الكل"; `IMAGE_FETCH_FAILED` asks for an upload
+- [x] Link dialog (SC8): game picker, field map onto its fields, per pack existing (proposed match) / new (name, amount) / left out; per-row errors in place
+- [x] "العروض" tab (SF1): category path, original price and discount, stock, field labels and types, supported or reason, ignored; filters category, supported, ignored, low stock; per-offer ignore/unignore; unsupported offers not selectable for import
+- [x] "كشف الحساب" tab (SF3): transactions and orders tabs, page by page, matched rows linked to our order with the attempt state, unmatched "غير مطابق لطلب عندنا", matched-and-refunded marked; "تحديث" with the 5 s limit; error with retry
+- [x] Game page (SC9, SC10, IM3, SF2): "تفعيل الكل" (confirmation with the count, then activated and skipped lists, `CATALOG_INCOMPLETE`), linked supplier categories with "فك الربط", "استخدام صورة المورد", stock chips on packs; route drawer stock chips
+- [x] Order page (SF4, RS3): "طلبات المورد القريبة" on an open or held attempt of a supplier with `statement` (read on request, already-matched mark, `complete` false shown as incomplete); `/orders/new` pack stock level
+- [x] i18n keys (`suppliers.catalog.*`, `statement.*`, game page, order page); errors already in the catalog from PR 2 (check)
+- [x] E2E: `suppliers-mock.ts` gains categories, draft, import, link, ignore, statement, platform status, nearby orders on the contracts' pure rules (`categoryStandings`, `suggestInputFields`, …); `supplier-catalog.spec.ts` flows (tree and states, import all-or-nothing with a refused row, link, ignore clears the badge, activate all, statement matched/unmatched, nearby orders); RTL screenshots light and dark of the tree, import dialog, link dialog, statement, activate all
+- [x] Docs: ROADMAP (S16 PR 3), admin `CLAUDE.md` patterns, `wiring.md` patterns, spec "Settled in implementation" (PR 3), architecture if routes changed
+- [x] Checks, reviewer (three blocking findings fixed: nearby orders read kept current, link capped at 100, icon tooltips), owner acceptance (2026-10-13), PR with auto-merge
 
 ## PR 4 — Two fields and select fields (MF1), only after Q19
 - [ ] Waits for WDG's answer

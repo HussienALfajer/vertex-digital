@@ -3252,6 +3252,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/catalog/games/{id}/supplier-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierCatalogAdminController_gameCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/catalog/games/{id}/cover/from-supplier": {
         parameters: {
             query?: never;
@@ -6243,6 +6259,7 @@ export interface components {
             priceUsdUnits: number | null;
             priceSypUnits: number | null;
             basisSupplierNameAr: string | null;
+            basisStockLevel: components["schemas"]["StockLevel"] | null;
             reviewOpen: boolean;
             deliveryStats: {
                 medianMs: number;
@@ -6252,6 +6269,8 @@ export interface components {
         };
         /** @enum {string} */
         ProductAvailability: "hidden" | "paused" | "paused_by_margin_guard" | "out_of_stock" | "available";
+        /** @enum {string} */
+        StockLevel: "ok" | "low" | "out" | "unlimited";
         UpdateGame: {
             /** Format: uuid */
             categoryId?: string;
@@ -7063,8 +7082,6 @@ export interface components {
                 gameNameAr: string;
             } | null;
         };
-        /** @enum {string} */
-        StockLevel: "ok" | "low" | "out" | "unlimited";
         FieldSpec: {
             key: string;
             label: string;
@@ -7145,6 +7162,8 @@ export interface components {
                 inStock: boolean;
                 /** Format: date-time */
                 missingSince: string | null;
+                stock: number | null;
+                stockLevel: components["schemas"]["StockLevel"];
             };
             priority: number;
             enabled: boolean;
@@ -13753,6 +13772,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupplierOffer"];
+                };
+            };
+        };
+    };
+    SupplierCatalogAdminController_gameCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nodes linked to the game itself */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCategoryNode"][];
                 };
             };
         };

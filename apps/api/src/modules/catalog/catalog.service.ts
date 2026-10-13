@@ -14,6 +14,7 @@ import {
   type GamePage,
   type MarginScope,
   type Product,
+  stockLevel,
   sypDisplayPrice,
   type UpdateCategory,
   type UpdateGame,
@@ -23,6 +24,7 @@ import {
   catalogGames,
   catalogInputFields,
   catalogProducts,
+  currentSupplierPolicy,
   type Database,
   newId,
   type ProductRoutingState,
@@ -552,10 +554,11 @@ export class CatalogService {
    */
   async products(executor: Database | Transaction, rows: ProductRow[]): Promise<Product[]> {
     const ids = rows.map((row) => row.id);
-    const [states, rate, delivery] = await Promise.all([
+    const [states, rate, delivery, policy] = await Promise.all([
       productRoutingStates(executor, ids, routingContext(this.env)),
       this.rates.current(),
       productDeliveryStats(executor, ids),
+      currentSupplierPolicy(executor),
     ]);
     return rows.map((row) => {
       const state = states.get(row.id) as ProductRoutingState;
@@ -568,6 +571,9 @@ export class CatalogService {
             ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
             : null,
         basisSupplierNameAr: state.basis?.supplier.nameAr ?? null,
+        basisStockLevel: state.basis
+          ? stockLevel(state.basis.offer.stock, state.basis.offer.inStock, policy.lowStockUnits)
+          : null,
         reviewOpen: state.openReview !== null,
         deliveryStats: delivery.get(row.id) ?? null,
       });

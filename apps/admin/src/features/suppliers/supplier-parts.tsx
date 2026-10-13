@@ -1,15 +1,18 @@
+import { useQuery } from '@tanstack/react-query';
 import {
   formatSyp,
   formatUsd,
   type RouteUnusableReason,
   type SupplierBalance,
+  type SupplierCode,
   type SupplierHealthState,
   type SupplierSummary,
   type SyncRun,
 } from '@vertex-digital/contracts';
 import { Badge } from '@vertex-digital/ui';
 import { useTranslation } from 'react-i18next';
-import { formatSince } from '../../lib/format';
+import { formatDateTime, formatSince } from '../../lib/format';
+import { platformStatusQuery } from './suppliers.queries';
 
 /*
  * What the supplier screens share: the state chips, a balance, a sync run's result and counts,
@@ -152,4 +155,37 @@ export function LastRun({ run }: { run: SyncRun | null }) {
 export function UnusableReason({ reason }: { reason: RouteUnusableReason }) {
   const { t } = useTranslation();
   return <Badge tone="warning">{t(`suppliers.routes.unusable.${reason}`)}</Badge>;
+}
+
+/**
+ * Rule SF5: the supplier's own status and catalog update time, read by the API when the panel
+ * asks (cached a minute); its text is the supplier's, shown as text.
+ */
+export function PlatformStatusLine({ code }: { code: SupplierCode }) {
+  const { t } = useTranslation();
+  const status = useQuery(platformStatusQuery(code));
+  if (status.isPending) {
+    return <span className="text-sm text-muted-foreground">{t('suppliers.platform.reading')}</span>;
+  }
+  if (status.isError) {
+    return <span className="text-sm text-muted-foreground">{t('suppliers.platform.failed')}</span>;
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted-foreground">{t('suppliers.platform.label')}</span>
+      <Badge tone="outline">
+        <bdi>{status.data.status}</bdi>
+      </Badge>
+      {status.data.catalogUpdatedAt && (
+        <span
+          className="text-muted-foreground"
+          title={formatDateTime(status.data.catalogUpdatedAt)}
+        >
+          {t('suppliers.platform.catalogUpdated', {
+            since: formatSince(status.data.catalogUpdatedAt),
+          })}
+        </span>
+      )}
+    </span>
+  );
 }

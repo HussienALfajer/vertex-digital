@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
-  formatUsd,
   MAX_IMPORT_ROWS,
   type SupplierDetail,
   type SupplierOffer,
@@ -32,25 +31,34 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@vertex-digital/ui';
-import { HistoryIcon, PackageSearchIcon, SearchIcon, XIcon } from 'lucide-react';
+import {
+  EyeIcon,
+  EyeOffIcon,
+  HistoryIcon,
+  PackageSearchIcon,
+  SearchIcon,
+  XIcon,
+} from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { formatDateTime, formatSince } from '../../lib/format';
+import { formatSince } from '../../lib/format';
 import { CostHistoryDialog } from './cost-history-dialog';
 import { ImportDialog } from './import-dialog';
+import { OfferCost, OfferFields, OfferMarks, StockChip } from './offer-cells';
 import type { OfferSearch } from './supplier-search';
-import { LIST_PAGE_SIZE, offersQuery } from './suppliers.queries';
+import { LIST_PAGE_SIZE, offersQuery, useOfferIgnored } from './suppliers.queries';
 
-type FlagName = 'mapped' | 'inStock' | 'missing';
+type FlagName = 'mapped' | 'inStock' | 'missing' | 'supported' | 'ignored' | 'lowStock';
 
 const ALL = 'all';
 
 /**
- * "العروض" (S07 screens): the supplier's offers with their cost and its freshness, stock and
- * mapping; filters and search in the URL; offers selected across pages and imported into a game
- * (rule RT8); an offer's cost history. `manual` lists the manual offers with their products.
+ * "العروض" (S07 screens, S16 SF1): the supplier's offers with their cost and its freshness, the
+ * original price and discount, stock, fields, support and mapping; filters and search in the
+ * URL; offers selected across pages and imported into a game (rule RT8); an offer's cost history;
+ * ignore and unignore (SC6). `manual` lists the manual offers with their products.
  */
 export function OffersTab({
   supplier,
@@ -66,13 +74,26 @@ export function OffersTab({
   const [selected, setSelected] = useState<Map<string, SupplierOffer>>(new Map());
   const [importing, setImporting] = useState(false);
   const [history, setHistory] = useState<SupplierOffer | null>(null);
+  const ignore = useOfferIgnored();
+  const [failure, setFailure] = useState<string | null>(null);
   const manual = supplier.code === 'manual';
   const filtered = Object.keys(search).some((name) => name !== 'page');
   const page = search.page ?? 1;
   const pageCount = Math.max(1, Math.ceil((offers.data?.total ?? 0) / LIST_PAGE_SIZE));
 
   const set = (next: OfferSearch) => onSearch({ ...search, ...next, page: undefined });
-  const selectable = (offer: SupplierOffer) => !manual && !offer.mapped && !offer.missingSince;
+  const selectable = (offer: SupplierOffer) =>
+    !manual && !offer.mapped && !offer.missingSince && !offer.unsupportedReason && !offer.ignoredAt;
+
+  async function setIgnored(offer: SupplierOffer, ignored: boolean) {
+    setFailure(null);
+    try {
+      await ignore.mutateAsync({ id: offer.id, ignored });
+      if (ignored) toggle(offer, false);
+    } catch (error) {
+      setFailure(errorMessage(t, error));
+    }
+  }
   const toggle = (offer: SupplierOffer, on: boolean) =>
     setSelected((previous) => {
       const next = new Map(previous);
@@ -97,6 +118,7 @@ export function OffersTab({
           </span>
         </div>
       )}
+      {failure && <FormAlert>{failure}</FormAlert>}
       {offers.isPending && <Skeleton className="h-96 w-full" aria-hidden="true" />}
       {offers.isError && (
         <div className="flex flex-col items-start gap-3">
@@ -133,6 +155,7 @@ export function OffersTab({
                   <TableHead>{t('suppliers.offers.columns.kind')}</TableHead>
                   <TableHead>{t('suppliers.offers.columns.cost')}</TableHead>
                   <TableHead>{t('suppliers.offers.columns.stock')}</TableHead>
+                  {!manual && <TableHead>{t('suppliers.offers.columns.fields')}</TableHead>}
                   <TableHead>{t('suppliers.offers.columns.product')}</TableHead>
                   <TableHead>
                     <span className="sr-only">{t('suppliers.offers.columns.actions')}</span>
@@ -160,6 +183,16 @@ export function OffersTab({
                         <bdi dir="ltr" className="text-xs text-muted-foreground">
                           {offer.offerId}
                         </bdi>
+                        {offer.categoryPath.length > 0 && (
+                          <button
+                            type="button"
+                            className="text-start text-xs text-muted-foreground underline-offset-4 hover:underline"
+                            onClick={() => set({ categoryId: offer.categoryId ?? undefined })}
+                          >
+                            <bdi>{offer.categoryPath.join(' › ')}</bdi>
+                          </button>
+                        )}
+                        <OfferMarks offer={{ ...offer, missingSince: null }} />
                       </span>
                     </TableCell>
                     <TableCell>
@@ -203,12 +236,15 @@ export function OffersTab({
                             since: formatSince(offer.missingSince),
                           })}
                         </Badge>
-                      ) : offer.inStock ? (
-                        <Badge tone="success">{t('suppliers.offers.inStock')}</Badge>
                       ) : (
-                        <Badge tone="warning">{t('suppliers.offers.outOfStock')}</Badge>
+                        <StockChip level={offer.stockLevel} stock={offer.stock} />
                       )}
                     </TableCell>
+                    {!manual && (
+                      <TableCell>
+                        <OfferFields offer={offer} />
+                      </TableCell>
+                    )}
                     <TableCell>
                       {offer.mapped ? (
                         <Link
@@ -229,23 +265,32 @@ export function OffersTab({
                       )}
                     </TableCell>
                     <TableCell>
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={t('suppliers.offers.history', { name: offer.name })}
-                              onClick={() => setHistory(offer)}
-                            />
-                          }
-                        >
-                          <HistoryIcon />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {t('suppliers.offers.history', { name: offer.name })}
-                        </TooltipContent>
-                      </Tooltip>
+                      <span className="flex items-center gap-1">
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={t('suppliers.offers.history', { name: offer.name })}
+                                onClick={() => setHistory(offer)}
+                              />
+                            }
+                          >
+                            <HistoryIcon />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {t('suppliers.offers.history', { name: offer.name })}
+                          </TooltipContent>
+                        </Tooltip>
+                        {!manual && !offer.mapped && (
+                          <IgnoreButton
+                            offer={offer}
+                            disabled={ignore.isPending}
+                            onChange={(ignored) => setIgnored(offer, ignored)}
+                          />
+                        )}
+                      </span>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -277,39 +322,37 @@ export function OffersTab({
   );
 }
 
-/** The cost and its freshness (rule SY5), or the raw value when it is not a usable USD cost. */
-function OfferCost({ offer }: { offer: SupplierOffer }) {
+/** Rule SC6: an unmapped offer ignored (no longer counted new) or counted again. */
+export function IgnoreButton({
+  offer,
+  disabled,
+  onChange,
+}: {
+  offer: Pick<SupplierOffer, 'name' | 'ignoredAt'>;
+  disabled: boolean;
+  onChange: (ignored: boolean) => void;
+}) {
   const { t } = useTranslation();
-  if (offer.costUsdUnits === null) {
-    return (
-      <span className="flex flex-col gap-0.5">
-        <Badge tone="warning">{t('suppliers.offers.costUnknown')}</Badge>
-        {offer.costRaw && (
-          <bdi dir="ltr" className="text-xs text-muted-foreground">
-            {offer.costRaw}
-          </bdi>
-        )}
-      </span>
-    );
-  }
+  const label = offer.ignoredAt
+    ? t('suppliers.offers.unignore', { name: offer.name })
+    : t('suppliers.offers.ignore', { name: offer.name });
   return (
-    <span className="flex flex-col gap-0.5">
-      <bdi dir="ltr" className="font-medium tabular-nums">
-        {formatUsd(offer.costUsdUnits)}
-      </bdi>
-      {offer.costStale ? (
-        <Badge tone="warning">{t('suppliers.offers.costStale')}</Badge>
-      ) : (
-        offer.costConfirmedAt && (
-          <span
-            className="text-xs text-muted-foreground"
-            title={formatDateTime(offer.costConfirmedAt)}
-          >
-            {formatSince(offer.costConfirmedAt)}
-          </span>
-        )
-      )}
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={label}
+            disabled={disabled}
+            onClick={() => onChange(!offer.ignoredAt)}
+          />
+        }
+      >
+        {offer.ignoredAt ? <EyeIcon /> : <EyeOffIcon />}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -384,9 +427,26 @@ function Filters({
         {!manual && flag('mapped')}
         {flag('inStock')}
         {!manual && flag('missing')}
+        {!manual && flag('supported')}
+        {!manual && flag('ignored')}
+        {!manual && flag('lowStock')}
       </div>
       {Object.keys(search).some((name) => name !== 'page') && (
         <div className="flex flex-wrap items-center gap-2">
+          {search.categoryId && (
+            <Badge tone="outline" className="h-8 gap-2 ps-3 pe-1">
+              {t('suppliers.offers.categoryFilter')} <bdi dir="ltr">{search.categoryId}</bdi>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="size-6"
+                aria-label={t('suppliers.offers.clearCategory')}
+                onClick={() => onSearch({ categoryId: undefined })}
+              >
+                <XIcon />
+              </Button>
+            </Badge>
+          )}
           {search.group && (
             <Badge tone="outline" className="h-8 gap-2 ps-3 pe-1">
               {t('suppliers.offers.groupFilter')} <bdi>{search.group}</bdi>

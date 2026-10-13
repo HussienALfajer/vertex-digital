@@ -19,6 +19,7 @@ import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { GamePricing } from '../pricing/game-pricing';
+import { GameSupplierLinks } from '../suppliers/game-supplier-links';
 import { gameQuery, useArchiveGame } from './catalog.queries';
 import { StatusBadge } from './catalog-parts';
 import { GAME_TABS, type GameTab } from './catalog-search';
@@ -122,7 +123,10 @@ export function GamePage({
           <FieldsTab game={data} />
         </TabsContent>
         <TabsContent value="products">
-          <ProductsTab game={data} />
+          <div className="flex flex-col gap-6">
+            <GameSupplierLinks game={data} />
+            <ProductsTab game={data} />
+          </div>
         </TabsContent>
         <TabsContent value="pricing">
           <GamePricing game={data} />

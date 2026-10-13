@@ -308,6 +308,13 @@ export type UpdateInputField = z.input<typeof updateInputFieldSchema>;
 
 // Products --------------------------------------------------------------------------------------
 
+/** S16 rule SF2 (supplier offers): `unlimited` when the supplier reports no figure. */
+export const STOCK_LEVELS = ['ok', 'low', 'out', 'unlimited'] as const;
+
+export const stockLevelSchema = z.enum(STOCK_LEVELS).meta({ id: 'StockLevel' });
+
+export type StockLevel = z.infer<typeof stockLevelSchema>;
+
 export const productSchema = z
   .object({
     ...record,
@@ -326,6 +333,8 @@ export const productSchema = z
     priceSypUnits: z.int().nullable(),
     /** The supplier of the route the price follows now (rule P1); null with no usable route. */
     basisSupplierNameAr: z.string().nullable(),
+    /** S16 SF2: the stock level of the basis route's offer; null with no usable route. */
+    basisStockLevel: stockLevelSchema.nullable(),
     /** A price review holds the price (rule P2). */
     reviewOpen: z.boolean(),
     /** Delivery time (S08 rule T1): null with fewer than 5 delivered orders. */

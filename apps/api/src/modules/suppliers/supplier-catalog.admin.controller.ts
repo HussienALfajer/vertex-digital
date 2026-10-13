@@ -238,6 +238,19 @@ export class SupplierCatalogAdminController {
     );
   }
 
+  /** The supplier categories linked to a game (the game page: SC9, IM3). */
+  @Get('catalog/games/:id/supplier-categories')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: supplierCategoryNodeSchema })
+  @ApiOkResponse({
+    description: 'Nodes linked to the game itself',
+    standardSchema: supplierCategoryNodeSchema.array(),
+  })
+  gameCategories(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.catalog.gameCategories(id);
+  }
+
   /** IM3: the linked category's image, downloaded again, as the game's cover. */
   @Post('catalog/games/:id/cover/from-supplier')
   @AdminRoute()
