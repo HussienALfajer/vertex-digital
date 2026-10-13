@@ -9,9 +9,9 @@ Drafts of the four S14 pages, written from the project's rules for the owner to 
 | `refund` | سياسة الاسترداد | `/refund` | [refund.md](refund.md) |
 | `about` | من نحن | `/about` | [about.md](about.md) |
 
-## Before publishing
+## Publishing
 
-Every `«…»` is a fact only the owner can give (questions below). Replace each one, then paste the body into the page's editor, preview and publish. Publish `terms` and `privacy` together: the sign-up sentence (S14 TA1) and the accepted versions (TA2) start with the first publication. These files are the reviewed draft; the panel's version history is the record of what was published, and later edits are made there.
+The texts are complete: paste each body into its page's editor, preview and publish. Publish `terms` and `privacy` together: the sign-up sentence (S14 TA1) and the accepted versions (TA2) start with the first publication. These files are the reviewed draft; the panel's version history is the record of what was published, and later edits are made there.
 
 ## Sources
 
@@ -33,17 +33,17 @@ Every `«…»` is a fact only the owner can give (questions below). Replace eac
 | No analytics or third-party trackers; session cookie and local storage keys (cart, theme, dismissed announcement, install and push cards) | `apps/store/src` (checked 2026-10-13) |
 | Game account passwords never asked | Q20 (not sold in V1) |
 
-## Questions for the owner
+## Owner answers (2026-10-13)
 
-1. **Operator:** the legal or trade name shown as the operator, and whether it is a registered business (with a registration number to show) or a person.
-2. **Location:** the city (and address, if any) to show on "من نحن".
-3. **Vertex Media:** how VERTEX DIGITAL relates to Vertex Media, if the page should say so.
-4. **Contact:** besides tickets and the Telegram link, a support email, phone or WhatsApp to list?
-5. **Governing law and disputes:** which law applies (Syrian law?) and which courts or body settle disputes.
-6. **Minimum age** for an account (18, or younger with a guardian's consent).
-7. **Faulty delivered order:** how long after delivery a customer may report "delivered but not received" or a code that does not work, and the remedy when the supplier confirms it (wallet compensation, a replacement code, or either).
-8. **Rejected deposit whose money did arrive** (for example, a receipt rejected as unclear after the request for a clearer one): is the amount credited later after a ticket, or returned through Sham Cash?
-9. **Exceptional cash refunds** (ADR 0003): mention them on the refund page (and when they apply), or say nothing?
-10. **Dormant balance:** confirm that a wallet balance never expires (the texts do not mention expiry).
-11. **Third parties:** name the email provider, the error-monitoring service (Sentry) and the hosting country in the privacy policy, or keep the generic descriptions?
-12. **About page story:** a founding year or a short story to add, if any.
+1. **Operator:** Vertex Media.
+2. **Address** (shown on "من نحن"): Syria, Aleppo, Azaz, the Black Mall (المول الأسود), fourth floor, office 409.
+3. **Relation to Vertex Media:** nothing beyond naming it as the operator.
+4. **Contact:** tickets and the panel's Telegram link only, for now.
+5. **Governing law and disputes:** none stated, for now; the terms have no such section.
+6. **Minimum age:** none.
+7. **Faulty delivered order:** reported by a ticket within 7 days of delivery; when the supplier confirms the fault is not the customer's, the full price of the affected units is credited to the wallet as a compensation (S02, S08 D6).
+8. **Rejected deposit whose money arrived:** the customer opens a ticket with proof; once the money is confirmed, it is credited to the wallet (an S02 `manual_deposit` claiming the same reference), never returned in cash.
+9. **Exceptional cash refunds:** mentioned, as the management's discretion, recorded in the wallet history, never a right (ADR 0003).
+10. **Wallet balance:** never expires.
+11. **Third parties:** generic descriptions, no provider names or hosting country.
+12. **About page:** a professional story, with no founding year or figures.
