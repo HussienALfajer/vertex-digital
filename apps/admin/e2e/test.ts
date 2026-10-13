@@ -294,9 +294,34 @@ export class AdminApi {
     () => this.reauthenticationRequired,
   );
   /** S08: the orders, their decisions, code reveals and the policy. */
-  readonly orders = new OrdersMock(() => this.reauthenticationRequired);
+  readonly orders: OrdersMock = new OrdersMock(() => this.reauthenticationRequired, {
+    // S16: a purchase from the panel reads the catalog's packs and the customers' wallets.
+    product: (productId) => {
+      const product = this.catalog.productView(productId);
+      const game = this.catalog.games.find((item) => item.id === product?.gameId);
+      return product && game ? { product, game: { id: game.id, nameAr: game.nameAr } } : null;
+    },
+    customer: (customerId) => {
+      const row = this.customers.find(customerId);
+      if (!row) return null;
+      return {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        isTest: row.isTest,
+        emailVerified: row.emailVerified,
+        frozen: row.frozenAt !== null,
+        archived: row.archivedAt !== null,
+        balanceUnits: row.balanceUnits,
+      };
+    },
+    charge: (customerId, units) => {
+      const row = this.customers.find(customerId);
+      if (row) row.balanceUnits -= units;
+    },
+  });
   /** S12: the customers, their profiles and changes, the support tickets and settings. */
-  readonly customers = new CustomersMock(
+  readonly customers: CustomersMock = new CustomersMock(
     () => this.reauthenticationRequired,
     () => this.orders.orders,
     (entry) => {
@@ -925,6 +950,10 @@ export class AdminApi {
         request.headers()['idempotency-key'] ?? null,
       );
       if (answer && 'json' in answer) return json(answer.status, answer.json);
+    }
+    if (path === '/api/admin/player-checks' && request.method() === 'POST') {
+      const answer = this.orders.playerCheck();
+      if ('json' in answer) return json(answer.status, answer.json);
     }
     if (path.startsWith('/api/admin/orders')) {
       this.orders.idempotencyKey = request.headers()['idempotency-key'] ?? null;

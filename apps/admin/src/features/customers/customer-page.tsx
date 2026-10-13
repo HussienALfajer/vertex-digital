@@ -27,6 +27,7 @@ import {
   CircleAlertIcon,
   LifeBuoyIcon,
   LogOutIcon,
+  ShoppingCartIcon,
   SlidersHorizontalIcon,
   SnowflakeIcon,
   SunIcon,
@@ -265,6 +266,16 @@ function Actions({
           <LogOutIcon className="rtl:-scale-x-100" />
           {t('customers.actions.revoke')}
         </DropdownMenuItem>
+        {status === 'active' && (
+          <DropdownMenuItem
+            render={
+              <Link to="/orders/new" search={{ purpose: 'on_behalf', customerId: customer.id }} />
+            }
+          >
+            <ShoppingCartIcon />
+            {t('customers.actions.buy')}
+          </DropdownMenuItem>
+        )}
         {status !== 'archived' && (
           <DropdownMenuItem render={<Link to="/support/new" search={{ customer: customer.id }} />}>
             <LifeBuoyIcon />

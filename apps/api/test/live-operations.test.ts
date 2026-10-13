@@ -535,7 +535,7 @@ describe('reroute (rules RR1–RR5)', () => {
     });
     expect(order.attempts[1]).toMatchObject({ id: attemptId, status: 'failed' });
     expect(order.decisions).toMatchObject({ fulfil: true, reroute: true, refund: true });
-    expect(columnOf(await board(), orderId)).toBe('manual');
+    expect(columnOf(await board(`?gameId=${ids.gameId}`), orderId)).toBe('manual');
     expect((await auditOf(test.db, orderId)).map((entry) => entry.action)).toContain(
       'order.rerouted',
     );

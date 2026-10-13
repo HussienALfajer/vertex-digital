@@ -162,6 +162,8 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
         status: manual ? 'pending' : 'sending',
         candidates,
         sentAt: now,
+        // S16 rule RS1: the call follows this commit, so any later send is a re-send.
+        ...(!manual && { sendStartedAt: now }),
       })
       .returning();
     const moved = await transitionOrder(tx, order, 'sent_to_supplier', {

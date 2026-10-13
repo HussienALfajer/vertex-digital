@@ -54,7 +54,7 @@ export async function findSavedPlayer(
 export async function touchSavedPlayer(
   tx: Transaction,
   order: {
-    customerId: string;
+    customerId: string | null;
     gameId: string;
     fields: Record<string, string>;
     playerCheck: PlayerCheckState;
@@ -62,6 +62,9 @@ export async function touchSavedPlayer(
   },
   save: { label: string } | null,
 ): Promise<SavedPlayerRow | null> {
+  // A walk-in order (S16 AP1) has no customer to save ids for.
+  const customerId = order.customerId;
+  if (customerId === null) return null;
   const named = order.playerCheck === 'valid' && order.playerName !== null;
   const name = named ? { playerName: order.playerName, nameCheckedAt: sql`now()` } : {};
   const hash = savedPlayerHash(order.gameId, order.fields);
@@ -70,7 +73,7 @@ export async function touchSavedPlayer(
     .set({ lastUsedAt: sql`now()`, ...name })
     .where(
       and(
-        eq(savedPlayers.customerId, order.customerId),
+        eq(savedPlayers.customerId, customerId),
         eq(savedPlayers.gameId, order.gameId),
         eq(savedPlayers.fieldsHash, hash),
       ),
@@ -86,7 +89,7 @@ export async function touchSavedPlayer(
       ),
     })
     .from(savedPlayers)
-    .where(eq(savedPlayers.customerId, order.customerId));
+    .where(eq(savedPlayers.customerId, customerId));
   if ((counts?.all ?? 0) >= SAVED_PLAYERS_MAX || (counts?.game ?? 0) >= SAVED_PLAYERS_PER_GAME) {
     return null;
   }
@@ -94,7 +97,7 @@ export async function touchSavedPlayer(
     .insert(savedPlayers)
     .values({
       id: newId(),
-      customerId: order.customerId,
+      customerId,
       gameId: order.gameId,
       label: save.label,
       fields: order.fields,
@@ -112,15 +115,17 @@ export async function touchSavedPlayer(
  */
 export async function markSavedPlayers(
   tx: Transaction,
-  order: { customerId: string; gameId: string; fields: Record<string, string> },
+  order: { customerId: string | null; gameId: string; fields: Record<string, string> },
   rejected: boolean,
 ): Promise<void> {
+  const customerId = order.customerId;
+  if (customerId === null) return;
   await tx
     .update(savedPlayers)
     .set({ rejectedAt: rejected ? sql`now()` : null })
     .where(
       and(
-        eq(savedPlayers.customerId, order.customerId),
+        eq(savedPlayers.customerId, customerId),
         eq(savedPlayers.gameId, order.gameId),
         eq(savedPlayers.fieldsHash, savedPlayerHash(order.gameId, order.fields)),
       ),

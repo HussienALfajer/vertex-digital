@@ -22,6 +22,7 @@ const card = (fields: Partial<LiveOrderCard> = {}): LiveOrderCard => ({
   totalUsdUnits: 990_000,
   isTest: false,
   customerEmail: 'sara@example.com',
+  purpose: null,
   attempt: null,
   paidAt: PAID,
   sentAt: PAID,

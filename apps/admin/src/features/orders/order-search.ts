@@ -1,7 +1,13 @@
 import {
+  ADMIN_ORDER_PURPOSES,
   ADMIN_ORDER_TABS,
+  type AdminOrderPurpose,
   type AdminOrderTab,
+  ORDER_PAYERS,
+  ORDER_PLACERS,
   ORDER_STATUSES,
+  type OrderPayer,
+  type OrderPlacer,
   type OrderStatus,
   SUPPLIER_CODES,
   type SupplierCode,
@@ -25,6 +31,10 @@ export interface OrderSearch {
   /** Calendar dates (`YYYY-MM-DD`), the day included. */
   from?: string;
   to?: string;
+  /** S16 AP14: who placed and paid, and the admin's mode. */
+  placedBy?: OrderPlacer;
+  payer?: OrderPayer;
+  purpose?: AdminOrderPurpose;
   /** Absent for the first page. */
   page?: number;
 }
@@ -51,6 +61,15 @@ export function parseOrderSearch(search: Record<string, unknown>): OrderSearch {
     parsed.supplier = search.supplier as SupplierCode;
   }
   if (search.test === 'true' || search.test === 'false') parsed.test = search.test;
+  if ((ORDER_PLACERS as readonly unknown[]).includes(search.placedBy)) {
+    parsed.placedBy = search.placedBy as OrderPlacer;
+  }
+  if ((ORDER_PAYERS as readonly unknown[]).includes(search.payer)) {
+    parsed.payer = search.payer as OrderPayer;
+  }
+  if ((ADMIN_ORDER_PURPOSES as readonly unknown[]).includes(search.purpose)) {
+    parsed.purpose = search.purpose as AdminOrderPurpose;
+  }
   for (const key of ['from', 'to'] as const) {
     const value = search[key];
     if (typeof value === 'string' && DATE.test(value) && !Number.isNaN(Date.parse(value))) {
@@ -85,6 +104,9 @@ export function listQuery(search: OrderSearch) {
     ...(search.productId && { productId: search.productId }),
     ...(search.supplier && { supplier: search.supplier }),
     ...(search.test && { test: search.test }),
+    ...(search.placedBy && { placedBy: search.placedBy }),
+    ...(search.payer && { payer: search.payer }),
+    ...(search.purpose && { purpose: search.purpose }),
     ...(search.from && { from: dayStart(search.from) }),
     ...(search.to && { to: dayEnd(search.to) }),
     page: search.page ?? 1,

@@ -12,6 +12,7 @@ import {
   rejectDepositSchema,
 } from './deposits.js';
 import { currencySchema } from './money.js';
+import { adminOrderPurposeSchema } from './orders.js';
 import {
   RECONCILIATION_ALERT_MAX_LINES,
   reconciliationCheckSchema,
@@ -94,6 +95,8 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'ticket_reply',
   /** S13 NT1: a reconciliation run failed or found a new problem (one per run). */
   'reconciliation_alert',
+  /** S16 AP13: every order placed from the panel, so a stolen session shows at once. */
+  'admin_order_placed',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -289,6 +292,15 @@ export const TELEGRAM_MESSAGE_PARAMS = {
       })
       .nullable()
       .default(null),
+    /** S16: owner-funded admin orders paid today (net of refunds) against the owner cap. */
+    ownerOrders: z
+      .object({
+        count: z.int().nonnegative(),
+        usedUsdUnits: z.int(),
+        capUsdUnits: z.int().nonnegative(),
+      })
+      .nullable()
+      .default(null),
   }),
   bot_reply: telegramBotReplySchema,
   /** To the previous chat when another chat was linked (rule TG3). */
@@ -427,6 +439,20 @@ export const TELEGRAM_MESSAGE_PARAMS = {
       .max(RECONCILIATION_ALERT_MAX_LINES),
     moreLines: z.int().nonnegative(),
     open: z.int().nonnegative(),
+  }),
+  /**
+   * S16 AP13: the order number, mode, pack, quantity and total; for an owner-funded order, today's
+   * owner total against the cap. Never field values or codes.
+   */
+  admin_order_placed: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    purpose: adminOrderPurposeSchema,
+    gameNameAr: z.string(),
+    productNameAr: z.string(),
+    quantity: z.int().positive(),
+    totalUsdUnits: z.int().positive(),
+    owner: z.object({ usedUsdUnits: z.int(), capUsdUnits: z.int().nonnegative() }).nullable(),
   }),
 } as const satisfies Record<TelegramMessageKind, z.ZodType>;
 

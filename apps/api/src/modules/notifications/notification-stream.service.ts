@@ -229,14 +229,17 @@ export class NotificationStreamService implements OnApplicationShutdown {
 
   /**
    * Rule LT2: `<customer id>:<order id>:<status>` from the `orders_notify` trigger, to the
-   * customer's streams with the stage; S11 rule LR4: to the admin's with the status only.
+   * customer's streams with the stage; S11 rule LR4: to the admin's with the status only. S16: a
+   * walk-in order has no customer (an empty id) and reaches the admin's streams only.
    */
   private deliverOrder(payload: string): void {
     const [customerId, orderId, status] = payload.split(':');
     const parsed = orderStatusSchema.safeParse(status);
-    if (!customerId || customerId === ADMIN_KEY || !orderId || !parsed.success) return;
-    const item = { orderId, status: parsed.data, stage: orderCustomerStage(parsed.data) };
-    for (const stream of this.streams.get(customerId) ?? []) send(stream.response, 'order', item);
+    if (customerId === undefined || customerId === ADMIN_KEY || !orderId || !parsed.success) return;
+    if (customerId) {
+      const item = { orderId, status: parsed.data, stage: orderCustomerStage(parsed.data) };
+      for (const stream of this.streams.get(customerId) ?? []) send(stream.response, 'order', item);
+    }
     const event: AdminStreamEvent = { orderId, status: parsed.data };
     for (const stream of this.streams.get(ADMIN_KEY) ?? []) send(stream.response, 'order', event);
   }

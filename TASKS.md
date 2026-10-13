@@ -1,24 +1,27 @@
-# TASKS — S15 PWA and web push
+# TASKS — S16 Supplier catalog and admin orders
 
-Spec: `docs/specs/S15-pwa-and-web-push.md` (F24; ADRs 0002, 0007, 0008, 0009, 0011, 0012, 0014, 0015, 0029). Two PRs; each leaves `main` green. The cloud session pushes to its designated branch (`ccr-43564ce9-yq0vn9`) instead of `feat/s15-*`.
+Spec: `docs/specs/S16-supplier-catalog-and-admin-orders.md` (F08, F09, F11 amended; ADRs 0003, 0004, 0005, 0011, 0016, 0020, 0021, 0022, 0023, 0025, 0026, 0027, 0030). Four PRs as the spec's implementation plan; PR4 waits for Q19. Each leaves `main` green.
 
-## PR 1 — Contracts, db, api, worker
-- [x] Contracts `push.ts` (new, re-exported): `PUSH_NOTIFICATION_EVENTS`, `PUSH_SERVICE_HOSTS` and the endpoint check (PS2), `pushSubscriptionSchema` (key lengths), `pushConfigSchema`, `removePushSubscriptionSchema`; preferences `push` and the `{ event, email } | { event, push }` union; job `push.send`; error codes `PUSH_NOT_CONFIGURED`, `PUSH_ENDPOINT_REFUSED` with Arabic text; audit action `customer.push_preference_changed` with its label; `adminCustomerSchema.counts.pushDevices`; unit tests
-- [x] Db (`/db-migration`): `push_subscriptions` (session FK on delete cascade, unique endpoint, indexes, grants), `notification_preferences.push`; conventions test entry; `notifyCustomer` queues `push.send` (PD1) with tests; the session cascade, the 10-device cap and the endpoint upsert
-- [x] Api (the rate counter moved to `packages/db/src/rate-limits.ts` so `notifications` can count below `auth`): `GET /api/push/config` (public, rate-limited, cache header), `PUT`/`DELETE /api/push/subscription` (20 an hour per customer, PS1–PS3, PS8), preferences `push` with audit (PP1), admin profile `pushDevices`; `VAPID_PUBLIC_KEY` env; `test/push.test.ts`
-- [x] Worker: `push.send` job (`jobs/push/`: PD2–PD7, `web-push`, host re-check, retries with only failed ids, Sentry once), `push-texts.ts` (PT1–PT3), `PUSH_TRANSPORT=log`, VAPID env (both or none); tests with the log transport and a mock push service
-- [x] `pnpm db:setup-local` generates the VAPID pair; `.env.example` fake values and `PUSH_TRANSPORT`/`PUSH_LOG_DIR`; no new nginx zone (the general `/api/` zone covers `/api/push/`, the API limits per customer)
-- [x] Bridge: build, OpenAPI export, admin client; mocks follow the changed shapes (preferences, admin customer counts)
-- [x] Wiring checklist, docs (`docs/architecture.md`, folder `CLAUDE.md` files, commands table, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, test, build, e2e, drift recorded on aa47df82cc67), reviewer (two blocking findings, fixed: keys off the curve, the stale rate-counter path), owner acceptance (2026-10-11), PR with auto-merge
+## PR 1 — Re-send safety net and admin purchases (RS1–RS4, AP1–AP15, AM1–AM4) · `feat/s16-admin-orders`
+- [x] Contracts: `ORDER_PAYERS`, `ORDER_PLACERS`, `ADMIN_ORDER_PURPOSES`, `adminOrderShape`; `owner_drawings` account kind and `heldUnits` label; `ORDER_POLICY.ownerDailyCapUsdUnits`, `ownerCapRemaining`; `isResendRefusal`; `PlaceOrderRequest.resend`; schemas `createAdminOrderSchema`, `adminPurchaseContextSchema`, `adminPlayerCheckSchema`, admin order list filters and row fields, customer order `placedByStore`/`customerNote`; error `OWNER_DAILY_CAP_EXCEEDED`; notification `order_placed_for_you`; Telegram kind `admin_order_placed`; audit details; reports and reconciliation shapes; unit tests at 100%
+- [x] Db (`/db-migration`): `orders` columns, checks, partial unique and indexes, frozen-column trigger; `order_policy.owner_daily_cap_usd_units` ($100 on the current row); `player_checks` nullable customer + `admin_id` with exactly-one check; `owner_drawings:USD` account; write paths: admin purchase (AM1, AM2, AP3–AP7 under the `owner_drawings` lock), owner-funded refund (AM3), RS1 in the outcome path; concurrency tests (cap edge, on_behalf vs customer purchase, refund once)
+- [x] Api: `POST /api/admin/orders` (re-auth, `Idempotency-Key`, 30/10 min), `GET /api/admin/orders/purchase-context`, `POST /api/admin/player-checks`, list filters, policy cap (re-auth), customer `GET /api/orders` view (chip, note, no price for gifts; walk-in never), notification and Telegram notice in the transaction, reports R1/R2/R6 and dashboard, reconciliation C4/C6/C7; `test/admin-orders.test.ts`
+- [x] Worker: RS1 on F3 and F6 re-sends (`resend_refused`, `supplier_code` kept, call logged `refused`), refund of owner-funded orders to owner drawings, owner-order refund notification text, `admin_order_placed` Telegram text, daily summary owner line; fake adapter and CLI `--order <offer> resend-refused`; tests
+- [x] Bridge: build, OpenAPI export, admin client; mocks follow the changed shapes
+- [x] Admin: `/orders/new` (four modes, customer picker, pack, fields with saved IDs and player check, reason and note, summary, re-auth), entry buttons (`/orders`, customer profile, game page packs), `/orders` chips and filters, order page placer/mode/reason/payer/note, walk-in reveal hint, RS3 marker, `/orders/policy` cap, reports owner line and R6 drawings; i18n
+- [x] Store: "طلباتي" chips and note, gift/compensation without price, refund text without amount; i18n
+- [x] E2E: `/orders/new` each mode (admin), store order placed by the store and gift (phone, dark and light); RTL screenshots
+- [x] Docs: `docs/suppliers/wdgzone.md` and ROADMAP WDGZone line (RS4), `docs/open-questions.md` Q18 resolved, architecture, commands table (`--order … resend-refused`), wiring patterns
+- [x] Reviewer finding 1: a rerouted attempt's first send goes through `orders.poll` as `resend`, so RS1 keeps its refusal unknown. Mark the first send durably (e.g. `fulfilment_attempts.send_started_at`, set by `fulfil.job` in its routing transaction and by the poll with `UPDATE … WHERE status = 'sending'` before the call); `resend` = already marked or `unknown`. Worker test: a reroute refused on its first send fails the attempt
+- [x] Reviewer finding 2: `orders_notify` (migration 0035) builds a NULL payload for walk-in orders, so the admin stream never gets them. Hand-written migration 0055 (0054 is the generated `send_started_at` column) with `coalesce(NEW.customer_id::text, '')`; `deliverOrder` in `notification-stream.service.ts` fans out to the admin streams with an empty customer id; test with a walk-in order
+- [x] Owner acceptance run (2026-10-13, steps 1–7 in the browser); found and fixed: `/orders/new` hid the game's fields on code packs (S08 O5, E2E added); the store's order page told a failed gift its price went back to the wallet (AM3, unit test); the reports' R6 tab drew R1's data while loading and crashed (E2E added)
+- [x] Checks again on the final tree, reviewer on the acceptance fixes, PR with auto-merge
 
-## PR 2 — Store PWA and push UI, admin count, E2E
-- [x] Brand: maskable 512 icon and monochrome badge in `brand/logo/png/`
-- [x] Store: `manifest.ts` (PW1), layout meta (PW2), `/sw.js` route (SW1, SW3, SW6, SW7) with the build id, inline registration (SW2), `/offline` (SW5)
-- [x] Store: install item in the account menu and footer, iOS steps sheet (IN1–IN2)
-- [x] Store: push client (`features/push/`): config read, subscribe, refresh and key change (PS6, PS7), sign-out unsubscribe (PS5); permission card on order and deposit pages (PC1–PC3, `next/dynamic`); device switch on `/account` and `/notifications` (PC4); preferences "الهاتف" column (PP1–PP2); i18n keys
-- [x] Store unit tests (PC1 conditions, SW7 URL check, PS6/PS7 refresh rule)
-- [x] Admin customer profile push devices line; i18n
-- [x] E2E: manifest and `/sw.js` headers, offline page, card flows (granted, denied, iOS), preferences push column and switch, first-load budgets, admin count; RTL screenshots (store phone and desktop, dark and light; admin light and dark)
-- [x] Wiring checklist, docs (`docs/ROADMAP.md` S15 done, `wiring.md` patterns, spec "Settled in implementation")
-- [x] Checks (lint, typecheck, test, build, e2e recorded on 3dd1d841f082), reviewer (two blocking findings, fixed: the same-tab rebind, the light screenshots), owner acceptance (2026-10-11), PR with auto-merge
+## PR 2 — Supplier catalog, back end (SC1–SC14, IM1–IM3, SF1–SF6)
+- [ ] Planned when PR 1 is merged
+
+## PR 3 — Supplier catalog, panel
+- [ ] Planned when PR 2 is merged
+
+## PR 4 — Two fields and select fields (MF1), only after Q19
+- [ ] Waits for WDG's answer

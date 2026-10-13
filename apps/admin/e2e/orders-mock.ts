@@ -3,6 +3,9 @@ import {
   type AdminOrder,
   type AdminOrderSummary,
   type AdminOrderTab,
+  type AdminPurchaseContext,
+  adminOrderShape,
+  createAdminOrderSchema,
   fulfilIsLoss,
   fulfilOrderSchema,
   LIVE_COLUMNS,
@@ -13,6 +16,8 @@ import {
   type OrderPolicy,
   orderDecisions,
   orderPolicySchema,
+  orderTotal,
+  type Product,
   type RerouteOptions,
   refundOrderSchema,
   rerouteOrderSchema,
@@ -31,6 +36,29 @@ import type { Answer } from './catalog-mock';
  */
 
 type Body = Record<string, unknown> | null;
+
+/** S16: what a purchase from the panel reads of the other mocks. */
+export interface PurchaseShop {
+  product(productId: string): { product: Product; game: { id: string; nameAr: string } } | null;
+  customer(customerId: string): {
+    id: string;
+    name: string;
+    email: string;
+    isTest: boolean;
+    emailVerified: boolean;
+    frozen: boolean;
+    archived: boolean;
+    balanceUnits: number;
+  } | null;
+  /** Takes the total from the customer's wallet (`on_behalf`). */
+  charge(customerId: string, units: number): void;
+}
+
+const NO_SHOP: PurchaseShop = {
+  product: () => null,
+  customer: () => null,
+  charge: () => {},
+};
 
 const error = (status: number, code: string, details?: unknown): Answer => ({
   status,
@@ -137,6 +165,11 @@ function order(n: keyof typeof ORDER_IDS, number: string, fields: Partial<AdminO
     number,
     status: 'paid',
     customer,
+    placedBy: 'customer',
+    payer: 'customer',
+    purpose: null,
+    adminReason: null,
+    customerNote: null,
     product: { id: id(70), nameAr: '60 UC', kind: 'direct' },
     game: pubg,
     fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب', value: '5123456789' }],
@@ -305,8 +338,9 @@ function card(row: AdminOrder): LiveOrderCard {
     product: { id: row.product.id, nameAr: row.product.nameAr },
     quantity: row.quantity,
     totalUsdUnits: row.totalUsdUnits,
-    isTest: row.customer.isTest,
-    customerEmail: row.customer.email,
+    isTest: row.customer?.isTest ?? false,
+    customerEmail: row.customer?.email ?? null,
+    purpose: row.purpose,
     attempt: latest
       ? {
           supplierCode: latest.supplierCode,
@@ -337,7 +371,7 @@ function routeOptions(row: AdminOrder): RerouteOptions {
       );
       const skipReason = tried
         ? 'already_tried'
-        : row.customer.isTest && route.code === 'wdgzone'
+        : row.customer?.isTest && route.code === 'wdgzone'
           ? 'test_customer'
           : null;
       return {
@@ -367,6 +401,9 @@ function summary(row: AdminOrder): AdminOrderSummary {
     number: row.number,
     status: row.status,
     customer: row.customer,
+    placedBy: row.placedBy,
+    payer: row.payer,
+    purpose: row.purpose,
     product: { id: row.product.id, nameAr: row.product.nameAr },
     game: row.game,
     quantity: row.quantity,
@@ -436,7 +473,7 @@ export class OrdersMock {
     const test = url.searchParams.get('test') ?? 'all';
     const rows = this.orders
       .filter((row) =>
-        test === 'hide' ? !row.customer.isTest : test === 'only' ? row.customer.isTest : true,
+        test === 'hide' ? !row.customer?.isTest : test === 'only' ? !!row.customer?.isTest : true,
       )
       .filter((row) => !gameId || row.game.id === gameId)
       .filter((row) => !supplier || card(row).attempt?.supplierCode === supplier);
@@ -476,7 +513,116 @@ export class OrdersMock {
     };
   }
 
-  constructor(private readonly reauthenticationRequired: () => boolean) {}
+  /** S16: owner-funded totals paid today, for the owner cap (AP7). */
+  ownerUsedToday = 0;
+  /** S16: what the next admin player check answers (AP8). */
+  nextPlayerCheck: { result: 'valid'; playerName: string } | { result: 'invalid' } = {
+    result: 'valid',
+    playerName: 'Player 6789',
+  };
+
+  constructor(
+    private readonly reauthenticationRequired: () => boolean,
+    private readonly shop: PurchaseShop = NO_SHOP,
+  ) {}
+
+  /** S16 rules AP4, AP7: the dialog's context. */
+  private purchaseContext(customerId: string | null): Answer {
+    const owner = {
+      capUsdUnits: this.policy.ownerDailyCapUsdUnits,
+      usedTodayUsdUnits: this.ownerUsedToday,
+      remainingUsdUnits: Math.max(0, this.policy.ownerDailyCapUsdUnits - this.ownerUsedToday),
+    };
+    if (!customerId) return { status: 200, json: { customer: null, owner } };
+    const found = this.shop.customer(customerId);
+    if (!found || found.archived) return error(404, 'NOT_FOUND');
+    const context: AdminPurchaseContext = {
+      customer: {
+        id: found.id,
+        name: found.name,
+        email: found.email,
+        isTest: found.isTest,
+        emailVerified: found.emailVerified,
+        frozen: found.frozen,
+        balanceUsdUnits: found.balanceUnits,
+        purchaseCapLeftUsdUnits: null,
+        savedPlayers: [],
+      },
+      owner,
+    };
+    return { status: 200, json: context };
+  }
+
+  /** S16 rules AP2–AP9 as the write path decides them, for the mock's catalog and customers. */
+  private purchase(body: Body): Answer {
+    if (this.reauthenticationRequired()) return error(403, 'REAUTHENTICATION_REQUIRED');
+    const idempotencyKey = this.idempotencyKey;
+    this.idempotencyKey = null;
+    if (!idempotencyKey) return error(400, 'VALIDATION_FAILED');
+    if (this.keys.has(idempotencyKey)) {
+      return { status: 200, json: this.find(this.keys.get(idempotencyKey) as string) };
+    }
+    const parsed = createAdminOrderSchema.safeParse(body);
+    if (!parsed.success) return error(400, 'VALIDATION_FAILED');
+    const input = parsed.data;
+    const shape = adminOrderShape(input.purpose);
+    const found = this.shop.product(input.productId);
+    if (!found) return error(404, 'NOT_FOUND');
+    const { product, game } = found;
+    const buyer = input.customerId ? this.shop.customer(input.customerId) : null;
+    if (input.customerId && (!buyer || buyer.archived)) return error(404, 'NOT_FOUND');
+    if (buyer?.frozen) return error(403, 'ACCOUNT_FROZEN');
+    const buyable =
+      product.availability === 'available' ||
+      (product.availability === 'paused' && shape.payer === 'owner');
+    if (!buyable || product.priceUsdUnits === null) {
+      return error(409, 'PRODUCT_UNAVAILABLE', { availability: product.availability });
+    }
+    if (product.priceUsdUnits !== input.expectedUnitPriceUsdUnits) {
+      return error(409, 'PRICE_CHANGED', { unitPriceUsdUnits: product.priceUsdUnits });
+    }
+    const total = orderTotal(product.priceUsdUnits, input.quantity);
+    if (shape.payer === 'owner') {
+      const left = Math.max(0, this.policy.ownerDailyCapUsdUnits - this.ownerUsedToday);
+      if (total > left) return error(409, 'OWNER_DAILY_CAP_EXCEEDED', { remainingUsdUnits: left });
+      this.ownerUsedToday += total;
+    } else if (buyer) {
+      if (buyer.balanceUnits < total) return error(409, 'INSUFFICIENT_BALANCE');
+      this.shop.charge(buyer.id, total);
+    }
+    const n = 900 + this.keys.size;
+    const now = new Date().toISOString();
+    const created = withDecisions({
+      ...order('fresh', `VO-ADM${String(this.keys.size + 2).padStart(3, '2')}`, {}),
+      id: id(n),
+      customer: buyer
+        ? { id: buyer.id, name: buyer.name, email: buyer.email, isTest: buyer.isTest, marks }
+        : null,
+      placedBy: 'admin',
+      payer: shape.payer,
+      purpose: input.purpose,
+      adminReason: input.reason,
+      customerNote: input.customerNote ?? null,
+      product: { id: product.id, nameAr: product.nameAr, kind: product.kind },
+      game,
+      fields: Object.entries(input.fields).map(([key, value]) => ({ key, labelAr: key, value })),
+      quantity: input.quantity,
+      unitPriceUsdUnits: product.priceUsdUnits,
+      totalUsdUnits: total,
+      paidAt: now,
+      createdAt: now,
+      events: [],
+      attempts: [],
+    });
+    this.orders = [created, ...this.orders];
+    this.keys.set(idempotencyKey, created.id);
+    return { status: 201, json: created };
+  }
+
+  /** S16 rule AP8: the admin's player check. */
+  playerCheck(): Answer {
+    return { status: 200, json: this.nextPlayerCheck };
+  }
 
   private find(orderId: string) {
     return this.orders.find((row) => row.id === orderId);
@@ -518,6 +664,9 @@ export class OrdersMock {
       const status = url.searchParams.get('status');
       const productId = url.searchParams.get('productId');
       const customerId = url.searchParams.get('customerId');
+      const placedBy = url.searchParams.get('placedBy');
+      const payer = url.searchParams.get('payer');
+      const purpose = url.searchParams.get('purpose');
       const page = Number(url.searchParams.get('page') ?? 1);
       const pageSize = Number(url.searchParams.get('pageSize') ?? 50);
       const items = this.orders
@@ -533,13 +682,16 @@ export class OrdersMock {
           (row) =>
             !q ||
             row.number.toLowerCase().includes(q.replace(/^vo-?/, '')) ||
-            row.customer.email.includes(q) ||
+            !!row.customer?.email.includes(q) ||
             row.checkoutId === q,
         )
         .filter((row) => !supplier || row.supplierCode === supplier)
         .filter((row) => !status || row.status === status)
         .filter((row) => !productId || row.product.id === productId)
-        .filter((row) => !customerId || row.customer.id === customerId);
+        .filter((row) => !customerId || row.customer?.id === customerId)
+        .filter((row) => !placedBy || row.placedBy === placedBy)
+        .filter((row) => !payer || row.payer === payer)
+        .filter((row) => !purpose || row.purpose === purpose);
       return {
         status: 200,
         json: {
@@ -552,6 +704,10 @@ export class OrdersMock {
     }
 
     if (key === 'GET /api/admin/orders/live') return { status: 200, json: this.board(url) };
+    if (key === 'GET /api/admin/orders/purchase-context') {
+      return this.purchaseContext(url.searchParams.get('customerId'));
+    }
+    if (key === 'POST /api/admin/orders') return this.purchase(body);
 
     const one = path.match(/^\/api\/admin\/orders\/([^/]+)$/);
     if (one && method === 'GET') {

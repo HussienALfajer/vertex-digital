@@ -38,7 +38,8 @@ export interface OrderFigures {
   conflicts: { count: number; newestAt: Date | null; orders: { id: string; number: string }[] };
 }
 
-const real = eq(orders.isTest, false);
+/** Real customers' orders paid by them (S16 AP14: owner-funded orders stay out of sales). */
+const real = and(eq(orders.isTest, false), eq(orders.payer, 'customer'));
 const finishedIn = (from: Date, to: Date) =>
   and(real, gte(orders.finishedAt, from), lt(orders.finishedAt, to));
 

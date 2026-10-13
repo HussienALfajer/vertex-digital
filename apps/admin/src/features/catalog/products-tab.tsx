@@ -15,7 +15,14 @@ import {
   TabsList,
   TabsTrigger,
 } from '@vertex-digital/ui';
-import { ArrowDownIcon, ArrowUpIcon, PackageIcon, PlusIcon, RouteIcon } from 'lucide-react';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  PackageIcon,
+  PlusIcon,
+  RouteIcon,
+  ShoppingCartIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
@@ -196,6 +203,20 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                         <Button variant="outline" size="sm" onClick={() => setRouting(product.id)}>
                           <RouteIcon />
                           {t('catalog.products.routes')}
+                        </Button>
+                        {/* S16: a purchase from the panel, this pack preset. */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          render={
+                            <Link
+                              to="/orders/new"
+                              search={{ gameId: product.gameId, productId: product.id }}
+                            />
+                          }
+                        >
+                          <ShoppingCartIcon />
+                          {t('catalog.products.buy')}
                         </Button>
                         <Button
                           variant="ghost"

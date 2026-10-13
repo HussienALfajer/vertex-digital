@@ -195,15 +195,18 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
           },
           dedupeKey: `review:${order.id}:${changed.reviewSince?.toISOString()}`,
         });
-        await notifyCustomer(tx, jobs, {
-          customerId: order.customerId,
-          event: 'order_delayed',
-          params: {
-            orderId: order.id,
-            orderNumber: order.number,
-            productNameAr: await productName(tx, order.productId),
-          },
-        });
+        // S16 AP12: a walk-in order tells no one.
+        if (order.customerId !== null) {
+          await notifyCustomer(tx, jobs, {
+            customerId: order.customerId,
+            event: 'order_delayed',
+            params: {
+              orderId: order.id,
+              orderNumber: order.number,
+              productNameAr: await productName(tx, order.productId),
+            },
+          });
+        }
         return true;
       });
       if (done) held.push(row.orderId);

@@ -259,6 +259,17 @@ describe('fake supplier', () => {
     ).toMatchObject({ status: 'delivered', quantity: 1 });
     expect(fakeOrderScriptSchema.safeParse('partial:0').success).toBe(false);
     expect(fakeOrderScriptSchema.safeParse('slow:5').success).toBe(true);
+    // S16 `resend-refused`: bought, answered unknown; the re-send is refused; a poll finds it.
+    const refusing = scripted('resend-refused');
+    const bought = order('51234567');
+    expect(await refusing.placeOrder(bought)).toMatchObject({ status: 'unknown' });
+    expect(await refusing.placeOrder({ ...bought, resend: true })).toMatchObject({
+      status: 'failed_definitive',
+      supplierCode: 'INSUFFICIENT_BALANCE',
+    });
+    expect(await refusing.getOrder(bought.idempotencyKey)).toMatchObject({
+      status: 'delivered',
+    });
   });
 
   it('takes a code order without a player, and refuses a top-up without one', async () => {

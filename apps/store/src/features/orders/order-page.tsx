@@ -137,6 +137,20 @@ export function OrderPage() {
           </div>
           <Badge tone={STAGE_TONES[order.stage]}>{stageText(order.stage)}</Badge>
         </div>
+        {/* S16 AP11: an order the store placed for the customer, with the store's note. */}
+        {order.placedByStore && (
+          <div className="flex flex-col gap-2 rounded-lg bg-muted p-3">
+            <Badge tone="gold" className="self-start">
+              {t(`orders.placedByStore.${order.placedByStore}`)}
+            </Badge>
+            {order.customerNote && (
+              <p className="text-sm">
+                {t('orders.detail.storeNote')}:{' '}
+                <bdi className="whitespace-pre-wrap">{order.customerNote}</bdi>
+              </p>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-3">
           {order.stage === 'delivered' && <Celebration orderId={order.id} />}
           <p className="text-lg font-bold">{stageSentence(order)}</p>
@@ -216,18 +230,23 @@ export function OrderPage() {
             </Line>
           ))}
           <Line label={t('orders.detail.quantity')}>{order.quantity}</Line>
-          <Line label={t('orders.detail.unitPrice')}>
-            <bdi dir="ltr">{formatUsd(order.unitPriceUsdUnits)}</bdi>
-          </Line>
-          <Line label={t('orders.detail.total')}>
-            <bdi dir="ltr">{formatUsd(order.totalUsdUnits)}</bdi>
-          </Line>
+          {/* S16 AP11: a gift or a compensation from the store shows no price. */}
+          {order.unitPriceUsdUnits !== null && (
+            <Line label={t('orders.detail.unitPrice')}>
+              <bdi dir="ltr">{formatUsd(order.unitPriceUsdUnits)}</bdi>
+            </Line>
+          )}
+          {order.totalUsdUnits !== null && (
+            <Line label={t('orders.detail.total')}>
+              <bdi dir="ltr">{formatUsd(order.totalUsdUnits)}</bdi>
+            </Line>
+          )}
           {order.totalSypUnits !== null && (
             <Line label={t('orders.detail.totalSyp')}>
               {t('orders.detail.totalSypValue', { amount: formatSyp(order.totalSypUnits) })}
             </Line>
           )}
-          {order.refundedUsdUnits > 0 && (
+          {order.refundedUsdUnits !== null && order.refundedUsdUnits > 0 && (
             <Line label={t('orders.detail.refunded')}>
               <bdi dir="ltr">{formatUsd(order.refundedUsdUnits)}</bdi>
             </Line>
@@ -319,10 +338,10 @@ function Reservation({ order, onChange }: { order: Order; onChange: () => Promis
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  // A reservation is the customer's own order: it always has its price.
+  const total = order.totalUsdUnits ?? 0;
   const shortfall =
-    balance.status === 'ready' && order.totalUsdUnits > balance.units
-      ? order.totalUsdUnits - balance.units
-      : null;
+    balance.status === 'ready' && total > balance.units ? total - balance.units : null;
   const deposit = `/wallet/deposit?${new URLSearchParams({
     ...(shortfall !== null && { amount: centsParam(shortfall) }),
     order: order.id,

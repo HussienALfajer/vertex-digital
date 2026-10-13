@@ -3,6 +3,7 @@ import type { InputField } from './catalog.js';
 import {
   ADMIN_ORDER_TAB_STATUSES,
   adminOrderListQuerySchema,
+  adminOrderShape,
   availabilityForCustomer,
   type CandidateOrder,
   type CandidateRoute,
@@ -10,12 +11,14 @@ import {
   cleanPlayerName,
   codeHint,
   costOfGoods,
+  createAdminOrderSchema,
   createOrderSchema,
   deliveredCodeSchema,
   deliveryStats,
   displaySypTotal,
   firstPollAt,
   isOpenAttempt,
+  isResendRefusal,
   isTerminalOrderStatus,
   manualReminderAt,
   maskCode,
@@ -33,6 +36,7 @@ import {
   orderStatusSchema,
   orderTimeline,
   orderTotal,
+  ownerCapRemaining,
   pastHardLimit,
   playerCheckRequestSchema,
   playerCheckSchema,
@@ -40,6 +44,7 @@ import {
   reservationCharge,
   resolveAttemptSchema,
   routeProfitable,
+  storeOrderHidesPrice,
 } from './orders.js';
 
 /** ADR 0004's transition table, plus `paid → refunded` (ADR 0013), written out independently. */
@@ -564,5 +569,109 @@ describe('admin decisions (rule D1)', () => {
     expect(isOpenAttempt('failed')).toBe(false);
     expect(ADMIN_ORDER_TAB_STATUSES.refunded).toEqual(['partially_refunded', 'refunded']);
     expect(adminOrderListQuerySchema.parse({})).toEqual({ tab: 'all', page: 1, pageSize: 50 });
+  });
+});
+
+describe('admin purchases (S16 AP1–AP11, RS1)', () => {
+  const base = {
+    productId: '0190a3f2-7b1c-7c3d-8e4f-5a6b7c8d9e0f',
+    quantity: 1,
+    expectedUnitPriceUsdUnits: 2_000_000,
+    reason: 'Bought at the counter',
+  };
+  const customerId = '0190a3f2-7b1c-7c3d-8e4f-5a6b7c8d9e10';
+
+  it('gives each mode its payer and customer (AP1)', () => {
+    expect(adminOrderShape('walk_in')).toEqual({ payer: 'owner', hasCustomer: false });
+    expect(adminOrderShape('on_behalf')).toEqual({ payer: 'customer', hasCustomer: true });
+    expect(adminOrderShape('gift')).toEqual({ payer: 'owner', hasCustomer: true });
+    expect(adminOrderShape('compensation')).toEqual({ payer: 'owner', hasCustomer: true });
+  });
+
+  it('counts what is left of the owner cap, never below zero (AP7)', () => {
+    expect(ownerCapRemaining(100_000_000, 30_000_000)).toBe(70_000_000);
+    expect(ownerCapRemaining(100_000_000, 120_000_000)).toBe(0);
+    expect(ownerCapRemaining(0, 0)).toBe(0);
+    // A refund larger than today's purchases leaves more than the cap.
+    expect(ownerCapRemaining(100_000_000, -5_000_000)).toBe(105_000_000);
+    expect(() => ownerCapRemaining(0.5, 0)).toThrow(RangeError);
+    expect(() => ownerCapRemaining(0, Number.NaN)).toThrow(RangeError);
+  });
+
+  it('takes a cap of whole cents up to $10,000, $100 by default (AP7)', () => {
+    expect(ORDER_POLICY_DEFAULTS.ownerDailyCapUsdUnits).toBe(100_000_000);
+    expect(
+      orderPolicySchema.safeParse({ ...ORDER_POLICY_DEFAULTS, ownerDailyCapUsdUnits: 0 }).success,
+    ).toBe(true);
+    expect(
+      orderPolicySchema.safeParse({
+        ...ORDER_POLICY_DEFAULTS,
+        ownerDailyCapUsdUnits: 10_000_000_000,
+      }).success,
+    ).toBe(true);
+    for (const bad of [10_000_010_000, -10_000, 1_005_000]) {
+      expect(
+        orderPolicySchema.safeParse({ ...ORDER_POLICY_DEFAULTS, ownerDailyCapUsdUnits: bad })
+          .success,
+      ).toBe(false);
+    }
+  });
+
+  it('turns only a refused re-send into an unknown outcome (RS1)', () => {
+    expect(isResendRefusal({ status: 'failed_definitive' }, true)).toBe(true);
+    expect(isResendRefusal({ status: 'failed_definitive' }, false)).toBe(false);
+    for (const status of ['delivered', 'pending', 'unknown']) {
+      expect(isResendRefusal({ status }, true)).toBe(false);
+    }
+  });
+
+  it('needs a customer for every mode but walk-in, and a note only on gifts (AP2)', () => {
+    expect(createAdminOrderSchema.safeParse({ ...base, purpose: 'walk_in' }).success).toBe(true);
+    expect(
+      createAdminOrderSchema.safeParse({ ...base, purpose: 'walk_in', customerId }).success,
+    ).toBe(false);
+    expect(createAdminOrderSchema.safeParse({ ...base, purpose: 'on_behalf' }).success).toBe(false);
+    expect(
+      createAdminOrderSchema.parse({
+        ...base,
+        purpose: 'gift',
+        customerId,
+        customerNote: ' عيد سعيد ',
+      }),
+    ).toMatchObject({ customerNote: 'عيد سعيد', fields: {}, confirmPlayer: false });
+    expect(
+      createAdminOrderSchema.safeParse({
+        ...base,
+        purpose: 'on_behalf',
+        customerId,
+        customerNote: 'شكراً',
+      }).success,
+    ).toBe(false);
+    expect(
+      createAdminOrderSchema.safeParse({
+        ...base,
+        purpose: 'compensation',
+        customerId,
+        customerNote: 'call 0933 123 456',
+      }).success,
+    ).toBe(false);
+    expect(
+      createAdminOrderSchema.safeParse({ ...base, purpose: 'gift', customerId, reason: 'no' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('hides the price of the store’s gifts and compensations (AP11)', () => {
+    expect(storeOrderHidesPrice('gift')).toBe(true);
+    expect(storeOrderHidesPrice('compensation')).toBe(true);
+    expect(storeOrderHidesPrice('on_behalf')).toBe(false);
+    expect(storeOrderHidesPrice(null)).toBe(false);
+  });
+
+  it('filters the admin list by placer, payer and mode (AP14)', () => {
+    expect(
+      adminOrderListQuerySchema.parse({ placedBy: 'admin', payer: 'owner', purpose: 'gift' }),
+    ).toMatchObject({ placedBy: 'admin', payer: 'owner', purpose: 'gift' });
+    expect(adminOrderListQuerySchema.safeParse({ payer: 'store' }).success).toBe(false);
   });
 });

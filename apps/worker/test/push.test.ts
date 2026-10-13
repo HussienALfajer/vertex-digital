@@ -112,6 +112,13 @@ const SAMPLE: { [Event in PushNotificationEvent]: NotificationParams<Event> } = 
     refundedUsdUnits: 4_560_000,
   },
   ticket_replied: { ticketId: newId(), number: 'T-1007' },
+  order_placed_for_you: {
+    orderId: newId(),
+    orderNumber: 'VD-1000042',
+    productNameAr: '660 شدة',
+    purpose: 'gift',
+    message: 'عيد سعيد',
+  },
 };
 
 describe('lock-screen texts (PT1–PT3)', () => {
@@ -141,6 +148,21 @@ describe('lock-screen texts (PT1–PT3)', () => {
         expect(text, event).not.toContain(word);
       }
     }
+  });
+
+  it('tells an order the store paid for without an amount, and never its note (S16 AP11)', () => {
+    expect(renderPush('order_placed_for_you', SAMPLE.order_placed_for_you).body).toBe(
+      'هدية من المتجر VD-1000042: 660 شدة',
+    );
+    expect(
+      renderPush('order_refunded', { ...SAMPLE.order_refunded, refundedUsdUnits: null }).body,
+    ).toBe('تعذّر تنفيذ الطلب VD-1000042');
+    expect(
+      renderPush('order_partially_refunded', {
+        ...SAMPLE.order_partially_refunded,
+        refundedUsdUnits: null,
+      }).body,
+    ).toBe('سُلّم جزء من طلبك VD-1000042 وتعذّر تنفيذ الباقي');
   });
 
   it('link and tag each record (PT3)', () => {

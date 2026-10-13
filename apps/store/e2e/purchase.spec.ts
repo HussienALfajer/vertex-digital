@@ -36,6 +36,8 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     id: ORDER_ID,
     number: 'VO-NEW234',
     stage: 'processing',
+    placedByStore: null,
+    customerNote: null,
     product: {
       id: product.id,
       nameAr: product.nameAr,

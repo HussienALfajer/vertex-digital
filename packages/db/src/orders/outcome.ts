@@ -62,7 +62,13 @@ export type AttemptOutcome =
       supplierErrorCode?: string | null;
       supplierOrderId?: string | null;
     }
-  | { status: 'unknown'; reason: string; supplierOrderId?: string | null };
+  | {
+      status: 'unknown';
+      reason: string;
+      supplierOrderId?: string | null;
+      /** S16 rule RS1: the supplier's code of a refused re-send, kept on the attempt. */
+      supplierErrorCode?: string | null;
+    };
 
 /** Who applies the result; an admin decision carries its reason and key (rules D2, D3). */
 export interface Resolution {
@@ -238,7 +244,12 @@ export async function applyOutcome(
           supplierOrderId,
           nextPollAt: pollAt,
           sentAt,
-          ...(outcome.status === 'unknown' && { failureReason: clip(outcome.reason, 200) }),
+          ...(outcome.status === 'unknown' && {
+            failureReason: clip(outcome.reason, 200),
+            ...(outcome.supplierErrorCode && {
+              supplierErrorCode: clip(outcome.supplierErrorCode, 64),
+            }),
+          }),
           result: { status: outcome.status },
         })
         .where(eq(fulfilmentAttempts.id, attemptId))
@@ -395,6 +406,8 @@ export interface RefundActor {
  * its terminal status: `refunded` when nothing was delivered (`order:<id>:refund`), else
  * `partially_refunded` (`order:<id>:refund:<last attempt>`). An order has one refund journal, so
  * refunds never exceed what was paid. The caller holds the order lock and closed its attempt.
+ * S16 AM3: an owner-funded order's refund returns to owner drawings, never to a wallet, and its
+ * customer (if any) is told without an amount (AP11).
  */
 export async function refundRemaining(
   tx: Transaction,
@@ -419,7 +432,13 @@ export async function refundRemaining(
       : `order:${order.id}:refund`,
     kind: 'refund',
     postings: [
-      { accountId: await ensureCustomerWallet(tx, order.customerId), amountUnits: amount },
+      {
+        accountId:
+          order.payer === 'owner' || order.customerId === null
+            ? await ownerDrawings(tx)
+            : await ensureCustomerWallet(tx, order.customerId),
+        amountUnits: amount,
+      },
       {
         accountId: await ensureSystemAccount(tx, {
           code: 'refunds:USD',
@@ -433,12 +452,16 @@ export async function refundRemaining(
   const productNameAr = await productName(tx, order.productId);
   // S10 rule CT8: a checkout's orders tell the center only; its summary is the one email.
   const email = { email: order.checkoutId === null };
-  if (partial) {
+  const customerId = order.customerId;
+  const refundedUsdUnits = order.payer === 'owner' ? null : amount;
+  if (customerId === null) {
+    // S16 AP12: a walk-in order tells no one.
+  } else if (partial) {
     await notifyCustomer(
       tx,
       context.jobs,
       {
-        customerId: order.customerId,
+        customerId,
         event: 'order_partially_refunded',
         params: {
           orderId: order.id,
@@ -446,7 +469,7 @@ export async function refundRemaining(
           productNameAr,
           deliveredQuantity: order.deliveredQuantity,
           refundedQuantity: units,
-          refundedUsdUnits: amount,
+          refundedUsdUnits,
         },
       },
       email,
@@ -456,13 +479,13 @@ export async function refundRemaining(
       tx,
       context.jobs,
       {
-        customerId: order.customerId,
+        customerId,
         event: 'order_refunded',
         params: {
           orderId: order.id,
           orderNumber: order.number,
           productNameAr,
-          refundedUsdUnits: amount,
+          refundedUsdUnits,
           reason,
         },
       },
@@ -498,6 +521,15 @@ export async function refundRemaining(
   return changed;
 }
 
+/** The system account owner-funded orders are paid from and refunded to (S16 AM2, AM3). */
+export function ownerDrawings(tx: Transaction) {
+  return ensureSystemAccount(tx, {
+    code: 'owner_drawings:USD',
+    kind: 'owner_drawings',
+    currency: 'USD',
+  });
+}
+
 async function productName(tx: Transaction, productId: string): Promise<string> {
   const [row] = await tx
     .select({ nameAr: catalogProducts.nameAr })
@@ -507,6 +539,8 @@ async function productName(tx: Transaction, productId: string): Promise<string> 
 }
 
 async function notifyDelivered(tx: Transaction, context: OrderContext, order: OrderRow) {
+  // S16 AP12: a walk-in order tells no one.
+  if (order.customerId === null) return;
   await notifyCustomer(
     tx,
     context.jobs,

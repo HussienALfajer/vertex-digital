@@ -28,6 +28,7 @@ import {
   type SavedPlayer,
   type ShareLink,
   shareStage,
+  storeOrderHidesPrice,
 } from '@vertex-digital/contracts';
 import {
   and,
@@ -131,6 +132,19 @@ export function sharePath(kind: 'gift' | 'receipt', token: string): string {
   return `/${kind === 'gift' ? 'g' : 'r'}/${token}`;
 }
 
+/**
+ * S16 rule AP11: the chip and note of an order the store placed for its customer, and whether its
+ * price is hidden (a gift or a compensation).
+ */
+function placedByStore(order: OrderRow) {
+  const purpose = order.adminPurpose === 'walk_in' ? null : order.adminPurpose;
+  return {
+    placedByStore: purpose,
+    customerNote: order.customerNote,
+    hidesPrice: storeOrderHidesPrice(purpose),
+  };
+}
+
 const giftOf = (order: OrderRow) =>
   order.isGift ? { senderName: order.giftSenderName, message: order.giftMessage } : null;
 
@@ -162,26 +176,31 @@ async function summaries(
     db,
     rows.map((row) => row.game.coverFileId),
   );
-  return rows.map(({ order, productNameAr, shown, game }) => ({
-    id: order.id,
-    number: order.number,
-    stage: orderCustomerStage(order.status),
-    productNameAr,
-    game: {
-      id: game.id,
-      slug: game.slug,
-      nameAr: game.nameAr,
-      cover: (game.coverFileId && images.get(game.coverFileId)) || null,
-    },
-    quantity: order.quantity,
-    totalUsdUnits: order.totalUsdUnits,
-    totalSypUnits: order.totalSypUnits,
-    expiresAt: iso(order.expiresAt),
-    checkoutId: order.checkoutId,
-    isGift: order.isGift,
-    repeatable: repeatable(order.status, shown),
-    createdAt: order.createdAt.toISOString(),
-  }));
+  return rows.map(({ order, productNameAr, shown, game }) => {
+    const store = placedByStore(order);
+    return {
+      id: order.id,
+      number: order.number,
+      stage: orderCustomerStage(order.status),
+      productNameAr,
+      game: {
+        id: game.id,
+        slug: game.slug,
+        nameAr: game.nameAr,
+        cover: (game.coverFileId && images.get(game.coverFileId)) || null,
+      },
+      quantity: order.quantity,
+      totalUsdUnits: store.hidesPrice ? null : order.totalUsdUnits,
+      totalSypUnits: store.hidesPrice ? null : order.totalSypUnits,
+      placedByStore: store.placedByStore,
+      customerNote: store.customerNote,
+      expiresAt: iso(order.expiresAt),
+      checkoutId: order.checkoutId,
+      isGift: order.isGift,
+      repeatable: repeatable(order.status, shown),
+      createdAt: order.createdAt.toISOString(),
+    };
+  });
 }
 
 const summaryFrom = (db: Executor) =>
@@ -288,6 +307,7 @@ export async function customerOrder(
     .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)));
   if (!row) return null;
   const { order, product, game } = row;
+  const store = placedByStore(order);
   const [fields, statusEvents, codes, images, stats, shareLinks] = await Promise.all([
     fieldsWithLabels(db, order),
     db
@@ -321,10 +341,12 @@ export async function customerOrder(
     quantity: order.quantity,
     deliveredQuantity: order.deliveredQuantity,
     refundedQuantity: order.refundedQuantity,
-    unitPriceUsdUnits: order.unitPriceUsdUnits,
-    totalUsdUnits: order.totalUsdUnits,
-    totalSypUnits: order.totalSypUnits,
-    refundedUsdUnits: order.refundedUsdUnits,
+    unitPriceUsdUnits: store.hidesPrice ? null : order.unitPriceUsdUnits,
+    totalUsdUnits: store.hidesPrice ? null : order.totalUsdUnits,
+    totalSypUnits: store.hidesPrice ? null : order.totalSypUnits,
+    refundedUsdUnits: store.hidesPrice ? null : order.refundedUsdUnits,
+    placedByStore: store.placedByStore,
+    customerNote: store.customerNote,
     refundReason: order.refundReason,
     timeline: orderTimeline(
       statusEvents.flatMap((event) =>
@@ -423,6 +445,13 @@ export async function revealCode(
 
 // Admin -------------------------------------------------------------------------------------------
 
+/** S16 rule AP9: who placed and paid the order, and the admin's mode. */
+const adminOrigin = (order: OrderRow) => ({
+  placedBy: order.placedBy,
+  payer: order.payer,
+  purpose: order.adminPurpose,
+});
+
 const OPEN = sql`(${fulfilmentAttempts.status} in ('sending', 'pending', 'unknown'))`;
 
 /** Orders with an open attempt at the manual supplier (rule MN1). */
@@ -460,6 +489,9 @@ function adminFilters(query: AdminOrderListQuery): SQL | undefined {
   if (query.test) conditions.push(eq(orders.isTest, query.test === 'true'));
   if (query.from) conditions.push(gte(orders.createdAt, new Date(query.from)));
   if (query.to) conditions.push(lte(orders.createdAt, new Date(query.to)));
+  if (query.placedBy) conditions.push(eq(orders.placedBy, query.placedBy));
+  if (query.payer) conditions.push(eq(orders.payer, query.payer));
+  if (query.purpose) conditions.push(eq(orders.adminPurpose, query.purpose));
   return and(...conditions);
 }
 
@@ -478,7 +510,7 @@ export async function adminOrderPage(
         game: { id: catalogGames.id, nameAr: catalogGames.nameAr },
       })
       .from(orders)
-      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(customers, eq(customers.id, orders.customerId))
       .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
       .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
       .where(where)
@@ -488,7 +520,7 @@ export async function adminOrderPage(
     db
       .select({ total: count() })
       .from(orders)
-      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(customers, eq(customers.id, orders.customerId))
       .where(where),
   ]);
   const ids = rows.map((row) => row.order.id);
@@ -513,7 +545,8 @@ export async function adminOrderPage(
         id: order.id,
         number: order.number,
         status: order.status,
-        customer: { ...customer, isTest: order.isTest },
+        customer: customer ? { ...customer, isTest: order.isTest } : null,
+        ...adminOrigin(order),
         product,
         game,
         quantity: order.quantity,
@@ -571,7 +604,7 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
       game: { id: catalogGames.id, nameAr: catalogGames.nameAr },
     })
     .from(orders)
-    .innerJoin(customers, eq(customers.id, orders.customerId))
+    .leftJoin(customers, eq(customers.id, orders.customerId))
     .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
     .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
     .where(eq(orders.id, orderId));
@@ -647,11 +680,17 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
     id: order.id,
     number: order.number,
     status: order.status,
-    customer: {
-      ...row.customer,
-      isTest: order.isTest,
-      marks: await customerMarks(db, order.customerId),
-    },
+    customer:
+      row.customer && order.customerId
+        ? {
+            ...row.customer,
+            isTest: order.isTest,
+            marks: await customerMarks(db, order.customerId),
+          }
+        : null,
+    ...adminOrigin(order),
+    adminReason: order.adminReason,
+    customerNote: order.customerNote,
     product: row.product,
     game: row.game,
     fields,
@@ -948,8 +987,9 @@ export async function publicShare(
       stage: stage.stage,
       paidAt: order.paidAt.toISOString(),
       finishedAt: iso(order.finishedAt),
+      // S16 AP11: a gift or a compensation from the store never shows its price.
       price:
-        link.kind === 'receipt' && link.showPrice
+        link.kind === 'receipt' && link.showPrice && !placedByStore(order).hidesPrice
           ? { totalUsdUnits: order.totalUsdUnits, refundedUsdUnits: order.refundedUsdUnits }
           : null,
       fields: Object.entries(order.fields)

@@ -1,4 +1,9 @@
-import type { Order, OrderStage, OrderTimelineStep } from '@vertex-digital/contracts';
+import {
+  type Order,
+  type OrderStage,
+  type OrderTimelineStep,
+  storeOrderHidesPrice,
+} from '@vertex-digital/contracts';
 import { t } from '@/lib/i18n';
 
 /*
@@ -25,17 +30,29 @@ export function stepText(step: OrderTimelineStep): string {
   return t(`orders.steps.${step}`);
 }
 
-/** The plain sentence under the stage on the order page. */
+/**
+ * The plain sentence under the stage on the order page. S16 rule AM3: an order the store paid for
+ * (a gift or compensation) is refunded to the store, never to the wallet, and names no amount.
+ */
 export function stageSentence(
-  order: Pick<Order, 'stage' | 'refundReason'> & Partial<Pick<Order, 'cancelReason'>>,
+  order: Pick<Order, 'stage' | 'refundReason'> &
+    Partial<Pick<Order, 'cancelReason' | 'placedByStore'>>,
 ): string {
   if (order.stage === 'cancelled' && order.cancelReason) {
     return t(`orders.cancelReasons.${order.cancelReason}`);
   }
+  const storePaid = storeOrderHidesPrice(order.placedByStore ?? null);
   if (order.stage === 'refunded' && order.refundReason) {
-    return t('orders.sentences.refundedBecause', {
-      reason: t(`orders.refundReasons.${order.refundReason}`),
-    });
+    return t(
+      storePaid ? 'orders.sentences.storeFailedBecause' : 'orders.sentences.refundedBecause',
+      {
+        reason: t(`orders.refundReasons.${order.refundReason}`),
+      },
+    );
+  }
+  if (storePaid && order.stage === 'refunded') return t('orders.sentences.storeFailed');
+  if (storePaid && order.stage === 'partially_refunded') {
+    return t('orders.sentences.storePartiallyFailed');
   }
   return t(`orders.sentences.${order.stage}`);
 }

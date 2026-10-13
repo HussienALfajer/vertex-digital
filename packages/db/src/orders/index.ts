@@ -13,6 +13,11 @@ export {
   rerouteOrder,
 } from './admin-actions.js';
 export {
+  type AdminPurchaseInput,
+  adminPurchaseOrder,
+  ownerSpentToday,
+} from './admin-purchase.js';
+export {
   type CheckoutInput,
   type CheckoutResult,
   type CheckoutRow,
@@ -25,6 +30,7 @@ export {
   type AppliedOutcome,
   type AttemptOutcome,
   applyOutcome,
+  ownerDrawings,
   type RefundActor,
   type Resolution,
   refundRemaining,
@@ -79,6 +85,7 @@ export {
   type OrderContext,
   type OrderEventInput,
   type OrderRow,
+  orderCustomerId,
   queueFulfil,
   queuePayWaiting,
   queuePoll,

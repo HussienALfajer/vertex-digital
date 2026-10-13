@@ -26,11 +26,15 @@ import {
 } from '@nestjs/swagger';
 import {
   type AdminOrderListQuery,
+  type AdminPurchaseContextQuery,
   adminOrderCountsSchema,
   adminOrderListQuerySchema,
   adminOrderPageSchema,
   adminOrderSchema,
+  adminPurchaseContextQuerySchema,
+  adminPurchaseContextSchema,
   adminRevealedCodeSchema,
+  createAdminOrderSchema,
   DELIVERY_PROOF_MAX_BYTES,
   deliveryProofSchema,
   fulfilOrderSchema,
@@ -57,6 +61,7 @@ import { ApiIdempotencyKey, IdempotencyKey } from '../../core/http/idempotency-k
 import { requestMeta } from '../../core/http/request-meta.js';
 import type { AdminIdentity } from '../admin/index.js';
 import { sendImage, uploadBody } from '../files/index.js';
+import { type AdminPurchaseBody, AdminPurchasesService } from './admin-purchases.service.js';
 import { OrderActionsService } from './order-actions.service.js';
 import { OrderDecisionsService } from './order-decisions.service.js';
 import { ShareLinksService } from './share-links.service.js';
@@ -78,7 +83,54 @@ export class OrdersAdminController {
     private readonly decisions: OrderDecisionsService,
     private readonly shareLinks: ShareLinksService,
     private readonly actions: OrderActionsService,
+    private readonly purchases: AdminPurchasesService,
   ) {}
+
+  /**
+   * S16 rules AP1–AP13: a purchase from the panel, re-authenticated, with the dialog's
+   * `Idempotency-Key` (`201` written, `200` replayed).
+   */
+  @Post()
+  @AdminRoute()
+  @Sensitive()
+  @Header('cache-control', 'no-store')
+  @ApiIdempotencyKey()
+  @SerializeOptions({ schema: adminOrderSchema })
+  @ApiCreatedResponse({
+    description: 'The paid order (200: a replay)',
+    standardSchema: adminOrderSchema,
+  })
+  async create(
+    @CurrentAdmin() admin: AdminIdentity,
+    @IdempotencyKey() idempotencyKey: string,
+    @Body({ schema: createAdminOrderSchema }) body: AdminPurchaseBody,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const { order, created } = await this.purchases.create(
+      { adminId: admin.id, meta: requestMeta(request) },
+      idempotencyKey,
+      body,
+    );
+    response.status(created ? 201 : 200);
+    return order;
+  }
+
+  /** S16 rules AP4, AP7, AP8: what the purchase dialog shows. */
+  @Get('purchase-context')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @ApiQueryOf(adminPurchaseContextQuerySchema)
+  @SerializeOptions({ schema: adminPurchaseContextSchema })
+  @ApiOkResponse({
+    description: "The customer's wallet and caps, the owner cap today",
+    standardSchema: adminPurchaseContextSchema,
+  })
+  purchaseContext(
+    @Query({ schema: adminPurchaseContextQuerySchema }) query: AdminPurchaseContextQuery,
+  ) {
+    return this.purchases.context(query.customerId);
+  }
 
   /** S10 rule AD1: removes exposure only, so no re-authentication; audited with the reason. */
   @Post(':id/share-links/:linkId/revoke')

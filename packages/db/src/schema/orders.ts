@@ -1,4 +1,5 @@
 import {
+  ADMIN_ORDER_PURPOSES,
   ATTEMPT_KINDS,
   ATTEMPT_RESOLVERS,
   ATTEMPT_STATUSES,
@@ -6,6 +7,8 @@ import {
   CODE_REVEAL_ACTORS,
   ORDER_EVENT_ACTORS,
   ORDER_EVENT_KINDS,
+  ORDER_PAYERS,
+  ORDER_PLACERS,
   ORDER_STATUSES,
   PLAYER_CHECK_RESULTS,
   PLAYER_CHECK_STATES,
@@ -74,6 +77,12 @@ export const receiptPlayerDisplayEnum = pgEnum('receipt_player_display', RECEIPT
 
 export const shareRevokerEnum = pgEnum('share_revoker', SHARE_REVOKERS);
 
+export const orderPlacerEnum = pgEnum('order_placer', ORDER_PLACERS);
+
+export const orderPayerEnum = pgEnum('order_payer', ORDER_PAYERS);
+
+export const adminOrderPurposeEnum = pgEnum('admin_order_purpose', ADMIN_ORDER_PURPOSES);
+
 /** The time of the insert, not of its transaction's start. */
 const insertedAt = () =>
   timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`);
@@ -87,10 +96,9 @@ export const orders = pgTable(
   {
     id: id(),
     number: text('number').notNull().unique(),
-    customerId: uuid('customer_id')
-      .notNull()
-      .references(() => customers.id),
-    /** The customer's test flag at purchase (rule R4). */
+    /** Null only for a walk-in admin order (S16 rule AP1). */
+    customerId: uuid('customer_id').references(() => customers.id),
+    /** The customer's test flag at purchase (rule R4); false for a walk-in order. */
     isTest: boolean('is_test').notNull(),
     productId: uuid('product_id')
       .notNull()
@@ -148,6 +156,16 @@ export const orders = pgTable(
     isGift: boolean('is_gift').notNull().default(false),
     giftSenderName: text('gift_sender_name'),
     giftMessage: text('gift_message'),
+    /**
+     * S16 rules AP1, AP9: an order placed from the panel, its mode, the admin (no foreign key: the
+     * admin row is replaceable), the internal reason and the note the customer reads; who paid.
+     */
+    placedBy: orderPlacerEnum('placed_by').notNull().default('customer'),
+    payer: orderPayerEnum('payer').notNull().default('customer'),
+    adminPurpose: adminOrderPurposeEnum('admin_purpose'),
+    adminId: uuid('admin_id'),
+    adminReason: text('admin_reason'),
+    customerNote: text('customer_note'),
     ...timestamps(),
   },
   (table) => [
@@ -182,6 +200,30 @@ export const orders = pgTable(
     index('orders_delivery_stats_idx')
       .on(table.productId, table.deliveredAt.desc())
       .where(sql`${table.status} = 'delivered' and not ${table.isTest}`),
+    /** S16 rule AP7: owner-funded orders paid today, under the cap. */
+    index('orders_owner_paid_at_idx')
+      .on(table.payer, table.paidAt)
+      .where(sql`${table.payer} = 'owner'`),
+    /** S16: the panel's admin orders. */
+    index('orders_admin_created_at_idx')
+      .on(table.placedBy, table.createdAt.desc())
+      .where(sql`${table.placedBy} = 'admin'`),
+    check(
+      'orders_admin_check',
+      sql`(${table.placedBy} = 'admin') = (${table.adminPurpose} is not null)
+        and (${table.placedBy} = 'admin') = (${table.adminId} is not null)
+        and (${table.placedBy} = 'admin') = (${table.adminReason} is not null)
+        and (${table.customerId} is null) = coalesce(${table.adminPurpose} = 'walk_in', false)
+        and (${table.payer} = 'owner')
+          = coalesce(${table.adminPurpose} in ('walk_in', 'gift', 'compensation'), false)
+        and (${table.customerNote} is null
+          or coalesce(${table.adminPurpose} in ('gift', 'compensation'), false))
+        and (${table.placedBy} = 'customer'
+          or (${table.checkoutId} is null and ${table.reservedAt} is null and not ${table.isGift}))
+        and (${table.customerId} is not null or not ${table.isTest})
+        and char_length(${table.adminReason}) between 5 and 500
+        and char_length(${table.customerNote}) between 1 and 300`,
+    ),
     check('orders_number_check', sql`${table.number} ~ '^VO-[2-9A-HJKMNP-Z]{6}$'`),
     check('orders_quantity_check', sql`${table.quantity} between 1 and 50`),
     check(
@@ -476,6 +518,12 @@ export const fulfilmentAttempts = pgTable(
     /** The classified outcome, without codes. */
     result: jsonb('result').$type<Record<string, unknown>>(),
     sentAt: timestamp('sent_at', { withTimezone: true }),
+    /**
+     * S16 rule RS1: the first send of the attempt's key has started (set once, before the call):
+     * every later send is a re-send, whose refusal cannot fail the attempt. Written by
+     * `orders.fulfil` with the attempt, or by the poll that sends a rerouted attempt first.
+     */
+    sendStartedAt: timestamp('send_started_at', { withTimezone: true }),
     pollCount: integer('poll_count').notNull().default(0),
     nextPollAt: timestamp('next_poll_at', { withTimezone: true }),
     /** A manual attempt's reminder was sent (rule MN2). */
@@ -626,6 +674,8 @@ export const orderPolicy = pgTable(
     reviewPollMinutes: integer('review_poll_minutes').notNull(),
     reviewPollHours: integer('review_poll_hours').notNull(),
     manualReminderMinutes: integer('manual_reminder_minutes').notNull(),
+    /** S16 rule AP7: whole cents, $0–$10,000; rows before it take $100. */
+    ownerDailyCapUsdUnits: amountUnits('owner_daily_cap_usd_units').notNull().default(100_000_000),
     /** Null for the seed. */
     adminId: uuid('admin_id'),
     createdAt: insertedAt(),
@@ -641,7 +691,9 @@ export const orderPolicy = pgTable(
         and ${table.hardLimitMinutes} between 5 and 240
         and ${table.reviewPollMinutes} between 5 and 240
         and ${table.reviewPollHours} between 1 and 72
-        and ${table.manualReminderMinutes} between 5 and 240`,
+        and ${table.manualReminderMinutes} between 5 and 240
+        and ${table.ownerDailyCapUsdUnits} between 0 and 10000000000
+        and ${table.ownerDailyCapUsdUnits} % 10000 = 0`,
     ),
   ],
 );
@@ -664,10 +716,10 @@ export const playerChecks = pgTable(
     supplierId: uuid('supplier_id')
       .notNull()
       .references(() => suppliers.id),
-    /** Whose request made the supplier call. */
-    customerId: uuid('customer_id')
-      .notNull()
-      .references(() => customers.id),
+    /** Whose request made the supplier call: a customer, or the admin (S16 rule AP8). */
+    customerId: uuid('customer_id').references(() => customers.id),
+    /** No foreign key: the admin row is replaceable. */
+    adminId: uuid('admin_id'),
     createdAt: insertedAt(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
@@ -687,5 +739,9 @@ export const playerChecks = pgTable(
         or (${table.result} = 'valid' and char_length(${table.playerName}) between 1 and 64)`,
     ),
     check('player_checks_expires_at_check', sql`${table.expiresAt} > ${table.createdAt}`),
+    check(
+      'player_checks_requester_check',
+      sql`(${table.customerId} is null) <> (${table.adminId} is null)`,
+    ),
   ],
 );

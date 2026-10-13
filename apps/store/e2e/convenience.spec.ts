@@ -87,6 +87,8 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     id: ORDER_ID,
     number: 'VO-NEW234',
     stage: 'delivered',
+    placedByStore: null,
+    customerNote: null,
     product: {
       id: product.id,
       nameAr: product.nameAr,
@@ -128,6 +130,8 @@ function summary(product: StoreProduct, changes: Partial<OrderSummary> = {}): Or
     id: ORDER_ID,
     number: 'VO-NEW234',
     stage: 'delivered',
+    placedByStore: null,
+    customerNote: null,
     productNameAr: product.nameAr,
     game: { id: PUBG.game.id, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', cover: null },
     quantity: 1,

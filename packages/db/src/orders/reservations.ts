@@ -35,6 +35,7 @@ import {
   lockOrder,
   type OrderContext,
   type OrderRow,
+  orderCustomerId,
   queueFulfil,
   transitionOrder,
 } from './transition.js';
@@ -107,7 +108,7 @@ export async function cancelReservation(
       .from(catalogProducts)
       .where(eq(catalogProducts.id, order.productId));
     await notifyCustomer(tx, context.jobs, {
-      customerId: order.customerId,
+      customerId: orderCustomerId(order),
       event: 'order_cancelled',
       params: {
         orderId: order.id,
@@ -275,7 +276,7 @@ async function payOne(
   }
   const total = orderTotal(charge.unitPriceUsdUnits, order.quantity);
   const display = await displayTotal(tx, total);
-  const wallet = await lockCustomerWallet(tx, order.customerId);
+  const wallet = await lockCustomerWallet(tx, orderCustomerId(order));
   // S12 LM4: skipped while it would pass the cap; it stays reserved until it fits or expires.
   if (await purchaseCapCheck(tx, customer, total)) return 'skipped_cap';
   const revenue = await ensureSystemAccount(tx, {
@@ -347,7 +348,7 @@ async function payOne(
     .from(catalogProducts)
     .where(eq(catalogProducts.id, order.productId));
   await notifyCustomer(tx, context.jobs, {
-    customerId: order.customerId,
+    customerId: orderCustomerId(order),
     event: 'order_paid',
     params: { orderId: order.id, orderNumber: order.number, productNameAr: product?.nameAr ?? '' },
   });
@@ -392,5 +393,5 @@ export async function customersWithReservations(db: Database, limit: number): Pr
     .groupBy(orders.customerId)
     .orderBy(sql`min(${orders.createdAt})`)
     .limit(limit);
-  return rows.map((row) => row.customerId);
+  return rows.flatMap((row) => (row.customerId === null ? [] : [row.customerId]));
 }

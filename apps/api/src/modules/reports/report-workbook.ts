@@ -83,7 +83,12 @@ const LEDGER_LINES: Record<string, string> = {
   transfer_fee: 'رسوم التحويل',
   supplier_correction: 'تصحيحات الموردين',
   rounding_gain: 'كسور الإيداع',
+  owner_drawing: 'مسحوبات المالك بضاعةً',
+  owner_drawing_refund: 'مستردّ إلى المالك',
 };
+
+/** S16 AP14: the line of owner-funded orders in R1 and R2. */
+const OWNER_FUNDED = 'طلبات من مال المالك';
 const CATEGORIES: Record<string, string> = {
   compensation: 'تعويض',
   correction: 'تصحيح',
@@ -145,6 +150,17 @@ function blocks(kind: ReportKind, report: Report<ReportKind>): Block[] {
           rows: sales.rows.map((row) => [date(row.date), ...figures(row)]),
           totals: ['الإجمالي', ...figures(sales.totals)],
         },
+        {
+          columns: [
+            { header: 'خارج المبيعات', width: 22 },
+            { header: 'الطلبات المسلّمة', width: 16, format: 'count' },
+            { header: 'القيمة بسعر المتجر', width: 18, format: 'usd' },
+            { header: 'التكلفة', width: 16, format: 'usd' },
+            { header: 'الربح', width: 16, format: 'usd' },
+            { header: 'الهامش %', width: 12, format: 'percent' },
+          ],
+          rows: [[OWNER_FUNDED, ...figures(sales.ownerFunded)]],
+        },
       ];
     }
     case 'breakdown': {
@@ -190,6 +206,26 @@ function blocks(kind: ReportKind, report: Report<ReportKind>): Block[] {
             'الإجمالي',
             ...(breakdown.by === 'product' ? [''] : []),
             ...figures(breakdown.totals),
+          ],
+        },
+        {
+          columns: [
+            { header: 'خارج المبيعات', width: 22 },
+            { header: 'الطلبات المسلّمة', width: 16, format: 'count' as const },
+            { header: 'القيمة بسعر المتجر', width: 18, format: 'usd' as const },
+            { header: 'التكلفة', width: 16, format: 'usd' as const },
+            { header: 'الربح', width: 16, format: 'usd' as const },
+            { header: 'الهامش %', width: 12, format: 'percent' as const },
+          ],
+          rows: [
+            [
+              OWNER_FUNDED,
+              breakdown.ownerFunded.delivered,
+              usd(breakdown.ownerFunded.salesUsdUnits),
+              usd(breakdown.ownerFunded.costUsdUnits),
+              usd(breakdown.ownerFunded.profitUsdUnits),
+              breakdown.ownerFunded.marginPercent,
+            ],
           ],
         },
       ];
@@ -358,10 +394,18 @@ function blocks(kind: ReportKind, report: Report<ReportKind>): Block[] {
             { header: 'في البداية', width: 16 },
             { header: 'في النهاية', width: 16 },
           ],
-          rows: ledger.places.map((row) => {
-            const value = row.currency === 'USD' ? usd : syp;
-            return [label(PLACES, row.place), value(row.startUnits), value(row.endUnits)];
-          }),
+          rows: [
+            ...ledger.places.map((row) => {
+              const value = row.currency === 'USD' ? usd : syp;
+              return [label(PLACES, row.place), value(row.startUnits), value(row.endUnits)];
+            }),
+            // S16: what the owner took in goods, held.
+            [
+              'أخذه المالك بضاعةً',
+              usd(ledger.ownerDrawings.startUnits),
+              usd(ledger.ownerDrawings.endUnits),
+            ],
+          ],
         },
       ];
     }

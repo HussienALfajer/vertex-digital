@@ -84,6 +84,24 @@ const walletLeg = (journal: SQL, customer: SQL) => sql`coalesce((
   where p.journal_id = ${journal} and a.kind = 'customer_wallet' and a.customer_id = ${customer}
 ), 0)`;
 
+/** S16 AM2, AM3: what a journal moved on owner drawings. */
+const drawingsLeg = (journal: SQL) => sql`coalesce((
+  select sum(p.amount_units) from ledger_postings p
+  join ledger_accounts a on a.id = p.account_id
+  where p.journal_id = ${journal} and a.code = 'owner_drawings:USD'
+), 0)`;
+
+/** What a journal of order `o` moved on its payer: the customer's wallet, or owner drawings. */
+const payerLeg = (journal: SQL) => sql`case when o.payer = 'owner'
+  then ${drawingsLeg(journal)} else ${walletLeg(journal, sql`o.customer_id`)} end`;
+
+/** The other payer's leg, which must be zero (an owner order touches no wallet, and back). */
+const otherLeg = (journal: SQL) => sql`case when o.payer = 'owner'
+  then coalesce((select sum(abs(p.amount_units)) from ledger_postings p
+    join ledger_accounts a on a.id = p.account_id
+    where p.journal_id = ${journal} and a.kind = 'customer_wallet'), 0)
+  else ${drawingsLeg(journal)} end`;
+
 /** C1: every journal balances per currency and has exactly `posting_count` postings. */
 const journalBalance = sql`
   select 'journal', j.id from ledger_journals j
@@ -143,8 +161,9 @@ const attemptCost = sql`
 
 /**
  * C6: every paid order has a purchase journal; a single order's journal takes its total from its
- * customer's wallet, a checkout's journal the sum of its orders' totals; every purchase journal
- * belongs to an order.
+ * customer's wallet (S16 AP15: an owner-funded order's from owner drawings, and nothing from a
+ * wallet), a checkout's journal the sum of its orders' totals; every purchase journal belongs to
+ * an order.
  */
 const orderPurchase = sql`
   select 'order', o.id from orders o
@@ -152,7 +171,8 @@ const orderPurchase = sql`
   union
   select 'order', o.id from orders o
   where o.checkout_id is null and o.purchase_journal_id is not null
-    and ${walletLeg(sql`o.purchase_journal_id`, sql`o.customer_id`)} <> -o.total_usd_units
+    and (${payerLeg(sql`o.purchase_journal_id`)} <> -o.total_usd_units
+      or ${otherLeg(sql`o.purchase_journal_id`)} <> 0)
   union
   select 'journal', o.purchase_journal_id from orders o
   where o.checkout_id is not null and o.purchase_journal_id is not null
@@ -164,14 +184,16 @@ const orderPurchase = sql`
     and not exists (select 1 from orders o where o.purchase_journal_id = j.id)`;
 
 /**
- * C7: an order's refund equals its refund journal's wallet credit (none when nothing was
- * refunded); every refund journal belongs to one order.
+ * C7: an order's refund equals its refund journal's wallet credit (S16 AP15: owner drawings' for
+ * an owner-funded order; none when nothing was refunded); every refund journal belongs to one
+ * order.
  */
 const orderRefund = sql`
   select 'order', o.id from orders o
   where (o.refund_journal_id is null) <> (o.refunded_usd_units = 0)
     or (o.refund_journal_id is not null
-      and ${walletLeg(sql`o.refund_journal_id`, sql`o.customer_id`)} <> o.refunded_usd_units)
+      and (${payerLeg(sql`o.refund_journal_id`)} <> o.refunded_usd_units
+        or ${otherLeg(sql`o.refund_journal_id`)} <> 0))
   union
   select 'journal', j.id from ledger_journals j
   where j.kind = 'refund'

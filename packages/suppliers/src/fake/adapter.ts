@@ -36,7 +36,8 @@ import { hmacSha256, verifyHmacSignature } from '../core/hmac.js';
  * S08: an offer's script (`orderScripts`, `supplier:fake --order`) decides its next orders before
  * the `playerId` prefix does (a code offer has no player): `delivered`, `pending` (until
  * resolved), `failed`, `invalid` (input rejected), `unknown` (no answer until resolved),
- * `partial:<n>` (n units delivered, the rest failed), `slow:<seconds>`. Orders are kept in the
+ * `partial:<n>` (n units delivered, the rest failed), `slow:<seconds>`; S16 `resend-refused` (the
+ * first send buys but answers unknown, a re-send of its key is refused). Orders are kept in the
  * state (`orders`): each change is handed to `onOrder`, which the worker persists, so a poll, a
  * repeated key and `supplier:fake --resolve` find them across calls and processes.
  */
@@ -49,7 +50,11 @@ export const FAKE_SIGNATURE_HEADER = 'x-fake-signature';
 
 /** How an offer's next orders answer (S08, `supplier:fake --order`). */
 export const fakeOrderScriptSchema = z.union([
-  z.enum(['delivered', 'pending', 'failed', 'invalid', 'unknown']),
+  /**
+   * S16 `resend-refused`: the first send buys and answers unknown; a re-send of its key is refused
+   * (`INSUFFICIENT_BALANCE`), as WDGZone may (rule RS1).
+   */
+  z.enum(['delivered', 'pending', 'failed', 'invalid', 'unknown', 'resend-refused']),
   /** 1 to 50 units. */
   z
     .templateLiteral(['partial:', z.int()])
@@ -94,6 +99,8 @@ const fakeOrderSchema = z.object({
   }),
   outcome: outcomeSchema,
   settled: outcomeSchema,
+  /** S16: a re-send of this key is refused (the `resend-refused` script). */
+  refuseResend: z.boolean().optional(),
 });
 
 export type FakeOrder = z.infer<typeof fakeOrderSchema>;
@@ -132,6 +139,14 @@ export interface FakeAdapterOptions {
   /** Called with every new or changed order, for the caller to keep (S08). */
   onOrder?: (idempotencyKey: string, order: FakeOrder) => Promise<void>;
 }
+
+/** What an order keeps of its request (a re-send's flag is not part of it). */
+const requestOf = (request: PlaceOrderRequest): FakeOrder['request'] => ({
+  idempotencyKey: request.idempotencyKey,
+  offerId: request.offerId,
+  quantity: request.quantity,
+  fields: request.fields,
+});
 
 const usd = (cents: number): SupplierMoney => ({ currency: 'USD', amountUnits: cents * USD_CENT });
 
@@ -260,6 +275,13 @@ export class FakeSupplierAdapter implements SupplierAdapter {
           reason: 'Key reused for another order',
         };
       }
+      if (existing.refuseResend) {
+        return {
+          status: 'failed_definitive',
+          supplierCode: 'INSUFFICIENT_BALANCE',
+          reason: 'Supplier balance too low',
+        };
+      }
       return existing.outcome.status === 'unknown' ? existing.settled : existing.outcome;
     }
     const offer = this.catalog().find((candidate) => candidate.offerId === request.offerId);
@@ -313,6 +335,15 @@ export class FakeSupplierAdapter implements SupplierAdapter {
 
     if (as('pending', 'pending') || (script === null && playerId.startsWith('badsig'))) {
       return this.record(request, { status: 'pending', supplierOrderId }, delivered);
+    }
+    if (script === 'resend-refused') {
+      await this.keep(request.idempotencyKey, {
+        request: requestOf(request),
+        outcome: { status: 'unknown', reason: 'Fake supplier timed out' },
+        settled: delivered,
+        refuseResend: true,
+      });
+      return { status: 'unknown', reason: 'Fake supplier timed out' };
     }
     if (as('unknown', 'unknown')) {
       // A scripted `unknown` never answers until resolved (the hard limit, rule F7); the
@@ -461,7 +492,7 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     outcome: SupplierOutcome,
     settled: SupplierOutcome = outcome,
   ): Promise<SupplierOutcome> {
-    await this.keep(request.idempotencyKey, { request, outcome, settled });
+    await this.keep(request.idempotencyKey, { request: requestOf(request), outcome, settled });
     return outcome;
   }
 

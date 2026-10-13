@@ -1,4 +1,8 @@
-import type { SupplierCallResult } from '@vertex-digital/contracts';
+import {
+  isResendRefusal,
+  RESEND_REFUSED_REASON,
+  type SupplierCallResult,
+} from '@vertex-digital/contracts';
 import {
   type AppliedOutcome,
   type AttemptOutcome,
@@ -44,12 +48,25 @@ const callResult = (outcome: SupplierOutcome): SupplierCallResult =>
       ? 'error'
       : 'ok';
 
-/** The adapter's answer as the write path takes it, reasons cleaned of credentials. */
+/**
+ * The adapter's answer as the write path takes it, reasons cleaned of credentials. S16 rule RS1: a
+ * refusal of a re-send is `unknown` (`resend_refused`, the supplier's code kept): the first send
+ * may have bought the order, so only the first send of an attempt can fail it.
+ */
 export function attemptOutcome(
   outcome: SupplierOutcome,
   secrets: readonly string[],
+  resend = false,
 ): AttemptOutcome {
   const clean = (reason: string) => sanitizedMessage(reason, secrets).slice(0, 200);
+  if (outcome.status === 'failed_definitive' && isResendRefusal(outcome, resend)) {
+    return {
+      status: 'unknown',
+      reason: RESEND_REFUSED_REASON,
+      supplierErrorCode: outcome.supplierCode ?? null,
+      supplierOrderId: outcome.supplierOrderId ?? null,
+    };
+  }
   switch (outcome.status) {
     case 'delivered':
       return {
@@ -78,15 +95,16 @@ export function attemptOutcome(
 }
 
 /**
- * Asks the attempt's supplier: `place` sends the order (again, with the same key: rules R3, F3,
- * F6), `get` reads a pending one. A supplier with no adapter or credentials here now gives
- * `unknown` (rule F8: the attempt stays with it and is polled again).
+ * Asks the attempt's supplier: `place` sends the order (rule R3), `resend` sends it again with the
+ * same key (rules F3, F6; S16 RS1: a refusal is then `unknown`), `get` reads a pending one. A
+ * supplier with no adapter or credentials here now gives `unknown` (rule F8: the attempt stays
+ * with it and is polled again).
  */
 export async function askSupplier(
   db: Executor,
   registry: SupplierRegistry,
   attempt: AttemptRow,
-  call: 'place' | 'get',
+  call: 'place' | 'resend' | 'get',
 ): Promise<AttemptOutcome> {
   const { routeId, supplierOfferId } = attempt;
   // S11: an `admin_fulfil` attempt is closed from its insert and never asked (edge case 17).
@@ -123,14 +141,15 @@ export async function askSupplier(
   const answer = await recordedCall(
     db,
     attempt.supplierId,
-    call === 'place' ? 'place_order' : 'get_order',
+    call === 'get' ? 'get_order' : 'place_order',
     () =>
-      call === 'place'
+      call !== 'get'
         ? adapter.placeOrder({
             idempotencyKey: attempt.id,
             offerId: supplierOfferId,
             quantity: attempt.quantity,
             fields,
+            resend: call === 'resend',
           })
         : adapter.getOrder(attempt.id, {
             ...(attempt.supplierOrderId !== null && { supplierOrderId: attempt.supplierOrderId }),
@@ -138,7 +157,11 @@ export async function askSupplier(
           }),
     callResult,
   );
-  return attemptOutcome(answer.ok ? answer.value : outcomeOfOrderError(answer.error), secrets);
+  return attemptOutcome(
+    answer.ok ? answer.value : outcomeOfOrderError(answer.error),
+    secrets,
+    call === 'resend',
+  );
 }
 
 /** Where a result for an attempt came from, for its conflict alert's dedupe key. */

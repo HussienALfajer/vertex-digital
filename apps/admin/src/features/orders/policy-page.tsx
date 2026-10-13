@@ -1,9 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
+  formatAmountInput,
+  formatUsd,
   ORDER_POLICY_DEFAULTS,
   type OrderPolicy,
   orderPolicySchema,
+  parseUsd,
 } from '@vertex-digital/contracts';
 import {
   Button,
@@ -26,17 +29,32 @@ import { orderPolicyQuery, useSetOrderPolicy } from './orders.queries';
 
 type PolicyField = keyof OrderPolicy;
 
-/** The form's sections, in order (rules F7, MN2), each field in its own unit. */
-const SECTIONS: { title: 'polling' | 'review' | 'manual'; fields: PolicyField[] }[] = [
+/** The form's sections, in order (rules F7, MN2; S16 AP7), each field in its own unit. */
+const SECTIONS: { title: 'polling' | 'review' | 'manual' | 'owner'; fields: PolicyField[] }[] = [
   {
     title: 'polling',
     fields: ['firstPollSeconds', 'fastPollSeconds', 'fastPollMinutes', 'slowPollSeconds'],
   },
   { title: 'review', fields: ['hardLimitMinutes', 'reviewPollMinutes', 'reviewPollHours'] },
   { title: 'manual', fields: ['manualReminderMinutes'] },
+  { title: 'owner', fields: ['ownerDailyCapUsdUnits'] },
 ];
 
+/** S16 AP7: the owner cap is typed in dollars; the other fields are whole numbers. */
+const DOLLAR_FIELDS: readonly PolicyField[] = ['ownerDailyCapUsdUnits'];
+
 const WHOLE = /^\d{1,5}$/;
+
+const textOf = (field: PolicyField, value: number) =>
+  DOLLAR_FIELDS.includes(field) ? formatAmountInput('USD', value) : String(value);
+
+const parsedValue = (field: PolicyField, text: string) =>
+  DOLLAR_FIELDS.includes(field) ? parseUsd(text) : WHOLE.test(text) ? Number(text) : null;
+
+const defaultOf = (field: PolicyField) =>
+  DOLLAR_FIELDS.includes(field)
+    ? formatUsd(ORDER_POLICY_DEFAULTS[field])
+    : ORDER_POLICY_DEFAULTS[field];
 
 /** "/orders/policy" (S08 screens): the policy's fields with their defaults, re-authenticated. */
 export function OrderPolicyPage() {
@@ -76,7 +94,7 @@ function PolicyForm({ policy }: { policy: OrderPolicy }) {
       Object.fromEntries(
         (Object.keys(ORDER_POLICY_DEFAULTS) as PolicyField[]).map((field) => [
           field,
-          String(policy[field]),
+          textOf(field, policy[field]),
         ]),
       ) as Record<PolicyField, string>,
   );
@@ -90,8 +108,7 @@ function PolicyForm({ policy }: { policy: OrderPolicy }) {
     setSaved(false);
     const values = Object.fromEntries(
       (Object.keys(texts) as PolicyField[]).map((field) => {
-        const text = texts[field].trim();
-        return [field, WHOLE.test(text) ? Number(text) : null];
+        return [field, parsedValue(field, texts[field].trim())];
       }),
     );
     const parsed = orderPolicySchema.safeParse(values);
@@ -124,7 +141,7 @@ function PolicyForm({ policy }: { policy: OrderPolicy }) {
                 <Input
                   name={field}
                   dir="ltr"
-                  inputMode="numeric"
+                  inputMode={DOLLAR_FIELDS.includes(field) ? 'decimal' : 'numeric'}
                   autoComplete="off"
                   value={texts[field]}
                   onChange={(event) => {
@@ -133,7 +150,7 @@ function PolicyForm({ policy }: { policy: OrderPolicy }) {
                   }}
                 />
                 <FieldDescription>
-                  {t('orders.policy.default', { value: ORDER_POLICY_DEFAULTS[field] })}
+                  {t('orders.policy.default', { value: defaultOf(field) })}
                 </FieldDescription>
                 <FieldError match={invalid.includes(field)}>
                   {t(`orders.policy.fields.${field}.error`)}

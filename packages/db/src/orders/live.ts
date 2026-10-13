@@ -153,12 +153,13 @@ export async function liveBoard(
             totalUsdUnits: orders.totalUsdUnits,
             isTest: orders.isTest,
             reviewSince: orders.reviewSince,
+            purpose: orders.adminPurpose,
             customerEmail: customers.email,
             product: { id: catalogProducts.id, nameAr: catalogProducts.nameAr },
             game: { id: catalogGames.id, nameAr: catalogGames.nameAr },
           })
           .from(orders)
-          .innerJoin(customers, eq(customers.id, orders.customerId))
+          .leftJoin(customers, eq(customers.id, orders.customerId))
           .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
           .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
           .where(inArray(orders.id, ids));
@@ -179,6 +180,7 @@ export async function liveBoard(
       totalUsdUnits: detail.totalUsdUnits,
       isTest: detail.isTest,
       customerEmail: detail.customerEmail,
+      purpose: detail.purpose,
       attempt:
         row.supplierCode && row.attemptStatus
           ? {

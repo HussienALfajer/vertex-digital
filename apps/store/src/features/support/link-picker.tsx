@@ -18,7 +18,8 @@ type Choice = {
   id: string;
   number: string;
   label: string;
-  amountUnits: number;
+  /** S16 AP11: null for a gift or a compensation from the store (no price shown). */
+  amountUnits: number | null;
   status: string;
   tone: BadgeProps['tone'];
 };
@@ -117,9 +118,11 @@ export function LinkPicker({
                 </span>
               </span>
               <span className="flex shrink-0 flex-col items-end gap-1">
-                <bdi dir="ltr" className="text-sm font-bold tabular-nums">
-                  {formatUsd(choice.amountUnits)}
-                </bdi>
+                {choice.amountUnits !== null && (
+                  <bdi dir="ltr" className="text-sm font-bold tabular-nums">
+                    {formatUsd(choice.amountUnits)}
+                  </bdi>
+                )}
                 <Badge tone={choice.tone}>{choice.status}</Badge>
               </span>
             </label>

@@ -1,4 +1,9 @@
-import type { AdminOrder, AttemptStatus, OrderStatus } from '@vertex-digital/contracts';
+import type {
+  AdminOrder,
+  AdminOrderPurpose,
+  AttemptStatus,
+  OrderStatus,
+} from '@vertex-digital/contracts';
 import type { TFunction } from 'i18next';
 
 /** Order and attempt status tones (brand/identity.md §2). */
@@ -21,6 +26,14 @@ export const ATTEMPT_TONES = {
   delivered: 'success',
   failed: 'danger',
 } as const satisfies Record<AttemptStatus, string>;
+
+/** S16 AP14: the chip of an order placed from the panel; owner-funded modes stand out. */
+export const PURPOSE_TONES = {
+  walk_in: 'gold',
+  on_behalf: 'info',
+  gift: 'gold',
+  compensation: 'gold',
+} as const satisfies Record<AdminOrderPurpose, string>;
 
 /** S09 rule AD3: how the player id was checked before the order was paid or reserved. */
 export function playerCheckText(

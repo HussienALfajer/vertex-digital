@@ -538,8 +538,9 @@ export function sypTolerance(toleranceUsdUnits: number, rate: string | null): nu
 
 /** Rule C4: the account kinds each journal kind may post to. */
 export const JOURNAL_ACCOUNT_KINDS = {
-  purchase: ['customer_wallet', 'sales_revenue'],
-  refund: ['customer_wallet', 'refunds'],
+  // S16 AP15: an owner-funded order is paid from, and refunded to, owner drawings.
+  purchase: ['customer_wallet', 'owner_drawings', 'sales_revenue'],
+  refund: ['customer_wallet', 'owner_drawings', 'refunds'],
   cost_of_goods: ['cost_of_goods', 'supplier_prepaid'],
   deposit: [
     'customer_wallet',

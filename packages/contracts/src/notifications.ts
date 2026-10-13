@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { otpCodeSchema } from './auth.js';
 import { depositRejectReasonSchema } from './deposits.js';
 import { cursorQuerySchema } from './lists.js';
-import { cancelReasonSchema, refundReasonSchema } from './orders.js';
+import {
+  ADMIN_ORDER_NOTE_MAX_LENGTH,
+  cancelReasonSchema,
+  refundReasonSchema,
+  STORE_PLACED_PURPOSES,
+} from './orders.js';
 import { adjustmentCategorySchema, adjustmentDirectionSchema } from './wallet.js';
 
 /*
@@ -46,6 +51,8 @@ export const EMAIL_TEMPLATES = [
   'customer_checkout_finished',
   /** The admin answered a ticket (S12 TK9): the number and a link, never the reply. */
   'customer_ticket_replied',
+  /** The store placed an order for the customer (S16 AP11): the mode and the note, no fields. */
+  'customer_order_placed_for_you',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -82,6 +89,7 @@ export const NOTIFICATION_EVENTS = [
   'order_cancelled',
   'checkout_finished',
   'ticket_replied',
+  'order_placed_for_you',
 ] as const;
 
 export const notificationEventSchema = z
@@ -128,13 +136,15 @@ export const NOTIFICATION_PARAMS = {
     productNameAr: z.string(),
     deliveredQuantity: z.int().positive(),
     refundedQuantity: z.int().positive(),
-    refundedUsdUnits: z.int().positive(),
+    /** S16 AP11: null when the owner paid: nothing returns to the wallet. */
+    refundedUsdUnits: z.int().positive().nullable(),
   }),
   order_refunded: z.object({
     orderId: z.uuid(),
     orderNumber: z.string(),
     productNameAr: z.string(),
-    refundedUsdUnits: z.int().positive(),
+    /** S16 AP11: null when the owner paid ("تعذّر تنفيذ الطلب", no wallet amount). */
+    refundedUsdUnits: z.int().positive().nullable(),
     reason: refundReasonSchema,
   }),
   order_delayed: z.object({
@@ -165,6 +175,15 @@ export const NOTIFICATION_PARAMS = {
   }),
   // S12 TK9: the ticket, never the message.
   ticket_replied: z.object({ ticketId: z.uuid(), number: z.string() }),
+  // S16 AP11: an order the store placed for the customer; never the admin's internal reason.
+  order_placed_for_you: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    productNameAr: z.string(),
+    purpose: z.enum(STORE_PLACED_PURPOSES),
+    /** The order's note to the customer (named apart from internal notes, rule NT3). */
+    message: z.string().max(ADMIN_ORDER_NOTE_MAX_LENGTH).optional(),
+  }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
@@ -194,6 +213,7 @@ export const EMAIL_PARAMS = {
   customer_order_cancelled: NOTIFICATION_PARAMS.order_cancelled.extend(at.shape),
   customer_checkout_finished: NOTIFICATION_PARAMS.checkout_finished.extend(at.shape),
   customer_ticket_replied: NOTIFICATION_PARAMS.ticket_replied,
+  customer_order_placed_for_you: NOTIFICATION_PARAMS.order_placed_for_you.extend(at.shape),
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
@@ -229,6 +249,7 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   order_cancelled: 'customer_order_cancelled',
   checkout_finished: 'customer_checkout_finished',
   ticket_replied: 'customer_ticket_replied',
+  order_placed_for_you: 'customer_order_placed_for_you',
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -278,6 +299,7 @@ export const customerNotificationSchema = z
     notification('order_cancelled'),
     notification('checkout_finished'),
     notification('ticket_replied'),
+    notification('order_placed_for_you'),
   ])
   .meta({ id: 'CustomerNotification' });
 

@@ -396,6 +396,8 @@ describe('S13 held amounts, ranges and implied rates', () => {
     expect(heldUnits('supplier_prepaid', -499_000_000)).toBe(499_000_000);
     expect(heldUnits('usdt_receipts', 5_000_000)).toBe(-5_000_000);
     expect(heldUnits('transfer_fees', -1_000_000)).toBe(1_000_000);
+    // S16 AM2: what the owner took in goods.
+    expect(heldUnits('owner_drawings', -20_000_000)).toBe(20_000_000);
     expect(Object.is(heldUnits('cost_of_goods', 0), 0)).toBe(true);
     expect(heldUnits('outside_funds', 200_000_000)).toBe(200_000_000);
     expect(heldUnits('customer_wallet', 25_000_000)).toBe(25_000_000);

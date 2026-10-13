@@ -486,7 +486,8 @@ describe('external checks (E1–E4)', () => {
           rawAmount: '5000000000000000000',
           amountUnits: 5 * USD,
           blockNumber: 1,
-          blockTime: new Date(),
+          // The oldest: the result lists 50 lines, oldest first, and other suites leave more.
+          blockTime: new Date('2020-01-01T00:00:00Z'),
           source: 'scan',
         })
         .returning();

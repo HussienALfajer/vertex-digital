@@ -62,7 +62,17 @@ export async function currentOrderPolicy(db: Executor): Promise<OrderPolicy> {
     reviewPollMinutes: row.reviewPollMinutes,
     reviewPollHours: row.reviewPollHours,
     manualReminderMinutes: row.manualReminderMinutes,
+    ownerDailyCapUsdUnits: row.ownerDailyCapUsdUnits,
   };
+}
+
+/**
+ * The customer of an order that always has one: a reservation or a store purchase (only a walk-in
+ * admin order has none, S16 AP1, and it is never reserved).
+ */
+export function orderCustomerId(order: { id: string; customerId: string | null }): string {
+  if (order.customerId === null) throw new Error(`Order ${order.id} has no customer`);
+  return order.customerId;
 }
 
 /** The order, locked `FOR UPDATE` for the caller's transaction; null when it does not exist. */

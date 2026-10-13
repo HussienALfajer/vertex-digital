@@ -447,6 +447,7 @@ describe('the messages of PR 4', () => {
       ticketsOpened: 3,
       ticketsWaiting: 2,
       reconciliation: { date: '2029-12-31', status: 'finished', mismatches: 2, open: 3 },
+      ownerOrders: { count: 2, usedUsdUnits: 12_500_000, capUsdUnits: 100_000_000 },
     };
     const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
     for (const line of [
@@ -467,6 +468,7 @@ describe('the messages of PR 4', () => {
       'تذاكر جديدة اليوم: 3 · بانتظار ردّك الآن: 2',
       'التحقق من المعرّف اليوم: SHOP2TOPUP 12، WDGZone 3',
       'المطابقة الليلية 2029-12-31: 2 فروقات · مفتوحة الآن: 3',
+      'طلبات من مال المالك اليوم: 2 بقيمة $12.50 من سقف $100.00',
     ]) {
       expect(text).toContain(line);
     }
@@ -603,6 +605,31 @@ describe('the messages of PR 4', () => {
     ).text;
     expect(reply).toContain('ردّ العميل على التذكرة VT-7KQ2MX');
     expect(reply).not.toContain('مع صور');
+  });
+
+  it('render a purchase from the panel with its mode and the owner cap, never fields (S16 AP13)', () => {
+    const order = {
+      orderId: newId(),
+      orderNumber: 'VO-7KQ2MX',
+      purpose: 'walk_in' as const,
+      gameNameAr: 'ببجي',
+      productNameAr: '660 شدة',
+      quantity: 1,
+      totalUsdUnits: 9_900_000,
+      owner: { usedUsdUnits: 19_900_000, capUsdUnits: 100_000_000 },
+    };
+    const text = renderTelegramMessage('admin_order_placed', order, LINKS).text;
+    expect(text).toContain('شراء من اللوحة VO-7KQ2MX · زبون مباشر');
+    expect(text).toContain('ببجي · 660 شدة × 1 · $9.90');
+    expect(text).toContain('مال المالك اليوم: $19.90 من $100.00');
+    expect(text).toContain(`/orders/${order.orderId}`);
+    const onBehalf = renderTelegramMessage(
+      'admin_order_placed',
+      { ...order, purpose: 'on_behalf', owner: null },
+      LINKS,
+    ).text;
+    expect(onBehalf).toContain('بطلب زبون من محفظته');
+    expect(onBehalf).not.toContain('مال المالك');
   });
 
   it('render the decision questions and answers (rules TC4, TC5)', () => {

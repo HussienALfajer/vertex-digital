@@ -45,7 +45,7 @@ import {
   isSlow,
   waitingIds,
 } from './live-time';
-import { STATUS_TONES } from './order-labels';
+import { PURPOSE_TONES, STATUS_TONES } from './order-labels';
 import type { OrderSearch } from './order-search';
 import { liveBoardQuery } from './orders.queries';
 
@@ -378,6 +378,9 @@ function OrderCard({
           {card.number}
         </bdi>
         <span className="flex flex-wrap items-center gap-1">
+          {card.purpose && (
+            <Badge tone={PURPOSE_TONES[card.purpose]}>{t(`orders.purposes.${card.purpose}`)}</Badge>
+          )}
           {card.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
           {slow && <Badge tone="warning">{t('orders.live.slow')}</Badge>}
           {column === 'finished' && (

@@ -11,6 +11,7 @@ import {
 import {
   bossJobSender,
   checkouts,
+  currentOrderPolicy,
   customers,
   type Database,
   depositSettings,
@@ -235,6 +236,30 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       ...(await this.checkoutLines(db, dayStart)),
       ...(await this.ticketLines(db, dayStart)),
       reconciliation: await this.reconciliationLine(db),
+      ownerOrders: await this.ownerOrdersLine(db, dayStart),
+    };
+  }
+
+  /**
+   * S16: owner-funded admin orders paid today, their totals net of refunds, against the owner cap;
+   * null without any.
+   */
+  private async ownerOrdersLine(db: Database | Transaction, dayStart: SQL) {
+    const [[row], policy] = await Promise.all([
+      db
+        .select({
+          count: count(),
+          used: sql<string>`coalesce(sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits}), 0)::text`,
+        })
+        .from(orders)
+        .where(and(eq(orders.payer, 'owner'), gte(orders.paidAt, dayStart))),
+      currentOrderPolicy(db),
+    ]);
+    if (!row || row.count === 0) return null;
+    return {
+      count: row.count,
+      usedUsdUnits: Number(row.used),
+      capUsdUnits: policy.ownerDailyCapUsdUnits,
     };
   }
 

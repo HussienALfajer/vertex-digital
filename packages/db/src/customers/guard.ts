@@ -67,8 +67,9 @@ export async function lockActiveCustomer(
 }
 
 /**
- * Rule LM4: what the customer bought in the last 24 hours, net of refunds: every order paid since,
- * its total less what was refunded.
+ * Rule LM4: what the customer bought in the last 24 hours, net of refunds: every order paid since
+ * from their wallet (S16: an `on_behalf` admin order counts, a gift or compensation does not), its
+ * total less what was refunded.
  */
 export async function purchasedLastDay(
   db: Database | Transaction,
@@ -80,7 +81,11 @@ export async function purchasedLastDay(
     })
     .from(orders)
     .where(
-      and(eq(orders.customerId, customerId), gt(orders.paidAt, sql`now() - interval '24 hours'`)),
+      and(
+        eq(orders.customerId, customerId),
+        eq(orders.payer, 'customer'),
+        gt(orders.paidAt, sql`now() - interval '24 hours'`),
+      ),
     );
   return Number(row?.used ?? 0);
 }
