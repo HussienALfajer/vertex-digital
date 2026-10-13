@@ -42,7 +42,7 @@ Spec: `docs/specs/S16-supplier-catalog-and-admin-orders.md` (F08, F09, F11 amend
 - [x] i18n keys (`suppliers.catalog.*`, `statement.*`, game page, order page); errors already in the catalog from PR 2 (check)
 - [x] E2E: `suppliers-mock.ts` gains categories, draft, import, link, ignore, statement, platform status, nearby orders on the contracts' pure rules (`categoryStandings`, `suggestInputFields`, …); `supplier-catalog.spec.ts` flows (tree and states, import all-or-nothing with a refused row, link, ignore clears the badge, activate all, statement matched/unmatched, nearby orders); RTL screenshots light and dark of the tree, import dialog, link dialog, statement, activate all
 - [x] Docs: ROADMAP (S16 PR 3), admin `CLAUDE.md` patterns, `wiring.md` patterns, spec "Settled in implementation" (PR 3), architecture if routes changed
-- [ ] Checks, reviewer, owner acceptance (spec acceptance 7–11 in the browser), PR with auto-merge
+- [x] Checks, reviewer (three blocking findings fixed: nearby orders read kept current, link capped at 100, icon tooltips), owner acceptance (2026-10-13), PR with auto-merge
 
 ## PR 4 — Two fields and select fields (MF1), only after Q19
 - [ ] Waits for WDG's answer
