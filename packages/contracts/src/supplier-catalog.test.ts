@@ -8,8 +8,10 @@ import {
   discountPercent,
   importCategorySchema,
   linkCategorySchema,
+  optionMapSchema,
   PANEL_READ_OPERATIONS,
   parseGameAmount,
+  proposeOptionMap,
   SUPPLIER_POLICY_DEFAULTS,
   stockAlertChange,
   stockLevel,
@@ -19,6 +21,7 @@ import {
   supplierHealth,
   supplierPanelCapabilities,
   supplierPolicySchema,
+  unmappedOptions,
 } from './suppliers.js';
 
 /*
@@ -151,6 +154,130 @@ describe('field suggestions (rule SC12)', () => {
       'a'.repeat(32),
       `${'a'.repeat(30)}_2`,
     ]);
+  });
+});
+
+describe('select fields and option maps (rules MF2, MF3)', () => {
+  const server = {
+    key: 'server',
+    label: 'Server',
+    type: 'select' as const,
+    options: [
+      { label: 'South America', value: 'south_america' },
+      { label: 'Asia', value: 'Asia' },
+      { label: 'asia', value: 'ASIA' },
+      { label: '  ', value: 'EU West' },
+    ],
+  };
+
+  it('turns a supplier select into ours with sanitized unique values and the option map', () => {
+    const { fields, fieldMap, optionMap } = suggestInputFields([
+      { key: 'player_id', label: 'Player ID', type: 'text' },
+      server,
+    ]);
+    expect(fields[1]).toEqual({
+      supplierKey: 'server',
+      key: 'server',
+      labelAr: 'السيرفر',
+      type: 'select',
+      minLength: null,
+      maxLength: null,
+      options: [
+        { value: 'south_america', labelAr: 'South America' },
+        { value: 'asia', labelAr: 'Asia' },
+        { value: 'asia_2', labelAr: 'asia' },
+        { value: 'eu_west', labelAr: 'eu_west' },
+      ],
+      required: true,
+    });
+    expect(fields[0]?.options).toBeNull();
+    expect(fieldMap).toEqual({ player_id: 'player_id', server: 'server' });
+    expect(optionMap).toEqual({
+      server: { south_america: 'south_america', asia: 'Asia', asia_2: 'ASIA', eu_west: 'EU West' },
+    });
+  });
+
+  it('keeps a select with fewer than 2 or more than 50 options as text', () => {
+    const many = Array.from({ length: 51 }, (_, n) => ({ label: `S${n}`, value: `s${n}` }));
+    const { fields, optionMap } = suggestInputFields([
+      { key: 'zone', label: 'Zone', type: 'select', options: [{ label: 'A', value: 'a' }] },
+      { key: 'realm', label: 'Realm', type: 'select', options: many },
+      { key: 'shard', label: 'Shard', type: 'select' },
+    ]);
+    expect(fields.map((field) => field.type)).toEqual(['text', 'text', 'text']);
+    expect(optionMap).toEqual({});
+  });
+
+  it('proposes our options onto the supplier list by value, label or sanitized value', () => {
+    expect(
+      proposeOptionMap(
+        [
+          { value: 'asia', labelAr: 'آسيا' },
+          { value: 'eu', labelAr: ' Europe ' },
+          { value: 'na_east', labelAr: 'شرق' },
+          { value: 'mars', labelAr: 'المريخ' },
+        ],
+        [
+          { label: 'Asia', value: 'asia' },
+          { label: 'europe', value: 'EU-1' },
+          { label: 'NA', value: 'NA East' },
+        ],
+      ),
+    ).toEqual({ asia: 'asia', eu: 'EU-1', na_east: 'NA East' });
+  });
+
+  it('lists the supplier selects a route cannot send from every option', () => {
+    const specs = [
+      { key: 'player_id', label: 'ID', type: 'text' as const },
+      {
+        key: 'server',
+        label: 'Server',
+        type: 'select' as const,
+        options: [
+          { label: 'Asia', value: 'Asia' },
+          { label: 'Europe', value: 'Europe' },
+        ],
+      },
+    ];
+    const fieldMap = { player_id: 'player_id', server: 'server' };
+    const selects = { server: ['asia', 'eu'] };
+    const full = { server: { asia: 'Asia', eu: 'Europe' } };
+    expect(unmappedOptions(specs, fieldMap, full, selects)).toEqual([]);
+    expect(unmappedOptions(null, fieldMap, {}, selects)).toEqual([]);
+    expect(unmappedOptions(specs, { player_id: 'player_id' }, {}, selects)).toEqual([]);
+    expect(unmappedOptions(specs, fieldMap, {}, selects)).toEqual(['server']);
+    expect(unmappedOptions(specs, fieldMap, { server: { asia: 'Asia' } }, selects)).toEqual([
+      'server',
+    ]);
+    expect(
+      unmappedOptions(specs, fieldMap, { server: { asia: 'Asia', eu: 'Mars' } }, selects),
+    ).toEqual(['server']);
+    expect(
+      unmappedOptions(
+        [{ key: 'shard', label: 'S', type: 'select' }],
+        { shard: 'shard' },
+        {},
+        {
+          shard: ['a'],
+        },
+      ),
+    ).toEqual(['shard']);
+    // A supplier select needs one of our selects.
+    expect(unmappedOptions(specs, fieldMap, full, {})).toEqual(['server']);
+    // Options the supplier lists and we do not are fine.
+    expect(
+      unmappedOptions(specs, fieldMap, { server: { asia: 'Asia' } }, { server: ['asia'] }),
+    ).toEqual([]);
+  });
+
+  it('bounds the option map', () => {
+    expect(optionMapSchema.safeParse({ server: { asia: 'Asia' } }).success).toBe(true);
+    expect(optionMapSchema.safeParse({ server: { Asia: 'Asia' } }).success).toBe(false);
+    expect(optionMapSchema.safeParse({ server: { asia: '' } }).success).toBe(false);
+    const options = Object.fromEntries(Array.from({ length: 51 }, (_, n) => [`o${n}`, 'x']));
+    expect(optionMapSchema.safeParse({ server: options }).success).toBe(false);
+    const fields = Object.fromEntries(Array.from({ length: 11 }, (_, n) => [`f${n}`, {}]));
+    expect(optionMapSchema.safeParse(fields).success).toBe(false);
   });
 });
 

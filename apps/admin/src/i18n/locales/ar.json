@@ -296,7 +296,8 @@
       "ACCOUNT_FROZEN": "العميل مجمّد: لا يمكنه الإيداع أو الشراء.",
       "PURCHASE_LIMIT_EXCEEDED": "تجاوز العميل حد الشراء اليومي.",
       "OWNER_DAILY_CAP_EXCEEDED": "تجاوز هذا الشراء سقف المالك اليومي لطلبات مال المالك.",
-      "OFFER_UNSUPPORTED": "هذه الباقة غير مدعومة حتى يرد WDG: تطلب أكثر من حقل أو حقل اختيار.",
+      "OFFER_UNSUPPORTED": "هذه الباقة غير مدعومة: لا يمكن إرسال حقولها إلى المورد.",
+      "FIELD_OPTIONS_DIFFER": "خيارات حقل الاختيار لا تقابل خيارات المورد: اربط كل خيار بخيار من قائمة المورد أو احذفه.",
       "OFFER_IGNORED": "هذا العرض متجاهل. ألغِ التجاهل أولًا.",
       "CATEGORY_LINKED": "هذه الفئة أو فئة فوقها أو تحتها مربوطة بلعبة أخرى.",
       "CATEGORY_MISSING": "اختفت هذه الفئة من المورد.",
@@ -2302,7 +2303,7 @@
       },
       "options": "خيارات: {{count}}",
       "unsupported": {
-        "fields_unsupported": "غير مدعوم حتى يرد WDG"
+        "fields_unsupported": "حقول لا يمكن إرسالها"
       },
       "ignored": "متجاهل",
       "ignore": "تجاهل {{name}}",
@@ -2328,6 +2329,14 @@
       "supplierFieldPlaceholder": "مثل playerId",
       "remove": "حذف الحقل",
       "add": "إضافة حقل من توثيق المورد"
+    },
+    "optionMap": {
+      "title": "ربط خيارات حقول الاختيار",
+      "hint": "اختر لكل خيار في اللعبة الخيار الذي يُرسَل إلى المورد.",
+      "unmapped": "غير مربوط",
+      "target": "خيار المورد لـ {{option}}",
+      "missing": "خيار أو أكثر بلا خيار من قائمة المورد",
+      "needsSelect": "حقل المورد قائمة اختيار: اربطه بحقل اختيار في اللعبة."
     },
     "import": {
       "title": "استيراد {{count}} عرض إلى لعبة",
@@ -2381,6 +2390,7 @@
       "priority": "الأولوية",
       "editFields": "ربط الحقول",
       "fieldsTitle": "ربط حقول المسار",
+      "options": "خيارات {{field}}:",
       "addTitle": "إضافة مسار",
       "supplier": "المورد",
       "chooseSupplier": "اختر المورد",
@@ -2405,7 +2415,7 @@
         "supplier_paused": "المورد موقوف",
         "supplier_down": "المورد متوقف",
         "offer_missing": "العرض اختفى من المورد",
-        "offer_unsupported": "العرض غير مدعوم حتى يرد WDG",
+        "offer_unsupported": "حقول العرض لا يمكن إرسالها",
         "out_of_stock": "العرض نافد",
         "cost_unknown": "التكلفة غير صالحة",
         "cost_stale": "السعر قديم",
@@ -2604,6 +2614,10 @@
       "minLength": "أقل طول",
       "maxLength": "أقصى طول",
       "required": "مطلوب",
+      "options": "الخيارات",
+      "optionsHint": "الخيار يُرسَل إلى المورد بقيمته. احذف ما لا تريد عرضه؛ يبقى خياران على الأقل.",
+      "optionLabel": "اسم الخيار {{value}}",
+      "removeOption": "حذف الخيار {{name}}",
       "selectGroup": "تحديد كل باقات {{name}}",
       "groupCount": "({{count}})",
       "selectPack": "تحديد {{name}}",
@@ -2612,7 +2626,8 @@
       "cost": "التكلفة",
       "price": "سعر المتجر",
       "refusals": {
-        "OFFER_UNSUPPORTED": "غير مدعوم حتى يرد WDG",
+        "OFFER_UNSUPPORTED": "حقول لا يمكن إرسالها",
+        "FIELD_OPTIONS_DIFFER": "خياراته لا تشمل كل خيارات الحقل",
         "OFFER_IGNORED": "متجاهل",
         "OFFER_ALREADY_MAPPED": "مربوط بباقة",
         "OFFER_MISSING": "اختفى من المورد",
@@ -2804,7 +2819,7 @@
       "supplier_paused": "المورد موقوف",
       "supplier_down": "المورد متوقف",
       "offer_missing": "العرض اختفى من المورد",
-      "offer_unsupported": "العرض غير مدعوم حتى يرد WDG",
+      "offer_unsupported": "حقول العرض لا يمكن إرسالها",
       "out_of_stock": "العرض نافد",
       "cost_unknown": "التكلفة غير صالحة",
       "cost_stale": "السعر قديم",

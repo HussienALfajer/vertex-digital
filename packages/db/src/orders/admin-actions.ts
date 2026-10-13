@@ -266,6 +266,7 @@ export async function rerouteOrder(
       offerId: route.offer.id,
       supplierOfferId: route.offer.offerId,
       fieldMap: route.fieldMap,
+      optionMap: route.optionMap,
       quantity: remaining,
       unitCostUsdUnits: route.costUsdUnits,
       status: manual ? 'pending' : 'sending',

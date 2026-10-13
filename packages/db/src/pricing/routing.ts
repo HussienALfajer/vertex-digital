@@ -79,6 +79,8 @@ export interface RouteState {
   priority: number;
   enabled: boolean;
   fieldMap: Record<string, string>;
+  /** S16 MF2. */
+  optionMap: Record<string, Record<string, string>>;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -246,7 +248,11 @@ export async function productRoutingStates(
     gameIds.length === 0
       ? []
       : await db
-          .select({ gameId: catalogInputFields.gameId, key: catalogInputFields.key })
+          .select({
+            gameId: catalogInputFields.gameId,
+            key: catalogInputFields.key,
+            options: catalogInputFields.options,
+          })
           .from(catalogInputFields)
           .where(
             and(inArray(catalogInputFields.gameId, gameIds), isNull(catalogInputFields.archivedAt)),
@@ -255,11 +261,19 @@ export async function productRoutingStates(
   const priceOf = new Map(prices.map((row) => [row.productId, row]));
   const reviewOf = new Map(reviews.map((row) => [row.productId, row]));
   const keysOf = new Map<string, string[]>();
-  for (const field of fields)
+  const selectsOf = new Map<string, Record<string, string[]>>();
+  for (const field of fields) {
     keysOf.set(field.gameId, [...(keysOf.get(field.gameId) ?? []), field.key]);
+    if (field.options) {
+      const selects = selectsOf.get(field.gameId) ?? {};
+      selects[field.key] = field.options.map((option) => option.value);
+      selectsOf.set(field.gameId, selects);
+    }
+  }
 
   for (const { product, ...where } of products) {
     const liveFieldKeys = keysOf.get(product.gameId) ?? [];
+    const liveSelectOptions = selectsOf.get(product.gameId) ?? {};
     const routes: RouteState[] = routeRows
       .filter(({ route }) => route.productId === product.id)
       .map(({ route, offer }) => {
@@ -281,7 +295,10 @@ export async function productRoutingStates(
             costConfirmedAt: offer.costConfirmedAt,
             requiredFields: offer.requiredFields,
             fieldMap: route.fieldMap,
+            optionMap: route.optionMap,
+            fieldSpecs: offer.fieldSpecs,
             liveFieldKeys,
+            liveSelectOptions,
             balanceUsdUnits: balance?.currency === 'USD' ? balance.amountUnits : null,
           },
           context.now,
@@ -298,6 +315,7 @@ export async function productRoutingStates(
           priority: route.priority,
           enabled: route.enabled,
           fieldMap: route.fieldMap,
+          optionMap: route.optionMap,
           archivedAt: route.archivedAt,
           createdAt: route.createdAt,
           updatedAt: route.updatedAt,

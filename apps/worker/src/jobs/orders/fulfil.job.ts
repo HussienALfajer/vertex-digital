@@ -156,6 +156,7 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
         offerId: route.offer.id,
         supplierOfferId: route.offer.offerId,
         fieldMap: route.fieldMap,
+        optionMap: route.optionMap,
         quantity: remainingUnits,
         unitCostUsdUnits: route.costUsdUnits as number,
         // A manual attempt waits for the admin at once; it is never polled (rule MN2).

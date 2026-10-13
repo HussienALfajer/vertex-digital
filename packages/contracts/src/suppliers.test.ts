@@ -26,6 +26,7 @@ import {
 } from './suppliers.js';
 
 const now = new Date('2026-10-08T12:00:00Z');
+type FieldSpec = RouteFacts['fieldSpecs'] extends readonly (infer Spec)[] | null ? Spec : never;
 const minutesAgo = (minutes: number) => new Date(now.getTime() - minutes * 60_000);
 const policy = { costStaleMinutes: 120 };
 const id = '0199a000-0000-7000-8000-000000000001';
@@ -45,7 +46,10 @@ const usable: RouteFacts = {
   costConfirmedAt: minutesAgo(5),
   requiredFields: ['playerId'],
   fieldMap: { playerId: 'player_id' },
+  optionMap: {},
+  fieldSpecs: null,
   liveFieldKeys: ['player_id'],
+  liveSelectOptions: {},
   balanceUsdUnits: 1_000_000_000,
 };
 
@@ -113,6 +117,17 @@ describe('routeUnusableReason (rule RT4)', () => {
       [{ costConfirmedAt: null }, 'cost_stale'],
       [{ fieldMap: {} }, 'fields_incomplete'],
       [{ liveFieldKeys: [] }, 'fields_incomplete'],
+      [
+        {
+          fieldSpecs: [
+            { key: 'region', label: 'Region', type: 'select', options: [] },
+          ] as FieldSpec[],
+          fieldMap: { playerId: 'player_id', region: 'region' },
+          liveFieldKeys: ['player_id', 'region'],
+          liveSelectOptions: { region: ['eu'] },
+        },
+        'fields_incomplete',
+      ],
       [{ balanceUsdUnits: 879_999 }, 'balance_low'],
     ];
     for (const [change, reason] of cases) {
@@ -205,6 +220,7 @@ describe('route inputs', () => {
       offerId: id,
       priority: 1,
       fieldMap: {},
+      optionMap: {},
     });
     expect(createRouteSchema.safeParse({ offerId: id, priority: 10 }).success).toBe(false);
   });
@@ -214,6 +230,7 @@ describe('route inputs', () => {
     expect(importOffersSchema.parse({ gameId: id, rows: [row] })).toEqual({
       gameId: id,
       fieldMap: {},
+      optionMap: {},
       rows: [{ offerId: id, nameAr: '60 شدة' }],
     });
     expect(importOffersSchema.safeParse({ gameId: id, rows: [row, row] }).success).toBe(false);

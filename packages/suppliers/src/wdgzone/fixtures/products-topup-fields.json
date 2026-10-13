@@ -1,0 +1,415 @@
+{
+  "request_id": "req_000000000000000000000010",
+  "success": true,
+  "data": [
+    {
+      "id": 269908,
+      "name": "50 + 5 Diamonds (First Top-Up Bonus)",
+      "description": null,
+      "category_id": 16741,
+      "category": "Brazil",
+      "brand": "Mobile Legends",
+      "type": "topup",
+      "price": 0.792,
+      "original_price": 0.792,
+      "discount_percent": 0,
+      "currency": "USD",
+      "stock": 999999,
+      "available": true,
+      "requires_player_id": true,
+      "required_fields": [
+        {
+          "key": "player_id",
+          "label": "Player ID",
+          "type": "text"
+        },
+        {
+          "key": "server_id",
+          "label": "Server ID",
+          "type": "text"
+        }
+      ],
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=Mobile%20Legends"
+    },
+    {
+      "id": 267066,
+      "name": "100 Diamonds",
+      "description": null,
+      "category_id": 16514,
+      "category": "Fashion Dream",
+      "brand": "Fashion Dream",
+      "type": "topup",
+      "price": 0.944,
+      "original_price": 0.944,
+      "discount_percent": 0,
+      "currency": "USD",
+      "stock": 999999,
+      "available": true,
+      "requires_player_id": true,
+      "required_fields": [
+        {
+          "key": "player_id",
+          "label": "Player ID",
+          "type": "text"
+        },
+        {
+          "key": "server",
+          "label": "Server",
+          "type": "select",
+          "options": [
+            {
+              "label": "South America",
+              "value": "south_america"
+            },
+            {
+              "label": "North America",
+              "value": "north_america"
+            },
+            {
+              "label": "Asia",
+              "value": "asia"
+            }
+          ]
+        }
+      ],
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=Fashion%20Dream"
+    },
+    {
+      "id": 271145,
+      "name": "110 Essence Stones",
+      "description": null,
+      "category_id": 16902,
+      "category": "Auto Via Login",
+      "brand": "Solo Leveling: Arise",
+      "type": "topup",
+      "price": 0.996,
+      "original_price": 0.996,
+      "discount_percent": 0,
+      "currency": "USD",
+      "stock": 999999,
+      "available": true,
+      "requires_player_id": true,
+      "required_fields": [
+        {
+          "key": "email",
+          "label": "Email",
+          "type": "text"
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "text"
+        }
+      ],
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=Solo%20Leveling%3A%20Arise"
+    },
+    {
+      "id": 271884,
+      "name": "Ravens Value Pack",
+      "description": null,
+      "category_id": 17605,
+      "category": "EU",
+      "brand": "Undawn",
+      "type": "topup",
+      "price": 0.451,
+      "original_price": 0.451,
+      "discount_percent": 0,
+      "currency": "USD",
+      "stock": 999999,
+      "available": true,
+      "requires_player_id": true,
+      "required_fields": [
+        {
+          "key": "player_id",
+          "label": "Player ID",
+          "type": "text"
+        },
+        {
+          "key": "server",
+          "label": "Server",
+          "type": "select",
+          "options": [
+            {
+              "label": "Follow Website server list",
+              "value": "Follow Website server list"
+            }
+          ]
+        }
+      ],
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=Undawn"
+    },
+    {
+      "id": 269192,
+      "name": "55 Credits",
+      "description": null,
+      "category_id": 16689,
+      "category": "LifeAfter",
+      "brand": "LifeAfter",
+      "type": "topup",
+      "price": 0.617,
+      "original_price": 0.617,
+      "discount_percent": 0,
+      "currency": "USD",
+      "stock": 999999,
+      "available": true,
+      "requires_player_id": true,
+      "required_fields": [
+        {
+          "key": "player_id",
+          "label": "User ID",
+          "type": "text"
+        },
+        {
+          "key": "server",
+          "label": "Server",
+          "type": "select",
+          "options": [
+            {
+              "label": "ArkCity",
+              "value": "ArkCity"
+            },
+            {
+              "label": "AsiaSurvival",
+              "value": "AsiaSurvival"
+            },
+            {
+              "label": "ChaosCity",
+              "value": "ChaosCity"
+            },
+            {
+              "label": "ChaosOutpost",
+              "value": "ChaosOutpost"
+            },
+            {
+              "label": "CharlesTown",
+              "value": "CharlesTown"
+            },
+            {
+              "label": "CrystalthornSea",
+              "value": "CrystalthornSea"
+            },
+            {
+              "label": "EasySurvival",
+              "value": "EasySurvival"
+            },
+            {
+              "label": "FallForest",
+              "value": "FallForest"
+            },
+            {
+              "label": "HopeValley",
+              "value": "HopeValley"
+            },
+            {
+              "label": "HopeWall",
+              "value": "HopeWall"
+            },
+            {
+              "label": "IronStride",
+              "value": "IronStride"
+            },
+            {
+              "label": "LabyrinthSea",
+              "value": "LabyrinthSea"
+            },
+            {
+              "label": "LevinCity",
+              "value": "LevinCity"
+            },
+            {
+              "label": "MileStone",
+              "value": "MileStone"
+            },
+            {
+              "label": "MiskaTown",
+              "value": "MiskaTown"
+            },
+            {
+              "label": "MountSnow",
+              "value": "MountSnow"
+            },
+            {
+              "label": "MouthSwamp",
+              "value": "MouthSwamp"
+            },
+            {
+              "label": "NancyCity",
+              "value": "NancyCity"
+            },
+            {
+              "label": "NewLand",
+              "value": "NewLand"
+            },
+            {
+              "label": "Oasis",
+              "value": "Oasis"
+            },
+            {
+              "label": "Obelisk",
+              "value": "Obelisk"
+            },
+            {
+              "label": "RedwoodTown",
+              "value": "RedwoodTown"
+            },
+            {
+              "label": "SandCastle",
+              "value": "SandCastle"
+            },
+            {
+              "label": "Santopany",
+              "value": "Santopany"
+            },
+            {
+              "label": "SilentIsland",
+              "value": "SilentIsland"
+            },
+            {
+              "label": "SimpleSurvival",
+              "value": "SimpleSurvival"
+            },
+            {
+              "label": "SnowHighlands",
+              "value": "SnowHighlands"
+            },
+            {
+              "label": "St.Rona",
+              "value": "St.Rona"
+            },
+            {
+              "label": "TwinIslands",
+              "value": "TwinIslands"
+            },
+            {
+              "label": "まったり村",
+              "value": "まったり村"
+            },
+            {
+              "label": "イージーサバイバル",
+              "value": "イージーサバイバル"
+            },
+            {
+              "label": "ドベ雪山",
+              "value": "ドベ雪山"
+            },
+            {
+              "label": "ラッキーサバイバル",
+              "value": "ラッキーサバイバル"
+            },
+            {
+              "label": "リバースデー",
+              "value": "リバースデー"
+            },
+            {
+              "label": "レイヴン市",
+              "value": "レイヴン市"
+            },
+            {
+              "label": "地下城",
+              "value": "地下城"
+            },
+            {
+              "label": "墜星海畔",
+              "value": "墜星海畔"
+            },
+            {
+              "label": "多貝雪山",
+              "value": "多貝雪山"
+            },
+            {
+              "label": "希望の壁",
+              "value": "希望の壁"
+            },
+            {
+              "label": "希望之牆",
+              "value": "希望之牆"
+            },
+            {
+              "label": "平樂古城",
+              "value": "平樂古城"
+            },
+            {
+              "label": "新生の地",
+              "value": "新生の地"
+            },
+            {
+              "label": "方舟基地",
+              "value": "方舟基地"
+            },
+            {
+              "label": "梅爾醫院",
+              "value": "梅爾醫院"
+            },
+            {
+              "label": "棘の海域",
+              "value": "棘の海域"
+            },
+            {
+              "label": "深海秘境",
+              "value": "深海秘境"
+            },
+            {
+              "label": "混沌の城",
+              "value": "混沌の城"
+            },
+            {
+              "label": "砂石の城",
+              "value": "砂石の城"
+            },
+            {
+              "label": "秋の森林",
+              "value": "秋の森林"
+            },
+            {
+              "label": "簡單生存服",
+              "value": "簡單生存服"
+            },
+            {
+              "label": "聖托帕尼",
+              "value": "聖托帕尼"
+            },
+            {
+              "label": "萊文市",
+              "value": "萊文市"
+            },
+            {
+              "label": "觸星山脈",
+              "value": "觸星山脈"
+            },
+            {
+              "label": "諾倫半島",
+              "value": "諾倫半島"
+            },
+            {
+              "label": "貝侖草原",
+              "value": "貝侖草原"
+            },
+            {
+              "label": "赤杉町",
+              "value": "赤杉町"
+            },
+            {
+              "label": "重啟之地",
+              "value": "重啟之地"
+            },
+            {
+              "label": "長嶺舊港",
+              "value": "長嶺舊港"
+            },
+            {
+              "label": "鷺水度假村",
+              "value": "鷺水度假村"
+            }
+          ]
+        }
+      ],
+      "image_url": "https://wdgzone.tech/panel/category-image.php?name=LifeAfter"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 100,
+    "total": 5,
+    "total_pages": 1
+  }
+}

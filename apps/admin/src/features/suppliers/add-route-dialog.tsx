@@ -2,9 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import {
   formatUsd,
   type GameDetail,
+  type OptionMap,
   type Product,
   type SupplierCode,
   type SupplierOffer,
+  unmappedOptions,
 } from '@vertex-digital/contracts';
 import {
   Button,
@@ -30,6 +32,7 @@ import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { type FieldMapEntry, fieldMapEntries, toFieldMap, unmappedOf } from './field-map';
 import { FieldMapEditor } from './field-map-editor';
+import { gameSelects, OptionMapEditor, supplierSelects } from './option-map-editor';
 import { offersQuery, suppliersQuery, useCreateRoute } from './suppliers.queries';
 
 /**
@@ -54,6 +57,7 @@ export function AddRouteDialog({
   const [query, setQuery] = useState<string | undefined>(undefined);
   const [offer, setOffer] = useState<SupplierOffer | null>(null);
   const [entries, setEntries] = useState<FieldMapEntry[]>([]);
+  const [optionMap, setOptionMap] = useState<OptionMap>({});
   const [missing, setMissing] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
   const offers = useQuery({
@@ -67,6 +71,7 @@ export function AddRouteDialog({
   function choose(next: SupplierOffer) {
     setOffer(next);
     setEntries(fieldMapEntries(next.requiredFields ?? []));
+    setOptionMap({});
     setMissing([]);
   }
 
@@ -80,7 +85,7 @@ export function AddRouteDialog({
     if (!offer) return;
     setFailure(null);
     try {
-      await create.mutateAsync({ offerId: offer.id, fieldMap: toFieldMap(entries) });
+      await create.mutateAsync({ offerId: offer.id, fieldMap: toFieldMap(entries), optionMap });
       onDone();
     } catch (error) {
       setMissing(unmappedOf(error));
@@ -89,7 +94,7 @@ export function AddRouteDialog({
   }
 
   return (
-    <DialogContent closeLabel={t('common.close')} className="max-w-xl">
+    <DialogContent closeLabel={t('common.close')} className="max-h-[90vh] max-w-xl overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{t('suppliers.routes.addTitle')}</DialogTitle>
         <DialogDescription>
@@ -185,6 +190,19 @@ export function AddRouteDialog({
               fields={game.fields.filter((field) => field.archivedAt === null)}
               missing={missing}
               onChange={setEntries}
+            />
+            <OptionMapEditor
+              fieldMap={toFieldMap(entries)}
+              fields={game.fields.filter((field) => field.archivedAt === null)}
+              supplierOptions={supplierSelects(offer.fieldSpecs ?? [])}
+              optionMap={optionMap}
+              missing={unmappedOptions(
+                offer.fieldSpecs,
+                toFieldMap(entries),
+                optionMap,
+                gameSelects(game.fields.filter((field) => field.archivedAt === null)),
+              )}
+              onChange={setOptionMap}
             />
           </>
         )}

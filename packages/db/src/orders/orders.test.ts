@@ -2279,6 +2279,8 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
       failureReason: ADMIN_CLOSE_REASONS.reroute,
     });
     expect(opened).toMatchObject({ status: 'pending', chosenByAdmin: true, quantity: 1 });
+    // S16 MF2: the attempt keeps the route's option map beside its field map.
+    expect(opened?.optionMap).toEqual({});
     expect(opened?.candidates).toHaveLength(2);
     const { rows: cards } = await pool.query(
       'select kind from telegram_messages where dedupe_key = $1',

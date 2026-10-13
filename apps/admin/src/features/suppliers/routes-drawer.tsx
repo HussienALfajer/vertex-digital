@@ -6,11 +6,13 @@ import {
   formatUsd,
   type GameDetail,
   manualCostSchema,
+  type OptionMap,
   type Product,
   type ProductRouting,
   parseUsd,
   ROUTE_PRIORITY_MAX,
   type Route,
+  unmappedOptions,
 } from '@vertex-digital/contracts';
 import {
   Badge,
@@ -48,6 +50,7 @@ import { HistoryIcon, PlusIcon, RouteIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
+import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince } from '../../lib/format';
 import { AvailabilityBadge } from '../catalog/catalog-parts';
@@ -55,6 +58,7 @@ import { AddRouteDialog } from './add-route-dialog';
 import { type FieldMapEntry, fieldMapEntries, toFieldMap, unmappedOf } from './field-map';
 import { FieldMapEditor } from './field-map-editor';
 import { StockChip } from './offer-cells';
+import { gameSelects, OptionMapEditor, supplierSelects } from './option-map-editor';
 import { UnusableReason } from './supplier-parts';
 import {
   priceHistoryQuery,
@@ -313,6 +317,19 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
           ))}
         </p>
       )}
+      {Object.entries(route.optionMap).map(([field, options]) => (
+        <p key={field} className="text-sm text-muted-foreground">
+          {t('suppliers.routes.options', { field })}{' '}
+          {Object.entries(options).map(([value, sent], index) => (
+            <span key={value}>
+              {index > 0 && '، '}
+              <bdi dir="ltr">
+                {value} → {sent}
+              </bdi>
+            </span>
+          ))}
+        </p>
+      ))}
       {failure && <FormAlert>{failure}</FormAlert>}
       <div className="flex flex-wrap items-center gap-3">
         {archived ? (
@@ -396,7 +413,10 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
   );
 }
 
-/** Rule RT3: the route's field map, edited against the game's live fields. */
+/**
+ * Rule RT3: the route's field map, edited against the game's live fields, and (S16 MF2) its
+ * option map: each option of a select the supplier lists is sent as one of its values.
+ */
 function FieldsDialog({
   route,
   game,
@@ -411,23 +431,38 @@ function FieldsDialog({
   const [entries, setEntries] = useState<FieldMapEntry[]>(() =>
     fieldMapEntries(route.offer.requiredFields ?? [], route.fieldMap),
   );
+  const [optionMap, setOptionMap] = useState<OptionMap>(route.optionMap);
   const [missing, setMissing] = useState<string[]>([]);
+  const [optionMissing, setOptionMissing] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
+  const fields = game.fields.filter((field) => field.archivedAt === null);
+  const fieldMap = toFieldMap(entries);
+  const specs = route.offer.fieldSpecs ?? [];
+  const gaps = unmappedOptions(specs, fieldMap, optionMap, gameSelects(fields));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFailure(null);
+    setMissing([]);
+    setOptionMissing([]);
     try {
-      await update.mutateAsync({ id: route.id, body: { fieldMap: toFieldMap(entries) } });
+      await update.mutateAsync({ id: route.id, body: { fieldMap, optionMap } });
       onDone();
     } catch (error) {
-      setMissing(unmappedOf(error));
+      if (error instanceof ApiError && error.code === 'FIELD_OPTIONS_DIFFER') {
+        setOptionMissing(unmappedOf(error));
+      } else {
+        setMissing(unmappedOf(error));
+      }
       setFailure(errorMessage(t, error));
     }
   }
 
   return (
-    <DialogContent closeLabel={t('common.close')} className="max-w-lg">
+    <DialogContent
+      closeLabel={t('common.close')}
+      className="max-h-[90vh] max-w-2xl overflow-y-auto"
+    >
       <DialogHeader>
         <DialogTitle>{t('suppliers.routes.fieldsTitle')}</DialogTitle>
         <DialogDescription>
@@ -435,11 +470,14 @@ function FieldsDialog({
         </DialogDescription>
       </DialogHeader>
       <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
-        <FieldMapEditor
-          entries={entries}
-          fields={game.fields.filter((field) => field.archivedAt === null)}
-          missing={missing}
-          onChange={setEntries}
+        <FieldMapEditor entries={entries} fields={fields} missing={missing} onChange={setEntries} />
+        <OptionMapEditor
+          fieldMap={fieldMap}
+          fields={fields}
+          supplierOptions={supplierSelects(specs)}
+          optionMap={optionMap}
+          missing={[...new Set([...gaps, ...optionMissing])]}
+          onChange={setOptionMap}
         />
         {failure && <FormAlert>{failure}</FormAlert>}
         <DialogFooter>

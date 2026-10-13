@@ -5,8 +5,10 @@ import {
   type ImportDraft,
   linkCategorySchema,
   MAX_IMPORT_ROWS,
+  type OptionMap,
   type SupplierCategoryNode,
   type SupplierDetail,
+  unmappedOptions,
 } from '@vertex-digital/contracts';
 import {
   Button,
@@ -41,6 +43,7 @@ import {
   type RowRefusal,
   refusalsByOffer,
   sentOffers,
+  withOptionRefusals,
 } from './category-import';
 import {
   type FieldMapEntry,
@@ -51,6 +54,7 @@ import {
 } from './field-map';
 import { FieldMapEditor } from './field-map-editor';
 import { PackFacts, packRefusal, Section } from './import-category-sheet';
+import { gameSelects, OptionMapEditor, supplierSelects } from './option-map-editor';
 import { importDraftQuery, useLinkCategory } from './suppliers.queries';
 
 type PackMode = 'existing' | 'new' | 'skip';
@@ -132,7 +136,7 @@ export function LinkCategorySheet({
 
 function LinkForm({
   supplier,
-  draft,
+  draft: read,
   gameId,
 }: {
   supplier: SupplierDetail;
@@ -141,9 +145,35 @@ function LinkForm({
 }) {
   const { t } = useTranslation();
   const game = useQuery(gameQuery(gameId));
-  const link = useLinkCategory(supplier.code, draft.category.categoryId);
+  const link = useLinkCategory(supplier.code, read.category.categoryId);
   const [entries, setEntries] = useState<FieldMapEntry[]>(() =>
-    fieldMapEntries(requiredFieldsOf(draft.packs), draft.fieldMap),
+    fieldMapEntries(requiredFieldsOf(read.packs), read.fieldMap),
+  );
+  // S16 MF3: the game's options mapped onto the supplier's, proposed by the draft.
+  const [optionMap, setOptionMap] = useState<OptionMap>(read.optionMap);
+  const gameFields = read.linkGame?.fields ?? [];
+  const fieldMap = toFieldMap(entries);
+  const selects = gameSelects(gameFields);
+  // Refusals for options follow the maps as edited.
+  const draft = withOptionRefusals(read, { fieldMap, optionMap, selects });
+  const supplierOptions = supplierSelects(
+    read.fields.map((field) => ({
+      key: field.supplierKey,
+      label: field.supplierLabel,
+      type: field.supplierType,
+      ...(field.supplierOptions && { options: field.supplierOptions }),
+    })),
+  );
+  const optionGaps = unmappedOptions(
+    read.fields.map((field) => ({
+      key: field.supplierKey,
+      label: field.supplierLabel,
+      type: field.supplierType,
+      ...(field.supplierOptions && { options: field.supplierOptions }),
+    })),
+    fieldMap,
+    optionMap,
+    selects,
   );
   const [edited, setRows] = useState<PackRow[]>(() => initialPackRows(draft));
   // The draft is read again after a refusal: what it refuses now is no longer selected.
@@ -151,6 +181,7 @@ function LinkForm({
   const [rowErrors, setRowErrors] = useState<Set<string>>(new Set());
   const [refusals, setRefusals] = useState<Map<string, RowRefusal>>(new Map());
   const [missing, setMissing] = useState<string[]>([]);
+  const [optionMissing, setOptionMissing] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
   const [result, setResult] = useState<CategoryImportResult | null>(null);
   const products = (game.data?.products ?? []).filter((item) => item.archivedAt === null);
@@ -165,10 +196,9 @@ function LinkForm({
     setFailure(null);
     setRefusals(new Map());
     setMissing([]);
+    setOptionMissing([]);
     const sent = sentOffers(rows);
-    const parsed = linkCategorySchema.safeParse(
-      linkBody({ gameId, fieldMap: toFieldMap(entries), rows }),
-    );
+    const parsed = linkCategorySchema.safeParse(linkBody({ gameId, fieldMap, optionMap, rows }));
     const issues = parsed.error?.issues ?? [];
     setRowErrors(
       new Set(
@@ -192,7 +222,11 @@ function LinkForm({
         error instanceof ApiError ? (error.details as { rows?: RowRefusal[] })?.rows : undefined;
       if (refused?.length) {
         setRefusals(refusalsByOffer(refused, sent));
-        setMissing([...new Set(refused.flatMap((row) => row.fields ?? []))]);
+        const named = (code: string) => [
+          ...new Set(refused.filter((row) => row.code === code).flatMap((row) => row.fields ?? [])),
+        ];
+        setMissing(named('ROUTE_FIELDS_UNMAPPED'));
+        setOptionMissing(named('FIELD_OPTIONS_DIFFER'));
         setFailure(t('suppliers.importCategory.refused'));
       } else {
         setMissing(unmappedOf(error));
@@ -236,9 +270,17 @@ function LinkForm({
     <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
       <FieldMapEditor
         entries={entries}
-        fields={draft.linkGame?.fields ?? []}
+        fields={gameFields}
         missing={missing}
         onChange={setEntries}
+      />
+      <OptionMapEditor
+        fieldMap={fieldMap}
+        fields={gameFields}
+        supplierOptions={supplierOptions}
+        optionMap={optionMap}
+        missing={[...new Set([...optionGaps, ...optionMissing])]}
+        onChange={setOptionMap}
       />
       <Section
         title={t('suppliers.linkCategory.packs', { selected: sentCount, max: MAX_IMPORT_ROWS })}

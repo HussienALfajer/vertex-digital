@@ -49,8 +49,10 @@ import { imageUrlAllowed } from '../core/image.js';
  * state (`orders`): each change is handed to `onOrder`, which the worker persists, so a poll, a
  * repeated key and `supplier:fake --resolve` find them across calls and processes.
  *
- * S16: a category tree (PUBG Mobile and Free Fire with subcategories, gift cards) whose images are
- * bundled PNGs on `fake-supplier.invalid`, offers with stock, original prices and field specs, a
+ * S16: a category tree (PUBG Mobile and Free Fire with subcategories, gift cards; PR 4: Mobile
+ * Legends with a zone field, Genshin Impact with a region select) whose images are bundled PNGs on
+ * `fake-supplier.invalid`; an order missing a field or with a value outside a select's options is
+ * refused (`FIELD_REFUSED`), offers with stock, original prices and field specs, a
  * statement built from its own orders and a platform status. The state scripts stock counts
  * (`--stock-count`), missing categories (`--category-missing`) and added offers (`--add-offer`).
  */
@@ -219,7 +221,33 @@ const giftCard = (offerId: string, name: string, cents: number): FakeOffer => ({
   delivers: 'code',
 });
 
-/** The fake catalog: PUBG Mobile and Free Fire top-ups, and iTunes codes. */
+/** S16 MF1: a second text field, as Mobile Legends asks for. */
+const ZONE_FIELD: FieldSpec = { key: 'zoneId', label: 'Zone ID', type: 'text' };
+
+/** S16 MF2: a select whose values differ from their labels, as Genshin Impact's servers. */
+const REGION_FIELD: FieldSpec = {
+  key: 'region',
+  label: 'Region',
+  type: 'select',
+  options: [
+    { label: 'America', value: 'os_usa' },
+    { label: 'Europe', value: 'os_euro' },
+    { label: 'Asia', value: 'os_asia' },
+    { label: 'TW, HK, MO', value: 'os_cht' },
+  ],
+};
+
+/** A top-up with more fields than the player's (S16 MF1, MF2). */
+const withFields = (offer: FakeOffer, extra: FieldSpec): FakeOffer => ({
+  ...offer,
+  requiredFields: ['playerId', extra.key],
+  fieldSpecs: [PLAYER_FIELD, extra],
+});
+
+/**
+ * The fake catalog: PUBG Mobile and Free Fire top-ups, iTunes codes, and (S16 PR 4) Mobile Legends
+ * with a zone and Genshin Impact with a region select.
+ */
 const OFFERS: readonly FakeOffer[] = [
   topUp('fake-uc-60', 'Fake UC 60', 'PUBG Mobile', 88, 'fake-pubg-global', 99),
   topUp('fake-uc-325', 'Fake UC 325', 'PUBG Mobile', 440, 'fake-pubg-global', 499),
@@ -231,6 +259,19 @@ const OFFERS: readonly FakeOffer[] = [
   topUp('fake-ff-1060', 'Fake Free Fire 1060', 'Free Fire', 950, 'fake-ff-auto'),
   giftCard('fake-gift-10', 'Fake gift card 10', 960),
   giftCard('fake-itunes-25', 'Fake iTunes 25', 2_400),
+  withFields(topUp('fake-ml-86', 'Fake Diamonds 86', 'Mobile Legends', 140, 'fake-ml'), ZONE_FIELD),
+  withFields(
+    topUp('fake-ml-172', 'Fake Diamonds 172', 'Mobile Legends', 275, 'fake-ml'),
+    ZONE_FIELD,
+  ),
+  withFields(
+    topUp('fake-gi-60', 'Fake Genesis Crystals 60', 'Genshin Impact', 85, 'fake-gi'),
+    REGION_FIELD,
+  ),
+  withFields(
+    topUp('fake-gi-330', 'Fake Genesis Crystals 330', 'Genshin Impact', 420, 'fake-gi'),
+    REGION_FIELD,
+  ),
 ];
 
 /** The host of the fake's category images (rule IM1); `.invalid` never resolves. */
@@ -271,6 +312,8 @@ const CATEGORIES: readonly (SupplierCategory & { color: [number, number, number]
     kind: 'code',
     color: [40, 100, 180],
   },
+  { categoryId: 'fake-ml', name: 'Mobile Legends', kind: 'direct', color: [90, 60, 180] },
+  { categoryId: 'fake-gi', name: 'Genshin Impact', kind: 'direct', color: [60, 170, 160] },
 ];
 
 /** A solid 64×64 PNG, so the fake needs no image files (rule IM1's bundled images). */
@@ -490,6 +533,19 @@ export class FakeSupplierAdapter implements SupplierAdapter {
         status: 'failed_definitive',
         supplierCode: 'FAKE_REFUSED',
         reason: offer ? 'Refused by the fake supplier' : 'Unknown offer',
+      });
+    }
+    // S16 MF1, MF2: every field of the offer, and a select's value from its own list.
+    const fieldRefused = (offer.fieldSpecs ?? []).some((spec) => {
+      const value = request.fields[spec.key];
+      if (!value) return true;
+      return spec.type === 'select' && !spec.options?.some((option) => option.value === value);
+    });
+    if (fieldRefused) {
+      return this.record(request, {
+        status: 'failed_definitive',
+        supplierCode: 'FIELD_REFUSED',
+        reason: 'A field is missing or not one of its options',
       });
     }
     if (as('invalid', 'invalid')) {

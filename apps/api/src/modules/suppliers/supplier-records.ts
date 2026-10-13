@@ -62,6 +62,11 @@ export const refusals = {
   offerUnsupported: () =>
     new CodedException(409, 'OFFER_UNSUPPORTED', 'The offer has fields this build cannot send'),
   offerIgnored: () => new CodedException(409, 'OFFER_IGNORED', 'The offer is ignored'),
+  /** S16 MF3: supplier selects the option map cannot send from every option. */
+  fieldOptionsDiffer: (fields: string[]) =>
+    new CodedException(409, 'FIELD_OPTIONS_DIFFER', 'Select options lack a supplier value', {
+      fields,
+    }),
 };
 
 /** The refusal a route's unique index raised (rule RT1), or null for any other error. */

@@ -414,6 +414,13 @@
       "when": 1791860452581,
       "tag": "0058_curly_jane_foster",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791888562379,
+      "tag": "0059_safe_earthquake",
+      "breakpoints": true
     }
   ]
 }

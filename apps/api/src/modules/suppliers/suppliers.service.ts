@@ -29,6 +29,7 @@ import {
   supplierPanelCapabilities,
   type UpdateSupplier,
   unmappedFields,
+  unmappedOptions,
   type ValidationQuota,
 } from '@vertex-digital/contracts';
 import {
@@ -549,8 +550,15 @@ export class SuppliersService {
           .where(and(inArray(productRoutes.offerId, ids), isNull(productRoutes.archivedAt)))
       ).map((row) => row.offerId),
     );
+    const selects = Object.fromEntries(
+      game.fields.flatMap((field) =>
+        field.archivedAt === null && field.options
+          ? [[field.key, field.options.map((option) => option.value)]]
+          : [],
+      ),
+    );
     const errors = input.rows.flatMap((row, index) => {
-      const error = importRowError(offerOf.get(row.offerId), mappedIds, input);
+      const error = importRowError(offerOf.get(row.offerId), mappedIds, input, selects);
       return error ? [{ index, ...error }] : [];
     });
     this.refuseRows(errors);
@@ -571,6 +579,7 @@ export class SuppliersService {
           supplierId: state.id,
           offerId: input.rows[index]?.offerId as string,
           fieldMap: input.fieldMap,
+          optionMap: input.optionMap,
         }));
         await tx.insert(productRoutes).values(routes);
         for (const route of routes) {
@@ -581,6 +590,7 @@ export class SuppliersService {
             priority: 1,
             enabled: true,
             fieldMap: route.fieldMap,
+            optionMap: route.optionMap,
           });
         }
         await auditSuppliers(tx, actor, 'supplier.import', supplierEntity(state.id), {
@@ -798,17 +808,26 @@ const routeEntity = (id: string) => ({ type: 'product_route' as const, id });
 function importRowError(
   offer: OfferRow | undefined,
   mappedIds: ReadonlySet<string>,
-  input: Pick<ImportOffers, 'kind' | 'fieldMap'>,
+  input: Pick<ImportOffers, 'kind' | 'fieldMap' | 'optionMap'>,
+  selects: Readonly<Record<string, readonly string[]>>,
 ): { code: string; fields?: string[] } | null {
   if (!offer) return { code: 'NOT_FOUND' };
   if (mappedIds.has(offer.id)) return { code: 'OFFER_ALREADY_MAPPED' };
   if (offer.missingSince) return { code: 'OFFER_MISSING' };
-  // S16 SC3, SC6: unsupported offers wait for Q19; an ignored one is unignored first.
+  // S16 SC3, SC6: fields its adapter cannot send; an ignored offer is unignored first.
   if (offer.unsupportedReason) return { code: 'OFFER_UNSUPPORTED' };
   if (offer.ignoredAt) return { code: 'OFFER_IGNORED' };
   if (offer.kind && input.kind && offer.kind !== input.kind) return { code: 'ROUTE_KIND_MISMATCH' };
   const fields = unmappedFields(offer.requiredFields, input.fieldMap ?? {});
   if (fields.length > 0) return { code: 'ROUTE_FIELDS_UNMAPPED', fields };
+  // S16 MF3: each select it maps sent from every option of ours.
+  const options = unmappedOptions(
+    offer.fieldSpecs,
+    input.fieldMap ?? {},
+    input.optionMap ?? {},
+    selects,
+  );
+  if (options.length > 0) return { code: 'FIELD_OPTIONS_DIFFER', fields: options };
   if (!offer.kind && !input.kind) return { code: 'VALIDATION_FAILED' };
   return null;
 }

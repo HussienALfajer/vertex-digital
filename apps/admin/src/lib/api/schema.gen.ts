@@ -7100,6 +7100,8 @@ export interface components {
             kind?: components["schemas"]["ProductKind"];
             /** @default {} */
             fieldMap: components["schemas"]["FieldMap"];
+            /** @default {} */
+            optionMap: components["schemas"]["OptionMap"];
             rows: {
                 /** Format: uuid */
                 offerId: string;
@@ -7108,6 +7110,11 @@ export interface components {
         };
         FieldMap: {
             [key: string]: string;
+        };
+        OptionMap: {
+            [key: string]: {
+                [key: string]: string;
+            };
         };
         ImportResult: {
             products: {
@@ -7164,11 +7171,17 @@ export interface components {
                 missingSince: string | null;
                 stock: number | null;
                 stockLevel: components["schemas"]["StockLevel"];
+                fieldSpecs: components["schemas"]["FieldSpec"][] | null;
             };
             priority: number;
             enabled: boolean;
             fieldMap: {
                 [key: string]: string;
+            };
+            optionMap: {
+                [key: string]: {
+                    [key: string]: string;
+                };
             };
             /** Format: date-time */
             archivedAt: string | null;
@@ -7188,6 +7201,8 @@ export interface components {
             priority: number;
             /** @default {} */
             fieldMap: components["schemas"]["FieldMap"];
+            /** @default {} */
+            optionMap: components["schemas"]["OptionMap"];
         };
         CreateManualRoute: {
             costUsdUnits: number;
@@ -7196,6 +7211,7 @@ export interface components {
             priority?: number;
             enabled?: boolean;
             fieldMap?: components["schemas"]["FieldMap"];
+            optionMap?: components["schemas"]["OptionMap"];
         };
         SetManualCost: components["schemas"]["CreateManualRoute"];
         SupplierCategoryListQuery: {
@@ -7269,11 +7285,18 @@ export interface components {
                 fields: {
                     key: string;
                     labelAr: string;
+                    type: components["schemas"]["InputFieldType"];
+                    options: components["schemas"]["SelectOption"][] | null;
                 }[];
             } | null;
             fields: components["schemas"]["SuggestedInputField"][];
             fieldMap: {
                 [key: string]: string;
+            };
+            optionMap: {
+                [key: string]: {
+                    [key: string]: string;
+                };
             };
             packs: components["schemas"]["ImportDraftPack"][];
         };
@@ -7282,12 +7305,17 @@ export interface components {
             supplierLabel: string;
             /** @enum {string} */
             supplierType: "text" | "select";
+            supplierOptions: {
+                label: string;
+                value: string;
+            }[] | null;
             key: string;
             labelAr: string;
             /** @enum {string} */
-            type: "digits" | "text";
-            minLength: number;
-            maxLength: number;
+            type: "digits" | "text" | "select";
+            minLength: number | null;
+            maxLength: number | null;
+            options: components["schemas"]["SelectOption"][] | null;
             required: boolean;
         };
         ImportDraftPack: {
@@ -7304,8 +7332,9 @@ export interface components {
             stock: number | null;
             stockLevel: components["schemas"]["StockLevel"];
             requiredFields: string[] | null;
+            fieldSpecs: components["schemas"]["FieldSpec"][] | null;
             /** @enum {string|null} */
-            refusal: "OFFER_UNSUPPORTED" | "OFFER_IGNORED" | "OFFER_ALREADY_MAPPED" | "OFFER_MISSING" | "ROUTE_KIND_MISMATCH" | null;
+            refusal: "OFFER_UNSUPPORTED" | "FIELD_OPTIONS_DIFFER" | "OFFER_IGNORED" | "OFFER_ALREADY_MAPPED" | "OFFER_MISSING" | "ROUTE_KIND_MISMATCH" | null;
             suggestedNameAr: string;
             suggestedGameAmount: number | null;
             pricePreviewUsdUnits: number | null;
@@ -7335,6 +7364,8 @@ export interface components {
             fields: components["schemas"]["CreateInputField"][];
             /** @default {} */
             fieldMap: components["schemas"]["FieldMap"];
+            /** @default {} */
+            optionMap: components["schemas"]["OptionMap"];
             rows: {
                 /** Format: uuid */
                 offerId: string;
@@ -7360,6 +7391,8 @@ export interface components {
             gameId: string;
             /** @default {} */
             fieldMap: components["schemas"]["FieldMap"];
+            /** @default {} */
+            optionMap: components["schemas"]["OptionMap"];
             rows: ({
                 /** Format: uuid */
                 offerId: string;

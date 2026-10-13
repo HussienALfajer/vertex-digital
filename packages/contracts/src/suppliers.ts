@@ -2,10 +2,13 @@ import { z } from 'zod';
 import {
   createGameSchema,
   createInputFieldSchema,
+  inputFieldTypeSchema,
   MAX_INPUT_FIELDS_PER_GAME,
   productAvailabilitySchema,
   productKindSchema,
+  type SelectOption,
   type StockLevel,
+  selectOptionSchema,
   stockLevelSchema,
 } from './catalog.js';
 import { pagedListSchema, pageQuerySchema } from './lists.js';
@@ -305,7 +308,7 @@ export const ROUTE_UNUSABLE_REASONS = [
   'supplier_paused',
   'supplier_down',
   'offer_missing',
-  /** S16 SC3: the offer has fields this build cannot send yet (Q19). */
+  /** S16 SC3: the offer has fields its adapter cannot send (MF1, MF2). */
   'offer_unsupported',
   'out_of_stock',
   'cost_unknown',
@@ -346,8 +349,14 @@ export interface RouteFacts {
   requiredFields: readonly string[] | null;
   /** Supplier field name → input field key. */
   fieldMap: Readonly<Record<string, string>>;
+  /** S16 MF2: supplier field name → our option value → the supplier's option value. */
+  optionMap: OptionMap;
+  /** S16 MF2: the offer's field specs (its select options); null when unknown. */
+  fieldSpecs: readonly FieldSpec[] | null;
   /** The unarchived input field keys of the product's game. */
   liveFieldKeys: readonly string[];
+  /** S16 MF2: the option values of the game's unarchived `select` fields, by key. */
+  liveSelectOptions: Readonly<Record<string, readonly string[]>>;
   /** The supplier's newest balance in USD units; null when it reports none in USD. */
   balanceUsdUnits: number | null;
 }
@@ -358,6 +367,33 @@ export function unmappedFields(
   fieldMap: Readonly<Record<string, string>>,
 ): string[] {
   return (requiredFields ?? []).filter((field) => !Object.hasOwn(fieldMap, field));
+}
+
+/**
+ * S16 MF2, MF3 (RT3 extended): the supplier `select` fields a route cannot send from every option
+ * of the field they map to. A supplier select must map to one of our `select` fields, and the
+ * option map must give each of that field's options a value from the supplier's own list. Our
+ * select mapped to a supplier text field sends our option value as it is. Empty when the
+ * supplier's fields are unknown.
+ */
+export function unmappedOptions(
+  fieldSpecs: readonly FieldSpec[] | null,
+  fieldMap: Readonly<Record<string, string>>,
+  optionMap: OptionMap,
+  selectOptions: Readonly<Record<string, readonly string[]>>,
+): string[] {
+  return (fieldSpecs ?? []).flatMap((spec) => {
+    if (spec.type !== 'select' || !Object.hasOwn(fieldMap, spec.key)) return [];
+    const ours = selectOptions[fieldMap[spec.key] as string];
+    if (!ours) return [spec.key];
+    const theirs = new Set((spec.options ?? []).map((option) => option.value));
+    const values = Object.hasOwn(optionMap, spec.key) ? optionMap[spec.key] : undefined;
+    const complete = ours.every((value) => {
+      const sent = values && Object.hasOwn(values, value) ? values[value] : undefined;
+      return sent !== undefined && theirs.has(sent);
+    });
+    return complete ? [] : [spec.key];
+  });
 }
 
 /** A cost older than the policy's limit is unknown (rule SY5); manual costs never go stale. */
@@ -391,7 +427,12 @@ export function routeUnusableReason(
   if (isCostStale(route.supplierCode, route.costConfirmedAt, now, policy)) return 'cost_stale';
   const keys = new Set(route.liveFieldKeys);
   const mapped = Object.values(route.fieldMap).every((key) => keys.has(key));
-  if (!mapped || unmappedFields(route.requiredFields, route.fieldMap).length > 0) {
+  if (
+    !mapped ||
+    unmappedFields(route.requiredFields, route.fieldMap).length > 0 ||
+    unmappedOptions(route.fieldSpecs, route.fieldMap, route.optionMap, route.liveSelectOptions)
+      .length > 0
+  ) {
     return 'fields_incomplete';
   }
   if (route.balanceUsdUnits !== null && route.balanceUsdUnits < route.costUsdUnits) {
@@ -454,7 +495,10 @@ export const supplierCategoryStateSchema = z
 
 export type SupplierCategoryState = z.infer<typeof supplierCategoryStateSchema>;
 
-/** Rule SC3: why an offer cannot be imported or routed yet (two fields or a select: Q19). */
+/**
+ * Rule SC3, S16 MF1–MF2: why an offer cannot be imported or routed (fields its adapter cannot
+ * send: for WDGZone, several fields without an account field, or a select it cannot list).
+ */
 export const OFFER_UNSUPPORTED_REASONS = ['fields_unsupported'] as const;
 
 export const offerUnsupportedReasonSchema = z
@@ -606,14 +650,17 @@ export function categoryStandings(
   return standings;
 }
 
-/** An input field the import proposes for a supplier field (rule SC12). */
+/** An input field the import proposes for a supplier field (rules SC12, MF3). */
 export interface SuggestedInputField {
   supplierKey: string;
   key: string;
   labelAr: string;
-  type: 'digits' | 'text';
-  minLength: number;
-  maxLength: number;
+  type: 'digits' | 'text' | 'select';
+  /** Null for a `select`. */
+  minLength: number | null;
+  maxLength: number | null;
+  /** A `select`'s options (S06: 2–50, unique values); null otherwise. */
+  options: SelectOption[] | null;
   required: true;
 }
 
@@ -631,45 +678,124 @@ const FIELD_LABELS_AR: Readonly<Record<string, string>> = {
 
 const DIGIT_FIELDS = new Set(['player_id', 'user_id', 'uid', 'zone_id', 'server_id', 'role_id']);
 
+/** S06's bounds of a select (rule CT7). */
+const SELECT_OPTIONS_MIN = 2;
+const SELECT_OPTIONS_MAX = 50;
+/** S06 keys and option values are at most 32 characters, option labels 40. */
+const KEY_MAX = 32;
+const LABEL_MAX = 40;
+
+/** `base`, else `base_2`, `base_3`… within 32 characters, not in `taken` (which it joins). */
+function uniqueName(base: string, taken: Set<string>): string {
+  let name = base;
+  for (let n = 2; taken.has(name); n += 1) {
+    const suffix = `_${n}`;
+    name = `${base.slice(0, KEY_MAX - suffix.length)}${suffix}`;
+  }
+  taken.add(name);
+  return name;
+}
+
+/** Rule SC12's sanitizing: lower case, characters outside `[a-z0-9_]` as `_`, cut to 32. */
+const sanitizedName = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .slice(0, KEY_MAX);
+
+/** A supplier text cut to an S06 label, else the fallback. */
+const labelOf = (text: string, fallback: string) =>
+  text.trim().slice(0, LABEL_MAX).trim() || fallback;
+
 /**
  * Rule SC12, per supplier field (each key once): our key is the supplier key lower-cased with
  * characters outside `[a-z0-9_]` turned to `_`, prefixed `f_` when it does not start with a
  * letter, cut to 32, given `_f` when shorter than 2 (S06 keys have 2 or more) and made unique
  * with `_2`, `_3`…; the Arabic label from the dictionary, else the supplier's label (cut to 40),
  * else the key; type `digits` (1–32) for id fields, else `text` (1–64); always required.
+ *
+ * S16 MF3: a supplier `select` with 2 to 50 options becomes our `select` with its options (the
+ * first pack's: labels kept and cut to 40, values sanitized as keys and made unique), and the
+ * option map sends each of our values as the supplier's (MF2). Other selects stay text: their
+ * offers are unsupported anyway.
  */
-export function suggestInputFields(specs: readonly Pick<FieldSpec, 'key' | 'label'>[]): {
+export function suggestInputFields(
+  specs: readonly (Pick<FieldSpec, 'key' | 'label'> &
+    Partial<Pick<FieldSpec, 'type' | 'options'>>)[],
+): {
   fields: SuggestedInputField[];
   fieldMap: Record<string, string>;
+  optionMap: OptionMap;
 } {
   const fields: SuggestedInputField[] = [];
   const fieldMap: Record<string, string> = {};
+  const optionMap: OptionMap = {};
   const taken = new Set<string>();
   for (const spec of specs) {
     if (Object.hasOwn(fieldMap, spec.key)) continue;
     const canonical = spec.key.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     let base = /^[a-z]/.test(canonical) ? canonical : `f_${canonical}`;
-    base = base.slice(0, 32);
+    base = base.slice(0, KEY_MAX);
     if (base.length < 2) base = `${base}_f`;
-    let key = base;
-    for (let n = 2; taken.has(key); n += 1) {
-      const suffix = `_${n}`;
-      key = `${base.slice(0, 32 - suffix.length)}${suffix}`;
+    const key = uniqueName(base, taken);
+    const labelAr = FIELD_LABELS_AR[canonical] ?? labelOf(spec.label, key);
+    fieldMap[spec.key] = key;
+    const choices = spec.type === 'select' ? (spec.options ?? []) : [];
+    if (choices.length >= SELECT_OPTIONS_MIN && choices.length <= SELECT_OPTIONS_MAX) {
+      const values = new Set<string>();
+      const options = choices.map((choice) => {
+        const value = uniqueName(sanitizedName(choice.value), values);
+        return { value, labelAr: labelOf(choice.label, value) };
+      });
+      optionMap[spec.key] = Object.fromEntries(
+        options.map((option, index) => [option.value, choices[index]?.value as string]),
+      );
+      fields.push({
+        supplierKey: spec.key,
+        key,
+        labelAr,
+        type: 'select',
+        minLength: null,
+        maxLength: null,
+        options,
+        required: true,
+      });
+      continue;
     }
-    taken.add(key);
     const digits = DIGIT_FIELDS.has(canonical);
     fields.push({
       supplierKey: spec.key,
       key,
-      labelAr: FIELD_LABELS_AR[canonical] ?? (spec.label.trim().slice(0, 40).trim() || key),
+      labelAr,
       type: digits ? 'digits' : 'text',
       minLength: 1,
       maxLength: digits ? 32 : 64,
+      options: null,
       required: true,
     });
-    fieldMap[spec.key] = key;
   }
-  return { fields, fieldMap };
+  return { fields, fieldMap, optionMap };
+}
+
+/**
+ * S16 MF3 (link, SC8): each option of our select proposed onto one of the supplier's, by equal
+ * value, else equal label, else equal sanitized value (case and spaces aside); an option with no
+ * equal is left out, so the route stays incomplete until the admin maps it.
+ */
+export function proposeOptionMap(
+  ours: readonly SelectOption[],
+  theirs: readonly NonNullable<FieldSpec['options']>[number][],
+): Record<string, string> {
+  const plain = (text: string) => text.trim().toLowerCase();
+  const proposal: Record<string, string> = {};
+  for (const option of ours) {
+    const match =
+      theirs.find((choice) => choice.value === option.value) ??
+      theirs.find((choice) => plain(choice.label) === plain(option.labelAr)) ??
+      theirs.find((choice) => sanitizedName(choice.value.trim()) === option.value);
+    if (match) proposal[option.value] = match.value;
+  }
+  return proposal;
 }
 
 /** A product name is at most 60 characters (S06). */
@@ -771,6 +897,27 @@ export const fieldMapSchema = z
   .meta({ id: 'FieldMap' });
 
 export type FieldMap = z.infer<typeof fieldMapSchema>;
+
+/**
+ * S16 MF2: supplier field name → our option value → the supplier's option value, at most 10
+ * fields of at most 50 options; values bounded as field specs. The adapter is only sent values
+ * from the supplier's own list.
+ */
+export const optionMapSchema = z
+  .record(
+    supplierFieldName,
+    z
+      .record(selectOptionSchema.shape.value, z.string().min(1).max(64))
+      .refine((options) => Object.keys(options).length <= MAX_FIELD_SPEC_OPTIONS, {
+        message: `Expected at most ${MAX_FIELD_SPEC_OPTIONS} options`,
+      }),
+  )
+  .refine((map) => Object.keys(map).length <= MAX_FIELD_SPECS, {
+    message: `Expected at most ${MAX_FIELD_SPECS} fields`,
+  })
+  .meta({ id: 'OptionMap' });
+
+export type OptionMap = z.infer<typeof optionMapSchema>;
 
 const priority = z.int().min(1).max(ROUTE_PRIORITY_MAX);
 
@@ -1001,6 +1148,7 @@ export const importOffersSchema = z
     /** The kind of the offers whose kind the supplier does not give. */
     kind: productKindSchema.optional(),
     fieldMap: fieldMapSchema.default({}),
+    optionMap: optionMapSchema.default({}),
     rows: z
       .array(
         z.object({
@@ -1051,6 +1199,7 @@ export const createRouteSchema = z
     offerId: z.uuid(),
     priority: priority.default(1),
     fieldMap: fieldMapSchema.default({}),
+    optionMap: optionMapSchema.default({}),
   })
   .meta({ id: 'CreateRoute' });
 
@@ -1063,7 +1212,12 @@ export const createManualRouteSchema = z
 export type CreateManualRoute = z.infer<typeof createManualRouteSchema>;
 
 export const updateRouteSchema = z
-  .object({ priority, enabled: z.boolean(), fieldMap: fieldMapSchema })
+  .object({
+    priority,
+    enabled: z.boolean(),
+    fieldMap: fieldMapSchema,
+    optionMap: optionMapSchema,
+  })
   .partial()
   .meta({ id: 'UpdateRoute' });
 
@@ -1088,10 +1242,13 @@ export const routeSchema = z
       missingSince: true,
       stock: true,
       stockLevel: true,
+      fieldSpecs: true,
     }),
     priority: z.int(),
     enabled: z.boolean(),
     fieldMap: z.record(z.string(), z.string()),
+    /** S16 MF2. */
+    optionMap: z.record(z.string(), z.record(z.string(), z.string())),
     archivedAt: z.iso.datetime().nullable(),
     /** Null for an unusable route. */
     tier: routeTierSchema.nullable(),
@@ -1211,6 +1368,8 @@ export type ImportDraftQuery = z.infer<typeof importDraftQuerySchema>;
 /** Why a pack row cannot be imported or linked (rules SC3, SC7, RT1, RT2). */
 export const IMPORT_PACK_REFUSALS = [
   'OFFER_UNSUPPORTED',
+  /** S16 MF3: its select lacks a supplier value for one of our options. */
+  'FIELD_OPTIONS_DIFFER',
   'OFFER_IGNORED',
   'OFFER_ALREADY_MAPPED',
   'OFFER_MISSING',
@@ -1233,6 +1392,8 @@ export const importDraftPackSchema = z
     stock: z.int().nonnegative().nullable(),
     stockLevel: stockLevelSchema,
     requiredFields: z.array(z.string()).nullable(),
+    /** S16 MF3: its fields with their select options, to check option changes in place. */
+    fieldSpecs: z.array(fieldSpecSchema).nullable(),
     /** Why the row cannot be chosen, or null. */
     refusal: z.enum(IMPORT_PACK_REFUSALS).nullable(),
     suggestedNameAr: z.string(),
@@ -1252,11 +1413,14 @@ export const suggestedInputFieldSchema = z
     supplierKey: z.string(),
     supplierLabel: z.string(),
     supplierType: z.enum(['text', 'select']),
+    /** S16 MF3: the supplier's options of a select (the first pack's). */
+    supplierOptions: fieldSpecSchema.shape.options.unwrap().nullable(),
     key: z.string(),
     labelAr: z.string(),
-    type: z.enum(['digits', 'text']),
-    minLength: z.int(),
-    maxLength: z.int(),
+    type: z.enum(['digits', 'text', 'select']),
+    minLength: z.int().nullable(),
+    maxLength: z.int().nullable(),
+    options: z.array(selectOptionSchema).nullable(),
     required: z.boolean(),
   })
   .meta({ id: 'SuggestedInputField' });
@@ -1279,11 +1443,20 @@ export const importDraftSchema = z
       .object({
         id: z.uuid(),
         nameAr: z.string(),
-        fields: z.array(z.object({ key: z.string(), labelAr: z.string() })),
+        fields: z.array(
+          z.object({
+            key: z.string(),
+            labelAr: z.string(),
+            type: inputFieldTypeSchema,
+            options: z.array(selectOptionSchema).nullable(),
+          }),
+        ),
       })
       .nullable(),
     fields: z.array(suggestedInputFieldSchema),
     fieldMap: z.record(z.string(), z.string()),
+    /** S16 MF2, MF3: the suggested (or, for a link, proposed) option map. */
+    optionMap: z.record(z.string(), z.record(z.string(), z.string())),
     packs: z.array(importDraftPackSchema),
   })
   .meta({ id: 'ImportDraft' });
@@ -1325,6 +1498,7 @@ export const importCategorySchema = z
     ]),
     fields: z.array(createInputFieldSchema).max(MAX_INPUT_FIELDS_PER_GAME),
     fieldMap: fieldMapSchema.default({}),
+    optionMap: optionMapSchema.default({}),
     rows: z.array(newPackRowSchema).min(1).max(MAX_IMPORT_ROWS).refine(eachOfferOnce, {
       message: 'Expected each offer once',
     }),
@@ -1338,6 +1512,7 @@ export const linkCategorySchema = z
   .object({
     gameId: z.uuid(),
     fieldMap: fieldMapSchema.default({}),
+    optionMap: optionMapSchema.default({}),
     rows: z
       .array(z.union([z.object({ offerId: z.uuid(), productId: z.uuid() }), newPackRowSchema]))
       .max(MAX_IMPORT_ROWS)

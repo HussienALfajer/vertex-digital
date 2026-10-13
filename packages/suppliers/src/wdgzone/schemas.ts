@@ -61,23 +61,55 @@ export const productsPageSchema = z.object({
   }),
 });
 
+/**
+ * A delivered item (S16 MF4, WDG support 2026-10-13): a plain code, or `{ code, pin }`. Read on
+ * the purchase reply, the poll and the webhook alike.
+ */
+export const deliveryItemSchema = z.union([
+  z.string(),
+  z.object({
+    code: z.union([z.string(), z.number()]).transform(String),
+    pin: z.union([z.string(), z.number()]).transform(String).nullish(),
+  }),
+]);
+
+export type WdgDeliveryItem = z.infer<typeof deliveryItemSchema>;
+
 /** `POST /products/{id}/purchase`: 201 for a new order, 200 for a replay of its key. */
 export const purchaseReplySchema = z.object({
   success: z.literal(true),
   data: z.object({
     order_id: z.number().int().positive(),
     status: z.string().min(1),
-    delivery_items: z.array(z.string()).nullish(),
+    delivery_items: z.array(deliveryItemSchema).nullish(),
   }),
 });
 
-/** `GET /orders/{id}/delivery` with 200 (ready). Its body is not documented: see the doc. */
+/**
+ * `GET /orders/{id}/delivery` with 200 (ready): `{ data: { order_id, status: "COMPLETED",
+ * delivery_items: [{ code, pin }] } }` (WDG support, 2026-10-13).
+ */
 export const deliveryReplySchema = z.object({
   success: z.literal(true),
   data: z.object({
-    delivery_items: z.array(z.string()).nullish(),
+    status: z.string().nullish(),
+    delivery_items: z.array(deliveryItemSchema).nullish(),
     quantity: z.number().int().positive().optional(),
   }),
+});
+
+/** `GET /orders/{id}/delivery` with 410: `{ data: { status, refunded: true } }`, no `error`. */
+export const refundedReplySchema = z.object({
+  data: z.object({ status: z.string().min(1).max(64) }),
+});
+
+/**
+ * `GET /orders/{id}` (S16 MF4), read after a poll's 202 for its `status` only: `pending`,
+ * `processing`, `completed`, `refunded`, `failed`, `cancelled`. The rest is not documented.
+ */
+export const orderStateReplySchema = z.object({
+  success: z.literal(true),
+  data: z.object({ status: z.string().min(1).max(64) }),
 });
 
 export const WDG_WEBHOOK_EVENTS = ['order.completed', 'order.failed', 'order.refunded'] as const;
@@ -93,7 +125,7 @@ export const webhookBodySchema = z.object({
   data: z.object({
     order_id: z.number().int().positive(),
     quantity: z.number().int().positive(),
-    delivery_items: z.array(z.string()).nullish(),
+    delivery_items: z.array(deliveryItemSchema).nullish(),
     refunded: z.boolean().optional(),
   }),
 });
@@ -168,7 +200,10 @@ export const orderRowSchema = z.object({
   created_at: z.string().nullish(),
 });
 
-/** `GET /health` (no key): `{ status, catalog_updated_at, time }`, at the top or in `data`. */
+/**
+ * `GET /health` (with the key: it answers 401 without one, seen 2026-10-13): `{ status,
+ * catalog_updated_at, time }`, at the top or in `data`.
+ */
 const healthBodySchema = z.object({
   status: z.string().min(1).max(64),
   catalog_updated_at: z.string().nullish(),

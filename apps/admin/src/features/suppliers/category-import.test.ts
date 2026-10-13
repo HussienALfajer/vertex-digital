@@ -4,6 +4,7 @@ import {
   alignedRows,
   type FieldRow,
   importBody,
+  importMaps,
   initialFieldRows,
   initialPackRows,
   linkBody,
@@ -11,6 +12,7 @@ import {
   refusalsByOffer,
   sentOffers,
   wholeNumber,
+  withOptionRefusals,
 } from './category-import';
 
 const pack = (offerId: string, values: Partial<ImportDraftPack> = {}): ImportDraftPack => ({
@@ -26,6 +28,7 @@ const pack = (offerId: string, values: Partial<ImportDraftPack> = {}): ImportDra
   stock: null,
   stockLevel: 'unlimited',
   requiredFields: ['player_id'],
+  fieldSpecs: null,
   refusal: null,
   suggestedNameAr: `${offerId} name`,
   suggestedGameAmount: 60,
@@ -42,6 +45,22 @@ const field: FieldRow = {
   minLength: '1',
   maxLength: '32',
   required: true,
+  options: [],
+};
+
+const region: FieldRow = {
+  supplierKey: 'server',
+  key: 'server',
+  labelAr: 'السيرفر',
+  type: 'select',
+  minLength: '',
+  maxLength: '',
+  required: true,
+  options: [
+    { value: 'asia', labelAr: 'Asia', supplierValue: 'Asia' },
+    { value: 'eu', labelAr: 'أوروبا', supplierValue: 'Europe' },
+    { value: 'mars', labelAr: 'Mars', supplierValue: null },
+  ],
 };
 
 describe('packGroups', () => {
@@ -65,6 +84,7 @@ describe('initialPackRows', () => {
     const packs = [
       pack('a', { match: { productId: 'p-1', nameAr: 'UC 60' } }),
       pack('b', { refusal: 'OFFER_UNSUPPORTED', suggestedGameAmount: null }),
+      pack('o', { refusal: 'FIELD_OPTIONS_DIFFER' }),
       ...Array.from({ length: 101 }, (_, index) => pack(`x${index}`)),
     ];
     const rows = initialPackRows({ packs });
@@ -76,6 +96,8 @@ describe('initialPackRows', () => {
       productId: 'p-1',
     });
     expect(rows[1]).toMatchObject({ selected: false, gameAmount: '', productId: null });
+    // Refused for its options only: selected, and kept out by `alignedRows` until mapped.
+    expect(rows[2]?.selected).toBe(true);
     expect(rows.filter((row) => row.selected)).toHaveLength(100);
     expect(rows.at(-1)?.selected).toBe(false);
   });
@@ -103,16 +125,79 @@ describe('initialFieldRows', () => {
             supplierKey: 'Player-ID',
             supplierLabel: 'Player ID',
             supplierType: 'text',
+            supplierOptions: null,
             key: 'player_id',
             labelAr: 'معرّف اللاعب',
             type: 'digits',
             minLength: 1,
             maxLength: 32,
+            options: null,
+            required: true,
+          },
+          {
+            supplierKey: 'server',
+            supplierLabel: 'Server',
+            supplierType: 'select',
+            supplierOptions: [
+              { label: 'Asia', value: 'Asia' },
+              { label: 'Europe', value: 'Europe' },
+            ],
+            key: 'server',
+            labelAr: 'السيرفر',
+            type: 'select',
+            minLength: null,
+            maxLength: null,
+            options: [
+              { value: 'asia', labelAr: 'Asia' },
+              { value: 'eu', labelAr: 'أوروبا' },
+              { value: 'mars', labelAr: 'Mars' },
+            ],
             required: true,
           },
         ],
+        optionMap: { server: { asia: 'Asia', eu: 'Europe' } },
       }),
-    ).toEqual([field]);
+    ).toEqual([field, region]);
+  });
+});
+
+describe('option maps (S16 MF2, MF3)', () => {
+  const specs = (values: string[]) => [
+    { key: 'Player-ID', label: 'ID', type: 'text' as const },
+    {
+      key: 'server',
+      label: 'Server',
+      type: 'select' as const,
+      options: values.map((value) => ({ label: value, value })),
+    },
+  ];
+
+  it('sends each option with its supplier value, and lists our selects', () => {
+    expect(importMaps([field, region, { ...region, supplierKey: null, key: 'own' }])).toEqual({
+      fieldMap: { 'Player-ID': 'player_id', server: 'server' },
+      optionMap: { server: { asia: 'Asia', eu: 'Europe' } },
+      selects: { server: ['asia', 'eu', 'mars'], own: ['asia', 'eu', 'mars'] },
+    });
+  });
+
+  it('reads a pack’s option refusal again as options are removed, keeping other refusals', () => {
+    const draft = {
+      packs: [
+        pack('a', { fieldSpecs: specs(['Asia', 'Europe']), refusal: 'FIELD_OPTIONS_DIFFER' }),
+        pack('b', { fieldSpecs: specs(['Asia']), refusal: 'FIELD_OPTIONS_DIFFER' }),
+        pack('c', { refusal: 'OFFER_IGNORED' }),
+      ],
+    };
+    const withoutMars = { ...region, options: region.options.slice(0, 2) };
+    const live = withOptionRefusals(draft, importMaps([field, withoutMars]));
+    expect(live.packs.map((item) => item.refusal)).toEqual([
+      null,
+      'FIELD_OPTIONS_DIFFER',
+      'OFFER_IGNORED',
+    ]);
+    expect(
+      withOptionRefusals(draft, importMaps([field, region])).packs.map((item) => item.refusal),
+    ).toEqual(['FIELD_OPTIONS_DIFFER', 'FIELD_OPTIONS_DIFFER', 'OFFER_IGNORED']);
   });
 });
 
@@ -136,7 +221,11 @@ describe('the bodies', () => {
       importBody({
         game: { slug: 'pubg', categoryId: 'cat', nameAr: 'ببجي', nameEn: 'PUBG' },
         cover: { supplierImage: true },
-        fields: [field, { ...field, supplierKey: null, key: 'note', type: 'text', maxLength: '' }],
+        fields: [
+          field,
+          { ...field, supplierKey: null, key: 'note', type: 'text', maxLength: '' },
+          region,
+        ],
         rows,
       }),
     ).toEqual({
@@ -159,8 +248,20 @@ describe('the bodies', () => {
           minLength: 1,
           maxLength: null,
         },
+        {
+          key: 'server',
+          labelAr: 'السيرفر',
+          type: 'select',
+          required: true,
+          options: [
+            { value: 'asia', labelAr: 'Asia' },
+            { value: 'eu', labelAr: 'أوروبا' },
+            { value: 'mars', labelAr: 'Mars' },
+          ],
+        },
       ],
-      fieldMap: { 'Player-ID': 'player_id' },
+      fieldMap: { 'Player-ID': 'player_id', server: 'server' },
+      optionMap: { server: { asia: 'Asia', eu: 'Europe' } },
       rows: [
         { offerId: 'a', nameAr: 'UC 60', gameAmount: 60 },
         { offerId: 'c', nameAr: 'UC 660' },
@@ -169,9 +270,17 @@ describe('the bodies', () => {
   });
 
   it('links existing products and new packs', () => {
-    expect(linkBody({ gameId: 'g', fieldMap: { uid: 'player_id' }, rows })).toEqual({
+    expect(
+      linkBody({
+        gameId: 'g',
+        fieldMap: { uid: 'player_id' },
+        optionMap: { server: { eu: 'Europe' } },
+        rows,
+      }),
+    ).toEqual({
       gameId: 'g',
       fieldMap: { uid: 'player_id' },
+      optionMap: { server: { eu: 'Europe' } },
       rows: [
         { offerId: 'a', productId: 'p-1' },
         { offerId: 'c', nameAr: 'UC 660' },

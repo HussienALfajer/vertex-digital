@@ -103,7 +103,7 @@ test.describe('suppliers', () => {
 
     await page.getByRole('tab', { name: s.tabs.offers }).click();
     await expect(page.getByText('Fake UC 60', { exact: true })).toBeVisible();
-    await expect(page.getByText(fill(s.offers.total, { total: 10 }))).toBeVisible();
+    await expect(page.getByText(fill(s.offers.total, { total: 14 }))).toBeVisible();
   });
 
   test('imports three PUBG offers into paused products, refusing a taken name in place (step 2)', async ({

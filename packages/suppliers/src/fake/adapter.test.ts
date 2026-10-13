@@ -47,9 +47,9 @@ describe('fake supplier', () => {
       originalCost: { currency: 'USD', amountUnits: 990_000 },
       fieldSpecs: [{ key: 'playerId', label: 'Player ID', type: 'text' }],
     });
-    expect(offers).toHaveLength(10);
+    expect(offers).toHaveLength(14);
     expect(new Set(offers.map((offer) => offer.group))).toEqual(
-      new Set(['PUBG Mobile', 'Free Fire', 'iTunes']),
+      new Set(['PUBG Mobile', 'Free Fire', 'iTunes', 'Mobile Legends', 'Genshin Impact']),
     );
     expect(offers.find((offer) => offer.offerId === 'fake-gift-10')).toMatchObject({
       kind: 'code',
@@ -368,6 +368,38 @@ describe('fake supplier', () => {
 });
 
 describe('fake supplier catalog tree, stock, statement and status (S16)', () => {
+  it('takes two fields and a select by their supplier values, refusing anything else (MF1, MF2)', async () => {
+    const fake = adapter();
+    const offers = await fake.listOffers();
+    expect(offers.find((offer) => offer.offerId === 'fake-ml-86')).toMatchObject({
+      requiredFields: ['playerId', 'zoneId'],
+      categoryId: 'fake-ml',
+    });
+    expect(offers.find((offer) => offer.offerId === 'fake-gi-60')?.fieldSpecs?.[1]).toMatchObject({
+      key: 'region',
+      type: 'select',
+    });
+    const place = (offerId: string, fields: Record<string, string>) =>
+      fake.placeOrder({ idempotencyKey: randomUUID(), offerId, quantity: 1, fields });
+    expect(await place('fake-ml-86', { playerId: '5000000001', zoneId: '1234' })).toMatchObject({
+      status: 'delivered',
+    });
+    expect(await place('fake-gi-60', { playerId: '5000000001', region: 'os_euro' })).toMatchObject({
+      status: 'delivered',
+    });
+    for (const [offerId, fields] of [
+      ['fake-ml-86', { playerId: '5000000001' }],
+      ['fake-ml-86', { playerId: '5000000001', zoneId: '' }],
+      ['fake-gi-60', { playerId: '5000000001', region: 'europe' }],
+      ['fake-gi-60', { playerId: '5000000001' }],
+    ] as const) {
+      expect(await place(offerId, fields)).toMatchObject({
+        status: 'failed_definitive',
+        supplierCode: 'FIELD_REFUSED',
+      });
+    }
+  });
+
   it('lists its tree with counts and images it serves itself', async () => {
     const fake = adapter();
     const categories = await fake.listCategories();
@@ -379,6 +411,8 @@ describe('fake supplier catalog tree, stock, statement and status (S16)', () => 
       'fake-ff-auto',
       'fake-gift',
       'fake-itunes',
+      'fake-ml',
+      'fake-gi',
     ]);
     expect(categories[0]).toEqual({
       categoryId: 'fake-pubg',

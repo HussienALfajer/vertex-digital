@@ -1,0 +1,47 @@
+{
+  "request_id": "req_000000000000000000000011",
+  "success": true,
+  "data": {
+    "id": 266018,
+    "name": "Token Pack 1 (40 tokens)",
+    "description": null,
+    "category_id": 16439,
+    "category": "Asphalt 9: Legends",
+    "brand": "Asphalt 9: Legends",
+    "type": "topup",
+    "price": 0.988,
+    "original_price": 0.988,
+    "discount_percent": 0,
+    "currency": "USD",
+    "stock": 999999,
+    "available": true,
+    "requires_player_id": true,
+    "required_fields": [
+      {
+        "key": "player_id",
+        "label": "User ID",
+        "type": "text"
+      },
+      {
+        "key": "platform",
+        "label": "Platform",
+        "type": "select",
+        "options": [
+          {
+            "label": "Android",
+            "value": "Android"
+          },
+          {
+            "label": "Windows",
+            "value": "Windows"
+          },
+          {
+            "label": "iOS",
+            "value": "iOS"
+          }
+        ]
+      }
+    ],
+    "image_url": "https://wdgzone.tech/panel/category-image.php?name=Asphalt%209%3A%20Legends"
+  }
+}
