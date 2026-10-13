@@ -716,6 +716,25 @@ export class CatalogService {
   }
 
   /** The unarchived input field keys of a game (S07 rule RT3: what a field map may name). */
+  /**
+   * S16 MF2: the option values of the game's unarchived `select` fields, by key (RT3 with option
+   * maps).
+   */
+  async liveSelectOptions(
+    executor: Database | Transaction,
+    gameId: string,
+  ): Promise<Record<string, string[]>> {
+    const rows = await executor
+      .select({ key: catalogInputFields.key, options: catalogInputFields.options })
+      .from(catalogInputFields)
+      .where(and(eq(catalogInputFields.gameId, gameId), isNull(catalogInputFields.archivedAt)));
+    return Object.fromEntries(
+      rows.flatMap((row) =>
+        row.options ? [[row.key, row.options.map((option) => option.value)]] : [],
+      ),
+    );
+  }
+
   async liveFieldKeys(executor: Database | Transaction, gameId: string): Promise<string[]> {
     const rows = await executor
       .select({ key: catalogInputFields.key })

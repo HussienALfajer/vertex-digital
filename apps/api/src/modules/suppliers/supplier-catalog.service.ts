@@ -10,8 +10,10 @@ import {
   type importCategorySchema,
   type linkCategorySchema,
   normalizeSearchText,
+  type OptionMap,
   type ProductKind,
   parseGameAmount,
+  proposeOptionMap,
   type SupplierCategoryListQuery,
   type SupplierCategoryNode,
   type SupplierCategoryPage,
@@ -19,6 +21,7 @@ import {
   suggestInputFields,
   suggestProductName,
   unmappedFields,
+  unmappedOptions,
 } from '@vertex-digital/contracts';
 import {
   currentSupplierPolicy,
@@ -190,7 +193,8 @@ export class SupplierCatalogService {
     const usable = offers.filter((offer) => packRefusal(offer, mapped) === null);
     const specs = usable.flatMap((offer) => offer.fieldSpecs ?? []);
     const suggestion = suggestInputFields(specs);
-    const specOf = new Map<string, FieldSpec>(specs.map((spec) => [spec.key, spec]));
+    // The first pack's spec of each key, as the suggestion reads them (rule MF3).
+    const specOf = new Map<string, FieldSpec>(specs.toReversed().map((spec) => [spec.key, spec]));
     const liveFields = (linkGame?.fields ?? []).filter((field) => field.archivedAt === null);
     const fieldMap = linkGame
       ? linkFieldMap(
@@ -198,6 +202,26 @@ export class SupplierCatalogService {
           liveFields.map((field) => field.key),
         )
       : suggestion.fieldMap;
+    // S16 MF3: an import sends our new selects' values as the first pack's; a link proposes each
+    // of the game's options onto the supplier's by value or label.
+    const selects: Record<string, string[]> = linkGame
+      ? selectOptionsOf(liveFields)
+      : selectOptionsOf(suggestion.fields);
+    const optionMap: OptionMap = linkGame
+      ? Object.fromEntries(
+          Object.entries(fieldMap).flatMap(([supplierKey, key]) => {
+            const spec = specOf.get(supplierKey);
+            const field = liveFields.find((candidate) => candidate.key === key);
+            if (spec?.type !== 'select' || !field?.options) return [];
+            return [[supplierKey, proposeOptionMap(field.options, spec.options ?? [])]];
+          }),
+        )
+      : suggestion.optionMap;
+    const refusalOf = (offer: OfferRow) =>
+      packRefusal(offer, mapped) ??
+      (unmappedOptions(offer.fieldSpecs, fieldMap, optionMap, selects).length > 0
+        ? 'FIELD_OPTIONS_DIFFER'
+        : null);
     const prices = await this.pricing.pricesFor(
       {
         ...(storeCategoryId && { categoryId: storeCategoryId }),
@@ -233,7 +257,8 @@ export class SupplierCatalogService {
         stock: offer.stock,
         stockLevel: stockLevel(offer.stock, offer.inStock, policy.lowStockUnits),
         requiredFields: offer.requiredFields,
-        refusal: packRefusal(offer, mapped),
+        fieldSpecs: offer.fieldSpecs,
+        refusal: refusalOf(offer),
         suggestedNameAr: nameAr,
         suggestedGameAmount: amount,
         pricePreviewUsdUnits: prices[index] ?? null,
@@ -254,13 +279,24 @@ export class SupplierCatalogService {
       linkGame: linkGame && {
         id: linkGame.id,
         nameAr: linkGame.nameAr,
-        fields: liveFields.map((field) => ({ key: field.key, labelAr: field.labelAr })),
+        fields: liveFields.map((field) => ({
+          key: field.key,
+          labelAr: field.labelAr,
+          type: field.type,
+          options: field.options,
+        })),
       },
       fields: suggestion.fields.map((field) => {
         const spec = specOf.get(field.supplierKey) as FieldSpec;
-        return { ...field, supplierLabel: spec.label, supplierType: spec.type };
+        return {
+          ...field,
+          supplierLabel: spec.label,
+          supplierType: spec.type,
+          supplierOptions: spec.options ?? null,
+        };
       }),
       fieldMap,
+      optionMap,
       packs,
     };
   }
@@ -288,9 +324,10 @@ export class SupplierCatalogService {
     }
     const offers = await this.rowOffers(supplier.id, view, row, input.rows);
     const mapped = await this.mappedOfferIds([...offers.values()].map((offer) => offer.id));
+    const selects = selectOptionsOf(input.fields);
     refuseRows(
       input.rows.flatMap((item, index) => {
-        const error = rowError(offers.get(item.offerId), mapped, input.fieldMap);
+        const error = rowError(offers.get(item.offerId), mapped, input, selects);
         return error ? [{ index, ...error }] : [];
       }),
     );
@@ -323,7 +360,7 @@ export class SupplierCatalogService {
             productId: product.id,
             offer: offers.get(input.rows[index]?.offerId as string) as OfferRow,
           })),
-          input.fieldMap,
+          input,
         );
         await this.link(tx, actor, locked, gameId);
         await auditSuppliers(tx, actor, 'supplier.category_imported', categoryEntity(locked.id), {
@@ -381,10 +418,11 @@ export class SupplierCatalogService {
       game.products.filter((product) => product.archivedAt === null).map((p) => [p.id, p]),
     );
     const routedHere = await this.productsRoutedTo(supplier.id, [...productOf.keys()]);
+    const selects = selectOptionsOf(game.fields.filter((field) => field.archivedAt === null));
     refuseRows(
       input.rows.flatMap((item, index) => {
         const offer = offers.get(item.offerId);
-        const error = rowError(offer, mapped, input.fieldMap);
+        const error = rowError(offer, mapped, input, selects);
         if (error) return [{ index, ...error }];
         if (!('productId' in item)) return [];
         const product = productOf.get(item.productId);
@@ -429,7 +467,7 @@ export class SupplierCatalogService {
           const productId = 'productId' in item ? item.productId : createdOf.get(index)?.id;
           return { productId: productId as string, offer: offers.get(item.offerId) as OfferRow };
         });
-        const routes = await this.insertRoutes(tx, actor, supplier, targets, input.fieldMap);
+        const routes = await this.insertRoutes(tx, actor, supplier, targets, input);
         if (locked.gameId !== game.id) await this.link(tx, actor, locked, game.id);
         await auditSuppliers(tx, actor, 'supplier_category.linked', categoryEntity(locked.id), {
           supplier: supplier.code,
@@ -774,26 +812,27 @@ export class SupplierCatalogService {
   }
 
   /**
-   * One enabled route per target (rules RT1–RT3), its field map limited to the offer's own fields
-   * so a supplier is never sent a field it did not ask for; each audited.
+   * One enabled route per target (rules RT1–RT3), its field and option maps limited to the
+   * offer's own fields so a supplier is never sent a field it did not ask for; each audited.
    */
   private async insertRoutes(
     tx: Transaction,
     actor: Actor,
     supplier: { id: string; code: SupplierCategoryNode['supplierCode'] },
     targets: readonly { productId: string; offer: OfferRow }[],
-    fieldMap: Record<string, string>,
+    maps: { fieldMap: Record<string, string>; optionMap: OptionMap },
   ): Promise<string[]> {
     const routes = targets.map((target) => {
-      const required = target.offer.requiredFields ?? Object.keys(fieldMap);
+      const required = target.offer.requiredFields ?? Object.keys(maps.fieldMap);
+      const own = <Value>(map: Record<string, Value>) =>
+        Object.fromEntries(Object.entries(map).filter(([key]) => required.includes(key)));
       return {
         id: newId(),
         productId: target.productId,
         supplierId: supplier.id,
         offerId: target.offer.id,
-        fieldMap: Object.fromEntries(
-          Object.entries(fieldMap).filter(([key]) => required.includes(key)),
-        ),
+        fieldMap: own(maps.fieldMap),
+        optionMap: own(maps.optionMap),
       };
     });
     if (routes.length === 0) return [];
@@ -806,6 +845,7 @@ export class SupplierCatalogService {
         priority: 1,
         enabled: true,
         fieldMap: route.fieldMap,
+        optionMap: route.optionMap,
       });
     }
     return routes.map((route) => route.id);
@@ -878,18 +918,32 @@ function packRefusal(
   return null;
 }
 
-/** A request row's refusal (rules SC3, SC7, RT1, RT3), or null. */
+/** A request row's refusal (rules SC3, SC7, RT1, RT3, MF3), or null. */
 function rowError(
   offer: OfferRow | undefined,
   mapped: ReadonlySet<string>,
-  fieldMap: Record<string, string>,
+  maps: { fieldMap: Record<string, string>; optionMap: OptionMap },
+  selects: Readonly<Record<string, readonly string[]>>,
 ): Omit<RowError, 'index'> | null {
   if (!offer) return { code: 'NOT_FOUND' };
   const refusal = packRefusal(offer, mapped);
   if (refusal) return { code: refusal };
-  const fields = unmappedFields(offer.requiredFields, fieldMap);
+  const fields = unmappedFields(offer.requiredFields, maps.fieldMap);
   if (fields.length > 0) return { code: 'ROUTE_FIELDS_UNMAPPED', fields };
+  const options = unmappedOptions(offer.fieldSpecs, maps.fieldMap, maps.optionMap, selects);
+  if (options.length > 0) return { code: 'FIELD_OPTIONS_DIFFER', fields: options };
   return null;
+}
+
+/** S16 MF2: the option values of the `select` fields among these, by key. */
+function selectOptionsOf(
+  fields: readonly { key: string; options?: readonly { value: string }[] | null }[],
+): Record<string, string[]> {
+  return Object.fromEntries(
+    fields.flatMap((field) =>
+      field.options ? [[field.key, field.options.map((option) => option.value)]] : [],
+    ),
+  );
 }
 
 /** Refuses a request with every refused row; the first row's code is the refusal's. */
@@ -949,10 +1003,16 @@ function linkFieldMap(
   suggested: Record<string, string>,
   liveKeys: readonly string[],
 ): Record<string, string> {
+  const entries = Object.entries(suggested);
   return Object.fromEntries(
-    Object.entries(suggested).flatMap(([supplierKey, key]) => {
-      if (liveKeys.includes(key)) return [[supplierKey, key]];
-      return liveKeys.length === 1 ? [[supplierKey, liveKeys[0] as string]] : [];
+    entries.flatMap(([supplierKey, key]) => {
+      // The same key, underscores aside (`playerid` and `player_id`).
+      const same = liveKeys.find((live) => live.replaceAll('_', '') === key.replaceAll('_', ''));
+      if (same) return [[supplierKey, same]];
+      // One supplier field onto a game of one field; several are mapped by key only.
+      return liveKeys.length === 1 && entries.length === 1
+        ? [[supplierKey, liveKeys[0] as string]]
+        : [];
     }),
   );
 }

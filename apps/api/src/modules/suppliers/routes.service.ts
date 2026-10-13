@@ -1,11 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   type createRouteSchema,
+  type FieldSpec,
+  type OptionMap,
   type ProductRouting,
   type Route,
   stockLevel,
   type UpdateRoute,
   unmappedFields,
+  unmappedOptions,
 } from '@vertex-digital/contracts';
 import {
   currentSupplierPolicy,
@@ -34,10 +37,11 @@ type ProductRow = Awaited<ReturnType<CatalogItemsService['lockProduct']>>['row']
 
 const routeEntity = (id: string) => ({ type: 'product_route' as const, id });
 
-const routeValues = (row: Pick<RouteRow, 'priority' | 'enabled' | 'fieldMap'>) => ({
+const routeValues = (row: Pick<RouteRow, 'priority' | 'enabled' | 'fieldMap' | 'optionMap'>) => ({
   priority: row.priority,
   enabled: row.enabled,
   fieldMap: row.fieldMap,
+  optionMap: row.optionMap,
 });
 
 function toRoute(route: RouteState, basisId: string | null, lowStockUnits: number): Route {
@@ -58,10 +62,12 @@ function toRoute(route: RouteState, basisId: string | null, lowStockUnits: numbe
       missingSince: offer.missingSince?.toISOString() ?? null,
       stock: offer.stock,
       stockLevel: stockLevel(offer.stock, offer.inStock, lowStockUnits),
+      fieldSpecs: offer.fieldSpecs,
     },
     priority: route.priority,
     enabled: route.enabled,
     fieldMap: route.fieldMap,
+    optionMap: route.optionMap,
     archivedAt: route.archivedAt?.toISOString() ?? null,
     tier: route.tier,
     unusableReason: route.unusableReason,
@@ -145,11 +151,11 @@ export class RoutesService {
         throw refusals.invalid('A manual offer serves only the product it was created for');
       }
       if (offer.missingSince) throw refusals.offerMissing();
-      // S16 SC3, SC6: not until Q19 is answered; an ignored offer is unignored first.
+      // S16 SC3, SC6: fields its adapter cannot send; an ignored offer is unignored first.
       if (offer.unsupportedReason) throw refusals.offerUnsupported();
       if (offer.ignoredAt) throw refusals.offerIgnored();
       if (offer.kind && offer.kind !== product.kind) throw refusals.kindMismatch();
-      await this.checkFields(tx, product.gameId, offer.requiredFields, input.fieldMap, true);
+      await this.checkFields(tx, product.gameId, offer, input, true);
       await this.checkFree(tx, product.id, offer.supplierId, offer.id);
       const [row] = await tx
         .insert(productRoutes)
@@ -160,6 +166,7 @@ export class RoutesService {
           offerId: offer.id,
           priority: input.priority,
           fieldMap: input.fieldMap,
+          optionMap: input.optionMap,
         })
         .returning();
       const route = row as RouteRow;
@@ -226,27 +233,34 @@ export class RoutesService {
     });
   }
 
-  /** Priority, enable and field map; an enabled route needs its known fields mapped (RT3). */
+  /**
+   * Priority, enable, field map and (S16 MF2) option map; an enabled route needs its known fields
+   * mapped and its selects' options given supplier values (RT3).
+   */
   async update(actor: Actor, routeId: string, input: UpdateRoute): Promise<ProductRouting> {
     return this.changeRoute(routeId, async (tx, product, before) => {
       const after = {
         priority: input.priority ?? before.priority,
         enabled: input.enabled ?? before.enabled,
         fieldMap: input.fieldMap ?? before.fieldMap,
+        optionMap: input.optionMap ?? before.optionMap,
       };
       const changed = (Object.keys(after) as (keyof typeof after)[]).filter(
         (key) => JSON.stringify(after[key]) !== JSON.stringify(before[key]),
       );
       if (changed.length === 0) return;
       const [offer] = await tx
-        .select({ requiredFields: supplierOffers.requiredFields })
+        .select({
+          requiredFields: supplierOffers.requiredFields,
+          fieldSpecs: supplierOffers.fieldSpecs,
+        })
         .from(supplierOffers)
         .where(eq(supplierOffers.id, before.offerId));
       await this.checkFields(
         tx,
         product.gameId,
-        offer?.requiredFields ?? null,
-        after.fieldMap,
+        { requiredFields: offer?.requiredFields ?? null, fieldSpecs: offer?.fieldSpecs ?? null },
+        after,
         after.enabled,
       );
       await tx.update(productRoutes).set(after).where(eq(productRoutes.id, routeId));
@@ -377,21 +391,26 @@ export class RoutesService {
 
   /**
    * Rule RT3: the map names only unarchived fields of the game; an enabled route also maps each
-   * field the supplier requires.
+   * field the supplier requires, and (S16 MF2) gives each option of a select it maps a value from
+   * the supplier's list (`FIELD_OPTIONS_DIFFER`).
    */
   private async checkFields(
     tx: Transaction,
     gameId: string,
-    requiredFields: string[] | null,
-    fieldMap: Record<string, string>,
+    offer: { requiredFields: string[] | null; fieldSpecs: FieldSpec[] | null },
+    maps: { fieldMap: Record<string, string>; optionMap: OptionMap },
     enabled: boolean,
   ): Promise<void> {
     const keys = new Set(await this.catalog.liveFieldKeys(tx, gameId));
-    if (!Object.values(fieldMap).every((key) => keys.has(key))) {
+    if (!Object.values(maps.fieldMap).every((key) => keys.has(key))) {
       throw refusals.invalid('The field map names a field the game does not have');
     }
-    const missing = unmappedFields(requiredFields, fieldMap);
-    if (enabled && missing.length > 0) throw refusals.fieldsUnmapped(missing);
+    if (!enabled) return;
+    const missing = unmappedFields(offer.requiredFields, maps.fieldMap);
+    if (missing.length > 0) throw refusals.fieldsUnmapped(missing);
+    const selects = await this.catalog.liveSelectOptions(tx, gameId);
+    const gaps = unmappedOptions(offer.fieldSpecs, maps.fieldMap, maps.optionMap, selects);
+    if (gaps.length > 0) throw refusals.fieldOptionsDiffer(gaps);
   }
 
   /** Rule RT1: no other unarchived route of the product to the supplier, or to the offer. */

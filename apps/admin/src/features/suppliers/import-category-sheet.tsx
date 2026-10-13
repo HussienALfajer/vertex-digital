@@ -42,6 +42,7 @@ import {
   alignedRows,
   type FieldRow,
   importBody,
+  importMaps,
   initialFieldRows,
   initialPackRows,
   type PackRow,
@@ -49,6 +50,7 @@ import {
   type RowRefusal,
   refusalsByOffer,
   sentOffers,
+  withOptionRefusals,
 } from './category-import';
 import { OriginalPrice, StockChip } from './offer-cells';
 import { categoryImageUrl, importDraftQuery, useImportCategory } from './suppliers.queries';
@@ -106,20 +108,22 @@ export function ImportCategorySheet({
   );
 }
 
-function ImportForm({ supplier, draft }: { supplier: SupplierDetail; draft: ImportDraft }) {
+function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft: ImportDraft }) {
   const { t } = useTranslation();
   const categories = useQuery(categoriesQuery());
-  const importCategory = useImportCategory(supplier.code, draft.category.categoryId);
+  const importCategory = useImportCategory(supplier.code, read.category.categoryId);
   const [game, setGame] = useState<Record<GameKey, string>>({
-    nameAr: draft.game.nameAr,
-    nameEn: draft.game.nameEn,
-    categoryId: draft.game.categoryId ?? '',
-    slug: draft.game.slug,
+    nameAr: read.game.nameAr,
+    nameEn: read.game.nameEn,
+    categoryId: read.game.categoryId ?? '',
+    slug: read.game.slug,
   });
   const [upload, setUpload] = useState<CatalogImage | null>(null);
-  const [useSupplierImage, setUseSupplierImage] = useState(draft.category.hasImage);
+  const [useSupplierImage, setUseSupplierImage] = useState(read.category.hasImage);
   const [imageFailed, setImageFailed] = useState(false);
-  const [fields, setFields] = useState<FieldRow[]>(() => initialFieldRows(draft));
+  const [fields, setFields] = useState<FieldRow[]>(() => initialFieldRows(read));
+  // S16 MF3: a pack refused for its options is choosable once the options it lacks are removed.
+  const draft = withOptionRefusals(read, importMaps(fields));
   const [edited, setRows] = useState<PackRow[]>(() => initialPackRows(draft));
   // The draft is read again after a refusal: what it refuses now is no longer selected.
   const rows = alignedRows(draft, edited);
@@ -400,68 +404,83 @@ function ImportForm({ supplier, draft }: { supplier: SupplierDetail; draft: Impo
                   <Trash2Icon />
                 </TipButton>
               </div>
-              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_9rem_5rem_5rem_auto] sm:items-end">
-                <Field>
-                  <FieldLabel>{t('suppliers.importCategory.fieldKey')}</FieldLabel>
-                  <Input
-                    dir="ltr"
-                    value={field.key}
-                    onChange={(event) => setField(index, { key: event.target.value })}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>{t('suppliers.importCategory.fieldLabel')}</FieldLabel>
-                  <Input
-                    value={field.labelAr}
-                    onChange={(event) => setField(index, { labelAr: event.target.value })}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>{t('suppliers.importCategory.fieldType')}</FieldLabel>
-                  <Select
-                    items={typeItems}
-                    value={field.type}
-                    onValueChange={(value) =>
-                      setField(index, { type: (value ?? 'text') as FieldRow['type'] })
-                    }
+              {field.type === 'select' ? (
+                <SelectFieldRow
+                  field={field}
+                  onChange={(next) => setField(index, next)}
+                  required={
+                    <CheckLine
+                      checked={field.required}
+                      onChange={(on) => setField(index, { required: on })}
+                    >
+                      {t('suppliers.importCategory.required')}
+                    </CheckLine>
+                  }
+                />
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-[1fr_1fr_9rem_5rem_5rem_auto] sm:items-end">
+                  <Field>
+                    <FieldLabel>{t('suppliers.importCategory.fieldKey')}</FieldLabel>
+                    <Input
+                      dir="ltr"
+                      value={field.key}
+                      onChange={(event) => setField(index, { key: event.target.value })}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>{t('suppliers.importCategory.fieldLabel')}</FieldLabel>
+                    <Input
+                      value={field.labelAr}
+                      onChange={(event) => setField(index, { labelAr: event.target.value })}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>{t('suppliers.importCategory.fieldType')}</FieldLabel>
+                    <Select
+                      items={typeItems}
+                      value={field.type}
+                      onValueChange={(value) =>
+                        setField(index, { type: (value ?? 'text') as FieldRow['type'] })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {typeItems.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel>{t('suppliers.importCategory.minLength')}</FieldLabel>
+                    <Input
+                      dir="ltr"
+                      inputMode="numeric"
+                      value={field.minLength}
+                      onChange={(event) => setField(index, { minLength: event.target.value })}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>{t('suppliers.importCategory.maxLength')}</FieldLabel>
+                    <Input
+                      dir="ltr"
+                      inputMode="numeric"
+                      value={field.maxLength}
+                      onChange={(event) => setField(index, { maxLength: event.target.value })}
+                    />
+                  </Field>
+                  <CheckLine
+                    checked={field.required}
+                    onChange={(on) => setField(index, { required: on })}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {typeItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel>{t('suppliers.importCategory.minLength')}</FieldLabel>
-                  <Input
-                    dir="ltr"
-                    inputMode="numeric"
-                    value={field.minLength}
-                    onChange={(event) => setField(index, { minLength: event.target.value })}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>{t('suppliers.importCategory.maxLength')}</FieldLabel>
-                  <Input
-                    dir="ltr"
-                    inputMode="numeric"
-                    value={field.maxLength}
-                    onChange={(event) => setField(index, { maxLength: event.target.value })}
-                  />
-                </Field>
-                <CheckLine
-                  checked={field.required}
-                  onChange={(on) => setField(index, { required: on })}
-                >
-                  {t('suppliers.importCategory.required')}
-                </CheckLine>
-              </div>
+                    {t('suppliers.importCategory.required')}
+                  </CheckLine>
+                </div>
+              )}
               {fieldErrors.includes(index) && (
                 <p role="alert" className="text-sm text-destructive-text">
                   {t('suppliers.importCategory.errors.field')}
@@ -486,6 +505,7 @@ function ImportForm({ supplier, draft }: { supplier: SupplierDetail; draft: Impo
                 minLength: '1',
                 maxLength: '64',
                 required: true,
+                options: [],
               },
             ])
           }
@@ -520,6 +540,85 @@ function ImportForm({ supplier, draft }: { supplier: SupplierDetail; draft: Impo
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * S16 MF3: a supplier select as our select: its key and label, each option's label (editable) and
+ * the supplier value it is sent as; options can be removed down to S06's two.
+ */
+function SelectFieldRow({
+  field,
+  required,
+  onChange,
+}: {
+  field: FieldRow;
+  required: ReactNode;
+  onChange: (next: Partial<FieldRow>) => void;
+}) {
+  const { t } = useTranslation();
+  const setOption = (value: string, labelAr: string) =>
+    onChange({
+      options: field.options.map((option) =>
+        option.value === value ? { ...option, labelAr } : option,
+      ),
+    });
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <Field>
+          <FieldLabel>{t('suppliers.importCategory.fieldKey')}</FieldLabel>
+          <Input
+            dir="ltr"
+            value={field.key}
+            onChange={(event) => onChange({ key: event.target.value })}
+          />
+        </Field>
+        <Field>
+          <FieldLabel>{t('suppliers.importCategory.fieldLabel')}</FieldLabel>
+          <Input
+            value={field.labelAr}
+            onChange={(event) => onChange({ labelAr: event.target.value })}
+          />
+        </Field>
+        {required}
+      </div>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm font-medium">
+          {t('suppliers.importCategory.options')}
+        </legend>
+        <p className="text-xs text-muted-foreground">{t('suppliers.importCategory.optionsHint')}</p>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {field.options.map((option) => (
+            <li
+              key={option.value}
+              className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2"
+            >
+              <Input
+                aria-label={t('suppliers.importCategory.optionLabel', { value: option.value })}
+                value={option.labelAr}
+                onChange={(event) => setOption(option.value, event.target.value)}
+              />
+              <bdi dir="ltr" className="text-xs text-muted-foreground">
+                {option.supplierValue ?? option.value}
+              </bdi>
+              <TipButton
+                type="button"
+                label={t('suppliers.importCategory.removeOption', { name: option.labelAr })}
+                disabled={field.options.length <= 2}
+                onClick={() =>
+                  onChange({
+                    options: field.options.filter((item) => item.value !== option.value),
+                  })
+                }
+              >
+                <XIcon />
+              </TipButton>
+            </li>
+          ))}
+        </ul>
+      </fieldset>
+    </div>
   );
 }
 

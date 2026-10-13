@@ -260,11 +260,14 @@ export class PlayerChecksService {
           ],
     );
     if (!allowed) throw orderRefusals.rateLimited();
+    // As the order would send them (S16 MF2: a select as the supplier's option value).
     const mapped = Object.fromEntries(
-      Object.entries(route.fieldMap).map(([supplierField, key]) => [
-        supplierField,
-        fields[key] ?? '',
-      ]),
+      Object.entries(route.fieldMap).map(([supplierField, key]) => {
+        const value = fields[key] ?? '';
+        const options = route.optionMap[supplierField];
+        const sent = options && Object.hasOwn(options, value) ? options[value] : undefined;
+        return [supplierField, sent ?? value];
+      }),
     );
     const started = performance.now();
     let answer: { valid: boolean; playerName?: string } | null = null;

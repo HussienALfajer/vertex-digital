@@ -1122,7 +1122,7 @@ describe('the supplier registry (rules SP1, SP2)', () => {
       const connected = await real.connect(tx, { id: ids.fake, code: 'fake' });
       expect(connected?.secrets).toEqual([SECRET]);
       const offers = (await connected?.adapter.listOffers()) ?? [];
-      expect(offers).toHaveLength(9);
+      expect(offers).toHaveLength(13);
       expect(offers.find((item) => item.offerId === 'fake-uc-60')?.cost.amountUnits).toBe(
         usd(0.92),
       );
@@ -1140,7 +1140,7 @@ describe('the supplier registry (rules SP1, SP2)', () => {
       expect(await real.get('shop2topup', { apiKey: SECRET })).toBeNull();
       expect(await real.get('manual', {})).toBeNull();
       await rm(env.FAKE_SUPPLIER_STATE_FILE, { force: true });
-      expect((await (await real.get('fake', {}))?.listOffers())?.length).toBe(10);
+      expect((await (await real.get('fake', {}))?.listOffers())?.length).toBe(14);
     }));
 
   it('masks credentials and URL queries in messages', () => {

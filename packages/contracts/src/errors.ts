@@ -215,8 +215,13 @@ export const ERROR_CODES = [
   'PUSH_ENDPOINT_REFUSED',
   /** Beyond today's owner cap for owner-funded admin orders; `details.remainingUsdUnits` (S16 AP7). */
   'OWNER_DAILY_CAP_EXCEEDED',
-  /** The offer has two fields or a select field: not usable until Q19 is answered (S16 SC3). */
+  /** The offer has fields its adapter cannot send (S16 SC3, MF1, MF2). */
   'OFFER_UNSUPPORTED',
+  /**
+   * A select field's options have no supplier value in the offer's list (S16 MF3); per row in
+   * `details.rows`, or `details.fields` (the supplier keys) on a route.
+   */
+  'FIELD_OPTIONS_DIFFER',
   /** The offer is ignored: unignore it first (S16 SC6). */
   'OFFER_IGNORED',
   /** The category, an ancestor or a descendant is linked to another game; `details.gameId` (S16 SC7). */

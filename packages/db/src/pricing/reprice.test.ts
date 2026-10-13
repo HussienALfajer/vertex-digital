@@ -260,6 +260,58 @@ describe('repriceProducts (rule P2)', () => {
     expect(await reprice([p.id], 'route_change')).toEqual({ repriced: 0, reviewsOpened: 0 });
   });
 
+  it('needs a supplier value for every option of a mapped select (S16 MF2, RT3)', async () => {
+    const p = await product();
+    const offerId = await offer('fake', usd(1));
+    await pool.query(
+      `update supplier_offers set field_specs = $2::jsonb, required_fields = $3 where id = $1`,
+      [
+        offerId,
+        JSON.stringify([
+          { key: 'playerId', label: 'ID', type: 'text' },
+          {
+            key: 'server',
+            label: 'Server',
+            type: 'select',
+            options: [
+              { label: 'Asia', value: 'Asia' },
+              { label: 'Europe', value: 'Europe' },
+            ],
+          },
+        ]),
+        ['playerId', 'server'],
+      ],
+    );
+    await pool.query(
+      `insert into catalog_input_fields (id, game_id, key, label_ar, type, required, options,
+         sort_order) values ($1, $2, 'server', 'السيرفر', 'select', true, $3::jsonb, 2)`,
+      [
+        newId(),
+        p.game,
+        JSON.stringify([
+          { value: 'asia', labelAr: 'آسيا' },
+          { value: 'eu', labelAr: 'أوروبا' },
+        ]),
+      ],
+    );
+    const routeId = await route(p.id, 'fake', offerId);
+    const setMaps = (optionMap: object) =>
+      pool.query(
+        `update product_routes set field_map = $2::jsonb, option_map = $3::jsonb where id = $1`,
+        [
+          routeId,
+          JSON.stringify({ playerId: 'player_id', server: 'server' }),
+          JSON.stringify(optionMap),
+        ],
+      );
+    await setMaps({ server: { asia: 'Asia' } });
+    expect((await state(p.id))?.routes[0]?.unusableReason).toBe('fields_incomplete');
+    await setMaps({ server: { asia: 'Asia', eu: 'Europe' } });
+    const routed = (await state(p.id))?.routes[0];
+    expect(routed?.unusableReason).toBeNull();
+    expect(routed?.optionMap).toEqual({ server: { asia: 'Asia', eu: 'Europe' } });
+  });
+
   it('serializes a sync and a rule change on one product, each from fresh facts', async () => {
     const p = await product();
     const fakeOffer = await offer('fake', usd(1));

@@ -12,6 +12,7 @@ import {
   auditEntries,
   bossJobSender,
   catalogCategories,
+  catalogProducts,
   checkoutOrders,
   createDatabase,
   customerNotifications,
@@ -363,7 +364,12 @@ async function credit(tx: Transaction, customerId: string, units: number) {
 async function buy(
   tx: Transaction,
   item: Product,
-  options: { quantity?: number; player?: string; isTest?: boolean } = {},
+  options: {
+    quantity?: number;
+    player?: string;
+    isTest?: boolean;
+    fields?: Record<string, string>;
+  } = {},
 ) {
   const buyer = await customer(tx, { isTest: options.isTest ?? false });
   const { order } = await purchaseOrder(
@@ -373,7 +379,7 @@ async function buy(
       customerId: buyer,
       productId: item.id,
       quantity: options.quantity ?? 1,
-      fields: item.code ? {} : { player_id: options.player ?? '5123456789' },
+      fields: item.code ? {} : { player_id: options.player ?? '5123456789', ...options.fields },
       expectedUnitPriceUsdUnits: item.price,
       idempotencyKey: newId(),
       requestHash: createHash('sha256').update(newId()).digest('hex'),
@@ -905,6 +911,72 @@ describe('re-sends and late answers (rules F3, F5, F6)', () => {
       expect(fakeState.orders[attempt?.id as string]?.request).toEqual(first);
       expect((await attemptsOf(tx, order.id))[0]).toMatchObject({ status: 'unknown' });
       expect(await orderOf(tx, order.id)).toMatchObject({ status: 'sent_to_supplier' });
+    });
+  });
+
+  it('sends a select as the supplier value of the attempt’s option map, on every re-send (S16 MF2)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, { offerId: 'fake-gi-60' });
+      const [game] = await tx
+        .select({ gameId: catalogProducts.gameId })
+        .from(catalogProducts)
+        .where(eq(catalogProducts.id, item.id));
+      await tx.execute(sql`insert into catalog_input_fields (id, game_id, key, label_ar, type,
+        required, options, sort_order) values (${newId()}, ${game?.gameId}, 'region', 'المنطقة',
+        'select', true, ${JSON.stringify([
+          { value: 'asia', labelAr: 'آسيا' },
+          { value: 'eu', labelAr: 'أوروبا' },
+        ])}::jsonb, 2)`);
+      await tx
+        .update(productRoutes)
+        .set({
+          fieldMap: { playerId: 'player_id', region: 'region' },
+          optionMap: { region: { asia: 'os_asia', eu: 'os_euro' } },
+        })
+        .where(eq(productRoutes.id, item.fakeRoute as string));
+      script('fake-gi-60', 'unknown');
+      const order = await buy(tx, item, { fields: { region: 'eu' } });
+      await fulfil.fulfil(order.id, tx);
+      const [attempt] = await attemptsOf(tx, order.id);
+      expect(attempt?.optionMap).toEqual({ region: { asia: 'os_asia', eu: 'os_euro' } });
+      expect(fakeState.orders[attempt?.id as string]?.request.fields).toEqual({
+        playerId: '5123456789',
+        region: 'os_euro',
+      });
+      // The admin points the option elsewhere while the attempt is open: the re-send is the same.
+      await tx
+        .update(productRoutes)
+        .set({ optionMap: { region: { asia: 'os_asia', eu: 'os_usa' } } })
+        .where(eq(productRoutes.id, item.fakeRoute as string));
+      await poll.poll(attempt?.id as string, tx);
+      expect(fakeState.orders[attempt?.id as string]?.request.fields.region).toBe('os_euro');
+      expect((await attemptsOf(tx, order.id))[0]).toMatchObject({ status: 'unknown' });
+    });
+  });
+
+  it('delivers a select order the fake checks against its own options (S16 MF2)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, { offerId: 'fake-gi-330' });
+      const [game] = await tx
+        .select({ gameId: catalogProducts.gameId })
+        .from(catalogProducts)
+        .where(eq(catalogProducts.id, item.id));
+      await tx.execute(sql`insert into catalog_input_fields (id, game_id, key, label_ar, type,
+        required, options, sort_order) values (${newId()}, ${game?.gameId}, 'region', 'المنطقة',
+        'select', true, ${JSON.stringify([
+          { value: 'asia', labelAr: 'آسيا' },
+          { value: 'eu', labelAr: 'أوروبا' },
+        ])}::jsonb, 2)`);
+      await tx
+        .update(productRoutes)
+        .set({
+          fieldMap: { playerId: 'player_id', region: 'region' },
+          optionMap: { region: { asia: 'os_asia', eu: 'os_euro' } },
+        })
+        .where(eq(productRoutes.id, item.fakeRoute as string));
+      const order = await buy(tx, item, { fields: { region: 'asia' } });
+      await fulfil.fulfil(order.id, tx);
+      expect(await orderOf(tx, order.id)).toMatchObject({ status: 'delivered' });
     });
   });
 

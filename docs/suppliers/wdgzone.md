@@ -2,7 +2,7 @@
 
 The backup supplier (ADR 0005): game top-ups and vouchers, cheaper than SHOP2TOPUP on some packs. Adapter: `packages/suppliers/src/wdgzone/`.
 
-Sources: the public documentation at https://wdgzone.tech/docs/ and its OpenAPI document (https://wdgzone.tech/api/openapi.json, "WDG Reseller API" 1.3.0), read on 2026-10-12, read-only calls to the live API with the owner's trial key on the same day (the wallet held $0, so no purchase could be charged), and WDG support's written answer to Q19 on 2026-10-13 (idempotency, several fields, the delivery poll). Anything these sources do not show is under "Open questions".
+Sources: the public documentation at https://wdgzone.tech/docs/ and its OpenAPI document (https://wdgzone.tech/api/openapi.json, "WDG Reseller API" 1.3.0), read on 2026-10-12, read-only calls to the live API with the owner's trial key on the same day (the wallet held $0, so no purchase could be charged), WDG support's written answer to Q19 on 2026-10-13 (idempotency, several fields, the delivery poll), and a read-only scan of every top-up on 2026-10-13 (S16 PR 4, "Account fields": `GET /products?type=topup` pages and one `GET /products/{id}`; nothing was bought or written). Anything these sources do not show is under "Open questions".
 
 ## Connection
 
@@ -26,14 +26,14 @@ Sources: the public documentation at https://wdgzone.tech/docs/ and its OpenAPI 
 | Catalog (`listOffers`) | `GET /products?type=topup&limit=100&page=N`, then `type=voucher` | Pages of up to 100 with `pagination: { page, limit, total, total_pages }`; a page past the end answers `data: []`. |
 | Purchase (`placeOrder`) | `POST /products/{id}/purchase` with `X-Idempotency-Key` | Body `{ quantity, player_id?, <other field keys>?, callback_url? }` (see "Account fields"). `201` new order, `200` a replay of the key (`idempotent_replay: true`). |
 | Poll (`getOrder`) | `GET /orders/{id}/delivery` | By WDG's own order id. `200` ready, `202` processing or a direct top-up without a code, `410` failed and refunded, `404` not found (bodies under "Status mapping"). WDG suggests every 2–5 s; the order engine polls on its own schedule (S08 rule F7). |
-| Order state (`getOrder` after a `202`, from S16 PR 4) | `GET /orders/{id}` | `status`: `pending`, `processing`, `completed`, `refunded`, `failed`, `cancelled` (WDG support, 2026-10-13). Read for that field only: the rest of its body is not documented. |
+| Order state (`getOrder` after a `202`, S16 MF4) | `GET /orders/{id}` | `status`: `pending`, `processing`, `completed`, `refunded`, `failed`, `cancelled` (WDG support, 2026-10-13). Read for that field only (`data.status`): the rest of its body is not documented. |
 | Player check (`validatePlayer`) | — | WDG does not check player ids. The capability is off; the store never asks WDG. |
 | Category tree (`listCategories`, S16 SC1) | `GET /categories` | The whole active tree in one array (3,573 nodes on 2026-10-12): `id`, `parent_id`, `name`, `type`, `product_count`, `in_stock_products`, `image_url`. A `pagination` object, should WDG send one, is followed page by page within the rate limit. `manual` nodes are left out, as their products are. |
 | Statement (`listTransactions`, `listOrders`, S16 SF3) | `GET /transactions?limit=50&page=N`, `GET /orders?limit=50&page=N` | Newest first. Their rows are not documented: each is read leniently (see "Statement"). |
-| Platform status (`getPlatformStatus`, S16 SF5) | `GET /health` | `{ status: "operational", catalog_updated_at, time }`, no key needed; read at the top or in `data`. |
+| Platform status (`getPlatformStatus`, S16 SF5) | `GET /health` | `{ status: "operational", catalog_updated_at, time }`, read at the top or in `data`. Needs `X-API-Key` like every call: without it, `401 UNAUTHORIZED` (seen 2026-10-13). |
 | Category images (`fetchImage`, S16 IM1) | the node's `image_url` | HTTPS on `wdgzone.tech` only, without the API key; redirects followed by hand, at most 3, only to `wdgzone.tech`. Any other host's URL is stored as none. |
 
-Not used: `GET /catalog`, `/catalog/{type}/categories`, `/catalog/{type}/categories/{id}/products` (the guided tree: `SUBCATEGORY_REQUIRED` 409 until a leaf), `GET /products/{id}` (WDG names it as the place of `required_fields`; `GET /products` lists the same field).
+Not used: `GET /catalog`, `/catalog/{type}/categories`, `/catalog/{type}/categories/{id}/products` (the guided tree: `SUBCATEGORY_REQUIRED` 409 until a leaf), `GET /products/{id}` (WDG names it as the place of `required_fields`; read once on 2026-10-13, it answers the same product body as `GET /products`, `required_fields` included: `fixtures/product-select.json`).
 
 ## Catalog
 
@@ -53,7 +53,7 @@ A product:
 
 - `type`: `topup` (5,602 products on 2026-10-12), `voucher` (5,975) or `manual` (about 64,500: fulfilled by hand at WDG, often Steam gifts, some with a placeholder price of `999`). Only `topup` (kind `direct`) and `voucher` (kind `code`) are listed; `manual` is left out (V1 sells automatic delivery).
 - Offer: id `String(id)`; group `brand` (the game), else `category`; name `"<category> · <name>"` when the category is neither the brand nor the name (`Auto · 60 UC`, `MENA · 110 Diamonds`), else `name`; in stock when `available` and `stock` is missing or above 0.
-- `required_fields`: the account fields, each `{ key, label, type: text | select, options? }` (`select` lists `{ label, value }`). Keys seen: `user_id`, `player_id`, `server_id`, `server`, `riot_id`, `region`, `uid`, `role_id`, `zone_id`… A product with `requires_player_id` and no listed field asks for `player_id`. Products with more than one field, or whose one field is a `select`, are kept since S16 with `unsupported_reason = fields_unsupported`: shown in the panel, never routed or imported until S16 PR 4 sends them ("Account fields"; Q19 answered on 2026-10-13); on 2026-10-12 the supported ones were 3,669 top-ups and 5,975 vouchers, 9,644 offers.
+- `required_fields`: the account fields, each `{ key, label, type: text | select, options? }` (`select` lists `{ label, value }`). A product with `requires_player_id` and no listed field asks for `player_id`. Since S16 PR 4 a product is unsupported (`unsupported_reason = fields_unsupported`: shown in the panel, never routed or imported) only when its fields cannot be sent by MF1–MF2 ("Account fields"); the counts of the 2026-10-13 scan are there.
 - S16: the offer keeps `category_id` (its leaf), `stock` (`999999` and above, or none, is unlimited), `original_price` (the price before WDG's discount) and `required_fields` as field specs (key, label, type, a select's options).
 - A product that does not parse, has another currency or an unreadable price is skipped; the rest of the page is kept.
 - WDG does not say how the list is sorted. A product that moves between pages while a read runs can be missed by that run (it reappears in the next one, 15 minutes later).
@@ -67,17 +67,30 @@ A product:
 - One account field is sent as `player_id` whatever its key (a product whose field is `user_id` still answers `PLAYER_ID_REQUIRED` without `player_id`). `player_id` is not checked by WDG; a missing one is refused before the balance. Several fields and selects: "Account fields".
 - `quantity` 1–100 per the documentation; the order engine sends 1–50.
 - `callback_url`: HTTPS only. The worker sends `${STORE_URL}/api/webhooks/suppliers/wdgzone` when `STORE_URL` is HTTPS (production), nothing in development.
-- Reply: `{ order_id, status, delivery_items: [codes…], total }`. `status: "completed"` (any case) is delivered: codes are `delivery_items` when there are any, units the units asked. Any other status is `pending` with the order id, followed by polling.
+- Reply: `{ order_id, status, delivery_items, total }`. `status: "completed"` (any case) is delivered: codes are `delivery_items` when there are any, units the units asked. Any other status is `pending` with the order id, followed by polling.
+- `delivery_items` (S16 MF4) are read as plain codes or as `{ code, pin }` objects, on the purchase reply, the poll and the webhook alike; a pin is kept in the code text as `<code> · PIN: <pin>` (no pin: the code alone). An empty code, or a text over S08's 200 characters, makes the answer `unknown`.
 
 ## Account fields
 
 WDG support (2026-10-13): standard games take `player_id`. Products that need a user id and a server or zone id take them "separated by a delimiter in the player_id field (e.g. `USER_ID|ZONE_ID` or `12345678(1234)`), or include them as JSON keys in the body: `{"player_id": "12345678", "zone_id": "1234"}`"; the structure per product is its `required_fields`. Selects are not covered by the answer.
 
-The owner's decisions (2026-10-13, S16 MF1–MF2), applied from S16 PR 4:
+The owner's decisions (2026-10-13, S16 MF1–MF2), applied since S16 PR 4:
 - One field: sent as `player_id`, as before.
-- Several fields: every field under its own key, plus `player_id` with the account field's value (the field keyed `player_id`, else the first present of `user_id`, `uid`, `role_id`, `riot_id`, `id`). A product with several fields and none of those keys stays unsupported. The delimiter form is never sent.
-- A `select` is sent as the supplier's option `value` (never its label) under its key; the route's option map turns the customer's choice into that value. A select with fewer than 2 options stays unsupported.
-- Until S16 PR 4 ships, an order with two fields is refused before sending (`FIELDS_UNSUPPORTED`).
+- Several fields: every field under its own key, plus `player_id` with the account field's value (the field keyed `player_id`, else the first present of `user_id`, `uid`, `role_id`, `riot_id`, `id`). A product with several fields and none of those keys stays unsupported, and an order with several fields and none of them is refused before sending (`FIELDS_UNSUPPORTED`, ours). The delimiter form is never sent. Empty values are left out of the body.
+- A `select` is sent as the supplier's option `value` (never its label) under its key; the route's option map (`product_routes.option_map`, kept on the attempt) turns the customer's choice into that value. A select with fewer than 2 or more than 50 options (S06's bounds), or with an empty, repeated or over-64-character value, stays unsupported.
+
+Read-only scan of every top-up on 2026-10-13 (57 pages of `GET /products?type=topup&limit=100`, then one `GET /products/{id}` for a select product), counted with the adapter's rules:
+
+| | Top-ups |
+|---|---|
+| Listed | 5,602 |
+| With a `select` field | 883 |
+| With several fields (at most 3) | 1,933 |
+| Supported before S16 PR 4 (one text field) | 3,669 |
+| Supported from S16 PR 4 (MF1–MF2) | 4,953 (1,284 with several fields, 427 with a select) |
+| Still unsupported | 649: 354 several fields without an account field (`email` and `password`, `character_id`, `account`…), 126 a select with one option, 149 a select with 51–72 options (LifeAfter, Lineage W, Lineage2M), 20 option values over 64 characters (Ragnarok Origin) |
+
+Selects within one game (rule MF3, `FIELD_OPTIONS_DIFFER`): among the supported packs, 25 game and select-key pairs, none with packs whose option values differ, so an import of a game's packs refuses no row today. Over all top-ups, 3 of 41 pairs differ: Love and Deepspace only in the labels' case (same values: no refusal), Sword of Justice and Undawn only between one-option selects (unsupported anyway). Of the supported packs, 9 ask for an `email` and a `password` beside an account field (see "Open questions" 11).
 
 ## Status mapping
 
@@ -85,12 +98,12 @@ The owner's decisions (2026-10-13, S16 MF1–MF2), applied from S16 PR 4:
 |---|---|
 | Purchase `2xx`, `status` `completed` | `delivered` (`quantity` asked, codes from `delivery_items`) |
 | Purchase `2xx`, any other `status` | `pending` (order id kept) |
-| Poll `202` `{ data: { status: "PROCESSING", delivery_items: null } }` | `pending`; from S16 PR 4, followed by `GET /orders/{id}`: `completed` → `delivered` without codes, `refunded` / `failed` / `cancelled` → `failed_definitive`, `pending` / `processing` → `pending`, else `unknown` (S16 MF4) |
-| Poll `200` `{ data: { order_id, status: "COMPLETED", delivery_items: [{ code, pin }] } }` | `delivered` with the attempt's units; `unknown` when a `quantity` differs or the body does not parse. Until S16 PR 4 the items are read as strings only, so a `{ code, pin }` reply is `unknown`; from PR 4 objects are read (a pin as `<code> · PIN: <pin>`) and a `status` other than `COMPLETED` is `unknown` (S16 MF4) |
-| Poll `410` `{ success: false, data: { status: "REFUNDED" \| "FAILED" \| "CANCELLED", refunded: true } }` | `failed_definitive` (`error.code`, else `ORDER_FAILED`; from S16 PR 4 `data.status`) |
+| Poll `202` `{ data: { status: "PROCESSING", delivery_items: null } }` | followed by `GET /orders/{id}` (S16 MF4): `completed` → `delivered` without codes, `refunded` / `failed` / `cancelled` → `failed_definitive` (the status upper-cased as the code), `pending` / `processing` → `pending`, anything else or no readable reply → `unknown` |
+| Poll `200` `{ data: { order_id, status: "COMPLETED", delivery_items: [{ code, pin }] } }` | `delivered` with the attempt's units, items read as codes or `{ code, pin }` (a pin as `<code> · PIN: <pin>`); `unknown` when `status` is present and not `COMPLETED` (any case), a `quantity` differs or the body does not parse (S16 MF4) |
+| Poll `410` `{ success: false, data: { status: "REFUNDED" \| "FAILED" \| "CANCELLED", refunded: true } }` | `failed_definitive` with `data.status` as the code (S16 MF4), else `error.code`, else `ORDER_FAILED` |
 | Poll `404 ORDER_NOT_FOUND`, `5xx`, timeout, other status | `unknown` |
 | Poll without a WDG order id | `unknown`, nothing sent (an `unknown` attempt is re-sent with its key instead: S08 rule F3) |
-| Webhook `order.completed` | `delivered` (`data.quantity`, codes from `data.delivery_items`); with `refunded: true`, malformed |
+| Webhook `order.completed` | `delivered` (`data.quantity`, codes from `data.delivery_items`, plain or `{ code, pin }`); with `refunded: true`, malformed |
 | Webhook `order.failed`, `order.refunded` | `failed_definitive` (`supplierCode` the event name) |
 
 The order engine still checks the codes: a `code` product needs one code per unit and a `direct` one none, else the attempt is `unknown` (`codes_missing`, S08 rule F1).
@@ -115,7 +128,7 @@ Every error is `{ "success": false, "error": { "code": "…", "message": "…" }
 | 422 | `INVALID_REQUEST` | docs | definitive |
 | 429 | `RATE_LIMITED` | docs | retryable → `unknown` |
 | 5xx, timeout, unreadable body | — | — | `unknown` |
-| before sending: a product id that is not WDG's digits, a key over 100 characters, two account fields (until S16 PR 4) | `PRODUCT_NOT_FOUND`, `IDEMPOTENCY_KEY_TOO_LONG`, `FIELDS_UNSUPPORTED` (ours) | — | definitive, nothing sent |
+| before sending: a product id that is not WDG's digits, a key over 100 characters, several fields without an account field (S16 MF1) | `PRODUCT_NOT_FOUND`, `IDEMPOTENCY_KEY_TOO_LONG`, `FIELDS_UNSUPPORTED` (ours) | — | definitive, nothing sent |
 
 Seen live: checks run as key, product, `player_id`, then the balance; `quantity` above 100 reached the balance check. Refusals before anything was sent (DNS, connection refused) are `unknown` too on a purchase (`outcomeOfOrderError`): the re-send with the same key settles them.
 
@@ -139,7 +152,7 @@ Seen live: checks run as key, product, `player_id`, then the balance; `quantity`
 
 ## Fixtures
 
-`packages/suppliers/src/wdgzone/fixtures/`, sanitized: `products-*.json` and the `error-*.json` replies recorded from the live API on 2026-10-12 (request ids replaced, pages cut to a few products); `me.json` recorded with the account id, name and balance replaced; `purchase-completed.json` and `webhook-order-completed.json` from the documentation's examples with the code replaced (`TEST-CODE-0001`). Poll replies (`202`, `200`, `410`) are written in the tests: until S16 PR 4 from the documented status codes, from PR 4 from the bodies in WDG support's answer (2026-10-13). Webhook signatures in tests use a test key. S16: `categories.json` is the documentation's example with a child, a `manual` node and an image on another host added; `health.json` the shape seen live on 2026-10-12; `transactions-page-1.json` and `orders-page-1.json` are synthetic (see "Statement").
+`packages/suppliers/src/wdgzone/fixtures/`, sanitized: `products-*.json` and the `error-*.json` replies recorded from the live API on 2026-10-12 (request ids replaced, pages cut to a few products); `me.json` recorded with the account id, name and balance replaced; `purchase-completed.json` and `webhook-order-completed.json` from the documentation's examples with the code replaced (`TEST-CODE-0001`). Poll replies (`202`, `200`, `410`) and `GET /orders/{id}` are written in the tests from the bodies in WDG support's answer (2026-10-13). S16 PR 4: `products-topup-fields.json` holds five top-ups recorded on 2026-10-13 (Mobile Legends with a server id, Fashion Dream with a select whose values differ from its labels, and three that stay unsupported: email and password, a one-option select, a 72-option select) and `product-select.json` the `GET /products/{id}` reply of a select product (Asphalt 9: Legends), request ids replaced. Webhook signatures in tests use a test key. S16: `categories.json` is the documentation's example with a child, a `manual` node and an image on another host added; `health.json` the shape seen live on 2026-10-12; `transactions-page-1.json` and `orders-page-1.json` are synthetic (see "Statement").
 
 ## Live checks done (2026-10-12, owner's trial key, $0 wallet)
 
@@ -150,10 +163,11 @@ Seen live: checks run as key, product, `player_id`, then the balance; `quantity`
 1. ~~Replay order of checks~~ answered by WDG support (2026-10-13): the key first, a replay is `200` without new checks or charge ("Purchases and idempotency").
 2. ~~The poll's bodies~~ answered (2026-10-13): "Status mapping". Still unknown: whether the purchase reply's and the webhook's `delivery_items` are `{ code, pin }` objects too (S16 PR 4 reads both forms everywhere).
 3. ~~Purchase states~~ answered (2026-10-13): `pending`, `processing`, `completed`, `refunded`, `failed`, `cancelled`. Whether a `201` can already say `failed` is still unknown (it is followed by polling).
-4. ~~Several account fields~~ answered (2026-10-13): "Account fields". Still unknown: how a `select` is sent (S16 MF2 sends its option value under its key) and the body of `GET /orders/{id}` beyond `status`. The first live order on each new kind of product is a walk-in order on the paused pack (S16 AP5) before it is activated.
+4. ~~Several account fields~~ answered (2026-10-13): "Account fields". Still unknown: how a `select` is sent (S16 MF2 sends its option value under its key) and the body of `GET /orders/{id}` beyond `status`. The first live order on each new kind of product (two fields, a select) is a walk-in order on the paused pack (S16 AP5) before it is activated.
 5. **Webhook retries:** the backoff schedule (the adapter accepts an event up to 24 hours after its `created_at`) and whether `created_at` stays the same on retries.
 6. **`order.refunded` after `order.completed`** (a voucher refunded later): when it happens. The engine treats it as a conflict for the admin (S08 rule F5).
 7. **Webhook source addresses**, to add an nginx allow list.
 8. **Sandbox:** its base URL and keys, for a funded test without real money.
 9. **Catalog order:** the sort order of `GET /products`, so a read cannot miss a product that moves between pages.
 10. **Statement and tree shapes (S16):** the rows of `GET /transactions` and `GET /orders`, and whether `GET /categories` pages. To record from read-only live calls on a funded account (owner's approval), then the fixtures replaced by sanitized recordings.
+11. **Account passwords (owner):** 9 supported top-ups ask for an `email` and a `password` beside an account field (MF1 sends them). Importing them would ask customers for their game account's password; the panel imports them like any pack. Whether to sell them is the owner's call (ignore them in the catalog meanwhile).

@@ -503,6 +503,11 @@ export const fulfilmentAttempts = pgTable(
      * whatever the route's map became since. Null on attempts written before it existed.
      */
     fieldMap: jsonb('field_map').$type<Record<string, string>>(),
+    /**
+     * S16 MF2: the route's option map when the attempt was written, beside `field_map`, so a
+     * re-send sends the same supplier values. Null on attempts written before it (read as `{}`).
+     */
+    optionMap: jsonb('option_map').$type<Record<string, Record<string, string>>>(),
     quantity: integer('quantity').notNull(),
     unitCostUsdUnits: amountUnits('unit_cost_usd_units').notNull(),
     status: attemptStatusEnum('status').notNull(),

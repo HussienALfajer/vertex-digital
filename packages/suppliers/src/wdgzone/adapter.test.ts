@@ -100,7 +100,7 @@ describe('WdgzoneAdapter catalog', () => {
         fieldSpecs: player('user_id', 'Unique ID'),
       },
       {
-        // Two account fields: kept, unsupported until Q19 (S16 SC3).
+        // Two fields with an account field (`user_id`): sent as keys (S16 MF1).
         offerId: '264322',
         name: '65 Tokens',
         cost: { currency: 'USD', amountUnits: 1_023_000 },
@@ -114,7 +114,6 @@ describe('WdgzoneAdapter catalog', () => {
           { key: 'user_id', label: 'User ID', type: 'text' },
           { key: 'server_id', label: 'Server ID', type: 'text' },
         ],
-        unsupportedReason: 'fields_unsupported',
       },
       {
         // No fields listed but a player is required; no stock.
@@ -158,6 +157,107 @@ describe('WdgzoneAdapter catalog', () => {
       },
     ]);
     expect(sleeps).toEqual([]);
+  });
+
+  it('keeps unsupported only the fields MF1 and MF2 cannot send (recorded 2026-10-13)', async () => {
+    server.reply(
+      { body: fixture('products-topup-fields') },
+      { body: { success: true, data: [], pagination: { page: 1, total_pages: 0 } } },
+    );
+    const offers = await adapter().listOffers();
+    const byId = new Map(offers.map((offer) => [offer.offerId, offer]));
+    // Mobile Legends: player id and server id.
+    expect(byId.get('269908')).toMatchObject({
+      requiredFields: ['player_id', 'server_id'],
+    });
+    expect(byId.get('269908')?.unsupportedReason).toBeUndefined();
+    // A select whose values differ from its labels: kept whole.
+    expect(byId.get('267066')?.fieldSpecs).toEqual([
+      { key: 'player_id', label: 'Player ID', type: 'text' },
+      {
+        key: 'server',
+        label: 'Server',
+        type: 'select',
+        options: [
+          { label: 'South America', value: 'south_america' },
+          { label: 'North America', value: 'north_america' },
+          { label: 'Asia', value: 'asia' },
+        ],
+      },
+    ]);
+    expect(byId.get('267066')?.unsupportedReason).toBeUndefined();
+    // Email and password, no account field; a one-option select; a 72-option select.
+    for (const id of ['271145', '271884', '269192']) {
+      expect(byId.get(id)?.unsupportedReason).toBe('fields_unsupported');
+    }
+    expect(byId.get('269192')?.fieldSpecs?.[1]?.options).toHaveLength(50);
+  });
+
+  it('reads a product with a select field as GET /products/{id} answers it', () => {
+    const reply = fixture('product-select') as { data: { required_fields: unknown[] } };
+    expect(reply.data.required_fields).toEqual([
+      { key: 'player_id', label: 'User ID', type: 'text' },
+      {
+        key: 'platform',
+        label: 'Platform',
+        type: 'select',
+        options: [
+          { label: 'Android', value: 'Android' },
+          { label: 'Windows', value: 'Windows' },
+          { label: 'iOS', value: 'iOS' },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps unsupported a select with duplicate or unreadable values', async () => {
+    const product = (id: number, options: unknown[]) => ({
+      id,
+      name: 'Pack',
+      category_id: 1,
+      brand: 'Game',
+      type: 'topup',
+      price: 1,
+      currency: 'USD',
+      available: true,
+      requires_player_id: true,
+      required_fields: [
+        { key: 'player_id', label: 'ID', type: 'text' },
+        { key: 'server', label: 'Server', type: 'select', options },
+      ],
+    });
+    const page = (data: unknown[]) => ({
+      success: true,
+      data,
+      pagination: { page: 1, total_pages: 1 },
+    });
+    server.reply(
+      {
+        body: page([
+          product(1, [
+            { label: 'A', value: 'a' },
+            { label: 'A again', value: 'a' },
+          ]),
+          product(2, [
+            { label: 'A', value: 'a' },
+            { label: 'Long', value: 'x'.repeat(65) },
+          ]),
+          product(3, [{ value: 'a' }, { value: 7 }]),
+        ]),
+      },
+      { body: page([]) },
+    );
+    const offers = await adapter().listOffers();
+    expect(offers.map((offer) => offer.unsupportedReason ?? null)).toEqual([
+      'fields_unsupported',
+      'fields_unsupported',
+      null,
+    ]);
+    expect(offers[1]?.fieldSpecs?.[1]?.options).toEqual([{ label: 'A', value: 'a' }]);
+    expect(offers[2]?.fieldSpecs?.[1]?.options).toEqual([
+      { label: 'a', value: 'a' },
+      { label: '7', value: '7' },
+    ]);
   });
 
   it('converts prices exactly and leaves out products it cannot sell', async () => {
@@ -321,6 +421,83 @@ describe('WdgzoneAdapter placeOrder', () => {
     expect(JSON.parse(server.requests.at(-1)?.body ?? '')).toEqual({ quantity: 1 });
   });
 
+  it('sends several fields as JSON keys plus player_id from the account field (MF1, MF2)', async () => {
+    const body = async (fields: Record<string, string>) => {
+      server.reply({ status: 201, body: fixture('purchase-completed') });
+      await adapter().placeOrder(order({ fields }));
+      return JSON.parse(server.requests.at(-1)?.body ?? '');
+    };
+    // One field goes as player_id whatever its key.
+    expect(await body({ user_id: '5000000001' })).toEqual({ quantity: 1, player_id: '5000000001' });
+    expect(await body({ player_id: '5000000001', zone_id: '1234' })).toEqual({
+      quantity: 1,
+      player_id: '5000000001',
+      zone_id: '1234',
+    });
+    // A select is sent as the supplier's value the worker gives it, under its key.
+    expect(await body({ server: 'south_america', user_id: '77' })).toEqual({
+      quantity: 1,
+      server: 'south_america',
+      user_id: '77',
+      player_id: '77',
+    });
+    // `player_id` first, then the list's order; empty values left out.
+    expect(await body({ uid: '1', riot_id: '2', player_id: '3' })).toMatchObject({
+      player_id: '3',
+    });
+    expect(await body({ riot_id: '2', role_id: '1', note: '' })).toEqual({
+      quantity: 1,
+      riot_id: '2',
+      role_id: '1',
+      player_id: '1',
+    });
+    expect(await body({ id: '9', server: 'eu' })).toEqual({
+      quantity: 1,
+      id: '9',
+      server: 'eu',
+      player_id: '9',
+    });
+    expect(await body({ user_id: '', server: 'eu' })).toEqual({ quantity: 1, server: 'eu' });
+  });
+
+  it('reads codes with pins on the purchase reply (MF4)', async () => {
+    server.reply({
+      status: 201,
+      body: {
+        success: true,
+        data: {
+          order_id: 3001,
+          status: 'completed',
+          delivery_items: [{ code: 'TEST-CODE-0001', pin: '1234' }, { code: 'TEST-CODE-0002' }],
+        },
+      },
+    });
+    expect(await adapter().placeOrder(order({ quantity: 2 }))).toEqual({
+      status: 'delivered',
+      supplierOrderId: '3001',
+      quantity: 2,
+      codes: ['TEST-CODE-0001 · PIN: 1234', 'TEST-CODE-0002'],
+    });
+    for (const items of [
+      [{ code: ' ' }],
+      ['x'.repeat(201)],
+      [{ code: 'C', pin: 'p'.repeat(200) }],
+    ]) {
+      server.reply({
+        status: 201,
+        body: {
+          success: true,
+          data: { order_id: 3002, status: 'completed', delivery_items: items },
+        },
+      });
+      expect(await adapter().placeOrder(order())).toEqual({
+        status: 'unknown',
+        supplierOrderId: '3002',
+        reason: 'WDGZone delivered an unreadable code',
+      });
+    }
+  });
+
   it('follows any state but completed by polling', async () => {
     for (const status of ['processing', 'pending', 'failed', 'COMPLETED_LATER']) {
       server.reply({
@@ -394,8 +571,8 @@ describe('WdgzoneAdapter placeOrder', () => {
       'IDEMPOTENCY_KEY_TOO_LONG',
     ],
     [
-      'two account fields',
-      order({ fields: { user_id: '1', server_id: '2' } }),
+      'several fields without an account field',
+      order({ fields: { email: 'a@b.test', password: 'x' } }),
       'FIELDS_UNSUPPORTED',
     ],
   ])('refuses %s without sending anything', async (_, request, code) => {
@@ -412,15 +589,21 @@ describe('WdgzoneAdapter getOrder', () => {
   const placed = { supplierOrderId: '1024', quantity: 2 };
 
   it('polls the delivery by WDG’s order id', async () => {
-    server.reply({ status: 202, body: { success: true, data: { status: 'processing' } } });
+    server.reply(
+      {
+        status: 202,
+        body: { success: true, data: { status: 'PROCESSING', delivery_items: null } },
+      },
+      { body: { success: true, data: { status: 'processing' } } },
+    );
     expect(await adapter().getOrder(ATTEMPT_ID, placed)).toEqual({
       status: 'pending',
       supplierOrderId: '1024',
     });
-    expect(server.requests.at(-1)).toMatchObject({
-      method: 'GET',
-      path: '/api/v1/orders/1024/delivery',
-    });
+    expect(server.requests.slice(-2).map((request) => request.path)).toEqual([
+      '/api/v1/orders/1024/delivery',
+      '/api/v1/orders/1024',
+    ]);
 
     server.reply({
       body: { success: true, data: { delivery_items: ['TEST-CODE-0001', 'TEST-CODE-0002'] } },
@@ -430,6 +613,77 @@ describe('WdgzoneAdapter getOrder', () => {
       supplierOrderId: '1024',
       quantity: 2,
       codes: ['TEST-CODE-0001', 'TEST-CODE-0002'],
+    });
+  });
+
+  it('reads a 200 with pins, and a status other than COMPLETED as unknown (MF4)', async () => {
+    server.reply({
+      body: {
+        success: true,
+        data: {
+          order_id: 1024,
+          status: 'COMPLETED',
+          delivery_items: [
+            { code: 'TEST-CODE-0001', pin: '1111' },
+            { code: 'TEST-CODE-0002', pin: null },
+          ],
+        },
+      },
+    });
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toEqual({
+      status: 'delivered',
+      supplierOrderId: '1024',
+      quantity: 2,
+      codes: ['TEST-CODE-0001 · PIN: 1111', 'TEST-CODE-0002'],
+    });
+    server.reply({
+      body: { success: true, data: { status: 'PROCESSING', delivery_items: ['TEST-CODE-0001'] } },
+    });
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toEqual({
+      status: 'unknown',
+      supplierOrderId: '1024',
+      reason: 'WDGZone delivery is not completed',
+    });
+  });
+
+  it.each([
+    ['completed', { status: 'delivered', supplierOrderId: '1024', quantity: 2 }],
+    ['pending', { status: 'pending', supplierOrderId: '1024' }],
+    ['refunded', { status: 'failed_definitive', supplierCode: 'REFUNDED' }],
+    ['FAILED', { status: 'failed_definitive', supplierCode: 'FAILED' }],
+    ['cancelled', { status: 'failed_definitive', supplierCode: 'CANCELLED' }],
+    ['on_hold', { status: 'unknown', reason: 'WDGZone order state unexpected' }],
+  ])('reads the order state %s after a 202 (MF4)', async (status, outcome) => {
+    server.reply(
+      { status: 202, body: { success: true, data: { status: 'PROCESSING' } } },
+      { body: { success: true, data: { order_id: 1024, status } } },
+    );
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toMatchObject(outcome);
+  });
+
+  it('reads an unreadable order state after a 202 as unknown', async () => {
+    server.reply({ status: 202, body: {} }, { body: { success: true, data: {} } });
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toMatchObject({
+      status: 'unknown',
+      supplierOrderId: '1024',
+    });
+    server.reply(
+      { status: 202, body: {} },
+      { status: 404, body: fixture('error-order-not-found') },
+    );
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toMatchObject({ status: 'unknown' });
+  });
+
+  it('keeps the 410 body’s data.status as the code (MF4)', async () => {
+    server.reply({
+      status: 410,
+      body: { success: false, data: { status: 'CANCELLED', refunded: true } },
+    });
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toEqual({
+      status: 'failed_definitive',
+      supplierOrderId: '1024',
+      supplierCode: 'CANCELLED',
+      reason: 'Failed and refunded by WDGZone',
     });
   });
 
@@ -528,6 +782,13 @@ describe('WdgzoneAdapter webhooks', () => {
     });
     // The same delivery again carries the same event id: the API stores it once.
     expect(adapter().parseWebhook(signed(body())).eventId).toBe(event.eventId);
+  });
+
+  it('reads codes with pins on the webhook (MF4)', () => {
+    const event = adapter().parseWebhook(
+      signed(body({}, { delivery_items: [{ code: 'TEST-CODE-0001', pin: 4321 }] })),
+    );
+    expect(event.outcome).toMatchObject({ codes: ['TEST-CODE-0001 · PIN: 4321'] });
   });
 
   it.each(['order.failed', 'order.refunded'])('reads %s as failed', (name) => {

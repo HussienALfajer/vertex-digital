@@ -10,6 +10,7 @@ import {
   type ProductKind,
   parseGameAmount,
   priceFromCost,
+  proposeOptionMap,
   resolveMarginRule,
   type SupplierCategoryNode,
   type SupplierCategoryState,
@@ -18,6 +19,7 @@ import {
   type SupplierTransaction,
   suggestInputFields,
   suggestProductName,
+  unmappedOptions,
 } from '@vertex-digital/contracts';
 import { type Answer, type CatalogMock, nextId } from './catalog-mock';
 import type { CategoryReader, StoredOffer, SuppliersMock } from './suppliers-mock';
@@ -58,6 +60,8 @@ const FAKE_TREE: [string, string | null, string, ProductKind][] = [
   ['fake-ff-auto', 'fake-ff', 'Auto', 'direct'],
   ['fake-gift', null, 'Gift cards', 'code'],
   ['fake-itunes', 'fake-gift', 'iTunes', 'code'],
+  ['fake-ml', null, 'Mobile Legends', 'direct'],
+  ['fake-gi', null, 'Genshin Impact', 'direct'],
 ];
 
 /** Rule SC14: the store category of a node's kind. */
@@ -446,6 +450,7 @@ export class SupplierCatalogMock implements CategoryReader {
         stock: offer.stock,
         stockLevel: view.stockLevel,
         requiredFields: offer.requiredFields,
+        fieldSpecs: offer.fieldSpecs,
         refusal: offer.unsupportedReason
           ? 'OFFER_UNSUPPORTED'
           : offer.ignoredAt
@@ -482,6 +487,43 @@ export class SupplierCatalogMock implements CategoryReader {
     const fields = game
       ? this.catalog.fields.filter((item) => item.gameId === game.id && !item.archivedAt)
       : [];
+    const fieldMap = game
+      ? Object.fromEntries(
+          Object.entries(suggested.fieldMap).flatMap(([supplierKey, key]) => {
+            // As the API: the same key, underscores aside.
+            const same = fields.find(
+              (field) => field.key.replaceAll('_', '') === key.replaceAll('_', ''),
+            );
+            return same ? [[supplierKey, same.key]] : [];
+          }),
+        )
+      : suggested.fieldMap;
+    const specOf = (key: string) => specs.find((item) => item.key === key);
+    // S16 MF3: a link proposes the game's options onto the supplier's; an import sends the first
+    // pack's values.
+    const optionMap = game
+      ? Object.fromEntries(
+          Object.entries(fieldMap).flatMap(([supplierKey, key]) => {
+            const spec = specOf(supplierKey);
+            const field = fields.find((item) => item.key === key);
+            if (spec?.type !== 'select' || !field?.options) return [];
+            return [[supplierKey, proposeOptionMap(field.options, spec.options ?? [])]];
+          }),
+        )
+      : suggested.optionMap;
+    const selects = game
+      ? this.suppliers.selectsOf(game.id)
+      : Object.fromEntries(
+          suggested.fields.flatMap((field) =>
+            field.options ? [[field.key, field.options.map((option) => option.value)]] : [],
+          ),
+        );
+    for (const pack of packs) {
+      if (pack.refusal === null) {
+        const gaps = unmappedOptions(pack.fieldSpecs, fieldMap, optionMap, selects);
+        if (gaps.length > 0) pack.refusal = 'FIELD_OPTIONS_DIFFER';
+      }
+    }
     return {
       category: this.node(row),
       kind,
@@ -490,7 +532,12 @@ export class SupplierCatalogMock implements CategoryReader {
         ? {
             id: game.id,
             nameAr: game.nameAr,
-            fields: fields.map((field) => ({ key: field.key, labelAr: field.labelAr })),
+            fields: fields.map((field) => ({
+              key: field.key,
+              labelAr: field.labelAr,
+              type: field.type,
+              options: field.options,
+            })),
           }
         : null,
       fields: suggested.fields.map((field) => {
@@ -499,15 +546,11 @@ export class SupplierCatalogMock implements CategoryReader {
           ...field,
           supplierLabel: spec?.label ?? field.supplierKey,
           supplierType: spec?.type ?? 'text',
+          supplierOptions: spec?.options ?? null,
         };
       }),
-      fieldMap: game
-        ? Object.fromEntries(
-            Object.entries(suggested.fieldMap).filter(([, key]) =>
-              fields.some((field) => field.key === key),
-            ),
-          )
-        : suggested.fieldMap,
+      fieldMap,
+      optionMap,
       packs,
     };
   }
@@ -517,6 +560,11 @@ export class SupplierCatalogMock implements CategoryReader {
     row: StoredCategory,
     rows: { offerId: string; nameAr?: string; productId?: string }[],
     taken: string[],
+    maps: {
+      fieldMap: Record<string, string>;
+      optionMap: Record<string, Record<string, string>>;
+      selects: Record<string, string[]>;
+    },
   ) {
     const subtree = this.subtree(row.supplierCode, row.categoryId);
     return rows.flatMap((item, index) => {
@@ -527,6 +575,8 @@ export class SupplierCatalogMock implements CategoryReader {
       if (offer.unsupportedReason) return [{ index, code: 'OFFER_UNSUPPORTED' }];
       if (offer.ignoredAt) return [{ index, code: 'OFFER_IGNORED' }];
       if (this.mapped(offer)) return [{ index, code: 'OFFER_ALREADY_MAPPED' }];
+      const gaps = unmappedOptions(offer.fieldSpecs, maps.fieldMap, maps.optionMap, maps.selects);
+      if (gaps.length > 0) return [{ index, code: 'FIELD_OPTIONS_DIFFER', fields: gaps }];
       if (item.nameAr !== undefined && taken.includes(item.nameAr)) {
         return [{ index, code: 'NAME_TAKEN' }];
       }
@@ -561,17 +611,24 @@ export class SupplierCatalogMock implements CategoryReader {
     const fields = (body?.fields ?? []) as {
       key: string;
       labelAr: string;
-      type: 'digits' | 'text';
+      type: 'digits' | 'text' | 'select';
       required: boolean;
-      minLength: number | null;
-      maxLength: number | null;
+      minLength?: number | null;
+      maxLength?: number | null;
+      options?: { value: string; labelAr: string }[];
     }[];
     const fieldMap = (body?.fieldMap ?? {}) as Record<string, string>;
+    const optionMap = (body?.optionMap ?? {}) as Record<string, Record<string, string>>;
     const rows = (body?.rows ?? []) as { offerId: string; nameAr: string; gameAmount?: number }[];
     if (this.catalog.games.some((item) => item.slug === game.slug)) {
       return error(409, 'SLUG_TAKEN');
     }
-    const errors = this.rowErrors(row, rows, []);
+    const selects = Object.fromEntries(
+      fields.flatMap((field) =>
+        field.options ? [[field.key, field.options.map((option) => option.value)]] : [],
+      ),
+    );
+    const errors = this.rowErrors(row, rows, [], { fieldMap, optionMap, selects });
     const [first] = errors;
     if (first) return error(first.code === 'NOT_FOUND' ? 404 : 409, first.code, { rows: errors });
     if (cover.supplierImage && this.failImage) {
@@ -589,8 +646,15 @@ export class SupplierCatalogMock implements CategoryReader {
       cover: !!cover.supplierImage,
     });
     if (cover.coverFileId) created.coverFileId = cover.coverFileId;
-    for (const field of fields) this.catalog.addField(created.id, field);
-    const products = this.createRows(created.id, rows, fieldMap);
+    for (const field of fields) {
+      this.catalog.addField(created.id, {
+        ...field,
+        minLength: field.minLength ?? null,
+        maxLength: field.maxLength ?? null,
+        options: field.options ?? null,
+      });
+    }
+    const products = this.createRows(created.id, rows, fieldMap, optionMap);
     row.gameId = created.id;
     const result: CategoryImportResult = { gameId: created.id, products };
     return { status: 201, json: result };
@@ -607,6 +671,7 @@ export class SupplierCatalogMock implements CategoryReader {
       return error(409, 'CATEGORY_LINKED', { gameId: linkedGame });
     }
     const fieldMap = (body?.fieldMap ?? {}) as Record<string, string>;
+    const optionMap = (body?.optionMap ?? {}) as Record<string, Record<string, string>>;
     const rows = (body?.rows ?? []) as {
       offerId: string;
       productId?: string;
@@ -616,14 +681,25 @@ export class SupplierCatalogMock implements CategoryReader {
     const taken = this.catalog.products
       .filter((item) => item.gameId === gameId && !item.archivedAt)
       .map((item) => item.nameAr);
-    const errors = this.rowErrors(row, rows, taken);
+    const errors = this.rowErrors(row, rows, taken, {
+      fieldMap,
+      optionMap,
+      selects: this.suppliers.selectsOf(gameId),
+    });
     const [first] = errors;
     if (first) return error(first.code === 'NOT_FOUND' ? 404 : 409, first.code, { rows: errors });
     const products = rows.flatMap((item) => {
       if (!item.productId) return [];
       const product = this.catalog.products.find((entry) => entry.id === item.productId);
       if (!product) return [];
-      const route = this.suppliers.addRoute(product.id, row.supplierCode, item.offerId, fieldMap);
+      const route = this.suppliers.addRoute(
+        product.id,
+        row.supplierCode,
+        item.offerId,
+        fieldMap,
+        1,
+        optionMap,
+      );
       this.suppliers.reprice([product.id], 'route_change');
       return [
         {
@@ -640,6 +716,7 @@ export class SupplierCatalogMock implements CategoryReader {
         gameId,
         rows.filter((item) => !item.productId) as { offerId: string; nameAr: string }[],
         fieldMap,
+        optionMap,
       ),
     );
     row.gameId = gameId;
@@ -651,6 +728,7 @@ export class SupplierCatalogMock implements CategoryReader {
     gameId: string,
     rows: { offerId: string; nameAr: string; gameAmount?: number }[],
     fieldMap: Record<string, string>,
+    optionMap: Record<string, Record<string, string>>,
   ) {
     return rows.map((item) => {
       const offer = this.suppliers.offers.find((entry) => entry.id === item.offerId) as StoredOffer;
@@ -661,10 +739,18 @@ export class SupplierCatalogMock implements CategoryReader {
         status: 'paused',
         maxQuantity: offer.kind === 'code' ? 10 : 1,
       });
-      const ownMap = Object.fromEntries(
-        Object.entries(fieldMap).filter(([field]) => offer.requiredFields?.includes(field)),
+      const own = <Value>(map: Record<string, Value>) =>
+        Object.fromEntries(
+          Object.entries(map).filter(([field]) => offer.requiredFields?.includes(field)),
+        );
+      const route = this.suppliers.addRoute(
+        product.id,
+        offer.supplierCode,
+        offer.id,
+        own(fieldMap),
+        1,
+        own(optionMap),
       );
-      const route = this.suppliers.addRoute(product.id, offer.supplierCode, offer.id, ownMap);
       this.suppliers.reprice([product.id], 'route_change');
       return {
         id: product.id,

@@ -24444,6 +24444,14 @@
               }
             ]
           },
+          "optionMap": {
+            "default": {},
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OptionMap"
+              }
+            ]
+          },
           "rows": {
             "minItems": 1,
             "maxItems": 100,
@@ -24480,6 +24488,17 @@
         "additionalProperties": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]{1,31}$"
+        }
+      },
+      "OptionMap": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
         }
       },
       "ImportResult": {
@@ -24710,6 +24729,13 @@
               },
               "stockLevel": {
                 "$ref": "#/components/schemas/StockLevel"
+              },
+              "fieldSpecs": {
+                "nullable": true,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FieldSpec"
+                }
               }
             },
             "required": [
@@ -24723,7 +24749,8 @@
               "inStock",
               "missingSince",
               "stock",
-              "stockLevel"
+              "stockLevel",
+              "fieldSpecs"
             ],
             "additionalProperties": false
           },
@@ -24739,6 +24766,15 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
+            }
+          },
+          "optionMap": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
             }
           },
           "archivedAt": {
@@ -24778,6 +24814,7 @@
           "priority",
           "enabled",
           "fieldMap",
+          "optionMap",
           "archivedAt",
           "tier",
           "unusableReason",
@@ -24833,6 +24870,14 @@
                 "$ref": "#/components/schemas/FieldMap"
               }
             ]
+          },
+          "optionMap": {
+            "default": {},
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OptionMap"
+              }
+            ]
           }
         },
         "required": [
@@ -24867,6 +24912,13 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/FieldMap"
+              }
+            ]
+          },
+          "optionMap": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OptionMap"
               }
             ]
           }
@@ -25189,11 +25241,23 @@
                     },
                     "labelAr": {
                       "type": "string"
+                    },
+                    "type": {
+                      "$ref": "#/components/schemas/InputFieldType"
+                    },
+                    "options": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SelectOption"
+                      }
                     }
                   },
                   "required": [
                     "key",
-                    "labelAr"
+                    "labelAr",
+                    "type",
+                    "options"
                   ],
                   "additionalProperties": false
                 }
@@ -25218,6 +25282,15 @@
               "type": "string"
             }
           },
+          "optionMap": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
           "packs": {
             "type": "array",
             "items": {
@@ -25232,6 +25305,7 @@
           "linkGame",
           "fields",
           "fieldMap",
+          "optionMap",
           "packs"
         ],
         "additionalProperties": false
@@ -25252,6 +25326,30 @@
               "select"
             ]
           },
+          "supplierOptions": {
+            "nullable": true,
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "label",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
           "key": {
             "type": "string"
           },
@@ -25262,18 +25360,28 @@
             "type": "string",
             "enum": [
               "digits",
-              "text"
+              "text",
+              "select"
             ]
           },
           "minLength": {
+            "nullable": true,
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
           "maxLength": {
+            "nullable": true,
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "options": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SelectOption"
+            }
           },
           "required": {
             "type": "boolean"
@@ -25283,11 +25391,13 @@
           "supplierKey",
           "supplierLabel",
           "supplierType",
+          "supplierOptions",
           "key",
           "labelAr",
           "type",
           "minLength",
           "maxLength",
+          "options",
           "required"
         ],
         "additionalProperties": false
@@ -25354,11 +25464,19 @@
               "type": "string"
             }
           },
+          "fieldSpecs": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSpec"
+            }
+          },
           "refusal": {
             "nullable": true,
             "type": "string",
             "enum": [
               "OFFER_UNSUPPORTED",
+              "FIELD_OPTIONS_DIFFER",
               "OFFER_IGNORED",
               "OFFER_ALREADY_MAPPED",
               "OFFER_MISSING",
@@ -25413,6 +25531,7 @@
           "stock",
           "stockLevel",
           "requiredFields",
+          "fieldSpecs",
           "refusal",
           "suggestedNameAr",
           "suggestedGameAmount",
@@ -25525,6 +25644,14 @@
               }
             ]
           },
+          "optionMap": {
+            "default": {},
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OptionMap"
+              }
+            ]
+          },
           "rows": {
             "minItems": 1,
             "maxItems": 100,
@@ -25630,6 +25757,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/FieldMap"
+              }
+            ]
+          },
+          "optionMap": {
+            "default": {},
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OptionMap"
               }
             ]
           },

@@ -4,6 +4,8 @@ import {
   type ImportDraftPack,
   type LinkCategory,
   MAX_IMPORT_ROWS,
+  type OptionMap,
+  unmappedOptions,
 } from '@vertex-digital/contracts';
 
 /*
@@ -23,15 +25,25 @@ export interface PackRow {
   productId: string | null;
 }
 
+/** An option of a select field, with the supplier's value it is sent as (S16 MF2). */
+export interface OptionRow {
+  value: string;
+  labelAr: string;
+  supplierValue: string | null;
+}
+
 /** An input field of the new game, beside the supplier field it maps (null: the admin's own). */
 export interface FieldRow {
   supplierKey: string | null;
   key: string;
   labelAr: string;
-  type: 'digits' | 'text';
+  /** `select` only for a supplier select (S16 MF3): its options come from the supplier. */
+  type: 'digits' | 'text' | 'select';
   minLength: string;
   maxLength: string;
   required: boolean;
+  /** A select's options; empty otherwise. */
+  options: OptionRow[];
 }
 
 /** The packs grouped by their leaf category, in the draft's order (the import dialog's groups). */
@@ -57,11 +69,14 @@ export function packGroups(
 /**
  * Every pack with its suggested name and amount (SC13); the packs that can be chosen are
  * selected, up to the 100 an import takes. In a link draft the proposed product is preset (SC8).
+ * A pack refused only for its options (MF3) is selected too: `alignedRows` keeps it out until
+ * the option map can send it.
  */
 export function initialPackRows(draft: Pick<ImportDraft, 'packs'>): PackRow[] {
   let selected = 0;
   return draft.packs.map((pack) => {
-    const choose = pack.refusal === null && selected < MAX_IMPORT_ROWS;
+    const choosable = pack.refusal === null || pack.refusal === 'FIELD_OPTIONS_DIFFER';
+    const choose = choosable && selected < MAX_IMPORT_ROWS;
     if (choose) selected += 1;
     return {
       offerId: pack.offerId,
@@ -94,17 +109,70 @@ export function alignedRows(
   });
 }
 
-/** The suggested fields (SC12) as editable rows. */
-export function initialFieldRows(draft: Pick<ImportDraft, 'fields'>): FieldRow[] {
-  return draft.fields.map((field) => ({
-    supplierKey: field.supplierKey,
-    key: field.key,
-    labelAr: field.labelAr,
-    type: field.type,
-    minLength: String(field.minLength),
-    maxLength: String(field.maxLength),
-    required: field.required,
-  }));
+/** The suggested fields (SC12, MF3) as editable rows, a select's options with their values. */
+export function initialFieldRows(draft: Pick<ImportDraft, 'fields' | 'optionMap'>): FieldRow[] {
+  return draft.fields.map((field) => {
+    const sent = draft.optionMap[field.supplierKey] ?? {};
+    return {
+      supplierKey: field.supplierKey,
+      key: field.key,
+      labelAr: field.labelAr,
+      type: field.type,
+      minLength: field.minLength === null ? '' : String(field.minLength),
+      maxLength: field.maxLength === null ? '' : String(field.maxLength),
+      required: field.required,
+      options: (field.options ?? []).map((option) => ({
+        value: option.value,
+        labelAr: option.labelAr,
+        supplierValue: sent[option.value] ?? null,
+      })),
+    };
+  });
+}
+
+/** What the import's field rows send: the field map, the option map, and our selects' values. */
+export function importMaps(fields: readonly FieldRow[]): {
+  fieldMap: Record<string, string>;
+  optionMap: OptionMap;
+  selects: Record<string, string[]>;
+} {
+  const fieldMap: Record<string, string> = {};
+  const optionMap: OptionMap = {};
+  const selects: Record<string, string[]> = {};
+  for (const field of fields) {
+    if (field.type === 'select') selects[field.key] = field.options.map((option) => option.value);
+    if (!field.supplierKey || !field.key) continue;
+    fieldMap[field.supplierKey] = field.key;
+    if (field.type !== 'select') continue;
+    optionMap[field.supplierKey] = Object.fromEntries(
+      field.options.flatMap((option) =>
+        option.supplierValue === null ? [] : [[option.value, option.supplierValue]],
+      ),
+    );
+  }
+  return { fieldMap, optionMap, selects };
+}
+
+/**
+ * S16 MF3: the draft with its `FIELD_OPTIONS_DIFFER` refusals read again for the maps as edited
+ * (an option removed or mapped makes a pack choosable); other refusals stay the server's.
+ */
+export function withOptionRefusals<Draft extends Pick<ImportDraft, 'packs'>>(
+  draft: Draft,
+  maps: {
+    fieldMap: Readonly<Record<string, string>>;
+    optionMap: OptionMap;
+    selects: Readonly<Record<string, readonly string[]>>;
+  },
+): Draft {
+  return {
+    ...draft,
+    packs: draft.packs.map((pack) => {
+      if (pack.refusal !== null && pack.refusal !== 'FIELD_OPTIONS_DIFFER') return pack;
+      const gaps = unmappedOptions(pack.fieldSpecs, maps.fieldMap, maps.optionMap, maps.selects);
+      return { ...pack, refusal: gaps.length > 0 ? 'FIELD_OPTIONS_DIFFER' : null };
+    }),
+  };
 }
 
 /** A whole number typed in a field, or null for an empty one; NaN when it is not one. */
@@ -127,29 +195,43 @@ const newPack = (row: PackRow) => {
 export const sentOffers = (rows: readonly PackRow[]): string[] =>
   rows.filter((row) => row.selected).map((row) => row.offerId);
 
-/** `POST …/import` (SC7): the field map follows the field rows that came from the supplier. */
+/**
+ * `POST …/import` (SC7): the field map follows the field rows that came from the supplier, the
+ * option map their select options (MF3).
+ */
 export function importBody(input: {
   game: ImportCategory['game'];
   cover: ImportCategory['cover'];
   fields: readonly FieldRow[];
   rows: readonly PackRow[];
 }): ImportCategory {
-  const fieldMap: Record<string, string> = {};
-  for (const field of input.fields) {
-    if (field.supplierKey && field.key) fieldMap[field.supplierKey] = field.key;
-  }
+  const { fieldMap, optionMap } = importMaps(input.fields);
   return {
     game: input.game,
     cover: input.cover,
-    fields: input.fields.map((field) => ({
-      key: field.key,
-      labelAr: field.labelAr,
-      type: field.type,
-      required: field.required,
-      minLength: wholeNumber(field.minLength),
-      maxLength: wholeNumber(field.maxLength),
-    })),
+    fields: input.fields.map((field) =>
+      field.type === 'select'
+        ? {
+            key: field.key,
+            labelAr: field.labelAr,
+            type: 'select' as const,
+            required: field.required,
+            options: field.options.map((option) => ({
+              value: option.value,
+              labelAr: option.labelAr,
+            })),
+          }
+        : {
+            key: field.key,
+            labelAr: field.labelAr,
+            type: field.type,
+            required: field.required,
+            minLength: wholeNumber(field.minLength),
+            maxLength: wholeNumber(field.maxLength),
+          },
+    ),
     fieldMap,
+    optionMap,
     rows: input.rows.filter((row) => row.selected).map(newPack),
   };
 }
@@ -158,11 +240,13 @@ export function importBody(input: {
 export function linkBody(input: {
   gameId: string;
   fieldMap: Record<string, string>;
+  optionMap: OptionMap;
   rows: readonly PackRow[];
 }): LinkCategory {
   return {
     gameId: input.gameId,
     fieldMap: input.fieldMap,
+    optionMap: input.optionMap,
     rows: input.rows
       .filter((row) => row.selected)
       .map((row) =>

@@ -33,6 +33,7 @@ import {
   supplierAvailable,
   supplierHasCatalog,
   supplierPanelCapabilities,
+  unmappedOptions,
 } from '@vertex-digital/contracts';
 import { type Answer, type CatalogMock, nextId } from './catalog-mock';
 
@@ -56,25 +57,45 @@ const NAMES: Record<SupplierCode, string> = {
 const USD = 1_000_000;
 
 /** The fake supplier's catalog (`packages/suppliers/src/fake/adapter.ts`), costs in cents. */
+const PLAYER: FieldSpec = { key: 'playerId', label: 'Player ID', type: 'text' };
+const ZONE: FieldSpec = { key: 'zoneId', label: 'Zone ID', type: 'text' };
+const REGION: FieldSpec = {
+  key: 'region',
+  label: 'Region',
+  type: 'select',
+  options: [
+    { label: 'America', value: 'os_usa' },
+    { label: 'Europe', value: 'os_euro' },
+    { label: 'Asia', value: 'os_asia' },
+    { label: 'TW, HK, MO', value: 'os_cht' },
+  ],
+};
+const PLAYER_FIELD = PLAYER;
+
 /**
  * S16: the fake's leaf categories, original prices (cents) and stock, as its adapter reports
  * them (`--stock-count` changes the stock through `script`).
  */
-const FAKE_FIELDS: Record<string, { categoryId: string; originalCents?: number; stock?: number }> =
-  {
-    'fake-uc-60': { categoryId: 'fake-pubg-global', originalCents: 99 },
-    'fake-uc-325': { categoryId: 'fake-pubg-global', originalCents: 499 },
-    'fake-uc-660': { categoryId: 'fake-pubg-mena' },
-    'fake-uc-1800': { categoryId: 'fake-pubg-mena' },
-    'fake-ff-100': { categoryId: 'fake-ff-auto' },
-    'fake-ff-310': { categoryId: 'fake-ff-auto' },
-    'fake-ff-520': { categoryId: 'fake-ff-auto' },
-    'fake-ff-1060': { categoryId: 'fake-ff-auto' },
-    'fake-gift-10': { categoryId: 'fake-itunes', stock: 40 },
-    'fake-itunes-25': { categoryId: 'fake-itunes', stock: 40 },
-  };
-
-const PLAYER_FIELD: FieldSpec = { key: 'playerId', label: 'Player ID', type: 'text' };
+const FAKE_FIELDS: Record<
+  string,
+  { categoryId: string; originalCents?: number; stock?: number; fieldSpecs?: FieldSpec[] }
+> = {
+  'fake-uc-60': { categoryId: 'fake-pubg-global', originalCents: 99 },
+  'fake-uc-325': { categoryId: 'fake-pubg-global', originalCents: 499 },
+  'fake-uc-660': { categoryId: 'fake-pubg-mena' },
+  'fake-uc-1800': { categoryId: 'fake-pubg-mena' },
+  'fake-ff-100': { categoryId: 'fake-ff-auto' },
+  'fake-ff-310': { categoryId: 'fake-ff-auto' },
+  'fake-ff-520': { categoryId: 'fake-ff-auto' },
+  'fake-ff-1060': { categoryId: 'fake-ff-auto' },
+  'fake-gift-10': { categoryId: 'fake-itunes', stock: 40 },
+  'fake-itunes-25': { categoryId: 'fake-itunes', stock: 40 },
+  // S16 PR 4: a zone beside the player id, and a region select.
+  'fake-ml-86': { categoryId: 'fake-ml', fieldSpecs: [PLAYER, ZONE] },
+  'fake-ml-172': { categoryId: 'fake-ml', fieldSpecs: [PLAYER, ZONE] },
+  'fake-gi-60': { categoryId: 'fake-gi', fieldSpecs: [PLAYER, REGION] },
+  'fake-gi-330': { categoryId: 'fake-gi', fieldSpecs: [PLAYER, REGION] },
+};
 
 const FAKE_CATALOG: [string, string, string, ProductKind, number][] = [
   ['fake-uc-60', 'Fake UC 60', 'PUBG Mobile', 'direct', 88],
@@ -87,6 +108,10 @@ const FAKE_CATALOG: [string, string, string, ProductKind, number][] = [
   ['fake-ff-1060', 'Fake Free Fire 1060', 'Free Fire', 'direct', 950],
   ['fake-gift-10', 'Fake gift card 10', 'iTunes', 'code', 960],
   ['fake-itunes-25', 'Fake iTunes 25', 'iTunes', 'code', 2_400],
+  ['fake-ml-86', 'Fake Diamonds 86', 'Mobile Legends', 'direct', 140],
+  ['fake-ml-172', 'Fake Diamonds 172', 'Mobile Legends', 'direct', 275],
+  ['fake-gi-60', 'Fake Genesis Crystals 60', 'Genshin Impact', 'direct', 85],
+  ['fake-gi-330', 'Fake Genesis Crystals 330', 'Genshin Impact', 'direct', 420],
 ];
 
 interface StoredSupplier {
@@ -121,6 +146,7 @@ interface StoredRoute {
   priority: number;
   enabled: boolean;
   fieldMap: Record<string, string>;
+  optionMap: Record<string, Record<string, string>>;
   archivedAt: string | null;
 }
 
@@ -240,12 +266,18 @@ export class SuppliersMock {
   }
 
   /** A product's route to one of `code`'s offers, by the supplier's offer id, and its price. */
-  map(productId: string, code: SupplierCode, offerId: string, fieldMap = {}): StoredRoute {
+  map(
+    productId: string,
+    code: SupplierCode,
+    offerId: string,
+    fieldMap = {},
+    optionMap: Record<string, Record<string, string>> = {},
+  ): StoredRoute {
     const offer = this.offers.find(
       (item) => item.supplierCode === code && item.offerId === offerId,
     );
     if (!offer) throw new Error(`No offer ${offerId}`);
-    const route = this.addRoute(productId, code, offer.id, fieldMap);
+    const route = this.addRoute(productId, code, offer.id, fieldMap, 1, optionMap);
     this.reprice([productId], 'route_change');
     return route;
   }
@@ -294,6 +326,7 @@ export class SuppliersMock {
     const liveFieldKeys = this.catalog.fields
       .filter((field) => field.gameId === product?.gameId && !field.archivedAt)
       .map((field) => field.key);
+    const liveSelectOptions = this.selectsOf(product?.gameId ?? '');
     return routeUnusableReason(
       {
         archived: route.archivedAt !== null,
@@ -310,7 +343,10 @@ export class SuppliersMock {
         costConfirmedAt: offer.costConfirmedAt ? new Date(offer.costConfirmedAt) : null,
         requiredFields: offer.requiredFields,
         fieldMap: route.fieldMap,
+        optionMap: route.optionMap,
+        fieldSpecs: offer.fieldSpecs,
         liveFieldKeys,
+        liveSelectOptions,
         balanceUsdUnits: this.balanceUsd(route.supplierCode),
       },
       new Date(),
@@ -452,6 +488,7 @@ export class SuppliersMock {
     offerId: string,
     fieldMap: Record<string, string>,
     priority = 1,
+    optionMap: Record<string, Record<string, string>> = {},
   ): StoredRoute {
     const route: StoredRoute = {
       id: nextId(),
@@ -461,6 +498,7 @@ export class SuppliersMock {
       priority,
       enabled: true,
       fieldMap,
+      optionMap,
       archivedAt: null,
     };
     this.routes.push(route);
@@ -520,7 +558,9 @@ export class SuppliersMock {
           name,
           groupName: group,
           kind,
-          requiredFields: kind === 'direct' ? ['playerId'] : [],
+          requiredFields: (fields?.fieldSpecs ?? (kind === 'direct' ? [PLAYER_FIELD] : [])).map(
+            (spec) => spec.key,
+          ),
           costUsdUnits: cost,
           costRaw: null,
           inStock: true,
@@ -531,7 +571,7 @@ export class SuppliersMock {
           stock: fields?.stock ?? null,
           originalCostUsdUnits:
             fields?.originalCents === undefined ? null : fields.originalCents * 10_000,
-          fieldSpecs: kind === 'direct' ? [PLAYER_FIELD] : [],
+          fieldSpecs: fields?.fieldSpecs ?? (kind === 'direct' ? [PLAYER_FIELD] : []),
           unsupportedReason: null,
           ignoredAt: null,
         };
@@ -678,10 +718,12 @@ export class SuppliersMock {
         missingSince: offer.missingSince,
         stock: offer.stock,
         stockLevel: this.stockLevelOf(offer),
+        fieldSpecs: offer.fieldSpecs,
       },
       priority: row.priority,
       enabled: row.enabled,
       fieldMap: row.fieldMap,
+      optionMap: row.optionMap,
       archivedAt: row.archivedAt,
       tier: reason === null ? routeTier(row.supplierCode, this.health(row.supplierCode)) : null,
       unusableReason: reason,
@@ -948,10 +990,12 @@ export class SuppliersMock {
       if (productRoutes[2] === 'routes' && method === 'POST') {
         const offer = this.offers.find((item) => item.id === body?.offerId);
         if (!offer) return notFound();
+        const optionMap = (body?.optionMap ?? {}) as Record<string, Record<string, string>>;
         const refusal = this.routeRefusal(
           product,
           offer,
           (body?.fieldMap ?? {}) as Record<string, string>,
+          optionMap,
         );
         if (refusal) return refusal;
         this.addRoute(
@@ -960,6 +1004,7 @@ export class SuppliersMock {
           offer.id,
           (body?.fieldMap ?? {}) as Record<string, string>,
           Number(body?.priority ?? 1),
+          optionMap,
         );
         this.reprice([productId], 'route_change');
         return { status: 201, json: this.routing(productId) };
@@ -1035,6 +1080,16 @@ export class SuppliersMock {
         if (next.enabled && missing.length > 0) {
           return error(409, 'ROUTE_FIELDS_UNMAPPED', { fields: missing });
         }
+        const product = this.catalog.products.find((item) => item.id === route.productId);
+        const gaps = unmappedOptions(
+          this.offerOf(route).fieldSpecs,
+          next.fieldMap,
+          next.optionMap,
+          this.selectsOf(product?.gameId ?? ''),
+        );
+        if (next.enabled && gaps.length > 0) {
+          return error(409, 'FIELD_OPTIONS_DIFFER', { fields: gaps });
+        }
         Object.assign(route, body);
       }
       this.reprice([route.productId], 'route_change');
@@ -1097,6 +1152,7 @@ export class SuppliersMock {
     product: { id: string; kind: ProductKind },
     offer: StoredOffer,
     fieldMap: Record<string, string>,
+    optionMap: Record<string, Record<string, string>> = {},
   ): Answer | null {
     if (offer.supplierCode === 'manual') return error(400, 'VALIDATION_FAILED');
     if (offer.missingSince) return error(409, 'OFFER_MISSING');
@@ -1116,7 +1172,19 @@ export class SuppliersMock {
     if (offer.kind && offer.kind !== product.kind) return error(409, 'ROUTE_KIND_MISMATCH');
     const missing = (offer.requiredFields ?? []).filter((field) => !fieldMap[field]);
     if (missing.length > 0) return error(409, 'ROUTE_FIELDS_UNMAPPED', { fields: missing });
+    const gameId = this.catalog.products.find((item) => item.id === product.id)?.gameId ?? '';
+    const gaps = unmappedOptions(offer.fieldSpecs, fieldMap, optionMap, this.selectsOf(gameId));
+    if (gaps.length > 0) return error(409, 'FIELD_OPTIONS_DIFFER', { fields: gaps });
     return null;
+  }
+
+  /** S16 MF2: the option values of a game's live `select` fields, by key. */
+  selectsOf(gameId: string): Record<string, string[]> {
+    return Object.fromEntries(
+      this.catalog.fields
+        .filter((field) => field.gameId === gameId && !field.archivedAt && field.options)
+        .map((field) => [field.key, (field.options ?? []).map((option) => option.value)]),
+    );
   }
 
   /** Rule RT8: all or nothing, every refused row in `details.rows`. */

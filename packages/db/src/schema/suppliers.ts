@@ -456,6 +456,14 @@ export const productRoutes = pgTable(
     enabled: boolean('enabled').notNull().default(true),
     /** Supplier field name → input field key of the product's game. */
     fieldMap: jsonb('field_map').$type<Record<string, string>>().notNull().default({}),
+    /**
+     * S16 MF2: supplier field name → our option value → the supplier's option value, so a select
+     * is sent as a value from the supplier's own list.
+     */
+    optionMap: jsonb('option_map')
+      .$type<Record<string, Record<string, string>>>()
+      .notNull()
+      .default({}),
     ...timestamps(),
     archivedAt: archivedAt(),
   },
@@ -470,6 +478,7 @@ export const productRoutes = pgTable(
     index('product_routes_supplier_id_idx').on(table.supplierId),
     check('product_routes_priority_check', sql`${table.priority} between 1 and 9`),
     check('product_routes_field_map_check', sql`jsonb_typeof(${table.fieldMap}) = 'object'`),
+    check('product_routes_option_map_check', sql`jsonb_typeof(${table.optionMap}) = 'object'`),
   ],
 );
 

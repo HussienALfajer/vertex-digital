@@ -36,12 +36,15 @@ import {
   healthReplySchema,
   meReplySchema,
   orderRowSchema,
+  orderStateReplySchema,
   productSchema,
   productsPageSchema,
   purchaseReplySchema,
+  refundedReplySchema,
   statementReplySchema,
   transactionRowSchema,
   type WdgCategory,
+  type WdgDeliveryItem,
   type WdgProduct,
   webhookBodySchema,
   webhookTimeSchema,
@@ -79,6 +82,16 @@ const WDG_ID_PATTERN = /^[1-9]\d{0,17}$/;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 100;
 
 const CATALOG_TYPES = { topup: 'direct', voucher: 'code' } as const;
+/**
+ * S16 MF1: with several fields, `player_id` carries the account field: the field keyed
+ * `player_id`, else the first of these present (a field map's key order is not kept, so "first"
+ * is this list's order).
+ */
+const ACCOUNT_FIELD_KEYS = ['player_id', 'user_id', 'uid', 'role_id', 'riot_id', 'id'] as const;
+/** S06's bounds of a select (S16 MF2): a supplier select outside them cannot be mapped. */
+const SELECT_OPTIONS_MIN = 2;
+/** S08's limit of a code's text (S16 MF4: a pin is kept in it). */
+const MAX_CODE_LENGTH = 200;
 /** WDG writes unlimited stock as 999999 (S16 SF2). */
 const UNLIMITED_STOCK = 999_999;
 /** At most this many pages of categories, should WDG ever page them (3,573 on 2026-10-12). */
@@ -255,7 +268,7 @@ export class WdgzoneAdapter implements SupplierAdapter {
     return { items, hasMore: hasMore(page, reply) };
   }
 
-  /** S16 SF5: `GET /health`, which needs no key. */
+  /** S16 SF5: `GET /health`, with the key like every request (it answers 401 without one). */
   async getPlatformStatus(): Promise<SupplierPlatformStatus> {
     const reply = await this.http.request({
       method: 'GET',
@@ -313,7 +326,6 @@ export class WdgzoneAdapter implements SupplierAdapter {
   }
 
   async placeOrder(request: PlaceOrderRequest): Promise<SupplierOutcome> {
-    const fields = Object.values(request.fields);
     // Refused before anything is sent: nothing was bought.
     if (!WDG_ID_PATTERN.test(request.offerId)) {
       return refused('PRODUCT_NOT_FOUND', 'Not a WDGZone product id');
@@ -321,11 +333,10 @@ export class WdgzoneAdapter implements SupplierAdapter {
     if (request.idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
       return refused('IDEMPOTENCY_KEY_TOO_LONG', 'Idempotency key longer than WDGZone takes');
     }
-    // WDG takes one account field, as `player_id`; how it takes a second one is not documented.
-    if (fields.length > 1) {
-      return refused('FIELDS_UNSUPPORTED', 'WDGZone takes one account field per order');
+    const fields = accountFields(request.fields);
+    if (fields === null) {
+      return refused('FIELDS_UNSUPPORTED', 'Several WDGZone fields without an account field');
     }
-    const playerId = fields[0];
     try {
       const reply = await this.http.request({
         method: 'POST',
@@ -333,7 +344,7 @@ export class WdgzoneAdapter implements SupplierAdapter {
         headers: { 'x-idempotency-key': request.idempotencyKey },
         body: {
           quantity: request.quantity,
-          ...(playerId !== undefined && playerId !== '' && { player_id: playerId }),
+          ...fields,
           ...(this.options.callbackUrl && { callback_url: this.options.callbackUrl }),
         },
         schema: purchaseReplySchema,
@@ -371,14 +382,20 @@ export class WdgzoneAdapter implements SupplierAdapter {
         method: 'GET',
         path: `orders/${supplierOrderId}/delivery`,
         schema: z.unknown(),
-        errorCode: wdgErrorCode,
+        // S16 MF4: a 410's body has `data.status` and no `error` object.
+        errorCode: (body) =>
+          refundedReplySchema.safeParse(body).data?.data.status ?? wdgErrorCode(body),
       });
-      if (reply.status === 202) return { status: 'pending', supplierOrderId };
+      // A 202 is also a delivered direct top-up (no code): the order's state decides (MF4).
+      if (reply.status === 202) return await this.orderState(supplierOrderId, placed.quantity);
       const ready = deliveryReplySchema.safeParse(reply.data);
       if (reply.status !== 200 || !ready.success) {
         return { status: 'unknown', supplierOrderId, reason: 'WDGZone delivery reply unexpected' };
       }
-      const { quantity, delivery_items: items } = ready.data.data;
+      const { quantity, status, delivery_items: items } = ready.data.data;
+      if (status != null && status.toLowerCase() !== 'completed') {
+        return { status: 'unknown', supplierOrderId, reason: 'WDGZone delivery is not completed' };
+      }
       if (quantity !== undefined && quantity !== placed.quantity) {
         return { status: 'unknown', supplierOrderId, reason: 'WDGZone delivered other units' };
       }
@@ -396,6 +413,33 @@ export class WdgzoneAdapter implements SupplierAdapter {
       const reason = error instanceof Error ? error.message : String(error);
       return { status: 'unknown', supplierOrderId, reason };
     }
+  }
+
+  /**
+   * S16 MF4: `GET /orders/{id}` after a poll's 202. `completed` is delivered without codes (a
+   * `code` pack without codes stays unknown by S08 F1), `refunded`, `failed`, `cancelled` failed,
+   * `pending`, `processing` pending; anything else, or no readable reply, unknown.
+   */
+  private async orderState(supplierOrderId: string, quantity: number): Promise<SupplierOutcome> {
+    const reply = await this.http.request({
+      method: 'GET',
+      path: `orders/${supplierOrderId}`,
+      schema: orderStateReplySchema,
+      errorCode: wdgErrorCode,
+    });
+    const status = reply.data.status.toLowerCase();
+    if (status === 'completed') return { status: 'delivered', supplierOrderId, quantity };
+    if (status === 'pending' || status === 'processing')
+      return { status: 'pending', supplierOrderId };
+    if (status === 'refunded' || status === 'failed' || status === 'cancelled') {
+      return {
+        status: 'failed_definitive',
+        supplierOrderId,
+        supplierCode: reply.data.status.toUpperCase(),
+        reason: 'Failed by WDGZone',
+      };
+    }
+    return { status: 'unknown', supplierOrderId, reason: 'WDGZone order state unexpected' };
   }
 
   verifyWebhook(request: WebhookRequest, now?: Date): boolean {
@@ -461,23 +505,44 @@ export class WdgzoneAdapter implements SupplierAdapter {
   }
 }
 
-/** A WDG product's account fields as field specs (S16 SC3), bounded; null when unreadable. */
-function fieldSpecsOf(product: WdgProduct): FieldSpec[] | null {
+/**
+ * A WDG product's account fields as field specs (S16 SC3), bounded; null when unreadable. `sendable`
+ * is false when a select cannot be mapped whole (S16 MF2: fewer than 2 or more than 50 options, or
+ * an option value that is empty or longer than 64): its stored options are then cut to the bound.
+ */
+function fieldSpecsOf(product: WdgProduct): { specs: FieldSpec[]; sendable: boolean } | null {
   const fields = product.required_fields ?? [];
   if (fields.length === 0) {
-    return product.requires_player_id
-      ? [{ key: 'player_id', label: 'Player ID', type: 'text' }]
-      : [];
+    return {
+      specs: product.requires_player_id
+        ? [{ key: 'player_id', label: 'Player ID', type: 'text' }]
+        : [],
+      sendable: true,
+    };
   }
   if (fields.length > MAX_FIELD_SPECS) return null;
   const specs: FieldSpec[] = [];
+  let sendable = true;
   for (const field of fields) {
     if (!/^[A-Za-z0-9_.-]{1,32}$/.test(field.key)) return null;
     const type = field.type == null || field.type === 'text' ? 'text' : 'select';
-    const options = (field.options ?? []).slice(0, MAX_FIELD_SPEC_OPTIONS).flatMap((option) => {
-      const value = String(option.value).slice(0, 64);
-      return value ? [{ label: (option.label ?? value).slice(0, 64), value }] : [];
-    });
+    const raw = (field.options ?? []).map((option) => ({
+      label: (option.label ?? String(option.value)).trim().slice(0, 64),
+      value: String(option.value),
+    }));
+    const values = new Set(raw.map((option) => option.value));
+    if (
+      type === 'select' &&
+      (raw.length < SELECT_OPTIONS_MIN ||
+        raw.length > MAX_FIELD_SPEC_OPTIONS ||
+        values.size !== raw.length ||
+        raw.some((option) => option.value === '' || option.value.length > 64))
+    ) {
+      sendable = false;
+    }
+    const options = raw
+      .filter((option) => option.value !== '' && option.value.length <= 64)
+      .slice(0, MAX_FIELD_SPEC_OPTIONS);
     specs.push({
       key: field.key,
       label: (field.label ?? field.key).trim().slice(0, 64),
@@ -485,7 +550,32 @@ function fieldSpecsOf(product: WdgProduct): FieldSpec[] | null {
       ...(type === 'select' && { options }),
     });
   }
-  return specs;
+  return { specs, sendable };
+}
+
+/** S16 MF1: the field keys WDG can be sent; several fields need an account field. */
+function sendableFields(specs: readonly FieldSpec[]): boolean {
+  if (specs.length <= 1) return true;
+  return specs.some((spec) => (ACCOUNT_FIELD_KEYS as readonly string[]).includes(spec.key));
+}
+
+/**
+ * S16 MF1: the purchase body's account fields. One field goes as `player_id` whatever its key;
+ * several go each under its own key, plus `player_id` with the account field's value (WDG's
+ * delimiter forms are never sent). Null when several fields have no account field. Empty values
+ * are left out (WDG refuses a missing `player_id` before anything is bought).
+ */
+function accountFields(fields: Readonly<Record<string, string>>): Record<string, string> | null {
+  const entries = Object.entries(fields);
+  if (entries.length <= 1) {
+    const value = entries[0]?.[1];
+    return value ? { player_id: value } : {};
+  }
+  const account = ACCOUNT_FIELD_KEYS.find((key) => Object.hasOwn(fields, key));
+  if (account === undefined) return null;
+  const body = Object.fromEntries(entries.filter(([, value]) => value !== ''));
+  const playerId = fields[account];
+  return { ...body, ...(playerId && { player_id: playerId }) };
 }
 
 /** A WDG product as an offer, or null when it cannot be listed through this adapter. */
@@ -493,11 +583,11 @@ function toOffer(product: WdgProduct): SupplierOffer | null {
   const kind = CATALOG_TYPES[product.type as keyof typeof CATALOG_TYPES];
   const amountUnits = usdUnits(product.price);
   if (!kind || product.currency !== 'USD' || amountUnits === null) return null;
-  const fieldSpecs = fieldSpecsOf(product);
-  if (fieldSpecs === null) return null;
-  // One free-text field, sent as `player_id`. Two fields or a list (`select`: region, server) are
-  // kept, but unsupported until WDG says how they are sent (S16 SC3, Q19).
-  const unsupported = fieldSpecs.length > 1 || fieldSpecs.some((field) => field.type !== 'text');
+  const fields = fieldSpecsOf(product);
+  if (fields === null) return null;
+  const { specs: fieldSpecs } = fields;
+  // S16 MF1, MF2: kept, but unsupported, when its fields cannot be sent.
+  const unsupported = !fields.sendable || !sendableFields(fieldSpecs);
   const group = product.brand?.trim() || product.category?.trim() || undefined;
   const category = product.category?.trim();
   const original = product.original_price == null ? null : usdUnits(product.original_price);
@@ -551,16 +641,34 @@ function hasMore(
     : reply.data.length >= STATEMENT_PAGE_SIZE;
 }
 
+/**
+ * S16 MF4: delivered items as code texts, a pin kept as `<code> · PIN: <pin>`; null when one is
+ * empty or beyond S08's code limit.
+ */
+function codeTexts(items: readonly WdgDeliveryItem[]): string[] | null {
+  const codes = items.map((item) => {
+    if (typeof item === 'string') return item.trim();
+    const code = item.code.trim();
+    const pin = item.pin?.trim();
+    return code && pin ? `${code} · PIN: ${pin}` : code;
+  });
+  return codes.every((code) => code !== '' && code.length <= MAX_CODE_LENGTH) ? codes : null;
+}
+
 function delivered(
   supplierOrderId: string,
   quantity: number,
-  items: readonly string[] | null | undefined,
+  items: readonly WdgDeliveryItem[] | null | undefined,
 ): SupplierOutcome {
+  const codes = codeTexts(items ?? []);
+  if (codes === null) {
+    return { status: 'unknown', supplierOrderId, reason: 'WDGZone delivered an unreadable code' };
+  }
   return {
     status: 'delivered',
     supplierOrderId,
     quantity,
-    ...(items && items.length > 0 && { codes: [...items] }),
+    ...(codes.length > 0 && { codes }),
   };
 }
 

@@ -115,6 +115,7 @@ export async function askSupplier(
     .select({
       code: suppliers.code,
       fieldMap: productRoutes.fieldMap,
+      optionMap: productRoutes.optionMap,
       fields: orders.fields,
     })
     .from(suppliers)
@@ -130,13 +131,17 @@ export async function askSupplier(
   }
   if (!connected) return { status: 'unknown', reason: 'supplier_unavailable' };
   const { adapter, secrets } = connected;
-  // The map the attempt was written with (S07 rule RT3: the supplier's field name → the order's
-  // input field key), so a re-send under the same key is the same request.
+  // The maps the attempt was written with (S07 rule RT3: the supplier's field name → the order's
+  // input field key; S16 MF2: our option value → the supplier's), so a re-send under the same key
+  // is the same request whatever the route's maps became. An attempt written before the option
+  // map has none (read as `{}`); one written before the field map follows the route's maps.
+  const optionMap = attempt.fieldMap ? (attempt.optionMap ?? {}) : row.optionMap;
   const fields = Object.fromEntries(
-    Object.entries(attempt.fieldMap ?? row.fieldMap).map(([name, key]) => [
-      name,
-      row.fields[key] ?? '',
-    ]),
+    Object.entries(attempt.fieldMap ?? row.fieldMap).map(([name, key]) => {
+      const value = row.fields[key] ?? '';
+      const options = Object.hasOwn(optionMap, name) ? optionMap[name] : undefined;
+      return [name, options && Object.hasOwn(options, value) ? (options[value] as string) : value];
+    }),
   );
   const answer = await recordedCall(
     db,

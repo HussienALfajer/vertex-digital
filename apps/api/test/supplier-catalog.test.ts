@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import {
   type CategoryImportResult,
+  type FieldSpec,
   type ImportDraft,
+  type ProductRouting,
   type SupplierCategoryNode,
   type SupplierCategoryPage,
   type SupplierOfferPage,
@@ -101,7 +103,7 @@ async function offer(
     kind?: 'direct' | 'code';
     unsupported?: boolean;
     stock?: number | null;
-    fields?: { key: string; label: string; type: 'text' | 'select' }[];
+    fields?: FieldSpec[];
   } = {},
 ) {
   const fields = values.fields ?? [{ key: 'player_id', label: 'Player ID', type: 'text' as const }];
@@ -477,7 +479,9 @@ describe('import and link (rules SC7–SC14, IM2)', () => {
       ),
       200,
     );
-    expect(draft.linkGame?.fields).toEqual([{ key: 'player_id', labelAr: 'معرّف اللاعب' }]);
+    expect(draft.linkGame?.fields).toEqual([
+      { key: 'player_id', labelAr: 'معرّف اللاعب', type: 'digits', options: null },
+    ]);
     expect(draft.fieldMap).toEqual({ player_id: 'player_id' });
     const existing = imported.products[1]?.id as string;
     const exists = await json<{ code: string; details: { rows: unknown[] } }>(
@@ -720,6 +724,254 @@ describe('import and link (rules SC7–SC14, IM2)', () => {
       categoryId: node('ff'),
     });
     expect(unlinked.status).toBe(404);
+  });
+});
+
+describe('two fields and select fields (rules MF1–MF3)', () => {
+  const region = (values: [string, string][]): FieldSpec => ({
+    key: 'region',
+    label: 'Region',
+    type: 'select',
+    options: values.map(([label, value]) => ({ label, value })),
+  });
+  const ALL: [string, string][] = [
+    ['America', 'os_usa'],
+    ['Europe', 'os_euro'],
+    ['Asia', 'os_asia'],
+  ];
+  const player = { key: 'playerId', label: 'Player ID', type: 'text' as const };
+  let selectGame = '';
+
+  beforeAll(async () => {
+    await category('ml');
+    await category('gi');
+    await category('gi2');
+    await offer('ml86', 'ml', {
+      cost: 1.4,
+      fields: [player, { key: 'zoneId', label: 'Zone ID', type: 'text' }],
+    });
+    // The draft follows the first pack (the cheapest, gi60): gi330's list lacks Asia.
+    await offer('gi60', 'gi', { cost: 0.85, fields: [player, region(ALL)] });
+    await offer('gi330', 'gi', { cost: 4.2, fields: [player, region(ALL.slice(0, 2))] });
+    await offer('gi2-60', 'gi2', { cost: 0.86, fields: [player, region(ALL)] });
+  });
+
+  const importBody = (fields: unknown[], rows: unknown[], extra: Record<string, unknown> = {}) => ({
+    game: {
+      slug: `gi-${run}`,
+      categoryId: ids.storeCategory,
+      nameAr: `جنشن ${run}`,
+      nameEn: `Genshin ${run}`,
+    },
+    cover: { supplierImage: true },
+    fields,
+    rows,
+    ...extra,
+  });
+
+  it('drafts two fields, and a select with the first pack’s options and its option map', async () => {
+    const ml = await json<ImportDraft>(
+      await get(`/api/admin/suppliers/fake/categories/${node('ml')}/import-draft`),
+      200,
+    );
+    expect(ml.fields.map((field) => [field.key, field.type])).toEqual([
+      ['playerid', 'text'],
+      ['zoneid', 'text'],
+    ]);
+    expect(ml.packs[0]?.refusal).toBeNull();
+    const gi = await json<ImportDraft>(
+      await get(`/api/admin/suppliers/fake/categories/${node('gi')}/import-draft`),
+      200,
+    );
+    expect(gi.fields[1]).toMatchObject({
+      supplierKey: 'region',
+      supplierType: 'select',
+      supplierOptions: region(ALL).options,
+      key: 'region',
+      labelAr: 'المنطقة',
+      type: 'select',
+      options: [
+        { value: 'os_usa', labelAr: 'America' },
+        { value: 'os_euro', labelAr: 'Europe' },
+        { value: 'os_asia', labelAr: 'Asia' },
+      ],
+    });
+    expect(gi.optionMap).toEqual({
+      region: { os_usa: 'os_usa', os_euro: 'os_euro', os_asia: 'os_asia' },
+    });
+    const refusals = Object.fromEntries(
+      gi.packs.map((pack) => [pack.supplierOfferId, pack.refusal]),
+    );
+    expect(refusals).toEqual({
+      [`gi60-${run}`]: null,
+      // Its list lacks Asia, one of the suggested options.
+      [`gi330-${run}`]: 'FIELD_OPTIONS_DIFFER',
+    });
+    expect(gi.packs.find((pack) => pack.refusal)?.fieldSpecs?.[1]?.options).toHaveLength(2);
+  });
+
+  it('refuses a pack whose options lack one of ours, then imports without that option', async () => {
+    const fields = [
+      { key: 'player_id', labelAr: 'المعرف', type: 'digits', required: true },
+      {
+        key: 'region',
+        labelAr: 'المنطقة',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'us', labelAr: 'أمريكا' },
+          { value: 'eu', labelAr: 'أوروبا' },
+          { value: 'asia', labelAr: 'آسيا' },
+        ],
+      },
+    ];
+    const fieldMap = { playerId: 'player_id', region: 'region' };
+    const optionMap = { region: { us: 'os_usa', eu: 'os_euro', asia: 'os_asia' } };
+    const rows = [
+      { offerId: offers.gi60, nameAr: `GI 60 ${run}` },
+      { offerId: offers.gi330, nameAr: `GI 330 ${run}` },
+    ];
+    const refused = await json<{ code: string; details: { rows: unknown[] } }>(
+      await post(
+        `/api/admin/suppliers/fake/categories/${node('gi')}/import`,
+        importBody(fields, rows, { fieldMap, optionMap }),
+      ),
+      409,
+    );
+    expect(refused).toMatchObject({
+      code: 'FIELD_OPTIONS_DIFFER',
+      details: { rows: [{ index: 1, code: 'FIELD_OPTIONS_DIFFER', fields: ['region'] }] },
+    });
+    // No option map: every row is refused.
+    expect(
+      (
+        await json<{ details: { rows: unknown[] } }>(
+          await post(
+            `/api/admin/suppliers/fake/categories/${node('gi')}/import`,
+            importBody(fields, rows.slice(0, 1), { fieldMap }),
+          ),
+          409,
+        )
+      ).details.rows,
+    ).toEqual([{ index: 0, code: 'FIELD_OPTIONS_DIFFER', fields: ['region'] }]);
+    const [, select] = fields as [unknown, { options: unknown[] }];
+    select.options = select.options.slice(0, 2);
+    const done = await json<CategoryImportResult>(
+      await post(
+        `/api/admin/suppliers/fake/categories/${node('gi')}/import`,
+        importBody(fields, rows, { fieldMap, optionMap }),
+      ),
+      201,
+    );
+    selectGame = done.gameId;
+    const routing = await json<ProductRouting>(
+      await get(`/api/admin/catalog/products/${done.products[1]?.id}/routes`),
+      200,
+    );
+    expect(routing.routes[0]).toMatchObject({
+      fieldMap,
+      // Kept whole: an option the game no longer has is never sent.
+      optionMap,
+      unusableReason: null,
+    });
+    expect(routing.routes[0]?.offer.fieldSpecs?.[1]?.key).toBe('region');
+    const audit = await auditOf(test.db, routing.routes[0]?.id as string);
+    expect(audit[0]?.details).toMatchObject({ fieldMap, optionMap });
+  });
+
+  it('links onto a game’s select by value or label, refusing an option the supplier lacks', async () => {
+    const draft = await json<ImportDraft>(
+      await get(
+        `/api/admin/suppliers/fake/categories/${node('gi2')}/import-draft?gameId=${selectGame}`,
+      ),
+      200,
+    );
+    expect(draft.linkGame?.fields[1]).toMatchObject({ key: 'region', type: 'select' });
+    expect(draft.fieldMap).toEqual({ playerId: 'player_id', region: 'region' });
+    // Proposed by label: أمريكا and أوروبا are no supplier label or value.
+    expect(draft.optionMap).toEqual({ region: {} });
+    const body = (optionMap: Record<string, Record<string, string>>) => ({
+      gameId: selectGame,
+      fieldMap: { playerId: 'player_id', region: 'region' },
+      optionMap,
+      rows: [{ offerId: offers['gi2-60'], nameAr: `GI2 60 ${run}` }],
+    });
+    const refused = await json<{ code: string; details: { rows: unknown[] } }>(
+      await post(
+        `/api/admin/suppliers/fake/categories/${node('gi2')}/link`,
+        body({ region: { us: 'os_usa', eu: 'Mars' } }),
+      ),
+      409,
+    );
+    expect(refused.details.rows).toEqual([
+      { index: 0, code: 'FIELD_OPTIONS_DIFFER', fields: ['region'] },
+    ]);
+    const linked = await json<CategoryImportResult>(
+      await post(
+        `/api/admin/suppliers/fake/categories/${node('gi2')}/link`,
+        body({ region: { us: 'os_usa', eu: 'os_euro' } }),
+      ),
+      201,
+    );
+    expect(linked.products).toHaveLength(1);
+  });
+
+  it('creates and updates a route with its option map (RT3 extended)', async () => {
+    const product = await json<{ id: string }>(
+      await post(`/api/admin/catalog/games/${selectGame}/products`, {
+        kind: 'direct',
+        nameAr: `مسار ${run}`,
+      }),
+      201,
+    );
+    const another = await offer('gi-route', 'gi', { cost: 0.9, fields: [player, region(ALL)] });
+    const route = {
+      offerId: another,
+      fieldMap: { playerId: 'player_id', region: 'region' },
+    };
+    const refused = await json<{ code: string; details: unknown }>(
+      await post(`/api/admin/catalog/products/${product.id}/routes`, {
+        ...route,
+        optionMap: { region: { us: 'os_usa' } },
+      }),
+      409,
+    );
+    expect(refused).toEqual(
+      expect.objectContaining({ code: 'FIELD_OPTIONS_DIFFER', details: { fields: ['region'] } }),
+    );
+    const created = await json<ProductRouting>(
+      await post(`/api/admin/catalog/products/${product.id}/routes`, {
+        ...route,
+        optionMap: { region: { us: 'os_usa', eu: 'os_euro' } },
+      }),
+      201,
+    );
+    const routeId = created.routes.find((item) => item.offer.id === another)?.id as string;
+    const patch = (optionMap: unknown) =>
+      client.request('PATCH', `/api/admin/routes/${routeId}`, {
+        cookie: admin.cookie,
+        body: { optionMap },
+      });
+    expect(
+      (await json<{ code: string }>(await patch({ region: { us: 'os_asia' } }), 409)).code,
+    ).toBe('FIELD_OPTIONS_DIFFER');
+    const updated = await json<ProductRouting>(
+      await patch({ region: { us: 'os_asia', eu: 'os_euro' } }),
+      200,
+    );
+    expect(updated.routes.find((item) => item.id === routeId)?.optionMap).toEqual({
+      region: { us: 'os_asia', eu: 'os_euro' },
+    });
+    const audit = await auditOf(test.db, routeId);
+    expect(audit.map((entry) => entry.action)).toEqual([
+      'product_route.created',
+      'product_route.updated',
+    ]);
+    expect(audit[1]?.details).toEqual({
+      productId: product.id,
+      before: { optionMap: { region: { us: 'os_usa', eu: 'os_euro' } } },
+      after: { optionMap: { region: { us: 'os_asia', eu: 'os_euro' } } },
+    });
   });
 });
 

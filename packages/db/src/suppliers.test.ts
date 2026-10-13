@@ -167,6 +167,11 @@ describe('routes', () => {
           route,
         ]),
       ).toBe('product_routes_field_map_check');
+      expect(
+        await violation(client, `update product_routes set option_map = '[]' where id = $1`, [
+          route,
+        ]),
+      ).toBe('product_routes_option_map_check');
     }));
 });
 
