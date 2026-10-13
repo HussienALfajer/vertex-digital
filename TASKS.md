@@ -55,4 +55,4 @@ Spec: `docs/specs/S16-supplier-catalog-and-admin-orders.md` (F08, F09, F11 amend
 - [x] E2E: import of a two-field and a select category (fake), link with option mapping, route drawer; RTL screenshots (admin, light and dark)
 - [x] Docs: `docs/suppliers/wdgzone.md` ("from S16 PR 4" marks removed, fixtures), spec "Settled in implementation" (PR 4), ROADMAP (S16 done), folder `CLAUDE.md`s, commands table if `supplier:fake` changes
 - [x] Live read (owner's approval, 2026-10-13): 57 pages of WDG top-ups and one `GET /products/{id}`, read only; counts in `docs/suppliers/wdgzone.md`; fixtures `products-topup-fields.json`, `product-select.json`; `/health` needs the key (comment and doc corrected)
-- [ ] Checks, reviewer, owner acceptance by the endpoint and screen summary (owner, 2026-10-13: full authority), PR with auto-merge
+- [x] Checks, reviewer (three blocking findings fixed: an unmapped option never sent, the body's own keys kept ours, password packs held for Q20), owner acceptance by the endpoint and screen summary (owner, 2026-10-13: full authority), PR with auto-merge
