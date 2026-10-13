@@ -69,9 +69,9 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] Off-server backups configured and a restore tested
 - [x] Domains and TLS for both hosts (checked 2026-10-12)
 - [ ] Production secrets on the server only; supplier keys entered in the panel
-- [ ] SPF, DKIM and DMARC for the sending mailbox
-- [ ] VPS IP registered in supplier allowlists; one small live order per supplier approved by the owner
-- [ ] Madani Arabic web license and files in place
+- [x] SPF, DKIM and DMARC for the sending mailbox (checked 2026-10-14 on public DNS: SPF includes Hostinger mail, DKIM `hostingermail-a` published, DMARC `p=quarantine`)
+- [ ] VPS IP registered in supplier allowlists; one small live order per supplier approved by the owner (WDGZone: key in the panel and IP registered by the owner on 2026-10-14, healthy and syncing; its live order waits for a real player id)
+- [x] Arabic typeface: the owner keeps Noto Kufi Arabic and Montserrat for launch (Q2 resolved 2026-10-14; Madani not licensed)
 - [x] Terms, privacy and refund policies published (with "من نحن", version 1 of each, 2026-10-13; texts in `docs/content/`)
 - [x] Admin account with 2FA; Telegram bot linked (2026-10-12: `info@vertexmedia.pro`, TOTP enrolled, the bot linked and its test message received)
-- [ ] USDT receiving addresses and chain-reader keys in the server environment; one small live USDT deposit per network approved by the owner (S04)
+- [ ] USDT receiving addresses and chain-reader keys in the server environment; one small live USDT deposit per network approved by the owner (S04; addresses, TronGrid key and BSC RPC in `shared/.env` and both live readers on, checked 2026-10-14; the live deposits are left)

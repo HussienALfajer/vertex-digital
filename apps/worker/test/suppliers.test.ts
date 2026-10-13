@@ -467,6 +467,46 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
       expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
     }));
 
+  it('writes a catalog larger than one batch completely (WDG lists 11,000+ offers)', () =>
+    isolated(async (tx) => {
+      const many = (cost: (i: number) => number) =>
+        Array.from({ length: 1_201 }, (_, i) =>
+          offer(`n${i}`, cost(i), {
+            stock: i,
+            fieldSpecs: i === 0 ? [] : undefined,
+            unsupportedReason: i === 1 ? 'fields_unsupported' : undefined,
+          }),
+        );
+      current = listing(...many(() => 1));
+      expect(await sync.sync(payload(), tx)).toMatchObject({ offersSeen: 1_201, offersNew: 1_201 });
+      current = listing(...many((i) => (i % 2 === 0 ? 2 : 1)));
+      const second = await sync.sync(payload(), tx);
+      expect(second).toMatchObject({ offersSeen: 1_201, offersNew: 0, costsChanged: 601 });
+      const rows = await tx
+        .select()
+        .from(supplierOffers)
+        .where(like(supplierOffers.offerId, `w-${run}-n%`));
+      expect(rows).toHaveLength(1_201);
+      for (const row of rows) {
+        const i = Number(row.offerId.split('-n')[1]);
+        expect(row).toMatchObject({
+          costUsdUnits: usd(i % 2 === 0 ? 2 : 1),
+          stock: i,
+          requiredFields: ['playerId'],
+          kind: 'direct',
+          fieldSpecs: i === 0 ? [] : null,
+          unsupportedReason: i === 1 ? 'fields_unsupported' : null,
+          lastSeenAt: second?.startedAt,
+          costConfirmedAt: second?.startedAt,
+        });
+      }
+      const changes = await tx
+        .select()
+        .from(supplierCostChanges)
+        .where(eq(supplierCostChanges.syncRunId, second?.id ?? ''));
+      expect(changes).toHaveLength(601);
+    }));
+
   it('refuses a suspicious catalog and changes nothing (SY3), and marks missing offers', () =>
     isolated(async (tx) => {
       const [p1, p2, p3] = [await product(tx), await product(tx), await product(tx)];

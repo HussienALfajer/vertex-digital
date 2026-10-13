@@ -187,6 +187,66 @@ const sameFields = (a: readonly string[] | null, b: readonly string[] | null) =>
 
 class SuspiciousCatalog extends Error {}
 
+/** Rows per statement when the sync writes offers and cost changes. */
+const BATCH_SIZE = 500;
+
+function* batches<T>(items: readonly T[]): Generator<T[]> {
+  for (let start = 0; start < items.length; start += BATCH_SIZE) {
+    yield items.slice(start, start + BATCH_SIZE);
+  }
+}
+
+/**
+ * Rule SY3 for listed offers already stored, in one statement: each row takes the listing's
+ * values, is seen at the run's start and no longer missing; a usable cost is confirmed then.
+ */
+async function updateOffers(
+  tx: Transaction,
+  batch: readonly { row: OfferRow; offer: ListedOffer }[],
+  seenAt: Date,
+): Promise<void> {
+  const values = batch.map(({ row, offer }) => ({
+    id: row.id,
+    name: offer.name,
+    group_name: offer.groupName,
+    kind: offer.kind,
+    required_fields: offer.requiredFields,
+    cost_usd_units: offer.costUsdUnits,
+    cost_raw: offer.costRaw,
+    in_stock: offer.inStock,
+    category_id: offer.categoryId,
+    stock: offer.stock,
+    original_cost_usd_units: offer.originalCostUsdUnits,
+    field_specs: offer.fieldSpecs,
+    unsupported_reason: offer.unsupportedReason,
+  }));
+  await tx.execute(sql`
+    update ${supplierOffers} as o set
+      name = v.name,
+      group_name = v.group_name,
+      kind = v.kind,
+      required_fields = v.required_fields,
+      cost_usd_units = v.cost_usd_units,
+      cost_raw = v.cost_raw,
+      in_stock = v.in_stock,
+      category_id = v.category_id,
+      stock = v.stock,
+      original_cost_usd_units = v.original_cost_usd_units,
+      field_specs = v.field_specs,
+      unsupported_reason = v.unsupported_reason,
+      last_seen_at = ${seenAt}::timestamptz,
+      cost_confirmed_at = case when v.cost_usd_units is null then o.cost_confirmed_at
+        else ${seenAt}::timestamptz end,
+      missing_since = null,
+      updated_at = now()
+    from jsonb_to_recordset(${JSON.stringify(values)}::jsonb) as v(
+      id uuid, name text, group_name text, kind product_kind, required_fields text[],
+      cost_usd_units bigint, cost_raw text, in_stock boolean, category_id text, stock integer,
+      original_cost_usd_units bigint, field_specs jsonb, unsupported_reason text
+    )
+    where o.id = v.id`);
+}
+
 /**
  * `suppliers.sync` (S07 rules SY1–SY4): one run at a time per supplier (the partial unique index on
  * running runs), one `listOffers` call recorded in `supplier_calls`, then, in one transaction, the
@@ -552,49 +612,39 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       const productIds = [...new Set([...onChanged, ...drifted].map((row) => row.productId))];
       const before = await productRoutingStates(tx, productIds, context());
 
-      for (const offer of listed) {
-        if (byOfferId.has(offer.offerId)) continue;
-        await tx.insert(supplierOffers).values({
-          id: newId(),
-          supplierId: supplier.id,
-          ...offer,
-          costConfirmedAt: offer.costUsdUnits === null ? null : run.startedAt,
-          lastSeenAt: run.startedAt,
-        });
-        counts.offersNew += 1;
-      }
-      for (const { row, offer } of updates) {
-        await tx
-          .update(supplierOffers)
-          .set({
-            name: offer.name,
-            groupName: offer.groupName,
-            kind: offer.kind,
-            requiredFields: offer.requiredFields,
-            costUsdUnits: offer.costUsdUnits,
-            costRaw: offer.costRaw,
-            inStock: offer.inStock,
-            categoryId: offer.categoryId,
-            stock: offer.stock,
-            originalCostUsdUnits: offer.originalCostUsdUnits,
-            fieldSpecs: offer.fieldSpecs,
-            unsupportedReason: offer.unsupportedReason,
+      // In batches: one statement per offer kept a WDG-sized catalog (11,000+ offers) writing for
+      // minutes and grew the worker past its memory limit, so PM2 killed it mid-run.
+      const fresh = listed.filter((offer) => !byOfferId.has(offer.offerId));
+      for (const batch of batches(fresh)) {
+        await tx.insert(supplierOffers).values(
+          batch.map((offer) => ({
+            id: newId(),
+            supplierId: supplier.id,
+            ...offer,
+            costConfirmedAt: offer.costUsdUnits === null ? null : run.startedAt,
             lastSeenAt: run.startedAt,
-            ...(offer.costUsdUnits !== null && { costConfirmedAt: run.startedAt }),
-            missingSince: null,
-          })
-          .where(eq(supplierOffers.id, row.id));
-        if (row.costUsdUnits !== offer.costUsdUnits) {
-          await tx.insert(supplierCostChanges).values({
+          })),
+        );
+      }
+      counts.offersNew = fresh.length;
+      for (const batch of batches(updates)) {
+        await updateOffers(tx, batch, run.startedAt);
+      }
+      const costChanges = updates.filter(
+        ({ row, offer }) => row.costUsdUnits !== offer.costUsdUnits,
+      );
+      for (const batch of batches(costChanges)) {
+        await tx.insert(supplierCostChanges).values(
+          batch.map(({ row, offer }) => ({
             id: newId(),
             offerId: row.id,
             fromUsdUnits: row.costUsdUnits,
             toUsdUnits: offer.costUsdUnits,
             syncRunId: run.id,
-          });
-          counts.costsChanged += 1;
-        }
+          })),
+        );
       }
+      counts.costsChanged = costChanges.length;
       if (missing.length > 0) {
         await tx
           .update(supplierOffers)

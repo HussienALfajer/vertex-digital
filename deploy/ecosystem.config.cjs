@@ -1,6 +1,9 @@
 // PM2 processes for production (docs/deployment.md). Run by the `vertexdigital` user from the
 // `current` release; the environment comes from the release's .env (a link to shared/.env).
-// Memory limits are per process: the server is shared with other sites (ADR 0009).
+// Memory limits are per process: the server is shared with other sites (ADR 0009). The api and
+// worker cap V8's heap below their PM2 limit: with the default (gigabytes) V8 put off collecting
+// while a large supplier sync ran, and PM2 killed the worker mid-run for memory that was garbage.
+// Set through NODE_OPTIONS because `startOrReload --update-env` applies env, not node_args.
 const root = '/srv/digital.vertexmedia.pro/current';
 const logs = '/var/log/digital.vertexmedia.pro';
 
@@ -27,6 +30,7 @@ module.exports = {
       name: 'vertexdigital-api',
       script: 'apps/api/dist/main.js',
       max_memory_restart: '512M',
+      env: { ...common.env, NODE_OPTIONS: '--max-old-space-size=384' },
       out_file: `${logs}/api.out.log`,
       error_file: `${logs}/api.err.log`,
     },
@@ -35,6 +39,7 @@ module.exports = {
       name: 'vertexdigital-worker',
       script: 'apps/worker/dist/main.js',
       max_memory_restart: '384M',
+      env: { ...common.env, NODE_OPTIONS: '--max-old-space-size=256' },
       out_file: `${logs}/worker.out.log`,
       error_file: `${logs}/worker.err.log`,
     },
