@@ -1,6 +1,6 @@
 # TASKS — S16 Supplier catalog and admin orders
 
-Spec: `docs/specs/S16-supplier-catalog-and-admin-orders.md` (F08, F09, F11 amended; ADRs 0003, 0004, 0005, 0011, 0016, 0020, 0021, 0022, 0023, 0025, 0026, 0027, 0030). Four PRs as the spec's implementation plan; PR4 waits for Q19. Each leaves `main` green.
+Spec: `docs/specs/S16-supplier-catalog-and-admin-orders.md` (F08, F09, F11 amended; ADRs 0003, 0004, 0005, 0011, 0016, 0020, 0021, 0022, 0023, 0025, 0026, 0027, 0030). Four PRs as the spec's implementation plan; Q19 answered on 2026-10-13 (MF1–MF5). Each leaves `main` green.
 
 ## PR 1 — Re-send safety net and admin purchases (RS1–RS4, AP1–AP15, AM1–AM4) · `feat/s16-admin-orders`
 - [x] Contracts: `ORDER_PAYERS`, `ORDER_PLACERS`, `ADMIN_ORDER_PURPOSES`, `adminOrderShape`; `owner_drawings` account kind and `heldUnits` label; `ORDER_POLICY.ownerDailyCapUsdUnits`, `ownerCapRemaining`; `isResendRefusal`; `PlaceOrderRequest.resend`; schemas `createAdminOrderSchema`, `adminPurchaseContextSchema`, `adminPlayerCheckSchema`, admin order list filters and row fields, customer order `placedByStore`/`customerNote`; error `OWNER_DAILY_CAP_EXCEEDED`; notification `order_placed_for_you`; Telegram kind `admin_order_placed`; audit details; reports and reconciliation shapes; unit tests at 100%
@@ -44,5 +44,14 @@ Spec: `docs/specs/S16-supplier-catalog-and-admin-orders.md` (F08, F09, F11 amend
 - [x] Docs: ROADMAP (S16 PR 3), admin `CLAUDE.md` patterns, `wiring.md` patterns, spec "Settled in implementation" (PR 3), architecture if routes changed
 - [x] Checks, reviewer (three blocking findings fixed: nearby orders read kept current, link capped at 100, icon tooltips), owner acceptance (2026-10-13), PR with auto-merge
 
-## PR 4 — Two fields and select fields (MF1), only after Q19
-- [ ] Waits for WDG's answer
+## PR 4 — Two fields and select fields, WDG delivery replies (MF1–MF5) · `claude/s16-pr4-wdg-mf1-bapgk5` (the session's designated branch, restarted from `main` after the docs PR #79)
+- [ ] Contracts: `optionMapSchema` (supplier key → our option value → supplier value, ≤ 10 × 50, bounded); `suggestInputFields` with selects (our `select` from the first pack's options, values sanitized and unique, labels kept; returns the option map) and `FIELD_OPTIONS_DIFFER` per row; `routeUnusableReason` RT3 with the option map (`fields_incomplete` when a mapped select option has no supplier value); `optionMap` on route create/update, import rows, link rows and the import draft; error `FIELD_OPTIONS_DIFFER` (Arabic in the admin catalog); audit details carry the option map; unit tests at 100%
+- [ ] Db (`/db-migration`): `product_routes.option_map` jsonb not null default `{}` with an object check; `fulfilment_attempts.option_map` jsonb nullable; written with the attempt beside `field_map`; tests
+- [ ] Suppliers: `wdgzone` MF1 (one field → `player_id`; several → each key plus `player_id` from the account-field list; none of the list → unsupported) and MF2 (select value sent as given; a select with < 2 options stays unsupported); MF4 (`delivery_items` strings or `{ code, pin }` on purchase, poll and webhook, `<code> · PIN: <pin>`; poll `200` with another status `unknown`; `202` then `GET /orders/{id}` by state; `410` code from `data.status`); fixtures: a select product (owner's read-only call, else synthetic from the documented shape); `fake`: a two-field category (player id + zone) and a select category (region), refusing a missing field or a value outside its options; tests
+- [ ] Worker: `askSupplier` turns the order's select values into supplier values through the attempt's option map (else the route's), so a re-send is the same request; `fulfil.job` writes the option map on the attempt; tests (re-send after the route's map changed)
+- [ ] Api: import (MF3: selects, option map on routes, `FIELD_OPTIONS_DIFFER` per row), link (option map onto the game's select options, proposals by value or label), route create and update with the option map, the draft's options; `test/supplier-catalog.test.ts` and the routes test
+- [ ] Bridge: build, OpenAPI export, admin client; mocks follow the changed shapes
+- [ ] Admin: import sheet (select fields with options: edit labels, remove options; refused rows with `FIELD_OPTIONS_DIFFER`), link sheet (per option mapping for select fields), route drawer (the option map); i18n
+- [ ] E2E: import of a two-field and a select category (fake), link with option mapping, route drawer; RTL screenshots (admin, light and dark)
+- [ ] Docs: `docs/suppliers/wdgzone.md` ("from S16 PR 4" marks removed, fixtures), spec "Settled in implementation" (PR 4), ROADMAP (S16 done), folder `CLAUDE.md`s, commands table if `supplier:fake` changes
+- [ ] Checks, reviewer, owner acceptance (spec steps 12–13), PR with auto-merge
