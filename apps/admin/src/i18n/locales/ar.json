@@ -3248,7 +3248,8 @@
       "quantity": "الكمية {{quantity}}",
       "free": "غير مطابق لأي محاولة",
       "thisAttempt": "مطابق لهذه المحاولة",
-      "otherAttempt": "مطابق للطلب {{order}}"
+      "otherAttempt": "مطابق للطلب {{order}}",
+      "readAt": "قُرئت في {{time}}"
     }
   },
   "customers": {

@@ -64,9 +64,14 @@ export function NearbySupplierOrders({
               : t('orders.nearby.read')}
         </Button>
       </div>
-      {nearby.isError && <FormAlert>{errorMessage(t, nearby.error)}</FormAlert>}
-      {nearby.isSuccess && (
+      {asked && nearby.isError && <FormAlert>{errorMessage(t, nearby.error)}</FormAlert>}
+      {asked && nearby.isSuccess && (
         <>
+          <p className="text-xs text-muted-foreground">
+            {t('orders.nearby.readAt', {
+              time: formatDateTime(new Date(nearby.dataUpdatedAt).toISOString()),
+            })}
+          </p>
           {!nearby.data.complete && (
             <Callout
               tone="warning"

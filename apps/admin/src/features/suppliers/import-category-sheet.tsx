@@ -52,6 +52,7 @@ import {
 } from './category-import';
 import { OriginalPrice, StockChip } from './offer-cells';
 import { categoryImageUrl, importDraftQuery, useImportCategory } from './suppliers.queries';
+import { TipButton } from './tip-button';
 
 /** The game fields the form edits (rules SC7, SC14). */
 type GameKey = 'nameAr' | 'nameEn' | 'categoryId' | 'slug';
@@ -391,15 +392,13 @@ function ImportForm({ supplier, draft }: { supplier: SupplierDetail; draft: Impo
                 ) : (
                   <span>{t('suppliers.importCategory.ownField')}</span>
                 )}
-                <Button
+                <TipButton
                   type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t('suppliers.importCategory.removeField')}
+                  label={t('suppliers.importCategory.removeField')}
                   onClick={() => setFields((previous) => previous.filter((_, at) => at !== index))}
                 >
                   <Trash2Icon />
-                </Button>
+                </TipButton>
               </div>
               <div className="grid gap-3 sm:grid-cols-[1fr_1fr_9rem_5rem_5rem_auto] sm:items-end">
                 <Field>

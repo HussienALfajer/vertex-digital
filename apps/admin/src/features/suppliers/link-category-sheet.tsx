@@ -180,6 +180,8 @@ function LinkForm({
     if (!parsed.success) {
       if (issues.some((issue) => issue.path[0] === 'fieldMap')) {
         setFailure(t('suppliers.import.errors.fieldMap'));
+      } else if (issues.some((issue) => issue.path[0] === 'rows' && issue.path.length === 1)) {
+        setFailure(t('suppliers.importCategory.errors.rows', { max: MAX_IMPORT_ROWS }));
       }
       return;
     }
@@ -253,8 +255,10 @@ function LinkForm({
                 const mode = modeOf(row);
                 const refusal = refusals.get(pack.offerId);
                 const invalid = rowErrors.has(pack.offerId) || !!refusal;
+                // At most 100 rows a link (rule SC8): a left-out pack stays out once 100 are chosen.
+                const full = !row.selected && sentCount >= MAX_IMPORT_ROWS;
                 const items =
-                  pack.refusal === null
+                  pack.refusal === null && !full
                     ? modeItems
                     : modeItems.filter((item) => item.value === 'skip');
                 return (

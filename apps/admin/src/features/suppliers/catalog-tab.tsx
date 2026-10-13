@@ -26,6 +26,9 @@ import {
   SelectValue,
   Sheet,
   Skeleton,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from '@vertex-digital/ui';
 import {
   ChevronDownIcon,
@@ -50,6 +53,7 @@ import {
   categoriesQuery,
   useCategoryChange,
 } from './suppliers.queries';
+import { TipButton } from './tip-button';
 
 const ALL = 'all';
 
@@ -274,11 +278,9 @@ function TreeNode({
     <li className="border-t border-border first:border-t-0">
       <div className="flex items-start gap-2 p-3" style={{ paddingInlineStart: indent(depth) }}>
         {node.childCount > 0 ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
+          <TipButton
             aria-expanded={open}
-            aria-label={
+            label={
               open
                 ? t('suppliers.catalog.collapse', { name: node.name })
                 : t('suppliers.catalog.expand', { name: node.name })
@@ -286,7 +288,7 @@ function TreeNode({
             onClick={() => setOpen((value) => !value)}
           >
             {open ? <ChevronDownIcon /> : <ChevronLeftIcon className="ltr:-scale-x-100" />}
-          </Button>
+          </TipButton>
         ) : (
           <span className="size-8 shrink-0" />
         )}
@@ -426,18 +428,25 @@ function NodeLine({
         </p>
       </div>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={row.busy}
-              aria-label={t('suppliers.catalog.actions', { name: node.name })}
-            />
-          }
-        >
-          <EllipsisVerticalIcon />
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={row.busy}
+                    aria-label={t('suppliers.catalog.actions', { name: node.name })}
+                  />
+                }
+              />
+            }
+          >
+            <EllipsisVerticalIcon />
+          </TooltipTrigger>
+          <TooltipContent>{t('suppliers.catalog.actions', { name: node.name })}</TooltipContent>
+        </Tooltip>
         <DropdownMenuContent>
           {importable && (
             <DropdownMenuItem onClick={() => row.onOpen(node, 'import')}>
@@ -516,9 +525,14 @@ function Filters({
             onChange={(event) => setQ(event.target.value)}
           />
         </Field>
-        <Button type="submit" variant="outline" aria-label={t('suppliers.catalog.searchSubmit')}>
+        <TipButton
+          type="submit"
+          variant="outline"
+          size="icon"
+          label={t('suppliers.catalog.searchSubmit')}
+        >
           <SearchIcon />
-        </Button>
+        </TipButton>
       </form>
       <Field className="w-full sm:w-44">
         <FieldLabel>{t('suppliers.catalog.filters.state')}</FieldLabel>

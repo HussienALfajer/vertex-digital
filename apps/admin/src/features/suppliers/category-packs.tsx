@@ -23,6 +23,7 @@ import { errorMessage } from '../../lib/errors';
 import { OfferCost, OfferFields, OfferMarks, StockChip } from './offer-cells';
 import { IgnoreButton } from './offers-tab';
 import { LIST_PAGE_SIZE, offersQuery, useOfferIgnored } from './suppliers.queries';
+import { TipButton } from './tip-button';
 
 /**
  * The packs of the selected category's subtree (S16 SF1): cost, original price and discount,
@@ -56,14 +57,9 @@ export function CategoryPacks({
     <Card className="gap-4">
       <div className="flex items-center justify-between gap-3">
         <CardTitle>{t('suppliers.catalog.packs.title')}</CardTitle>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('suppliers.catalog.hidePacks')}
-          onClick={onClose}
-        >
+        <TipButton label={t('suppliers.catalog.hidePacks')} onClick={onClose}>
           <XIcon />
-        </Button>
+        </TipButton>
       </div>
       {failure && <FormAlert>{failure}</FormAlert>}
       {packs.isPending && <Skeleton className="h-48 w-full" aria-hidden="true" />}

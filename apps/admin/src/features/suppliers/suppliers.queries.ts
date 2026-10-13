@@ -213,6 +213,7 @@ export const statementOrdersQuery = (code: SupplierCode, page: number) =>
         }),
       ),
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 0,
     retry: false,
   });
 
@@ -227,6 +228,7 @@ export const statementTransactionsQuery = (code: SupplierCode, page: number) =>
         }),
       ),
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 0,
     retry: false,
   });
 

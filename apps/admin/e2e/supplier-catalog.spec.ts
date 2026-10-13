@@ -291,6 +291,13 @@ test.describe('supplier catalog', () => {
     await expect(page.getByText('W-77')).toBeVisible();
     await expect(page.getByText(ar.orders.nearby.free)).toBeVisible();
     await expect(page.getByText(ar.orders.nearby.incomplete)).toBeVisible();
+
+    // Back on the order later: the old read is gone until the admin reads again.
+    await page.getByRole('main').getByRole('link', { name: ar.orders.back }).click();
+    await expect(page).toHaveURL(/\/orders$/);
+    await page.goBack();
+    await expect(page.getByRole('button', { name: ar.orders.nearby.read })).toBeVisible();
+    await expect(page.getByText('W-77')).toBeHidden();
   });
 
   test('the game page lists its supplier categories, unlinks one and takes the supplier cover (SC9, IM3, SF2)', async ({
