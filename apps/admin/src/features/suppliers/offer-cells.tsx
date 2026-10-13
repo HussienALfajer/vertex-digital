@@ -1,7 +1,7 @@
 import { formatUsd, type StockLevel, type SupplierOffer } from '@vertex-digital/contracts';
 import { Badge } from '@vertex-digital/ui';
 import { useTranslation } from 'react-i18next';
-import { formatDateTime, formatSince } from '../../lib/format';
+import { formatDateTime, formatSince, ltr } from '../../lib/format';
 
 /*
  * An offer's supplier fields as the offers table, a category's packs and the import dialogs show
@@ -110,7 +110,9 @@ export function OriginalPrice({
       <bdi dir="ltr" className="tabular-nums line-through">
         {formatUsd(originalCostUsdUnits)}
       </bdi>
-      <Badge tone="gold">{t('suppliers.offers.discount', { percent: discountPercent })}</Badge>
+      <Badge tone="gold">
+        {t('suppliers.offers.discount', { percent: ltr(`${discountPercent}%`) })}
+      </Badge>
     </span>
   );
 }

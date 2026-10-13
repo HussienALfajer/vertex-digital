@@ -73,6 +73,27 @@ export function initialPackRows(draft: Pick<ImportDraft, 'packs'>): PackRow[] {
   });
 }
 
+/**
+ * The rows aligned with the draft as read now: a pack refused since (ignored, mapped, missing)
+ * is no longer selected, and a pack the draft gained comes unselected with its suggestions.
+ */
+export function alignedRows(
+  draft: Pick<ImportDraft, 'packs'>,
+  rows: readonly PackRow[],
+): PackRow[] {
+  const byOffer = new Map(rows.map((row) => [row.offerId, row]));
+  return draft.packs.map((pack) => {
+    const row = byOffer.get(pack.offerId) ?? {
+      offerId: pack.offerId,
+      selected: false,
+      nameAr: pack.suggestedNameAr,
+      gameAmount: pack.suggestedGameAmount === null ? '' : String(pack.suggestedGameAmount),
+      productId: pack.match?.productId ?? null,
+    };
+    return pack.refusal === null ? row : { ...row, selected: false };
+  });
+}
+
 /** The suggested fields (SC12) as editable rows. */
 export function initialFieldRows(draft: Pick<ImportDraft, 'fields'>): FieldRow[] {
   return draft.fields.map((field) => ({

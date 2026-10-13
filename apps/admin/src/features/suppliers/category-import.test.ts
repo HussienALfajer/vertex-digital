@@ -1,6 +1,7 @@
 import type { ImportDraftPack } from '@vertex-digital/contracts';
 import { describe, expect, it } from 'vitest';
 import {
+  alignedRows,
   type FieldRow,
   importBody,
   initialFieldRows,
@@ -77,6 +78,19 @@ describe('initialPackRows', () => {
     expect(rows[1]).toMatchObject({ selected: false, gameAmount: '', productId: null });
     expect(rows.filter((row) => row.selected)).toHaveLength(100);
     expect(rows.at(-1)?.selected).toBe(false);
+  });
+});
+
+describe('alignedRows', () => {
+  it('unselects packs refused since and adds packs the draft gained', () => {
+    const rows = initialPackRows({ packs: [pack('a'), pack('b')] });
+    expect(
+      alignedRows({ packs: [pack('a', { refusal: 'OFFER_IGNORED' }), pack('b'), pack('c')] }, rows),
+    ).toEqual([
+      { ...rows[0], selected: false },
+      rows[1],
+      { offerId: 'c', selected: false, nameAr: 'c name', gameAmount: '60', productId: null },
+    ]);
   });
 });
 

@@ -24,6 +24,7 @@ import { CustomersMock } from './customers-mock';
 import { quietDashboard } from './dashboard-mock';
 import { OrdersMock } from './orders-mock';
 import { ReconciliationMock } from './reconciliation-mock';
+import { SupplierCatalogMock } from './supplier-catalog-mock';
 import { SuppliersMock } from './suppliers-mock';
 
 /*
@@ -293,6 +294,8 @@ export class AdminApi {
       this.switches().switches.find((item) => item.switch === `${code}_paused`)?.value ?? false,
     () => this.reauthenticationRequired,
   );
+  /** S16: the supplier catalog panel (tree, imports, links, statement, platform status). */
+  readonly supplierCatalog = new SupplierCatalogMock(this.suppliers, this.catalog);
   /** S08: the orders, their decisions, code reveals and the policy. */
   readonly orders: OrdersMock = new OrdersMock(() => this.reauthenticationRequired, {
     // S16: a purchase from the panel reads the catalog's packs and the customers' wallets.
@@ -949,6 +952,17 @@ export class AdminApi {
         body,
         request.headers()['idempotency-key'] ?? null,
       );
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
+    }
+    if (
+      path.startsWith('/api/admin/suppliers') ||
+      path.startsWith('/api/admin/catalog/games/') ||
+      path.endsWith('/supplier-orders')
+    ) {
+      const answer = this.supplierCatalog.answer(request.method(), url, body);
+      if (answer && 'image' in answer) {
+        return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+      }
       if (answer && 'json' in answer) return json(answer.status, answer.json);
     }
     if (path === '/api/admin/player-checks' && request.method() === 'POST') {

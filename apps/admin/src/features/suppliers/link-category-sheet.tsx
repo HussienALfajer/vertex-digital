@@ -33,6 +33,7 @@ import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { allGamesQuery, gameQuery } from '../catalog/catalog.queries';
 import {
+  alignedRows,
   initialPackRows,
   linkBody,
   type PackRow,
@@ -144,7 +145,9 @@ function LinkForm({
   const [entries, setEntries] = useState<FieldMapEntry[]>(() =>
     fieldMapEntries(requiredFieldsOf(draft.packs), draft.fieldMap),
   );
-  const [rows, setRows] = useState<PackRow[]>(() => initialPackRows(draft));
+  const [edited, setRows] = useState<PackRow[]>(() => initialPackRows(draft));
+  // The draft is read again after a refusal: what it refuses now is no longer selected.
+  const rows = alignedRows(draft, edited);
   const [rowErrors, setRowErrors] = useState<Set<string>>(new Set());
   const [refusals, setRefusals] = useState<Map<string, RowRefusal>>(new Map());
   const [missing, setMissing] = useState<string[]>([]);
@@ -155,9 +158,7 @@ function LinkForm({
   const sentCount = rows.filter((row) => row.selected).length;
 
   const setRow = (offerId: string, next: Partial<PackRow>) =>
-    setRows((previous) =>
-      previous.map((row) => (row.offerId === offerId ? { ...row, ...next } : row)),
-    );
+    setRows(rows.map((row) => (row.offerId === offerId ? { ...row, ...next } : row)));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -231,17 +232,12 @@ function LinkForm({
 
   return (
     <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
-      <Section
-        title={t('suppliers.linkCategory.fields')}
-        description={t('suppliers.linkCategory.fieldsHint')}
-      >
-        <FieldMapEditor
-          entries={entries}
-          fields={draft.linkGame?.fields ?? []}
-          missing={missing}
-          onChange={setEntries}
-        />
-      </Section>
+      <FieldMapEditor
+        entries={entries}
+        fields={draft.linkGame?.fields ?? []}
+        missing={missing}
+        onChange={setEntries}
+      />
       <Section
         title={t('suppliers.linkCategory.packs', { selected: sentCount, max: MAX_IMPORT_ROWS })}
         description={t('suppliers.linkCategory.packsHint')}

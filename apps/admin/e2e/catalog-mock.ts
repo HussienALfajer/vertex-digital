@@ -208,7 +208,7 @@ export class CatalogMock {
     return field;
   }
 
-  private upload(): CatalogImage {
+  upload(): CatalogImage {
     const id = nextId();
     const image = { id, url: `/api/catalog/images/${id}`, width: 1200, height: 675 };
     this.images.set(id, image);
@@ -296,7 +296,7 @@ export class CatalogMock {
     return row ? this.product(row) : null;
   }
 
-  private detail(row: StoredGame) {
+  detail(row: StoredGame) {
     const bySort = <T extends { sortOrder: number }>(items: T[]) =>
       [...items].sort((a, b) => a.sortOrder - b.sortOrder);
     return {

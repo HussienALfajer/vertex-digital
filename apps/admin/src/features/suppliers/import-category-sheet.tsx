@@ -39,6 +39,7 @@ import { categoriesQuery } from '../catalog/catalog.queries';
 import { ImageUpload } from '../catalog/image-upload';
 import { ActivateAllButton } from './activate-all';
 import {
+  alignedRows,
   type FieldRow,
   importBody,
   initialFieldRows,
@@ -118,7 +119,9 @@ function ImportForm({ supplier, draft }: { supplier: SupplierDetail; draft: Impo
   const [useSupplierImage, setUseSupplierImage] = useState(draft.category.hasImage);
   const [imageFailed, setImageFailed] = useState(false);
   const [fields, setFields] = useState<FieldRow[]>(() => initialFieldRows(draft));
-  const [rows, setRows] = useState<PackRow[]>(() => initialPackRows(draft));
+  const [edited, setRows] = useState<PackRow[]>(() => initialPackRows(draft));
+  // The draft is read again after a refusal: what it refuses now is no longer selected.
+  const rows = alignedRows(draft, edited);
   const [gameErrors, setGameErrors] = useState<Partial<Record<GameKey | 'cover', boolean>>>({});
   const [fieldErrors, setFieldErrors] = useState<number[]>([]);
   const [rowErrors, setRowErrors] = useState<Set<string>>(new Set());
@@ -128,9 +131,7 @@ function ImportForm({ supplier, draft }: { supplier: SupplierDetail; draft: Impo
   const selected = rows.filter((row) => row.selected).length;
 
   const setRow = (offerId: string, next: Partial<PackRow>) =>
-    setRows((previous) =>
-      previous.map((row) => (row.offerId === offerId ? { ...row, ...next } : row)),
-    );
+    setRows(rows.map((row) => (row.offerId === offerId ? { ...row, ...next } : row)));
   const setField = (index: number, next: Partial<FieldRow>) =>
     setFields((previous) => previous.map((row, at) => (at === index ? { ...row, ...next } : row)));
 
@@ -507,7 +508,7 @@ function ImportForm({ supplier, draft }: { supplier: SupplierDetail; draft: Impo
           rowErrors={rowErrors}
           refusals={refusals}
           onRow={setRow}
-          onRows={setRows}
+          onRows={(update) => setRows(update(rows))}
         />
       </Section>
 
@@ -635,7 +636,6 @@ function PackGroups({
                         <bdi>{pack.name}</bdi>
                       </FieldLabel>
                       <Input
-                        aria-label={t('suppliers.importCategory.packName', { name: pack.name })}
                         value={row.nameAr}
                         disabled={pack.refusal !== null}
                         onChange={(event) => onRow(pack.offerId, { nameAr: event.target.value })}
