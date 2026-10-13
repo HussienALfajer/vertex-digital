@@ -1,4 +1,4 @@
-# Store page texts (Q10)
+# Store page texts (Q10) and FAQ
 
 Drafts of the four S14 pages, written from the project's rules for the owner to review, complete and publish in the admin panel (Panel → المحتوى → الصفحات). Each file is the page **body** only, in the S14 limited Markdown (MD1–MD4: `##`/`###` headings, bold, lists, internal links only); all four pass `richTextProblems` with no problem. The titles are the seeded draft titles.
 
@@ -8,6 +8,8 @@ Drafts of the four S14 pages, written from the project's rules for the owner to 
 | `privacy` | سياسة الخصوصية | `/privacy` | [privacy.md](privacy.md) |
 | `refund` | سياسة الاسترداد | `/refund` | [refund.md](refund.md) |
 | `about` | من نحن | `/about` | [about.md](about.md) |
+
+The FAQ (`/faq`) is drafted in [faq.md](faq.md): seven sections and their questions, each answer in the same limited Markdown, all passing `richTextProblems` and the section and question lengths of `saveFaqSectionSchema` and `saveFaqItemSchema`. Enter them in Panel → المحتوى → الأسئلة الشائعة (one section per `##`, one question per `###`, the text under it as the answer), preview and publish; `/faq`, its footer link and the support callout appear with the first publication (S14 FQ5, SL3).
 
 ## Publishing
 
@@ -32,6 +34,13 @@ The texts are complete: paste each body into its page's editor, preview and publ
 | Personal data collected and shared, sign-in log 90 days, OTP purge, records never deleted, archive with zero balance and the email reserved | S01, S03, S05 TC2, S08, S09, S10, S12, S15 |
 | No analytics or third-party trackers; session cookie and local storage keys (cart, theme, dismissed announcement, install and push cards) | `apps/store/src` (checked 2026-10-13) |
 | Game account passwords never asked | Q20 (not sold in V1) |
+| FAQ: sign-up, 6-digit codes valid 10 minutes, one per minute, password reset signs out everywhere, sign-in emails, sessions, name, phone and email changes | S01 C1–C14, S05 |
+| FAQ: notification center, email and phone push preferences | S05 NT8, S15 PP1 |
+| FAQ: cart of up to 10 lines paid at once, gifts and share links | S10 CT2, GF, SH |
+| FAQ: saved player IDs, rejected-ID warning | S10 SP1–SP6 |
+| FAQ: code reveal masked with "إظهار", first reveal shown | S08 C2 |
+| FAQ: reservation balance not held, cancelled when the cost rose above the reservation price | S09 RS3, RS6, RS7 |
+| FAQ: tickets, replies notified, the footer's Telegram link | S12 |
 
 ## Owner answers (2026-10-13)
 
