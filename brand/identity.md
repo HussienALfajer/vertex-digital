@@ -103,9 +103,9 @@ About 60% deep surfaces, 30% green structure, 10% sand. Sand is precious: if eve
 
 | Script | Typeface | Source and license |
 |---|---|---|
-| Arabic | **Madani Arabic** (Namela) | Commercial. Needs a web license covering a public store (open question Q2). Files are private: never committed. |
+| Arabic | **Madani Arabic** (Namela) | Commercial. Not licensed for V1: the owner kept the fallback for launch (Q2, 2026-10-14). Files are private: never committed. |
 | Latin and digits | **Montserrat** | SIL OFL |
-| Arabic fallback | Noto Kufi Arabic | SIL OFL. Used until the Madani files and license are in place, and as a runtime fallback. |
+| Arabic fallback | Noto Kufi Arabic | SIL OFL. The Arabic face in V1 (Q2), and the runtime fallback if Madani is ever licensed. |
 
 - Madani's `@font-face` uses an Arabic `unicode-range`, so Latin letters and digits render in Montserrat.
 - Stack: `"Madani Arabic", "Montserrat", "Noto Kufi Arabic", system-ui, sans-serif`.

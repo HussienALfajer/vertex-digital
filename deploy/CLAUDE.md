@@ -4,7 +4,7 @@ Everything installed on the production server comes from this folder (ADR 0009, 
 
 ## Layout
 - `provision.sh`: one-time and idempotent server setup (user, directories, repository mirror, roles and database, `shared/.env`, nginx, certificates, fail2ban, systemd). `deploy.sh`: atomic releases, rollback and restore, run through `bin/vertexdigital-deploy`.
-- `ecosystem.config.cjs`: PM2 processes `vertexdigital-api`, `vertexdigital-worker`, `vertexdigital-store`, with memory limits.
+- `ecosystem.config.cjs`: PM2 processes `vertexdigital-api`, `vertexdigital-worker`, `vertexdigital-store`, with memory limits; the api and worker cap V8's heap below theirs through `NODE_OPTIONS`.
 - `nginx/`: one site per host (`digital.vertexmedia.pro`, `digital-admin.vertexmedia.pro`), their `.bootstrap` variants for the first certificate, and the `vertexdigital-*` snippets (headers, CSP, proxy, compression) and rate-limit zones.
 - `fail2ban/`: the `vertexdigital-auth` filter and jail (failed sign-ins on both hosts). `systemd/`: PM2 service, health timer, backup timer. `logrotate/`: app logs. `bin/`: deploy entry point, health check, backup.
 
