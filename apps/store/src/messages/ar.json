@@ -166,7 +166,8 @@
         "order_refunded": "عند استرداد مبلغ طلب",
         "order_cancelled": "عند إلغاء طلب محجوز",
         "checkout_finished": "عند اكتمال كل طلبات سلة",
-        "ticket_replied": "ردود الدعم"
+        "ticket_replied": "ردود الدعم",
+        "order_placed_for_you": "أنشأ المتجر طلباً لي"
       },
       "emailLabel": "البريد: {event}",
       "pushLabel": "الهاتف: {event}",
@@ -480,7 +481,13 @@
       "checkout_finished_delivered": "سُلّم {count}",
       "checkout_finished_partial": "سُلّم جزئياً {count}",
       "checkout_finished_refunded": "استُرد {count}",
-      "checkout_finished_amount": "({amount} أُعيدت إلى رصيدك)"
+      "checkout_finished_amount": "({amount} أُعيدت إلى رصيدك)",
+      "order_failed": "تعذّر تنفيذ طلب {product} ({number}) الذي أنشأه المتجر لك: {reason}. لم يُخصم من رصيدك شيء.",
+      "order_partially_failed": "سُلّم جزء من طلب {product} ({number}) وتعذّر تنفيذ الباقي. لم يُخصم من رصيدك شيء.",
+      "order_placed_for_you_on_behalf": "أنشأ المتجر بطلبك طلب {product} ({number}) ودفعه من رصيدك.",
+      "order_placed_for_you_gift": "هدية من المتجر: طلب {product} ({number}).",
+      "order_placed_for_you_compensation": "تعويض من المتجر: طلب {product} ({number}).",
+      "order_placed_for_you_message": "رسالة المتجر: {message}"
     }
   },
   "errors": {
@@ -592,6 +599,9 @@
       "partially_refunded": "سلّمنا جزءاً من طلبك وأعدنا ثمن الباقي إلى محفظتك",
       "refunded": "أعدنا ثمن طلبك إلى محفظتك",
       "refundedBecause": "أعدنا ثمن طلبك إلى محفظتك: {reason}",
+      "storeFailed": "تعذّر تنفيذ الطلب",
+      "storeFailedBecause": "تعذّر تنفيذ الطلب: {reason}",
+      "storePartiallyFailed": "سلّمنا جزءاً من الطلب وتعذّر تنفيذ الباقي",
       "cancelled": "أُلغي هذا الطلب"
     },
     "detail": {
@@ -608,7 +618,8 @@
       "refunded": "المبلغ المُسترد",
       "refundReason": "سبب الاسترداد",
       "totalSypValue": "{amount} ل.س",
-      "playerName": "الاسم في اللعبة:"
+      "playerName": "الاسم في اللعبة:",
+      "storeNote": "رسالة المتجر"
     },
     "codes": {
       "title": "الأكواد",
@@ -690,6 +701,11 @@
       "preview": "هكذا يظهر الإيصال لمن يفتح الرابط:",
       "create": "إنشاء الرابط",
       "update": "حفظ الخيارات"
+    },
+    "placedByStore": {
+      "on_behalf": "أنشأه المتجر بطلبك",
+      "gift": "هدية من المتجر",
+      "compensation": "تعويض من المتجر"
     }
   },
   "units": {

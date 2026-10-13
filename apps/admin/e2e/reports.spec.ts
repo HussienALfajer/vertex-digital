@@ -28,6 +28,8 @@ function sales(from: string, to: string): Report<ReportKind> {
       { date: to, ...figures(5, 30 * USD, 25_100_000) },
     ],
     totals: figures(8, 42 * USD, 35_445_600),
+    // S16 AP14: owner-funded orders on their own line.
+    ownerFunded: figures(2, 4 * USD, 3_520_000),
   };
   return report;
 }
@@ -52,6 +54,7 @@ function bySupplier(from: string, to: string): Report<ReportKind> {
       },
     ],
     totals: { ...figures(5, 30 * USD, 25_100_000), deliveredUnits: 5, ...attempts },
+    ownerFunded: figures(2, 4 * USD, 3_520_000),
   };
   return report;
 }
@@ -80,6 +83,9 @@ test('R1: the daily lines, the rows and their totals rounded to the cent; sorted
   await expect(table.getByRole('row').nth(1)).toContainText(ltr('$30.00'));
   await table.getByRole('button', { name: rp.columns.sales }).click();
   await expect(table.getByRole('row').nth(1)).toContainText(ltr('$12.00'));
+  // S16 AP14: owner-funded orders stay out of the totals, on their own line.
+  await expect(page.getByText(rp.ownerFunded.title)).toBeVisible();
+  await expect(page.getByText(ltr('$4.00'))).toBeVisible();
 });
 
 test('R2 by supplier keeps the breakdown and period in the URL', async ({ page, admin }) => {
@@ -93,6 +99,32 @@ test('R2 by supplier keeps the breakdown and period in the URL', async ({ page, 
   await expect(page.getByRole('columnheader', { name: rp.columns.failureRate })).toBeVisible();
   expect(admin.calls).toContain('GET /api/admin/reports/breakdown');
   await expect(page.getByRole('combobox', { name: rp.period.label })).toHaveText(rp.presets.custom);
+});
+
+test("R6 after R1: the tab never draws another report's numbers (S16 owner drawings)", async ({
+  page,
+  admin,
+}) => {
+  admin.reconciliation.reports.ledger = (from, to): Report<ReportKind> => ({
+    from,
+    to,
+    generatedAt: new Date().toISOString(),
+    rows: [
+      { date: to, line: 'owner_drawing', detail: null, usdUnits: 11_540_000, testUsdUnits: null },
+    ],
+    totals: [{ line: 'owner_drawing', detail: null, usdUnits: 11_540_000, testUsdUnits: null }],
+    places: [],
+    ownerDrawings: { startUnits: 0, endUnits: 10_560_000 },
+  });
+  await open(page, admin);
+  await expect(page.getByRole('table', { name: rp.kinds.sales })).toBeVisible();
+  // R1 rows are in the cache; R6's view must wait for its own report, not draw R1's.
+  await page.getByRole('tab', { name: rp.kinds.ledger }).click();
+  await expect(
+    page.getByText(
+      rp.ledger.ownerDrawings.replace('{{start}}', ltr('$0.00')).replace('{{end}}', ltr('$10.56')),
+    ),
+  ).toBeVisible();
 });
 
 test('an empty period says so; the export downloads the report', async ({ page, admin }) => {

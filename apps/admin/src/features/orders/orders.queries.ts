@@ -1,5 +1,7 @@
 import { keepPreviousData, queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
+  AdminPlayerCheck,
+  CreateAdminOrder,
   DeliveryProof,
   FulfilOrder,
   LiveBoardQuery,
@@ -203,6 +205,43 @@ export const useRevokeShareLink = (orderId: string) =>
       }),
     ),
   );
+
+/* S16 purchases from the panel ------------------------------------------------------------- */
+
+/** Rules AP4, AP7, AP8: the customer's wallet, caps and saved ids, and the owner cap today. */
+export const purchaseContextQuery = (customerId: string | undefined) =>
+  queryOptions({
+    queryKey: ['orders', 'purchase-context', customerId ?? null],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/orders/purchase-context', {
+          params: { query: customerId ? { customerId } : {} },
+        }),
+      ),
+    staleTime: 0,
+  });
+
+/**
+ * Rules AP2–AP13: one order, re-authenticated, with the dialog's `Idempotency-Key`; the customer's
+ * wallet and the owner cap change with it.
+ */
+export const useCreateAdminOrder = () =>
+  useOrdersMutation(({ body, key }: { body: CreateAdminOrder; key: string }) =>
+    call(
+      api.POST('/api/admin/orders', {
+        params: { header: { 'Idempotency-Key': key } },
+        body: body as never,
+      }),
+    ),
+  );
+
+/** Rule AP8: S09's check with the admin as requester; no re-authentication, nothing cached here. */
+export function useAdminPlayerCheck() {
+  return useMutation({
+    mutationFn: (body: AdminPlayerCheck) =>
+      call(api.POST('/api/admin/player-checks', { body: body as never })),
+  });
+}
 
 export const useSetOrderPolicy = () =>
   useOrdersMutation((body: OrderPolicy) => call(api.PUT('/api/admin/orders/policy', { body })));

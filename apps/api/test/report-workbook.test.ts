@@ -41,8 +41,9 @@ describe('the report workbook', () => {
         { place: 'outside_syp', currency: 'SYP', startUnits: -1_234_550, endUnits: -5 },
         { place: 'outside_usd', currency: 'USD', startUnits: -3, endUnits: 0 },
       ],
+      ownerDrawings: { startUnits: 0, endUnits: 20_000_000 },
     });
-    expect(cells).toEqual(expect.arrayContaining([-12_345.5, -0.05, -1.25, -0.000003, 0]));
+    expect(cells).toEqual(expect.arrayContaining([-12_345.5, -0.05, -1.25, -0.000003, 0, 20]));
     expect(cells.some((value) => typeof value === 'number' && Number.isNaN(value))).toBe(false);
   });
 });

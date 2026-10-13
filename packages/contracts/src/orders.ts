@@ -713,6 +713,68 @@ export function orderCandidates(
   ];
 }
 
+// Admin purchases (S16 AP1–AP15, ADR 0030) -------------------------------------------------------
+
+/** Who placed an order: the customer in the store, or the admin from the panel (rule AP9). */
+export const ORDER_PLACERS = ['customer', 'admin'] as const;
+
+export const orderPlacerSchema = z.enum(ORDER_PLACERS).meta({ id: 'OrderPlacer' });
+
+export type OrderPlacer = z.infer<typeof orderPlacerSchema>;
+
+/** Who paid: the customer's wallet, or the owner's funds booked as owner drawings (AM1, AM2). */
+export const ORDER_PAYERS = ['customer', 'owner'] as const;
+
+export const orderPayerSchema = z.enum(ORDER_PAYERS).meta({ id: 'OrderPayer' });
+
+export type OrderPayer = z.infer<typeof orderPayerSchema>;
+
+/** Rule AP1: the four modes of an admin purchase. */
+export const ADMIN_ORDER_PURPOSES = ['walk_in', 'on_behalf', 'gift', 'compensation'] as const;
+
+export const adminOrderPurposeSchema = z
+  .enum(ADMIN_ORDER_PURPOSES)
+  .meta({ id: 'AdminOrderPurpose' });
+
+export type AdminOrderPurpose = z.infer<typeof adminOrderPurposeSchema>;
+
+/**
+ * Rule AP1: who pays an admin order of this mode and whether it names a customer. `walk_in` has
+ * no customer; `on_behalf` is paid from the customer's wallet; `gift` and `compensation` from the
+ * owner's funds.
+ */
+export function adminOrderShape(purpose: AdminOrderPurpose): {
+  payer: OrderPayer;
+  hasCustomer: boolean;
+} {
+  return {
+    payer: purpose === 'on_behalf' ? 'customer' : 'owner',
+    hasCustomer: purpose !== 'walk_in',
+  };
+}
+
+/** Rule AP7: the highest owner daily cap the policy accepts. */
+export const OWNER_DAILY_CAP_MAX_USD_UNITS = 10_000 * CURRENCY_SCALE.USD;
+
+/** Rule AP7: what is left of today's owner cap; never below zero. */
+export function ownerCapRemaining(capUnits: number, usedUnits: number): number {
+  if (!Number.isSafeInteger(capUnits) || !Number.isSafeInteger(usedUnits)) {
+    throw new RangeError('Expected safe integer amounts');
+  }
+  return Math.max(0, capUnits - usedUnits);
+}
+
+/**
+ * S16 rule RS1: a refusal on a re-send of an attempt's key is never definitive (the first send may
+ * have bought the order), so the engine applies it as `unknown` with `RESEND_REFUSED_REASON`.
+ */
+export function isResendRefusal(outcome: { status: string }, resend: boolean): boolean {
+  return resend && outcome.status === 'failed_definitive';
+}
+
+/** Rule RS1: the open attempt's reason after a refused re-send (RS3 shows it with the code). */
+export const RESEND_REFUSED_REASON = 'resend_refused';
+
 // Policy and polling (F7, MN2) ------------------------------------------------------------------
 
 /** The order policy (owner, 2026-10-09): the newest `order_policy` row is in force. */
@@ -726,6 +788,11 @@ export const orderPolicySchema = z
     reviewPollMinutes: z.int().min(5).max(240),
     reviewPollHours: z.int().min(1).max(72),
     manualReminderMinutes: z.int().min(5).max(240),
+    /**
+     * S16 rule AP7: the most owner-funded orders may take in a Damascus day, net of refunds; 0
+     * turns them off.
+     */
+    ownerDailyCapUsdUnits: usdCentsSchema.min(0).max(OWNER_DAILY_CAP_MAX_USD_UNITS),
   })
   .meta({ id: 'OrderPolicy' });
 
@@ -741,6 +808,7 @@ export const ORDER_POLICY_DEFAULTS: OrderPolicy = {
   reviewPollMinutes: 30,
   reviewPollHours: 24,
   manualReminderMinutes: 15,
+  ownerDailyCapUsdUnits: 100 * CURRENCY_SCALE.USD,
 };
 
 const SECOND = 1_000;
@@ -957,6 +1025,24 @@ export type OrderStreamItem = z.infer<typeof orderStreamItemSchema>;
 
 const orderGame = z.object({ id: z.uuid(), slug: z.string(), nameAr: z.string() });
 
+/**
+ * S16 rule AP11: an order the store placed for the customer (its chip), and the note it carries;
+ * null on the customer's own orders. Walk-in orders never reach the customer.
+ */
+export const STORE_PLACED_PURPOSES = ['on_behalf', 'gift', 'compensation'] as const;
+
+export type StorePlacedPurpose = (typeof STORE_PLACED_PURPOSES)[number];
+
+const placedByStore = {
+  placedByStore: z.enum(STORE_PLACED_PURPOSES).nullable(),
+  customerNote: z.string().nullable(),
+};
+
+/** S16 rule AP11: the customer sees no price on a gift or a compensation from the store. */
+export function storeOrderHidesPrice(placedByStore: string | null): boolean {
+  return placedByStore === 'gift' || placedByStore === 'compensation';
+}
+
 /** A saved player id (S10 F14) as the buy box and "معرّفاتي" show it. */
 export const savedPlayerSchema = z
   .object({
@@ -1012,9 +1098,11 @@ export const orderSummarySchema = z
     productNameAr: z.string(),
     game: orderGame.extend({ cover: catalogImageSchema.nullable() }),
     quantity: z.int().positive(),
-    totalUsdUnits: z.int().positive(),
+    /** S16 rule AP11: null on a gift or a compensation from the store (no price shown). */
+    totalUsdUnits: z.int().positive().nullable(),
     /** The pounds shown at purchase (rule O6), display only; null without a rate then. */
     totalSypUnits: z.int().nullable(),
+    ...placedByStore,
     /** A reservation's deadline (rule RS1); null for an order created paid. */
     expiresAt: z.iso.datetime().nullable(),
     /** S10: the checkout the order was paid in, a gift, and rule OT3's "اشترِ مجدداً". */
@@ -1092,11 +1180,13 @@ export const orderSchema = z
     quantity: z.int().positive(),
     deliveredQuantity: z.int().nonnegative(),
     refundedQuantity: z.int().nonnegative(),
-    unitPriceUsdUnits: z.int().positive(),
-    totalUsdUnits: z.int().positive(),
+    /** S16 rule AP11: the four amounts are null on a gift or a compensation from the store. */
+    unitPriceUsdUnits: z.int().positive().nullable(),
+    totalUsdUnits: z.int().positive().nullable(),
     totalSypUnits: z.int().nullable(),
-    refundedUsdUnits: z.int().nonnegative(),
+    refundedUsdUnits: z.int().nonnegative().nullable(),
     refundReason: refundReasonSchema.nullable(),
+    ...placedByStore,
     /** Rule LT1, oldest first. */
     timeline: z.array(z.object({ step: orderTimelineStepSchema, at: z.iso.datetime() })),
     codes: z.array(orderCodeSchema),
@@ -1226,6 +1316,10 @@ export const adminOrderListQuerySchema = pageQuerySchema
     test: booleanFilter,
     from: z.iso.datetime({ offset: true }).optional(),
     to: z.iso.datetime({ offset: true }).optional(),
+    /** S16 rule AP14: by placer, payer and admin mode. */
+    placedBy: orderPlacerSchema.optional(),
+    payer: orderPayerSchema.optional(),
+    purpose: adminOrderPurposeSchema.optional(),
   })
   .meta({ id: 'AdminOrderListQuery' });
 
@@ -1238,12 +1332,21 @@ const orderCustomer = z.object({
   isTest: z.boolean(),
 });
 
+/** S16 rule AP9: who placed and paid an order, and the admin's mode (null for a customer's). */
+const adminOrigin = {
+  placedBy: orderPlacerSchema,
+  payer: orderPayerSchema,
+  purpose: adminOrderPurposeSchema.nullable(),
+};
+
 export const adminOrderSummarySchema = z
   .object({
     id: z.uuid(),
     number: z.string(),
     status: orderStatusSchema,
-    customer: orderCustomer,
+    /** Null for a walk-in order (S16 rule AP1). */
+    customer: orderCustomer.nullable(),
+    ...adminOrigin,
     product: z.object({ id: z.uuid(), nameAr: z.string() }),
     game: z.object({ id: z.uuid(), nameAr: z.string() }),
     quantity: z.int().positive(),
@@ -1417,8 +1520,12 @@ export const adminOrderSchema = z
     id: z.uuid(),
     number: z.string(),
     status: orderStatusSchema,
-    /** S12 CS6: the status, the pinned note and the signals beside the customer. */
-    customer: orderCustomer.extend({ marks: customerMarksSchema }),
+    /** S12 CS6: the status, the pinned note and the signals beside the customer; null walk-in. */
+    customer: orderCustomer.extend({ marks: customerMarksSchema }).nullable(),
+    /** S16 rule AP9: the reason is internal; the note is what the customer reads. */
+    ...adminOrigin,
+    adminReason: z.string().nullable(),
+    customerNote: z.string().nullable(),
     product: z.object({ id: z.uuid(), nameAr: z.string(), kind: productKindSchema }),
     game: z.object({ id: z.uuid(), nameAr: z.string() }),
     fields: z.array(orderFieldValue),
@@ -1492,6 +1599,104 @@ const decisionReason = z
   .min(5)
   .max(500)
   .regex(/^[^\p{Cc}]+$/u);
+
+/** Rule AP9: the note an owner-funded customer order shows its customer (S10 GF3's text rule). */
+export const ADMIN_ORDER_NOTE_MAX_LENGTH = 300;
+
+/**
+ * `POST /api/admin/orders` (rules AP1–AP9): one product, at the store's current price. A customer
+ * for every mode but `walk_in` (AP1); a customer note only on a gift or a compensation.
+ */
+export const createAdminOrderSchema = createOrderSchema
+  .pick({
+    productId: true,
+    quantity: true,
+    fields: true,
+    expectedUnitPriceUsdUnits: true,
+    confirmPlayer: true,
+  })
+  .extend({
+    purpose: adminOrderPurposeSchema,
+    customerId: z.uuid().optional(),
+    /** Internal (rule AP9): never shown to the customer. */
+    reason: decisionReason,
+    customerNote: z
+      .string()
+      .trim()
+      .min(1)
+      .max(ADMIN_ORDER_NOTE_MAX_LENGTH)
+      .refine(giftTextAllowed, GIFT_TEXT_REFUSED)
+      .optional(),
+  })
+  .superRefine((order, context) => {
+    const { hasCustomer } = adminOrderShape(order.purpose);
+    if (hasCustomer !== (order.customerId !== undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['customerId'],
+        message: hasCustomer ? 'This mode needs a customer' : 'A walk-in order has no customer',
+      });
+    }
+    if (order.customerNote !== undefined && !['gift', 'compensation'].includes(order.purpose)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['customerNote'],
+        message: 'Only a gift or a compensation carries a note',
+      });
+    }
+  })
+  .meta({ id: 'CreateAdminOrder' });
+
+export type CreateAdminOrder = z.input<typeof createAdminOrderSchema>;
+
+/** `GET /api/admin/orders/purchase-context`. */
+export const adminPurchaseContextQuerySchema = z
+  .object({ customerId: z.uuid().optional() })
+  .meta({ id: 'AdminPurchaseContextQuery' });
+
+export type AdminPurchaseContextQuery = z.infer<typeof adminPurchaseContextQuerySchema>;
+
+/**
+ * What the purchase dialog shows (rules AP4, AP7, AP8): the customer's wallet, state and cap left
+ * today (null without a cap), their saved player ids; the owner's cap, used and left today.
+ */
+export const adminPurchaseContextSchema = z
+  .object({
+    customer: z
+      .object({
+        id: z.uuid(),
+        name: z.string(),
+        email: z.string(),
+        isTest: z.boolean(),
+        emailVerified: z.boolean(),
+        frozen: z.boolean(),
+        balanceUsdUnits: z.int().nonnegative(),
+        purchaseCapLeftUsdUnits: z.int().nonnegative().nullable(),
+        savedPlayers: z.array(
+          z.object({
+            id: z.uuid(),
+            gameId: z.uuid(),
+            label: z.string(),
+            fields: z.record(z.string(), z.string()),
+            playerName: z.string().nullable(),
+          }),
+        ),
+      })
+      .nullable(),
+    owner: z.object({
+      capUsdUnits: z.int().nonnegative(),
+      usedTodayUsdUnits: z.int(),
+      remainingUsdUnits: z.int().nonnegative(),
+    }),
+  })
+  .meta({ id: 'AdminPurchaseContext' });
+
+export type AdminPurchaseContext = z.infer<typeof adminPurchaseContextSchema>;
+
+/** `POST /api/admin/player-checks` (rule AP8): S09's check with the admin as requester. */
+export const adminPlayerCheckSchema = playerCheckRequestSchema.meta({ id: 'AdminPlayerCheck' });
+
+export type AdminPlayerCheck = z.input<typeof adminPlayerCheckSchema>;
 
 /** `POST /api/admin/orders/:id/attempts/:attemptId/poll` (rule D4). */
 export const pollAttemptSchema = z.object({ reason: decisionReason }).meta({ id: 'PollAttempt' });
@@ -1610,7 +1815,10 @@ export const liveOrderCardSchema = z
     quantity: z.int().positive(),
     totalUsdUnits: z.int().positive(),
     isTest: z.boolean(),
-    customerEmail: z.string(),
+    /** Null for a walk-in order (S16 AP1). */
+    customerEmail: z.string().nullable(),
+    /** S16 AP14: the admin's mode chip; null for a customer's order. */
+    purpose: adminOrderPurposeSchema.nullable(),
     /** The open attempt, else the newest one; null before routing. */
     attempt: z
       .object({

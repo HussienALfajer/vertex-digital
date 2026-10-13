@@ -25,6 +25,9 @@ const STATUS: Partial<Record<ErrorCode, 400 | 403 | 404 | 409>> = {
   // S12 CF2, LM4.
   ACCOUNT_FROZEN: 403,
   PURCHASE_LIMIT_EXCEEDED: 409,
+  // S16 AP4, AP7.
+  EMAIL_NOT_VERIFIED: 409,
+  OWNER_DAILY_CAP_EXCEEDED: 409,
 };
 
 /** An `OrderError` or `LedgerError` as the API answers it; anything else is rethrown as is. */

@@ -42,7 +42,10 @@ export const reportQuery = <Kind extends ReportKind>(request: ReportRequest & { 
   queryOptions({
     queryKey: ['reports', request.kind, request.from, request.to, request.by],
     queryFn: () => read(request.kind, request, request.by),
-    placeholderData: keepPreviousData,
+    // The previous period's numbers stay up while a new period loads; never another report's,
+    // whose shape its view cannot read.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === request.kind ? keepPreviousData(previous) : undefined,
   });
 
 /** Rules X1–X4: the `.xlsx` the API streams, saved under its Latin file name. */

@@ -6,6 +6,7 @@ import {
   type EmailTemplate,
   formatUsd,
   type RefundReason,
+  type StorePlacedPurpose,
 } from '@vertex-digital/contracts';
 
 /*
@@ -60,6 +61,18 @@ const REJECT_REASON_LABELS: Record<DepositRejectReason, string> = {
   wrong_network: 'التحويل على شبكة غير الشبكة المختارة',
   transfer_other_customer: 'التحويل يخص طلب إيداع آخر',
   other: 'سبب آخر، موضَّح في صفحة الإيداع',
+};
+
+/** S16 AP11: the subject and opening of `customer_order_placed_for_you`, by mode. */
+const PLACED_FOR_YOU_SUBJECTS: Record<StorePlacedPurpose, string> = {
+  on_behalf: 'أنشأ المتجر طلباً بطلبك',
+  gift: 'هدية من المتجر',
+  compensation: 'تعويض من المتجر',
+};
+const PLACED_FOR_YOU_LINES: Record<StorePlacedPurpose, string> = {
+  on_behalf: 'أنشأ المتجر بطلبك الطلب، ودُفع من رصيد محفظتك:',
+  gift: 'أهداك المتجر الطلب، من دون أن يُخصم من رصيدك شيء:',
+  compensation: 'أنشأ المتجر لك تعويضاً، من دون أن يُخصم من رصيدك شيء: الطلب',
 };
 
 /** The customer-facing words of the refund reasons (S08 rule O13). */
@@ -201,7 +214,10 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     subject: `سُلّم جزء من طلبك ${orderNumber} واسترد الباقي`,
     lines: [
       `سُلّم ${deliveredQuantity} من طلبك ${orderNumber} (${productNameAr}) بتاريخ ${formatTime(at)}، ولم يتوفّر الباقي (${refundedQuantity}).`,
-      `أُعيد ${formatUsd(refundedUsdUnits)} إلى رصيد محفظتك عن الكمية التي لم تُسلَّم.`,
+      // S16 AP11: an order the store paid returns nothing to the wallet.
+      refundedUsdUnits === null
+        ? 'تعذّر تنفيذ الكمية الباقية، ولم يُخصم من رصيدك شيء.'
+        : `أُعيد ${formatUsd(refundedUsdUnits)} إلى رصيد محفظتك عن الكمية التي لم تُسلَّم.`,
     ],
     link: orderPage(orderId),
   }),
@@ -212,11 +228,39 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     productNameAr,
     refundedUsdUnits,
     reason,
+  }) =>
+    // S16 AP11: an order the store paid returns nothing to the wallet.
+    refundedUsdUnits === null
+      ? {
+          subject: `تعذّر تنفيذ الطلب ${orderNumber}`,
+          lines: [
+            `تعذّر تنفيذ الطلب ${orderNumber} (${productNameAr}) الذي أنشأه المتجر لك، بتاريخ ${formatTime(at)}. لم يُخصم من رصيدك شيء.`,
+            `السبب: ${REFUND_REASON_LABELS[reason]}.`,
+          ],
+          link: orderPage(orderId),
+        }
+      : {
+          subject: `أُعيد ${formatUsd(refundedUsdUnits)} إلى رصيدك عن الطلب ${orderNumber}`,
+          lines: [
+            `لم نتمكن من تنفيذ طلبك ${orderNumber} (${productNameAr})، فأُعيد ${formatUsd(refundedUsdUnits)} كاملاً إلى رصيد محفظتك بتاريخ ${formatTime(at)}.`,
+            `السبب: ${REFUND_REASON_LABELS[reason]}.`,
+          ],
+          link: orderPage(orderId),
+        },
+  // S16 AP11: an order the store placed for the customer; the note is the store's own words.
+  customer_order_placed_for_you: ({
+    at,
+    orderId,
+    orderNumber,
+    productNameAr,
+    purpose,
+    message,
   }) => ({
-    subject: `أُعيد ${formatUsd(refundedUsdUnits)} إلى رصيدك عن الطلب ${orderNumber}`,
+    subject: `${PLACED_FOR_YOU_SUBJECTS[purpose]}: ${orderNumber}`,
     lines: [
-      `لم نتمكن من تنفيذ طلبك ${orderNumber} (${productNameAr})، فأُعيد ${formatUsd(refundedUsdUnits)} كاملاً إلى رصيد محفظتك بتاريخ ${formatTime(at)}.`,
-      `السبب: ${REFUND_REASON_LABELS[reason]}.`,
+      `${PLACED_FOR_YOU_LINES[purpose]} ${orderNumber} (${productNameAr}) بتاريخ ${formatTime(at)}.`,
+      ...(message ? [`رسالة المتجر: ${message}`] : []),
+      'تتابع تنفيذه في صفحة الطلب، والأكواد هناك فقط إن كان الطلب أكواداً.',
     ],
     link: orderPage(orderId),
   }),

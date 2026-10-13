@@ -5,7 +5,7 @@
  *
  *   pnpm --filter @vertex-digital/worker supplier:fake --cost <offer> <usd> | --stock <offer> on|off
  *     | --remove <offer> | --fail-sync on|off | --errors on|off | --balance <usd> | --reset
- *     | --order <offer> delivered|pending|failed|invalid|unknown|partial:<n>|slow:<seconds>
+ *     | --order <offer> delivered|pending|failed|invalid|unknown|resend-refused|partial:<n>|slow:<seconds>
  *     | --resolve <order number> delivered|failed --via poll|webhook
  *
  * S08: `--order` scripts how the offer's next orders answer; `--resolve` settles the order's open
@@ -29,7 +29,7 @@ import { SupplierRegistry } from '../suppliers/supplier-registry.js';
 
 const USAGE = `Usage: supplier:fake --cost <offer> <usd> | --stock <offer> on|off | --remove <offer>
   | --fail-sync on|off | --errors on|off | --balance <usd> | --reset
-  | --order <offer> delivered|pending|failed|invalid|unknown|partial:<n>|slow:<seconds>
+  | --order <offer> delivered|pending|failed|invalid|unknown|resend-refused|partial:<n>|slow:<seconds>
   | --resolve <order number> delivered|failed --via poll|webhook`;
 
 function fail(message: string): never {
@@ -97,7 +97,9 @@ if (values.cost !== undefined) {
 } else if (values.order !== undefined) {
   const script = fakeOrderScriptSchema.safeParse(positionals[0]);
   if (!script.success)
-    fail('Expected delivered, pending, failed, invalid, unknown, partial:<n> or slow:<s>');
+    fail(
+      'Expected delivered, pending, failed, invalid, unknown, resend-refused, partial:<n> or slow:<s>',
+    );
   next = { ...state, orderScripts: { ...state.orderScripts, [values.order]: script.data } };
 } else {
   next = fakeSupplierStateSchema.parse({});

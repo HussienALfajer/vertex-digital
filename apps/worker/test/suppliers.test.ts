@@ -202,6 +202,13 @@ async function prepare(tx: Transaction): Promise<void> {
         notLike(supplierOffers.offerId, `w-${run}-%`),
       ),
     );
+  // Other runs' offers stay in the test database, and SY5's stale check reads every offer: one
+  // crossing its stale limit during a test would count as newly stale and refresh the store
+  // (S09 rule SF4). Long stale, they never do.
+  await tx
+    .update(supplierOffers)
+    .set({ costConfirmedAt: new Date(0) })
+    .where(notLike(supplierOffers.offerId, `w-${run}-%`));
   await tx.insert(supplierCredentials).values({
     id: newId(),
     supplierId: ids.fake,

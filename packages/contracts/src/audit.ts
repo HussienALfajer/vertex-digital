@@ -19,7 +19,9 @@ import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
 import { notificationEventSchema } from './notifications.js';
 import {
+  adminOrderPurposeSchema,
   cancelReasonSchema,
+  orderPayerSchema,
   orderPolicySchema,
   refundReasonSchema,
   shareKindSchema,
@@ -542,6 +544,10 @@ export const AUDIT_DETAILS = {
     /** S10: the checkout that paid it (rule CT5), and a gift (rule GF1). */
     checkoutId: z.uuid().optional(),
     gift: z.boolean().optional(),
+    /** S16: an order the admin placed (its reason in the entry's `reason`); null customer walk-in. */
+    purpose: adminOrderPurposeSchema.optional(),
+    payer: orderPayerSchema.optional(),
+    customerId: z.uuid().nullable().optional(),
   }),
   /** S09 rule RS1: the customer reserved an order; no money moved. */
   'order.reserved': z.strictObject({

@@ -1,6 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type AdminOrder, type FulfilmentAttempt, formatUsd } from '@vertex-digital/contracts';
+import {
+  type AdminOrder,
+  type FulfilmentAttempt,
+  formatUsd,
+  RESEND_REFUSED_REASON,
+} from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
@@ -30,7 +35,7 @@ import {
   OrderActionButtons,
   OrderActionDialog,
 } from './order-actions';
-import { ATTEMPT_TONES, playerCheckText, STATUS_TONES } from './order-labels';
+import { ATTEMPT_TONES, PURPOSE_TONES, playerCheckText, STATUS_TONES } from './order-labels';
 import { orderQuery, proofUrl, useRevealCode } from './orders.queries';
 import { CheckoutBlock, GiftBlock, ShareLinksBlock } from './share-links';
 
@@ -122,7 +127,10 @@ function Header({ order }: { order: AdminOrder }) {
     <Card className="gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={STATUS_TONES[order.status]}>{t(`orders.statuses.${order.status}`)}</Badge>
-        {order.customer.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
+        {order.purpose && (
+          <Badge tone={PURPOSE_TONES[order.purpose]}>{t(`orders.purposes.${order.purpose}`)}</Badge>
+        )}
+        {order.customer?.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
         {order.refundReason && (
           <Badge tone="neutral">{t(`orders.refundReasons.${order.refundReason}`)}</Badge>
         )}
@@ -132,24 +140,30 @@ function Header({ order }: { order: AdminOrder }) {
       </div>
       <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Fact label={t('orders.detail.customer')}>
-          <Link
-            to="/wallets/$customerId"
-            params={{ customerId: order.customer.id }}
-            className="underline-offset-4 hover:underline"
-          >
-            {order.customer.name}
-          </Link>
-          <span dir="ltr" className="block text-end text-sm font-normal text-muted-foreground">
-            {order.customer.email}
-          </span>
-          {/* S12 CS6: the status chips, the pinned note and the signals. */}
-          <div className="mt-2 font-normal">
-            <CustomerMarks
-              customerId={order.customer.id}
-              marks={order.customer.marks}
-              isTest={order.customer.isTest}
-            />
-          </div>
+          {order.customer ? (
+            <>
+              <Link
+                to="/wallets/$customerId"
+                params={{ customerId: order.customer.id }}
+                className="underline-offset-4 hover:underline"
+              >
+                {order.customer.name}
+              </Link>
+              <span dir="ltr" className="block text-end text-sm font-normal text-muted-foreground">
+                {order.customer.email}
+              </span>
+              {/* S12 CS6: the status chips, the pinned note and the signals. */}
+              <div className="mt-2 font-normal">
+                <CustomerMarks
+                  customerId={order.customer.id}
+                  marks={order.customer.marks}
+                  isTest={order.customer.isTest}
+                />
+              </div>
+            </>
+          ) : (
+            t('orders.walkInCustomer')
+          )}
         </Fact>
         <Fact label={t('orders.detail.total')}>
           <bdi dir="ltr">{formatUsd(order.totalUsdUnits)}</bdi>
@@ -194,7 +208,30 @@ function Header({ order }: { order: AdminOrder }) {
           <bdi>{playerCheckText(t, order)}</bdi>
         </Fact>
       </dl>
+      {order.placedBy === 'admin' && <Origin order={order} />}
     </Card>
+  );
+}
+
+/** S16 AP9: who placed the order from the panel, in which mode, why, and who paid. */
+function Origin({ order }: { order: AdminOrder }) {
+  const { t } = useTranslation();
+  return (
+    <dl className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Fact label={t('orders.origin.placedBy')}>{t('orders.placers.admin')}</Fact>
+      <Fact label={t('orders.origin.purpose')}>
+        {order.purpose ? t(`orders.purposes.${order.purpose}`) : '—'}
+      </Fact>
+      <Fact label={t('orders.origin.payer')}>{t(`orders.payers.${order.payer}`)}</Fact>
+      <Fact label={t('orders.origin.reason')}>
+        <bdi className="font-normal whitespace-pre-wrap">{order.adminReason}</bdi>
+      </Fact>
+      {order.customerNote && (
+        <Fact label={t('orders.origin.customerNote')}>
+          <bdi className="font-normal whitespace-pre-wrap">{order.customerNote}</bdi>
+        </Fact>
+      )}
+    </dl>
   );
 }
 
@@ -291,6 +328,10 @@ function Codes({ order }: { order: AdminOrder }) {
   return (
     <Card className="gap-3">
       <CardTitle>{t('orders.codes.title')}</CardTitle>
+      {/* S16 AP12: nobody else sees a walk-in order's codes. */}
+      {order.purpose === 'walk_in' && (
+        <p className="text-sm text-muted-foreground">{t('orders.origin.walkInHint')}</p>
+      )}
       <ul className="flex flex-col gap-3">
         {order.codes.map((code) => {
           const value = shown[code.id];
@@ -367,6 +408,14 @@ function Attempts({ orderId, attempts }: { orderId: string; attempts: Fulfilment
               </Badge>
               {attempt.inputRejected && (
                 <Badge tone="danger">{t('orders.attempts.inputRejected')}</Badge>
+              )}
+              {/* S16 RS3: a refusal of a re-send waits for the admin; it never failed the attempt. */}
+              {attempt.failureReason === RESEND_REFUSED_REASON && (
+                <Badge tone="warning">
+                  {t('orders.attempts.resendRefused', {
+                    code: attempt.supplierErrorCode ?? '—',
+                  })}
+                </Badge>
               )}
               {attempt.kind === 'admin_fulfil' && (
                 <Badge tone="brand">{t('orders.attempts.adminFulfil')}</Badge>

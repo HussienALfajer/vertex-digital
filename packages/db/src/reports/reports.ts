@@ -80,15 +80,27 @@ function figures(row: { delivered: unknown; sales: unknown; cost: unknown }) {
 const sum = <Row>(rows: Row[], pick: (row: Row) => number) =>
   rows.reduce((total, row) => total + pick(row), 0);
 
-/** Real customers' orders finished in the period, with their delivered attempts' cost. */
-const finishedOrders = (period: ReportPeriod) => sql`
+/**
+ * Real customers' orders finished in the period, with their delivered attempts' cost: the ones
+ * customers paid, or (S16 AP14) the owner-funded admin orders, which are reported apart.
+ */
+const finishedOrders = (period: ReportPeriod, payer: 'customer' | 'owner' = 'customer') => sql`
   select o.*,
     o.delivered_quantity::bigint * o.unit_price_usd_units as sales,
     coalesce((select sum(f.delivered_quantity::bigint * f.unit_cost_usd_units)
       from fulfilment_attempts f where f.order_id = o.id and f.status = 'delivered'), 0) as cost,
     (o.status in ('delivered', 'partially_refunded'))::int as is_delivered
   from orders o
-  where not o.is_test and ${within(sql`o.finished_at`, period)}`;
+  where not o.is_test and o.payer = ${payer} and ${within(sql`o.finished_at`, period)}`;
+
+/** S16 AP14: the "طلبات من مال المالك" line of R1 and R2, the period's owner-funded orders. */
+async function ownerFundedFigures(db: Executor, period: ReportPeriod) {
+  const { rows } = await db.execute<{ delivered: string; sales: string; cost: string }>(sql`
+    select coalesce(sum(is_delivered), 0)::text as delivered,
+      coalesce(sum(sales), 0)::text as sales, coalesce(sum(cost), 0)::text as cost
+    from (${finishedOrders(period, 'owner')}) o`);
+  return figures(rows[0] ?? { delivered: 0, sales: 0, cost: 0 });
+}
 
 /** R1 (rule RP3): sales and profit by day, equal to the dashboard's for the same day. */
 export async function salesReport(
@@ -117,6 +129,7 @@ export async function salesReport(
       sales: sum(days, (day) => day.salesUsdUnits),
       cost: sum(days, (day) => day.costUsdUnits),
     }),
+    ownerFunded: await ownerFundedFigures(db, period),
   };
 }
 
@@ -149,7 +162,8 @@ export async function breakdownReport(
           f.delivered_quantity::bigint * o.unit_price_usd_units as sales,
           f.delivered_quantity::bigint * f.unit_cost_usd_units as cost, o.status
         from fulfilment_attempts f join orders o on o.id = f.order_id
-        where f.status = 'delivered' and not o.is_test and ${within(sql`o.finished_at`, period)}
+        where f.status = 'delivered' and not o.is_test and o.payer = 'customer'
+          and ${within(sql`o.finished_at`, period)}
       ),
       attempts as (
         select f.supplier_id,
@@ -223,6 +237,7 @@ export async function breakdownReport(
       attemptsFailed: supplierRows ? failedTotal : null,
       failureRatePercent: supplierRows ? percent(failedTotal, resolvedTotal) : null,
     },
+    ownerFunded: await ownerFundedFigures(db, period),
   };
 }
 
@@ -399,6 +414,8 @@ export async function customersReport(
 
 type LedgerLine = LedgerReport['rows'][number];
 
+const OWNER_DRAWINGS_CODE = 'owner_drawings:USD';
+
 /**
  * R6 (rule RP8): the ledger's USD money movement by journal day, and each place at the start and
  * the end. Lines that touch a wallet show test customers' share apart. A treasury movement counts
@@ -459,6 +476,12 @@ export async function ledgerReport(
       select j.day, 'rounding_gain', null, s.amount, null
       from journal j join system s on s.journal_id = j.id where s.code = 'deposit_rounding:USD'
       union all
+      -- S16 AM2, AM3: owner-funded orders and their refunds.
+      select j.day, case when j.kind = 'purchase' then 'owner_drawing' else 'owner_drawing_refund' end,
+        null, abs(s.amount), null
+      from journal j join system s on s.journal_id = j.id
+      where j.kind in ('purchase', 'refund') and s.code = 'owner_drawings:USD'
+      union all
       select j.day,
         case
           when m.kind = 'supplier_correction' then 'supplier_correction'
@@ -517,7 +540,10 @@ export async function ledgerReport(
     from ledger_accounts a
     join ledger_postings p on p.account_id = a.id join ledger_journals j on j.id = p.journal_id
     where a.code in (${sql.join(
-      TREASURY_PLACES.map((place) => sql`${TREASURY_ACCOUNTS[place].code}`),
+      [
+        ...TREASURY_PLACES.map((place) => sql`${TREASURY_ACCOUNTS[place].code}`),
+        sql`${OWNER_DRAWINGS_CODE}`,
+      ],
       sql`, `,
     )})
     group by a.code`);
@@ -536,5 +562,9 @@ export async function ledgerReport(
         endUnits: heldUnits(account.kind, num(row?.finish)),
       };
     }),
+    ownerDrawings: {
+      startUnits: heldUnits('owner_drawings', num(byCode.get(OWNER_DRAWINGS_CODE)?.start)),
+      endUnits: heldUnits('owner_drawings', num(byCode.get(OWNER_DRAWINGS_CODE)?.finish)),
+    },
   };
 }

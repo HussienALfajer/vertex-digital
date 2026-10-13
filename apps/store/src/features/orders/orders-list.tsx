@@ -264,15 +264,23 @@ function OrderCard({ order }: { order: OrderSummary }) {
               {t('orders.gift.badge')}
             </Badge>
           )}
+          {/* S16 AP11: an order the store placed for the customer. */}
+          {order.placedByStore && (
+            <Badge tone="gold" className="self-start">
+              {t(`orders.placedByStore.${order.placedByStore}`)}
+            </Badge>
+          )}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1 text-end">
           <Badge tone={STAGE_TONES[order.stage]}>{stageText(order.stage)}</Badge>
           {order.stage === 'awaiting_balance' && order.expiresAt && (
             <ReservedLeft expiresAt={order.expiresAt} />
           )}
-          <p className="font-bold tabular-nums">
-            <bdi dir="ltr">{formatUsd(order.totalUsdUnits)}</bdi>
-          </p>
+          {order.totalUsdUnits !== null && (
+            <p className="font-bold tabular-nums">
+              <bdi dir="ltr">{formatUsd(order.totalUsdUnits)}</bdi>
+            </p>
+          )}
           {order.totalSypUnits !== null && (
             <p className="text-xs text-muted-foreground tabular-nums">
               {t('orders.syp', { amount: formatSyp(order.totalSypUnits) })}

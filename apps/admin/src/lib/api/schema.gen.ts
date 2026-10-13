@@ -3252,6 +3252,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersAdminController_list"];
+        put?: never;
+        post: operations["OrdersAdminController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/orders/purchase-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersAdminController_purchaseContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/orders/{id}/share-links/{linkId}/revoke": {
         parameters: {
             query?: never;
@@ -3262,22 +3294,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["OrdersAdminController_revokeShareLink"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/orders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["OrdersAdminController_list"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3486,6 +3502,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["OrdersAdminController_reveal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/player-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PlayerChecksAdminController_check"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3725,7 +3757,7 @@ export interface components {
                 productNameAr: string;
                 deliveredQuantity: number;
                 refundedQuantity: number;
-                refundedUsdUnits: number;
+                refundedUsdUnits: number | null;
             };
         } | {
             /** Format: uuid */
@@ -3741,7 +3773,7 @@ export interface components {
                 orderId: string;
                 orderNumber: string;
                 productNameAr: string;
-                refundedUsdUnits: number;
+                refundedUsdUnits: number | null;
                 reason: components["schemas"]["RefundReason"];
             };
         } | {
@@ -3823,6 +3855,24 @@ export interface components {
                 ticketId: string;
                 number: string;
             };
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "order_placed_for_you";
+            params: {
+                /** Format: uuid */
+                orderId: string;
+                orderNumber: string;
+                productNameAr: string;
+                /** @enum {string} */
+                purpose: "on_behalf" | "gift" | "compensation";
+                message?: string;
+            };
         };
         /** @enum {string} */
         DepositRejectReason: "not_received" | "receipt_invalid" | "receipt_used" | "reference_other_customer" | "wrong_account" | "wrong_network" | "transfer_other_customer" | "other";
@@ -3855,7 +3905,7 @@ export interface components {
             push: boolean;
         };
         /** @enum {string} */
-        NotificationEvent: "deposit_credited" | "deposit_rejected" | "deposit_receipt_requested" | "wallet_adjusted" | "order_delivered" | "order_partially_refunded" | "order_refunded" | "order_delayed" | "order_paid" | "order_cancelled" | "checkout_finished" | "ticket_replied";
+        NotificationEvent: "deposit_credited" | "deposit_rejected" | "deposit_receipt_requested" | "wallet_adjusted" | "order_delivered" | "order_partially_refunded" | "order_refunded" | "order_delayed" | "order_paid" | "order_cancelled" | "checkout_finished" | "ticket_replied" | "order_placed_for_you";
         PushConfig: {
             publicKey: string | null;
         };
@@ -4310,7 +4360,7 @@ export interface components {
             balanceUnits: number;
         };
         /** @enum {string} */
-        LedgerAccountKind: "customer_wallet" | "sham_cash_receipts" | "usdt_receipts" | "supplier_prepaid" | "sales_revenue" | "cost_of_goods" | "refunds" | "adjustments" | "currency_exchange" | "deposit_rounding" | "outside_funds" | "transfer_fees" | "supplier_corrections";
+        LedgerAccountKind: "customer_wallet" | "sham_cash_receipts" | "usdt_receipts" | "supplier_prepaid" | "sales_revenue" | "cost_of_goods" | "refunds" | "adjustments" | "currency_exchange" | "deposit_rounding" | "outside_funds" | "transfer_fees" | "supplier_corrections" | "owner_drawings";
         /** @enum {string} */
         Currency: "USD" | "SYP";
         ShamCashOptions: {
@@ -5497,6 +5547,13 @@ export interface components {
                 profitUsdUnits: number;
                 marginPercent: number | null;
             };
+            ownerFunded: {
+                delivered: number;
+                salesUsdUnits: number;
+                costUsdUnits: number;
+                profitUsdUnits: number;
+                marginPercent: number | null;
+            };
         };
         BreakdownReport: {
             /** Format: date */
@@ -5533,6 +5590,13 @@ export interface components {
                 attemptsSent: number | null;
                 attemptsFailed: number | null;
                 failureRatePercent: number | null;
+            };
+            ownerFunded: {
+                delivered: number;
+                salesUsdUnits: number;
+                costUsdUnits: number;
+                profitUsdUnits: number;
+                marginPercent: number | null;
             };
         };
         DepositsReport: {
@@ -5648,9 +5712,13 @@ export interface components {
                 startUnits: number;
                 endUnits: number;
             }[];
+            ownerDrawings: {
+                startUnits: number;
+                endUnits: number;
+            };
         };
         /** @enum {string} */
-        LedgerReportLine: "deposit" | "purchase" | "refund" | "cost_of_goods" | "adjustment_credit" | "adjustment_debit" | "treasury_funding" | "treasury_withdrawal" | "treasury_injection" | "treasury_transfer" | "transfer_fee" | "supplier_correction" | "rounding_gain";
+        LedgerReportLine: "deposit" | "purchase" | "refund" | "cost_of_goods" | "adjustment_credit" | "adjustment_debit" | "treasury_funding" | "treasury_withdrawal" | "treasury_injection" | "treasury_transfer" | "transfer_fee" | "supplier_correction" | "rounding_gain" | "owner_drawing" | "owner_drawing_refund";
         Storefront: {
             service: components["schemas"]["StoreServiceState"];
             categories: {
@@ -6862,11 +6930,14 @@ export interface components {
             quantity: number;
             deliveredQuantity: number;
             refundedQuantity: number;
-            unitPriceUsdUnits: number;
-            totalUsdUnits: number;
+            unitPriceUsdUnits: number | null;
+            totalUsdUnits: number | null;
             totalSypUnits: number | null;
-            refundedUsdUnits: number;
+            refundedUsdUnits: number | null;
             refundReason: components["schemas"]["RefundReason"] | null;
+            /** @enum {string|null} */
+            placedByStore: "on_behalf" | "gift" | "compensation" | null;
+            customerNote: string | null;
             timeline: {
                 step: components["schemas"]["OrderTimelineStep"];
                 /** Format: date-time */
@@ -6986,8 +7057,11 @@ export interface components {
                 cover: components["schemas"]["CatalogImage"] | null;
             };
             quantity: number;
-            totalUsdUnits: number;
+            totalUsdUnits: number | null;
             totalSypUnits: number | null;
+            /** @enum {string|null} */
+            placedByStore: "on_behalf" | "gift" | "compensation" | null;
+            customerNote: string | null;
             /** Format: date-time */
             expiresAt: string | null;
             /** Format: uuid */
@@ -7055,11 +7129,14 @@ export interface components {
             quantity: number;
             deliveredQuantity: number;
             refundedQuantity: number;
-            unitPriceUsdUnits: number;
-            totalUsdUnits: number;
+            unitPriceUsdUnits: number | null;
+            totalUsdUnits: number | null;
             totalSypUnits: number | null;
-            refundedUsdUnits: number;
+            refundedUsdUnits: number | null;
             refundReason: components["schemas"]["RefundReason"] | null;
+            /** @enum {string|null} */
+            placedByStore: "on_behalf" | "gift" | "compensation" | null;
+            customerNote: string | null;
             timeline: {
                 step: components["schemas"]["OrderTimelineStep"];
                 /** Format: date-time */
@@ -7094,9 +7171,25 @@ export interface components {
             /** Format: date-time */
             firstRevealedAt: string;
         };
-        RevokeShareLink: {
+        CreateAdminOrder: {
+            /** Format: uuid */
+            productId: string;
+            quantity: number;
+            /** @default {} */
+            fields: {
+                [key: string]: string;
+            };
+            expectedUnitPriceUsdUnits: number;
+            /** @default false */
+            confirmPlayer: boolean;
+            purpose: components["schemas"]["AdminOrderPurpose"];
+            /** Format: uuid */
+            customerId?: string;
             reason: string;
+            customerNote?: string;
         };
+        /** @enum {string} */
+        AdminOrderPurpose: "walk_in" | "on_behalf" | "gift" | "compensation";
         AdminOrder: {
             /** Format: uuid */
             id: string;
@@ -7109,7 +7202,12 @@ export interface components {
                 email: string;
                 isTest: boolean;
                 marks: components["schemas"]["CustomerMarks"];
-            };
+            } | null;
+            placedBy: components["schemas"]["OrderPlacer"];
+            payer: components["schemas"]["OrderPayer"];
+            purpose: components["schemas"]["AdminOrderPurpose"] | null;
+            adminReason: string | null;
+            customerNote: string | null;
             product: {
                 /** Format: uuid */
                 id: string;
@@ -7198,6 +7296,10 @@ export interface components {
                 revokeReason: string | null;
             }[];
         };
+        /** @enum {string} */
+        OrderPlacer: "customer" | "admin";
+        /** @enum {string} */
+        OrderPayer: "customer" | "owner";
         /** @enum {string} */
         PlayerCheckState: "valid" | "invalid_confirmed" | "unchecked_confirmed" | "none";
         OrderDecisions: {
@@ -7313,6 +7415,42 @@ export interface components {
         CodeRevealActor: "customer" | "admin";
         /** @enum {string} */
         ShareRevoker: "customer" | "admin";
+        AdminPurchaseContextQuery: {
+            /** Format: uuid */
+            customerId?: string;
+        };
+        AdminPurchaseContext: {
+            customer: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                email: string;
+                isTest: boolean;
+                emailVerified: boolean;
+                frozen: boolean;
+                balanceUsdUnits: number;
+                purchaseCapLeftUsdUnits: number | null;
+                savedPlayers: {
+                    /** Format: uuid */
+                    id: string;
+                    /** Format: uuid */
+                    gameId: string;
+                    label: string;
+                    fields: {
+                        [key: string]: string;
+                    };
+                    playerName: string | null;
+                }[];
+            } | null;
+            owner: {
+                capUsdUnits: number;
+                usedTodayUsdUnits: number;
+                remainingUsdUnits: number;
+            };
+        };
+        RevokeShareLink: {
+            reason: string;
+        };
         AdminOrderListQuery: {
             /** @default 1 */
             page: number;
@@ -7333,6 +7471,9 @@ export interface components {
             from?: string;
             /** Format: date-time */
             to?: string;
+            placedBy?: components["schemas"]["OrderPlacer"];
+            payer?: components["schemas"]["OrderPayer"];
+            purpose?: components["schemas"]["AdminOrderPurpose"];
         };
         /** @enum {string} */
         AdminOrderTab: "all" | "review" | "manual" | "active" | "delivered" | "refunded";
@@ -7353,7 +7494,10 @@ export interface components {
                 name: string;
                 email: string;
                 isTest: boolean;
-            };
+            } | null;
+            placedBy: components["schemas"]["OrderPlacer"];
+            payer: components["schemas"]["OrderPayer"];
+            purpose: components["schemas"]["AdminOrderPurpose"] | null;
             product: {
                 /** Format: uuid */
                 id: string;
@@ -7431,7 +7575,8 @@ export interface components {
             quantity: number;
             totalUsdUnits: number;
             isTest: boolean;
-            customerEmail: string;
+            customerEmail: string | null;
+            purpose: components["schemas"]["AdminOrderPurpose"] | null;
             attempt: {
                 supplierCode: components["schemas"]["SupplierCode"];
                 supplierNameAr: string;
@@ -7456,6 +7601,7 @@ export interface components {
             reviewPollMinutes: number;
             reviewPollHours: number;
             manualReminderMinutes: number;
+            ownerDailyCapUsdUnits: number;
         };
         PollAttempt: {
             reason: string;
@@ -7520,6 +7666,7 @@ export interface components {
         AdminRevealedCode: {
             code: string;
         };
+        AdminPlayerCheck: components["schemas"]["PlayerCheckRequest"];
         PublicShare: {
             kind: components["schemas"]["ShareKind"];
             orderNumber: string | null;
@@ -7581,7 +7728,7 @@ export interface components {
             } | null;
         };
         /** @enum {string} */
-        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test" | "supplier_sync_summary" | "supplier_health" | "supplier_balance_low" | "supplier_sync_failing" | "manual_order" | "manual_order_reminder" | "order_needs_review" | "order_conflict" | "validation_quota_reached" | "ticket_opened" | "ticket_reply" | "reconciliation_alert";
+        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test" | "supplier_sync_summary" | "supplier_health" | "supplier_balance_low" | "supplier_sync_failing" | "manual_order" | "manual_order_reminder" | "order_needs_review" | "order_conflict" | "validation_quota_reached" | "ticket_opened" | "ticket_reply" | "reconciliation_alert" | "admin_order_placed";
         /** @enum {string} */
         TelegramMessageStatus: "pending" | "sent" | "failed" | "skipped";
         TelegramLinkCode: {
@@ -13095,6 +13242,90 @@ export interface operations {
             };
         };
     };
+    OrdersAdminController_list: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                tab?: "all" | "review" | "manual" | "active" | "delivered" | "refunded";
+                status?: "awaiting_balance" | "paid" | "sent_to_supplier" | "failed" | "needs_review" | "delivered" | "partially_refunded" | "refunded" | "cancelled";
+                q?: string;
+                productId?: string;
+                customerId?: string;
+                supplier?: "shop2topup" | "wdgzone" | "manual" | "fake";
+                test?: "true" | "false";
+                from?: string;
+                to?: string;
+                placedBy?: "customer" | "admin";
+                payer?: "customer" | "owner";
+                purpose?: "walk_in" | "on_behalf" | "gift" | "compensation";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrderPage"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A UUID per attempt; a retry with the same key returns the first result */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAdminOrder"];
+            };
+        };
+        responses: {
+            /** @description The paid order (200: a replay) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrder"];
+                };
+            };
+        };
+    };
+    OrdersAdminController_purchaseContext: {
+        parameters: {
+            query?: {
+                customerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The customer's wallet and caps, the owner cap today */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPurchaseContext"];
+                };
+            };
+        };
+    };
     OrdersAdminController_revokeShareLink: {
         parameters: {
             query?: never;
@@ -13118,38 +13349,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminOrder"];
-                };
-            };
-        };
-    };
-    OrdersAdminController_list: {
-        parameters: {
-            query?: {
-                page?: number;
-                pageSize?: number;
-                tab?: "all" | "review" | "manual" | "active" | "delivered" | "refunded";
-                status?: "awaiting_balance" | "paid" | "sent_to_supplier" | "failed" | "needs_review" | "delivered" | "partially_refunded" | "refunded" | "cancelled";
-                q?: string;
-                productId?: string;
-                customerId?: string;
-                supplier?: "shop2topup" | "wdgzone" | "manual" | "fake";
-                test?: "true" | "false";
-                from?: string;
-                to?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Newest first */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdminOrderPage"];
                 };
             };
         };
@@ -13499,6 +13698,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminRevealedCode"];
+                };
+            };
+        };
+    };
+    PlayerChecksAdminController_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPlayerCheck"];
+            };
+        };
+        responses: {
+            /** @description The check, from the cache or a supplier */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerCheck"];
                 };
             };
         };

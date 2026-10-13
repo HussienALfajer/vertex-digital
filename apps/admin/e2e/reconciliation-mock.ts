@@ -487,7 +487,7 @@ function emptyReport(kind: ReportKind, from: string, to: string, url: URL): Repo
   };
   switch (kind) {
     case 'sales':
-      return { ...period, rows: [], totals: sales };
+      return { ...period, rows: [], totals: sales, ownerFunded: sales };
     case 'breakdown':
       return {
         ...period,
@@ -500,6 +500,7 @@ function emptyReport(kind: ReportKind, from: string, to: string, url: URL): Repo
           attemptsFailed: null,
           failureRatePercent: null,
         },
+        ownerFunded: sales,
       };
     case 'deposits':
       return {
@@ -523,6 +524,12 @@ function emptyReport(kind: ReportKind, from: string, to: string, url: URL): Repo
         totals: { delivered: 0, salesUsdUnits: 0, profitUsdUnits: 0, depositsUsdUnits: 0 },
       };
     default:
-      return { ...period, rows: [], totals: [], places: [] };
+      return {
+        ...period,
+        rows: [],
+        totals: [],
+        places: [],
+        ownerDrawings: { startUnits: 0, endUnits: 0 },
+      };
   }
 }

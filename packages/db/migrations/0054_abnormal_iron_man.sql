@@ -1,0 +1,1 @@
+ALTER TABLE "fulfilment_attempts" ADD COLUMN "send_started_at" timestamp with time zone;

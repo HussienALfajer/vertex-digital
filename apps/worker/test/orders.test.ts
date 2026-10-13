@@ -64,6 +64,7 @@ import { parseEnv } from '../src/core/config/env.js';
 import { LOG_REDACT_PATHS } from '../src/core/config/log-redact.js';
 import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { OrdersFulfilJob } from '../src/jobs/orders/fulfil.job.js';
+import { attemptOutcome } from '../src/jobs/orders/order-calls.js';
 import { OrdersPayWaitingJob } from '../src/jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from '../src/jobs/orders/poll.job.js';
 import { OrdersSweepJob } from '../src/jobs/orders/sweep.job.js';
@@ -461,7 +462,7 @@ describe('routing and sending (rules R1–R6, F1)', () => {
         .from(ledgerJournals)
         .where(eq(ledgerJournals.idempotencyKey, `order:${order.id}:cost:${attempt?.id}`));
       expect(cost).toBeDefined();
-      expect(await notificationsOf(tx, order.customerId)).toContainEqual({
+      expect(await notificationsOf(tx, order.customerId as string)).toContainEqual({
         event: 'order_delivered',
       });
       // A second run finds a delivered order and does nothing (rule R1).
@@ -542,7 +543,7 @@ describe('routing and sending (rules R1–R6, F1)', () => {
       const item = await product(tx, { code: true });
       script('fake-gift-10', 'partial:2');
       const order = await buy(tx, item, { quantity: 3 });
-      const before = await walletOf(tx, order.customerId);
+      const before = await walletOf(tx, order.customerId as string);
       await fulfil.fulfil(order.id, tx);
       const result = await fulfil.fulfil(order.id, tx);
       expect(result.kind).toBe('refunded');
@@ -553,8 +554,8 @@ describe('routing and sending (rules R1–R6, F1)', () => {
         refundedUsdUnits: item.price,
         refundReason: 'routes_exhausted',
       });
-      expect(await walletOf(tx, order.customerId)).toBe(before + item.price);
-      expect(await notificationsOf(tx, order.customerId)).toContainEqual({
+      expect(await walletOf(tx, order.customerId as string)).toBe(before + item.price);
+      expect(await notificationsOf(tx, order.customerId as string)).toContainEqual({
         event: 'order_partially_refunded',
       });
     });
@@ -578,7 +579,7 @@ describe('routing and sending (rules R1–R6, F1)', () => {
         refundedQuantity: 1,
         refundReason: 'routes_exhausted',
       });
-      expect(await notificationsOf(tx, order.customerId)).toContainEqual({
+      expect(await notificationsOf(tx, order.customerId as string)).toContainEqual({
         event: 'order_refunded',
       });
       const [failed] = await attemptsOf(tx, order.id);
@@ -748,14 +749,14 @@ describe('polling, the hard limit and the sweep (rules F3, F6, F7)', () => {
       ]);
       expect(message).toMatchObject({ kind: 'order_needs_review' });
       expect(message?.params).toMatchObject({ orderNumber: order.number, waitMinutes: 31 });
-      expect(await notificationsOf(tx, order.customerId)).toContainEqual({
+      expect(await notificationsOf(tx, order.customerId as string)).toContainEqual({
         event: 'order_delayed',
       });
       // The delay lives in the center only: no email (S08 "Jobs and integrations").
       const emails = await tx
         .select({ template: emailOutbox.template })
         .from(emailOutbox)
-        .where(eq(emailOutbox.customerId, order.customerId));
+        .where(eq(emailOutbox.customerId, order.customerId as string));
       expect(emails.map((email) => email.template)).not.toContain('customer_order_delayed');
       expect((await sweep.sweep(now, tx)).held).not.toContain(order.id);
 
@@ -904,6 +905,108 @@ describe('re-sends and late answers (rules F3, F5, F6)', () => {
       expect(fakeState.orders[attempt?.id as string]?.request).toEqual(first);
       expect((await attemptsOf(tx, order.id))[0]).toMatchObject({ status: 'unknown' });
       expect(await orderOf(tx, order.id)).toMatchObject({ status: 'sent_to_supplier' });
+    });
+  });
+
+  it('keeps a refused re-send unknown, with the supplier code, never another route (S16 RS1, RS2)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, { manualCost: usd(0.9) });
+      script('fake-uc-60', 'resend-refused');
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [attempt] = await attemptsOf(tx, order.id);
+      expect(attempt).toMatchObject({ status: 'unknown' });
+      await poll.poll(attempt?.id as string, tx);
+      const [after] = await attemptsOf(tx, order.id);
+      expect(after).toMatchObject({
+        status: 'unknown',
+        failureReason: 'resend_refused',
+        supplierErrorCode: 'INSUFFICIENT_BALANCE',
+        inputRejected: false,
+      });
+      // RS2: the supplier answered, so health counts a refusal, not an error.
+      const calls = await tx
+        .select({ operation: supplierCalls.operation, result: supplierCalls.result })
+        .from(supplierCalls)
+        .where(
+          and(eq(supplierCalls.supplierId, ids.fake), sql`${supplierCalls.createdAt} >= now()`),
+        );
+      expect(calls).toContainEqual({ operation: 'place_order', result: 'refused' });
+      expect(await orderOf(tx, order.id)).toMatchObject({ status: 'sent_to_supplier' });
+      expect(await fulfil.fulfil(order.id, tx)).toEqual({ kind: 'skipped' });
+    });
+  });
+
+  it.each([
+    ['marked by `orders.fulfil`', true],
+    ['unmarked, written by an older release during a deploy', false],
+  ])(
+    'keeps a refused re-send of a lost first send unknown, %s (S16 RS1, edge case 2)',
+    async (_, marked) => {
+      await isolated(async (tx) => {
+        const item = await product(tx, { manualCost: usd(0.9) });
+        script('fake-uc-60', 'invalid');
+        const order = await buy(tx, item);
+        const [offer] = await tx
+          .select({ id: supplierOffers.id })
+          .from(supplierOffers)
+          .where(
+            and(eq(supplierOffers.supplierId, ids.fake), eq(supplierOffers.offerId, 'fake-uc-60')),
+          );
+        // A `sending` attempt `orders.fulfil` wrote, then lost (F6): whether its first send left is
+        // unknown, so its re-send is refused with `inputRejected`. Only a reroute claims a first send.
+        const attemptId = newId();
+        const sentAt = new Date(Date.now() - 2 * 60_000);
+        await tx.insert(fulfilmentAttempts).values({
+          id: attemptId,
+          orderId: order.id,
+          routeId: item.fakeRoute as string,
+          supplierId: ids.fake,
+          offerId: offer?.id as string,
+          supplierOfferId: 'fake-uc-60',
+          fieldMap: { playerId: 'player_id' },
+          quantity: 1,
+          unitCostUsdUnits: usd(0.88),
+          status: 'sending',
+          candidates: [],
+          sentAt,
+          sendStartedAt: marked ? sentAt : null,
+        });
+        await tx.execute(sql`update orders set status = 'sent_to_supplier' where id = ${order.id}`);
+        await poll.poll(attemptId, tx);
+        const [after] = await attemptsOf(tx, order.id);
+        expect(after).toMatchObject({
+          status: 'unknown',
+          failureReason: 'resend_refused',
+          supplierErrorCode: 'PLAYER_NOT_FOUND',
+          inputRejected: false,
+        });
+        expect(await orderOf(tx, order.id)).toMatchObject({ status: 'sent_to_supplier' });
+      });
+    },
+  );
+
+  it('fails an attempt on its first send only (S16 RS1)', () => {
+    const refusal = {
+      status: 'failed_definitive' as const,
+      supplierCode: 'OUT_OF_STOCK',
+      inputRejected: true,
+      reason: 'Refused',
+    };
+    expect(attemptOutcome(refusal, [], false)).toMatchObject({
+      status: 'failed',
+      inputRejected: true,
+      supplierErrorCode: 'OUT_OF_STOCK',
+    });
+    expect(attemptOutcome(refusal, [], true)).toEqual({
+      status: 'unknown',
+      reason: 'resend_refused',
+      supplierErrorCode: 'OUT_OF_STOCK',
+      supplierOrderId: null,
+    });
+    // Other answers to a re-send keep their meaning.
+    expect(attemptOutcome({ status: 'pending', supplierOrderId: 'x' }, [], true)).toMatchObject({
+      status: 'pending',
     });
   });
 
@@ -1756,6 +1859,69 @@ describe('live operations (S11)', () => {
       await poll.poll(rerouted.attempt.id, tx);
       expect(await orderOf(tx, order.id)).toMatchObject({ status: 'delivered' });
       expect(Object.keys(fakeState.orders)).toEqual([rerouted.attempt.id]);
+    });
+  });
+
+  it('fails a rerouted attempt refused on its first send, sent by its poll (S16 RS1)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, { fake: null, manualCost: usd(0.9) });
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const offer = await fakeOffer(tx, 'fake-uc-60', usd(0.88));
+      const route = newId();
+      await tx.insert(productRoutes).values({
+        id: route,
+        productId: item.id,
+        supplierId: ids.fake,
+        offerId: offer,
+        fieldMap: { playerId: 'player_id' },
+      });
+      const rerouted = await rerouteOrder(
+        tx,
+        { ...context(), routing: { now: new Date(), fakeEnabled: true } },
+        { orderId: order.id, routeId: route, admin: admin() },
+      );
+      expect(rerouted.attempt).toMatchObject({ status: 'sending', sendStartedAt: null });
+      script('fake-uc-60', 'failed');
+      const applied = await poll.poll(rerouted.attempt.id, tx);
+      expect(applied?.attempt).toMatchObject({ status: 'failed', resolvedBy: 'poll' });
+      expect(applied?.attempt.failureReason).not.toBe('resend_refused');
+      expect(applied?.attempt.sendStartedAt).toBeInstanceOf(Date);
+      // Closed: a later poll asks nothing.
+      expect(await poll.poll(rerouted.attempt.id, tx)).toBeNull();
+    });
+  });
+
+  it('re-sends a rerouted attempt whose first send was marked, so its refusal stays unknown (S16 RS1)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, { fake: null, manualCost: usd(0.9) });
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const offer = await fakeOffer(tx, 'fake-uc-60', usd(0.88));
+      const route = newId();
+      await tx.insert(productRoutes).values({
+        id: route,
+        productId: item.id,
+        supplierId: ids.fake,
+        offerId: offer,
+        fieldMap: { playerId: 'player_id' },
+      });
+      const rerouted = await rerouteOrder(
+        tx,
+        { ...context(), routing: { now: new Date(), fakeEnabled: true } },
+        { orderId: order.id, routeId: route, admin: admin() },
+      );
+      // A poll marked the first send, then was lost before its answer was written.
+      await tx
+        .update(fulfilmentAttempts)
+        .set({ sendStartedAt: new Date() })
+        .where(eq(fulfilmentAttempts.id, rerouted.attempt.id));
+      script('fake-uc-60', 'failed');
+      const applied = await poll.poll(rerouted.attempt.id, tx);
+      expect(applied?.attempt).toMatchObject({
+        status: 'unknown',
+        failureReason: 'resend_refused',
+      });
     });
   });
 

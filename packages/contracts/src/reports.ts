@@ -87,12 +87,19 @@ const salesFigures = {
   marginPercent: percent,
 };
 
+/**
+ * S16 AP14: owner-funded admin orders, left out of the rows and totals and shown on their own line
+ * "طلبات من مال المالك" (sales here is their value at store prices).
+ */
+const ownerFunded = { ownerFunded: z.object(salesFigures) };
+
 /** R1 (rule RP3). */
 export const salesReportSchema = z
   .object({
     ...period,
     rows: z.array(z.object({ date: z.iso.date(), ...salesFigures })),
     totals: z.object(salesFigures),
+    ...ownerFunded,
   })
   .meta({ id: 'SalesReport' });
 
@@ -126,6 +133,7 @@ export const breakdownReportSchema = z
       }),
     ),
     totals: z.object(breakdownFigures),
+    ...ownerFunded,
   })
   .meta({ id: 'BreakdownReport' });
 
@@ -240,6 +248,9 @@ export const LEDGER_REPORT_LINES = [
   'transfer_fee',
   'supplier_correction',
   'rounding_gain',
+  /** S16 AM2, AM3: owner-funded orders paid, and their refunds back to owner drawings. */
+  'owner_drawing',
+  'owner_drawing_refund',
 ] as const;
 
 export const ledgerReportLineSchema = z.enum(LEDGER_REPORT_LINES).meta({ id: 'LedgerReportLine' });
@@ -269,6 +280,8 @@ export const ledgerReportSchema = z
         endUnits: units,
       }),
     ),
+    /** S16: what the owner took in goods (owner drawings, held), at the start and the end. */
+    ownerDrawings: z.object({ startUnits: units, endUnits: units }),
   })
   .meta({ id: 'LedgerReport' });
 

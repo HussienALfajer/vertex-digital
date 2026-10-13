@@ -34,6 +34,7 @@ import {
   productPrices,
   savedPlayers,
   storeSwitchChanges,
+  telegramMessages,
 } from '../schema/index.js';
 import {
   ADMIN_CLOSE_REASONS,
@@ -43,8 +44,9 @@ import {
   rerouteOptions,
   rerouteOrder,
 } from './admin-actions.js';
+import { type AdminPurchaseInput, adminPurchaseOrder, ownerSpentToday } from './admin-purchase.js';
 import { type CheckoutInput, checkoutOrders } from './checkout.js';
-import { applyOutcome, refundRemaining } from './outcome.js';
+import { applyOutcome, ownerDrawings, refundRemaining } from './outcome.js';
 import { OrderError, type PurchaseInput, purchaseOrder } from './purchase.js';
 import {
   adminOrder,
@@ -2231,6 +2233,13 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
     const other = await held(await product());
     expect(await update(other.attemptId, { unitCostUsdUnits: usd(0.5) })).toBe('23001');
     expect(await update(other.attemptId, { proofFileId: await proof() })).toBe('23001');
+    // S16 RS1 (migration 0055): the first send is marked once.
+    await db
+      .update(fulfilmentAttempts)
+      .set({ sendStartedAt: new Date() })
+      .where(eq(fulfilmentAttempts.id, other.attemptId));
+    expect(await update(other.attemptId, { sendStartedAt: new Date() })).toBe('23001');
+    expect(await update(other.attemptId, { sendStartedAt: null })).toBe('23001');
   });
 
   it('lists the routes with their eligibility for the order (rule RR2)', async () => {
@@ -2411,7 +2420,7 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
     const item = await product();
     const manual = await manualRoute(item.id);
     const { order, manualAttemptId } = await waitingManual(item, manual);
-    const before = await balance(order.customerId);
+    const before = await balance(order.customerId as string);
     const prepaid = await db.transaction((tx) =>
       ensureSystemAccount(tx, {
         code: 'supplier_prepaid:manual',
@@ -2441,11 +2450,11 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
     expect(attempt?.costJournalId).not.toBeNull();
     // S13 LS1: the store holds less at the supplier: its account grows by the cost.
     expect(await accountBalance(db, prepaid)).toBe(prepaidBefore + usd(0.8));
-    expect(await balance(order.customerId)).toBe(before);
+    expect(await balance(order.customerId as string)).toBe(before);
     const [delivered] = await db
       .select({ event: customerNotifications.event })
       .from(customerNotifications)
-      .where(eq(customerNotifications.customerId, order.customerId))
+      .where(eq(customerNotifications.customerId, order.customerId as string))
       .orderBy(desc(customerNotifications.createdAt))
       .limit(1);
     expect(delivered?.event).toBe('order_delivered');
@@ -2567,7 +2576,7 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
     const item = await product();
     const manual = await manualRoute(item.id);
     const { order, manualAttemptId } = await waitingManual(item, manual);
-    const before = await balance(order.customerId);
+    const before = await balance(order.customerId as string);
     const by = { id: newId(), reason: 'لا يتوفر الآن' };
     const refunded = await db.transaction(async (tx) => {
       const closed = await closeForAdminRefund(tx, order.id, by, new Date());
@@ -2580,7 +2589,7 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
       });
     });
     expect(refunded.status).toBe('refunded');
-    expect(await balance(order.customerId)).toBe(before + item.price);
+    expect(await balance(order.customerId as string)).toBe(before + item.price);
     const manualAttempt = (await attemptsOf(order.id)).find((row) => row.id === manualAttemptId);
     expect(manualAttempt).toMatchObject({
       status: 'failed',
@@ -2927,3 +2936,364 @@ describe('customer guards: freezing, the purchase cap and archiving (S12)', () =
 });
 
 const TICKET_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
+describe('admin purchases (S16 AP1–AP15, AM1–AM3)', () => {
+  const adminId = newId();
+
+  /** A new policy row like the one in force, with this owner cap. */
+  async function setOwnerCap(units: number) {
+    await pool.query(
+      `insert into order_policy (id, first_poll_seconds, fast_poll_seconds, fast_poll_minutes,
+         slow_poll_seconds, hard_limit_minutes, review_poll_minutes, review_poll_hours,
+         manual_reminder_minutes, owner_daily_cap_usd_units, admin_id)
+       select $1, first_poll_seconds, fast_poll_seconds, fast_poll_minutes, slow_poll_seconds,
+         hard_limit_minutes, review_poll_minutes, review_poll_hours, manual_reminder_minutes, $2, $3
+       from order_policy order by created_at desc, id desc limit 1`,
+      [newId(), units, adminId],
+    );
+  }
+
+  beforeAll(() => setOwnerCap(usd(10_000)));
+
+  function adminInput(
+    item: { id: string; price: number },
+    overrides: Partial<AdminPurchaseInput> = {},
+  ): AdminPurchaseInput {
+    return {
+      adminId,
+      purpose: 'walk_in',
+      customerId: null,
+      productId: item.id,
+      quantity: 1,
+      fields: { player_id: '5123456789' },
+      expectedUnitPriceUsdUnits: item.price,
+      confirmPlayer: false,
+      reason: 'Bought at the counter',
+      customerNote: null,
+      idempotencyKey: newId(),
+      requestHash: hash({ productId: item.id, admin: true }),
+      fakeEnabled: true,
+      purchasesStopped: false,
+      playerCheck: async () => null,
+      ...overrides,
+    };
+  }
+
+  const adminBuy = (input: AdminPurchaseInput) =>
+    db.transaction((tx) => adminPurchaseOrder(tx, context(), input));
+
+  const drawings = () => db.transaction(async (tx) => accountBalance(tx, await ownerDrawings(tx)));
+
+  it('pays a walk-in order from owner drawings, without a customer or a notice (AP1, AM2, AP12, AP13)', async () => {
+    const item = await product();
+    const before = await drawings();
+    sent.length = 0;
+    const { order, created } = await adminBuy(adminInput(item));
+    expect(created).toBe(true);
+    expect(order).toMatchObject({
+      status: 'paid',
+      customerId: null,
+      isTest: false,
+      placedBy: 'admin',
+      payer: 'owner',
+      adminPurpose: 'walk_in',
+      adminId,
+      adminReason: 'Bought at the counter',
+      customerNote: null,
+    });
+    expect(await drawings()).toBe(before - item.price);
+    expect(sent.map((job) => job.queue)).toEqual(
+      expect.arrayContaining([QUEUES.ordersFulfil, QUEUES.telegramSend]),
+    );
+    const [event] = await db.select().from(orderEvents).where(eq(orderEvents.orderId, order.id));
+    expect(event).toMatchObject({ actor: 'admin', actorId: adminId, toStatus: 'paid' });
+    const [audit] = await db
+      .select()
+      .from(auditEntries)
+      .where(and(eq(auditEntries.entityId, order.id), eq(auditEntries.action, 'order.paid')));
+    expect(audit).toMatchObject({
+      actorKind: 'admin',
+      actorId: adminId,
+      reason: 'Bought at the counter',
+    });
+    expect(audit?.details).toMatchObject({ purpose: 'walk_in', payer: 'owner', customerId: null });
+    const [notice] = await db
+      .select()
+      .from(telegramMessages)
+      .where(eq(telegramMessages.dedupeKey, `admin-order:${order.id}`));
+    expect(notice?.params).toMatchObject({
+      orderNumber: order.number,
+      purpose: 'walk_in',
+      totalUsdUnits: item.price,
+      owner: { capUsdUnits: usd(10_000) },
+    });
+    expect(await adminOrder(db, order.id)).toMatchObject({
+      customer: null,
+      placedBy: 'admin',
+      payer: 'owner',
+      purpose: 'walk_in',
+      adminReason: 'Bought at the counter',
+    });
+    const page = await adminOrderPage(db, {
+      tab: 'all',
+      page: 1,
+      pageSize: 50,
+      purpose: 'walk_in',
+      payer: 'owner',
+      placedBy: 'admin',
+    });
+    expect(page.items.map((row) => row.id)).toContain(order.id);
+    expect(page.items.every((row) => row.purpose === 'walk_in' && row.customer === null)).toBe(
+      true,
+    );
+  });
+
+  it('replays the same key and body, and refuses the key for another body (AP2)', async () => {
+    const item = await product();
+    const input = adminInput(item);
+    const first = await adminBuy(input);
+    expect(await adminBuy(input)).toMatchObject({ created: false, order: { id: first.order.id } });
+    expect(await refusal(adminBuy({ ...input, requestHash: hash({ other: true }) }))).toMatchObject(
+      { code: 'IDEMPOTENCY_KEY_REUSED' },
+    );
+    // A customer's key never replays as an admin order.
+    const buyer = await customer({ funds: usd(10) });
+    const bought = await buy(request(buyer, item));
+    expect(
+      await refusal(adminBuy({ ...input, idempotencyKey: bought.order.idempotencyKey })),
+    ).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
+  });
+
+  it('pays on behalf of a customer from the wallet and tells them (AM1, AP4, AP11)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(5) });
+    const before = await drawings();
+    const { order } = await adminBuy(
+      adminInput(item, { purpose: 'on_behalf', customerId: buyer, reason: 'Asked on WhatsApp' }),
+    );
+    expect(order).toMatchObject({
+      payer: 'customer',
+      customerId: buyer,
+      adminPurpose: 'on_behalf',
+    });
+    expect(await balance(buyer)).toBe(usd(5) - item.price);
+    expect(await drawings()).toBe(before);
+    const [notice] = await db
+      .select()
+      .from(customerNotifications)
+      .where(eq(customerNotifications.customerId, buyer));
+    expect(notice).toMatchObject({
+      event: 'order_placed_for_you',
+      params: { orderId: order.id, purpose: 'on_behalf' },
+    });
+    // It counts toward the customer's own daily cap (S12 LM4).
+    expect(await purchasedLastDay(db, buyer)).toBe(item.price);
+    expect(await customerOrder(db, buyer, order.id)).toMatchObject({
+      placedByStore: 'on_behalf',
+      totalUsdUnits: item.price,
+      customerNote: null,
+    });
+    const poor = await customer({ funds: usd(0.5) });
+    expect(
+      await refusal(adminBuy(adminInput(item, { purpose: 'on_behalf', customerId: poor }))),
+    ).toMatchObject({ code: 'INSUFFICIENT_BALANCE' });
+  });
+
+  it('gives a gift from owner funds, hides its price and refunds it to owner drawings (AM2, AM3, AP11, edge case 4)', async () => {
+    const item = await product();
+    const buyer = await customer();
+    const before = await drawings();
+    const usedBefore = (await ownerSpentToday(db)).usedUsdUnits;
+    const { order } = await adminBuy(
+      adminInput(item, {
+        purpose: 'gift',
+        customerId: buyer,
+        reason: 'Loyal customer gift',
+        customerNote: 'عيد سعيد',
+      }),
+    );
+    expect(order).toMatchObject({ payer: 'owner', customerNote: 'عيد سعيد' });
+    expect(await drawings()).toBe(before - item.price);
+    expect((await ownerSpentToday(db)).usedUsdUnits).toBe(usedBefore + item.price);
+    expect(await purchasedLastDay(db, buyer)).toBe(0);
+    const [notice] = await db
+      .select()
+      .from(customerNotifications)
+      .where(eq(customerNotifications.customerId, buyer));
+    expect(notice?.params).toMatchObject({ purpose: 'gift', message: 'عيد سعيد' });
+    expect(await customerOrder(db, buyer, order.id)).toMatchObject({
+      placedByStore: 'gift',
+      customerNote: 'عيد سعيد',
+      unitPriceUsdUnits: null,
+      totalUsdUnits: null,
+      totalSypUnits: null,
+      refundedUsdUnits: null,
+    });
+    const page = await customerOrderPage(db, buyer, { after: null, limit: 10 });
+    expect(page.items[0]).toMatchObject({ placedByStore: 'gift', totalUsdUnits: null });
+
+    const attemptId = await send(order, item);
+    await apply(attemptId, { status: 'failed', reason: 'refused', inputRejected: true });
+    const refunded = (await orderRow(order.id)) as OrderRow;
+    expect(refunded.status).toBe('refunded');
+    expect(await drawings()).toBe(before);
+    expect(await findCustomerWallet(db, buyer)).toBeNull();
+    expect((await ownerSpentToday(db)).usedUsdUnits).toBe(usedBefore);
+    const [latest] = await db
+      .select()
+      .from(customerNotifications)
+      .where(eq(customerNotifications.customerId, buyer))
+      .orderBy(desc(customerNotifications.createdAt))
+      .limit(1);
+    expect(latest).toMatchObject({ event: 'order_refunded', params: { refundedUsdUnits: null } });
+
+    // C4, C6, C7 pass with owner-funded orders.
+    const { results } = await runInternalChecks(db);
+    for (const check of ['account_journal_kinds', 'order_purchase', 'order_refund']) {
+      const offending = results
+        .filter((result) => result.check === check)
+        .flatMap((result) => result.details.offending.map((entry) => entry.id));
+      for (const id of [order.id, refunded.purchaseJournalId, refunded.refundJournalId]) {
+        expect(offending).not.toContain(id);
+      }
+    }
+  });
+
+  it("applies the customer's own rules to the customer modes (AP3, AP4, AP6, edge cases 5–7, 22)", async () => {
+    const item = await product();
+    const archived = await customer();
+    await pool.query('update customers set archived_at = now() where id = $1', [archived]);
+    expect(
+      await refusal(adminBuy(adminInput(item, { purpose: 'gift', customerId: archived }))),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    const unverified = await customer();
+    await pool.query('update customers set email_verified = false where id = $1', [unverified]);
+    expect(
+      await refusal(
+        adminBuy(adminInput(item, { purpose: 'compensation', customerId: unverified })),
+      ),
+    ).toMatchObject({ code: 'EMAIL_NOT_VERIFIED' });
+    const frozen = await customer({ funds: usd(10) });
+    await pool.query('update customers set frozen_at = now() where id = $1', [frozen]);
+    for (const purpose of ['gift', 'on_behalf'] as const) {
+      expect(
+        await refusal(adminBuy(adminInput(item, { purpose, customerId: frozen }))),
+      ).toMatchObject({ code: 'ACCOUNT_FROZEN' });
+    }
+    expect(
+      await refusal(adminBuy(adminInput(item, { purpose: 'gift', customerId: null }))),
+    ).toMatchObject({ code: 'VALIDATION_FAILED' });
+    expect(await refusal(adminBuy(adminInput(item, { purchasesStopped: true })))).toMatchObject({
+      code: 'PURCHASES_STOPPED',
+    });
+    expect(
+      await refusal(adminBuy(adminInput(item, { expectedUnitPriceUsdUnits: item.price + usd(1) }))),
+    ).toMatchObject({ code: 'PRICE_CHANGED', details: { unitPriceUsdUnits: item.price } });
+  });
+
+  it('buys a paused pack from owner funds only (AP5, edge case 10)', async () => {
+    const item = await product();
+    await pool.query("update catalog_products set status = 'paused' where id = $1", [item.id]);
+    const buyer = await customer({ funds: usd(10) });
+    expect(
+      await refusal(adminBuy(adminInput(item, { purpose: 'on_behalf', customerId: buyer }))),
+    ).toMatchObject({ code: 'PRODUCT_UNAVAILABLE' });
+    const { order } = await adminBuy(adminInput(item));
+    expect(order.status).toBe('paid');
+    const { rows } = await pool.query<{ status: string }>(
+      'select status from catalog_products where id = $1',
+      [item.id],
+    );
+    expect(rows[0]?.status).toBe('paused');
+    await pool.query('update catalog_products set archived_at = now() where id = $1', [item.id]);
+    expect(await refusal(adminBuy(adminInput(item)))).toMatchObject({
+      code: 'PRODUCT_UNAVAILABLE',
+    });
+  });
+
+  it('lets exactly one of two owner orders pass at the edge of the cap (AP7, edge case 3)', async () => {
+    const item = await product();
+    const { usedUsdUnits } = await ownerSpentToday(db);
+    // Room for one order and a half, in whole cents.
+    await setOwnerCap(Math.ceil((usedUsdUnits + item.price * 1.5) / 10_000) * 10_000);
+    try {
+      const results = await Promise.allSettled([
+        adminBuy(adminInput(item)),
+        adminBuy(adminInput(item)),
+      ]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      const failed = results.find((result) => result.status === 'rejected');
+      const error = (failed as PromiseRejectedResult).reason as OrderError;
+      expect(error.code).toBe('OWNER_DAILY_CAP_EXCEEDED');
+      expect((error.details as { remainingUsdUnits: number }).remainingUsdUnits).toBeLessThan(
+        item.price,
+      );
+      // A cap of 0 turns owner-funded orders off.
+      await setOwnerCap(0);
+      expect(await refusal(adminBuy(adminInput(item)))).toMatchObject({
+        code: 'OWNER_DAILY_CAP_EXCEEDED',
+        details: { remainingUsdUnits: 0 },
+      });
+    } finally {
+      await setOwnerCap(usd(10_000));
+    }
+  });
+
+  it("never takes a wallet below zero beside the customer's own purchase (AM1)", async () => {
+    const item = await product();
+    const buyer = await customer({ funds: item.price });
+    const results = await Promise.allSettled([
+      adminBuy(adminInput(item, { purpose: 'on_behalf', customerId: buyer })),
+      buy(request(buyer, item)),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(await balance(buyer)).toBe(0);
+  });
+
+  it('keeps the admin columns tied together and fixed (migrations 0051–0053)', async () => {
+    const item = await product();
+    const { order } = await adminBuy(adminInput(item));
+    for (const change of [
+      `customer_note = 'نص'`,
+      `admin_reason = 'Another reason'`,
+      `payer = 'customer'`,
+      `placed_by = 'customer'`,
+    ]) {
+      await expect(
+        pool.query(`update orders set ${change} where id = $1`, [order.id]),
+      ).rejects.toThrow();
+    }
+    // The checks, which the guard does not reach: an order inserted with admin columns that do not fit.
+    const buyer = await customer({ funds: usd(10) });
+    const bought = await buy(request(buyer, item));
+    const copy = (overrides: string) =>
+      pool.query(
+        `insert into orders select (jsonb_populate_record(o, jsonb_build_object(
+           'id', $2::uuid, 'number', 'VO-' || $3, 'idempotency_key', $4::uuid,
+           'purchase_journal_id', null, 'paid_at', null, 'status', 'awaiting_balance',
+           'reserved_at', now(), 'expires_at', now() + interval '1 hour') || ${overrides})).*
+         from orders o where o.id = $1`,
+        [bought.order.id, newId(), 'ZZZZZZ', newId()],
+      );
+    await expect(copy(`jsonb_build_object('customer_note', 'نص')`)).rejects.toThrow(
+      /orders_admin_check/,
+    );
+    await expect(
+      copy(`jsonb_build_object('placed_by', 'admin', 'admin_purpose', 'walk_in',
+        'admin_id', gen_random_uuid(), 'admin_reason', 'Reason here', 'payer', 'owner')`),
+    ).rejects.toThrow(/orders_admin_check/);
+    // A player check names exactly one requester.
+    await expect(
+      pool.query(
+        `insert into player_checks (id, game_id, fields_hash, result, supplier_id, expires_at)
+         values ($1, $2, $3, 'valid', $4, now() + interval '1 hour')`,
+        [newId(), item.game, 'a'.repeat(64), suppliers.fake],
+      ),
+    ).rejects.toThrow(/player_checks_requester_check/);
+    await pool.query(
+      `insert into player_checks (id, game_id, fields_hash, result, supplier_id, admin_id,
+         expires_at) values ($1, $2, $3, 'valid', $4, $5, now() + interval '1 hour')`,
+      [newId(), item.game, 'b'.repeat(64), suppliers.fake, adminId],
+    );
+  });
+});

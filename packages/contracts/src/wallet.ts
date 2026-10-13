@@ -32,6 +32,11 @@ export const LEDGER_ACCOUNT_KINDS = [
   'transfer_fees',
   /** S13: supplier balance changes that are not a delivery's cost (rule T5). */
   'supplier_corrections',
+  /**
+   * S16 AM2, ADR 0030: the goods the owner took at store prices (owner-funded admin orders), net
+   * of their refunds; never settled.
+   */
+  'owner_drawings',
 ] as const;
 
 export const ledgerAccountKindSchema = z

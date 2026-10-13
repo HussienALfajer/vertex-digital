@@ -50,7 +50,9 @@ export async function ticketOrderLink(
     .from(orders)
     .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
     .where(eq(orders.id, orderId));
-  return row ?? null;
+  // A walk-in order (S16 AP1) has no customer to open a ticket.
+  if (!row || row.customerId === null) return null;
+  return { ...row, customerId: row.customerId };
 }
 
 /** The deposit a ticket names, or null. */

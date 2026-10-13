@@ -36,19 +36,48 @@ export function notificationText(notification: CustomerNotification): string {
         product: notification.params.productNameAr,
         number: reference(notification.params.orderNumber),
       });
-    case 'order_partially_refunded':
+    case 'order_partially_refunded': {
+      const { params } = notification;
+      // S16 AP11: an order the store paid returns nothing to the wallet.
+      if (params.refundedUsdUnits === null) {
+        return t('notifications.events.order_partially_failed', {
+          product: params.productNameAr,
+          number: reference(params.orderNumber),
+        });
+      }
       return t('notifications.events.order_partially_refunded', {
-        product: notification.params.productNameAr,
-        number: reference(notification.params.orderNumber),
-        amount: ltr(formatUsd(notification.params.refundedUsdUnits)),
+        product: params.productNameAr,
+        number: reference(params.orderNumber),
+        amount: ltr(formatUsd(params.refundedUsdUnits)),
       });
-    case 'order_refunded':
+    }
+    case 'order_refunded': {
+      const { params } = notification;
+      if (params.refundedUsdUnits === null) {
+        return t('notifications.events.order_failed', {
+          product: params.productNameAr,
+          number: reference(params.orderNumber),
+          reason: t(`orders.refundReasons.${params.reason}`),
+        });
+      }
       return t('notifications.events.order_refunded', {
-        product: notification.params.productNameAr,
-        number: reference(notification.params.orderNumber),
-        amount: ltr(formatUsd(notification.params.refundedUsdUnits)),
-        reason: t(`orders.refundReasons.${notification.params.reason}`),
+        product: params.productNameAr,
+        number: reference(params.orderNumber),
+        amount: ltr(formatUsd(params.refundedUsdUnits)),
+        reason: t(`orders.refundReasons.${params.reason}`),
       });
+    }
+    // S16 AP11: the mode and the store's note, never its internal reason.
+    case 'order_placed_for_you': {
+      const { params } = notification;
+      const text = t(`notifications.events.order_placed_for_you_${params.purpose}`, {
+        product: params.productNameAr,
+        number: reference(params.orderNumber),
+      });
+      return params.message
+        ? `${text} ${t('notifications.events.order_placed_for_you_message', { message: params.message })}`
+        : text;
+    }
     case 'order_delayed':
       return t('notifications.events.order_delayed', {
         product: notification.params.productNameAr,

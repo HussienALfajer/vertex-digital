@@ -67,7 +67,14 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 /** R1 (rule RP3): by day, as the dashboard counts, with the daily lines above the table. */
 function SalesView({ report }: { report: SalesReport }) {
   const { t } = useTranslation();
-  if (report.totals.delivered === 0) return <Empty />;
+  if (report.totals.delivered === 0) {
+    return (
+      <>
+        <Empty />
+        <OwnerFunded figures={report.ownerFunded} />
+      </>
+    );
+  }
   const columns: Column<SalesReport['rows'][number]>[] = [
     {
       id: 'date',
@@ -109,11 +116,44 @@ function SalesView({ report }: { report: SalesReport }) {
         rowKey={(row) => row.date}
         label={t('reports.kinds.sales')}
       />
+      <OwnerFunded figures={report.ownerFunded} />
     </>
   );
 }
 
 type SalesFigures = SalesReport['totals'];
+
+/**
+ * S16 AP14: owner-funded orders, left out of the sales above, on their own line (value at store
+ * prices, cost, profit); nothing without any.
+ */
+function OwnerFunded({ figures }: { figures: SalesFigures }) {
+  const { t } = useTranslation();
+  if (figures.delivered === 0 && figures.salesUsdUnits === 0) return null;
+  return (
+    <Card className="gap-3">
+      <div className="flex flex-col gap-1">
+        <CardTitle>{t('reports.ownerFunded.title')}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t('reports.ownerFunded.help')}</p>
+      </div>
+      <dl className="grid gap-4 sm:grid-cols-4">
+        {(
+          [
+            ['delivered', String(figures.delivered)],
+            ['value', usd(figures.salesUsdUnits)],
+            ['cost', usd(figures.costUsdUnits)],
+            ['profit', usd(figures.profitUsdUnits)],
+          ] as const
+        ).map(([key, value]) => (
+          <div key={key} className="flex flex-col gap-1">
+            <dt className="text-sm text-muted-foreground">{t(`reports.ownerFunded.${key}`)}</dt>
+            <dd className="font-medium tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+}
 
 /** Sales, cost, profit and margin: R1 and R2 share them. */
 function moneyColumns<Row extends SalesFigures>(t: TFunction, totals: SalesFigures): Column<Row>[] {
@@ -156,7 +196,14 @@ function moneyColumns<Row extends SalesFigures>(t: TFunction, totals: SalesFigur
 /** R2 (rule RP4): by game, product or supplier, sorted by sales. */
 function BreakdownView({ report }: { report: BreakdownReport }) {
   const { t } = useTranslation();
-  if (report.rows.length === 0) return <Empty />;
+  if (report.rows.length === 0) {
+    return (
+      <>
+        <Empty />
+        <OwnerFunded figures={report.ownerFunded} />
+      </>
+    );
+  }
   type Row = BreakdownReport['rows'][number];
   const columns: Column<Row>[] = [
     {
@@ -232,12 +279,15 @@ function BreakdownView({ report }: { report: BreakdownReport }) {
     );
   }
   return (
-    <ReportTable
-      rows={report.rows}
-      columns={columns}
-      rowKey={(row) => row.key}
-      label={t('reports.kinds.breakdown')}
-    />
+    <>
+      <ReportTable
+        rows={report.rows}
+        columns={columns}
+        rowKey={(row) => row.key}
+        label={t('reports.kinds.breakdown')}
+      />
+      <OwnerFunded figures={report.ownerFunded} />
+    </>
   );
 }
 
@@ -606,6 +656,12 @@ function LedgerView({ report }: { report: LedgerReport }) {
           ]}
         />
       </Section>
+      <p className="text-sm text-muted-foreground">
+        {t('reports.ledger.ownerDrawings', {
+          start: usd(report.ownerDrawings.startUnits),
+          end: usd(report.ownerDrawings.endUnits),
+        })}
+      </p>
       <Section title={t('reports.ledger.daily')}>
         <ReportTable
           rows={report.rows}

@@ -8477,24 +8477,18 @@
         ]
       }
     },
-    "/api/admin/orders/{id}/share-links/{linkId}/revoke": {
+    "/api/admin/orders": {
       "post": {
-        "operationId": "OrdersAdminController_revokeShareLink",
+        "operationId": "OrdersAdminController_create",
         "parameters": [
           {
-            "name": "id",
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
             "required": true,
-            "in": "path",
             "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "linkId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -8503,14 +8497,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RevokeShareLink"
+                "$ref": "#/components/schemas/CreateAdminOrder"
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "The order with the link revoked",
+          "201": {
+            "description": "The paid order (200: a replay)",
             "content": {
               "application/json": {
                 "schema": {
@@ -8523,9 +8517,7 @@
         "tags": [
           "orders"
         ]
-      }
-    },
-    "/api/admin/orders": {
+      },
       "get": {
         "operationId": "OrdersAdminController_list",
         "parameters": [
@@ -8662,6 +8654,44 @@
               "format": "date-time",
               "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
             }
+          },
+          {
+            "name": "placedBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "customer",
+                "admin"
+              ]
+            }
+          },
+          {
+            "name": "payer",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "customer",
+                "owner"
+              ]
+            }
+          },
+          {
+            "name": "purpose",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "walk_in",
+                "on_behalf",
+                "gift",
+                "compensation"
+              ]
+            }
           }
         ],
         "responses": {
@@ -8671,6 +8701,86 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminOrderPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/admin/orders/purchase-context": {
+      "get": {
+        "operationId": "OrdersAdminController_purchaseContext",
+        "parameters": [
+          {
+            "name": "customerId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The customer's wallet and caps, the owner cap today",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPurchaseContext"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/admin/orders/{id}/share-links/{linkId}/revoke": {
+      "post": {
+        "operationId": "OrdersAdminController_revokeShareLink",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "linkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeShareLink"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The order with the link revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOrder"
                 }
               }
             }
@@ -9236,6 +9346,37 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminRevealedCode"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/admin/player-checks": {
+      "post": {
+        "operationId": "PlayerChecksAdminController_check",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPlayerCheck"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The check, from the cache or a supplier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerCheck"
                 }
               }
             }
@@ -9844,6 +9985,7 @@
                     "maximum": 9007199254740991
                   },
                   "refundedUsdUnits": {
+                    "nullable": true,
                     "type": "integer",
                     "minimum": 0,
                     "exclusiveMinimum": true,
@@ -9910,6 +10052,7 @@
                     "type": "string"
                   },
                   "refundedUsdUnits": {
+                    "nullable": true,
                     "type": "integer",
                     "minimum": 0,
                     "exclusiveMinimum": true,
@@ -10251,6 +10394,76 @@
               "params"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "order_placed_for_you"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "orderId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "orderNumber": {
+                    "type": "string"
+                  },
+                  "productNameAr": {
+                    "type": "string"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "on_behalf",
+                      "gift",
+                      "compensation"
+                    ]
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "orderId",
+                  "orderNumber",
+                  "productNameAr",
+                  "purpose"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -10340,7 +10553,8 @@
               "order_paid",
               "order_cancelled",
               "checkout_finished",
-              "ticket_replied"
+              "ticket_replied",
+              "order_placed_for_you"
             ]
           },
           "push": {
@@ -10360,7 +10574,8 @@
               "order_paid",
               "order_cancelled",
               "checkout_finished",
-              "ticket_replied"
+              "ticket_replied",
+              "order_placed_for_you"
             ]
           }
         },
@@ -10424,7 +10639,8 @@
           "order_paid",
           "order_cancelled",
           "checkout_finished",
-          "ticket_replied"
+          "ticket_replied",
+          "order_placed_for_you"
         ]
       },
       "PushConfig": {
@@ -12499,7 +12715,8 @@
           "deposit_rounding",
           "outside_funds",
           "transfer_fees",
-          "supplier_corrections"
+          "supplier_corrections",
+          "owner_drawings"
         ]
       },
       "Currency": {
@@ -17708,6 +17925,43 @@
               "marginPercent"
             ],
             "additionalProperties": false
+          },
+          "ownerFunded": {
+            "type": "object",
+            "properties": {
+              "delivered": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "salesUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "profitUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "marginPercent": {
+                "nullable": true,
+                "type": "number"
+              }
+            },
+            "required": [
+              "delivered",
+              "salesUsdUnits",
+              "costUsdUnits",
+              "profitUsdUnits",
+              "marginPercent"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -17715,7 +17969,8 @@
           "to",
           "generatedAt",
           "rows",
-          "totals"
+          "totals",
+          "ownerFunded"
         ],
         "additionalProperties": false
       },
@@ -17895,6 +18150,43 @@
               "failureRatePercent"
             ],
             "additionalProperties": false
+          },
+          "ownerFunded": {
+            "type": "object",
+            "properties": {
+              "delivered": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "salesUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "profitUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "marginPercent": {
+                "nullable": true,
+                "type": "number"
+              }
+            },
+            "required": [
+              "delivered",
+              "salesUsdUnits",
+              "costUsdUnits",
+              "profitUsdUnits",
+              "marginPercent"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -17903,7 +18195,8 @@
           "generatedAt",
           "by",
           "rows",
-          "totals"
+          "totals",
+          "ownerFunded"
         ],
         "additionalProperties": false
       },
@@ -18443,6 +18736,26 @@
               ],
               "additionalProperties": false
             }
+          },
+          "ownerDrawings": {
+            "type": "object",
+            "properties": {
+              "startUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "endUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "startUnits",
+              "endUnits"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -18451,7 +18764,8 @@
           "generatedAt",
           "rows",
           "totals",
-          "places"
+          "places",
+          "ownerDrawings"
         ],
         "additionalProperties": false
       },
@@ -18470,7 +18784,9 @@
           "treasury_transfer",
           "transfer_fee",
           "supplier_correction",
-          "rounding_gain"
+          "rounding_gain",
+          "owner_drawing",
+          "owner_drawing_refund"
         ]
       },
       "Storefront": {
@@ -23744,12 +24060,14 @@
             "maximum": 9007199254740991
           },
           "unitPriceUsdUnits": {
+            "nullable": true,
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
             "maximum": 9007199254740991
           },
           "totalUsdUnits": {
+            "nullable": true,
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
@@ -23762,6 +24080,7 @@
             "maximum": 9007199254740991
           },
           "refundedUsdUnits": {
+            "nullable": true,
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
@@ -23773,6 +24092,19 @@
                 "$ref": "#/components/schemas/RefundReason"
               }
             ]
+          },
+          "placedByStore": {
+            "nullable": true,
+            "type": "string",
+            "enum": [
+              "on_behalf",
+              "gift",
+              "compensation"
+            ]
+          },
+          "customerNote": {
+            "nullable": true,
+            "type": "string"
           },
           "timeline": {
             "type": "array",
@@ -23893,6 +24225,8 @@
           "totalSypUnits",
           "refundedUsdUnits",
           "refundReason",
+          "placedByStore",
+          "customerNote",
           "timeline",
           "codes",
           "expiresAt",
@@ -24296,6 +24630,7 @@
             "maximum": 9007199254740991
           },
           "totalUsdUnits": {
+            "nullable": true,
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
@@ -24306,6 +24641,19 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "placedByStore": {
+            "nullable": true,
+            "type": "string",
+            "enum": [
+              "on_behalf",
+              "gift",
+              "compensation"
+            ]
+          },
+          "customerNote": {
+            "nullable": true,
+            "type": "string"
           },
           "expiresAt": {
             "nullable": true,
@@ -24340,6 +24688,8 @@
           "quantity",
           "totalUsdUnits",
           "totalSypUnits",
+          "placedByStore",
+          "customerNote",
           "expiresAt",
           "checkoutId",
           "isGift",
@@ -24589,12 +24939,14 @@
             "maximum": 9007199254740991
           },
           "unitPriceUsdUnits": {
+            "nullable": true,
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
             "maximum": 9007199254740991
           },
           "totalUsdUnits": {
+            "nullable": true,
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
@@ -24607,6 +24959,7 @@
             "maximum": 9007199254740991
           },
           "refundedUsdUnits": {
+            "nullable": true,
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
@@ -24618,6 +24971,19 @@
                 "$ref": "#/components/schemas/RefundReason"
               }
             ]
+          },
+          "placedByStore": {
+            "nullable": true,
+            "type": "string",
+            "enum": [
+              "on_behalf",
+              "gift",
+              "compensation"
+            ]
+          },
+          "customerNote": {
+            "nullable": true,
+            "type": "string"
           },
           "timeline": {
             "type": "array",
@@ -24730,6 +25096,8 @@
           "totalSypUnits",
           "refundedUsdUnits",
           "refundReason",
+          "placedByStore",
+          "customerNote",
           "timeline",
           "codes",
           "expiresAt",
@@ -24780,18 +25148,71 @@
         ],
         "additionalProperties": false
       },
-      "RevokeShareLink": {
+      "CreateAdminOrder": {
         "type": "object",
         "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "fields": {
+            "default": {},
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "expectedUnitPriceUsdUnits": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "confirmPlayer": {
+            "default": false,
+            "type": "boolean"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/AdminOrderPurpose"
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
           "reason": {
             "type": "string",
             "minLength": 5,
             "maxLength": 500,
             "pattern": "^[^\\p{Cc}]+$"
+          },
+          "customerNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
           }
         },
         "required": [
+          "productId",
+          "quantity",
+          "expectedUnitPriceUsdUnits",
+          "purpose",
           "reason"
+        ]
+      },
+      "AdminOrderPurpose": {
+        "type": "string",
+        "enum": [
+          "walk_in",
+          "on_behalf",
+          "gift",
+          "compensation"
         ]
       },
       "AdminOrder": {
@@ -24809,6 +25230,7 @@
             "$ref": "#/components/schemas/OrderStatus"
           },
           "customer": {
+            "nullable": true,
             "type": "object",
             "properties": {
               "id": {
@@ -24837,6 +25259,28 @@
               "marks"
             ],
             "additionalProperties": false
+          },
+          "placedBy": {
+            "$ref": "#/components/schemas/OrderPlacer"
+          },
+          "payer": {
+            "$ref": "#/components/schemas/OrderPayer"
+          },
+          "purpose": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminOrderPurpose"
+              }
+            ]
+          },
+          "adminReason": {
+            "nullable": true,
+            "type": "string"
+          },
+          "customerNote": {
+            "nullable": true,
+            "type": "string"
           },
           "product": {
             "type": "object",
@@ -25218,6 +25662,11 @@
           "number",
           "status",
           "customer",
+          "placedBy",
+          "payer",
+          "purpose",
+          "adminReason",
+          "customerNote",
           "product",
           "game",
           "fields",
@@ -25250,6 +25699,20 @@
           "shareLinks"
         ],
         "additionalProperties": false
+      },
+      "OrderPlacer": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "admin"
+        ]
+      },
+      "OrderPayer": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "owner"
+        ]
       },
       "PlayerCheckState": {
         "type": "string",
@@ -25763,6 +26226,154 @@
           "admin"
         ]
       },
+      "AdminPurchaseContextQuery": {
+        "type": "object",
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        }
+      },
+      "AdminPurchaseContext": {
+        "type": "object",
+        "properties": {
+          "customer": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "isTest": {
+                "type": "boolean"
+              },
+              "emailVerified": {
+                "type": "boolean"
+              },
+              "frozen": {
+                "type": "boolean"
+              },
+              "balanceUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "purchaseCapLeftUsdUnits": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "savedPlayers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "gameId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "fields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "playerName": {
+                      "nullable": true,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "gameId",
+                    "label",
+                    "fields",
+                    "playerName"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "isTest",
+              "emailVerified",
+              "frozen",
+              "balanceUsdUnits",
+              "purchaseCapLeftUsdUnits",
+              "savedPlayers"
+            ],
+            "additionalProperties": false
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "capUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "usedTodayUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "remainingUsdUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "capUsdUnits",
+              "usedTodayUsdUnits",
+              "remainingUsdUnits"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "customer",
+          "owner"
+        ],
+        "additionalProperties": false
+      },
+      "RevokeShareLink": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500,
+            "pattern": "^[^\\p{Cc}]+$"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
       "AdminOrderListQuery": {
         "type": "object",
         "properties": {
@@ -25831,6 +26442,27 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "placedBy": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderPlacer"
+              }
+            ]
+          },
+          "payer": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderPayer"
+              }
+            ]
+          },
+          "purpose": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminOrderPurpose"
+              }
+            ]
           }
         }
       },
@@ -25893,6 +26525,7 @@
             "$ref": "#/components/schemas/OrderStatus"
           },
           "customer": {
+            "nullable": true,
             "type": "object",
             "properties": {
               "id": {
@@ -25917,6 +26550,20 @@
               "isTest"
             ],
             "additionalProperties": false
+          },
+          "placedBy": {
+            "$ref": "#/components/schemas/OrderPlacer"
+          },
+          "payer": {
+            "$ref": "#/components/schemas/OrderPayer"
+          },
+          "purpose": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminOrderPurpose"
+              }
+            ]
           },
           "product": {
             "type": "object",
@@ -26002,6 +26649,9 @@
           "number",
           "status",
           "customer",
+          "placedBy",
+          "payer",
+          "purpose",
           "product",
           "game",
           "quantity",
@@ -26248,7 +26898,16 @@
             "type": "boolean"
           },
           "customerEmail": {
+            "nullable": true,
             "type": "string"
+          },
+          "purpose": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminOrderPurpose"
+              }
+            ]
           },
           "attempt": {
             "nullable": true,
@@ -26312,6 +26971,7 @@
           "totalUsdUnits",
           "isTest",
           "customerEmail",
+          "purpose",
           "attempt",
           "paidAt",
           "sentAt",
@@ -26363,6 +27023,11 @@
             "type": "integer",
             "minimum": 5,
             "maximum": 240
+          },
+          "ownerDailyCapUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000000000
           }
         },
         "required": [
@@ -26373,7 +27038,8 @@
           "hardLimitMinutes",
           "reviewPollMinutes",
           "reviewPollHours",
-          "manualReminderMinutes"
+          "manualReminderMinutes",
+          "ownerDailyCapUsdUnits"
         ],
         "additionalProperties": false
       },
@@ -26682,6 +27348,13 @@
         ],
         "additionalProperties": false
       },
+      "AdminPlayerCheck": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PlayerCheckRequest"
+          }
+        ]
+      },
       "PublicShare": {
         "type": "object",
         "properties": {
@@ -26959,7 +27632,8 @@
           "validation_quota_reached",
           "ticket_opened",
           "ticket_reply",
-          "reconciliation_alert"
+          "reconciliation_alert",
+          "admin_order_placed"
         ]
       },
       "TelegramMessageStatus": {

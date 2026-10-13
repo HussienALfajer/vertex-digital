@@ -88,7 +88,7 @@ Business tables have `id` (UUIDv7), `created_at`, `updated_at`; append-only tabl
 ## States and rules
 
 ### The re-send safety net (Q18; owner, 2026-10-12)
-- RS1. A `placeOrder` call is a **re-send** when its attempt was sent before: S08 F3's re-send of an `unknown` attempt and F6's re-send of an attempt left `sending`. On a re-send, the engine applies any `failed_definitive` outcome (with or without `inputRejected`, whatever its code) as `unknown` with reason `resend_refused`, keeping the supplier's code in `supplier_code`. The attempt stays open, is re-sent on F7's schedule and, past the hard limit, waits for the admin (S08 F7, D2–D5). Only the first send of an attempt can fail it definitively. The rule is the engine's (`packages/db/src/orders` and the worker), for every supplier; adapters keep classifying answers as they do.
+- RS1. A `placeOrder` call is a **re-send** when its attempt was sent before: S08 F3's re-send of an `unknown` attempt and F6's re-send of an attempt left `sending`. On a re-send, the engine applies any `failed_definitive` outcome (with or without `inputRejected`, whatever its code) as `unknown` with reason `resend_refused`, keeping the supplier's code in `supplier_code`. The attempt stays open, is re-sent on F7's schedule and, past the hard limit, waits for the admin (S08 F7, D2–D5). Only the first send of an attempt can fail it definitively. The first send is marked durably before its call (`fulfilment_attempts.send_started_at`, set once): `orders.fulfil` marks it with the attempt; an admin's reroute (S11 RR3) leaves it unmarked and its poll marks it, committed, before sending, so a reroute refused on its first send fails. A send is a re-send when the attempt is `unknown`, already marked, or unmarked but not rerouted (an attempt an older release wrote during a deploy may have been sent). The rule is the engine's (`packages/db/src/orders` and the worker), for every supplier; adapters keep classifying answers as they do.
 - RS2. `supplier_calls` records the refusal as `refused` (the supplier is working), so health is unchanged.
 - RS3. The admin's order page marks such an attempt "رفض المورد إعادة الإرسال: <code>" and, for a supplier with the `statement` capability, lists the supplier's nearby orders (rule SF4) so the admin can confirm delivered or failed.
 - RS4. Q18 is resolved by RS1: routing real orders to WDGZone no longer waits for WDG's answer. The launch checklist's one small live order per supplier still applies, and the funded test of `docs/suppliers/wdgzone.md` open question 1 stays useful to learn how often RS1 will hold orders.
@@ -193,7 +193,7 @@ Admin (Arabic, RTL, light and dark). Store (phone width first, RTL, dark default
   1. Mode: four cards (زبون مباشر، بطلب زبون من محفظته، هدية لزبون، تعويض لزبون) with who pays.
   2. Customer (not for walk-in): search by name, email or phone; the card shows balance, frozen, today's cap left; frozen or unverified customers are shown disabled with the reason.
   3. Pack: game, then pack with price (USD and SYP), availability (paused packs selectable for owner-funded modes, marked "موقوفة: شراء تجريبي"), basis supplier and stock level; quantity.
-  4. Account fields (direct packs): the game's fields, the customer's saved IDs as chips, the player check with its answer and the "not found" confirmation.
+  4. Account fields: the game's fields for every pack (S08 O5, code packs too); for a direct pack also the customer's saved IDs as chips, the player check with its answer and the "not found" confirmation.
   5. Reason (internal, required), note to the customer (gift and compensation), a summary: total, who pays, the customer's balance after or today's owner total against the cap. "تأكيد الشراء" asks for re-authentication, then opens the order page.
   States: loading skeletons; errors in place with their translation (`PRICE_CHANGED` refreshes the price and asks again; `OWNER_DAILY_CAP_EXCEEDED` shows the amount left and a link to the policy).
 - **`/orders`, `/orders/$id`, `/orders/live`:** mode chips and filters; the order page shows placer, mode, reason, payer, customer note; for walk-in orders the code reveal hint (AP12); an attempt refused on re-send (RS3) shows the code and "طلبات المورد القريبة" (SF4) beside S08's decisions.
@@ -281,6 +281,16 @@ Admin (Arabic, RTL, light and dark). Store (phone width first, RTL, dark default
   - Import: all or nothing with per-row errors; `CATEGORY_LINKED` for ancestors and descendants; first prices written; link to existing products; "تفعيل الكل" activated and skipped lists.
   - Worker: low-stock levels alert once per level and clear on recovery; category read failure keeps the tree and the run goes on.
   - E2E and RTL screenshots (admin): `/orders/new` in each mode, the catalog tree, the import dialog, the link dialog, "كشف الحساب", "تفعيل الكل"; (store) an order placed by the store and a gift order on phone width.
+
+## Settled in implementation
+- PR 1 (2026-10-12):
+  - RS3's "طلبات المورد القريبة" (SF4) needs the `statement` capability, which arrives in PR 2; PR 1 shows the refused re-send's code on the attempt, and the admin settles it with S08's decisions (owner, 2026-10-12).
+  - `orders.idempotency_key` stays unique across every order (customer and admin keys are random UUIDs): a stronger form of the two partial indexes the Data section names, with no migration of the existing index. A customer's key never replays as an admin order and back (`IDEMPOTENCY_KEY_REUSED`).
+  - The note on `order_placed_for_you` is the parameter `message`: rule NT3 refuses parameter names with `note`, which stand for the admin's internal notes.
+  - The admin player check runs as a real customer's would (every route of the pack, the fake included where it is on); a pack the admin paused may be checked (AP5).
+  - Stock levels on packs (SF2) and the stock line of the purchase dialog arrive with PR 2's offer fields.
+  - Owner-funded orders stay out of the dashboard, R1, R2, R5 and the customer's daily cap; R6 shows `owner_drawing` and `owner_drawing_refund` lines and owner drawings at the start and end of the period.
+  - Owner acceptance (2026-10-13): the store's order page names a failed gift or compensation "تعذّر تنفيذ الطلب" without the wallet or an amount (AM3), as the notification does; switching report tabs never draws another report's data in a view.
 
 ## Implementation plan
 Owner preference: few PRs, each safe on its own.

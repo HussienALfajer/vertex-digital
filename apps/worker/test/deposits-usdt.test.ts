@@ -258,7 +258,10 @@ async function onChain(
     txid: hash,
     status: options.status ?? 'succeeded',
     final: options.final ?? true,
-    blockTime: options.blockTime,
+    // A second after now: the fake's own default (`new Date()`, whole milliseconds) can fall before
+    // a deposit created in the same millisecond (PostgreSQL keeps microseconds), and the scanner
+    // only matches deposits created before the transfer.
+    blockTime: options.blockTime ?? new Date(Date.now() + 1_000).toISOString(),
     transfers: transfers.map((transfer) => ({
       contract: transfer.contract ?? USDT_NETWORKS[method].contract,
       from: SENDER[method],

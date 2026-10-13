@@ -212,7 +212,7 @@ test.describe('the profile (CS3–CS5)', () => {
 
 test('the order page shows the customer marks (CS6)', async ({ page, admin }) => {
   const order = admin.orders.orders.find((row) => row.id === ORDER_IDS.held);
-  if (!order) throw new Error('No held order');
+  if (!order?.customer) throw new Error('No held order');
   order.customer = {
     ...order.customer,
     marks: { status: 'frozen', pinnedNote: 'لا توافق على إيداعاتها قبل الاتصال', signalsCount: 2 },

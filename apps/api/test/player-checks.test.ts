@@ -5,6 +5,7 @@ import { priceFromCost, QUEUES } from '@vertex-digital/contracts';
 import {
   auditEntries,
   catalogCategories,
+  damascusDate,
   ensureCustomerWallet,
   ensureSystemAccount,
   newId,
@@ -20,7 +21,7 @@ import {
   validationsToday,
 } from '@vertex-digital/db';
 import { FakeSupplierAdapter } from '@vertex-digital/suppliers';
-import { and, eq, inArray, like, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { parseEnv } from '../src/core/config/env.js';
 import { SupplierAdaptersService } from '../src/modules/suppliers/supplier-adapters.service.js';
@@ -465,7 +466,8 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
       const alerts = await test.db
         .select()
         .from(telegramMessages)
-        .where(like(telegramMessages.dedupeKey, 'validation-quota:fake:%'));
+        // Today's alert only: earlier days' alerts stay in the test database.
+        .where(eq(telegramMessages.dedupeKey, `validation-quota:fake:${damascusDate(new Date())}`));
       expect(alerts).toHaveLength(1);
       expect(alerts[0]?.kind).toBe('validation_quota_reached');
       // A cache hit still answers.

@@ -12,6 +12,7 @@ import {
   CircleSlashIcon,
   CircleXIcon,
   ClockAlertIcon,
+  GiftIcon,
   LifeBuoyIcon,
   type LucideIcon,
   PackageCheckIcon,
@@ -52,6 +53,7 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   ticket_replied: LifeBuoyIcon,
   order_cancelled: CircleSlashIcon,
   checkout_finished: ShoppingCartIcon,
+  order_placed_for_you: GiftIcon,
 };
 
 /** Marks everything up to the newest shown as read and tells the bell (rule NT5). */

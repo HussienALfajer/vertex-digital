@@ -50,6 +50,9 @@ interface CheckRoute {
 /** Thrown by a supplier call that took longer than rule PV6 allows. */
 class Timeout extends Error {}
 
+/** Who asks: a customer in the store, or the admin buying from the panel (S16 rule AP8). */
+type Requester = { kind: 'customer'; id: string } | { kind: 'admin'; id: string };
+
 /**
  * Player checks (S09 rules PV1–PV8): the supplier's answer for a player id, cached by an HMAC of
  * the fields (`player_checks`, no player id stored), limited per customer and address for the
@@ -71,31 +74,48 @@ export class PlayerChecksService {
   }
 
   /** `POST /api/player-checks`. */
-  async check(
-    customerId: string,
+  check(customerId: string, request: PlayerCheckRequest, meta: RequestMeta): Promise<PlayerCheck> {
+    return this.run({ kind: 'customer', id: customerId }, request, meta);
+  }
+
+  /**
+   * `POST /api/admin/player-checks` (S16 rule AP8): the same check and cache with the admin as
+   * requester, the supplier's daily quota counted, 30 supplier calls per 10 minutes; a pack the
+   * admin paused may be checked (an owner-funded order may buy it, AP5).
+   */
+  checkForAdmin(adminId: string, request: PlayerCheckRequest): Promise<PlayerCheck> {
+    return this.run({ kind: 'admin', id: adminId }, request, null);
+  }
+
+  private async run(
+    requester: Requester,
     request: PlayerCheckRequest,
-    meta: RequestMeta,
+    meta: RequestMeta | null,
   ): Promise<PlayerCheck> {
     // S12 CF2: a frozen customer spends no supplier quota.
-    await this.db
-      .transaction((tx) => lockActiveCustomer(tx, customerId))
-      .catch((error: unknown) => {
-        throw asCodedException(error);
-      });
+    if (requester.kind === 'customer') {
+      await this.db
+        .transaction((tx) => lockActiveCustomer(tx, requester.id))
+        .catch((error: unknown) => {
+          throw asCodedException(error);
+        });
+    }
     const state = (
       await productRoutingStates(this.db, [request.productId], routingContext(this.env))
     ).get(request.productId);
-    if (!state || state.availability === 'hidden' || state.availability === 'paused') {
+    const paused = state?.availability === 'paused' && requester.kind === 'customer';
+    if (!state || state.availability === 'hidden' || paused) {
       throw orderRefusals.notFound();
     }
-    if (state.availability !== 'available') {
+    if (state.availability !== 'available' && state.availability !== 'paused') {
       throw new CodedException(409, 'PRODUCT_UNAVAILABLE', 'The product cannot be bought now', {
         availability: state.availability,
       });
     }
     const fields = await this.parsedFields(state.gameId, request.fields ?? {});
     if (state.kind !== 'direct') return { result: 'not_supported' };
-    const isTest = await this.customers.isTestCustomer(customerId);
+    const isTest =
+      requester.kind === 'customer' && (await this.customers.isTestCustomer(requester.id));
     const routes = this.checkRoutes(state, isTest);
     if (routes.length === 0) return { result: 'not_supported' };
 
@@ -112,7 +132,7 @@ export class PlayerChecksService {
         await this.quotaReached(route, quota);
         continue;
       }
-      return this.ask(route, state.gameId, fieldsHash, fields, customerId, meta);
+      return this.ask(route, state.gameId, fieldsHash, fields, requester, meta);
     }
     return { result: 'unavailable', reason: 'quota' };
   }
@@ -223,17 +243,22 @@ export class PlayerChecksService {
     gameId: string,
     fieldsHash: string,
     fields: Record<string, string>,
-    customerId: string,
-    meta: RequestMeta,
+    requester: Requester,
+    meta: RequestMeta | null,
   ): Promise<PlayerCheck> {
     const adapter = await this.adapters.connect(route.supplier);
     if (!adapter?.capabilities.validatePlayer) return { result: 'not_supported' };
-    // Rule PV4: only a request that is about to call a supplier counts.
-    const allowed = await withinLimits(this.db, [
-      { key: `player-check:customer:${customerId}`, max: 10, windowMs: HOUR },
-      { key: `player-check:customer-day:${customerId}`, max: 30, windowMs: 24 * HOUR },
-      { key: `player-check:ip:${meta.ipAddress ?? 'unknown'}`, max: 30, windowMs: HOUR },
-    ]);
+    // Rule PV4: only a request that is about to call a supplier counts (S16 AP8: the admin's own).
+    const allowed = await withinLimits(
+      this.db,
+      requester.kind === 'admin'
+        ? [{ key: `player-check:admin:${requester.id}`, max: 30, windowMs: 10 * 60 * 1000 }]
+        : [
+            { key: `player-check:customer:${requester.id}`, max: 10, windowMs: HOUR },
+            { key: `player-check:customer-day:${requester.id}`, max: 30, windowMs: 24 * HOUR },
+            { key: `player-check:ip:${meta?.ipAddress ?? 'unknown'}`, max: 30, windowMs: HOUR },
+          ],
+    );
     if (!allowed) throw orderRefusals.rateLimited();
     const mapped = Object.fromEntries(
       Object.entries(route.fieldMap).map(([supplierField, key]) => [
@@ -274,7 +299,9 @@ export class PlayerChecksService {
         result,
         playerName,
         supplierId: route.supplier.id,
-        customerId,
+        ...(requester.kind === 'customer'
+          ? { customerId: requester.id }
+          : { adminId: requester.id }),
         expiresAt: new Date(Date.now() + PLAYER_CHECK_TTL_MS[result]),
       });
       return result === 'valid' ? { result, playerName } : { result };

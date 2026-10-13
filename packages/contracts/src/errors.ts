@@ -213,6 +213,8 @@ export const ERROR_CODES = [
   'PUSH_NOT_CONFIGURED',
   /** The endpoint is not `https:` on an allowed push service (S15 PS2). */
   'PUSH_ENDPOINT_REFUSED',
+  /** Beyond today's owner cap for owner-funded admin orders; `details.remainingUsdUnits` (S16 AP7). */
+  'OWNER_DAILY_CAP_EXCEEDED',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

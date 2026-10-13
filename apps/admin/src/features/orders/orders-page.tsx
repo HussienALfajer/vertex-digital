@@ -1,10 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
+  ADMIN_ORDER_PURPOSES,
   ADMIN_ORDER_TABS,
   type AdminOrderSummary,
   type AdminOrderTab,
   formatUsd,
+  ORDER_PAYERS,
+  ORDER_PLACERS,
   ORDER_STATUSES,
   SUPPLIER_CODES,
 } from '@vertex-digital/contracts';
@@ -29,14 +32,14 @@ import {
   TabsList,
   TabsTrigger,
 } from '@vertex-digital/ui';
-import { InboxIcon, SlidersHorizontalIcon, XIcon } from 'lucide-react';
+import { InboxIcon, ShoppingCartIcon, SlidersHorizontalIcon, XIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince } from '../../lib/format';
 import { ALL, FilterSelect } from './filter-select';
-import { STATUS_TONES } from './order-labels';
+import { PURPOSE_TONES, STATUS_TONES } from './order-labels';
 import { type OrderSearch, tabOf, withFilter } from './order-search';
 import { orderListQuery } from './orders.queries';
 import { shortCheckoutId } from './share-links';
@@ -63,10 +66,16 @@ export function OrdersPage({
         title={t('orders.title')}
         description={t('orders.subtitle')}
         actions={
-          <Button variant="outline" render={<Link to="/orders/policy" />}>
-            <SlidersHorizontalIcon />
-            {t('orders.policy.link')}
-          </Button>
+          <>
+            <Button variant="outline" render={<Link to="/orders/policy" />}>
+              <SlidersHorizontalIcon />
+              {t('orders.policy.link')}
+            </Button>
+            <Button render={<Link to="/orders/new" />}>
+              <ShoppingCartIcon />
+              {t('orders.buy.open')}
+            </Button>
+          </>
         }
       />
       <Tabs
@@ -131,6 +140,9 @@ function Filters({
   const [status, setStatus] = useState<string>(search.status ?? ALL);
   const [supplier, setSupplier] = useState<string>(search.supplier ?? ALL);
   const [test, setTest] = useState<string>(search.test ?? ALL);
+  const [placedBy, setPlacedBy] = useState<string>(search.placedBy ?? ALL);
+  const [payer, setPayer] = useState<string>(search.payer ?? ALL);
+  const [purpose, setPurpose] = useState<string>(search.purpose ?? ALL);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -147,6 +159,9 @@ function Filters({
         status: status === ALL ? undefined : (status as OrderSearch['status']),
         supplier: supplier === ALL ? undefined : (supplier as OrderSearch['supplier']),
         test: test === ALL ? undefined : (test as OrderSearch['test']),
+        placedBy: placedBy === ALL ? undefined : (placedBy as OrderSearch['placedBy']),
+        payer: payer === ALL ? undefined : (payer as OrderSearch['payer']),
+        purpose: purpose === ALL ? undefined : (purpose as OrderSearch['purpose']),
       }),
     );
   }
@@ -198,6 +213,33 @@ function Filters({
               { value: 'false', label: t('orders.filters.realOnly') },
               { value: 'true', label: t('orders.filters.testOnly') },
             ]}
+          />
+          <FilterSelect
+            label={t('orders.filters.placedBy')}
+            value={placedBy}
+            onChange={setPlacedBy}
+            options={ORDER_PLACERS.map((value) => ({
+              value,
+              label: t(`orders.placers.${value}`),
+            }))}
+          />
+          <FilterSelect
+            label={t('orders.filters.payer')}
+            value={payer}
+            onChange={setPayer}
+            options={ORDER_PAYERS.map((value) => ({
+              value,
+              label: t(`orders.payers.${value}`),
+            }))}
+          />
+          <FilterSelect
+            label={t('orders.filters.purpose')}
+            value={purpose}
+            onChange={setPurpose}
+            options={ADMIN_ORDER_PURPOSES.map((value) => ({
+              value,
+              label: t(`orders.purposes.${value}`),
+            }))}
           />
           <Field>
             <FieldLabel>{t('orders.filters.from')}</FieldLabel>
@@ -270,23 +312,32 @@ export function OrderTable({
             </TableCell>
             {withCustomer && (
               <TableCell className="min-w-44 whitespace-normal">
-                <span className="flex flex-col gap-1">
-                  <span className="flex items-center gap-2">
-                    {order.customer.name}
-                    {order.customer.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
+                {order.customer ? (
+                  <span className="flex flex-col gap-1">
+                    <span className="flex items-center gap-2">
+                      {order.customer.name}
+                      {order.customer.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
+                    </span>
+                    <span dir="ltr" className="text-end text-sm text-muted-foreground">
+                      {order.customer.email}
+                    </span>
                   </span>
-                  <span dir="ltr" className="text-end text-sm text-muted-foreground">
-                    {order.customer.email}
-                  </span>
-                </span>
+                ) : (
+                  <span className="text-muted-foreground">{t('orders.walkInCustomer')}</span>
+                )}
               </TableCell>
             )}
             <TableCell className="min-w-40 whitespace-normal">
               <span className="flex flex-col gap-1">
                 <bdi>{order.product.nameAr}</bdi>
                 <span className="text-sm text-muted-foreground">{order.game.nameAr}</span>
-                {(order.isGift || order.checkoutId) && (
+                {(order.isGift || order.checkoutId || order.purpose) && (
                   <span className="flex flex-wrap gap-1">
+                    {order.purpose && (
+                      <Badge tone={PURPOSE_TONES[order.purpose]}>
+                        {t(`orders.purposes.${order.purpose}`)}
+                      </Badge>
+                    )}
                     {order.isGift && <Badge tone="info">{t('orders.gift.badge')}</Badge>}
                     {order.checkoutId && (
                       <Link

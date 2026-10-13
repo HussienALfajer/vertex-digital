@@ -22,7 +22,7 @@ import {
   OrderActionButtons,
   OrderActionDialog,
 } from './order-actions';
-import { ATTEMPT_TONES, STATUS_TONES } from './order-labels';
+import { ATTEMPT_TONES, PURPOSE_TONES, STATUS_TONES } from './order-labels';
 import { orderQuery } from './orders.queries';
 
 /** The newest events the sheet shows (rule LR7). */
@@ -92,14 +92,17 @@ function SheetBody({ orderId }: { orderId: string }) {
           {data.number}
         </bdi>
         <Badge tone={STATUS_TONES[data.status]}>{t(`orders.statuses.${data.status}`)}</Badge>
-        {data.customer.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
+        {data.purpose && (
+          <Badge tone={PURPOSE_TONES[data.purpose]}>{t(`orders.purposes.${data.purpose}`)}</Badge>
+        )}
+        {data.customer?.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
       </div>
       <dl className="flex flex-col gap-2">
         <Row label={t('orders.live.sheet.product')}>
           {data.product.nameAr} · {data.game.nameAr}
         </Row>
         <Row label={t('orders.detail.customer')}>
-          <bdi dir="ltr">{data.customer.email}</bdi>
+          {data.customer ? <bdi dir="ltr">{data.customer.email}</bdi> : t('orders.walkInCustomer')}
         </Row>
         <Row label={t('orders.detail.units')}>
           {t('orders.detail.unitsValue', {

@@ -123,10 +123,14 @@ export async function routingNow(
   return (await productRoutingStates(tx, [productId], { now, fakeEnabled })).get(productId);
 }
 
-/** The product's availability for this customer (S08 rule O3: test routes for test customers). */
-export function availabilityNow(usable: ProductRoutingState, isTest: boolean) {
+/**
+ * The product's availability for this customer (S08 rule O3: test routes for test customers).
+ * S16 rule AP5: an owner-funded admin order (`allowPaused`) may buy a pack the admin paused, by
+ * its price and routes as if it were active.
+ */
+export function availabilityNow(usable: ProductRoutingState, isTest: boolean, allowPaused = false) {
   const current = usable.current;
-  return usable.availability === 'hidden' || usable.availability === 'paused'
+  return usable.availability === 'hidden' || (usable.availability === 'paused' && !allowPaused)
     ? usable.availability
     : availabilityForCustomer(
         {
@@ -222,14 +226,18 @@ export interface PreparedLine {
 export async function prepareLine(
   tx: Transaction,
   context: Pick<OrderContext, 'now'>,
-  common: Pick<PurchaseCommon, 'fakeEnabled' | 'playerCheck'> & { isTest: boolean },
+  common: Pick<PurchaseCommon, 'fakeEnabled' | 'playerCheck'> & {
+    isTest: boolean;
+    /** S16 rule AP5: an owner-funded admin order may buy a paused pack. */
+    allowPaused?: boolean;
+  },
   line: LineInput,
   product: ProductRow,
 ): Promise<PreparedLine> {
   const usable = await routingNow(tx, product.id, context.now, common.fakeEnabled);
   if (!usable) throw new OrderError('NOT_FOUND', 'No such product');
   const current = usable.current;
-  const availability = availabilityNow(usable, common.isTest);
+  const availability = availabilityNow(usable, common.isTest, common.allowPaused);
   if (availability !== 'available' || !current) {
     throw new OrderError('PRODUCT_UNAVAILABLE', 'The product cannot be bought now', {
       availability,

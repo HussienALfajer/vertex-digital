@@ -338,7 +338,7 @@ export class CustomersMock {
     private readonly audit: (entry: AuditEntry) => void,
   ) {
     // The waiting ticket is about Sara's delivered order.
-    const delivered = this.orders().find((order) => order.customer.id === CUSTOMER_IDS.sara);
+    const delivered = this.orders().find((order) => order.customer?.id === CUSTOMER_IDS.sara);
     const waiting = this.tickets[0];
     if (waiting && delivered) waiting.orderId = delivered.id;
     this.history = [
@@ -508,7 +508,7 @@ export class CustomersMock {
     switch (query.kind) {
       case 'order': {
         const order = this.orders().find((item) => item.number === query.number);
-        return this.customers.filter((row) => row.id === order?.customer.id);
+        return this.customers.filter((row) => row.id === order?.customer?.id);
       }
       case 'ticket': {
         const ticket = this.tickets.find((item) => item.number === query.number);
@@ -737,7 +737,7 @@ export class CustomersMock {
       return error(409, 'CUSTOMER_STATE_INVALID', { status: 'archived' });
     }
     const ownOrder = this.orders().some(
-      (order) => order.id === input.orderId && order.customer.id === owner.id,
+      (order) => order.id === input.orderId && order.customer?.id === owner.id,
     );
     if (!ticketLinkValid(input) || (input.orderId && !ownOrder) || input.depositId) {
       return error(400, 'TICKET_LINK_INVALID');

@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { priceFromCost } from '@vertex-digital/contracts';
+import { MAX_QUANTITY_LIMIT, priceFromCost, TOP_CUSTOMERS_LIMIT } from '@vertex-digital/contracts';
 import {
   applyOutcome,
   auditEntries,
   catalogCategories,
+  catalogProducts,
   customers,
   damascusDate,
   ensureCustomerWallet,
@@ -48,6 +49,8 @@ const categories: string[] = [];
 const run = randomBytes(4).toString('hex');
 const usd = (dollars: number) => Math.round(dollars * 1_000_000);
 const RULE = { percentBp: 1000, fixedUsdUnits: 0, minMarginUsdUnits: usd(0.1) };
+/** The pack's units per order: the export test buys its way into R5's top customers in one order. */
+const MAX_UNITS = MAX_QUANTITY_LIMIT;
 const state = { fake: '', gameId: '', productId: '', routeId: '', offerId: '', price: 0, cost: 0 };
 const today = damascusDate(new Date());
 
@@ -90,15 +93,15 @@ async function buyer(options: { isTest?: boolean; name?: string } = {}) {
 
 type Buyer = Awaited<ReturnType<typeof buyer>>;
 
-/** Buys one unit, sends it to the fake supplier and applies its delivery, as the worker does. */
-async function delivered(who: Buyer) {
+/** Buys `quantity` units, sends them to the fake supplier and applies the delivery, as the worker does. */
+async function delivered(who: Buyer, quantity = 1) {
   const { id: orderId } = await json<{ id: string }>(
     await client.post('/api/orders', {
       cookie: who.cookie,
       headers: { 'idempotency-key': randomUUID() },
       body: {
         productId: state.productId,
-        quantity: 1,
+        quantity,
         fields: { player_id: '5123456789' },
         expectedUnitPriceUsdUnits: state.price,
         confirmPlayer: true,
@@ -117,7 +120,7 @@ async function delivered(who: Buyer) {
       supplierId: state.fake,
       offerId: state.offerId,
       supplierOfferId: 'o-test',
-      quantity: 1,
+      quantity,
       unitCostUsdUnits: state.cost,
       status: 'sending',
       candidates: [],
@@ -135,7 +138,7 @@ async function delivered(who: Buyer) {
         now: new Date(),
       },
       attemptId,
-      { status: 'delivered', quantity: 1 },
+      { status: 'delivered', quantity },
       { by: 'webhook' },
     ),
   );
@@ -244,6 +247,10 @@ beforeAll(async () => {
   );
   state.routeId = routed.routes[0]?.id as string;
   state.price = priceFromCost(state.cost, RULE);
+  await test.db
+    .update(catalogProducts)
+    .set({ maxQuantity: MAX_UNITS })
+    .where(eq(catalogProducts.id, product.id));
   await test.db.execute(sql`update catalog_games set status = 'active' where id = ${game.id}`);
 });
 
@@ -382,7 +389,17 @@ describe('Excel export (X1–X4)', () => {
   it('streams an audited right-to-left workbook, with text never read as a formula and no phone', async () => {
     const name = `=HYPERLINK("http://x.test","${run}")`;
     const customer = await buyer({ name });
-    for (let index = 0; index < 3; index += 1) await delivered(customer);
+    // R5 lists the top customers of the day: earlier runs' customers stay in the test database,
+    // so this one buys past the last of a full list (ties go to the older customer).
+    const { rows } = await json<{ rows: { salesUsdUnits: number }[] }>(
+      await adminGet(`/api/admin/reports/customers?${period}`),
+      200,
+    );
+    const last = rows.length < TOP_CUSTOMERS_LIMIT ? 0 : (rows.at(-1)?.salesUsdUnits ?? 0);
+    // One order of several units, not many orders: the purchase limits count orders.
+    const units = Math.max(3, Math.floor(last / state.price) + 1);
+    expect(units, 'R5 needs more than one order can buy').toBeLessThanOrEqual(MAX_UNITS);
+    await delivered(customer, units);
     const response = await adminGet(`/api/admin/reports/customers/export?${period}`);
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe(

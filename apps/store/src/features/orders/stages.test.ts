@@ -27,6 +27,24 @@ describe('order stages (rule O13)', () => {
       'تأخّر المورد، نتحقق منه وسنعلمك',
     );
   });
+
+  it('never says a store-paid order went back to the wallet (S16 rule AM3)', () => {
+    for (const placedByStore of ['gift', 'compensation'] as const) {
+      expect(
+        stageSentence({ stage: 'refunded', refundReason: 'routes_exhausted', placedByStore }),
+      ).toBe('تعذّر تنفيذ الطلب: لا يتوفّر مورد لهذه الباقة الآن');
+      expect(stageSentence({ stage: 'refunded', refundReason: null, placedByStore })).toBe(
+        'تعذّر تنفيذ الطلب',
+      );
+      expect(
+        stageSentence({ stage: 'partially_refunded', refundReason: null, placedByStore }),
+      ).not.toContain('محفظتك');
+    }
+    // Paid from the customer's wallet: the refund goes back to it.
+    expect(
+      stageSentence({ stage: 'refunded', refundReason: null, placedByStore: 'on_behalf' }),
+    ).toBe('أعدنا ثمن طلبك إلى محفظتك');
+  });
 });
 
 describe('timelineEntries (S09 rule LT1)', () => {

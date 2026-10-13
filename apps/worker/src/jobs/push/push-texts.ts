@@ -40,6 +40,12 @@ const deposit = (params: { depositId: string }) => ({
   tag: `deposit-${params.depositId}`,
 });
 
+const PLACED_FOR_YOU = {
+  on_behalf: 'أنشأ المتجر طلباً بطلبك',
+  gift: 'هدية من المتجر',
+  compensation: 'تعويض من المتجر',
+} as const;
+
 const RENDERERS: Renderers = {
   order_delivered: (params) => ({
     body: `تم تسليم طلبك ${params.orderNumber}: ${params.productNameAr}${
@@ -48,11 +54,23 @@ const RENDERERS: Renderers = {
     ...order(params),
   }),
   order_partially_refunded: (params) => ({
-    body: `سُلّم جزء من طلبك ${params.orderNumber} وأُعيد الباقي إلى رصيدك`,
+    body:
+      params.refundedUsdUnits === null
+        ? `سُلّم جزء من طلبك ${params.orderNumber} وتعذّر تنفيذ الباقي`
+        : `سُلّم جزء من طلبك ${params.orderNumber} وأُعيد الباقي إلى رصيدك`,
     ...order(params),
   }),
   order_refunded: (params) => ({
-    body: `لم نتمكن من تسليم طلبك ${params.orderNumber}، وأُعيد المبلغ إلى رصيدك`,
+    // S16 AP11: an order the store paid returns nothing to the wallet.
+    body:
+      params.refundedUsdUnits === null
+        ? `تعذّر تنفيذ الطلب ${params.orderNumber}`
+        : `لم نتمكن من تسليم طلبك ${params.orderNumber}، وأُعيد المبلغ إلى رصيدك`,
+    ...order(params),
+  }),
+  // S16 AP11: the order number and the pack's name only, never the store's note.
+  order_placed_for_you: (params) => ({
+    body: `${PLACED_FOR_YOU[params.purpose]} ${params.orderNumber}: ${params.productNameAr}`,
     ...order(params),
   }),
   order_cancelled: (params) => ({

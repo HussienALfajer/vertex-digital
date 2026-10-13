@@ -57,6 +57,11 @@ export interface PlaceOrderRequest {
   offerId: string;
   quantity: number;
   fields: OrderFields;
+  /**
+   * S16 rule RS1: the attempt was sent before. Adapters classify answers as usual; the engine
+   * treats a refusal of a re-send as unknown.
+   */
+  resend?: boolean;
 }
 
 /**

@@ -1,4 +1,5 @@
 import {
+  type AdminOrderPurpose,
   type DepositFlagCode,
   type DepositMethod,
   type DepositRejectReason,
@@ -332,6 +333,14 @@ const TICKET_CATEGORY_LABELS: Record<TicketCategory, string> = {
   other: 'أخرى',
 };
 
+/** S16 AP1: the four modes of a purchase from the panel. */
+const ADMIN_ORDER_PURPOSES_AR: Record<AdminOrderPurpose, string> = {
+  walk_in: 'زبون مباشر',
+  on_behalf: 'بطلب زبون من محفظته',
+  gift: 'هدية لزبون',
+  compensation: 'تعويض لزبون',
+};
+
 /** A duration in seconds or minutes, Latin digits: "45 ث"، "3 د". */
 function durationText(ms: number): string {
   const seconds = Math.round(ms / 1_000);
@@ -510,6 +519,11 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
     ...(summary.suppressedAlerts > 0
       ? [`تنبيهات حُجبت بحد الإرسال: ${summary.suppressedAlerts}`]
       : []),
+    ...(summary.ownerOrders
+      ? [
+          `طلبات من مال المالك اليوم: ${summary.ownerOrders.count} بقيمة ${formatUsd(summary.ownerOrders.usedUsdUnits)} من سقف ${formatUsd(summary.ownerOrders.capUsdUnits)}`,
+        ]
+      : []),
     reconciliationLine(summary.reconciliation),
   ].join('\n');
 }
@@ -685,6 +699,23 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
         text: [
           `⚠️ بلغت حصة التحقق اليومية لدى ${quota.supplierNameAr} (${quota.quota}). العملاء يؤكدون المعرّف بأنفسهم حتى منتصف الليل.`,
           `${links.admin}/suppliers/${quota.supplier}`,
+        ].join('\n'),
+      };
+    }
+    case 'admin_order_placed': {
+      // S16 AP13: never field values or codes.
+      const order = params as TelegramMessageParams<'admin_order_placed'>;
+      return {
+        text: [
+          `🛒 شراء من اللوحة ${order.orderNumber} · ${ADMIN_ORDER_PURPOSES_AR[order.purpose]}`,
+          `${order.gameNameAr} · ${order.productNameAr} × ${order.quantity} · ${formatUsd(order.totalUsdUnits)}`,
+          ...(order.owner
+            ? [
+                `مال المالك اليوم: ${formatUsd(order.owner.usedUsdUnits)} من ${formatUsd(order.owner.capUsdUnits)}`,
+              ]
+            : []),
+          'إن لم تفعل ذلك بنفسك فأوقف الشراء وغيّر كلمة المرور فوراً.',
+          `${links.admin}/orders/${order.orderId}`,
         ].join('\n'),
       };
     }

@@ -75,9 +75,10 @@ export function receiptPreview(
     stage: SHARE_STAGES[order.stage],
     paidAt: order.timeline.find((entry) => entry.step === 'paid')?.at ?? order.createdAt,
     finishedAt: finished ? (order.timeline.at(-1)?.at ?? null) : null,
-    price: showPrice
-      ? { totalUsdUnits: order.totalUsdUnits, refundedUsdUnits: order.refundedUsdUnits }
-      : null,
+    price:
+      showPrice && order.totalUsdUnits !== null && order.refundedUsdUnits !== null
+        ? { totalUsdUnits: order.totalUsdUnits, refundedUsdUnits: order.refundedUsdUnits }
+        : null,
     fields: order.fields
       .filter((field) => field.value)
       .map((field) => ({

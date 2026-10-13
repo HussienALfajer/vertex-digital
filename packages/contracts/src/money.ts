@@ -326,6 +326,7 @@ const FLIPPED_ACCOUNT_KINDS: ReadonlySet<LedgerAccountKind> = new Set<LedgerAcco
   'refunds',
   'adjustments',
   'transfer_fees',
+  'owner_drawings',
 ]);
 
 /** The amount the panel shows for an account's raw balance (rule LS2): held, spent or as stored. */

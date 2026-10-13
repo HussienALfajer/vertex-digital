@@ -18,6 +18,8 @@ const IDS = {
   delayed: id(4),
   reserved: id(5),
   cancelled: id(6),
+  onBehalf: id(7),
+  storeGift: id(8),
   other: id(9),
 };
 const CODE_ID = id(50);
@@ -36,6 +38,8 @@ function order(changes: Partial<Order> & { id: string }): Order {
   return {
     number: 'VO-7KQ2MX',
     stage: 'delivered',
+    placedByStore: null,
+    customerNote: null,
     product: { id: id(70), nameAr: '60 UC', kind: 'direct', regionAr: null, redemptionAr: null },
     game,
     fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب', value: '5123456789' }],
@@ -69,6 +73,24 @@ function order(changes: Partial<Order> & { id: string }): Order {
 
 const ORDERS: Record<Exclude<keyof typeof IDS, 'other'>, Order> = {
   topUp: order({ id: IDS.topUp }),
+  // S16 AP11: orders the store placed for the customer.
+  onBehalf: order({ id: IDS.onBehalf, number: 'VO-BHLF23', placedByStore: 'on_behalf' }),
+  storeGift: order({
+    id: IDS.storeGift,
+    number: 'VO-GFT234',
+    stage: 'processing',
+    deliveredQuantity: 0,
+    placedByStore: 'gift',
+    customerNote: 'عيد سعيد',
+    unitPriceUsdUnits: null,
+    totalUsdUnits: null,
+    totalSypUnits: null,
+    refundedUsdUnits: null,
+    timeline: [
+      { step: 'paid', at: '2026-10-09T10:00:00.000Z' },
+      { step: 'sent', at: '2026-10-09T10:00:01.000Z' },
+    ],
+  }),
   codes: order({
     id: IDS.codes,
     number: 'VO-CODE23',
@@ -153,6 +175,8 @@ const ORDERS: Record<Exclude<keyof typeof IDS, 'other'>, Order> = {
 
 const summary = (item: Order): OrderSummary => ({
   id: item.id,
+  placedByStore: item.placedByStore,
+  customerNote: item.customerNote,
   number: item.number,
   stage: item.stage,
   productNameAr: item.product.nameAr,
@@ -336,6 +360,27 @@ test.describe('orders', () => {
     await page.goto('/orders');
     await expect(page).toHaveURL(/\/sign-in\?next=%2Forders/);
   });
+
+  test('orders the store placed show their chip and note; a gift shows no price (S16 AP11)', async ({
+    page,
+    api,
+  }) => {
+    withOrders(api);
+    await page.goto('/orders');
+    const gift = page.getByRole('link', { name: /VO-GFT234/ });
+    await expect(gift).toContainText(o.placedByStore.gift);
+    await expect(gift).not.toContainText('$');
+    await expect(page.getByRole('link', { name: /VO-BHLF23/ })).toContainText('$0.99');
+    await gift.click();
+    await expect(page).toHaveURL(`/orders/${IDS.storeGift}`);
+    // The list stays mounted but hidden after a client navigation.
+    await expect(page.getByText(o.placedByStore.gift).filter({ visible: true })).toBeVisible();
+    await expect(page.getByText('عيد سعيد')).toBeVisible();
+    await expect(page.getByText(o.detail.total, { exact: true })).toHaveCount(0);
+    await page.goto(`/orders/${IDS.onBehalf}`);
+    await expect(page.getByText(o.placedByStore.on_behalf)).toBeVisible();
+    await expect(page.getByText('$0.99').first()).toBeVisible();
+  });
 });
 
 for (const theme of ['dark', 'light'] as const) {
@@ -361,6 +406,8 @@ for (const theme of ['dark', 'light'] as const) {
       ['delayed', IDS.delayed],
       ['reserved', IDS.reserved],
       ['cancelled', IDS.cancelled],
+      ['on-behalf', IDS.onBehalf],
+      ['store-gift', IDS.storeGift],
     ] as const) {
       await page.goto(`/orders/${orderId}`);
       await expect(page.getByRole('list', { name: o.detail.timeline })).toBeVisible();

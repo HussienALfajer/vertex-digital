@@ -35,6 +35,17 @@ export interface DepositCustomer {
   frozen: boolean;
 }
 
+/** A customer as the panel's purchase dialog shows them (S16). */
+export interface PurchaseCustomer {
+  id: string;
+  name: string;
+  email: string;
+  isTest: boolean;
+  emailVerified: boolean;
+  frozen: boolean;
+  archived: boolean;
+}
+
 /** Owns the customer Better Auth instance: its HTTP handler and session lookups. */
 @Injectable()
 export class AuthService {
@@ -86,6 +97,25 @@ export class AuthService {
       .from(customers)
       .where(eq(customers.id, id));
     return row ?? null;
+  }
+
+  /** A customer as the panel's purchase dialog checks them (S16 rule AP4), or null. */
+  async purchaseCustomer(id: string): Promise<PurchaseCustomer | null> {
+    const [row] = await this.db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        isTest: customers.isTest,
+        emailVerified: customers.emailVerified,
+        frozenAt: customers.frozenAt,
+        archivedAt: customers.archivedAt,
+      })
+      .from(customers)
+      .where(eq(customers.id, id));
+    if (!row) return null;
+    const { frozenAt, archivedAt, ...customer } = row;
+    return { ...customer, frozen: frozenAt !== null, archived: archivedAt !== null };
   }
 
   /** Customers by id for the deposit screens (S03). */
