@@ -295,6 +295,8 @@ test.describe('supplier catalog', () => {
     // Back on the order later: the old read is gone until the admin reads again.
     await page.getByRole('main').getByRole('link', { name: ar.orders.back }).click();
     await expect(page).toHaveURL(/\/orders$/);
+    await expect(page.getByRole('heading', { name: ar.orders.title, level: 1 })).toBeVisible();
+    await expect(page.getByText(ar.orders.nearby.title)).toBeHidden();
     await page.goBack();
     await expect(page.getByRole('button', { name: ar.orders.nearby.read })).toBeVisible();
     await expect(page.getByText('W-77')).toBeHidden();
