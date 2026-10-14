@@ -19,11 +19,12 @@ import {
   Input,
   PageHeader,
   Skeleton,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { orderPolicyQuery, useSetOrderPolicy } from './orders.queries';
 
@@ -99,6 +100,7 @@ function PolicyForm({ policy }: { policy: OrderPolicy }) {
       ) as Record<PolicyField, string>,
   );
   const [invalid, setInvalid] = useState<PolicyField[]>([]);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -115,7 +117,7 @@ function PolicyForm({ policy }: { policy: OrderPolicy }) {
     setInvalid([
       ...new Set((parsed.error?.issues ?? []).map((issue) => issue.path[0] as PolicyField)),
     ]);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await setPolicy.mutateAsync(parsed.data);
       setSaved(true);
@@ -125,7 +127,7 @@ function PolicyForm({ policy }: { policy: OrderPolicy }) {
   }
 
   return (
-    <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
+    <form ref={ref} className="flex flex-col gap-6" onSubmit={submit} noValidate>
       {SECTIONS.map((section) => (
         <Card key={section.title} className="gap-5">
           <div className="flex flex-col gap-1">
@@ -161,6 +163,7 @@ function PolicyForm({ policy }: { policy: OrderPolicy }) {
         </Card>
       ))}
       {failure && <FormAlert>{failure}</FormAlert>}
+      <InvalidAlert show={invalid.length > 0} />
       {saved && (
         <p role="status" className="text-sm font-medium text-status-success-foreground">
           {t('orders.policy.saved')}

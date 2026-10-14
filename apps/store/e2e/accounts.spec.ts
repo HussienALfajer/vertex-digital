@@ -118,6 +118,28 @@ test.describe('sign-up and the email code', () => {
     expect(api.last('POST /api/auth/sign-up/email')).toBeUndefined();
   });
 
+  // Launch hardening (2026-10-14): a refused submit focuses the first refused field.
+  test('a refused sign-up focuses the first refused field, with the alert by the button', async ({
+    page,
+    api,
+  }) => {
+    await page.goto('/sign-up');
+    await field(page, ar.fields.name).fill(PROFILE.name);
+    await field(page, ar.fields.email).fill('sara@');
+    await page.getByRole('button', { name: ar.signUp.submit }).click();
+    const email = field(page, ar.fields.email);
+    await expect(email).toBeFocused();
+    await expect(email).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('alert').filter({ hasText: ar.forms.invalid })).toBeVisible();
+    expect(api.last('POST /api/auth/sign-up/email')).toBeUndefined();
+
+    // The focus moves on a press only: typing in another field keeps it there.
+    const password = field(page, ar.fields.password);
+    await password.click();
+    await page.keyboard.type('x');
+    await expect(password).toBeFocused();
+  });
+
   test('a common password is refused before any request', async ({ page, api }) => {
     await page.goto('/sign-up');
     await signUp(page, '0944123456', 'PassWord1');
@@ -350,6 +372,20 @@ test.describe('account', () => {
     await expect(page.getByRole('link', { name: ar.header.signIn })).toBeVisible();
   });
 });
+
+// RTL screenshots of a refused sign-up (launch hardening, 2026-10-14), dark and light.
+for (const theme of ['dark', 'light'] as const) {
+  test(`refused sign-up screenshot, ${theme} theme`, async ({ page, api: _api }, testInfo) => {
+    if (theme === 'light') {
+      await page.addInitScript(() => localStorage.setItem('vertex-theme', 'light'));
+    }
+    await page.goto('/sign-up');
+    await page.getByRole('button', { name: ar.signUp.submit }).click();
+    await expect(field(page, ar.fields.name)).toBeFocused();
+    await expect(page.getByRole('alert').filter({ hasText: ar.forms.invalid })).toBeVisible();
+    await screenshot(page, testInfo, `sign-up-refused-${theme}`);
+  });
+}
 
 // RTL screenshots of every account screen, dark and light, at phone width and desktop.
 for (const theme of ['dark', 'light'] as const) {

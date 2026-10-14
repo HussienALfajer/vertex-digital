@@ -46,7 +46,7 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import { customerMarks } from '../customers/reads.js';
 import { newId } from '../id.js';
 import {
@@ -308,17 +308,18 @@ export async function customerOrder(
   if (!row) return null;
   const { order, product, game } = row;
   const store = placedByStore(order);
-  const [fields, statusEvents, codes, images, stats, shareLinks] = await Promise.all([
-    fieldsWithLabels(db, order),
-    db
-      .select({ status: orderEvents.toStatus, at: orderEvents.createdAt })
-      .from(orderEvents)
-      .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.kind, 'status')))
-      .orderBy(asc(orderEvents.createdAt), asc(orderEvents.id)),
-    orderCodeList(db, order.id),
-    covers(db, [game.coverFileId]),
-    productDeliveryStats(db, [product.id]),
-    liveShareLinks(db, order.id, storeUrl),
+  const [fields, statusEvents, codes, images, stats, shareLinks] = await readAll(db, [
+    () => fieldsWithLabels(db, order),
+    () =>
+      db
+        .select({ status: orderEvents.toStatus, at: orderEvents.createdAt })
+        .from(orderEvents)
+        .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.kind, 'status')))
+        .orderBy(asc(orderEvents.createdAt), asc(orderEvents.id)),
+    () => orderCodeList(db, order.id),
+    () => covers(db, [game.coverFileId]),
+    () => productDeliveryStats(db, [product.id]),
+    () => liveShareLinks(db, order.id, storeUrl),
   ]);
   return {
     id: order.id,
@@ -501,27 +502,29 @@ export async function adminOrderPage(
   query: AdminOrderListQuery,
 ): Promise<{ items: AdminOrderSummary[]; total: number }> {
   const where = adminFilters(query);
-  const [rows, [totalRow]] = await Promise.all([
-    db
-      .select({
-        order: orders,
-        customer: { id: customers.id, name: customers.name, email: customers.email },
-        product: { id: catalogProducts.id, nameAr: catalogProducts.nameAr },
-        game: { id: catalogGames.id, nameAr: catalogGames.nameAr },
-      })
-      .from(orders)
-      .leftJoin(customers, eq(customers.id, orders.customerId))
-      .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
-      .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
-      .where(where)
-      .orderBy(desc(orders.createdAt), desc(orders.id))
-      .limit(query.pageSize)
-      .offset((query.page - 1) * query.pageSize),
-    db
-      .select({ total: count() })
-      .from(orders)
-      .leftJoin(customers, eq(customers.id, orders.customerId))
-      .where(where),
+  const [rows, [totalRow]] = await readAll(db, [
+    () =>
+      db
+        .select({
+          order: orders,
+          customer: { id: customers.id, name: customers.name, email: customers.email },
+          product: { id: catalogProducts.id, nameAr: catalogProducts.nameAr },
+          game: { id: catalogGames.id, nameAr: catalogGames.nameAr },
+        })
+        .from(orders)
+        .leftJoin(customers, eq(customers.id, orders.customerId))
+        .innerJoin(catalogProducts, eq(catalogProducts.id, orders.productId))
+        .innerJoin(catalogGames, eq(catalogGames.id, orders.gameId))
+        .where(where)
+        .orderBy(desc(orders.createdAt), desc(orders.id))
+        .limit(query.pageSize)
+        .offset((query.page - 1) * query.pageSize),
+    () =>
+      db
+        .select({ total: count() })
+        .from(orders)
+        .leftJoin(customers, eq(customers.id, orders.customerId))
+        .where(where),
   ]);
   const ids = rows.map((row) => row.order.id);
   const latest =
@@ -610,70 +613,76 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
     .where(eq(orders.id, orderId));
   if (!row) return null;
   const { order } = row;
-  const [fields, attempts, events, codes, webhooks, checkout, shareLinks] = await Promise.all([
-    fieldsWithLabels(db, order),
-    db
-      .select({
-        attempt: fulfilmentAttempts,
-        supplierCode: suppliers.code,
-        supplierNameAr: suppliers.nameAr,
-        offerName: supplierOffers.name,
-      })
-      .from(fulfilmentAttempts)
-      .innerJoin(suppliers, eq(suppliers.id, fulfilmentAttempts.supplierId))
-      // S11: an `admin_fulfil` attempt has no offer.
-      .leftJoin(supplierOffers, eq(supplierOffers.id, fulfilmentAttempts.offerId))
-      .where(eq(fulfilmentAttempts.orderId, order.id))
-      .orderBy(desc(fulfilmentAttempts.createdAt), desc(fulfilmentAttempts.id)),
-    db
-      .select()
-      .from(orderEvents)
-      .where(eq(orderEvents.orderId, order.id))
-      .orderBy(asc(orderEvents.createdAt), asc(orderEvents.id)),
-    orderCodeList(db, order.id),
-    db
-      .select()
-      .from(supplierWebhookEvents)
-      .innerJoin(fulfilmentAttempts, eq(fulfilmentAttempts.id, supplierWebhookEvents.attemptId))
-      .where(eq(fulfilmentAttempts.orderId, order.id))
-      .orderBy(asc(supplierWebhookEvents.createdAt)),
-    order.checkoutId ? adminCheckout(db, order.checkoutId) : null,
-    db
-      .select()
-      .from(orderShareLinks)
-      .where(eq(orderShareLinks.orderId, order.id))
-      .orderBy(asc(orderShareLinks.createdAt)),
+  const [fields, attempts, events, codes, webhooks, checkout, shareLinks] = await readAll(db, [
+    () => fieldsWithLabels(db, order),
+    () =>
+      db
+        .select({
+          attempt: fulfilmentAttempts,
+          supplierCode: suppliers.code,
+          supplierNameAr: suppliers.nameAr,
+          offerName: supplierOffers.name,
+        })
+        .from(fulfilmentAttempts)
+        .innerJoin(suppliers, eq(suppliers.id, fulfilmentAttempts.supplierId))
+        // S11: an `admin_fulfil` attempt has no offer.
+        .leftJoin(supplierOffers, eq(supplierOffers.id, fulfilmentAttempts.offerId))
+        .where(eq(fulfilmentAttempts.orderId, order.id))
+        .orderBy(desc(fulfilmentAttempts.createdAt), desc(fulfilmentAttempts.id)),
+    () =>
+      db
+        .select()
+        .from(orderEvents)
+        .where(eq(orderEvents.orderId, order.id))
+        .orderBy(asc(orderEvents.createdAt), asc(orderEvents.id)),
+    () => orderCodeList(db, order.id),
+    () =>
+      db
+        .select()
+        .from(supplierWebhookEvents)
+        .innerJoin(fulfilmentAttempts, eq(fulfilmentAttempts.id, supplierWebhookEvents.attemptId))
+        .where(eq(fulfilmentAttempts.orderId, order.id))
+        .orderBy(asc(supplierWebhookEvents.createdAt)),
+    () => (order.checkoutId ? adminCheckout(db, order.checkoutId) : null),
+    () =>
+      db
+        .select()
+        .from(orderShareLinks)
+        .where(eq(orderShareLinks.orderId, order.id))
+        .orderBy(asc(orderShareLinks.createdAt)),
   ]);
   const journalIds = [
     ...(order.purchaseJournalId ? [order.purchaseJournalId] : []),
     ...(order.refundJournalId ? [order.refundJournalId] : []),
     ...attempts.flatMap(({ attempt }) => (attempt.costJournalId ? [attempt.costJournalId] : [])),
   ];
-  const [journals, reveals] = await Promise.all([
-    db
-      .select({
-        id: ledgerJournals.id,
-        kind: ledgerJournals.kind,
-        createdAt: ledgerJournals.createdAt,
-        amount: sql<string>`sum(${ledgerPostings.amountUnits}) filter (where ${ledgerPostings.amountUnits} > 0)`,
-      })
-      .from(ledgerJournals)
-      .innerJoin(ledgerPostings, eq(ledgerPostings.journalId, ledgerJournals.id))
-      .where(inArray(ledgerJournals.id, journalIds))
-      .groupBy(ledgerJournals.id)
-      .orderBy(asc(ledgerJournals.createdAt)),
-    codes.length === 0
-      ? []
-      : db
-          .select()
-          .from(orderCodeReveals)
-          .where(
-            inArray(
-              orderCodeReveals.codeId,
-              codes.map((code) => code.id),
-            ),
-          )
-          .orderBy(asc(orderCodeReveals.createdAt)),
+  const [journals, reveals] = await readAll(db, [
+    () =>
+      db
+        .select({
+          id: ledgerJournals.id,
+          kind: ledgerJournals.kind,
+          createdAt: ledgerJournals.createdAt,
+          amount: sql<string>`sum(${ledgerPostings.amountUnits}) filter (where ${ledgerPostings.amountUnits} > 0)`,
+        })
+        .from(ledgerJournals)
+        .innerJoin(ledgerPostings, eq(ledgerPostings.journalId, ledgerJournals.id))
+        .where(inArray(ledgerJournals.id, journalIds))
+        .groupBy(ledgerJournals.id)
+        .orderBy(asc(ledgerJournals.createdAt)),
+    () =>
+      codes.length === 0
+        ? []
+        : db
+            .select()
+            .from(orderCodeReveals)
+            .where(
+              inArray(
+                orderCodeReveals.codeId,
+                codes.map((code) => code.id),
+              ),
+            )
+            .orderBy(asc(orderCodeReveals.createdAt)),
   ]);
   const open = attempts.find(({ attempt }) => isOpenAttempt(attempt.status));
   return {
@@ -907,20 +916,25 @@ export async function customerSavedPlayers(
       desc(savedPlayers.id),
     );
   const gameIds = [...new Set(rows.map((row) => row.game.id))];
-  const [images, fields] = await Promise.all([
-    covers(
-      db,
-      rows.map((row) => row.game.coverFileId),
-    ),
-    gameIds.length === 0
-      ? []
-      : db
-          .select()
-          .from(catalogInputFields)
-          .where(
-            and(inArray(catalogInputFields.gameId, gameIds), isNull(catalogInputFields.archivedAt)),
-          )
-          .orderBy(asc(catalogInputFields.sortOrder)),
+  const [images, fields] = await readAll(db, [
+    () =>
+      covers(
+        db,
+        rows.map((row) => row.game.coverFileId),
+      ),
+    () =>
+      gameIds.length === 0
+        ? []
+        : db
+            .select()
+            .from(catalogInputFields)
+            .where(
+              and(
+                inArray(catalogInputFields.gameId, gameIds),
+                isNull(catalogInputFields.archivedAt),
+              ),
+            )
+            .orderBy(asc(catalogInputFields.sortOrder)),
   ]);
   return rows.map(({ saved, game, shown }) => {
     const rules = fields.filter((field) => field.gameId === game.id);

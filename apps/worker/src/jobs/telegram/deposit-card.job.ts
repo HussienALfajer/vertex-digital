@@ -15,6 +15,7 @@ import {
   depositReceipts,
   depositSettings,
   deposits,
+  readAll,
   storedFiles,
   type Transaction,
   telegramDepositCards,
@@ -236,31 +237,35 @@ export class DepositCardJob implements OnApplicationBootstrap {
     if (usdt && !outcome && (deposit.status !== 'submitted' || usdt.checkStatus !== 'review')) {
       return null;
     }
-    const [[customer], [credited], flags, [settings]] = await Promise.all([
-      db
-        .select({ name: customers.name, frozenAt: customers.frozenAt })
-        .from(customers)
-        .where(eq(customers.id, deposit.customerId)),
-      db
-        .select({ count: count() })
-        .from(deposits)
-        .where(
-          and(
-            eq(deposits.customerId, deposit.customerId),
-            eq(deposits.status, 'credited'),
-            ne(deposits.id, deposit.id),
+    const [[customer], [credited], flags, [settings]] = await readAll(db, [
+      () =>
+        db
+          .select({ name: customers.name, frozenAt: customers.frozenAt })
+          .from(customers)
+          .where(eq(customers.id, deposit.customerId)),
+      () =>
+        db
+          .select({ count: count() })
+          .from(deposits)
+          .where(
+            and(
+              eq(deposits.customerId, deposit.customerId),
+              eq(deposits.status, 'credited'),
+              ne(deposits.id, deposit.id),
+            ),
           ),
-        ),
-      db
-        .selectDistinct({ code: depositFlags.code })
-        .from(depositFlags)
-        .where(eq(depositFlags.depositId, deposit.id))
-        .orderBy(depositFlags.code),
-      db
-        .select({ limit: depositSettings.telegramApprovalMaxUsdUnits })
-        .from(depositSettings)
-        .orderBy(desc(depositSettings.createdAt), desc(depositSettings.id))
-        .limit(1),
+      () =>
+        db
+          .selectDistinct({ code: depositFlags.code })
+          .from(depositFlags)
+          .where(eq(depositFlags.depositId, deposit.id))
+          .orderBy(depositFlags.code),
+      () =>
+        db
+          .select({ limit: depositSettings.telegramApprovalMaxUsdUnits })
+          .from(depositSettings)
+          .orderBy(desc(depositSettings.createdAt), desc(depositSettings.id))
+          .limit(1),
     ]);
     const refusal = telegramApprovalRefusal({
       method: deposit.method,

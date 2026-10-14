@@ -11,6 +11,7 @@ import {
   FieldError,
   FieldLabel,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +28,7 @@ export function ExplainDialog({ result, onDone }: { result: OpenMismatch; onDone
   const { t } = useTranslation();
   const explain = useExplainResult();
   const [invalid, setInvalid] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -36,7 +38,7 @@ export function ExplainDialog({ result, onDone }: { result: OpenMismatch; onDone
       note: String(new FormData(event.currentTarget).get('note') ?? ''),
     });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await explain.mutateAsync({ id: result.id, body: parsed.data });
       onDone();
@@ -56,7 +58,7 @@ export function ExplainDialog({ result, onDone }: { result: OpenMismatch; onDone
           })}
         </DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t('reconciliation.explain.note')}</FieldLabel>
           <Textarea name="note" rows={3} maxLength={500} autoFocus />

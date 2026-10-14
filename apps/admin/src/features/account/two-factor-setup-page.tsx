@@ -9,6 +9,7 @@ import {
   FieldLabel,
   PasswordInput,
   toast,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { CheckIcon, CopyIcon, LogOutIcon } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -132,7 +133,7 @@ function PasswordStep({ onEnrolled }: { onEnrolled: (enrollment: Enrollment) => 
   const [password, setPassword] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
   const [pending, setPending] = useState(false);
-  const passwordInput = useRef<HTMLInputElement>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -143,14 +144,14 @@ function PasswordStep({ onEnrolled }: { onEnrolled: (enrollment: Enrollment) => 
     if (error || !data || !('totpURI' in data)) {
       const refused = passwordFailure(t, error);
       setFailure(refused);
-      if (refused.field) passwordInput.current?.focus();
+      if (refused.field) focusInvalid();
       return;
     }
     onEnrolled({ totpURI: data.totpURI, backupCodes: data.backupCodes });
   }
 
   return (
-    <form className="flex flex-col gap-5" onSubmit={submit}>
+    <form ref={ref} className="flex flex-col gap-5" onSubmit={submit}>
       <p className="text-muted-foreground">{t('twoFactorSetup.passwordIntro')}</p>
       <Field invalid={failure?.field}>
         <FieldLabel>{t('twoFactorSetup.password')}</FieldLabel>
@@ -159,7 +160,6 @@ function PasswordStep({ onEnrolled }: { onEnrolled: (enrollment: Enrollment) => 
           hideLabel={t('common.hidePassword')}
           autoComplete="current-password"
           autoFocus
-          ref={passwordInput}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />

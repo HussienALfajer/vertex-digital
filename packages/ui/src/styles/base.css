@@ -30,6 +30,12 @@
     outline-offset: 2px;
   }
 
+  /* A failed submit scrolls to the first invalid field (lib/focus-invalid.ts): clear of the sticky
+     headers of both apps when the field is taller than the screen and scrolled to its start. */
+  [data-slot="field"] {
+    scroll-margin-block: 6rem;
+  }
+
   ::selection {
     background-color: var(--color-gold-200);
     color: var(--color-green-950);

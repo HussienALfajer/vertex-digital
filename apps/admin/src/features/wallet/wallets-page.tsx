@@ -21,6 +21,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { SearchIcon, SearchXIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
@@ -148,18 +149,20 @@ function Stat({ label, value }: { label: string; value: string }) {
 function SearchForm({ q, onSearch }: { q?: string; onSearch: (q?: string) => void }) {
   const { t } = useTranslation();
   const [tooShort, setTooShort] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = String(new FormData(event.currentTarget).get('q') ?? '').trim();
     const short = value.length > 0 && value.length < MIN_SEARCH;
     setTooShort(short);
-    if (!short) onSearch(value || undefined);
+    if (short) return focusInvalid();
+    onSearch(value || undefined);
   }
 
   return (
     <search>
-      <form className="flex items-start gap-2" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex items-start gap-2" onSubmit={submit} noValidate>
         <Field invalid={tooShort} className="flex-1">
           <FieldLabel className="sr-only">{t('wallets.search.label')}</FieldLabel>
           <Input

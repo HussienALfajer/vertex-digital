@@ -14,6 +14,7 @@ import {
   type Database,
   findCustomer,
   queueTelegramMessage,
+  readAll,
   recordAudit,
   supportMessages,
   supportSettings,
@@ -112,27 +113,29 @@ export class SupportService {
       await this.lock(tx, customerId, idempotencyKey);
       const again = await this.replay(tx, customerId, idempotencyKey, input.body, null);
       if (again) return { id: again, created: false };
-      const [[open], [today]] = await Promise.all([
-        tx
-          .select({ count: count() })
-          .from(supportTickets)
-          .where(
-            and(
-              eq(supportTickets.customerId, customerId),
-              eq(supportTickets.openedBy, 'customer'),
-              ne(supportTickets.status, 'closed'),
+      const [[open], [today]] = await readAll(tx, [
+        () =>
+          tx
+            .select({ count: count() })
+            .from(supportTickets)
+            .where(
+              and(
+                eq(supportTickets.customerId, customerId),
+                eq(supportTickets.openedBy, 'customer'),
+                ne(supportTickets.status, 'closed'),
+              ),
             ),
-          ),
-        tx
-          .select({ count: count() })
-          .from(supportTickets)
-          .where(
-            and(
-              eq(supportTickets.customerId, customerId),
-              eq(supportTickets.openedBy, 'customer'),
-              gt(supportTickets.createdAt, sql`now() - interval '24 hours'`),
+        () =>
+          tx
+            .select({ count: count() })
+            .from(supportTickets)
+            .where(
+              and(
+                eq(supportTickets.customerId, customerId),
+                eq(supportTickets.openedBy, 'customer'),
+                gt(supportTickets.createdAt, sql`now() - interval '24 hours'`),
+              ),
             ),
-          ),
       ]);
       if ((open?.count ?? 0) >= TICKET_LIMITS.openPerCustomer) throw ticketRefusals.limit('open');
       if ((today?.count ?? 0) >= TICKET_LIMITS.createdPerDay) throw ticketRefusals.limit('daily');

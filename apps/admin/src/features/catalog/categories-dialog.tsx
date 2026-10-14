@@ -19,12 +19,13 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import {
@@ -181,19 +182,24 @@ function CategoryName({ category, editable }: { category: Category; editable: bo
   const rename = useRenameCategory();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsed = updateCategorySchema.safeParse({
       nameAr: new FormData(event.currentTarget).get('nameAr'),
     });
-    if (!parsed.success) return setError(t('catalog.categories.errors.name'));
+    if (!parsed.success) {
+      setError(t('catalog.categories.errors.name'));
+      return focusInvalid();
+    }
     try {
       await rename.mutateAsync({ id: category.id, nameAr: parsed.data.nameAr });
       setEditing(false);
       setError(null);
     } catch (failure) {
       setError(errorMessage(t, failure));
+      focusInvalid();
     }
   }
 
@@ -213,7 +219,7 @@ function CategoryName({ category, editable }: { category: Category; editable: bo
     );
   }
   return (
-    <form className="flex items-start gap-2" onSubmit={submit} noValidate>
+    <form ref={ref} className="flex items-start gap-2" onSubmit={submit} noValidate>
       <Field invalid={!!error}>
         <FieldLabel className="sr-only">{t('catalog.categories.name')}</FieldLabel>
         <Input name="nameAr" defaultValue={category.nameAr} maxLength={40} autoFocus />
@@ -233,6 +239,7 @@ function NewCategoryForm() {
   const { t } = useTranslation();
   const create = useCreateCategory();
   const [errors, setErrors] = useState<{ slug?: string; nameAr?: string }>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -250,7 +257,7 @@ function NewCategoryForm() {
       if (issue.path[0] === 'nameAr') found.nameAr = t('catalog.categories.errors.name');
     }
     setErrors(found);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await create.mutateAsync(parsed.data);
       form.reset();
@@ -258,12 +265,14 @@ function NewCategoryForm() {
       const code = error instanceof ApiError ? error.code : undefined;
       if (code === 'SLUG_TAKEN') setErrors({ slug: errorMessage(t, error) });
       else if (code === 'NAME_TAKEN') setErrors({ nameAr: errorMessage(t, error) });
-      else setFailure(errorMessage(t, error));
+      else return setFailure(errorMessage(t, error));
+      focusInvalid();
     }
   }
 
   return (
     <form
+      ref={ref}
       className="flex flex-col gap-4 rounded-lg bg-muted p-4"
       onSubmit={submit}
       noValidate
@@ -286,6 +295,7 @@ function NewCategoryForm() {
         </Field>
       </div>
       {failure && <FormAlert>{failure}</FormAlert>}
+      <InvalidAlert show={!!(errors.slug || errors.nameAr)} />
       <Button type="submit" className="self-start" disabled={create.isPending}>
         {t('catalog.categories.addSubmit')}
       </Button>

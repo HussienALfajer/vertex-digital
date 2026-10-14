@@ -33,11 +33,12 @@ import {
   SelectValue,
   Skeleton,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, SearchIcon, UserXIcon } from 'lucide-react';
 import { type FormEvent, type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
@@ -89,6 +90,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
   const [note, setNote] = useState('');
   const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   /** `OWNER_DAILY_CAP_EXCEEDED` links to the policy beside its message. */
   const [capReached, setCapReached] = useState(false);
   const keyFor = useIdempotencyKey();
@@ -150,7 +152,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
         next[key] ??= t(`orders.buy.errors.${key}`);
       }
       setErrors(next);
-      return;
+      return focusInvalid();
     }
     setErrors({});
     try {
@@ -180,6 +182,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
     }
     if (error.code === 'VALIDATION_FAILED' && details.fields) {
       setErrors({ fields: t('orders.buy.errors.fields') });
+      focusInvalid();
     }
     if (error.code === 'PLAYER_NOT_CONFIRMED') setCheck({ result: 'invalid' });
     return errorMessage(t, error);
@@ -197,7 +200,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
           </Button>
         }
       />
-      <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-6" onSubmit={submit} noValidate>
         <Step title={t('orders.buy.steps.mode')}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {ADMIN_ORDER_PURPOSES.map((item) => (
@@ -229,7 +232,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
         </Step>
 
         {shape?.hasCustomer && (
-          <Step title={t('orders.buy.steps.customer')}>
+          <Step title={t('orders.buy.steps.customer')} invalid={!!errors.customerId}>
             <CustomerPicker
               customerId={customerId}
               context={context.data?.customer ?? null}
@@ -279,6 +282,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
                 game={game.data}
                 ownerFunded={ownerFunded}
                 productId={productId}
+                invalid={!!errors.productId}
                 onPick={(id) => {
                   setProductId(id);
                   setQuantity('1');
@@ -312,6 +316,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
             <AccountFields
               game={game.data}
               values={fields}
+              invalid={!!errors.fields}
               // Saved IDs and the player check are a top-up's (S10 SP1, S16 AP8).
               saved={
                 product.kind === 'direct'
@@ -381,6 +386,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
         )}
 
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         {capReached && (
           <Button variant="link" className="self-start" render={<Link to="/orders/policy" />}>
             {t('orders.policy.link')}
@@ -396,9 +402,18 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
   );
 }
 
-function Step({ title, children }: { title: string; children: ReactNode }) {
+/** `invalid`: the step's own choice (a customer) is refused; a failed submit focuses it. */
+function Step({
+  title,
+  invalid,
+  children,
+}: {
+  title: string;
+  invalid?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <Card className="gap-4">
+    <Card className="gap-4" data-invalid={invalid ? '' : undefined}>
       <CardTitle>{title}</CardTitle>
       {children}
     </Card>
@@ -555,11 +570,13 @@ function Packs({
   game,
   ownerFunded,
   productId,
+  invalid,
   onPick,
 }: {
   game: GameDetail;
   ownerFunded: boolean;
   productId: string | null;
+  invalid: boolean;
   onPick: (id: string) => void;
 }) {
   const { t } = useTranslation();
@@ -568,7 +585,10 @@ function Packs({
     return <p className="text-sm text-muted-foreground">{t('orders.buy.noPacks')}</p>;
   }
   return (
-    <fieldset className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    <fieldset
+      className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
+      data-invalid={invalid ? '' : undefined}
+    >
       <legend className="sr-only">{t('orders.buy.pack')}</legend>
       {products.map((item) => {
         const choice = packChoice(item, ownerFunded);
@@ -624,11 +644,13 @@ function Packs({
 function AccountFields({
   game,
   values,
+  invalid,
   saved,
   onChange,
 }: {
   game: GameDetail;
   values: Record<string, string>;
+  invalid: boolean;
   saved: NonNullable<AdminPurchaseContext['customer']>['savedPlayers'];
   onChange: (values: Record<string, string>) => void;
 }) {
@@ -657,7 +679,7 @@ function AccountFields({
           ))}
         </div>
       )}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2" data-invalid={invalid ? '' : undefined}>
         {fields.map((field) => (
           <Field key={field.id}>
             <FieldLabel>{field.labelAr}</FieldLabel>

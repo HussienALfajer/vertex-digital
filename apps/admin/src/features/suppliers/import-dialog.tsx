@@ -27,12 +27,13 @@ import {
   SelectTrigger,
   SelectValue,
   Skeleton,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
 import { CircleCheckIcon, InfoIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { allGamesQuery, gameQuery } from '../catalog/catalog.queries';
@@ -77,6 +78,7 @@ export function ImportDialog({
   });
   const [refusals, setRefusals] = useState<RowRefusal[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [result, setResult] = useState<ImportResult | null>(null);
   const game = useQuery({ ...gameQuery(gameId ?? ''), enabled: gameId !== null });
   const kindUnknown = offers.some((offer) => offer.kind === null);
@@ -107,7 +109,7 @@ export function ImportDialog({
       if (parsed.error?.issues.some((issue) => issue.path[0] === 'fieldMap')) {
         setFailure(t('suppliers.import.errors.fieldMap'));
       }
-      return;
+      return focusInvalid();
     }
     try {
       setResult(await importOffers.mutateAsync(parsed.data));
@@ -115,8 +117,9 @@ export function ImportDialog({
     } catch (error) {
       const rows =
         error instanceof ApiError ? (error.details as { rows?: RowRefusal[] })?.rows : [];
-      if (rows?.length) setRefusals(rows);
-      else setFailure(errorMessage(t, error));
+      if (!rows?.length) return setFailure(errorMessage(t, error));
+      setRefusals(rows);
+      focusInvalid();
     }
   }
 
@@ -168,7 +171,7 @@ export function ImportDialog({
         <DialogTitle>{t('suppliers.import.title', { count: offers.length })}</DialogTitle>
         <DialogDescription>{t('suppliers.import.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field invalid={errors.game}>
             <FieldLabel>{t('suppliers.import.game')}</FieldLabel>
@@ -270,6 +273,9 @@ export function ImportDialog({
         </fieldset>
         {refusals.length > 0 && <FormAlert>{t('suppliers.import.refused')}</FormAlert>}
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert
+          show={!failure && (!!errors.game || !!errors.kind || errors.names.length > 0)}
+        />
         <DialogFooter>
           <Button type="submit" disabled={importOffers.isPending}>
             {importOffers.isPending

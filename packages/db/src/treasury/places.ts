@@ -7,7 +7,7 @@ import {
   type TreasuryPlace,
 } from '@vertex-digital/contracts';
 import { sql } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import { openingRecorded, placeBooks } from '../reconciliation/external.js';
 import { units } from '../reconciliation/types.js';
 
@@ -69,12 +69,13 @@ function proposedOpening(
 
 /** `GET /api/admin/treasury/places`. */
 export async function moneyPlaces(db: Executor): Promise<MoneyPlaces> {
-  const places = await Promise.all(
-    TREASURY_PLACES.map(async (place) => {
-      const [booksUnits, external, recorded] = await Promise.all([
-        placeBooks(db, place),
-        externalBalance(db, place),
-        openingRecorded(db, place),
+  const places = await readAll(
+    db,
+    TREASURY_PLACES.map((place) => async () => {
+      const [booksUnits, external, recorded] = await readAll(db, [
+        () => placeBooks(db, place),
+        () => externalBalance(db, place),
+        () => openingRecorded(db, place),
       ]);
       return {
         place,

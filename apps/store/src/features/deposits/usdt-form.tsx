@@ -11,9 +11,11 @@ import { Callout } from '@vertex-digital/ui/components/callout';
 import { Card } from '@vertex-digital/ui/components/card';
 import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { NetworkIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useRef, useState } from 'react';
+import { InvalidAlert } from '@/components/invalid-alert';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
 import {
@@ -43,6 +45,7 @@ export function UsdtForm({
   const router = useRouter();
   const [text, setText] = useState(() => prefillText(prefillUnits, options.limits?.minUnits));
   const [error, setError] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [busyAlternatives, setBusyAlternatives] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   // One `Idempotency-Key` per request body (rule U2, as S03 SC2).
@@ -57,13 +60,19 @@ export function UsdtForm({
     setBusyAlternatives([]);
   }
 
+  /** Every refusal here is about the amount: shown under it, with the focus moved there. */
+  function refuse(message: string | null) {
+    setError(message);
+    focusInvalid();
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setBusyAlternatives([]);
-    if (units === null) return setError(t('deposits.form.invalidUsd'));
+    if (units === null) return refuse(t('deposits.form.invalidUsd'));
     const breach = limits ? depositLimitBreach(limits, units) : null;
-    if (breach) return setError(limitText(breach));
+    if (breach) return refuse(limitText(breach));
     const body = { method, amountUnits: units };
     const sent = JSON.stringify(body);
     if (attempt.current?.body !== sent) attempt.current = { body: sent, key: crypto.randomUUID() };
@@ -84,7 +93,7 @@ export function UsdtForm({
         ),
       );
     }
-    setError(
+    refuse(
       result.reason === 'DEPOSIT_LIMIT_EXCEEDED'
         ? (limitText(result.details) ?? errorText(result.reason))
         : errorText(result.reason),
@@ -92,7 +101,7 @@ export function UsdtForm({
   }
 
   return (
-    <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
+    <form ref={ref} className="flex flex-col gap-6" onSubmit={submit} noValidate>
       <Card className="gap-5">
         <Callout
           tone="info"
@@ -157,6 +166,7 @@ export function UsdtForm({
         )}
         <p className="text-sm text-muted-foreground">{t('deposits.usdt.fees')}</p>
       </Card>
+      <InvalidAlert show={!!error} />
       <Button type="submit" size="xl" disabled={submitting}>
         {submitting ? t('deposits.form.submitting') : t('deposits.form.submit')}
       </Button>

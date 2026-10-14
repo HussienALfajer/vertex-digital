@@ -33,12 +33,13 @@ import {
   TableRow,
   ToggleGroup,
   ToggleGroupItem,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArchiveIcon, ArchiveRestoreIcon, MegaphoneIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { type FormEvent, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
 import { ScheduleFields } from './banner-dialog';
@@ -238,6 +239,7 @@ function AnnouncementDialog({
   const [tone, setTone] = useState<AnnouncementTone>(announcement?.tone ?? 'info');
   const [errors, setErrors] = useState<Partial<Record<AnnouncementField, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -260,7 +262,7 @@ function AnnouncementDialog({
       found[field] = t(`content.announcements.errors.${field}`);
     }
     setErrors(found);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await save.mutateAsync({ id: announcement?.id, body: parsed.data });
       onDone();
@@ -280,6 +282,7 @@ function AnnouncementDialog({
           ]),
         ),
       );
+      focusInvalid();
     }
   }
 
@@ -296,7 +299,7 @@ function AnnouncementDialog({
         </DialogTitle>
         <DialogDescription>{t('content.announcements.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={!!errors.text}>
           <FieldLabel>{t('content.announcements.text')}</FieldLabel>
           <Input
@@ -359,6 +362,7 @@ function AnnouncementDialog({
           </div>
         </StorePreview>
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" disabled={save.isPending}>
             {t('content.actions.save')}

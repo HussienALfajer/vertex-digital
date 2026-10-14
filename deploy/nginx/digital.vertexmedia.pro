@@ -209,6 +209,18 @@ server {
         access_log off;
     }
 
+    # The favicon (src/app/favicon.ico): browsers ask for it on their own, so it must never 404
+    # (a 404 repeated by a browser trips the server-wide nginx-4xx-flood jail). The store answers
+    # it with `max-age=0`; a day in the browser's cache is enough for a file that rarely changes.
+    location = /favicon.ico {
+        proxy_pass http://127.0.0.1:3061;
+        include snippets/vertexdigital-proxy.conf;
+        proxy_hide_header Cache-Control;
+        include snippets/vertexdigital-store-headers.conf;
+        add_header Cache-Control "public, max-age=86400" always;
+        access_log off;
+    }
+
     # Dotfiles and source maps are never served.
     location ~ /\. { return 404; }
     location ~ \.map$ { return 404; }

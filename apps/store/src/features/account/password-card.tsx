@@ -9,18 +9,21 @@ import {
   FieldLabel,
 } from '@vertex-digital/ui/components/field';
 import { PasswordInput } from '@vertex-digital/ui/components/password-input';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { type FormEvent, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
-import { currentPasswordError, focusFirst, newPasswordError } from '../auth/validation';
+import { currentPasswordError, newPasswordError } from '../auth/validation';
 import { changePassword } from './requests';
 
 /** Rule C11: the current password, then the new one; every other session is signed out. */
 export function PasswordCard({ onChanged }: { onChanged: () => void }) {
   const [errors, setErrors] = useState<{ currentPassword?: string; newPassword?: string }>({});
   const [failure, setFailure] = useState<Failure | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [changed, setChanged] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -38,8 +41,7 @@ export function PasswordCard({ onChanged }: { onChanged: () => void }) {
     setFailure(null);
     setChanged(false);
     if (found.currentPassword || found.newPassword) {
-      focusFirst(form, found);
-      return;
+      return focusInvalid();
     }
     setPending(true);
     const result = await changePassword({ currentPassword, newPassword });
@@ -54,7 +56,8 @@ export function PasswordCard({ onChanged }: { onChanged: () => void }) {
       setErrors({ currentPassword: errorText(result.reason) });
     } else if (result.reason === 'PASSWORD_TOO_COMMON') {
       setErrors({ newPassword: t('validation.passwordCommon') });
-    } else setFailure(result.reason);
+    } else return setFailure(result.reason);
+    focusInvalid();
   };
 
   return (
@@ -63,7 +66,7 @@ export function PasswordCard({ onChanged }: { onChanged: () => void }) {
         <CardTitle>{t('account.password.title')}</CardTitle>
         <CardDescription>{t('account.password.description')}</CardDescription>
       </CardHeader>
-      <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+      <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
         <Field invalid={!!errors.currentPassword}>
           <FieldLabel>{t('fields.currentPassword')}</FieldLabel>
           <PasswordInput
@@ -90,6 +93,7 @@ export function PasswordCard({ onChanged }: { onChanged: () => void }) {
           <FieldError match={!!errors.newPassword}>{errors.newPassword}</FieldError>
         </Field>
         {failure && <FormAlert>{errorText(failure)}</FormAlert>}
+        <InvalidAlert show={!!(errors.currentPassword || errors.newPassword)} />
         {changed && <FormAlert tone="success">{t('account.password.changed')}</FormAlert>}
         <Button type="submit" size="xl" className="self-start" disabled={pending}>
           {pending ? t('account.password.submitting') : t('account.password.submit')}

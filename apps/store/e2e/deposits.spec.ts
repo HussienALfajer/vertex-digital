@@ -247,6 +247,32 @@ test.describe('deposits', () => {
     await expect(page.getByLabel(ar.deposits.form.amountUsd)).toHaveValue('2');
   });
 
+  // Launch hardening (2026-10-14): a refusal, the browser's or the server's, focuses the amount.
+  test('a refused amount takes the focus, before sending and after the server refuses', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on('GET /api/deposits/sham-cash/options', 200, OPTIONS);
+    await page.goto('/wallet/deposit');
+    const submit = page.getByRole('button', { name: ar.deposits.form.submit });
+    const amount = page.getByLabel(ar.deposits.form.amountSyp);
+    await submit.click();
+    await expect(amount).toBeFocused();
+    await expect(amount).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('alert').filter({ hasText: ar.forms.invalid })).toBeVisible();
+    expect(api.last('POST /api/deposits/sham-cash')).toBeUndefined();
+
+    api.on('POST /api/deposits/sham-cash', 422, {
+      code: 'DEPOSIT_LIMIT_EXCEEDED',
+      details: { limit: 'daily', limitUnits: 100 * USD, remainingUnits: 5 * USD },
+    });
+    await amount.fill('2000');
+    await submit.focus();
+    await submit.click();
+    await expect(amount).toBeFocused();
+    expect(api.last('POST /api/deposits/sham-cash')).toBeDefined();
+  });
+
   test('limits, an open deposit and no method are handled before sending', async ({
     page,
     api,

@@ -41,9 +41,3 @@ export function nameError(name: string): string | undefined {
 export function codeError(code: string): string | undefined {
   return otpCodeSchema.safeParse(code).success ? undefined : t('validation.codeInvalid');
 }
-
-/** Moves the focus to the first refused field of a form, in the order of `names`. */
-export function focusFirst(form: HTMLFormElement, errors: Record<string, string | undefined>) {
-  const first = Object.keys(errors).find((name) => errors[name]);
-  if (first) form.querySelector<HTMLInputElement>(`[name="${first}"]`)?.focus();
-}

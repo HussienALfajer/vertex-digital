@@ -4,15 +4,17 @@ import { Button } from '@vertex-digital/ui/components/button';
 import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
 import { PasswordInput } from '@vertex-digital/ui/components/password-input';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
 import { CodeInput } from '../auth/code-input';
-import { codeError, currentPasswordError, emailError, focusFirst } from '../auth/validation';
+import { codeError, currentPasswordError, emailError } from '../auth/validation';
 import { SentTo } from '../auth/verify-email-panel';
 import { confirmEmailChange, requestEmailChange } from './requests';
 
@@ -63,6 +65,7 @@ function RequestStep({
   onUnauthorized: () => void;
 }) {
   const [errors, setErrors] = useState<{ newEmail?: string; password?: string }>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<Failure | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -76,20 +79,20 @@ function RequestStep({
     setErrors(found);
     setFailure(null);
     if (found.newEmail || found.password) {
-      focusFirst(form, found);
-      return;
+      return focusInvalid();
     }
     setPending(true);
     const result = await requestEmailChange({ newEmail, password });
     setPending(false);
     if (result.ok) return onSent(newEmail);
     if (result.reason === 'UNAUTHORIZED') return onUnauthorized();
-    if (result.reason === 'INVALID_PASSWORD') setErrors({ password: errorText(result.reason) });
-    else setFailure(result.reason);
+    if (result.reason !== 'INVALID_PASSWORD') return setFailure(result.reason);
+    setErrors({ password: errorText(result.reason) });
+    focusInvalid();
   };
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+    <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
       <Field invalid={!!errors.newEmail}>
         <FieldLabel>{t('fields.newEmail')}</FieldLabel>
         <Input
@@ -116,6 +119,7 @@ function RequestStep({
         <FieldError match={!!errors.password}>{errors.password}</FieldError>
       </Field>
       {failure && <FormAlert>{errorText(failure)}</FormAlert>}
+      <InvalidAlert show={!!(errors.newEmail || errors.password)} />
       <Button type="submit" size="xl" disabled={pending}>
         {pending ? t('changeEmail.sending') : t('changeEmail.send')}
       </Button>
@@ -137,6 +141,7 @@ function CodeStep({
 }) {
   const [code, setCode] = useState('');
   const [codeFailure, setCodeFailure] = useState<string | undefined>();
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<Failure | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -145,20 +150,21 @@ function CodeStep({
     const invalid = codeError(code);
     setCodeFailure(invalid);
     setFailure(null);
-    if (invalid) return;
+    if (invalid) return focusInvalid();
     setPending(true);
     const result = await confirmEmailChange({ newEmail, otp: code });
     setPending(false);
     if (result.ok) return onDone();
     if (result.reason === 'UNAUTHORIZED') return onUnauthorized();
-    if (result.reason === 'INVALID_OTP') setCodeFailure(errorText(result.reason));
-    else setFailure(result.reason);
+    if (result.reason !== 'INVALID_OTP') return setFailure(result.reason);
+    setCodeFailure(errorText(result.reason));
+    focusInvalid();
   };
 
   return (
     <div className="flex flex-col gap-5">
       <SentTo text={t('changeEmail.codeSubtitle')} email={newEmail} />
-      <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+      <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
         <CodeInput value={code} onValueChange={setCode} error={codeFailure} autoFocus />
         {failure && <FormAlert>{errorText(failure)}</FormAlert>}
         <Button type="submit" size="xl" disabled={pending}>

@@ -26,6 +26,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
   toast,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { DownloadIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
@@ -147,6 +148,7 @@ function PeriodPicker({
   const preset = presetOf(period, now);
   const [custom, setCustom] = useState(preset === null);
   const [invalid, setInvalid] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
   const items = [
     ...REPORT_PRESETS.map((item) => ({ value: item, label: t(`reports.presets.${item}`) })),
     { value: CUSTOM, label: t('reports.presets.custom') },
@@ -169,12 +171,14 @@ function PeriodPicker({
     const to = String(data.get('to') ?? '');
     const bad = !from || !to || reportPeriodError(from, to) !== null;
     setInvalid(bad);
-    if (!bad) onPeriod({ from, to });
+    if (bad) return focusInvalid();
+    onPeriod({ from, to });
   }
 
   return (
     <Card>
       <form
+        ref={ref}
         className="flex flex-wrap items-end gap-4"
         onSubmit={apply}
         noValidate

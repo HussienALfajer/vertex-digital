@@ -9,9 +9,11 @@ import {
 } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
 import { PasswordInput } from '@vertex-digital/ui/components/password-input';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
@@ -21,7 +23,7 @@ import { savePendingEmail } from './pending-email';
 import { DEFAULT_COUNTRY, toE164 } from './phone';
 import { PhoneField } from './phone-field';
 import { signUp } from './requests';
-import { emailError, focusFirst, nameError, newPasswordError } from './validation';
+import { emailError, nameError, newPasswordError } from './validation';
 
 type Fields = 'name' | 'email' | 'password' | 'phone';
 
@@ -37,6 +39,7 @@ export function SignUpForm({ onClosed }: { onClosed: () => void }) {
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<Fields, string>>>({});
   const [failure, setFailure] = useState<Failure | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -55,8 +58,7 @@ export function SignUpForm({ onClosed }: { onClosed: () => void }) {
     setErrors(found);
     setFailure(null);
     if (Object.values(found).some(Boolean) || !e164) {
-      focusFirst(form, found);
-      return;
+      return focusInvalid();
     }
     setPending(true);
     const result = await signUp({ name, email, password, phone: e164 });
@@ -69,13 +71,13 @@ export function SignUpForm({ onClosed }: { onClosed: () => void }) {
     if (result.reason === 'REGISTRATION_CLOSED') return onClosed();
     if (result.reason === 'PASSWORD_TOO_COMMON') {
       setErrors({ password: t('validation.passwordCommon') });
-      return;
+      return focusInvalid();
     }
     setFailure(result.reason);
   };
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+    <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
       <Field invalid={!!errors.name}>
         <FieldLabel>{t('fields.name')}</FieldLabel>
         <Input
@@ -120,6 +122,7 @@ export function SignUpForm({ onClosed }: { onClosed: () => void }) {
         error={errors.phone}
       />
       {failure && <FormAlert>{errorText(failure)}</FormAlert>}
+      <InvalidAlert show={Object.values(errors).some(Boolean)} />
       <Button type="submit" size="xl" disabled={pending}>
         {pending ? t('signUp.submitting') : t('signUp.submit')}
       </Button>

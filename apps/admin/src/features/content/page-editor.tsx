@@ -39,12 +39,13 @@ import {
   TabsTrigger,
   Textarea,
   toast,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, EyeIcon, HistoryIcon, SaveIcon, SendIcon } from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorCode, errorMessage } from '../../lib/errors';
 import { formatDate } from '../../lib/format';
 import {
@@ -151,6 +152,9 @@ function Editor({
   const [stale, setStale] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [view, setView] = useState<'edit' | 'preview'>('edit');
+  const { ref, focusInvalid } = useFocusInvalid();
+  /** A refused field sits in the form, which the preview tab hides on phones. */
+  const showInvalid = useCallback(() => focusInvalid(() => setView('edit')), [focusInvalid]);
   const deferredBody = useDeferredValue(body);
   const deferredTitle = useDeferredValue(title);
   const problems = parseRichText(deferredBody).problems;
@@ -172,10 +176,12 @@ function Editor({
       }
       const lines = refusedProblems(error, 'body');
       setServerProblems(lines);
-      if (refusedFields(error).has('title')) setTitleError(t('content.pages.errors.title'));
-      if (lines.length === 0) setFailure(errorMessage(t, error));
+      const title = refusedFields(error).has('title');
+      if (title) setTitleError(t('content.pages.errors.title'));
+      if (lines.length === 0 && !title) setFailure(errorMessage(t, error));
+      else showInvalid();
     },
-    [t],
+    [t, showInvalid],
   );
 
   const submit = useCallback(async () => {
@@ -184,7 +190,8 @@ function Editor({
     const parsed = savePageDraftSchema.safeParse({ title, body, revision: saved.revision });
     const titleIssue = parsed.error?.issues.some((issue) => issue.path[0] === 'title');
     setTitleError(titleIssue ? t('content.pages.errors.title') : null);
-    if (!parsed.success || save.isPending) return;
+    if (!parsed.success) return showInvalid();
+    if (save.isPending) return;
     try {
       const result = await save.mutateAsync(parsed.data);
       setSaved({ title: result.title, body: result.body, revision: result.revision });
@@ -192,7 +199,7 @@ function Editor({
     } catch (error) {
       refused(error);
     }
-  }, [title, body, saved.revision, save, refused, t]);
+  }, [title, body, saved.revision, save, refused, showInvalid, t]);
 
   // Ctrl+S (or ⌘S) saves the draft instead of the browser saving the page.
   useEffect(() => {
@@ -253,6 +260,7 @@ function Editor({
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <form
+          ref={ref}
           className={cn('flex flex-col gap-5', view === 'preview' && 'max-lg:hidden')}
           onSubmit={(event) => {
             event.preventDefault();
@@ -287,6 +295,7 @@ function Editor({
           <ProblemList problems={shownProblems} />
           <LinkWarnings source={deferredBody} />
           {failure && <FormAlert>{failure}</FormAlert>}
+          <InvalidAlert show={!!titleError || serverProblems.length > 0} />
         </form>
         <StorePreview className={cn(view === 'edit' && 'max-lg:hidden')}>
           <PagePreview title={deferredTitle} body={deferredBody} />
@@ -329,6 +338,7 @@ function Editor({
             if (lines.length > 0) {
               setPublishing(false);
               setServerProblems(lines);
+              showInvalid();
               return;
             }
             throw error;

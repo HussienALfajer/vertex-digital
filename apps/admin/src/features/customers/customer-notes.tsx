@@ -13,6 +13,7 @@ import {
   FieldError,
   FieldLabel,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArchiveIcon, NotebookPenIcon, PinIcon, PinOffIcon } from 'lucide-react';
 import { type FormEvent, useId, useState } from 'react';
@@ -87,13 +88,14 @@ function AddNote({ customerId }: { customerId: string }) {
   const [pinned, setPinned] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFailure(null);
     const parsed = createCustomerNoteSchema.safeParse({ body, pinned });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await add.mutateAsync(parsed.data);
       setBody('');
@@ -109,7 +111,7 @@ function AddNote({ customerId }: { customerId: string }) {
         <CardTitle>{t('customers.notes.add')}</CardTitle>
         <CardDescription>{t('customers.notes.bodyHint')}</CardDescription>
       </CardHeader>
-      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t('customers.notes.body')}</FieldLabel>
           <Textarea

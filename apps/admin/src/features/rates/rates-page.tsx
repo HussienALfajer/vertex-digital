@@ -30,12 +30,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
 import { ArrowLeftRightIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, ltr } from '../../lib/format';
@@ -168,6 +169,7 @@ function ChangeRateForm({ current }: { current: ExchangeRateRecord | null }) {
   );
   const [confirmation, setConfirmation] = useState('');
   const [errors, setErrors] = useState<Partial<Record<FormField, string>>>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -194,21 +196,22 @@ function ChangeRateForm({ current }: { current: ExchangeRateRecord | null }) {
       found.confirmation = t('rates.form.errors.confirmation');
     }
     setErrors(found);
-    if (!parsed.success || found.confirmation) return;
+    if (!parsed.success || found.confirmation) return focusInvalid();
     try {
       await change.mutateAsync(parsed.data);
       setSaved(true);
     } catch (error) {
       const field = error instanceof ApiError && error.code ? FIELD_OF_CODE[error.code] : undefined;
-      if (field) setErrors({ [field]: refusalText(t, error) });
-      else setFailure(errorMessage(t, error));
+      if (!field) return setFailure(errorMessage(t, error));
+      setErrors({ [field]: refusalText(t, error) });
+      focusInvalid();
     }
   }
 
   return (
     <Card className="gap-4">
       <CardTitle>{current ? t('rates.form.title') : t('rates.form.firstTitle')}</CardTitle>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={!!errors.rate}>
           <FieldLabel>{t('rates.form.rate')}</FieldLabel>
           <Input
@@ -276,6 +279,7 @@ function ChangeRateForm({ current }: { current: ExchangeRateRecord | null }) {
           <FieldError match={!!errors.step}>{errors.step}</FieldError>
         </Field>
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         {saved && (
           <p role="status" className="text-sm font-medium text-status-success-foreground">
             {t('rates.form.saved')}

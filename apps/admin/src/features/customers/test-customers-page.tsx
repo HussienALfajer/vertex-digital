@@ -28,6 +28,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { KeyRoundIcon, PlusIcon, TriangleAlertIcon, UsersRoundIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -35,7 +36,7 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { CopyButton } from '../../components/copy-button';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorCode, errorMessage } from '../../lib/errors';
 import { formatDate } from '../../lib/format';
 import {
@@ -191,6 +192,7 @@ function AddTestCustomerDialog({
   const { t } = useTranslation();
   const create = useCreateTestCustomer();
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const {
     register,
     handleSubmit,
@@ -201,18 +203,22 @@ function AddTestCustomerDialog({
     defaultValues: { name: '', email: '', phone: '' },
   });
 
-  const onSubmit = handleSubmit(async (values) => {
-    setFailure(null);
-    try {
-      onCreated(await create.mutateAsync(values));
-    } catch (error) {
-      // Rule T3: the email must be unused by any customer.
-      if (errorCode(error) === 'EMAIL_TAKEN') {
-        return setError('email', { type: 'server', message: errorMessage(t, error) });
+  const onSubmit = handleSubmit(
+    async (values) => {
+      setFailure(null);
+      try {
+        onCreated(await create.mutateAsync(values));
+      } catch (error) {
+        // Rule T3: the email must be unused by any customer.
+        if (errorCode(error) === 'EMAIL_TAKEN') {
+          setError('email', { type: 'server', message: errorMessage(t, error) });
+          return focusInvalid();
+        }
+        setFailure(errorMessage(t, error));
       }
-      setFailure(errorMessage(t, error));
-    }
-  });
+    },
+    () => focusInvalid(),
+  );
 
   return (
     <DialogContent closeLabel={t('common.close')}>
@@ -220,7 +226,7 @@ function AddTestCustomerDialog({
         <DialogTitle>{t('testCustomers.form.title')}</DialogTitle>
         <DialogDescription>{t('testCustomers.form.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
         <Field invalid={!!errors.name}>
           <FieldLabel>{t('testCustomers.form.name')}</FieldLabel>
           <Input autoComplete="off" autoFocus {...register('name')} />
@@ -242,6 +248,7 @@ function AddTestCustomerDialog({
           <FieldError match={!!errors.phone}>{t('testCustomers.form.errors.phone')}</FieldError>
         </Field>
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.keys(errors).length > 0} />
         <DialogFooter>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? t('testCustomers.form.submitting') : t('testCustomers.form.submit')}

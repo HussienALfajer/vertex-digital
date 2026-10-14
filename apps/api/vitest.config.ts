@@ -9,6 +9,7 @@ export default defineConfig({
     // Files share one test database; some checks read global rows (the active owner).
     fileParallelism: false,
     globalSetup: ['./test/global-setup.ts'],
+    setupFiles: ['./test/no-concurrent-queries.ts'],
     // Set explicitly: the root .env (loaded to find the test database) must not leak in.
     env: {
       NODE_ENV: 'test',

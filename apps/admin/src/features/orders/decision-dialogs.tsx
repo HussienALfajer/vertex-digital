@@ -18,11 +18,12 @@ import {
   FieldLabel,
   Input,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { TriangleAlertIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import { usePollAttempt, useRefundOrder, useResolveAttempt } from './orders.queries';
@@ -57,6 +58,7 @@ export function DecisionDialog({
   const keyFor = useIdempotencyKey();
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const pending = poll.isPending || resolve.isPending || refund.isPending;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -68,12 +70,12 @@ export function DecisionDialog({
       if (decision === 'poll') {
         const parsed = pollAttemptSchema.safeParse({ reason });
         setErrors({ reason: !parsed.success });
-        if (!parsed.success) return;
+        if (!parsed.success) return focusInvalid();
         await poll.mutateAsync({ attemptId, body: parsed.data });
       } else if (decision === 'refund') {
         const parsed = refundOrderSchema.safeParse({ reason });
         setErrors({ reason: !parsed.success });
-        if (!parsed.success) return;
+        if (!parsed.success) return focusInvalid();
         await refund.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
       } else {
         const quantity = Number(String(form.get('quantity') ?? units).trim());
@@ -96,7 +98,7 @@ export function DecisionDialog({
           quantity: quantityWrong,
           codes: paths.has('codes') || codesWrong,
         });
-        if (!parsed.success || quantityWrong || codesWrong) return;
+        if (!parsed.success || quantityWrong || codesWrong) return focusInvalid();
         await resolve.mutateAsync({ attemptId, body, key: keyFor(body) });
       }
       onDone();
@@ -113,7 +115,7 @@ export function DecisionDialog({
           {t(`orders.decisions.${decision}.description`, { number: order.number })}
         </DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         {decision === 'delivered' && (
           <>
             <Field invalid={!!errors.quantity}>
@@ -157,6 +159,7 @@ export function DecisionDialog({
           />
         )}
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button
             type="submit"

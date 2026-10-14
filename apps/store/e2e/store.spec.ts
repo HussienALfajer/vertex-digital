@@ -111,8 +111,11 @@ const BUDGET_KB = { script: 215, stylesheet: 20 };
 /**
  * The game page (S09): the home page's first load plus the buy box, the calculator and the
  * player check, which only a game page downloads. Measured in S09 PR 3 (apps/store/CLAUDE.md).
+ * Raised from 230 to 235 (launch hardening, 2026-10-15): it already measured just over 230 with
+ * rounding, and the refused-form alert's string in the Arabic catalog every page ships took it
+ * to 231 in CI; the form code itself loads only with the forms and the lazy buy box.
  */
-const GAME_BUDGET_KB = { script: 230, stylesheet: 20 };
+const GAME_BUDGET_KB = { script: 235, stylesheet: 20 };
 
 /** The JS and CSS of a page's first load, gzipped, in KB. */
 async function firstLoad(page: Page, path: string) {
