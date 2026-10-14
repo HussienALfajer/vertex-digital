@@ -1,11 +1,8 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { SUPPLIER_POLICY_DEFAULTS } from '@vertex-digital/contracts';
 import type pg from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDatabase } from './client.js';
 import { newId } from './id.js';
-import { migrationsFolder } from './migrate.js';
 
 /*
  * Suppliers, routes, stored prices and reviews (S07 "Data"): seeds, checks, partial unique
@@ -131,53 +128,15 @@ describe('seeds', () => {
   });
 });
 
-describe('the SHOP2TOPUP drop (ADR 0031, migration 0060)', () => {
-  const file = readdirSync(migrationsFolder).find((name) => name.startsWith('0060_'));
-  const drop = readFileSync(join(migrationsFolder, file as string), 'utf8');
-  const seed = `insert into suppliers (id, code, name_ar) values ($1, 'shop2topup', 'SHOP2TOPUP')`;
-
-  it('deletes the supplier row when nothing names it', () =>
-    rolledBack(async (client) => {
-      await client.query(seed, [newId()]);
-      expect(await violation(client, drop)).toBeNull();
-      const { rows } = await client.query(`select 1 from suppliers where code = 'shop2topup'`);
-      expect(rows).toEqual([]);
-    }, owner.pool));
-
-  it('refuses while a row, a switch change, an account or an audit entry names it', () =>
-    rolledBack(async (client) => {
-      const supplier = newId();
-      await client.query(seed, [supplier]);
-      const references: [string, unknown[]][] = [
-        [
-          `insert into supplier_sync_runs (id, supplier_id, trigger) values ($1, $2, 'admin')`,
-          [newId(), supplier],
-        ],
-        [
-          `insert into store_switch_changes (id, switch, value, admin_id, channel)
-          values ($1, 'shop2topup_paused', true, $2, 'admin')`,
-          [newId(), newId()],
-        ],
-        [
-          `insert into ledger_accounts (id, code, kind, currency)
-          values ($1, 'supplier_prepaid:shop2topup', 'supplier_prepaid', 'USD')`,
-          [newId()],
-        ],
-        [
-          `insert into audit_entries (id, actor_kind, actor_id, action, channel, entity_type, entity_id)
-          values ($1, 'admin', $2, 'supplier.credentials_set', 'admin', 'supplier', $3)`,
-          [newId(), newId(), supplier],
-        ],
-      ];
-      for (const [insert, values] of references) {
-        await client.query('savepoint reference');
-        await client.query(insert, values);
-        expect(await violation(client, drop)).toMatch(/SHOP2TOPUP is still referenced/);
-        await client.query('rollback to savepoint reference');
-      }
-      const { rows } = await client.query(`select 1 from suppliers where id = $1`, [supplier]);
-      expect(rows).toHaveLength(1);
-    }, owner.pool));
+describe('the SHOP2TOPUP drop (ADR 0031, migrations 0060 and 0061)', () => {
+  it('leaves no supplier code or pause switch for it', async () => {
+    const { rows } = await connection.pool.query<{ codes: string; switches: string }>(
+      `select enum_range(null::supplier_code)::text as codes,
+        enum_range(null::store_switch)::text as switches`,
+    );
+    expect(rows[0]?.codes).not.toContain('shop2topup');
+    expect(rows[0]?.switches).not.toContain('shop2topup');
+  });
 });
 
 describe('routes', () => {
