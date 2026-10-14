@@ -24,32 +24,37 @@ The plan sets the purchase price ("rebate tier"); every plan has the full catalo
 
 | Plan | Fee per 30 days (panel, 2026-10-15) | Stated rebate |
 |---|---|---|
-| Trial | free, 5 days, Gold prices | as Gold; no card or KYC (email, username, password) |
+| Trial | free, 5 days | the Gold tier: the panel's Steam top-up shows Gold's 3.55%; no card or KYC (email, username, password) |
 | Bronze | $3.99 | entry-level; Steam top-up 2.5% |
 | Silver | $6.99 | improved; Steam top-up 3% |
 | Gold | $9.99 | maximum; Steam top-up 3.55%; personal integration help |
 
 - The fee is debited from the USD balance (`POST /subscription/activate-from-balance`); auto-renewal is a flag (`PATCH /subscription/auto-renew`); an upgrade charges the new plan and starts a new 30-day period, a downgrade applies at once without a refund (`PATCH /subscription/plan`). A partner promo code applies to the first paid activation only.
-- Per-category rebate percentages are not published; live prices per SKU appear in the panel and the API for the account's current plan. Only Gold prices could be read (the trial is Gold).
-- An earlier summary of the public pricing page gave $9.99 / $19.99 / $29.99. The panel showed $3.99 / $6.99 / $9.99 on 2026-10-15: trust `GET /subscription/plans`.
+- Fees: `GET /api/v2/website/subscription-prices` (no key) and the panel both answer $3.99 / $6.99 / $9.99. The marketing pages' meta descriptions still say $29.99 for Gold (and an earlier summary gave $9.99 / $19.99 / $29.99): trust `GET /subscription/plans`.
+- **What the plan changes is documented only for Steam top-up, Steam gifts and manual services** ("plan-adjusted partner prices… global per subscription tier or account custom"). Nothing in the OpenAPI document, the SDK or the site says that the tier changes top-up or gift card prices, and no per-category rebate is published. Whether Bronze or Silver pay more than the trial for PUBG UC is **not confirmed**: ask support, or read the prices again after a plan change.
+- The panel's account record (`/panel/api/me`) has `tier: "trial"` and `discountPct: 0`; the 0 is the account's own custom discount, not the tier's (Steam still shows 3.55%).
+- Reseller rules on the pricing page apply only to selling to other merchants (B2B): a minimum markup over FazerCards' price of 3% (Bronze), 1.5% (Silver), 0.5% (Gold), and no copying of their public list. Selling to players, as this store does, is the standard (B2C) case.
 
-### Live Gold prices against WDGZone (2026-10-15)
+### Live trial prices against WDGZone (2026-10-15)
 
-| Pack (direct top-up) | FazerCards Gold | WDGZone Auto (public catalog) | Difference |
-|---|---|---|---|
-| PUBG Mobile Global 60 UC | $0.88 | $0.887 | −0.8% |
-| 325 UC | $4.38 | $4.435 | −1.2% |
-| 660 UC | $8.76 | $8.870 | −1.2% |
-| 1800 UC | $21.90 | $22.176 | −1.2% |
-| 3850 UC | $43.94 | $44.295 | −0.8% |
-| 8100 UC | $87.15 | $88.200 | −1.2% |
-| Free Fire MENA 110 Diamonds | $0.91 | $0.919 | −1.0% |
-| 231 Diamonds | $1.82 | $1.838 | −1.0% |
-| 583 Diamonds | $4.57 | $4.604 | −0.7% |
-| 1188 Diamonds | $9.14 | $9.209 | −0.7% |
+Read from the panel on the trial (Gold tier) with 4 decimals (`/panel/api/topup/<category>`), every PUBG Mobile and Free Fire MENA category the panel lists (306 top-up categories in all):
 
-- The public marketing table ($0.80 for 60 UC, $79.84 for 8100 UC) is not what the account pays: the live Gold price is about 9% higher. FazerCards' public page itself notes a "base −1%" display and that live rates need a login.
-- About 1% below WDGZone on Gold; Bronze and Silver pay more than Gold, so likely more than WDGZone. At $9.99 a month, Gold pays for itself only above roughly $1,000 of purchases a month.
+| Pack (direct top-up) | FazerCards Auto | FazerCards Reserve | FazerCards Fast | WDGZone Auto (public catalog) |
+|---|---|---|---|---|
+| PUBG Mobile Global 60 UC | $0.8798 | $0.8798 | — | $0.887 |
+| 325 UC | $4.3800 | $4.4120 | $4.5228 | $4.435 |
+| 660 UC | $8.7600 | $8.8239 | — | $8.870 |
+| 1800 UC | $21.9000 | $22.0598 | $22.8062 | $22.176 |
+| 3850 UC | $43.9439 | $43.9439 | — | $44.295 |
+| 8100 UC | $87.1488 | $87.8878 | $88.6625 | $88.200 |
+| Free Fire MENA 110 Diamonds | $0.9117 | | | $0.919 |
+| 231 Diamonds | $1.82 | | | $1.838 |
+| 583 Diamonds | $4.57 | | | $4.604 |
+| 1188 Diamonds | $9.14 | | | $9.209 |
+
+- The public catalog table ($0.80 for 60 UC, $79.84 for 8100 UC) matches **no** PUBG category in the panel: Auto, Reserve, Fast and Manual all ask $86.70–$88.66 for 8100 UC. The page calls its figures "indicative reference amounts" with "a −1% adjustment to the base figure for display" and sends to the logged-in catalog for the real price. Their ratio to the live prices is not constant (60 UC 0.91, 8100 UC 0.92, Prime Plus 12 months 0.95), so they are not the live price minus one plan discount.
+- About 1% below WDGZone on the trial. FazerCards' PUBG categories (Auto, Reserve, Fast, Manual) carry the same names as WDGZone's delivery lines, at prices about 1% apart: FazerCards likely resells WDGZone for these packs (an inference, not confirmed).
+- At $9.99 a month, Gold pays for itself only above roughly $1,000 of purchases a month at a 1% difference.
 - "PUBG Mobile (Manual)" (1800 / 3850 / 8100 UC at $22.57 / $43.86 / $86.70) states 5–15 minute delivery and a success rate of "approximately 50/50": never route to it.
 - Free Fire has a MENA category (110 / 231 / 583 / 1188 / 2420 Diamonds), absent from the public catalog page.
 
@@ -120,7 +125,7 @@ Built through `/supplier-adapter fazercards` after Q17 is answered, as its own P
 
 1. **Database** (`/db-migration`): `fazercards` in the supplier code enum and its `fazercards_paused` store switch, a seeded supplier row; credentials `apiKey` and `webhookSecret` (two values, unlike WDGZone).
 2. **Adapter** (`packages/suppliers/src/fazercards/`, copying `wdgzone/`): `SupplierHttp`, Zod schemas from the OpenAPI document, fixtures recorded read-only with the owner's key. Capabilities: `validatePlayer`, `webhooks`, `balance`, `catalog`, `categories` (flat), `statement` on; `platformStatus` off. Image hosts from `imageurl`.
-3. **Catalog sync**: a full read is one request per category (1,000+ categories) at 120 a minute, over the 15-minute sync budget. Read only the categories the admin linked to a game (S16 SC5), paced inside the catalog limit, and the category list once a day.
+3. **Catalog sync**: a full read is one request per category (306 top-up categories on 2026-10-15, plus gift cards) at 120 a minute, over the 15-minute sync budget. Read only the categories the admin linked to a game (S16 SC5), paced inside the catalog limit, and the category list once a day.
 4. **Orders**: `placeOrder` with the attempt id as `Idempotency-Key`; `getOrder` by `ord-N` (`PlacedOrder.supplierOrderId`), re-sending with the key when no order id is known; webhook as in "Webhooks", a gift card completion followed by `GET /orders/{id}`.
 5. **Player check**: `POST /topups/validate-id`, mapping our route's category to a validate-id `category_id` (S09 quotas apply).
 6. **Subscription watch (new)**: the worker reads `GET /me` with the balance; a Telegram alert 48 hours before `planExpiresAt` and when `subscriptionActive` is false. Orders on an expired plan are not documented: pause the supplier rather than find out live.
@@ -134,7 +139,7 @@ Built through `/supplier-adapter fazercards` after Q17 is answered, as its own P
 
 ## Open questions (for FazerCards support, or a funded test)
 
-1. Prices on Bronze and Silver for the same packs.
+1. Whether the plan changes top-up and gift card prices at all, and the Bronze and Silver prices of the same packs.
 2. What an order does when the plan has expired.
 3. The `code` values of `400` replies.
 4. Whether `POST /topups/validate-id` category ids match the order category ids.
