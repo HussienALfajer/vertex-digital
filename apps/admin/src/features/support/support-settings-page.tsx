@@ -11,6 +11,7 @@ import {
   Input,
   PageHeader,
   Skeleton,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { CircleAlertIcon, CircleCheckIcon, SendIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
@@ -54,6 +55,7 @@ function SettingsForm({ saved }: { saved: string | null }) {
   const save = useSaveSupportSettings();
   const [value, setValue] = useState(saved ?? '');
   const [invalid, setInvalid] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const trimmed = value.trim();
@@ -64,7 +66,7 @@ function SettingsForm({ saved }: { saved: string | null }) {
     setFailure(null);
     setDone(false);
     setInvalid(!valid);
-    if (!valid) return;
+    if (!valid) return focusInvalid();
     try {
       await save.mutateAsync({ telegramUrl: trimmed === '' ? null : trimmed });
       setDone(true);
@@ -75,7 +77,7 @@ function SettingsForm({ saved }: { saved: string | null }) {
 
   return (
     <Card className="max-w-2xl gap-6">
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t('support.settings.telegram')}</FieldLabel>
           <Input

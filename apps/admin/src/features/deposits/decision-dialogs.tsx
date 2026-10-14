@@ -23,11 +23,12 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import { useRejectDeposit, useRequestReceipt } from './deposits.queries';
@@ -76,6 +77,7 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
   const reasons = rejectReasonsFor(deposit.method);
   const [errors, setErrors] = useState<Partial<Record<NoteField, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,7 +91,7 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
     };
     const parsed = rejectDepositSchema.safeParse(body);
     setErrors(fieldErrors(t, parsed.error?.issues ?? []));
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await reject.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
       onDone();
@@ -106,7 +108,7 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
           {t('deposits.reject.description', { reference: deposit.referenceCode })}
         </DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={!!errors.reason}>
           <FieldLabel>{t('deposits.reject.reason')}</FieldLabel>
           <Select
@@ -133,6 +135,7 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
         <NoteFields errors={errors} customerNoteRequired={reason === 'other'} />
         <p className="text-sm text-muted-foreground">{t('deposits.reject.money')}</p>
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" variant="destructive" disabled={reject.isPending}>
             {reject.isPending ? t('deposits.reject.submitting') : t('deposits.reject.submit')}
@@ -158,6 +161,7 @@ export function RequestReceiptDialog({
   const request = useRequestReceipt(deposit.id);
   const [errors, setErrors] = useState<Partial<Record<NoteField, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -170,7 +174,7 @@ export function RequestReceiptDialog({
     };
     const parsed = requestReceiptSchema.safeParse(body);
     setErrors(fieldErrors(t, parsed.error?.issues ?? []));
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await request.mutateAsync(parsed.data);
       onDone();
@@ -185,9 +189,10 @@ export function RequestReceiptDialog({
         <DialogTitle>{t('deposits.requestReceipt.title')}</DialogTitle>
         <DialogDescription>{t('deposits.requestReceipt.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <NoteFields errors={errors} customerNoteRequired={false} />
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" disabled={request.isPending}>
             {request.isPending

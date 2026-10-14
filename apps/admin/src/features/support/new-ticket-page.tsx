@@ -22,11 +22,12 @@ import {
   SelectValue,
   Skeleton,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, CircleAlertIcon, UserRoundSearchIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatDate, ltr } from '../../lib/format';
@@ -75,6 +76,7 @@ function NewTicketForm({ customerId }: { customerId: string }) {
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<Errors>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<unknown>(null);
 
   const back = (
@@ -137,7 +139,7 @@ function NewTicketForm({ customerId }: { customerId: string }) {
     const paths = new Set((parsed.error?.issues ?? []).map((issue) => issue.path[0]));
     const linkMissing = (category === 'order' || category === 'deposit') && !linkId;
     setErrors({ link: linkMissing, subject: paths.has('subject'), body: paths.has('body') });
-    if (!parsed.success || linkMissing) return;
+    if (!parsed.success || linkMissing) return focusInvalid();
     const key = keyFor({
       ...input,
       files: files.map((file) => [file.name, file.size, file.lastModified]),
@@ -158,7 +160,7 @@ function NewTicketForm({ customerId }: { customerId: string }) {
         actions={back}
       />
       <Card className="max-w-2xl">
-        <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+        <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
           <Field>
             <FieldLabel>{t('support.new.category')}</FieldLabel>
             <Select
@@ -220,6 +222,7 @@ function NewTicketForm({ customerId }: { customerId: string }) {
             <FieldError match={!!errors.body}>{t('support.new.bodyError')}</FieldError>
           </Field>
           <ImagePicker files={files} onChange={setFiles} disabled={open.isPending} />
+          <InvalidAlert show={!!(errors.link || errors.subject || errors.body)} />
           {failure !== null && (
             <div className="flex flex-col items-start gap-2">
               <FormAlert>{errorMessage(t, failure)}</FormAlert>

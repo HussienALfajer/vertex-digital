@@ -13,6 +13,7 @@
     "./brand/*": "./src/brand/*.tsx",
     "./styles.css": "./src/styles/index.css",
     "./theme-hex": "./src/styles/theme-hex.ts",
+    "./focus-invalid": "./src/lib/focus-invalid.ts",
     "./madani.css": "./src/styles/madani.css"
   },
   "scripts": {
@@ -40,6 +41,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vertex-digital/config": "workspace:*",
+    "happy-dom": "^20.14.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tailwindcss": "^4.3.3",

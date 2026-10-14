@@ -30,6 +30,7 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { InboxIcon, SearchIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
@@ -162,11 +163,15 @@ function SearchForm({
   const { t } = useTranslation();
   const [text, setText] = useState(search.q ?? '');
   const [short, setShort] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const q = text.trim();
-    if (q && q.length < 3) return setShort(true);
+    if (q && q.length < 3) {
+      setShort(true);
+      return focusInvalid();
+    }
     setShort(false);
     const { q: _previous, ...rest } = search;
     onSearch(q ? { ...rest, q } : rest);
@@ -174,7 +179,7 @@ function SearchForm({
 
   return (
     <search className="w-full sm:w-auto">
-      <form className="flex items-start gap-2" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex items-start gap-2" onSubmit={submit} noValidate>
         <Field invalid={short} className="flex-1 sm:w-64">
           <FieldLabel className="sr-only">{t('deposits.search.label')}</FieldLabel>
           <Input

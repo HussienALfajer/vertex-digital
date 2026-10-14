@@ -45,6 +45,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { HistoryIcon, PlusIcon, RouteIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
@@ -435,6 +436,7 @@ function FieldsDialog({
   const [missing, setMissing] = useState<string[]>([]);
   const [optionMissing, setOptionMissing] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const fields = game.fields.filter((field) => field.archivedAt === null);
   const fieldMap = toFieldMap(entries);
   const specs = route.offer.fieldSpecs ?? [];
@@ -449,12 +451,14 @@ function FieldsDialog({
       await update.mutateAsync({ id: route.id, body: { fieldMap, optionMap } });
       onDone();
     } catch (error) {
+      const unmapped = unmappedOf(error);
       if (error instanceof ApiError && error.code === 'FIELD_OPTIONS_DIFFER') {
-        setOptionMissing(unmappedOf(error));
+        setOptionMissing(unmapped);
       } else {
-        setMissing(unmappedOf(error));
+        setMissing(unmapped);
       }
       setFailure(errorMessage(t, error));
+      if (unmapped.length > 0) focusInvalid();
     }
   }
 
@@ -469,7 +473,7 @@ function FieldsDialog({
           <bdi>{route.offer.name}</bdi>
         </DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <FieldMapEditor entries={entries} fields={fields} missing={missing} onChange={setEntries} />
         <OptionMapEditor
           fieldMap={fieldMap}
@@ -515,6 +519,7 @@ function ManualCostDialog({
   );
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const pending = create.isPending || setCost.isPending;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -522,7 +527,7 @@ function ManualCostDialog({
     setFailure(null);
     const parsed = manualCostSchema.safeParse(parseUsd(text));
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       if (routeId) await setCost.mutateAsync({ id: routeId, costUsdUnits: parsed.data });
       else await create.mutateAsync(parsed.data);
@@ -538,7 +543,7 @@ function ManualCostDialog({
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{t('suppliers.routes.manual.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t('suppliers.routes.manual.cost')}</FieldLabel>
           <Input

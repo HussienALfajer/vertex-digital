@@ -26,12 +26,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { SearchXIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopyButton } from '../../components/copy-button';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
 import { auditListQuery } from './audit.queries';
@@ -165,6 +166,7 @@ function AuditFilters({
   const [entityType, setEntityType] = useState<string>(search.entityType ?? ALL);
   const [invalid, setInvalid] = useState<{ actorId?: boolean; entityId?: boolean }>({});
   const withActorId = actorKind === 'customer' || actorKind === 'admin';
+  const { ref, focusInvalid } = useFocusInvalid();
 
   function apply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -177,7 +179,7 @@ function AuditFilters({
       entityId: !!entityId && !isUuid(entityId),
     };
     setInvalid(found);
-    if (found.actorId || found.entityId) return;
+    if (found.actorId || found.entityId) return focusInvalid();
     const next: Record<string, string> = {
       actorKind,
       actorId,
@@ -197,6 +199,7 @@ function AuditFilters({
   return (
     <Card>
       <form
+        ref={ref}
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
         onSubmit={apply}
         noValidate
@@ -249,6 +252,9 @@ function AuditFilters({
           <FieldLabel>{t('audit.filters.to')}</FieldLabel>
           <Input name="to" type="date" dir="ltr" defaultValue={search.to} />
         </Field>
+        <div className="sm:col-span-2 lg:col-span-4 empty:hidden">
+          <InvalidAlert show={!!(invalid.actorId || invalid.entityId)} />
+        </div>
         <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
           <Button type="submit">{t('audit.filters.apply')}</Button>
           <Button variant="ghost" onClick={() => onSearch({})}>

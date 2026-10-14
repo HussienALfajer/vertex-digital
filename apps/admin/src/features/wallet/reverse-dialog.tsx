@@ -18,10 +18,11 @@ import {
   FieldError,
   FieldLabel,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { formatDateTime } from '../../lib/format';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import {
@@ -53,6 +54,7 @@ export function ReverseDialog({
   const keyFor = useIdempotencyKey();
   const [confirmText, setConfirmText] = useState('');
   const [errors, setErrors] = useState<AdjustmentFieldErrors>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
   const amountUnits = Math.abs(entry.amountUnits);
   const needsConfirmation = amountUnits > ADJUSTMENT_CONFIRMATION_THRESHOLD_USD_UNITS;
@@ -77,7 +79,7 @@ export function ReverseDialog({
       found.confirm = t('wallets.adjust.errors.confirm');
     }
     setErrors(found);
-    if (!parsed.success || found.confirm) return;
+    if (!parsed.success || found.confirm) return focusInvalid();
 
     const body: ReverseAdjustment = parsed.data;
     try {
@@ -85,8 +87,9 @@ export function ReverseDialog({
       onDone();
     } catch (error) {
       const shown = failureOf(t, error);
-      if (shown.field) setErrors({ [shown.field]: shown.message });
-      else setFailure(shown.message);
+      if (!shown.field) return setFailure(shown.message);
+      setErrors({ [shown.field]: shown.message });
+      focusInvalid();
     }
   }
 
@@ -96,7 +99,7 @@ export function ReverseDialog({
         <DialogTitle>{t('wallets.reverse.title')}</DialogTitle>
         <DialogDescription>{t('wallets.reverse.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <div className="flex flex-col gap-1 rounded-lg border border-border p-3">
           <p className="text-sm text-muted-foreground">{t('wallets.reverse.original')}</p>
           <p className="flex flex-wrap items-baseline justify-between gap-2">
@@ -130,6 +133,7 @@ export function ReverseDialog({
         </Field>
         <BalanceLines balanceUnits={balanceUnits} signedUnits={-entry.amountUnits} />
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" variant="destructive" disabled={reverse.isPending}>
             {reverse.isPending ? t('wallets.reverse.submitting') : t('wallets.reverse.submit')}

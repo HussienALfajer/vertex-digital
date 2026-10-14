@@ -1,7 +1,7 @@
 import type { CatalogImage } from '@vertex-digital/contracts';
 import { Button } from '@vertex-digital/ui';
 import { ImageIcon, UploadIcon, XIcon } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { errorMessage } from '../../lib/errors';
 import { useUploadImage } from './catalog.queries';
@@ -27,6 +27,7 @@ export function ImageUpload({
   const upload = useUploadImage();
   const input = useRef<HTMLInputElement>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const errorId = useId();
 
   async function choose(file: File | undefined) {
     if (!file) return;
@@ -41,7 +42,7 @@ export function ImageUpload({
   }
 
   return (
-    <fieldset className="flex flex-col gap-2">
+    <fieldset className="flex flex-col gap-2" data-invalid={error ? '' : undefined}>
       <legend className="mb-2 text-sm font-medium">{label}</legend>
       <div className="flex aspect-video max-h-48 items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted">
         {image ? (
@@ -69,6 +70,8 @@ export function ImageUpload({
           variant="outline"
           size="sm"
           disabled={upload.isPending}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={failure || error ? errorId : undefined}
           onClick={() => input.current?.click()}
         >
           <UploadIcon />
@@ -86,7 +89,7 @@ export function ImageUpload({
         )}
       </div>
       {(failure || error) && (
-        <p role="alert" className="text-sm text-destructive-text">
+        <p id={errorId} role="alert" className="text-sm text-destructive-text">
           {failure ?? error}
         </p>
       )}

@@ -28,11 +28,12 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { PlusIcon, Trash2Icon } from 'lucide-react';
 import { type FormEvent, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { useCreateField, useUpdateField } from './catalog.queries';
 import { catalogFailure } from './catalog-parts';
@@ -70,6 +71,7 @@ export function FieldDialog({
       { value: '', labelAr: '' },
     ],
   );
+  const { ref, focusInvalid } = useFocusInvalid();
   const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const pending = create.isPending || update.isPending;
@@ -115,7 +117,9 @@ export function FieldDialog({
       }
     }
     setErrors(found);
-    if (!parsed.success || !shapeCheck.success || Object.keys(found).length > 0) return;
+    if (!parsed.success || !shapeCheck.success || Object.keys(found).length > 0) {
+      return focusInvalid();
+    }
     try {
       if (field) await update.mutateAsync({ id: field.id, body: parsed.data });
       else await create.mutateAsync(parsed.data as Parameters<typeof create.mutateAsync>[0]);
@@ -123,6 +127,7 @@ export function FieldDialog({
     } catch (error) {
       if (error instanceof ApiError && error.code === 'FIELD_KEY_TAKEN') {
         setErrors({ key: catalogFailure(t, error) });
+        focusInvalid();
       } else {
         setFailure(catalogFailure(t, error));
       }
@@ -142,7 +147,7 @@ export function FieldDialog({
         </DialogTitle>
         <DialogDescription>{t('catalog.inputFields.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field invalid={!!errors.key}>
             <FieldLabel>{t('catalog.inputFields.key')}</FieldLabel>
@@ -242,6 +247,7 @@ export function FieldDialog({
           <OptionsEditor options={options} onChange={setOptions} error={errors.options} />
         )}
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" disabled={pending}>
             {field ? t('catalog.actions.save') : t('catalog.inputFields.addSubmit')}
@@ -266,7 +272,7 @@ function OptionsEditor({
   const set = (index: number, change: Partial<SelectOption>) =>
     onChange(options.map((option, at) => (at === index ? { ...option, ...change } : option)));
   return (
-    <fieldset className="flex flex-col gap-3">
+    <fieldset className="flex flex-col gap-3" data-invalid={error ? '' : undefined}>
       <legend className="mb-2 text-sm font-medium">{t('catalog.inputFields.options')}</legend>
       {options.map((option, index) => (
         // Options have no id until saved; their position names them.

@@ -2,6 +2,7 @@
 
 import { Button } from '@vertex-digital/ui/components/button';
 import { EmptyState } from '@vertex-digital/ui/components/empty-state';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { MailQuestionIcon } from 'lucide-react';
 import Link from 'next/link';
 import { type FormEvent, useEffect, useState } from 'react';
@@ -46,6 +47,7 @@ export function VerifyEmailPanel() {
 function VerifyEmailForm({ pending: { email, next } }: { pending: PendingEmail }) {
   const [code, setCode] = useState('');
   const [codeFailure, setCodeFailure] = useState<string | undefined>();
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<Failure | null>(null);
   const [notice, setNotice] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -58,7 +60,7 @@ function VerifyEmailForm({ pending: { email, next } }: { pending: PendingEmail }
     setCodeFailure(invalid);
     setFailure(null);
     setNotice(false);
-    if (invalid) return;
+    if (invalid) return focusInvalid();
     setSubmitting(true);
     const result = await verifyEmail(email, code);
     if (result.ok) {
@@ -68,8 +70,9 @@ function VerifyEmailForm({ pending: { email, next } }: { pending: PendingEmail }
       return;
     }
     setSubmitting(false);
-    if (result.reason === 'INVALID_OTP') setCodeFailure(errorText(result.reason));
-    else setFailure(result.reason);
+    if (result.reason !== 'INVALID_OTP') return setFailure(result.reason);
+    setCodeFailure(errorText(result.reason));
+    focusInvalid();
   };
 
   const resend = async () => {
@@ -88,7 +91,7 @@ function VerifyEmailForm({ pending: { email, next } }: { pending: PendingEmail }
   return (
     <div className="flex flex-col gap-5">
       <SentTo text={t('verifyEmail.subtitle')} email={email} />
-      <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+      <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
         <CodeInput value={code} onValueChange={setCode} error={codeFailure} autoFocus />
         {/* An expired or voided code says to request a new one (rule C4). */}
         {failure && <FormAlert>{errorText(failure)}</FormAlert>}

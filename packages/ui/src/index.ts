@@ -41,3 +41,4 @@ export * from './components/toast';
 export * from './components/toggle-group';
 export * from './components/tooltip';
 export { cn } from './lib/cn';
+export { focusFirstInvalid, useFocusInvalid } from './lib/focus-invalid';

@@ -22,6 +22,7 @@ import {
   Input,
   ToggleGroup,
   ToggleGroupItem,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -48,6 +49,7 @@ export function CountDialog({
   const [currency, setCurrency] = useState<Currency>(initial);
   const [amountText, setAmountText] = useState('');
   const [invalid, setInvalid] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState<ReconciliationRunDetail | null>(null);
 
@@ -57,7 +59,7 @@ export function CountDialog({
     const units = currency === 'SYP' ? parseWholeSyp(amountText) : parseUsd(amountText);
     const parsed = shamCashCountSchema.safeParse({ currency, countedUnits: units ?? Number.NaN });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     const body: ShamCashCount = parsed.data;
     try {
       setSaved(await count.mutateAsync({ body, key: keyFor(body) }));
@@ -101,7 +103,7 @@ export function CountDialog({
         <DialogTitle>{t('reconciliation.count.title')}</DialogTitle>
         <DialogDescription>{t('reconciliation.count.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field>
           <FieldLabel>{t('reconciliation.count.currency')}</FieldLabel>
           <ToggleGroup<Currency>

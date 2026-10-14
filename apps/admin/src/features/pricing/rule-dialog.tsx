@@ -17,10 +17,11 @@ import {
   FieldError,
   FieldLabel,
   Input,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { PricePreview } from './price-preview';
 import { useSetRule } from './pricing.queries';
@@ -85,6 +86,7 @@ export function RuleDialog({
   const [texts, setTexts] = useState(() => ruleTexts(initial));
   const [costText, setCostText] = useState(sampleCost);
   const [errors, setErrors] = useState<RuleField[]>([]);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
 
   const values = valuesOf(texts);
@@ -98,7 +100,7 @@ export function RuleDialog({
     const invalid = invalidFields(texts);
     setErrors(invalid);
     const parsed = setMarginRuleSchema.safeParse({ ...values, scope, targetId });
-    if (invalid.length > 0 || !parsed.success) return;
+    if (invalid.length > 0 || !parsed.success) return focusInvalid();
     setSaving(true);
     try {
       if (onSave && values) await onSave(values);
@@ -137,7 +139,7 @@ export function RuleDialog({
         </DialogTitle>
         <DialogDescription>{t('pricing.form.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <div className="grid gap-4 sm:grid-cols-3">
           {field('percent', t('pricing.form.percentHint'))}
           {field('fixed', t('pricing.form.fixedHint'))}
@@ -166,6 +168,7 @@ export function RuleDialog({
           <PricePreview request={request} />
         </section>
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={errors.length > 0} />
         <DialogFooter>
           <Button type="submit" disabled={saving}>
             {saving ? t('pricing.form.saving') : t('pricing.form.save')}

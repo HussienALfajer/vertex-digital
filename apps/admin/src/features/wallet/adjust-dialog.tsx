@@ -32,10 +32,11 @@ import {
   Textarea,
   ToggleGroup,
   ToggleGroupItem,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import {
   type AdjustmentField,
@@ -96,6 +97,7 @@ export function AdjustDialog({
   const [amountText, setAmountText] = useState(prefill?.amountText ?? '');
   const [confirmText, setConfirmText] = useState('');
   const [errors, setErrors] = useState<AdjustmentFieldErrors>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
 
   const categories = categoriesFor(direction, wallet.customer.isTest);
@@ -137,7 +139,7 @@ export function AdjustDialog({
       found.confirm = t('wallets.adjust.errors.confirm');
     }
     setErrors(found);
-    if (!parsed.success || found.confirm) return;
+    if (!parsed.success || found.confirm) return focusInvalid();
 
     const request: CreateAdjustment = parsed.data;
     try {
@@ -145,8 +147,9 @@ export function AdjustDialog({
       onDone();
     } catch (error) {
       const shown = failureOf(t, error);
-      if (shown.field) setErrors({ [shown.field]: shown.message });
-      else setFailure(shown.message);
+      if (!shown.field) return setFailure(shown.message);
+      setErrors({ [shown.field]: shown.message });
+      focusInvalid();
     }
   }
 
@@ -156,7 +159,7 @@ export function AdjustDialog({
         <DialogTitle>{t('wallets.adjust.title')}</DialogTitle>
         <DialogDescription>{t('wallets.adjust.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field>
           <FieldLabel>{t('wallets.adjust.direction')}</FieldLabel>
           <ToggleGroup<AdjustmentDirection>
@@ -268,6 +271,7 @@ export function AdjustDialog({
         </Field>
         <BalanceLines balanceUnits={wallet.balanceUnits} signedUnits={signed} />
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" disabled={adjust.isPending}>
             {adjust.isPending ? t('wallets.adjust.submitting') : t('wallets.adjust.submit')}

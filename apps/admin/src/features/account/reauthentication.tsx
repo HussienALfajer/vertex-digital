@@ -13,6 +13,7 @@ import {
   FieldLabel,
   OtpField,
   PasswordInput,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import {
   createContext,
@@ -25,7 +26,7 @@ import {
 } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorCode, errorMessage } from '../../lib/errors';
 import { reauthenticate } from './account.queries';
@@ -93,6 +94,7 @@ function ReauthenticationDialog({ onConfirmed }: { onConfirmed: () => void }) {
   const { t } = useTranslation();
   const codeId = useId();
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const {
     register,
     control,
@@ -105,23 +107,28 @@ function ReauthenticationDialog({ onConfirmed }: { onConfirmed: () => void }) {
     defaultValues: { password: '', totpCode: '' },
   });
 
-  const onSubmit = handleSubmit(async (values) => {
-    setFailure(null);
-    try {
-      await reauthenticate(values);
-    } catch (error) {
-      const code = errorCode(error);
-      if (code === 'INVALID_PASSWORD') {
-        return setError('password', { type: 'server', message: errorMessage(t, error) });
+  const onSubmit = handleSubmit(
+    async (values) => {
+      setFailure(null);
+      try {
+        await reauthenticate(values);
+      } catch (error) {
+        const code = errorCode(error);
+        if (code === 'INVALID_PASSWORD') {
+          setError('password', { type: 'server', message: errorMessage(t, error) });
+          return focusInvalid();
+        }
+        if (code === 'INVALID_CODE') {
+          resetField('totpCode');
+          setError('totpCode', { type: 'server', message: errorMessage(t, error) });
+          return focusInvalid();
+        }
+        return setFailure(errorMessage(t, error));
       }
-      if (code === 'INVALID_CODE') {
-        resetField('totpCode');
-        return setError('totpCode', { type: 'server', message: errorMessage(t, error) });
-      }
-      return setFailure(errorMessage(t, error));
-    }
-    onConfirmed();
-  });
+      onConfirmed();
+    },
+    () => focusInvalid(),
+  );
 
   return (
     <DialogContent closeLabel={t('common.close')}>
@@ -129,7 +136,7 @@ function ReauthenticationDialog({ onConfirmed }: { onConfirmed: () => void }) {
         <DialogTitle>{t('reauth.title')}</DialogTitle>
         <DialogDescription>{t('reauth.subtitle')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
         <Field invalid={!!errors.password}>
           <FieldLabel>{t('reauth.password')}</FieldLabel>
           <PasswordInput
@@ -165,6 +172,7 @@ function ReauthenticationDialog({ onConfirmed }: { onConfirmed: () => void }) {
           </FieldError>
         </Field>
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.keys(errors).length > 0} />
         <DialogFooter>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? t('reauth.submitting') : t('reauth.submit')}

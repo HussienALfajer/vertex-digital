@@ -25,10 +25,11 @@ import {
   SelectValue,
   Switch,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
@@ -77,6 +78,7 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
   const [accent, setAccent] = useState(game?.accentColor ?? '');
   const [searchTerms, setSearchTerms] = useState<string[]>(game?.searchTerms ?? []);
   const [errors, setErrors] = useState<GameErrors>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const pending = create.isPending || update.isPending;
@@ -114,7 +116,7 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
       if (field === 'searchTerms') found.searchTerms = t('catalog.searchTerms.invalid');
     }
     setErrors(found);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       if (game) {
         await update.mutateAsync(parsed.data);
@@ -138,15 +140,16 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
       } else if (code === 'VALIDATION_FAILED' && refusesSearchTerms(error)) {
         setErrors({ searchTerms: t('catalog.searchTerms.invalid') });
       } else {
-        setFailure(errorMessage(t, error));
+        return setFailure(errorMessage(t, error));
       }
+      focusInvalid();
     }
   }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <Card>
-        <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+        <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field invalid={!!errors.nameAr}>
               <FieldLabel>{t('catalog.fields.nameAr')}</FieldLabel>
@@ -235,6 +238,7 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
             />
           )}
           {failure && <FormAlert>{failure}</FormAlert>}
+          <InvalidAlert show={Object.values(errors).some(Boolean)} />
           {saved && (
             <p role="status" className="text-sm text-muted-foreground">
               {t('catalog.game.saved')}
