@@ -86,7 +86,7 @@ const offerKey = (name: string) => `w-${run}-${name}`;
 const SECRET = `sk-${run}-do-not-leak-0123456789`;
 const LINKS = { admin: 'http://127.0.0.1:5173' };
 
-const ids = { fake: '', manual: '', wdgzone: '', shop2topup: '' };
+const ids = { fake: '', manual: '', wdgzone: '' };
 
 interface Sent {
   queue: string;
@@ -825,24 +825,27 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
     }
   });
 
-  it('fails a run of a supplier without an adapter here (edge case 14)', () =>
+  it('fails a run of a supplier whose adapter cannot be built (edge case 14)', () =>
     isolated(async (tx) => {
+      // WDGZone keys without its API key: the registry has no adapter for them.
       await tx.insert(supplierCredentials).values({
         id: newId(),
-        supplierId: ids.shop2topup,
-        ciphertext: Buffer.from([0]),
+        supplierId: ids.wdgzone,
+        ciphertext: encryptCredentials(supplierKey(env.SUPPLIER_KEYS_SECRET), ids.wdgzone, {}),
         hints: {},
         adminId: newId(),
       });
       const [run] = await tx
         .insert(supplierSyncRuns)
-        .values({ id: newId(), supplierId: ids.shop2topup, trigger: 'admin' })
+        .values({ id: newId(), supplierId: ids.wdgzone, trigger: 'admin' })
         .returning();
+      // The real registry: the scripted one above hands an adapter to every supplier.
+      const real = new SupplierSyncJob(pgBoss, new SupplierRegistry(env), db, env);
       expect(
-        await sync.sync(
+        await real.sync(
           {
-            supplierId: ids.shop2topup,
-            supplierCode: 'shop2topup',
+            supplierId: ids.wdgzone,
+            supplierCode: 'wdgzone',
             trigger: 'admin',
             runId: run?.id,
           },
@@ -1177,7 +1180,6 @@ describe('the supplier registry (rules SP1, SP2)', () => {
       await expect(real.connect(tx, { id: ids.wdgzone, code: 'wdgzone' })).rejects.toThrow();
       expect(await real.get('wdgzone', {})).toBeNull();
       expect(await real.get('wdgzone', { apiKey: SECRET })).toBeInstanceOf(WdgzoneAdapter);
-      expect(await real.get('shop2topup', { apiKey: SECRET })).toBeNull();
       expect(await real.get('manual', {})).toBeNull();
       await rm(env.FAKE_SUPPLIER_STATE_FILE, { force: true });
       expect((await (await real.get('fake', {}))?.listOffers())?.length).toBe(14);

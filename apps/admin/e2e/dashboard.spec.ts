@@ -22,7 +22,7 @@ test('a quiet day: nothing needs the admin, zero sales, the suppliers and the ra
   await expect(page.getByText(d.sales, { exact: true })).toBeVisible();
   await expect(page.getByRole('img', { name: /المبيعات في آخر 7 أيام/ })).toBeVisible();
   const suppliers = page.getByRole('table');
-  await expect(suppliers.getByRole('link', { name: 'SHOP2TOPUP' })).toBeVisible();
+  await expect(suppliers.getByRole('link', { name: 'WDGZone' })).toBeVisible();
   await expect(suppliers.getByRole('link', { name: 'يدوي' })).toBeVisible();
   await expect(page.getByText(ar.rates.current.value.replace('{{rate}}', '118'))).toBeVisible();
 });

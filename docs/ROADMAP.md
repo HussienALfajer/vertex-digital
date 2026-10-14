@@ -28,10 +28,8 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 
 ## Phase 2 — Selling
 - [x] S06 Catalog and pricing: F08 Catalog · F10 Pricing engine; spec `docs/specs/S06-catalog-and-pricing.md` (two PRs: contracts, db and the `catalog` and `pricing` API modules, then the admin `/catalog`, game and `/pricing` screens with E2E)
-- [x] S07 Suppliers: F09 alone (product mapping and price sync; adapters `shop2topup`, `wdgzone`, `manual`); spec `docs/specs/S07-suppliers.md` (three PRs: contracts, db and api; worker jobs; the admin `/suppliers`, routes drawer, `/pricing/reviews` and policy screens with E2E)
-- [ ] S07 real adapters: `/supplier-adapter shop2topup`, then `/supplier-adapter wdgzone`, one PR each once its account and API documentation arrive (Q12)
-  - [x] `wdgzone` (`docs/suppliers/wdgzone.md`; real orders may be routed to it since S16 PR 1's re-send safety net (RS1–RS4, Q18 resolved); the launch checklist's small live order still applies)
-  - [ ] `shop2topup`
+- [x] S07 Suppliers: F09 alone (product mapping and price sync; adapters `wdgzone`, `manual`); spec `docs/specs/S07-suppliers.md` (three PRs: contracts, db and api; worker jobs; the admin `/suppliers`, routes drawer, `/pricing/reviews` and policy screens with E2E)
+- [x] S07 real adapter: `/supplier-adapter wdgzone` (`docs/suppliers/wdgzone.md`; real orders may be routed to it since S16 PR 1's re-send safety net (RS1–RS4, Q18 resolved); the launch checklist's small live order still applies); the other planned supplier was dropped on 2026-10-14 (ADR 0031)
 - [x] S08 Orders and fulfilment: F11 alone (money core); spec `docs/specs/S08-orders-and-fulfilment.md` (three PRs: contracts, db and api with the purchase and webhook routes; worker jobs; store `/orders` and the admin order screens with E2E)
 - [x] S09 Storefront and purchase: F12 Store home and game pages · F13 Purchase flow and live order tracking · F15 Smart search; spec `docs/specs/S09-storefront-and-purchase.md` (three PRs: contracts, db and api with player checks and reservations; worker jobs; store pages, buy box, search and admin additions with E2E)
 - [x] S10 Convenience: F14 Saved player IDs and one-tap recharge · F16 Cart, gift top-up and shareable receipt; spec `docs/specs/S10-convenience.md` (two PRs: contracts, db and api with checkouts, saved IDs, share links and images; store cart, buy box additions, share pages and admin additions with E2E)
@@ -70,7 +68,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] Domains and TLS for both hosts (checked 2026-10-12)
 - [ ] Production secrets on the server only; supplier keys entered in the panel
 - [x] SPF, DKIM and DMARC for the sending mailbox (checked 2026-10-14 on public DNS: SPF includes Hostinger mail, DKIM `hostingermail-a` published, DMARC `p=quarantine`)
-- [ ] VPS IP registered in supplier allowlists; one small live order per supplier approved by the owner (WDGZone: key in the panel and IP registered by the owner on 2026-10-14, healthy and syncing; live order VO-5QXTCT on 2026-10-14: a walk-in 60 UC for $0.99 approved and confirmed by the owner, sent at once, delivered in under two minutes through the signed webhook (WDG order 3507, cost $0.887, the supplier balance down by exactly that); `shop2topup` left)
+- [x] VPS IP registered in the supplier's allowlist; one small live order approved by the owner (WDGZone: key in the panel and IP registered by the owner on 2026-10-14, healthy and syncing; live order VO-5QXTCT on 2026-10-14: a walk-in 60 UC for $0.99 approved and confirmed by the owner, sent at once, delivered in under two minutes through the signed webhook (WDG order 3507, cost $0.887, the supplier balance down by exactly that))
 - [x] Arabic typeface: the owner keeps Noto Kufi Arabic and Montserrat for launch (Q2 resolved 2026-10-14; Madani not licensed)
 - [x] Terms, privacy and refund policies published (with "من نحن", version 1 of each, 2026-10-13; texts in `docs/content/`)
 - [x] Admin account with 2FA; Telegram bot linked (2026-10-12: `info@vertexmedia.pro`, TOTP enrolled, the bot linked and its test message received)

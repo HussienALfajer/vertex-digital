@@ -56,7 +56,6 @@ const PLACE_SUBJECTS: readonly string[] = [
   'sham_cash_usd',
   'usdt_trc20',
   'usdt_bep20',
-  'supplier:shop2topup',
   'supplier:wdgzone',
   'supplier:manual',
   'supplier:fake',

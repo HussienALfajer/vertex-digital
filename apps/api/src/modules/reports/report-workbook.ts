@@ -101,7 +101,6 @@ const PLACES: Record<string, string> = {
   sham_cash_usd: 'شام كاش (دولار)',
   usdt_trc20: 'USDT (TRC20)',
   usdt_bep20: 'USDT (BEP20)',
-  'supplier:shop2topup': 'SHOP2TOPUP',
   'supplier:wdgzone': 'WDGZone',
   'supplier:manual': 'المورد اليدوي',
   'supplier:fake': 'المورد التجريبي',

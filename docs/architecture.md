@@ -17,7 +17,7 @@ vertex-digital/
 │   ├── contracts/    Zod schemas, money math, state tables, pricing rules, error codes
 │   ├── db/           Drizzle schema, migrations, ledger posting and order transition write paths
 │   ├── ui/           Vertex design system (shadcn/ui on Base UI, Tailwind v4 tokens, RTL)
-│   ├── suppliers/    Supplier adapters behind one interface (shop2topup, wdgzone, manual, fake)
+│   ├── suppliers/    Supplier adapters behind one interface (wdgzone, manual, fake)
 │   └── config/       Shared TypeScript and Biome configuration
 ├── deploy/           Everything installed on the server (ADR 0009)
 ├── brand/            Logo files and visual identity

@@ -343,7 +343,6 @@
                 "sham_cash_paused",
                 "usdt_trc20_paused",
                 "usdt_bep20_paused",
-                "shop2topup_paused",
                 "wdgzone_paused",
                 "manual_paused",
                 "fake_paused"
@@ -3865,7 +3864,6 @@
                 "sham_cash_usd",
                 "usdt_trc20",
                 "usdt_bep20",
-                "supplier:shop2topup",
                 "supplier:wdgzone",
                 "supplier:manual",
                 "supplier:fake",
@@ -7158,7 +7156,6 @@
             "schema": {
               "type": "string",
               "enum": [
-                "shop2topup",
                 "wdgzone",
                 "manual",
                 "fake"
@@ -9331,7 +9328,6 @@
             "schema": {
               "type": "string",
               "enum": [
-                "shop2topup",
                 "wdgzone",
                 "manual",
                 "fake"
@@ -9538,7 +9534,6 @@
             "schema": {
               "type": "string",
               "enum": [
-                "shop2topup",
                 "wdgzone",
                 "manual",
                 "fake"
@@ -11534,7 +11529,6 @@
           "sham_cash_paused",
           "usdt_trc20_paused",
           "usdt_bep20_paused",
-          "shop2topup_paused",
           "wdgzone_paused",
           "manual_paused",
           "fake_paused"
@@ -17499,7 +17493,6 @@
           "sham_cash_usd",
           "usdt_trc20",
           "usdt_bep20",
-          "supplier:shop2topup",
           "supplier:wdgzone",
           "supplier:manual",
           "supplier:fake",
@@ -17699,7 +17692,6 @@
           "sham_cash_usd",
           "usdt_trc20",
           "usdt_bep20",
-          "supplier:shop2topup",
           "supplier:wdgzone",
           "supplier:manual",
           "supplier:fake",
@@ -17814,7 +17806,6 @@
       "SupplierCode": {
         "type": "string",
         "enum": [
-          "shop2topup",
           "wdgzone",
           "manual",
           "fake"

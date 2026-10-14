@@ -1,6 +1,6 @@
 # 0021 — Supplier sync, price review, route tiers and health
 
-Status: Accepted · Date: 2026-10-08 · Amends [0005](0005-supplier-adapters-and-routing.md) (the manual supplier's place in routing, health thresholds, stale costs), [0020](0020-pricing-engine.md) (when a price follows a cost change) · Amended by [0027](0027-treasury-movements-reconciliation-and-reports.md) (supplier funding recorded as treasury movements)
+Status: Accepted · Date: 2026-10-08 · Amends [0005](0005-supplier-adapters-and-routing.md) (the manual supplier's place in routing, health thresholds, stale costs), [0020](0020-pricing-engine.md) (when a price follows a cost change) · Amended by [0027](0027-treasury-movements-reconciliation-and-reports.md) (supplier funding recorded as treasury movements), [0031](0031-drop-shop2topup.md) (SHOP2TOPUP dropped)
 
 ## Context
 F09 connects the store to its suppliers: their offers, the mapping of store products to offers, and the costs that prices follow (ADR 0020). The owner had to settle how often costs are refreshed and when a refreshed cost may no longer be trusted, which cost changes wait for the admin instead of moving a price at once, what happens to a price when the cheapest supplier stops, where the manual supplier sits among the routes, the health and balance thresholds, and whether funding a supplier's prepaid balance is recorded now. The supplier accounts and API documentation are not ready yet (Q12), so the real adapters cannot be written with this feature's first PRs.
@@ -15,7 +15,7 @@ F09 connects the store to its suppliers: their offers, the mapping of store prod
 - **Import:** products are created from supplier offers in bulk, paused, mapped and priced, and the admin activates them after checking names; the launch catalog is everything the suppliers offer, imported progressively (owner, 2026-10-08).
 - **Notifications:** one Telegram message after a sync only when something needs the admin (new reviews, products paused by the guard, mapped offers gone), and the open counts in the daily summary (owner, 2026-10-08).
 - **No money moves in F09.** Funding a supplier's prepaid balance is recorded with the daily reconciliation (F20, S13); until then the panel shows the balance each supplier reports (owner, 2026-10-08).
-- **Adapters after the documentation:** S07 is built and accepted with the `fake` and `manual` suppliers; the `shop2topup` and `wdgzone` adapters each come in their own PR through `/supplier-adapter` once the owner shares the supplier's documentation (Q12). Supplier base URLs live in code, never in the panel.
+- **Adapters after the documentation:** S07 is built and accepted with the `fake` and `manual` suppliers; the `wdgzone` adapter comes in its own PR through `/supplier-adapter` once the owner shares the supplier's documentation (SHOP2TOPUP was dropped before its adapter, ADR 0031). Supplier base URLs live in code, never in the panel.
 
 ## Consequences
 - A price moves without the admin only for small cost changes and for route changes the admin can see on the supplier page; large moves wait for a decision, and no wait can sell below cost.

@@ -48,7 +48,6 @@ import { type Answer, type CatalogMock, nextId } from './catalog-mock';
 type Body = Record<string, unknown> | null;
 
 const NAMES: Record<SupplierCode, string> = {
-  shop2topup: 'SHOP2TOPUP',
   wdgzone: 'WDGZone',
   manual: 'يدوي',
   fake: 'مورد تجريبي',

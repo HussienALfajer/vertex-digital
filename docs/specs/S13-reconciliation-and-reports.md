@@ -35,7 +35,7 @@ The books must prove themselves every night, and the owner must see where the mo
 
 ### Contracts (`packages/contracts/src/reconciliation.ts`, `reports.ts` new; `wallet.ts`, `audit.ts`, `errors.ts`, `jobs.ts`, `telegram.ts`, `dashboard.ts`, `usdt.ts` extended)
 - `LEDGER_ACCOUNT_KINDS` gains `outside_funds` (money outside the store: the owner's pocket and the rest of the world), `transfer_fees` (fees lost moving money) and `supplier_corrections` (supplier balance changes that are not a delivery's cost). `JOURNAL_KINDS` gains `treasury`.
-- `TREASURY_PLACES`: `sham_cash_syp`, `sham_cash_usd`, `usdt_trc20`, `usdt_bep20`, `supplier:<code>` (`shop2topup`, `wdgzone`, `manual`, `fake`), `outside_usd`, `outside_syp`; each maps to one ledger account code and currency (rule T1) and whether it is an asset (shown as "held" = −balance, rule LS2).
+- `TREASURY_PLACES`: `sham_cash_syp`, `sham_cash_usd`, `usdt_trc20`, `usdt_bep20`, `supplier:<code>` (`wdgzone`, `manual`, `fake`), `outside_usd`, `outside_syp`; each maps to one ledger account code and currency (rule T1) and whether it is an asset (shown as "held" = −balance, rule LS2).
 - `OUTSIDE_CATEGORIES`: `owner`, `unclaimed_receipt`, `return_to_sender`, `other` (rule T4).
 - `TREASURY_MOVEMENT_KINDS`: `transfer`, `supplier_correction`.
 - `RECONCILIATION_CHECKS` (rule C list), `RECONCILIATION_RESULT_STATUSES`: `ok`, `mismatch`, `warning`, `skipped`; `RECONCILIATION_RUN_TRIGGERS`: `schedule`, `manual`, `count`; `RECONCILIATION_RUN_STATUSES`: `running`, `finished`, `failed`.

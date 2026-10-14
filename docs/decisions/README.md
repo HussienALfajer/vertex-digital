@@ -34,6 +34,7 @@ Short records of decisions that shape the system. Each has a status: **Accepted*
 | [0028](0028-content-publishing-and-live-activity.md) | Content: four fixed pages and an FAQ published as versions from drafts, limited Markdown with internal links only, at most 5 scheduled 2:1 banners, one dismissible announcement, refresh through the `content` cache tag; live activity from real deliveries 5 minutes to 24 hours old, hidden below 5, switchable; sign-up records the terms and privacy versions (amends 0015) | Accepted |
 | [0029](0029-pwa-and-web-push.md) | PWA and web push: the service worker caches only the offline page; self-hosted VAPID push for every emailed customer event with per-event switches, minimal lock-screen text, subscriptions bound to sessions (10 per customer), push service hosts allow-listed | Accepted |
 | [0030](0030-resend-refusals-admin-orders-and-supplier-catalog.md) | Any refusal of a re-sent attempt is unknown (Q18); admin orders (walk-in, on behalf, gift, compensation) at store prices, owner-funded ones booked as never-settled owner drawings under a $100 daily cap and reported apart; supplier categories mirrored and imported as paused games, images re-encoded from declared hosts, low-stock alerts (amends 0003, 0004, 0021, 0027) | Accepted |
+| [0031](0031-drop-shop2topup.md) | SHOP2TOPUP dropped before its adapter: WDGZone is the only automatic supplier, manual the last resort; removed from code, docs and data, its enum values dropped one release later (supersedes the SHOP2TOPUP parts of 0004, 0005, 0021) | Accepted |
 
 Template:
 

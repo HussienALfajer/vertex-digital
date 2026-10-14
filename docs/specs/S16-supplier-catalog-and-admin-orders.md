@@ -17,7 +17,7 @@ Three gaps showed once the WDGZone adapter (PR #74) met its real catalog. First,
 - Out (later or never):
   - FazerCards as a third supplier (owner, 2026-10-12).
   - WDG's `manual` products (about 64,500, delivered by hand at WDG): left out, as the adapter does today (owner, 2026-10-12).
-  - SHOP2TOPUP's catalog browser: its adapter is not built (Q12); the browser works for any supplier whose adapter declares `categories`, and says "هذا المورد لا يعرض فئات" otherwise.
+  - A catalog browser for suppliers without the capability: the browser works for any supplier whose adapter declares `categories`, and says "هذا المورد لا يعرض فئات" otherwise.
   - A cart, reservations (`awaiting_balance`) or several products in one admin purchase: one product per admin order.
   - Settling owner drawings: they are a running total of what the owner took in goods, never paid back (ADR 0030).
   - Recording the money a walk-in buyer hands the owner: it stays outside the books (ADR 0030).

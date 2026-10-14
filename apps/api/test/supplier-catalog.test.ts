@@ -261,7 +261,7 @@ describe('access', () => {
   it('answers 404 for an unknown supplier or one without the capability', async () => {
     expect((await get('/api/admin/suppliers/nope/categories')).status).toBe(404);
     const refused = await json<{ code: string }>(
-      await get('/api/admin/suppliers/shop2topup/statement/orders'),
+      await get('/api/admin/suppliers/manual/statement/orders'),
       409,
     );
     expect(refused.code).toBe('CAPABILITY_UNSUPPORTED');

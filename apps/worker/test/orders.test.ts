@@ -1346,11 +1346,11 @@ describe('Telegram order messages (rules MN1, MN2, F5, F7)', () => {
     expect(
       renderTelegramMessage(
         'validation_quota_reached',
-        { supplier: 'shop2topup', supplierNameAr: 'SHOP2TOPUP', quota: 1000 },
+        { supplier: 'fake', supplierNameAr: 'مورد تجريبي', quota: 1000 },
         links,
       ).text,
     ).toBe(
-      `⚠️ بلغت حصة التحقق اليومية لدى SHOP2TOPUP (1000). العملاء يؤكدون المعرّف بأنفسهم حتى منتصف الليل.\n${links.admin}/suppliers/shop2topup`,
+      `⚠️ بلغت حصة التحقق اليومية لدى مورد تجريبي (1000). العملاء يؤكدون المعرّف بأنفسهم حتى منتصف الليل.\n${links.admin}/suppliers/fake`,
     );
     expect(
       renderTelegramMessage(
@@ -1817,20 +1817,20 @@ describe('expiry and the player-check cache (S09 rule RS7, "Data")', () => {
 describe('races on one attempt (committed: each side has its own connection)', () => {
   /**
    * The order and its open attempt, committed; the attempt `sending` or `pending`. The product
-   * is sold through a manual route, and the attempt goes to a `shop2topup` offer of its own
+   * is sold through a manual route, and the attempt goes to a `wdgzone` offer of its own
    * (answered by the in-process fake here), so nothing committed touches the fake supplier's
-   * calls, health, credentials or routes, which the supplier tests read.
+   * calls, health, credentials or routes, which the supplier tests read; WDGZone gets no keys.
    */
   async function committed(offerId: string, status: 'sending' | 'pending', code: boolean) {
     return db.transaction(async (tx) => {
       sent.length = 0;
       const item = await product(tx, { code, fake: null, manualCost: usd(code ? 24 : 0.9) });
       const order = await buy(tx, item);
-      const [shop] = await tx
+      const [wdg] = await tx
         .select({ id: suppliers.id })
         .from(suppliers)
-        .where(eq(suppliers.code, 'shop2topup'));
-      const supplierId = shop?.id as string;
+        .where(eq(suppliers.code, 'wdgzone'));
+      const supplierId = wdg?.id as string;
       const offer = newId();
       await tx.insert(supplierOffers).values({
         id: offer,

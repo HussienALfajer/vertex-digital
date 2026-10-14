@@ -140,7 +140,7 @@ function attempt(
       },
       {
         routeId: id(300 + n),
-        supplierCode: 'shop2topup',
+        supplierCode: 'fake',
         tier: null,
         costUsdUnits: 900_000,
         rank: null,

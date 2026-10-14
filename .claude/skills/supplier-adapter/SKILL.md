@@ -1,7 +1,7 @@
 ---
 name: supplier-adapter
-description: Add or change a supplier adapter in packages/suppliers (SHOP2TOPUP, WDGZone or a new supplier) behind the SupplierAdapter interface — documented endpoints, Zod response schemas, outcome and error classification, idempotency, webhook HMAC verification, sanitized fixtures and tests that never call the live service. Use when a supplier is added or its API changes.
-argument-hint: <supplier code, e.g. shop2topup>
+description: Add or change a supplier adapter in packages/suppliers (WDGZone or a new supplier) behind the SupplierAdapter interface — documented endpoints, Zod response schemas, outcome and error classification, idempotency, webhook HMAC verification, sanitized fixtures and tests that never call the live service. Use when a supplier is added or its API changes.
+argument-hint: <supplier code, e.g. wdgzone>
 disable-model-invocation: true
 effort: high
 ---

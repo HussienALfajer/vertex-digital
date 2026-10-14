@@ -15,7 +15,6 @@ export const STORE_SWITCHES = [
   'sham_cash_paused',
   'usdt_trc20_paused',
   'usdt_bep20_paused',
-  'shop2topup_paused',
   'wdgzone_paused',
   'manual_paused',
   'fake_paused',
@@ -39,7 +38,6 @@ export const STORE_SWITCH_DEFAULTS: StoreSwitchValues = {
   sham_cash_paused: false,
   usdt_trc20_paused: false,
   usdt_bep20_paused: false,
-  shop2topup_paused: false,
   wdgzone_paused: false,
   manual_paused: false,
   fake_paused: false,
@@ -61,7 +59,6 @@ export const DEPOSIT_PAUSE_SWITCHES: Record<DepositMethod, StoreSwitch> = {
 
 /** The switch that pauses each supplier's routes (S07 rule SP3). */
 export const SUPPLIER_PAUSE_SWITCHES: Record<SupplierCode, StoreSwitch> = {
-  shop2topup: 'shop2topup_paused',
   wdgzone: 'wdgzone_paused',
   manual: 'manual_paused',
   fake: 'fake_paused',

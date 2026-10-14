@@ -4208,7 +4208,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        StoreSwitch: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused" | "shop2topup_paused" | "wdgzone_paused" | "manual_paused" | "fake_paused";
+        StoreSwitch: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused" | "wdgzone_paused" | "manual_paused" | "fake_paused";
         /** @enum {string} */
         SwitchChannel: "admin" | "telegram";
         ChangeSwitch: {
@@ -5559,7 +5559,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        TreasuryPlace: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:shop2topup" | "supplier:wdgzone" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp";
+        TreasuryPlace: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:wdgzone" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp";
         TreasuryMovementQuery: {
             cursor?: string;
             /** @default 50 */
@@ -5604,7 +5604,7 @@ export interface components {
         /** @enum {string} */
         TreasuryMovementKind: "transfer" | "supplier_correction";
         /** @enum {string} */
-        TreasuryEndpoint: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:shop2topup" | "supplier:wdgzone" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp" | "supplier_corrections";
+        TreasuryEndpoint: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:wdgzone" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp" | "supplier_corrections";
         /** @enum {string} */
         OutsideCategory: "owner" | "unclaimed_receipt" | "return_to_sender" | "other";
         CreateTreasuryMovement: {
@@ -5629,7 +5629,7 @@ export interface components {
             amountConfirmationUnits?: number;
         };
         /** @enum {string} */
-        SupplierCode: "shop2topup" | "wdgzone" | "manual" | "fake";
+        SupplierCode: "wdgzone" | "manual" | "fake";
         /** @enum {string} */
         SupplierCorrectionDirection: "increase" | "decrease";
         ReverseTreasuryMovement: {
@@ -8738,7 +8738,7 @@ export interface operations {
             query?: {
                 cursor?: string;
                 limit?: number;
-                switch?: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused" | "shop2topup_paused" | "wdgzone_paused" | "manual_paused" | "fake_paused";
+                switch?: "registration_open" | "purchases_stopped" | "deposits_stopped" | "sham_cash_paused" | "usdt_trc20_paused" | "usdt_bep20_paused" | "wdgzone_paused" | "manual_paused" | "fake_paused";
             };
             header?: never;
             path?: never;
@@ -10833,7 +10833,7 @@ export interface operations {
             query?: {
                 cursor?: string;
                 limit?: number;
-                place?: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:shop2topup" | "supplier:wdgzone" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp";
+                place?: "sham_cash_syp" | "sham_cash_usd" | "usdt_trc20" | "usdt_bep20" | "supplier:wdgzone" | "supplier:manual" | "supplier:fake" | "outside_usd" | "outside_syp";
             };
             header?: never;
             path?: never;
@@ -13007,7 +13007,7 @@ export interface operations {
                 page?: number;
                 pageSize?: number;
                 status?: "open" | "accepted" | "margin_adjusted" | "paused" | "superseded";
-                supplier?: "shop2topup" | "wdgzone" | "manual" | "fake";
+                supplier?: "wdgzone" | "manual" | "fake";
             };
             header?: never;
             path?: never;
@@ -14243,7 +14243,7 @@ export interface operations {
                 q?: string;
                 productId?: string;
                 customerId?: string;
-                supplier?: "shop2topup" | "wdgzone" | "manual" | "fake";
+                supplier?: "wdgzone" | "manual" | "fake";
                 test?: "true" | "false";
                 from?: string;
                 to?: string;
@@ -14367,7 +14367,7 @@ export interface operations {
     OrdersAdminController_live: {
         parameters: {
             query?: {
-                supplier?: "shop2topup" | "wdgzone" | "manual" | "fake";
+                supplier?: "wdgzone" | "manual" | "fake";
                 gameId?: string;
                 test?: "all" | "hide" | "only";
             };

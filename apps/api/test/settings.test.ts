@@ -145,7 +145,6 @@ describe('changing a switch (rules SW1, SW2)', () => {
       'sham_cash_paused',
       'usdt_trc20_paused',
       'usdt_bep20_paused',
-      'shop2topup_paused',
       'wdgzone_paused',
       'manual_paused',
       'fake_paused',

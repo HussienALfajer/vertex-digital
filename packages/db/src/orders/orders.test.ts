@@ -96,12 +96,12 @@ const context = (): OrderContext => ({
   now: new Date(),
 });
 
-let suppliers: Record<'fake' | 'manual' | 'shop2topup', string>;
+let suppliers: Record<'fake' | 'manual', string>;
 const categories: string[] = [];
 
 beforeAll(async () => {
-  const { rows } = await pool.query<{ id: string; code: 'fake' | 'manual' | 'shop2topup' }>(
-    `select id, code from suppliers where code in ('fake', 'manual', 'shop2topup')`,
+  const { rows } = await pool.query<{ id: string; code: 'fake' | 'manual' }>(
+    `select id, code from suppliers where code in ('fake', 'manual')`,
   );
   suppliers = Object.fromEntries(rows.map((row) => [row.code, row.id])) as typeof suppliers;
   await pool.query(
@@ -154,13 +154,12 @@ async function customer(options: { isTest?: boolean; funds?: number } = {}) {
 const balance = async (customerId: string) =>
   accountBalance(db, (await findCustomerWallet(db, customerId)) as string);
 
-/** An active product with a `player_id` field, a route to `supplier` at `cost`, and its price. */
+/** An active product with a `player_id` field, a route to the fake supplier at `cost`, and its price. */
 async function product(
-  options: { kind?: 'direct' | 'code'; cost?: number; supplier?: 'fake' | 'shop2topup' } = {},
+  options: { kind?: 'direct' | 'code'; cost?: number; inStock?: boolean } = {},
 ) {
   const [category, game, id, offer, route] = [newId(), newId(), newId(), newId(), newId()];
   const kind = options.kind ?? 'direct';
-  const supplier = options.supplier ?? 'fake';
   const cost = options.cost ?? usd(0.88);
   categories.push(category);
   await pool.query(
@@ -191,13 +190,13 @@ async function product(
   );
   await pool.query(
     `insert into supplier_offers (id, supplier_id, offer_id, name, in_stock, cost_usd_units,
-       cost_confirmed_at, last_seen_at) values ($1, $2, $3, 'Offer', true, $4, now(), now())`,
-    [offer, suppliers[supplier], `o-${unique()}`, cost],
+       cost_confirmed_at, last_seen_at) values ($1, $2, $3, 'Offer', $4, $5, now(), now())`,
+    [offer, suppliers.fake, `o-${unique()}`, options.inStock ?? true, cost],
   );
   await pool.query(
     `insert into product_routes (id, product_id, supplier_id, offer_id, field_map)
      values ($1, $2, $3, $4, $5)`,
-    [route, id, suppliers[supplier], offer, kind === 'direct' ? { playerId: 'player_id' } : {}],
+    [route, id, suppliers.fake, offer, kind === 'direct' ? { playerId: 'player_id' } : {}],
   );
   await db.transaction((tx) =>
     repriceProducts(tx, {
@@ -411,9 +410,9 @@ describe('purchase (rules O1–O6, M1)', () => {
   });
 
   it('refuses a product that cannot be bought, and real suppliers for a test customer (O3, R4)', async () => {
-    const item = await product({ supplier: 'shop2topup' });
+    const item = await product({ inStock: false });
     const buyer = await customer({ funds: usd(10) });
-    // `shop2topup` has no adapter in this build (S07 SP1): no usable route, no price.
+    // Its only offer is out of stock (S07 RT4): no usable route, no price.
     expect(await refusal(buy(request(buyer, { id: item.id, price: 1 })))).toMatchObject({
       code: 'PRODUCT_UNAVAILABLE',
     });
@@ -3323,7 +3322,7 @@ describe('the supplier statement matched to attempts (S16 SF3, SF4)', () => {
       attemptId,
       attemptStatus: 'pending',
     });
-    expect((await supplierOrderMatches(db, suppliers.shop2topup, [supplierOrderId])).size).toBe(0);
+    expect((await supplierOrderMatches(db, suppliers.manual, [supplierOrderId])).size).toBe(0);
     expect((await supplierOrderMatches(db, suppliers.fake, [])).size).toBe(0);
     expect(await attemptSupplierFacts(db, order.id, attemptId)).toMatchObject({
       attemptId,

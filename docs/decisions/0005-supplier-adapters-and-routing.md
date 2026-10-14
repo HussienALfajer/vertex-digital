@@ -1,17 +1,16 @@
 # 0005 — Supplier adapters and smart routing
 
-Status: Accepted · Date: 2026-10-06 · Amended by [0016](0016-single-admin-account.md) (one admin account, no staff or roles), [0020](0020-pricing-engine.md) (the margin guard's boundary and the price basis), [0021](0021-supplier-sync-price-review-and-health.md) (manual supplier as last resort, health thresholds, stale costs), [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) (test customers' routes, the adapter outcome)
+Status: Accepted · Date: 2026-10-06 · Amended by [0016](0016-single-admin-account.md) (one admin account, no staff or roles), [0020](0020-pricing-engine.md) (the margin guard's boundary and the price basis), [0021](0021-supplier-sync-price-review-and-health.md) (manual supplier as last resort, health thresholds, stale costs), [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) (test customers' routes, the adapter outcome), [0031](0031-drop-shop2topup.md) (SHOP2TOPUP dropped: WDGZone is the only automatic supplier)
 
 ## Context
-Goods come from wholesale suppliers with different APIs, prices, features and reliability. The primary supplier validates player IDs and returns the in-game name; the backup is cheaper on some packs but cannot validate. Suppliers fail, change prices and run out of balance. Some products are fulfilled by hand.
+Goods come from wholesale suppliers with different APIs, prices, features and reliability. Suppliers fail, change prices and run out of balance. Some products are fulfilled by hand.
 
 ## Decision
 
 ### Suppliers at launch
 | Code | Role | API | Notes |
 |---|---|---|---|
-| `shop2topup` | Primary | REST, base `https://shop2topup.com/api/endpoints/v1`, `Authorization: Bearer <keyId>.<secret>` | Player validation with in-game name; HMAC-signed webhooks; idempotent `order_id`; automatic refunds on their side; price protection; IP allowlist (register the VPS outbound IP) |
-| `wdgzone` | Backup, cheaper on some packs | REST, base `https://wdgzone.tech/api/v1`, `X-API-Key` header, `X-Idempotency-Key` | HMAC-signed webhooks (secret derived from the API key; they name WDG's order id, not our key); polling by WDG's order id; automatic refunds; no player validation; 60 requests a minute (`docs/suppliers/wdgzone.md`) |
+| `wdgzone` | Automatic (ADR 0031) | REST, base `https://wdgzone.tech/api/v1`, `X-API-Key` header, `X-Idempotency-Key` | HMAC-signed webhooks (secret derived from the API key; they name WDG's order id, not our key); polling by WDG's order id; automatic refunds; no player validation; 60 requests a minute (`docs/suppliers/wdgzone.md`) |
 | `manual` | Staff fulfil by hand | — | Orders wait in the live orders room (F17) for an operator to deliver and confirm |
 | `fake` | Development, tests, E2E | In-process | Scripted outcomes: delivered, slow, pending then webhook, definitive failure, unknown/timeout, wrong signature |
 
@@ -30,11 +29,11 @@ Exact endpoints, payloads and limits are written in `docs/suppliers/<code>.md` w
 - Each store product maps to supplier offers (supplier, offer id, priority, enabled).
 - At fulfilment the router builds candidates: enabled mapping, supplier healthy (not `down`), offer in stock, cost known and **cost < price − minimum margin** (margin guard, F10). Order: lowest cost, then health score, then measured delivery time, then priority.
 - On a definitive failure the next candidate is tried (A04); a route already tried for the order is skipped. When none is left, the order is refunded.
-- A player validated by `shop2topup` may be fulfilled by `wdgzone`: validation is about the player, not the route.
+- A player validated by one supplier may be fulfilled by another: validation is about the player, not the route.
 
 ### Input fields and player validation
-- Each game's input fields (player ID, zone ID, server, region, phone…) are defined in the catalog (F08) and mapped per supplier offer to the supplier's own field names; SHOP2TOPUP's per-category requirements endpoint is used to build and check the mapping. An order is never sent with a field the route needs missing.
-- Validation is a scarce, abusable resource (SHOP2TOPUP has a daily quota). The API validates only for signed-in, email-verified customers, after the field is complete (debounced or on blur, never per keystroke), with per-customer and per-IP limits, and caches results per game and account fields for a set time (valid and invalid alike). Quota use is tracked; near the quota the store falls back to "confirm the ID yourself" instead of failing purchases. Staff see quota use on the supplier page.
+- Each game's input fields (player ID, zone ID, server, region, phone…) are defined in the catalog (F08) and mapped per supplier offer to the supplier's own field names (a supplier that publishes per-category requirements is used to build and check the mapping). An order is never sent with a field the route needs missing.
+- Validation is a scarce, abusable resource (a supplier that validates sets a daily quota). The API validates only for signed-in, email-verified customers, after the field is complete (debounced or on blur, never per keystroke), with per-customer and per-IP limits, and caches results per game and account fields for a set time (valid and invalid alike). Quota use is tracked; near the quota the store falls back to "confirm the ID yourself" instead of failing purchases. Staff see quota use on the supplier page.
 - **Health:** a rolling window per supplier of success rate, unknown-outcome rate and latency sets `healthy`, `degraded` (used only when no healthy route exists) or `down` (excluded; a half-open probe after a cool-down). Supplier balance below the cost of the order excludes it too (A07 alerts).
 - **Price sync** (A06) refreshes costs on a schedule; a change beyond the configured threshold goes to the price change review queue, and the margin guard pauses products without a profitable route.
 

@@ -6,10 +6,9 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 |---|---|---|---|
 | Q1 | Off-server backup destination (shared need with Vertex Hub) | Launch | Required: the system holds customer money |
 | Q3 | License for the public repository (none means all rights reserved) | Anytime | — |
-| Q12 | Supplier account and API documentation for SHOP2TOPUP, including its daily player-validation quota, its reset time and any fee (S09 uses a panel default of 1,000 a day until then; the launch catalog part was answered on 2026-10-08; WDGZone's part on 2026-10-12: its public documentation, `docs/suppliers/wdgzone.md`) | The `shop2topup` adapter PR (S07 is built and accepted with the fake and manual suppliers) | Share the documentation (files or links) when the account is ready; keys are entered in the panel only |
 | Q15 | Sentry: account owner and organization for the three apps | Phase 0 deploy skeleton | Free plan under the owner's email |
 | Q16 | Who draws the final VERTEX DIGITAL wordmark (agent in Phase 0 from the Vertex Media style, or a designer) | Phase 0 design system | Agent draft in Phase 0 (done: `brand/logo/svg/vertex-logo.svg`, the DIGITAL mark over the Vertex Media VERTEX wordmark), designer files later replace it |
-| Q17 | S07 rule P3: a large cost change seen through another basis route (a non-basis supplier drops its cost to near zero, so its route becomes the basis) reprices at once without review. Should such a basis switch also go to review when the price moves more than the threshold? | The second real adapter (`shop2topup` or `wdgzone`); it cannot happen with only `fake` and `manual` | Review it too: the spec's abuse row says a cost dropped near zero is held for review |
+| Q17 | S07 rule P3: a large cost change seen through another basis route (a non-basis supplier drops its cost to near zero, so its route becomes the basis) reprices at once without review. Should such a basis switch also go to review when the price moves more than the threshold? | A second automatic supplier (ADR 0031 left WDGZone the only one); it cannot happen with one automatic supplier and `manual` | Review it too: the spec's abuse row says a cost dropped near zero is held for review |
 | Q20 | WDGZone lists top-ups that ask for the customer's game account email and password beside its id (9 supported by S16 MF1 on 2026-10-13, e.g. Genshin Impact's account top-ups). Sell them, asking customers for their password? | Importing such a pack (S16 PR 4 keeps every offer with a password field unsupported until then) | Do not sell them in V1: a password is personal data the store must never hold; if sold later, it needs its own spec (encrypted at rest, removed after delivery, never shown in the panel) |
 
 ## Resolved
@@ -24,7 +23,8 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Stack | ADR 0002 | 2026-10-06 |
 | Base currency and SYP | USD base; SYP shown everywhere and accepted for deposits with stored rates; 15-minute rate lock (ADR 0003) | 2026-10-06 |
 | Payment methods at launch | Sham Cash (manual review) and USDT TRC20/BEP20 (automatic) (ADR 0006) | 2026-10-06 |
-| Suppliers | SHOP2TOPUP primary, WDGZone backup, manual and fake (ADR 0005) | 2026-10-06 |
+| Suppliers | WDGZone (automatic), manual and fake (ADR 0005; the first primary was dropped on 2026-10-14, ADR 0031) | 2026-10-14 |
+| Q12: supplier accounts and API documentation | WDGZone's public documentation (`docs/suppliers/wdgzone.md`, 2026-10-12); the other supplier was dropped before its adapter (ADR 0031); the validation quota keeps its panel default of 1,000 a day | 2026-10-14 |
 | Customer verification | Email OTP only; phone required and format-validated, not verified (ADR 0007) | 2026-10-06 |
 | UI languages | Arabic only in V1, i18n ready; English in Phase 4 (ADR 0012) | 2026-10-06 |
 | Wallet withdrawals | None in V1; refunds to the wallet; exceptional owner cash refunds recorded as adjustments (ADR 0003) | 2026-10-06 |

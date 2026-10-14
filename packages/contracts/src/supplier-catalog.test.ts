@@ -352,7 +352,7 @@ describe('capabilities and health (S16, SF6)', () => {
   it('declares the panel reads for wdgzone and fake only', () => {
     expect(supplierPanelCapabilities('wdgzone').categories).toBe(true);
     expect(supplierPanelCapabilities('fake').statement).toBe(true);
-    expect(supplierPanelCapabilities('shop2topup')).toEqual({
+    expect(supplierPanelCapabilities('manual')).toEqual({
       categories: false,
       statement: false,
       platformStatus: false,
