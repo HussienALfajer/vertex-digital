@@ -83,7 +83,7 @@ Money is USD units (micro-dollars, ADR 0003). SYP is display only and never stor
 - The app role has `SELECT`, `INSERT` and `DELETE`. The sweep deletes rows expired for more than a day. The table has no audit and no trigger: it is a cache of a supplier's answer, and its lookups are recorded in `supplier_calls`.
 
 ### `suppliers` (changed)
-- `validation_daily_quota` int 0–1,000,000, default 1,000 (owner, 2026-10-09, until SHOP2TOPUP's real quota is known: Q12). Changed from the supplier page and audited.
+- `validation_daily_quota` int 0–1,000,000, default 1,000 (owner, 2026-10-09; no live supplier validates since ADR 0031). Changed from the supplier page and audited.
 - Today's usage is counted from `supplier_calls` (`operation = 'validate_player'`) since 00:00 `Asia/Damascus`. A new index `(supplier_id, operation, created_at desc)` serves the count.
 
 ### `catalog_games` (changed)
@@ -249,7 +249,7 @@ Statuses: `409` for `PLAYER_NOT_CONFIRMED`, `RESERVATIONS_LIMIT_REACHED`, `ORDER
 - `orders.sweep` (S08, every minute) gains two steps: RS7 expiry (at most 100 per run) and deleting `player_checks` rows expired for more than a day.
 - `store.revalidate` (singleton, at most once per 10 seconds): SF4. It calls the store on `127.0.0.1:<STORE_PORT>` with a 5-second timeout. A failure retries 3 times, then logs a warning; the 5-minute cache life is the fallback, and a failure raises no alert.
 - Supplier calls: `validatePlayer` from the API (PV2–PV6) through `SupplierRegistry` with decrypted credentials, recorded in `supplier_calls` (operation `validate_player`; `ok` for valid or invalid, `error` for a timeout or unknown answer). Adapters map "player not found" to `valid: false`. The real adapters' mapping is Q12's adapter PRs. The fake adapter already answers `invalid…` players as invalid, and `supplier:fake --errors on` fails its validation calls for the "unavailable" path.
-- Telegram: `validation_quota_reached` ("⚠️ بلغت حصة التحقق اليومية لدى SHOP2TOPUP (1000). العملاء يؤكدون المعرّف بأنفسهم حتى منتصف الليل"; dedupe `validation-quota:<supplier>:<date>`). The daily summary (AL3) adds the day's validations per supplier and the reservations paid and expired.
+- Telegram: `validation_quota_reached` ("⚠️ بلغت حصة التحقق اليومية لدى <المورد> (1000). العملاء يؤكدون المعرّف بأنفسهم حتى منتصف الليل"; dedupe `validation-quota:<supplier>:<date>`). The daily summary (AL3) adds the day's validations per supplier and the reservations paid and expired.
 - Customer notifications (S05 `notifyCustomer`, in the transaction of the change): `order_paid` (center only), `order_cancelled` (center and email, reasons of RS9). Params: order number, product name, reason; never field values.
 - `order:place` (api CLI) gains `--reserve` (`whenBalanceShort: 'reserve'`) and `--confirm-player`.
 
@@ -330,7 +330,7 @@ Statuses: `409` for `PLAYER_NOT_CONFIRMED`, `RESERVATIONS_LIMIT_REACHED`, `ORDER
 23. Search for "pubg" with no search terms entered: the English name matches; "ببجي" matches only once the admin adds it as a term.
 
 ## Open questions
-- Q12 (part): SHOP2TOPUP's real validation quota, its reset time and any fee. Until known, the panel default of 1,000 a day counted from Damascus midnight is used. Each adapter PR maps its "player not found" answer to `valid: false`. This does not block S09, which is built and accepted with the fake supplier.
+- Q12 (closed by ADR 0031): no live supplier validates players; the panel default of 1,000 a day counted from Damascus midnight stays. A future validating adapter maps its "player not found" answer to `valid: false`. S09 is built and accepted with the fake supplier.
 
 ## Acceptance
 The owner's browser check (local, `pnpm dev`, `SUPPLIER_FAKE_ENABLED=true`, `TELEGRAM_TRANSPORT=log`). The data is S06–S08's: PUBG Mobile active with "60 UC" (`game_amount` 60), "325 UC" and "660 UC" routed to fake offers, an iTunes code product, and a second game paused. The customer is a non-test one with $5 from a manual deposit adjustment.

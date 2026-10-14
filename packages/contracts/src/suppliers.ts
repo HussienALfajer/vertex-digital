@@ -20,7 +20,8 @@ import { CURRENCY_SCALE, currencySchema, USD_CENT, usdCentsSchema } from './mone
  * `pricing.ts`. Supplier text (offer names, groups) is shown as received, as text only.
  */
 
-export const SUPPLIER_CODES = ['shop2topup', 'wdgzone', 'manual', 'fake'] as const;
+/** ADR 0031: WDGZone is the only automatic supplier. */
+export const SUPPLIER_CODES = ['wdgzone', 'manual', 'fake'] as const;
 
 export const supplierCodeSchema = z.enum(SUPPLIER_CODES).meta({ id: 'SupplierCode' });
 
@@ -69,12 +70,10 @@ export type SupplierCallOperation = (typeof SUPPLIER_CALL_OPERATIONS)[number];
 export type SupplierCallResult = (typeof SUPPLIER_CALL_RESULTS)[number];
 
 /**
- * The secret fields the panel asks for, per supplier (rule SP2). Provisional for `shop2topup`: its
- * adapter PR may rename them (Q12). WDGZone signs its webhooks with a secret derived from the API
- * key, so the key is its only field (docs/suppliers/wdgzone.md).
+ * The secret fields the panel asks for, per supplier (rule SP2). WDGZone signs its webhooks with a
+ * secret derived from the API key, so the key is its only field (docs/suppliers/wdgzone.md).
  */
 export const SUPPLIER_CREDENTIAL_FIELDS: Record<SupplierCode, readonly string[]> = {
-  shop2topup: ['apiKey', 'webhookSecret'],
   wdgzone: ['apiKey'],
   manual: [],
   fake: ['webhookSecret'],
@@ -95,7 +94,7 @@ export function supplierAvailable(code: SupplierCode, options: { fakeEnabled: bo
 /** Suppliers that list offers (rule SY1); `manual` offers are the admin's. */
 /**
  * S09 rule PV1: this build has an adapter for the supplier that checks player ids. Each real
- * adapter's PR adds its code (Q12).
+ * adapter's PR adds its code.
  */
 export function supplierChecksPlayers(
   code: SupplierCode,
@@ -544,7 +543,7 @@ export const supplierPanelCapabilitiesSchema = z
 
 export type SupplierPanelCapabilities = z.infer<typeof supplierPanelCapabilitiesSchema>;
 
-/** The adapters that declare the S16 capabilities (`wdgzone`, `fake`); SHOP2TOPUP has none yet. */
+/** The adapters that declare the S16 capabilities (`wdgzone`, `fake`). */
 export function supplierPanelCapabilities(code: SupplierCode): SupplierPanelCapabilities {
   const has = code === 'wdgzone' || code === 'fake';
   return { categories: has, statement: has, platformStatus: has };

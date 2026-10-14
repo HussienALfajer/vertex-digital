@@ -14,7 +14,7 @@ import type {
 
 /** What a supplier's API offers; routing and the store check these before calling. */
 export interface SupplierCapabilities {
-  /** Checks a player ID and returns the in-game name (SHOP2TOPUP). */
+  /** Checks a player ID and returns the in-game name. */
   validatePlayer: boolean;
   /** Pushes order results by HMAC-signed webhook; otherwise polling only. */
   webhooks: boolean;
@@ -194,7 +194,7 @@ export interface SupplierWebhookEvent {
 }
 
 export interface SupplierAdapter {
-  /** The supplier code (`shop2topup`, `wdgzone`, `fake`). */
+  /** The supplier code (`wdgzone`, `fake`). */
   readonly code: string;
   readonly capabilities: SupplierCapabilities;
   listOffers(): Promise<SupplierOffer[]>;

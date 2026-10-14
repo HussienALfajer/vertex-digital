@@ -435,18 +435,18 @@ describe('external checks (E1–E4)', () => {
   it('skips a place without an opening, then compares within the range and the tolerance (E2)', async () => {
     await rolledBack(db, async (tx) => {
       const check = (actualUnits: number) =>
-        supplierBalanceCheck(tx, { supplier: 'shop2topup', actualUnits, toleranceUsdUnits: USD });
-      // Tests elsewhere never record a standing opening on SHOP2TOPUP.
+        supplierBalanceCheck(tx, { supplier: 'manual', actualUnits, toleranceUsdUnits: USD });
+      // Tests elsewhere never record a standing opening on the manual supplier.
       expect(await check(0)).toMatchObject({
         status: 'skipped',
         details: { reason: 'opening_missing' },
       });
       await recordMovement(
         tx,
-        transfer('outside_usd', 'supplier:shop2topup', 200 * USD, { openingBalance: true }),
+        transfer('outside_usd', 'supplier:manual', 200 * USD, { openingBalance: true }),
         actor,
       );
-      const books = await placeBooks(tx, 'supplier:shop2topup');
+      const books = await placeBooks(tx, 'supplier:manual');
       expect(await check(books)).toMatchObject({
         status: 'ok',
         booksUnits: books,

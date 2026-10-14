@@ -421,6 +421,13 @@
       "when": 1791888562379,
       "tag": "0059_safe_earthquake",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1791969296304,
+      "tag": "0060_adr0031_drop_shop2topup",
+      "breakpoints": true
     }
   ]
 }

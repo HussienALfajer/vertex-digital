@@ -1,6 +1,6 @@
 # WDGZone (`wdgzone`)
 
-The backup supplier (ADR 0005): game top-ups and vouchers, cheaper than SHOP2TOPUP on some packs. Adapter: `packages/suppliers/src/wdgzone/`.
+The automatic supplier (ADR 0005, 0031): game top-ups and vouchers. Adapter: `packages/suppliers/src/wdgzone/`.
 
 Sources: the public documentation at https://wdgzone.tech/docs/ and its OpenAPI document (https://wdgzone.tech/api/openapi.json, "WDG Reseller API" 1.3.0), read on 2026-10-12, read-only calls to the live API with the owner's trial key on the same day (the wallet held $0, so no purchase could be charged), WDG support's written answer to Q19 on 2026-10-13 (idempotency, several fields, the delivery poll), and a read-only scan of every top-up on 2026-10-13 (S16 PR 4, "Account fields": `GET /products?type=topup` pages and one `GET /products/{id}`; nothing was bought or written). Anything these sources do not show is under "Open questions".
 

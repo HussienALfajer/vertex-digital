@@ -54,7 +54,7 @@ beforeAll(async () => {
     body: { password: PASSWORD, totpCode: totp(admin.secret) },
   });
   expect(reauthenticated.status).toBe(200);
-  await clearPlace(TREASURY_ACCOUNTS['supplier:shop2topup'].code);
+  await clearPlace(TREASURY_ACCOUNTS['supplier:manual'].code);
 });
 
 afterAll(async () => {
@@ -100,7 +100,7 @@ describe('movements', () => {
     const key = randomUUID();
     const payload = {
       from: 'usdt_trc20',
-      to: 'supplier:shop2topup',
+      to: 'supplier:manual',
       sentUnits: 20 * USD,
       receivedUnits: 19 * USD,
       externalReference: `api-${randomUUID()}`,
@@ -113,7 +113,7 @@ describe('movements', () => {
     expect(first).toMatchObject({
       kind: 'transfer',
       from: 'usdt_trc20',
-      to: 'supplier:shop2topup',
+      to: 'supplier:manual',
       feeUnits: USD,
       rate: null,
       reversedByMovementId: null,
@@ -178,7 +178,7 @@ describe('movements', () => {
   it('asks for the amount typed again above $100 (rule T7)', async () => {
     const payload = {
       from: 'outside_usd',
-      to: 'supplier:shop2topup',
+      to: 'supplier:manual',
       sentUnits: 150 * USD,
       receivedUnits: 150 * USD,
       outsideCategory: 'owner',
@@ -228,7 +228,7 @@ describe('movements', () => {
 
   it('records a supplier correction about an order number it knows (rule T5)', async () => {
     const payload = {
-      supplier: 'shop2topup',
+      supplier: 'manual',
       direction: 'decrease',
       amountUnits: 1_250,
       reason: 'Charged twice',
@@ -247,7 +247,7 @@ describe('movements', () => {
     written.push(correction.id as string);
     expect(correction).toMatchObject({
       kind: 'supplier_correction',
-      from: 'supplier:shop2topup',
+      from: 'supplier:manual',
       to: 'supplier_corrections',
       sentUnits: 1_250,
       feeUnits: 0,
@@ -257,7 +257,7 @@ describe('movements', () => {
   it('reverses once, in parallel too, and never a reversal (rule T9)', async () => {
     const original = await recorded({
       from: 'outside_usd',
-      to: 'supplier:shop2topup',
+      to: 'supplier:manual',
       sentUnits: 3 * USD,
       receivedUnits: 3 * USD,
       outsideCategory: 'owner',
@@ -285,7 +285,7 @@ describe('movements', () => {
       code: 'NOT_FOUND',
     });
     const list = await body(
-      await client.get('/api/admin/treasury/movements?place=supplier:shop2topup&limit=100', {
+      await client.get('/api/admin/treasury/movements?place=supplier:manual&limit=100', {
         cookie: admin.cookie,
       }),
     );

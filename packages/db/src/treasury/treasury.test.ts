@@ -196,7 +196,7 @@ describe('recording movements', () => {
   it('allows an opening only as the place stands empty, again once it is reversed (T6, edge 12)', async () => {
     await rolledBack(async (tx) => {
       const opening = (overrides: Partial<MovementInput> = {}) =>
-        transfer('outside_usd', 'supplier:shop2topup', { openingBalance: true, ...overrides });
+        transfer('outside_usd', 'supplier:manual', { openingBalance: true, ...overrides });
       const { movement } = await recordMovement(tx, opening(), actor);
       expect(await refusal(recordMovement(tx, opening(), actor))).toBe('OPENING_BALANCE_EXISTS');
       await reverseMovement(
@@ -211,7 +211,7 @@ describe('recording movements', () => {
       );
       expect(second.created).toBe(true);
       // A later movement into the place makes a new opening impossible.
-      await recordMovement(tx, transfer('usdt_trc20', 'supplier:shop2topup'), actor);
+      await recordMovement(tx, transfer('usdt_trc20', 'supplier:manual'), actor);
       await reverseMovement(
         tx,
         { movementId: second.movement.id, idempotencyKey: newId(), reason: 'Reset' },

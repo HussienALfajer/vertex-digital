@@ -3,11 +3,11 @@
 Status: Approved · Date: 2026-10-08 · Scope: `docs/product/v1-scope.md` §F09 (A06, A07, A08; with §F10 and §F08 CT9) · ADRs: 0003, 0004, 0005, 0008, 0011, 0016, 0019, 0020, 0021
 
 ## Summary
-S06 built the catalog and the price math, but nothing has a cost, so everything is out of stock. S07 connects the suppliers: their encrypted keys, their offers and costs read every 15 minutes, bulk import of offers into paused products, the mapping of each product to one route per supplier with its input fields, and the stored prices that follow the cheapest usable route. Large cost changes wait in a review queue, the margin guard pauses products that would sell at a loss, supplier health and balances are watched with Telegram alerts, and each supplier can be paused. It is built and accepted with the `fake` and `manual` suppliers; the SHOP2TOPUP and WDGZone adapters follow in their own PRs once their documentation arrives (Q12, ADR 0021).
+S06 built the catalog and the price math, but nothing has a cost, so everything is out of stock. S07 connects the suppliers: their encrypted keys, their offers and costs read every 15 minutes, bulk import of offers into paused products, the mapping of each product to one route per supplier with its input fields, and the stored prices that follow the cheapest usable route. Large cost changes wait in a review queue, the margin guard pauses products that would sell at a loss, supplier health and balances are watched with Telegram alerts, and each supplier can be paused. It is built and accepted with the `fake` and `manual` suppliers; the WDGZone adapter followed in its own PR (ADR 0021); the other planned supplier was dropped before its adapter (ADR 0031).
 
 ## In scope / out of scope
 - In:
-  - Suppliers: the four rows (`shop2topup`, `wdgzone`, `manual`, `fake`), credentials entered in the panel and stored encrypted (AES-256-GCM), a per-supplier switch, a low-balance threshold, health state with history, balance reads.
+  - Suppliers: the three rows (`wdgzone`, `manual`, `fake`; ADR 0031), credentials entered in the panel and stored encrypted (AES-256-GCM), a per-supplier switch, a low-balance threshold, health state with history, balance reads.
   - Offers: read by sync (A06) every 15 minutes and on demand, with cost history; manual offers created by the admin with a cost.
   - Routes (mapping): one route per supplier per product, with priority, enable switch and input field mapping; bulk import of offers into paused products.
   - Prices: stored with their history, repriced on cost, route, mapping, switch, health, staleness and rule changes (PR9), the review queue for cost changes above 10%, the margin guard's pauses, and real availability (CT9).
@@ -15,7 +15,7 @@ S06 built the catalog and the price math, but nothing has a cost, so everything 
   - The ADR 0003 rule refusing a display step that adds more than 2% to the cheapest available product (S03, S06 deferred it here).
   - The `fake` adapter's catalog scripting and a dev CLI for it; the supplier policy settings page.
 - Out (later or never):
-  - The `shop2topup` and `wdgzone` adapters: one PR each through `/supplier-adapter` when the owner shares their documentation (Q12, ADR 0021). Their credential fields below are provisional and may be renamed by that PR. The `wdgzone` adapter is built (`docs/suppliers/wdgzone.md`).
+  - The `wdgzone` adapter: its own PR through `/supplier-adapter` (ADR 0021), built (`docs/suppliers/wdgzone.md`).
   - Orders, routing an order, fulfilment attempts, the supplier webhook endpoint and its events, polling, cost of goods: S08 (F11). S08 records its order calls into `supplier_calls`, so they count toward health.
   - Player validation, its cache and quota display: S09 (F13), through the same adapters and `supplier_calls`.
   - Showing service status and measured delivery times on the store: S09 (F12), from the health and availability built here.
@@ -41,16 +41,16 @@ Customers reach nothing new in S07: S09 reads availability and prices for the st
 New tables are owned by the api `suppliers` module (stored prices and reviews by `pricing`). Business tables have `id`, `created_at`, `updated_at`, `archived_at`; append-only tables have `id` (UUIDv7), `created_at` and no update or delete grant for the app role (ADR 0014). Money is USD units (micro-dollars, ADR 0003); every cost is > 0 and ≤ $10,000.
 
 ### Contracts (`suppliers.ts`, new; `pricing.ts`, `catalog.ts`, `settings.ts`, `telegram.ts` extended)
-- `SUPPLIER_CODES` (`shop2topup`, `wdgzone`, `manual`, `fake`); `SUPPLIER_HEALTH_STATES` (`healthy`, `degraded`, `down`); `SUPPLIER_CALL_OPERATIONS` (`list_offers`, `get_balance`, `validate_player`, `place_order`, `get_order`); `SUPPLIER_CALL_RESULTS` (`ok`, `refused`, `error`): `ok` answered, `refused` a definitive refusal (the supplier is working), `error` no trustworthy answer (timeout, connection, 5xx, unreadable reply, `unknown` order outcome).
-- `SUPPLIER_CREDENTIAL_FIELDS`: per code, the named secret fields the panel asks for. Provisional: `shop2topup` `apiKey` (the `<keyId>.<secret>` token, ADR 0005) and `webhookSecret`; `wdgzone` `apiKey` (its PR: WDG derives the webhook secret from the key); `fake` `webhookSecret`; `manual` none.
+- `SUPPLIER_CODES` (`wdgzone`, `manual`, `fake`); `SUPPLIER_HEALTH_STATES` (`healthy`, `degraded`, `down`); `SUPPLIER_CALL_OPERATIONS` (`list_offers`, `get_balance`, `validate_player`, `place_order`, `get_order`); `SUPPLIER_CALL_RESULTS` (`ok`, `refused`, `error`): `ok` answered, `refused` a definitive refusal (the supplier is working), `error` no trustworthy answer (timeout, connection, 5xx, unreadable reply, `unknown` order outcome).
+- `SUPPLIER_CREDENTIAL_FIELDS`: per code, the named secret fields the panel asks for. `wdgzone` `apiKey` (its PR: WDG derives the webhook secret from the key); `fake` `webhookSecret`; `manual` none.
 - `SYNC_RUN_TRIGGERS` (`schedule`, `admin`); `SYNC_RUN_STATUSES` (`running`, `succeeded`, `failed`); `PRICE_CHANGE_CAUSES` (`cost_sync`, `route_change`, `rule_change`, `review_accepted`, `margin_adjusted`); `PRICE_REVIEW_STATUSES` (`open`, `accepted`, `margin_adjusted`, `paused`, `superseded`).
 - Pure functions (100% coverage): `supplierHealth(window, policy, previous)` (H1–H5), `routeUsability(route, facts, now, policy)` (RT4), `priceBasis(routes)` (P1), `needsReview(basisCostThen, costNow, thresholdBp)` (P3), `productAvailability` extended with routes and price (P6), `displayStepAllowed(stepUnits, rate, cheapestPriceUnits)` (P9). Schemas for every request and response below.
-- `STORE_SWITCHES` gains `shop2topup_paused`, `wdgzone_paused`, `manual_paused` (default `false`), as S05 planned.
+- `STORE_SWITCHES` gains `wdgzone_paused`, `manual_paused` (default `false`), as S05 planned.
 - Error codes: `SUPPLIER_NOT_CONFIGURED`, `SUPPLIER_UNAVAILABLE`, `OFFER_ALREADY_MAPPED`, `ROUTE_EXISTS`, `ROUTE_KIND_MISMATCH`, `ROUTE_FIELDS_UNMAPPED` (`details.fields`), `OFFER_MISSING`, `REVIEW_CLOSED`, `REVIEW_STALE` (`details.proposedPriceUsdUnits`), `DISPLAY_STEP_TOO_LARGE` (`details.maxStepSypUnits`). Each with its Arabic text in the panel.
 - Audit entity types `supplier`, `supplier_policy`, `supplier_offer`, `product_route`, `price_review`; actions in "Audit and notifications".
 
 ### `suppliers` (new; business table, never archived)
-- `code` enum `supplier_code`, unique; `name_ar` text 1–40 (seeded: "SHOP2TOPUP"، "WDGZone"، "يدوي"، "مورد تجريبي"); `low_balance_usd_units` bigint, whole cents, $0–$100,000, default $50 (A07; ignored for `manual`).
+- `code` enum `supplier_code`, unique; `name_ar` text 1–40 (seeded: "WDGZone"، "يدوي"، "مورد تجريبي"); `low_balance_usd_units` bigint, whole cents, $0–$100,000, default $50 (A07; ignored for `manual`).
 - Seeded by a custom migration with the four rows. Base URLs are not stored: they live in each adapter (ADR 0021).
 
 ### `supplier_credentials` (new; append-only; the newest row per supplier is in force)
@@ -98,7 +98,7 @@ New tables are owned by the api `suppliers` module (stored prices and reviews by
 ## States and rules
 
 ### Suppliers and credentials
-- SP1. A supplier is **configured** when it needs no credentials (`manual`) or has a credentials row, and **available** when the running app has its adapter: `manual` always; `fake` only when `SUPPLIER_FAKE_ENABLED=true`, which the api and worker refuse to start with in production; `shop2topup` once its adapter PR lands; `wdgzone` since its adapter PR. An unavailable supplier shows "المحوّل غير جاهز" and its routes are unusable.
+- SP1. A supplier is **configured** when it needs no credentials (`manual`) or has a credentials row, and **available** when the running app has its adapter: `manual` always; `fake` only when `SUPPLIER_FAKE_ENABLED=true`, which the api and worker refuse to start with in production; `wdgzone` since its adapter PR. An unavailable supplier shows "المحوّل غير جاهز" and its routes are unusable.
 - SP2. Setting credentials writes a new `supplier_credentials` row (all fields of that supplier, each 1–500 characters, trimmed) and enqueues an `admin` sync, which is the connection test: its run reports success or the error code. Credentials are never returned, logged, put in jobs, audit details or Sentry; the panel shows the hints only ("…a1b2").
 - SP3. The supplier switch (`<code>_paused`) uses the S05 write path (re-authentication, history, `switch_changed` Telegram notice). A paused supplier is still synced and its balance read; its routes are unusable (RT4).
 
@@ -181,7 +181,7 @@ Queues in `packages/contracts` `QUEUES`; payloads carry ids only.
 - `suppliers.balances` (every 5 minutes): H5.
 - `suppliers.health` (every minute): H1–H4 and SY5's stale repricing. Safe twice: a state is written only when it differs from the newest row.
 - Sync summary (owner, 2026-10-08): after a run that opened reviews, put products into `paused_by_margin_guard`, or found mapped offers missing, one `supplier_sync_summary` message: "مزامنة WDGZone: 3 تغييرات أسعار للمراجعة، باقتان أوقفهما حارس الهامش، عرض مربوط اختفى" with a link to the panel. Dedupe key `sync:<runId>`.
-- Telegram (S05 write path, `telegram_messages`): new kinds `supplier_sync_summary`, `supplier_health` ("⚠️ WDGZone متراجع: نجاح 82%" / "⛔ … متوقف" / "✅ … عاد سليماً"), `supplier_balance_low` (and its recovery), `supplier_sync_failing` (after 3 consecutive failed runs, then once when costs go stale: "أسعار SHOP2TOPUP قديمة: 14 باقة غير متوفرة"). The daily summary (AL3) adds open reviews, products paused by the guard, suppliers not healthy and balances below threshold.
+- Telegram (S05 write path, `telegram_messages`): new kinds `supplier_sync_summary`, `supplier_health` ("⚠️ WDGZone متراجع: نجاح 82%" / "⛔ … متوقف" / "✅ … عاد سليماً"), `supplier_balance_low` (and its recovery), `supplier_sync_failing` (after 3 consecutive failed runs, then once when costs go stale: "أسعار WDGZone قديمة: 14 باقة غير متوفرة"). The daily summary (AL3) adds open reviews, products paused by the guard, suppliers not healthy and balances below threshold.
 - Supplier calls: through the registry (`SupplierRegistry.get(code, credentials)`), credentials decrypted in memory per call, every call recorded in `supplier_calls`; adapters per ADR 0005. No call from the API in S07.
 - `fake` supplier scripting (development and E2E only): its catalog grows to about ten offers with groups (PUBG Mobile, Free Fire, iTunes), kinds and required fields; the worker reads overrides from a git-ignored JSON file (`FAKE_SUPPLIER_STATE_FILE`) written by a dev CLI: `pnpm --filter @vertex-digital/worker supplier:fake --cost <offer> <usd> | --stock <offer> on|off | --remove <offer> | --fail-sync on|off | --errors on|off | --balance <usd>`.
 
@@ -237,15 +237,15 @@ Admin actor, channel `admin`, in the transaction of the change:
 11. A game field archived that a route maps: the route is unusable until remapped (RT3); CT3 still guards activation.
 12. The global margin rule changed with thousands of products: repriced in one transaction; products with an open review only have their proposals refreshed.
 13. Exchange rate or step change that would make the cheapest available product's step exceed 2%: refused with the largest allowed step.
-14. No adapter yet for `shop2topup` or `wdgzone`: credentials can be stored; sync answers `SUPPLIER_UNAVAILABLE`; nothing routes to them.
+14. A supplier without an adapter: credentials can be stored; sync answers `SUPPLIER_UNAVAILABLE`; nothing routes to it.
 15. A health window with one call: no rate rule applies; only consecutive errors can move it to `down`.
 
 ## Open questions
-- Q12 (part): the SHOP2TOPUP and WDGZone accounts and API documentation are still needed before their adapter PRs. Until then S07 is built and accepted with the `fake` and `manual` suppliers. Not a blocker for S07's three PRs.
+- Q12 (closed by ADR 0031): S07 is built and accepted with the `fake` and `manual` suppliers; WDGZone's adapter followed.
 
 ## Acceptance
 The owner's browser check (local, `pnpm dev`, `SUPPLIER_FAKE_ENABLED=true`, signed in to the panel, S06 games present):
-1. `/suppliers`: four suppliers; SHOP2TOPUP and WDGZone show "المحوّل غير جاهز"; the fake one "غير مهيّأ". Set its webhook secret (re-authentication): the connection test succeeds and the offers appear.
+1. `/suppliers`: three suppliers; the fake one "غير مهيّأ". Set its webhook secret (re-authentication): the connection test succeeds and the offers appear.
 2. "العروض": filter by group "PUBG Mobile", select three offers other than `fake-uc-60`, "استيراد إلى لعبة" ببجي موبايل with `playerId` → `player_id`: three paused products, each priced by PR3 from its cost and the rule in force. Resume one: the game page shows its price, SYP price and "متوفرة".
 3. Map S06's "60 UC" to `fake-uc-60` from its routes drawer; add a manual route at $1.20. The basis is the fake route; the manual one is "ملجأ أخير".
 4. `supplier:fake --cost fake-uc-60 0.92` (from $0.88) then "مزامنة الآن": the price moves at once (under 10%). `--cost fake-uc-60 1.10`, sync: a review appears in `/pricing/reviews` and a Telegram summary arrives (`TELEGRAM_TRANSPORT=log`); the price stays; since $1.10 leaves the held price below the margin, the product shows "موقوفة بحارس الهامش". Accept: the new price applies and the product is available.

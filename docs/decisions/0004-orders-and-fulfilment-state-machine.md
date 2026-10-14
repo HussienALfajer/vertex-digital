@@ -1,6 +1,6 @@
 # 0004 — Orders and the fulfilment state machine
 
-Status: Accepted · Date: 2026-10-06 · Amended by [0013](0013-refund-paid-order-without-route.md) (`paid → refunded`), [0016](0016-single-admin-account.md) (one admin account, no staff or roles), [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) (the hard limit, admin decisions, input rejections, test orders), [0023](0023-reservations-and-player-validation.md) (reservations: price at pay, expiry, limits)
+Status: Accepted · Date: 2026-10-06 · Amended by [0013](0013-refund-paid-order-without-route.md) (`paid → refunded`), [0016](0016-single-admin-account.md) (one admin account, no staff or roles), [0022](0022-order-fulfilment-timing-reviews-and-test-orders.md) (the hard limit, admin decisions, input rejections, test orders), [0023](0023-reservations-and-player-validation.md) (reservations: price at pay, expiry, limits), [0031](0031-drop-shop2topup.md) (SHOP2TOPUP dropped)
 
 ## Context
 An order spends the customer's money and asks a supplier for goods over the network. Networks time out, suppliers answer late through webhooks, and customers double-tap. The two failures that matter most are charging without delivering and delivering twice (paying two suppliers for one sale).
@@ -24,14 +24,14 @@ An order spends the customer's money and asks a supplier for goods over the netw
 - Every change appends an `order_events` row (state, actor: system, supplier or staff, details), which feeds the live timeline and the audit.
 
 ### Attempts
-- Each try with a supplier is a `fulfilment_attempts` row with its own UUIDv7, sent as the supplier's idempotency key (`order_id` for SHOP2TOPUP, `X-Idempotency-Key` for WDGZone), the supplier's reference, the cost and the raw result.
+- Each try with a supplier is a `fulfilment_attempts` row with its own UUIDv7, sent as the supplier's idempotency key (`X-Idempotency-Key` for WDGZone), the supplier's reference, the cost and the raw result.
 - Supplier results are classified by the adapter (ADR 0005) as `delivered`, `pending`, `failed_definitive` or `unknown`.
 - **An `unknown` outcome (timeout, 5xx after sending, unparseable answer) is never followed by a try with another supplier.** The worker polls the same supplier with the same key; if the outcome stays unknown past the product's hard limit, the order goes to `needs_review` (A14).
 - Retrying with the same supplier and the same key is safe (idempotent); a new attempt with another supplier needs a definitive failure of the previous one.
 
 ### Quantity and partial delivery
 - An order has a quantity (1 for most direct top-ups; more for code products or packs the supplier sells in units). Every attempt records how many units it asked for and how many were delivered.
-- A supplier may deliver only some units (SHOP2TOPUP reports `partial`). Delivered units are final. The remaining units follow the normal rules: retried on the next profitable route after a definitive failure, or refunded.
+- A supplier may deliver only some units (an adapter reports `delivered` with fewer units). Delivered units are final. The remaining units follow the normal rules: retried on the next profitable route after a definitive failure, or refunded.
 - `delivered` means every unit was delivered. When some units are delivered and the rest are refunded, the order ends in **`partially_refunded`** (terminal), with a reversing journal for exactly the undelivered units at the unit price paid (idempotency key `order:<id>:refund:<attempt>`). The sum of refunds can never exceed what was paid; a database check and a test enforce it.
 
 ### Code products

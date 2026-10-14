@@ -110,13 +110,13 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 #### F08 — Catalog
 - Games and apps (with category, cover, per-game accent color, ID guide image, region notes), products (packs) with official price and display order.
 - **Two product kinds:**
-  - **Direct top-up:** delivered to an account. Each game defines its **input fields** (player ID, and where needed zone ID, server or region, phone number), with type, format, required flag and the guide image; fields are mapped to the supplier's requirements (SHOP2TOPUP publishes them per category).
+  - **Direct top-up:** delivered to an account. Each game defines its **input fields** (player ID, and where needed zone ID, server or region, phone number), with type, format, required flag and the guide image; fields are mapped to the supplier's requirements.
   - **Code:** a gift card or voucher PIN (iTunes, Google Play, PSN, Steam, Razer Gold…) delivered as a code; quantity allowed; region and redemption instructions per product.
 - Product availability: active, paused (manual or by margin guard), out of stock (no healthy supplier).
 - Admin: create and edit games and products, reorder, archive.
 
 #### F09 — Suppliers, product mapping and price sync
-- Supplier connections: SHOP2TOPUP (primary), WDGZone (backup), Manual, Fake (development and tests) (ADR 0005). API keys entered in the admin panel and stored encrypted; balance shown per supplier.
+- Supplier connections: WDGZone (automatic), Manual, Fake (development and tests) (ADR 0005, 0031). API keys entered in the admin panel and stored encrypted; balance shown per supplier.
 - Mapping: each store product maps to one or more supplier offers, with priority and per-offer enable switch.
 - Price sync: supplier costs refreshed on a schedule; changes beyond a threshold go to the **price change review queue** (accept new price, adjust margin, pause).
 - **Supplier catalog browser** (S16): the supplier's category tree with images, counts and a state per category; import a category as a new game (paused, mapped, priced) or link it to a game; ignore; new-pack notices; stock with low-stock alerts; the supplier's wallet transactions and order history matched to our orders.

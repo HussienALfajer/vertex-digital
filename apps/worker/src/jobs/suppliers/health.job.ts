@@ -277,7 +277,7 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
 
   /**
    * After three failed syncs in a row, once per run of failures: how many of the supplier's
-   * products its stale costs left unavailable ("أسعار SHOP2TOPUP قديمة: 14 باقة غير متوفرة").
+   * products its stale costs left unavailable ("أسعار WDGZone قديمة: 14 باقة غير متوفرة").
    */
   private async reportStale(db: Executor, supplier: SupplierState, now: Date): Promise<void> {
     const streak = await failedRunStreak(db, supplier.id);

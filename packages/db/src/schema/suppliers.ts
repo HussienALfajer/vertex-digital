@@ -5,6 +5,7 @@ import {
   SUPPLIER_CALL_RESULTS,
   SUPPLIER_CODES,
   SUPPLIER_HEALTH_STATES,
+  type SupplierCode,
   SYNC_RUN_STATUSES,
   SYNC_RUN_TRIGGERS,
   WEBHOOK_EVENT_RESULTS,
@@ -32,10 +33,14 @@ import { fulfilmentAttempts } from './orders.js';
  * owned by the api `suppliers` module. Append-only tables (credentials, cost changes, calls,
  * health changes, balance reads, policy) are guarded by migration 0027 and stamped with the time
  * of the insert, so the newest row is the latest written even when its transaction began earlier.
- * Seeds (the four suppliers, the policy): 0027.
+ * Seeds (the suppliers, the policy): 0027.
  */
 
-export const supplierCodeEnum = pgEnum('supplier_code', SUPPLIER_CODES);
+/**
+ * ADR 0031: the enum keeps the dropped `shop2topup` until the release that removed it is deployed
+ * (expand, then contract); no row holds it since migration 0060. Back on `SUPPLIER_CODES` then.
+ */
+export const supplierCodeEnum = pgEnum('supplier_code', ['shop2topup', ...SUPPLIER_CODES]);
 
 export const supplierHealthStateEnum = pgEnum('supplier_health_state', SUPPLIER_HEALTH_STATES);
 
@@ -63,7 +68,7 @@ export const suppliers = pgTable(
   'suppliers',
   {
     id: id(),
-    code: supplierCodeEnum('code').notNull().unique(),
+    code: supplierCodeEnum('code').$type<SupplierCode>().notNull().unique(),
     nameAr: text('name_ar').notNull(),
     /** A07: whole cents, $0–$100,000; ignored for `manual`. */
     lowBalanceUsdUnits: amountUnits('low_balance_usd_units').notNull().default(50_000_000),

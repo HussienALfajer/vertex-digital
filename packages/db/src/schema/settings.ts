@@ -1,4 +1,4 @@
-import { STORE_SWITCHES, SWITCH_CHANNELS } from '@vertex-digital/contracts';
+import { STORE_SWITCHES, type StoreSwitch, SWITCH_CHANNELS } from '@vertex-digital/contracts';
 import { sql } from 'drizzle-orm';
 import { boolean, index, pgEnum, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { id } from './columns.js';
@@ -9,7 +9,15 @@ import { id } from './columns.js';
  * Append-only (migration 0019).
  */
 
-export const storeSwitchEnum = pgEnum('store_switch', STORE_SWITCHES);
+/**
+ * ADR 0031: the enum keeps the dropped `shop2topup_paused`, in its place, until the release that
+ * removed it is deployed (expand, then contract); no row holds it. Back on `STORE_SWITCHES` then.
+ */
+export const storeSwitchEnum = pgEnum('store_switch', [
+  ...STORE_SWITCHES.slice(0, 6),
+  'shop2topup_paused',
+  ...STORE_SWITCHES.slice(6),
+] as [string, ...string[]]);
 
 export const switchChannelEnum = pgEnum('switch_channel', SWITCH_CHANNELS);
 
@@ -17,7 +25,7 @@ export const storeSwitchChanges = pgTable(
   'store_switch_changes',
   {
     id: id(),
-    switch: storeSwitchEnum('switch').notNull(),
+    switch: storeSwitchEnum('switch').$type<StoreSwitch>().notNull(),
     value: boolean('value').notNull(),
     /** The admin who changed it; no foreign key, as `deposit_settings.admin_id`. */
     adminId: uuid('admin_id').notNull(),

@@ -13,7 +13,7 @@ Nothing can be sold until the store knows what it sells and at what price. S06 g
   - Q7 and Q13 answered (owner, 2026-10-08); ADR 0020.
 - Out (later or never):
   - Supplier offers, product mappings, route costs, stored product prices and their history, repricing on cost or rule changes, the price change review queue, the margin guard pausing products, the availability computation and the S03 rule that refuses a display step adding more than 2% to the cheapest active product: S07 (F09), which brings the costs these need. S07 uses S06's math and rules unchanged.
-  - Mapping input fields to suppliers' field names and SHOP2TOPUP's requirements check: S07.
+  - Mapping input fields to suppliers' field names: S07.
   - Validating a customer's field values, the price on the order, `PRICE_CHANGED` and the margin guard at pay time: S08 (F11). The validation rules of each field type are fixed here (CT7) and built with their first use there.
   - Store pages (home, game pages, packs, search, the "how many do I need" calculator) and the public catalog read API with its cache tags: S09 (F12, F15). Responsive image widths and AVIF: S09.
   - Search aliases and misspellings: S09 (F15) adds them to the catalog.

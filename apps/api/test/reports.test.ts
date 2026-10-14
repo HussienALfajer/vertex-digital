@@ -1,5 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { MAX_QUANTITY_LIMIT, priceFromCost, TOP_CUSTOMERS_LIMIT } from '@vertex-digital/contracts';
+import {
+  MAX_QUANTITY_LIMIT,
+  priceFromCost,
+  TOP_CUSTOMERS_LIMIT,
+  TREASURY_PLACES,
+} from '@vertex-digital/contracts';
 import {
   applyOutcome,
   auditEntries,
@@ -381,7 +386,7 @@ describe('figures', () => {
     for (const row of ledger.rows.filter((item) => item.line === 'cost_of_goods')) {
       expect(row.testUsdUnits).toBeNull();
     }
-    expect(ledger.places).toHaveLength(10);
+    expect(ledger.places).toHaveLength(TREASURY_PLACES.length);
   });
 });
 

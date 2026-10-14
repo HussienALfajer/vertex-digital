@@ -300,7 +300,7 @@ describe('routing candidates (rules R2, R4)', () => {
     const routes = [
       route('1', { supplierCode: 'manual', costUsdUnits: 500_000 }),
       route('2', { supplierCode: 'wdgzone', health: 'degraded', costUsdUnits: 700_000 }),
-      route('3', { supplierCode: 'shop2topup', costUsdUnits: 850_000 }),
+      route('3', { supplierCode: 'fake', costUsdUnits: 850_000 }),
       route('4', { supplierCode: 'fake', unusableReason: 'archived' }),
       route('5', { supplierCode: 'fake', costUsdUnits: 950_000 }),
     ];
@@ -317,7 +317,7 @@ describe('routing candidates (rules R2, R4)', () => {
   it('skips tried routes, routes a supplier cannot pay for, and real suppliers for test customers', () => {
     const routes = [
       route('1'),
-      route('2', { supplierCode: 'shop2topup' }),
+      route('2', { supplierCode: 'wdgzone' }),
       route('3', { supplierCode: 'wdgzone', balanceUsdUnits: 1_599_999 }),
       route('4', { supplierCode: 'manual', balanceUsdUnits: 1_600_000 }),
     ];
@@ -347,7 +347,7 @@ describe('routing candidates (rules R2, R4)', () => {
       productStatus: 'active' as const,
       price: { priceUsdUnits: 1_000_000, minMarginUsdUnits: 100_000 },
     };
-    const routes = [{ supplierCode: 'shop2topup' as const, costUsdUnits: 800_000 }];
+    const routes = [{ supplierCode: 'wdgzone' as const, costUsdUnits: 800_000 }];
     expect(availabilityForCustomer(facts, routes, false)).toBe('available');
     expect(availabilityForCustomer(facts, routes, true)).toBe('out_of_stock');
   });

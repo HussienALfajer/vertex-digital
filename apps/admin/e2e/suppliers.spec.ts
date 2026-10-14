@@ -78,10 +78,9 @@ test.describe('suppliers', () => {
   }) => {
     seed(admin);
     await page.goto('/suppliers');
-    for (const name of ['SHOP2TOPUP', 'WDGZone', 'يدوي', 'مورد تجريبي']) {
+    for (const name of ['WDGZone', 'يدوي', 'مورد تجريبي']) {
       await expect(card(page, name)).toBeVisible();
     }
-    await expect(card(page, 'SHOP2TOPUP')).toContainText(s.chips.unavailable);
     await expect(card(page, 'مورد تجريبي')).toContainText(s.chips.notConfigured);
 
     await card(page, 'مورد تجريبي').getByRole('button', { name: s.sync.now }).click();

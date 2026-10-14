@@ -70,10 +70,6 @@ test.describe('supplier catalog', () => {
     await page.getByRole('button', { name: c.searchSubmit }).click();
     await expect(page).toHaveURL(/cq=mena/);
     await expect(page.getByText('PUBG Mobile', { exact: true })).toBeVisible();
-
-    // A supplier without the capability says so.
-    await page.goto('/suppliers/shop2topup?tab=catalog');
-    await expect(page.getByText(c.unsupported)).toBeVisible();
   });
 
   test('imports PUBG Mobile as a paused game with two subcategories, then activates all (SC7, SC10)', async ({

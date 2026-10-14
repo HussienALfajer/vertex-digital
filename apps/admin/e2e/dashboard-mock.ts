@@ -16,18 +16,6 @@ const day = (offset: number) => {
 
 const suppliers: Dashboard['suppliers'] = [
   {
-    code: 'shop2topup',
-    nameAr: 'SHOP2TOPUP',
-    health: 'healthy',
-    healthSince: ago(600),
-    paused: false,
-    balanceUsdUnits: 412 * USD,
-    balanceAt: ago(3),
-    lowBalanceUsdUnits: 100 * USD,
-    balanceLow: false,
-    lastSync: { status: 'succeeded', at: ago(12) },
-  },
-  {
     code: 'wdgzone',
     nameAr: 'WDGZone',
     health: 'healthy',

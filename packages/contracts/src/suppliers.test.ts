@@ -58,12 +58,11 @@ describe('suppliers (rule SP1)', () => {
     expect(supplierAvailable('manual', { fakeEnabled: false })).toBe(true);
     expect(supplierAvailable('fake', { fakeEnabled: true })).toBe(true);
     expect(supplierAvailable('fake', { fakeEnabled: false })).toBe(false);
-    expect(supplierAvailable('shop2topup', { fakeEnabled: true })).toBe(false);
     expect(supplierAvailable('wdgzone', { fakeEnabled: false })).toBe(true);
   });
 
   it('list offers except the manual supplier', () => {
-    expect(SUPPLIER_CODES.filter(supplierHasCatalog)).toEqual(['shop2topup', 'wdgzone', 'fake']);
+    expect(SUPPLIER_CODES.filter(supplierHasCatalog)).toEqual(['wdgzone', 'fake']);
   });
 
   it('ask for credentials except the manual supplier', () => {
@@ -186,14 +185,14 @@ describe('route order and basis (rules RT5, RT6, P1)', () => {
     const ordered = orderRoutes([
       route('wdgzone', 500, { priority: 2 }),
       route('fake', null),
-      route('shop2topup', 500, { priority: 2 }),
+      route('fake', 500, { priority: 2 }),
       route('fake', 500, { priority: 1 }),
       route('fake', 400, { priority: 9 }),
     ]);
     expect(ordered.map((item) => [item.supplierCode, item.costUsdUnits])).toEqual([
       ['fake', 400],
       ['fake', 500],
-      ['shop2topup', 500],
+      ['fake', 500],
       ['wdgzone', 500],
       ['fake', null],
     ]);
@@ -411,6 +410,6 @@ describe('supplierChecksPlayers (S09 rule PV1)', () => {
   it('knows the adapters that check player ids in this build', () => {
     expect(supplierChecksPlayers('fake', { fakeEnabled: true })).toBe(true);
     expect(supplierChecksPlayers('fake', { fakeEnabled: false })).toBe(false);
-    expect(supplierChecksPlayers('shop2topup', { fakeEnabled: true })).toBe(false);
+    expect(supplierChecksPlayers('wdgzone', { fakeEnabled: true })).toBe(false);
   });
 });

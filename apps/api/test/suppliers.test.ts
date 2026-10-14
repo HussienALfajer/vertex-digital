@@ -323,13 +323,12 @@ describe('access', () => {
 });
 
 describe('suppliers (rules SP1–SP3)', () => {
-  it('lists the four suppliers: the adapter missing for SHOP2TOPUP', async () => {
+  it('lists the three suppliers, each with its adapter', async () => {
     const list = await json<{ code: string; available: boolean; configured: boolean }[]>(
       await get('/api/admin/suppliers'),
       200,
     );
     expect(list.map((item) => [item.code, item.available])).toEqual([
-      ['shop2topup', false],
       ['wdgzone', true],
       ['manual', true],
       ['fake', true],
@@ -397,20 +396,11 @@ describe('suppliers (rules SP1–SP3)', () => {
       status: 409,
       code: 'SUPPLIER_NOT_CONFIGURED',
     });
-    // Keys stored without an adapter yet: no connection test, and unavailable (edge case 14).
-    const stored = await json<{ configured: boolean; available: boolean; lastRun: unknown }>(
-      await put('/api/admin/suppliers/shop2topup/credentials', {
-        values: { apiKey: `key.${run}`, webhookSecret: `secret-${run}` },
-      }),
-      200,
-    );
-    expect(stored).toMatchObject({ configured: true, available: false });
-    for (const code of ['shop2topup', 'manual']) {
-      expect(await body(await post(`/api/admin/suppliers/${code}/sync`))).toMatchObject({
-        status: 409,
-        code: 'SUPPLIER_UNAVAILABLE',
-      });
-    }
+    // The manual supplier lists no offers: nothing to sync.
+    expect(await body(await post('/api/admin/suppliers/manual/sync'))).toMatchObject({
+      status: 409,
+      code: 'SUPPLIER_UNAVAILABLE',
+    });
     const first = await json<{ id: string; status: string }>(
       await post('/api/admin/suppliers/fake/sync'),
       202,
