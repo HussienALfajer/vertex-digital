@@ -839,8 +839,10 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
         .insert(supplierSyncRuns)
         .values({ id: newId(), supplierId: ids.wdgzone, trigger: 'admin' })
         .returning();
+      // The real registry: the scripted one above hands an adapter to every supplier.
+      const real = new SupplierSyncJob(pgBoss, new SupplierRegistry(env), db, env);
       expect(
-        await sync.sync(
+        await real.sync(
           {
             supplierId: ids.wdgzone,
             supplierCode: 'wdgzone',
