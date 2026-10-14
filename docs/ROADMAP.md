@@ -70,7 +70,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] Domains and TLS for both hosts (checked 2026-10-12)
 - [ ] Production secrets on the server only; supplier keys entered in the panel
 - [x] SPF, DKIM and DMARC for the sending mailbox (checked 2026-10-14 on public DNS: SPF includes Hostinger mail, DKIM `hostingermail-a` published, DMARC `p=quarantine`)
-- [ ] VPS IP registered in supplier allowlists; one small live order per supplier approved by the owner (WDGZone: key in the panel and IP registered by the owner on 2026-10-14, healthy and syncing; its live order waits for a real player id)
+- [ ] VPS IP registered in supplier allowlists; one small live order per supplier approved by the owner (WDGZone: key in the panel and IP registered by the owner on 2026-10-14, healthy and syncing; live order VO-5QXTCT on 2026-10-14: a walk-in 60 UC for $0.99 approved and confirmed by the owner, sent at once, delivered in under two minutes through the signed webhook (WDG order 3507, cost $0.887, the supplier balance down by exactly that); `shop2topup` left)
 - [x] Arabic typeface: the owner keeps Noto Kufi Arabic and Montserrat for launch (Q2 resolved 2026-10-14; Madani not licensed)
 - [x] Terms, privacy and refund policies published (with "من نحن", version 1 of each, 2026-10-13; texts in `docs/content/`)
 - [x] Admin account with 2FA; Telegram bot linked (2026-10-12: `info@vertexmedia.pro`, TOTP enrolled, the bot linked and its test message received)
