@@ -36,11 +36,7 @@ import { fulfilmentAttempts } from './orders.js';
  * Seeds (the suppliers, the policy): 0027.
  */
 
-/**
- * ADR 0031: the enum keeps the dropped `shop2topup` until the release that removed it is deployed
- * (expand, then contract); no row holds it since migration 0060. Back on `SUPPLIER_CODES` then.
- */
-export const supplierCodeEnum = pgEnum('supplier_code', ['shop2topup', ...SUPPLIER_CODES]);
+export const supplierCodeEnum = pgEnum('supplier_code', SUPPLIER_CODES);
 
 export const supplierHealthStateEnum = pgEnum('supplier_health_state', SUPPLIER_HEALTH_STATES);
 

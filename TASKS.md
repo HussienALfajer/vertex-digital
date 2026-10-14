@@ -17,4 +17,9 @@ Two PRs, expand then contract (`db-migration` step 4): the released code passes 
 - [x] Reviewer, PR with auto-merge
 
 ## PR 2 — Drop the retired enum values (after PR 1 is deployed) · `refactor/drop-shop2topup-enums`
-- [ ] Db: the enums back on the contracts' lists; the generated migration recreates `supplier_code` without `shop2topup` and `store_switch` without `shop2topup_paused`; review its SQL; drift
+PR 1 was deployed on 2026-10-14 (commit `e849fa5`; migration 0060 applied, the supplier row deleted).
+- [x] Db: the enums back on the contracts' lists; the generated migration 0061 recreates `supplier_code` without `shop2topup` and `store_switch` without `shop2topup_paused` (SQL reviewed: no other column, index or function depends on either type; 0060 guarantees no row holds a retired value); the 0060 guard tests replaced by a check that neither enum holds a SHOP2TOPUP value (the value can no longer be seeded)
+- [x] Docs: ROADMAP and `docs/deployment.md` (the 2026-10-14 deploys), `packages/db/CLAUDE.md`
+- [x] Checks (lint, typecheck, test, build, drift) through the checker
+- [x] Commit locally; the owner opens the PR (asked on 2026-10-14 not to open it directly)
+- [ ] After merge: deploy (a rollback to `39ead74` or older is no longer possible without a restore: that code sends `shop2topup_paused`)
