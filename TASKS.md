@@ -22,4 +22,4 @@ PR 1 was deployed on 2026-10-14 (commit `e849fa5`; migration 0060 applied, the s
 - [x] Docs: ROADMAP and `docs/deployment.md` (the 2026-10-14 deploys), `packages/db/CLAUDE.md`
 - [x] Checks (lint, typecheck, test, build, drift) through the checker
 - [x] Commit locally; the owner opens the PR (asked on 2026-10-14 not to open it directly)
-- [ ] After merge: deploy (a rollback to `39ead74` or older is no longer possible without a restore: that code sends `shop2topup_paused`)
+- [x] After merge: deploy (a rollback to `39ead74` or older is no longer possible without a restore: that code sends `shop2topup_paused`). Deployed on 2026-10-14 (commit `c2ac68e`): 62 migrations applied, `supplier_code` is `wdgzone,manual,fake`, `store_switch` holds no `shop2topup_paused`
