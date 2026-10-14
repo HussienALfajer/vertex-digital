@@ -94,7 +94,7 @@ test.describe('pricing', () => {
       .click();
     await saveRule(page, '12', '0.15');
     await reauthenticate(page);
-    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     expect(admin.lastBody('PUT /api/admin/pricing/rules')).toEqual({
       scope: 'category',
       targetId: admin.catalog.categories[0]?.id,
