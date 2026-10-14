@@ -17,7 +17,7 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import { customerWalletBalances } from '../ledger/wallet.js';
 import {
   auditEntries,
@@ -150,19 +150,20 @@ export async function customerPage(
     .orderBy(desc(customers.createdAt), desc(customers.id))
     .limit(input.limit + 1);
   const ids = rows.map((row) => row.id);
-  const [balances, delivered] = await Promise.all([
-    customerWalletBalances(db, ids),
-    ids.length === 0
-      ? []
-      : db
-          .select({
-            customerId: orders.customerId,
-            count: sql<number>`(count(*) filter (where ${orders.status} in ('delivered', 'partially_refunded')))::int`,
-            lastAt: sql<Date | null>`max(${orders.createdAt})`,
-          })
-          .from(orders)
-          .where(inArray(orders.customerId, ids))
-          .groupBy(orders.customerId),
+  const [balances, delivered] = await readAll(db, [
+    () => customerWalletBalances(db, ids),
+    () =>
+      ids.length === 0
+        ? []
+        : db
+            .select({
+              customerId: orders.customerId,
+              count: sql<number>`(count(*) filter (where ${orders.status} in ('delivered', 'partially_refunded')))::int`,
+              lastAt: sql<Date | null>`max(${orders.createdAt})`,
+            })
+            .from(orders)
+            .where(inArray(orders.customerId, ids))
+            .groupBy(orders.customerId),
   ]);
   const ordersOf = new Map(delivered.map((row) => [row.customerId, row]));
   return rows.map(({ frozenAt, archivedAt, ...row }) => {
@@ -201,67 +202,76 @@ export async function customerProfileFacts(
 ): Promise<CustomerProfileFacts> {
   const status = customerStatus(customer);
   const [[orderFacts], [depositFacts], [tickets], [sessions], [devices], balances, [change]] =
-    await Promise.all([
-      db
-        .select({
-          delivered: sql<number>`(count(*) filter (where ${orders.status} in ('delivered', 'partially_refunded')))::int`,
-          deliveredTotal: sql<string>`coalesce(sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits}) filter (where ${orders.status} in ('delivered', 'partially_refunded')), 0)::text`,
-          refunded: sql<number>`(count(*) filter (where ${orders.status} = 'refunded'))::int`,
-          reservations: sql<number>`(count(*) filter (where ${orders.status} = 'awaiting_balance'))::int`,
-        })
-        .from(orders)
-        .where(eq(orders.customerId, customer.id)),
-      db
-        .select({
-          credited: sql<number>`(count(*) filter (where ${deposits.status} = 'credited'))::int`,
-          creditedTotal: sql<string>`coalesce(sum(${deposits.creditedUsdUnits}) filter (where ${deposits.status} = 'credited'), 0)::text`,
-        })
-        .from(deposits)
-        .where(eq(deposits.customerId, customer.id)),
-      db
-        .select({ open: sql<number>`count(*)::int` })
-        .from(supportTickets)
-        .where(
-          and(
-            eq(supportTickets.customerId, customer.id),
-            sql`${supportTickets.status} <> 'closed'`,
+    await readAll(db, [
+      () =>
+        db
+          .select({
+            delivered: sql<number>`(count(*) filter (where ${orders.status} in ('delivered', 'partially_refunded')))::int`,
+            deliveredTotal: sql<string>`coalesce(sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits}) filter (where ${orders.status} in ('delivered', 'partially_refunded')), 0)::text`,
+            refunded: sql<number>`(count(*) filter (where ${orders.status} = 'refunded'))::int`,
+            reservations: sql<number>`(count(*) filter (where ${orders.status} = 'awaiting_balance'))::int`,
+          })
+          .from(orders)
+          .where(eq(orders.customerId, customer.id)),
+      () =>
+        db
+          .select({
+            credited: sql<number>`(count(*) filter (where ${deposits.status} = 'credited'))::int`,
+            creditedTotal: sql<string>`coalesce(sum(${deposits.creditedUsdUnits}) filter (where ${deposits.status} = 'credited'), 0)::text`,
+          })
+          .from(deposits)
+          .where(eq(deposits.customerId, customer.id)),
+      () =>
+        db
+          .select({ open: sql<number>`count(*)::int` })
+          .from(supportTickets)
+          .where(
+            and(
+              eq(supportTickets.customerId, customer.id),
+              sql`${supportTickets.status} <> 'closed'`,
+            ),
           ),
-        ),
-      db
-        .select({ active: sql<number>`count(*)::int` })
-        .from(customerSessions)
-        .where(
-          and(eq(customerSessions.userId, customer.id), gt(customerSessions.expiresAt, sql`now()`)),
-        ),
+      () =>
+        db
+          .select({ active: sql<number>`count(*)::int` })
+          .from(customerSessions)
+          .where(
+            and(
+              eq(customerSessions.userId, customer.id),
+              gt(customerSessions.expiresAt, sql`now()`),
+            ),
+          ),
       // S15: the devices the worker would send to (PD2), whatever their VAPID key.
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(pushSubscriptions)
-        .innerJoin(customerSessions, eq(customerSessions.id, pushSubscriptions.sessionId))
-        .where(
-          and(
-            eq(pushSubscriptions.customerId, customer.id),
-            gt(customerSessions.expiresAt, sql`now()`),
+      () =>
+        db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(pushSubscriptions)
+          .innerJoin(customerSessions, eq(customerSessions.id, pushSubscriptions.sessionId))
+          .where(
+            and(
+              eq(pushSubscriptions.customerId, customer.id),
+              gt(customerSessions.expiresAt, sql`now()`),
+            ),
           ),
-        ),
-      customerWalletBalances(db, [customer.id]),
-      status === 'active'
-        ? [undefined]
-        : db
-            .select({ reason: auditEntries.reason, at: auditEntries.occurredAt })
-            .from(auditEntries)
-            .where(
-              and(
-                eq(auditEntries.entityType, 'customer'),
-                eq(auditEntries.entityId, customer.id),
-                eq(
-                  auditEntries.action,
-                  status === 'frozen' ? 'customer.frozen' : 'customer.archived',
+      () => customerWalletBalances(db, [customer.id]),
+      () =>
+        status === 'active'
+          ? [undefined]
+          : db
+              .select({ reason: auditEntries.reason, at: auditEntries.occurredAt })
+              .from(auditEntries)
+              .where(
+                and(
+                  eq(auditEntries.entityType, 'customer'),
+                  eq(auditEntries.entityId, customer.id),
+                  eq(
+                    auditEntries.action,
+                    status === 'frozen' ? 'customer.frozen' : 'customer.archived',
+                  ),
                 ),
-              ),
-            )
-            .orderBy(desc(auditEntries.occurredAt))
-            .limit(1),
+              )
+              .orderBy(desc(auditEntries.occurredAt))
+              .limit(1),
     ]);
   const credited = depositFacts?.credited ?? 0;
   return {

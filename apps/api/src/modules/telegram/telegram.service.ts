@@ -9,6 +9,7 @@ import {
   type Database,
   newId,
   queueTelegramMessage,
+  readAll,
   recordAudit,
   type Transaction,
   telegramLinkCodes,
@@ -66,13 +67,14 @@ export class TelegramService {
 
   /** `GET /api/admin/telegram`. */
   async status(executor: Executor = this.db): Promise<TelegramLinkStatus> {
-    const [link, [message]] = await Promise.all([
-      this.liveLink(executor),
-      executor
-        .select()
-        .from(telegramMessages)
-        .orderBy(desc(telegramMessages.createdAt), desc(telegramMessages.id))
-        .limit(1),
+    const [link, [message]] = await readAll(executor, [
+      () => this.liveLink(executor),
+      () =>
+        executor
+          .select()
+          .from(telegramMessages)
+          .orderBy(desc(telegramMessages.createdAt), desc(telegramMessages.id))
+          .limit(1),
     ]);
     return {
       configured: this.configured,

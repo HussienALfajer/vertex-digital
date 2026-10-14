@@ -4,7 +4,7 @@ import {
   ACTIVITY_WINDOW_HOURS,
 } from '@vertex-digital/contracts';
 import { sql } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 
 /*
  * Live activity (S14 LA1–LA3), read here so the api `content` module shows real deliveries
@@ -46,16 +46,17 @@ export async function liveActivity(
       and p.archived_at is null
       and g.status = 'active' and g.archived_at is null and c.archived_at is null
       ${game}`;
-  const [counted, rows] = await Promise.all([
-    db.execute<{ count: number }>(sql`select count(*)::int as count ${qualifying}`),
-    db.execute<{
-      game_slug: string;
-      game_name_ar: string;
-      product_name_ar: string;
-      quantity: number;
-      duration_seconds: number;
-      delivered_at: string;
-    }>(sql`
+  const [counted, rows] = await readAll(db, [
+    () => db.execute<{ count: number }>(sql`select count(*)::int as count ${qualifying}`),
+    () =>
+      db.execute<{
+        game_slug: string;
+        game_name_ar: string;
+        product_name_ar: string;
+        quantity: number;
+        duration_seconds: number;
+        delivered_at: string;
+      }>(sql`
       select g.slug as game_slug, g.name_ar as game_name_ar, p.name_ar as product_name_ar,
         o.quantity,
         greatest(0, floor(extract(epoch from o.delivered_at - o.paid_at)))::int as duration_seconds,

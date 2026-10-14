@@ -13,6 +13,7 @@ import {
 import {
   ADMIN_CLOSE_REASONS,
   type Database,
+  type Executor,
   fulfilmentAttempts,
   fulfilOrderManually,
   liveBoard,
@@ -22,6 +23,7 @@ import {
   orderCodesKey,
   orderFigures,
   orders,
+  readAll,
   recordAudit,
   rerouteOptions,
   rerouteOrder,
@@ -275,18 +277,19 @@ export class OrderActionsService {
     orderId: string,
     key: string,
     action: 'reroute' | 'fulfil',
-    db: Pick<Database, 'select'> = this.db,
+    db: Executor = this.db,
   ): Promise<boolean> {
-    const [[attempt], [refunded]] = await Promise.all([
-      db
-        .select({
-          orderId: fulfilmentAttempts.orderId,
-          failureReason: fulfilmentAttempts.failureReason,
-          proofFileId: fulfilmentAttempts.proofFileId,
-        })
-        .from(fulfilmentAttempts)
-        .where(eq(fulfilmentAttempts.decisionIdempotencyKey, key)),
-      db.select({ id: orders.id }).from(orders).where(eq(orders.refundIdempotencyKey, key)),
+    const [[attempt], [refunded]] = await readAll(db, [
+      () =>
+        db
+          .select({
+            orderId: fulfilmentAttempts.orderId,
+            failureReason: fulfilmentAttempts.failureReason,
+            proofFileId: fulfilmentAttempts.proofFileId,
+          })
+          .from(fulfilmentAttempts)
+          .where(eq(fulfilmentAttempts.decisionIdempotencyKey, key)),
+      () => db.select({ id: orders.id }).from(orders).where(eq(orders.refundIdempotencyKey, key)),
     ]);
     if (refunded) throw orderRefusals.keyReused();
     if (!attempt) return false;

@@ -19,7 +19,7 @@ import {
   supplierAvailable,
 } from '@vertex-digital/contracts';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import {
   catalogCategories,
   catalogGames,
@@ -139,33 +139,37 @@ export async function supplierStates(
   db: Executor,
   context: Pick<RoutingContext, 'fakeEnabled'>,
 ): Promise<SupplierState[]> {
-  const [rows, credentials, health, balances, switches] = await Promise.all([
-    db.select().from(suppliers).orderBy(asc(suppliers.code)),
-    db.selectDistinct({ supplierId: supplierCredentials.supplierId }).from(supplierCredentials),
-    db
-      .selectDistinctOn([supplierHealthChanges.supplierId])
-      .from(supplierHealthChanges)
-      .orderBy(
-        supplierHealthChanges.supplierId,
-        desc(supplierHealthChanges.createdAt),
-        desc(supplierHealthChanges.id),
-      ),
-    db
-      .selectDistinctOn([supplierBalanceReads.supplierId])
-      .from(supplierBalanceReads)
-      .orderBy(
-        supplierBalanceReads.supplierId,
-        desc(supplierBalanceReads.createdAt),
-        desc(supplierBalanceReads.id),
-      ),
-    db
-      .selectDistinctOn([storeSwitchChanges.switch], {
-        switch: storeSwitchChanges.switch,
-        value: storeSwitchChanges.value,
-      })
-      .from(storeSwitchChanges)
-      .where(inArray(storeSwitchChanges.switch, Object.values(SUPPLIER_PAUSE_SWITCHES)))
-      .orderBy(storeSwitchChanges.switch, desc(storeSwitchChanges.createdAt)),
+  const [rows, credentials, health, balances, switches] = await readAll(db, [
+    () => db.select().from(suppliers).orderBy(asc(suppliers.code)),
+    () =>
+      db.selectDistinct({ supplierId: supplierCredentials.supplierId }).from(supplierCredentials),
+    () =>
+      db
+        .selectDistinctOn([supplierHealthChanges.supplierId])
+        .from(supplierHealthChanges)
+        .orderBy(
+          supplierHealthChanges.supplierId,
+          desc(supplierHealthChanges.createdAt),
+          desc(supplierHealthChanges.id),
+        ),
+    () =>
+      db
+        .selectDistinctOn([supplierBalanceReads.supplierId])
+        .from(supplierBalanceReads)
+        .orderBy(
+          supplierBalanceReads.supplierId,
+          desc(supplierBalanceReads.createdAt),
+          desc(supplierBalanceReads.id),
+        ),
+    () =>
+      db
+        .selectDistinctOn([storeSwitchChanges.switch], {
+          switch: storeSwitchChanges.switch,
+          value: storeSwitchChanges.value,
+        })
+        .from(storeSwitchChanges)
+        .where(inArray(storeSwitchChanges.switch, Object.values(SUPPLIER_PAUSE_SWITCHES)))
+        .orderBy(storeSwitchChanges.switch, desc(storeSwitchChanges.createdAt)),
   ]);
   const configured = new Set(credentials.map((row) => row.supplierId));
   const healthOf = new Map(health.map((row) => [row.supplierId, row]));
@@ -211,37 +215,41 @@ export async function productRoutingStates(
   const states = new Map<string, ProductRoutingState>();
   if (productIds.length === 0) return states;
   const ids = [...new Set(productIds)];
-  const [products, routeRows, supplierList, rules, prices, reviews, policy] = await Promise.all([
-    db
-      .select({
-        product: catalogProducts,
-        gameStatus: catalogGames.status,
-        gameArchivedAt: catalogGames.archivedAt,
-        categoryId: catalogGames.categoryId,
-        categoryArchivedAt: catalogCategories.archivedAt,
-      })
-      .from(catalogProducts)
-      .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
-      .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
-      .where(inArray(catalogProducts.id, ids)),
-    db
-      .select({ route: productRoutes, offer: supplierOffers })
-      .from(productRoutes)
-      .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
-      .where(inArray(productRoutes.productId, ids))
-      .orderBy(asc(productRoutes.createdAt)),
-    supplierStates(db, context),
-    db.select().from(marginRules).where(isNull(marginRules.archivedAt)),
-    db
-      .selectDistinctOn([productPrices.productId])
-      .from(productPrices)
-      .where(inArray(productPrices.productId, ids))
-      .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id)),
-    db
-      .select()
-      .from(priceReviews)
-      .where(and(inArray(priceReviews.productId, ids), eq(priceReviews.status, 'open'))),
-    currentSupplierPolicy(db),
+  const [products, routeRows, supplierList, rules, prices, reviews, policy] = await readAll(db, [
+    () =>
+      db
+        .select({
+          product: catalogProducts,
+          gameStatus: catalogGames.status,
+          gameArchivedAt: catalogGames.archivedAt,
+          categoryId: catalogGames.categoryId,
+          categoryArchivedAt: catalogCategories.archivedAt,
+        })
+        .from(catalogProducts)
+        .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
+        .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
+        .where(inArray(catalogProducts.id, ids)),
+    () =>
+      db
+        .select({ route: productRoutes, offer: supplierOffers })
+        .from(productRoutes)
+        .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
+        .where(inArray(productRoutes.productId, ids))
+        .orderBy(asc(productRoutes.createdAt)),
+    () => supplierStates(db, context),
+    () => db.select().from(marginRules).where(isNull(marginRules.archivedAt)),
+    () =>
+      db
+        .selectDistinctOn([productPrices.productId])
+        .from(productPrices)
+        .where(inArray(productPrices.productId, ids))
+        .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id)),
+    () =>
+      db
+        .select()
+        .from(priceReviews)
+        .where(and(inArray(priceReviews.productId, ids), eq(priceReviews.status, 'open'))),
+    () => currentSupplierPolicy(db),
   ]);
   const gameIds = [...new Set(products.map((row) => row.product.gameId))];
   const fields =

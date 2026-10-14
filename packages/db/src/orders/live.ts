@@ -12,7 +12,7 @@ import {
   slowAfterSeconds,
 } from '@vertex-digital/contracts';
 import { and, count, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import {
   catalogGames,
   catalogProducts,
@@ -98,9 +98,9 @@ export async function liveCounts(
   db: Executor,
   now: Date,
 ): Promise<Record<LiveColumn, number> & { awaitingBalance: number }> {
-  const [rows, [awaiting]] = await Promise.all([
-    boardRows(db, { test: 'all' }, now),
-    db.select({ count: count() }).from(orders).where(eq(orders.status, 'awaiting_balance')),
+  const [rows, [awaiting]] = await readAll(db, [
+    () => boardRows(db, { test: 'all' }, now),
+    () => db.select({ count: count() }).from(orders).where(eq(orders.status, 'awaiting_balance')),
   ]);
   const counts = Object.fromEntries(LIVE_COLUMNS.map((column) => [column, 0])) as Record<
     LiveColumn,
@@ -120,12 +120,13 @@ export async function liveBoard(
   query: LiveBoardQuery,
   now: Date,
 ): Promise<LiveBoard> {
-  const [rows, [awaiting]] = await Promise.all([
-    boardRows(db, query, now),
-    db
-      .select({ count: count() })
-      .from(orders)
-      .where(and(eq(orders.status, 'awaiting_balance'), ...boardFilters(query))),
+  const [rows, [awaiting]] = await readAll(db, [
+    () => boardRows(db, query, now),
+    () =>
+      db
+        .select({ count: count() })
+        .from(orders)
+        .where(and(eq(orders.status, 'awaiting_balance'), ...boardFilters(query))),
   ]);
   const time = (date: Date | null) => date?.getTime() ?? 0;
   const shown = new Map<LiveColumn, typeof rows>();

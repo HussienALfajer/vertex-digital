@@ -30,6 +30,7 @@ import {
   type ProductRoutingState,
   productDeliveryStats,
   productRoutingStates,
+  readAll,
   type Transaction,
 } from '@vertex-digital/db';
 import {
@@ -320,21 +321,23 @@ export class CatalogService {
       : [];
     if (!found) throw refusals.notFound('game');
     const { row } = found;
-    const [fields, products, images] = await Promise.all([
-      executor
-        .select()
-        .from(catalogInputFields)
-        .where(eq(catalogInputFields.gameId, id))
-        .orderBy(
-          sql`${catalogInputFields.archivedAt} is not null`,
-          asc(catalogInputFields.sortOrder),
-        ),
-      executor
-        .select()
-        .from(catalogProducts)
-        .where(eq(catalogProducts.gameId, id))
-        .orderBy(sql`${catalogProducts.archivedAt} is not null`, asc(catalogProducts.sortOrder)),
-      this.images([row]),
+    const [fields, products, images] = await readAll(executor, [
+      () =>
+        executor
+          .select()
+          .from(catalogInputFields)
+          .where(eq(catalogInputFields.gameId, id))
+          .orderBy(
+            sql`${catalogInputFields.archivedAt} is not null`,
+            asc(catalogInputFields.sortOrder),
+          ),
+      () =>
+        executor
+          .select()
+          .from(catalogProducts)
+          .where(eq(catalogProducts.gameId, id))
+          .orderBy(sql`${catalogProducts.archivedAt} is not null`, asc(catalogProducts.sortOrder)),
+      () => this.images([row]),
     ]);
     return {
       ...toGame(row, images, products.filter((product) => !product.archivedAt).length),
@@ -554,11 +557,11 @@ export class CatalogService {
    */
   async products(executor: Database | Transaction, rows: ProductRow[]): Promise<Product[]> {
     const ids = rows.map((row) => row.id);
-    const [states, rate, delivery, policy] = await Promise.all([
-      productRoutingStates(executor, ids, routingContext(this.env)),
-      this.rates.current(),
-      productDeliveryStats(executor, ids),
-      currentSupplierPolicy(executor),
+    const [states, rate, delivery, policy] = await readAll(executor, [
+      () => productRoutingStates(executor, ids, routingContext(this.env)),
+      () => this.rates.current(),
+      () => productDeliveryStats(executor, ids),
+      () => currentSupplierPolicy(executor),
     ]);
     return rows.map((row) => {
       const state = states.get(row.id) as ProductRoutingState;

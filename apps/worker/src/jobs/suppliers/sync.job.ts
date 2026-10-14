@@ -33,6 +33,7 @@ import {
   productRoutingStates,
   queueStoreRevalidate,
   queueTelegramMessage,
+  readAll,
   repriceProducts,
   type SupplierState,
   supplierCategories,
@@ -525,20 +526,24 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
   ): Promise<SyncRunRow> {
     const context = () => ({ now: new Date(), fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED });
     return db.transaction(async (tx) => {
-      const [existing, routed, policy] = await Promise.all([
-        tx
-          .select()
-          .from(supplierOffers)
-          .where(eq(supplierOffers.supplierId, supplier.id))
-          .orderBy(asc(supplierOffers.id))
-          // Not `FOR UPDATE`: a route inserted by the panel takes `FOR KEY SHARE` on its offer
-          // while it holds its game, which this transaction locks next (repricing).
-          .for('no key update'),
-        tx
-          .selectDistinct({ offerId: productRoutes.offerId })
-          .from(productRoutes)
-          .where(and(eq(productRoutes.supplierId, supplier.id), isNull(productRoutes.archivedAt))),
-        currentSupplierPolicy(tx),
+      const [existing, routed, policy] = await readAll(tx, [
+        () =>
+          tx
+            .select()
+            .from(supplierOffers)
+            .where(eq(supplierOffers.supplierId, supplier.id))
+            .orderBy(asc(supplierOffers.id))
+            // Not `FOR UPDATE`: a route inserted by the panel takes `FOR KEY SHARE` on its offer
+            // while it holds its game, which this transaction locks next (repricing).
+            .for('no key update'),
+        () =>
+          tx
+            .selectDistinct({ offerId: productRoutes.offerId })
+            .from(productRoutes)
+            .where(
+              and(eq(productRoutes.supplierId, supplier.id), isNull(productRoutes.archivedAt)),
+            ),
+        () => currentSupplierPolicy(tx),
       ]);
       const mapped = new Set(routed.map((row) => row.offerId));
       const listedById = new Map(listed.map((offer) => [offer.offerId, offer]));
