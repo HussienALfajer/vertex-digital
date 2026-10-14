@@ -408,8 +408,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
       await nodeAction(page, 'Gift cards', c.link);
       const sheet = page.getByRole('dialog');
-      await sheet.getByRole('combobox', { name: s.linkCategory.game }).click();
-      await page.getByRole('option', { name: 'فري فاير', exact: true }).click();
+      // On a slow runner a click on the option while the sheet still opens was lost (CI, PR #84):
+      // the game stayed unchosen. Choose again until the field shows it.
+      const gamePicker = sheet.getByRole('combobox', { name: s.linkCategory.game });
+      await expect(async () => {
+        const option = page.getByRole('option', { name: 'فري فاير', exact: true });
+        if (!(await option.isVisible())) await gamePicker.click();
+        await option.click({ timeout: 2_000 });
+        await expect(gamePicker).toHaveText(/فري فاير/, { timeout: 1_000 });
+      }).toPass();
       await expect(sheet.getByText('Fake iTunes 25').first()).toBeVisible();
       await screenshot(page, testInfo, `supplier-link-category-${colorScheme}`);
       await page.keyboard.press('Escape');
