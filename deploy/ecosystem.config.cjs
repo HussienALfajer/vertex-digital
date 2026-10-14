@@ -38,7 +38,8 @@ module.exports = {
       ...common,
       name: 'vertexdigital-worker',
       script: 'apps/worker/dist/main.js',
-      max_memory_restart: '384M',
+      // A WDG sync (11,595 offers) peaks near 350 MB with the 256 MB heap (measured 2026-10-14).
+      max_memory_restart: '512M',
       env: { ...common.env, NODE_OPTIONS: '--max-old-space-size=256' },
       out_file: `${logs}/worker.out.log`,
       error_file: `${logs}/worker.err.log`,
