@@ -65,8 +65,9 @@ async function signUp(email: string) {
   });
 }
 
-async function verify(email: string, otp: string) {
-  return client.post('/api/auth/email-otp/verify-email', { body: { email, otp } });
+/** The code with the password chosen at sign-up (rule C7, F2-7). */
+async function verify(email: string, otp: string, password = PASSWORD) {
+  return client.post('/api/auth/email-otp/verify-email', { body: { email, otp, password } });
 }
 
 /** Signs up over HTTP and verifies with the emailed code; returns the id and the session. */
@@ -119,6 +120,76 @@ describe('sign-up (rules C1, C2, C16)', () => {
     // The per-email code limit answers both the same way too: 1 a minute (rule C5).
     expect((await signUp(existing.email)).status).toBe(429);
     expect((await emailsTo(test.db, existing.email)).length).toBe(1);
+  });
+
+  it('keeps the pending code of an unverified email signed up again, and sets nothing (F2-3)', async () => {
+    const email = uniqueEmail('again');
+    expect((await signUp(email)).status).toBe(200);
+    const id = await idOf(email);
+    const first = await lastCode(test.db, email);
+    // Moves the minute window back, as if a minute passed (rule C5).
+    await test.db.execute(
+      sql.raw(
+        `update customer_rate_limits set last_request = last_request - 61000 where key like 'code-email-minute:${email}'`,
+      ),
+    );
+    // A second sign-up, as the owner of the address would after someone else signed up first.
+    const ownerPassword = 'owner-long-passphrase';
+    const again = await client.post('/api/auth/sign-up/email', {
+      body: { ...signUpBody(email), name: 'صاحب البريد', password: ownerPassword },
+      headers: await client.altcha(),
+    });
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual({ status: 'code_sent' });
+    // No code for the second sign-up: the attempt notice sends the owner to "forgot password".
+    expect((await emailsTo(test.db, email)).map((row) => row.template)).toEqual([
+      'customer_verify_email',
+      'customer_sign_up_attempt',
+    ]);
+    const [customer] = await test.db.select().from(customers).where(eq(customers.id, id));
+    expect(customer).toMatchObject({ name: 'سارة الأحمد', emailVerified: false });
+    // The first code still works, and the second sign-up's password never signs in.
+    expect((await verify(email, first)).status).toBe(200);
+    const signIn = await client.post('/api/auth/sign-in/email', {
+      body: { email, password: ownerPassword },
+    });
+    expect(signIn.status).toBe(401);
+  });
+
+  it('never signs the owner of an address in to an account someone else chose the password of (F2-7)', async () => {
+    const email = uniqueEmail('squatted');
+    // Someone signs up first with the address and never verifies it.
+    expect((await signUp(email)).status).toBe(200);
+    // Moves the minute window back, as if a minute passed (rule C5).
+    await test.db.execute(
+      sql.raw(
+        `update customer_rate_limits set last_request = last_request - 61000 where key like 'code-email-minute:${email}'`,
+      ),
+    );
+    // The address's owner asks for a new code on the code page and receives it.
+    const resend = await client.post('/api/auth/email-otp/send-verification-otp', {
+      body: { email },
+      headers: await client.altcha(),
+    });
+    expect(resend.status).toBe(200);
+    const code = await lastCode(test.db, email);
+    // The right code with the owner's own password: refused, no session, the account unverified.
+    const mismatch = await verify(email, code, 'owner-long-passphrase');
+    expect(await body(mismatch)).toMatchObject({ status: 400, code: 'PASSWORD_MISMATCH' });
+    expect(mismatch.headers.getSetCookie()).toEqual([]);
+    const [customer] = await test.db.select().from(customers).where(eq(customers.email, email));
+    expect(customer?.emailVerified).toBe(false);
+    // The code is used: it does not work a second time, even with the first password.
+    expect(await body(await verify(email, code))).toMatchObject({ code: 'INVALID_OTP' });
+  });
+
+  it('asks for the password with the code', async () => {
+    const email = uniqueEmail('no-password');
+    expect((await signUp(email)).status).toBe(200);
+    const response = await client.post('/api/auth/email-otp/verify-email', {
+      body: { email, otp: await lastCode(test.db, email) },
+    });
+    expect(response.status).toBe(400);
   });
 
   it('needs a solved ALTCHA, a valid form and an uncommon password', async () => {

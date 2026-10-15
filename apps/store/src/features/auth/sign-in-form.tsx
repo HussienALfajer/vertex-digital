@@ -15,7 +15,7 @@ import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
 import { safeRedirect } from '@/lib/safe-redirect';
 import { useSearchParam } from '@/lib/use-search-param';
-import { savePendingEmail } from './pending-email';
+import { holdPassword, savePendingEmail } from './pending-email';
 import { registrationState, signIn } from './requests';
 import { currentPasswordError, emailError } from './validation';
 
@@ -67,6 +67,7 @@ export function SignInForm() {
     // The API sent a new code to an unverified account (account states): enter it next.
     if (result.reason === 'EMAIL_NOT_VERIFIED') {
       savePendingEmail({ email, next: safeRedirect(next) });
+      holdPassword(password);
       router.push('/verify-email');
       return;
     }

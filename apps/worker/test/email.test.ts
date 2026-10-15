@@ -239,7 +239,36 @@ describe('email.send', () => {
     expect(message).toContain('482913');
     expect(message).toContain('dir=3D"rtl"');
     expect(message).toMatch(/Subject: =\?UTF-8\?/);
+    // The brand logo travels inside the email, named by the HTML (F2-5).
+    expect(message).toContain('cid:logo@vertex-digital');
+    expect(message).toContain('Content-ID: <logo@vertex-digital>');
+    expect(message).toContain('Content-Disposition: inline');
     expect(await rowOf(id)).toMatchObject({ status: 'sent', attempts: 1, params: null });
+  });
+
+  it('frames every email in the brand: the logo, the title and the store address', () => {
+    const email = renderEmail(
+      'customer_new_sign_in',
+      {
+        at: '2026-10-07T09:30:00.000Z',
+        browser: 'Chrome',
+        system: 'Android',
+        ipAddress: '203.0.113.7',
+      },
+      'https://digital.example',
+    );
+    expect(email.html).toContain('src="cid:logo@vertex-digital"');
+    expect(email.html).toContain('#004139');
+    expect(email.html).toContain('>تسجيل دخول جديد إلى حسابك</h1>');
+    expect(email.html).toContain('href="https://digital.example"');
+    expect(email.text.startsWith('تسجيل دخول جديد إلى حسابك')).toBe(true);
+    expect(email.attachments).toEqual([
+      {
+        cid: 'logo@vertex-digital',
+        path: expect.stringMatching(/vertex-logo-gold\.png$/),
+        filename: 'vertex-digital.png',
+      },
+    ]);
   });
 
   it('writes the wallet adjustment email with its link', async () => {

@@ -103,11 +103,21 @@ export class AuthAccountService {
     // Hashed on both paths, so the time taken does not tell whether the email has an account.
     const passwordHash = await hashPassword(input.password);
     const [existing] = await this.db
-      .select({ id: customers.id })
+      .select({
+        id: customers.id,
+        emailVerified: customers.emailVerified,
+        archivedAt: customers.archivedAt,
+      })
       .from(customers)
       .where(eq(customers.email, email));
     if (existing) {
-      await this.db.transaction((tx) => issueDecoyCode(tx, 'email-verification', email));
+      // An unverified account keeps its pending code (2026-10-15 system test, F2-3): the same
+      // person signing up twice can still enter the first code. No new code is sent, so whoever
+      // signed up first never hands the address's owner an account holding their own password:
+      // the owner goes through "forgot password", which sets the password (edge case 7).
+      if (existing.emailVerified || existing.archivedAt) {
+        await this.db.transaction((tx) => issueDecoyCode(tx, 'email-verification', email));
+      }
       await this.sendAttemptNotice(email, existing.id);
       return;
     }
@@ -169,9 +179,19 @@ export class AuthAccountService {
     });
   }
 
-  /** Rule C7: the code verifies the email; the caller signs the customer in. */
-  async verifyEmail(emailInput: string, otp: string, meta: RequestMeta): Promise<string> {
-    const email = emailInput.trim().toLowerCase();
+  /**
+   * Rule C7: the code and the account's password verify the email; the caller signs the customer
+   * in. The password proves the person holding the code is the one who chose it (2026-10-15
+   * system test, F2-7): someone who signed up first with another person's address never hands the
+   * address's owner an account whose password they know. A right code with another password
+   * answers `PASSWORD_MISMATCH` (the code is used): the owner sets a password through "forgot
+   * password". Only a right code reaches the password, so it never tests a password for a stranger.
+   */
+  async verifyEmail(
+    input: { email: string; otp: string; password: string },
+    meta: RequestMeta,
+  ): Promise<string> {
+    const email = input.email.trim().toLowerCase();
     const outcome = await this.db.transaction(async (tx) => {
       const [customer] = await tx
         .select({ id: customers.id, emailVerified: customers.emailVerified })
@@ -179,13 +199,35 @@ export class AuthAccountService {
         .where(and(eq(customers.email, email), isNull(customers.archivedAt)))
         .for('update');
       // The code first: its answers are the same whether or not the email has an account.
-      const check = await checkCode(tx, 'email-verification', email, otp);
+      const check = await checkCode(tx, 'email-verification', email, input.otp);
       if (!check.ok) return check;
       if (!customer) return { ok: false, code: 'INVALID_OTP' } as const;
+      const [account] = await tx
+        .select({ password: customerAccounts.password })
+        .from(customerAccounts)
+        .where(
+          and(
+            eq(customerAccounts.userId, customer.id),
+            eq(customerAccounts.providerId, 'credential'),
+          ),
+        );
+      const valid = account?.password
+        ? await verifyPassword({ hash: account.password, password: input.password })
+        : false;
+      if (!valid) return { ok: false, mismatch: true } as const;
       await this.markVerified(tx, customer, email, meta);
       return { ok: true, id: customer.id } as const;
     });
-    if (!outcome.ok) throw codeError(outcome);
+    if (!outcome.ok) {
+      if ('mismatch' in outcome) {
+        throw new CodedException(
+          400,
+          'PASSWORD_MISMATCH',
+          'The email has an account with another password',
+        );
+      }
+      throw codeError(outcome);
+    }
     return outcome.id;
   }
 

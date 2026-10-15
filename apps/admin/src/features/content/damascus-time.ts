@@ -21,7 +21,7 @@ export function toDamascusInput(iso: string): string {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
-const shown = new Intl.DateTimeFormat('ar-u-nu-latn', {
+const shown = new Intl.DateTimeFormat('ar-SY-u-nu-latn', {
   timeZone: 'Asia/Damascus',
   dateStyle: 'medium',
   timeStyle: 'short',

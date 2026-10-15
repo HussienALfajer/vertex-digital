@@ -13,8 +13,15 @@ export const signInSchema = z.object({
   password: z.string().min(1),
 });
 
-/** `POST /api/auth/email-otp/verify-email` (rule C7): the code signs the customer in. */
-export const verifyEmailSchema = z.object({ email: z.email(), otp: z.string().min(1).max(10) });
+/**
+ * `POST /api/auth/email-otp/verify-email` (rule C7): the code and the account's password sign the
+ * customer in (F2-7: the password proves the code's holder chose it).
+ */
+export const verifyEmailSchema = z.object({
+  email: z.email(),
+  otp: z.string().min(1).max(10),
+  password: z.string().min(1).max(128),
+});
 
 export type SignIn = z.infer<typeof signInSchema>;
 

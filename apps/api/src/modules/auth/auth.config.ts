@@ -109,7 +109,7 @@ const toApiError = (error: unknown): unknown =>
     : error;
 
 /**
- * `POST /api/auth/email-otp/verify-email` (rule C7): the code verifies the email, then the
+ * `POST /api/auth/email-otp/verify-email` (rule C7): the code and the password verify the email, then the
  * customer is signed in with one session. A Better Auth endpoint, so the session cookie is set the
  * way every other session's is; the verification itself is the account service's transaction.
  */
@@ -121,16 +121,16 @@ const verifyEmailPlugin = (accounts: AuthAccountService) =>
         '/email-otp/verify-email',
         {
           method: 'POST',
-          body: z.object({ email: z.string().max(254), otp: z.string().max(10) }),
+          body: z.object({
+            email: z.string().max(254),
+            otp: z.string().max(10),
+            password: z.string().min(1).max(128),
+          }),
         },
         async (ctx) => {
           let customerId: string;
           try {
-            customerId = await accounts.verifyEmail(
-              ctx.body.email,
-              ctx.body.otp,
-              metaOf(ctx.request?.headers),
-            );
+            customerId = await accounts.verifyEmail(ctx.body, metaOf(ctx.request?.headers));
           } catch (error) {
             throw toApiError(error);
           }

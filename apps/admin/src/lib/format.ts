@@ -2,7 +2,7 @@
  * Dates in Arabic with Latin digits (brand/identity.md), in the viewer's time zone (rule A4).
  */
 
-const LOCALE = 'ar-u-nu-latn';
+const LOCALE = 'ar-SY-u-nu-latn';
 
 const dateTime = new Intl.DateTimeFormat(LOCALE, { dateStyle: 'medium', timeStyle: 'short' });
 const date = new Intl.DateTimeFormat(LOCALE, { dateStyle: 'medium' });

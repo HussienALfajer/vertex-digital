@@ -65,6 +65,13 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F1-2 | 1 | Code audit (1.8) | The own-sessions list kept sessions past their 12 hours or idle for 30 minutes, which sign nobody in | minor | Only live sessions are listed (`AdminAccountService.sessions`), with this file's PR | Fixed |
 | F1-3 | 1 | Code audit (1.10) | The backup-codes download released its file at the moment of the click, which can cancel the download in some browsers | minor | Released a second later, with this file's PR | Fixed |
 | F1-4 | 1 | Code audit | The re-authentication password and the current password of a password change had no length limit | minor | Bounded at 128 like every password, with this file's PR | Fixed |
+| F2-1 | 2 | 2.2 | The copy button of the test-customer password said "تعذّر النسخ": the in-app test browser denies `clipboard-write` (checked: permission `denied`, "Document is not focused"). The panel's fallback toast worked as designed | — | Not a bug; re-checked in Chrome at the next password dialog | Closed |
+| F2-2 | 2 | 2.3 | `password123` was accepted: the common-password list (SecLists 10k, entries of 8+ characters) lacks it and other well-known ones (`admin123`, `password1234`, `p@ssw0rd`, `aa123456`) | major | None: the owner keeps the current list (the customer chooses the password; rate limits and ALTCHA slow guessing). Step 4 now uses `qwerty123`, which the list refuses | Accepted |
+| F2-3 | 2 | 2.3 / 2.5 | The code page showed "محاولات كثيرة خلال وقت قصير". Production records (read-only, owner's approval): "إنشاء الحساب" was sent again with the same unverified `+su` address at 18:27; rule C2 treated it as an existing account, so the first code was voided by a decoy, `+su` got "someone tried to sign up with your email" about itself, and the next "send a new code" presses hit the per-address limits (every hit counts). A customer coming back from the code page to sign up again loses the code the same way | major | A second sign-up for an unverified account no longer voids its pending code (`AuthAccountService.signUp`, S01 C2 and edge case 4a); it still sends only the attempt notice, so the address's owner never receives an account that holds someone else's password (the reviewer refused a first fix that sent a new code for this reason). Test in `apps/api/test/auth.test.ts`, with this file's PR | Fixed |
+| F2-4 | 2 | 2.5 | The store's code page uses one plain field, not the slot-style code field the panel uses for TOTP (`OtpField`) | minor | The email code fields (verify email, forgot password, change email) use `OtpField`: six slots, numeric keyboard, one-time-code autofill, a pasted code fills every slot (`features/auth/code-input.tsx`), with this file's PR | Fixed |
+| F2-5 | 2 | 2.14 | The owner wants the account emails and screens more professional and distinctive: the logo and the brand colours | minor | Emails: the sand logo on a Vertex Green band (sent inside the email as an inline image, so no client fetches it), the title with the sand start bar, the code in a framed block, the action button in Vertex Green, a footer with the store's address (`email-templates.ts`). Screens: sign-in, sign-up, the code page and forgot password share `AuthFrame`, one card with a brand panel (sand logo, 60° hairlines, three plain promises from `md`) beside the form, with this file's PR | Fixed |
+| F2-6 | 2 | 2.14 | Dates said "أكتوبر": `ar-u-nu-latn` gives Egyptian month names, while `brand/identity.md` §10 asks for the names read in Damascus (تشرين الأول) | minor | `ar-SY-u-nu-latn` in the emails, the store and the panel, with this file's PR | Fixed |
+| F2-7 | 2 | Review of F2-3 | Before this test (not new): someone who signs up first with another person's address and never verifies keeps a password on that unverified account. If the real owner then presses "send a new code" on the code page and enters it, the owner is signed in to an account whose password the first person knows | major (registration is closed until the pilot) | The owner chose to fix it here. Verifying the email takes the code and the account's password (S01 C7): the store sends the password just typed at sign-up or sign-in (held in the page's memory, never stored) and asks for it after a reload; a right code with another password answers `PASSWORD_MISMATCH` and points to "forgot password". Tests in `apps/api/test/auth.test.ts` and `apps/store/e2e/accounts.spec.ts`, with this file's PR | Fixed |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -281,7 +288,7 @@ Result: ✅ (2026-10-15). Read from the panel's own sessions list (`GET /api/adm
 4. Expected: the calm message "التسجيل يفتح قريبًا", and no form.
 5. In the panel open "المفاتيح" (`/settings/switches`). Expected: "التسجيل" shows "مغلق".
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### 2.2 Test customers from the panel (TC1, TC2, TC3)
 
@@ -296,7 +303,7 @@ Result: ☐
 7. In "سجل التدقيق" filter the action "إنشاء عميل اختبار". Expected: three entries, and no password anywhere in their details.
 8. In the store browser sign in as TC1 with its password. Expected: signed in at once (no code step), the header shows TC1's initial.
 
-Result: ☐
+Result: ✅ 2026-10-15. The copy button answered "تعذّر النسخ" in the in-app test browser, which denies the clipboard (F2-1); the password was copied by hand.
 
 ### 2.3 Sign-up while registration is open (SU)
 
@@ -307,12 +314,12 @@ Do 2.3 to 2.5 in one sitting: registration stays open only for those minutes.
 1. In the panel, "المفاتيح" → "التسجيل" → open it. Confirm the dialog (the re-authentication dialog may ask for your password and code).
 2. In the store browser, signed out, reload the home page. Expected: "إنشاء حساب" is now in the header.
 3. Open "إنشاء حساب". Leave every field empty and press "إنشاء الحساب". Expected: an error under each field; the first one gets the focus.
-4. Enter a name, the `+su` address, the password `password123` (a common password). Expected: refused as too common.
+4. Enter a name, the `+su` address, the password `qwerty123` (a common password). Expected: refused as too common.
 5. Enter a strong password, and a phone in the local form `09…`. Press "إنشاء الحساب".
 6. Expected: you go to the code page "تأكيد البريد الإلكتروني", which shows the `+su` address. Within a minute an Arabic email with a 6-digit code arrives.
 7. Do **not** enter the code yet: go to 2.4.
 
-Result: ☐
+Result: ❌ 2026-10-15. `password123` was accepted as a password (F2-2); the sign-up then went on to the code page. A "too many attempts" alert showed on the code page (F2-3).
 
 ### 2.4 An address that already has an account reveals nothing
 
@@ -323,7 +330,7 @@ Result: ☐
 3. Expected: the `+tc2` inbox receives "someone tried to sign up with your email" (no code inside). TC2's password still works (nothing changed).
 4. Close the private window.
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### 2.5 Email code: wrong code, resend, then success
 
@@ -337,7 +344,7 @@ Result: ☐
 6. Expected: **no** "new sign-in" email for this session (the code page's sign-in does not send one).
 7. In the panel, "المفاتيح" → "التسجيل" → close it again. In the store browser sign out, reload: "إنشاء حساب" is gone again.
 
-Result: ☐
+Result: ✅ 2026-10-15. The owner asks for the slot-style code field of the panel (F2-4).
 
 ### 2.6 Sign-in, its errors and the new sign-in email
 
@@ -349,7 +356,7 @@ Result: ☐
 4. Expected: the `+su` inbox gets a "new sign-in" email with the time, the browser and system, and the IP address.
 5. Open `https://digital.vertexmedia.pro/account` signed out (private window). Expected: the sign-in page; after signing in you land on `/account`.
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### 2.7 The browser check after 3 failed sign-ins
 
@@ -361,7 +368,7 @@ Wait 10 minutes after any earlier failed sign-in before this case, to stay far f
 2. Expected: before or at the fourth try the store shows the browser check ("جارٍ التحقق من المتصفح…"), which solves itself in a few seconds.
 3. Sign in with TC3's right password. Expected: signed in. Sign out.
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### 2.8 Forgot password
 
@@ -375,7 +382,7 @@ Result: ☐
 6. On the phone, tap any link. Expected: TC1 is signed out there.
 7. On the PC sign in with the old password: refused. With the new one: signed in.
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### 2.9 Profile: name and phone
 
@@ -387,7 +394,7 @@ Result: ☐
 4. Enter a correct new name and phone `+963 9…` with spaces. Press "حفظ". Expected: "حُفظت التغييرات.", the phone shown normalized.
 5. In the panel's audit log filter the action "تعديل بيانات العميل". Expected: an entry with "customer" as actor and the before and after values.
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### 2.10 Change password
 
@@ -399,7 +406,7 @@ Result: ☐
 4. On the phone, tap any link. Expected: signed out.
 5. Expected: the `+tc1` inbox gets "your password was changed" (no password inside).
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### 2.11 Sessions list and signing out
 
@@ -411,7 +418,7 @@ Result: ☐
 4. Sign in on the phone once more. On the PC press "تسجيل الخروج من كل الأجهزة" → confirm.
 5. Expected: the PC goes to the sign-in page with "سُجّل خروجك من كل الأجهزة"; the phone is signed out at its next tap.
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### 2.12 Change email
 
@@ -425,7 +432,7 @@ Result: ☐
 6. Expected: `+su` (the old address) gets "your email was changed"; the phone is signed out at its next tap.
 7. Sign out, then sign in with `+su2`. Expected: works; `+su` no longer signs in.
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### 2.13 The admin resets a test customer's password
 
@@ -437,7 +444,7 @@ Result: ☐
 4. On the phone, tap any link. Expected: TC2 is signed out; the old password is refused; the new one works.
 5. Expected: SU does **not** appear on the test-customers page (it is a real sign-up).
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### 2.14 Emails and screens quality
 
@@ -447,7 +454,7 @@ Result: ☐
 2. On the phone, open sign-in, forgot password, the code page and "حسابي" in the light and dark themes. Expected: readable, no horizontal scroll, the code field opens the number keyboard, Latin digits everywhere.
 3. On the PC, the same pages at full width. Expected: the forms stay centred and readable.
 
-Result: ☐
+Result: ⏳ 2026-10-15. Readable and correct, but the owner wants the emails and the account screens more professional and distinctive: the logo and the brand colours (F2-5).
 
 ### 2.15 Clean-up: archive SU
 
@@ -457,7 +464,7 @@ Result: ☐
 2. In the panel open "العملاء", find SU (by `+su2`) → "إجراءات العميل" → "أرشفة", with the reason "temporary sign-up test". Confirm (re-authentication if asked).
 3. Expected: on the phone, the next tap signs SU out; signing in again is refused with the general error.
 
-Result: ☐
+Result: ✅ 2026-10-15
 
 ### Feature 2 sign-off
 

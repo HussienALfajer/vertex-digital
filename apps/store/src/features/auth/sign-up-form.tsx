@@ -19,7 +19,7 @@ import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
 import { safeRedirect } from '@/lib/safe-redirect';
 import { useSearchParam } from '@/lib/use-search-param';
-import { savePendingEmail } from './pending-email';
+import { holdPassword, savePendingEmail } from './pending-email';
 import { DEFAULT_COUNTRY, toE164 } from './phone';
 import { PhoneField } from './phone-field';
 import { signUp } from './requests';
@@ -64,6 +64,7 @@ export function SignUpForm({ onClosed }: { onClosed: () => void }) {
     const result = await signUp({ name, email, password, phone: e164 });
     if (result.ok) {
       savePendingEmail({ email, next: safeRedirect(next) });
+      holdPassword(password);
       router.push('/verify-email');
       return;
     }

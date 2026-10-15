@@ -58,6 +58,10 @@ function signedIn(api: MockApi): MockApi {
 const field = (page: Page, label: string) =>
   page.getByLabel(label, { exact: true }).filter({ visible: true });
 
+/** The email code's first slot (F2-4): a code typed or pasted there fills all six. */
+const codeField = (page: Page) =>
+  page.getByRole('textbox', { name: ar.fields.code, exact: true }).filter({ visible: true });
+
 async function signUp(page: Page, phone = '0944123456', password = PASSWORD) {
   await field(page, ar.fields.name).fill(PROFILE.name);
   await field(page, ar.fields.email).fill(EMAIL);
@@ -87,21 +91,54 @@ test.describe('sign-up and the email code', () => {
     expect(sent?.headers['x-altcha']).toBeTruthy();
 
     api.on('POST /api/auth/email-otp/verify-email', 400, { code: 'INVALID_OTP' });
-    await field(page, ar.fields.code).fill('111111');
+    await codeField(page).fill('111111');
     await page.getByRole('button', { name: ar.verifyEmail.submit }).click();
     await expect(page.getByText(ar.errors.INVALID_OTP)).toBeVisible();
 
     api.on('POST /api/auth/email-otp/verify-email', 200, { status: true });
     signedIn(api);
-    // The code pasted with a space, as some mail apps copy it.
-    await field(page, ar.fields.code).fill('123 456');
+    // The code pasted into the first slot with a space, as some mail apps copy it: every slot fills.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.evaluate(() => navigator.clipboard.writeText('123 456'));
+    await codeField(page).focus();
+    await page.keyboard.press('ControlOrMeta+V');
     await page.getByRole('button', { name: ar.verifyEmail.submit }).click();
     await expect(page).toHaveURL('/');
     await expect(page.getByRole('button', { name: ar.header.menu })).toBeVisible();
+    // The password typed at sign-up goes with the code, without being asked again (F2-7).
     expect(api.last('POST /api/auth/email-otp/verify-email')?.body).toEqual({
       email: EMAIL,
       otp: CODE,
+      password: PASSWORD,
     });
+  });
+
+  test('after a reload the code page asks for the password; another password sends to forgot password', async ({
+    page,
+    api,
+  }) => {
+    api.on('POST /api/auth/sign-up/email', 200, { status: 'code_sent' });
+    await page.goto('/sign-up');
+    await signUp(page);
+    await expect(page).toHaveURL('/verify-email');
+    await expect(field(page, ar.fields.password)).toHaveCount(0);
+    // The password was held in the page's memory only: a reload forgets it.
+    await page.reload();
+    await expect(field(page, ar.fields.password)).toBeVisible();
+    await codeField(page).pressSequentially(CODE);
+    await page.getByRole('button', { name: ar.verifyEmail.submit }).click();
+    await expect(page.getByText(ar.validation.passwordRequired)).toBeVisible();
+    api.on('POST /api/auth/email-otp/verify-email', 400, { code: 'PASSWORD_MISMATCH' });
+    await field(page, ar.fields.password).fill('another-passphrase');
+    await page.getByRole('button', { name: ar.verifyEmail.submit }).click();
+    await expect(page.getByText(ar.errors.PASSWORD_MISMATCH)).toBeVisible();
+    expect(api.last('POST /api/auth/email-otp/verify-email')?.body).toEqual({
+      email: EMAIL,
+      otp: CODE,
+      password: 'another-passphrase',
+    });
+    await page.getByRole('link', { name: ar.signIn.forgotPassword }).click();
+    await expect(page).toHaveURL('/forgot-password');
   });
 
   test('the phone shows as an international number and a bad one is refused', async ({
@@ -203,6 +240,8 @@ test.describe('sign-in', () => {
     await page.getByRole('button', { name: ar.signIn.submit }).click();
     await expect(page).toHaveURL('/verify-email');
     await expect(page.getByText(EMAIL)).toBeVisible();
+    // The sign-in's password goes with the code: not asked again.
+    await expect(field(page, ar.fields.password)).toHaveCount(0);
   });
 
   test('solves the challenge after repeated failures, then returns to the page asked for', async ({
@@ -238,7 +277,7 @@ test('forgot password: the code and a new password, then sign in', async ({ page
     api.last('POST /api/auth/email-otp/request-password-reset')?.headers['x-altcha'],
   ).toBeTruthy();
 
-  await field(page, ar.fields.code).fill(CODE);
+  await codeField(page).fill(CODE);
   await field(page, ar.fields.newPassword).fill(PASSWORD);
   await page.getByRole('button', { name: ar.forgotPassword.submit }).click();
   await expect(page.getByText(ar.errors.OTP_EXPIRED)).toBeVisible();
@@ -350,7 +389,7 @@ test.describe('account', () => {
     expect(request?.body).toEqual({ newEmail: 'sara.new@example.com', password: PASSWORD });
     expect(request?.headers['x-altcha']).toBeTruthy();
 
-    await field(page, ar.fields.code).fill(CODE);
+    await codeField(page).fill(CODE);
     await page.getByRole('button', { name: ar.changeEmail.submit }).click();
     await expect(page.getByText(ar.changeEmail.done)).toBeVisible();
     expect(api.last('POST /api/auth/email-otp/change-email')?.body).toEqual({
@@ -401,13 +440,13 @@ for (const theme of ['dark', 'light'] as const) {
     await screenshot(page, testInfo, `sign-up-${theme}`);
 
     await signUp(page);
-    await expect(field(page, ar.fields.code)).toBeVisible();
+    await expect(codeField(page)).toBeVisible();
     await screenshot(page, testInfo, `verify-email-${theme}`);
 
     await page.goto('/forgot-password');
     await field(page, ar.fields.email).fill(EMAIL);
     await page.getByRole('button', { name: ar.forgotPassword.send }).click();
-    await expect(field(page, ar.fields.code)).toBeVisible();
+    await expect(codeField(page)).toBeVisible();
     await screenshot(page, testInfo, `forgot-password-${theme}`);
 
     signedIn(api);
