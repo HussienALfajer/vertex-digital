@@ -197,11 +197,12 @@ Source: the public catalog page https://wdgzone.tech/catalog/pubg-mobile-id-auto
 
 - **No `type=topup` product of PUBG Mobile has `Web`/`Web Purchase` in its name or category**: the Web Purchase packs are **not** automatic top-ups in the API, so the adapter does not see them and the store cannot route to them today.
 - The Auto packs match the page and the table above: ids 235203–235208 (60, 325, 660, 1800, 3850, 8100 UC), `category_id` 14693, `category` `Auto`, `type` `topup`, price 0.887 / 4.435 / 8.870 / 22.176 / 44.295 / 88.200, `stock` 999999, `required_fields` `player_id` (text).
-- Still to check: `type=manual` (a scan of about 645 pages), where the `WEB` packs most likely are. If they are `manual`, WDG fulfils them by hand and they are not an automatic route (V1 sells automatic delivery only).
+- **`GET /products?type=manual` (same day, whole scan): the six packs are `type: manual`**, ids 286552–286557 (`WEB 60 UC` … `WEB 8100 UC`), `category_id` 928542, `category` `Web Purchase`, brand `PUBG Mobile`, prices and stock as in the table (stock 1000, 999 for 660 UC), `available: true`, `requires_player_id: true` but **`required_fields` empty**.
+- **Conclusion:** Web Purchase is a manual product: the adapter leaves `manual` out (V1 sells automatic delivery only), the API gives no field list to build the order from, and delivery is by hand at WDG. It is **not** an automatic route for the store and the cheaper price cannot be used by the order engine as it is. The routing gap below is therefore secondary until WDG makes it automatic (question 12).
 
 ### Not confirmed
 
-1. **API `type`:** `type=topup` does not return the `WEB` packs (checked above); whether `type=manual` does (the adapter ignores it, "Catalog"). Their product ids, `category_id`, `category` (expected `Web Purchase`), `required_fields`, `stock` and `available`. The page lists the Manual route's UC packs too, so the page cannot tell the types apart.
+1. **API `type`:** answered above: `type=manual`, not `topup`. Their product ids, `category_id`, `category` (expected `Web Purchase`), `required_fields`, `stock` and `available`. The page lists the Manual route's UC packs too, so the page cannot tell the types apart.
 2. **Delivery:** speed, success rate and refund behaviour of Web Purchase. If the packs are `type=manual`, they would be fulfilled by hand at WDG and are not an automatic route for us at all.
 3. **Fields:** whether `WEB` packs ask only for `player_id` like Auto.
 
