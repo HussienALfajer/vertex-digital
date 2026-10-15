@@ -162,7 +162,7 @@ Scale (size / line height, px):
 | Rule | Value |
 |---|---|
 | Mark | The Vertex mark, `brand/logo/svg/vertex-mark*.svg` |
-| Wordmark | VERTEX DIGITAL, drawn in the style of the Vertex Media wordmark (Phase 0, open question Q16) |
+| Wordmark | VERTEX DIGITAL, drawn in the style of the Vertex Media wordmark (final: Q16 resolved 2026-10-15) |
 | Clear space | One stroke width of the mark on every side |
 | Minimum size | Mark 24 px; below that use the favicon |
 | Colorways | Sand mark on deep green (store default), green on white, white on green |
