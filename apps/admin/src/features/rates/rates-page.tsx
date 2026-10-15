@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type ChangeRate,
   CURRENCY_SCALE,
@@ -73,8 +73,7 @@ export function RatesPage() {
         <>
           <div className="grid gap-6 lg:grid-cols-2">
             <CurrentRate current={current} />
-            {/* A new key empties the form once a change is saved. */}
-            <ChangeRateForm key={current?.id ?? 'none'} current={current} />
+            <ChangeRateForm current={current} />
           </div>
           <section className="flex flex-col gap-3" aria-labelledby="rate-history">
             <h2 id="rate-history" className="text-lg font-bold">
@@ -163,10 +162,14 @@ function changeOf(current: ExchangeRateRecord | null, rateText: string): string 
 function ChangeRateForm({ current }: { current: ExchangeRateRecord | null }) {
   const { t } = useTranslation();
   const change = useChangeRate();
+  const queryClient = useQueryClient();
   const [rateText, setRateText] = useState('');
-  const [stepText, setStepText] = useState(
-    String((current?.displayStepSypUnits ?? 5 * CURRENCY_SCALE.SYP) / CURRENCY_SCALE.SYP),
-  );
+  // The step follows the current rate's until the admin edits it, so a rate read again after
+  // another session's change never sends back the step that change replaced.
+  const [stepEdit, setStepEdit] = useState<string | null>(null);
+  const stepText =
+    stepEdit ??
+    String((current?.displayStepSypUnits ?? 5 * CURRENCY_SCALE.SYP) / CURRENCY_SCALE.SYP);
   const [confirmation, setConfirmation] = useState('');
   const [errors, setErrors] = useState<Partial<Record<FormField, string>>>({});
   const { ref, focusInvalid } = useFocusInvalid();
@@ -199,10 +202,16 @@ function ChangeRateForm({ current }: { current: ExchangeRateRecord | null }) {
     if (!parsed.success || found.confirmation) return focusInvalid();
     try {
       await change.mutateAsync(parsed.data);
+      setRateText('');
+      setConfirmation('');
+      setStepEdit(null);
       setSaved(true);
     } catch (error) {
       const field = error instanceof ApiError && error.code ? FIELD_OF_CODE[error.code] : undefined;
       if (!field) return setFailure(errorMessage(t, error));
+      // Another change saved meanwhile moved the rate this one compares with (FX2): read it
+      // again, keeping what was typed, so the change and the confirmation field follow it (F3-6).
+      if (field === 'confirmation') await queryClient.invalidateQueries({ queryKey: ['rates'] });
       setErrors({ [field]: refusalText(t, error) });
       focusInvalid();
     }
@@ -268,7 +277,7 @@ function ChangeRateForm({ current }: { current: ExchangeRateRecord | null }) {
             inputMode="numeric"
             autoComplete="off"
             value={stepText}
-            onChange={(event) => setStepText(event.target.value)}
+            onChange={(event) => setStepEdit(event.target.value)}
           />
           <FieldDescription>
             {t('rates.form.stepHint', {

@@ -16,6 +16,7 @@ import {
   exchangeRates,
   newId,
   recordAudit,
+  type Transaction,
 } from '@vertex-digital/db';
 import { desc, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -56,9 +57,13 @@ export class RatesService {
     private readonly admins: AdminAuthService,
   ) {}
 
-  /** The newest rate, or null before the first one (rule FX8). */
-  async current(): Promise<CurrentRate | null> {
-    const [row] = await this.db
+  /**
+   * The newest rate, or null before the first one (rule FX8). A caller inside a transaction
+   * passes it: a read through the pool while the transaction holds a connection and a row lock
+   * can leave every connection waiting on the others (F3-4).
+   */
+  async current(db: Database | Transaction = this.db): Promise<CurrentRate | null> {
+    const [row] = await db
       .select()
       .from(exchangeRates)
       .orderBy(desc(exchangeRates.createdAt), desc(exchangeRates.id))

@@ -35,6 +35,8 @@ describe('the deposit amounts', () => {
 
   it('previews the USD of pounds, floored to cents (rule FX6)', () => {
     expect(previewUsd(200_000, '118')).toBe(16_940_000);
+    // Twelve digits of pounds at 100 are past the safe integers: no preview, the limit refuses.
+    expect(previewUsd(99_999_999_999_900, '100')).toBeNull();
   });
 
   it('writes amounts with their currency', () => {

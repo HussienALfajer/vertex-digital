@@ -298,6 +298,11 @@ describe('deposit credits (S03 rules FX6, M3)', () => {
     expect(sypDepositUsd(100, '130')).toBe(0);
     expect(sypDepositUsd(200_000, '118.5')).toBe(16_870_000);
   });
+
+  it('answers null instead of failing for pounds worth more than the safe integers (edge case 12)', () => {
+    // 999,999,999,999 pounds at 100: $9,999,999,999.99, past the largest safe number of units.
+    expect(sypDepositUsd(99_999_999_999_900, '100')).toBeNull();
+  });
 });
 
 describe('rateFromNumeric', () => {

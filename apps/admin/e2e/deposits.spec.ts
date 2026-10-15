@@ -176,6 +176,34 @@ test.describe('exchange rate', () => {
     await expect(rows(page).nth(1)).toContainText('+10.17%');
   });
 
+  test('a change saved elsewhere meanwhile brings the confirmation field, keeping what was typed (F3-6)', async ({
+    page,
+    admin,
+  }) => {
+    await open(page, admin, '/rates');
+    await expect(page.getByText(fill(ar.rates.current.value, { rate: '118' }))).toBeVisible();
+    // Another session saves 110 while this page still shows 118.
+    admin.rates = [
+      { ...admin.rates[0], id: '0199a000-0000-7000-8000-0000000000aa', sypPerUsd: '110' },
+      ...admin.rates,
+    ] as typeof admin.rates;
+    // 121 is +2.55% of 118 (no confirmation here) but +10.00% of 110.
+    await field(page, ar.rates.form.rate).fill('121');
+    await expect(field(page, ar.rates.form.confirmation)).toBeHidden();
+    await page.getByRole('button', { name: ar.rates.form.submit }).click();
+    await expect(page.getByText(fill(ar.rates.current.value, { rate: '110' }))).toBeVisible();
+    await expect(field(page, ar.rates.form.confirmation)).toBeVisible();
+    await expect(page.getByText(/\+10\.00%/)).toBeVisible();
+    await expect(field(page, ar.rates.form.rate)).toHaveValue('121');
+    await field(page, ar.rates.form.confirmation).fill('121');
+    await page.getByRole('button', { name: ar.rates.form.submit }).click();
+    await expect(page.getByText(fill(ar.rates.current.value, { rate: '121' }))).toBeVisible();
+    expect(admin.lastBody('POST /api/admin/rates')).toMatchObject({
+      sypPerUsd: '121',
+      rateConfirmation: '121',
+    });
+  });
+
   test('a rate older than 48 hours shows the banner on every page', async ({ page, admin }) => {
     admin.rates = admin.rates.map((rate) => ({ ...rate, createdAt: minutesAgo(49 * 60) }));
     await open(page, admin, '/audit');

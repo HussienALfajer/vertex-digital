@@ -211,9 +211,16 @@ export function floorToWholeCents(usdUnits: number): number {
 /**
  * The USD a customer gets for `sypUnits` at `rate` (S03 rule FX6): converted rounding down, then
  * floored to whole cents, so a credit is never worth more than the pounds received (rule M3).
+ * Null when the pounds are worth more than the largest safe number of USD units (edge case 12):
+ * the caller refuses the amount (the per-deposit limit) instead of failing on it (F3-7).
  */
-export function sypDepositUsd(sypUnits: number, rate: string): number {
-  return floorToWholeCents(sypToUsd(sypUnits, rate, 'down'));
+export function sypDepositUsd(sypUnits: number, rate: string): number | null {
+  const usd = divide(
+    unitsOrThrow(sypUnits) * USD_SCALE * RATE_FACTOR,
+    SYP_SCALE * rateOrThrow(rate),
+    'down',
+  );
+  return usd > BigInt(Number.MAX_SAFE_INTEGER) ? null : floorToWholeCents(Number(usd));
 }
 
 /**

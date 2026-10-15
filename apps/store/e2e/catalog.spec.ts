@@ -201,6 +201,47 @@ test.describe('search (rules SR1–SR6)', () => {
     expect(api.requests.filter((r) => r.key === 'GET /api/catalog/search-index')).toHaveLength(1);
   });
 
+  test('a second open within 30 seconds reuses the index; later it reads the new prices (F3-5)', async ({
+    page,
+    api,
+  }) => {
+    // Only Date.now moves: timers keep running, so the dialog's animations end.
+    const start = Date.parse('2026-10-15T12:00:00Z');
+    await page.clock.setFixedTime(start);
+    const before = searchIndex();
+    api.on('GET /api/catalog/search-index', 200, before);
+    await page.goto('/');
+    const dialog = page.getByRole('dialog', { name: ar.search.title });
+    const reads = () => api.requests.filter((r) => r.key === 'GET /api/catalog/search-index');
+    const product = before.products.find((item) => item.id === pack(PUBG, '60 UC').id);
+    const oldSyp = product?.priceSypUnits ?? 0;
+    const newSyp = oldSyp + 500;
+    const sypText = (units: number) => `${formatSyp(units)} ل.س`;
+
+    await pressUntilOpen(page, dialog, 'Control+k');
+    await dialog.getByRole('combobox').fill('60 UC');
+    await expect(dialog.getByRole('option').first()).toContainText(sypText(oldSyp));
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await pressUntilOpen(page, dialog, 'Control+k');
+    expect(reads()).toHaveLength(1);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+
+    // The rate changed: the index now answers the new SYP.
+    api.on('GET /api/catalog/search-index', 200, {
+      ...before,
+      products: before.products.map((item) =>
+        item.id === product?.id ? { ...item, priceSypUnits: newSyp } : item,
+      ),
+    });
+    await page.clock.setFixedTime(start + 31_000);
+    await pressUntilOpen(page, dialog, 'Control+k');
+    await dialog.getByRole('combobox').fill('60 UC');
+    await expect(dialog.getByRole('option').first()).toContainText(sypText(newSyp));
+    expect(reads()).toHaveLength(2);
+  });
+
   test('"/" opens it, an empty query shows the recent searches, and no results say so', async ({
     page,
     api,

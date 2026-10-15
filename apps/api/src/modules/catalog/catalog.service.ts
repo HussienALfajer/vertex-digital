@@ -568,7 +568,7 @@ export class CatalogService {
     const ids = rows.map((row) => row.id);
     const [states, rate, delivery, policy] = await readAll(executor, [
       () => productRoutingStates(executor, ids, routingContext(this.env)),
-      () => this.rates.current(),
+      () => this.rates.current(executor),
       () => productDeliveryStats(executor, ids),
       () => currentSupplierPolicy(executor),
     ]);

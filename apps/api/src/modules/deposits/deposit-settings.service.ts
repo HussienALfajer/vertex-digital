@@ -19,6 +19,7 @@ import {
   deposits,
   newId,
   recordAudit,
+  type Transaction,
   usdtScanCursors,
 } from '@vertex-digital/db';
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
@@ -113,8 +114,9 @@ export class DepositSettingsService {
   }
 
   /** The newest version, or null before the first save (rule SC1). */
-  async current(): Promise<CurrentSettings | null> {
-    const [row] = await this.db
+  async current(db: Database | Transaction = this.db): Promise<CurrentSettings | null> {
+    // Inside a transaction, read through it: never the pool while holding a lock (F3-4).
+    const [row] = await db
       .select()
       .from(depositSettings)
       .orderBy(desc(depositSettings.createdAt), desc(depositSettings.id))
