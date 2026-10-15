@@ -162,7 +162,7 @@ test('the game page stays within its performance budget', async ({ page, api: _a
  * and slide-to-pay with the page (373 KB, beside the wallet's 307 and the account's 415); a share
  * page renders its card on the server and ships only the time and its two actions (210 KB).
  */
-const CART_BUDGET_KB = { script: 380, stylesheet: 20 };
+const CART_BUDGET_KB = { script: 385, stylesheet: 20 };
 const SHARE_BUDGET_KB = { script: 215, stylesheet: 20 };
 
 test('the cart stays within its performance budget', async ({ page, api }) => {

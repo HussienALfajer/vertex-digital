@@ -136,9 +136,12 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
       }
     }
     if (!found.amount && (credit === null || credit === 0)) {
+      // A credit too large to convert (edge case 12, F3-7) is null like a missing one.
       found.amount = missingRate
         ? t('deposits.approve.errors.noRate')
-        : t('deposits.approve.errors.zeroCredit');
+        : credit === null && receivedUnits !== null && receivedUnits > 0
+          ? t('deposits.approve.errors.tooLarge')
+          : t('deposits.approve.errors.zeroCredit');
     }
     if (allFlags.some((code) => !ticked.includes(code))) {
       found.flags = t('deposits.approve.errors.flags');

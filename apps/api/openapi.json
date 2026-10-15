@@ -11636,7 +11636,8 @@
         "properties": {
           "currentPassword": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 128
           },
           "newPassword": {
             "type": "string",
@@ -11669,7 +11670,8 @@
         "properties": {
           "password": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 128
           },
           "totpCode": {
             "type": "string",
@@ -11766,7 +11768,7 @@
             "type": "string",
             "minLength": 2,
             "maxLength": 60,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200E\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2066-\\u2069]+$"
           },
           "email": {
             "type": "string",
@@ -11954,7 +11956,7 @@
             "type": "string",
             "minLength": 2,
             "maxLength": 60,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200E\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2066-\\u2069]+$"
           },
           "phone": {
             "type": "string",
@@ -12039,7 +12041,7 @@
             "type": "string",
             "minLength": 2,
             "maxLength": 60,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200E\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2066-\\u2069]+$"
           },
           "email": {
             "type": "string",

@@ -1,4 +1,5 @@
 import { ERROR_CODES, type ErrorCode } from '@vertex-digital/contracts';
+import { noteServerDate } from './server-clock';
 
 /**
  * Why a request failed, as the screens explain it: an API error code (`errors.<code>`), no
@@ -49,6 +50,7 @@ export async function apiRequest<Data = unknown>(
 ): Promise<Result<Data>> {
   let response: Response;
   const json = body !== undefined && !(body instanceof FormData);
+  const sentAt = Date.now();
   try {
     response = await fetcher(path, {
       method,
@@ -60,6 +62,7 @@ export async function apiRequest<Data = unknown>(
   } catch {
     return { ok: false, reason: 'NETWORK' };
   }
+  noteServerDate(response.headers, sentAt, Date.now());
   const data: unknown = await response.json().catch(() => null);
   if (response.ok) return { ok: true, data: data as Data };
   const error = data as { code?: unknown; details?: unknown } | null;

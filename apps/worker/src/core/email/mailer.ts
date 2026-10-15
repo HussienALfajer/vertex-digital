@@ -11,6 +11,8 @@ export interface OutgoingEmail {
   subject: string;
   html: string;
   text: string;
+  /** Inline images the HTML names by `cid:`. */
+  attachments: { cid: string; path: string; filename: string }[];
 }
 
 /**
@@ -48,6 +50,7 @@ export class Mailer {
       subject: email.subject,
       html: email.html,
       text: email.text,
+      attachments: email.attachments.map((file) => ({ ...file, contentDisposition: 'inline' })),
     });
     if (this.logDir) {
       await mkdir(this.logDir, { recursive: true });

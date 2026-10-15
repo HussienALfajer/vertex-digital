@@ -104,6 +104,7 @@ describe('amounts and the credit (rules SC2, RV2, FX6)', () => {
     expect(depositCreditUsdUnits('USD', 25 * USD, null)).toBe(25 * USD);
     expect(depositCreditUsdUnits('SYP', 190_000, '118')).toBe(16_100_000);
     expect(() => depositCreditUsdUnits('SYP', 190_000, null)).toThrow(RangeError);
+    expect(depositCreditUsdUnits('SYP', 99_999_999_999_900, '100')).toBeNull();
   });
 
   it('needs a re-authentication above $100 or with any flag (rule RV4)', () => {

@@ -172,3 +172,58 @@ Seen live: checks run as key, product, `player_id`, then the balance; `quantity`
 9. **Catalog order:** the sort order of `GET /products`, so a read cannot miss a product that moves between pages.
 10. **Statement and tree shapes (S16):** the rows of `GET /transactions` and `GET /orders`, and whether `GET /categories` pages. To record from read-only live calls on a funded account (owner's approval), then the fixtures replaced by sanitized recordings.
 11. **Account passwords (owner, `docs/open-questions.md` Q20):** 9 top-ups ask for an `email` and a `password` beside an account field. The adapter keeps them unsupported until the owner decides.
+
+## Web Purchase route (read 2026-10-15)
+
+Source: the public catalog page https://wdgzone.tech/catalog/pubg-mobile-id-auto-22, read on 2026-10-15 (no key, no API call, nothing bought or written). The API itself was **not** queried: the facts about `type`, ids and `required_fields` below are unconfirmed (see "Not confirmed").
+
+### Prices seen (USD, per pack)
+
+| Pack | Web Purchase | Auto (our route) | Web vs Auto | Reserve | Manual | Fast |
+|---|---|---|---|---|---|---|
+| 60 UC | 0.877 | 0.887 | −1.1% | 0.887 | 0.905 | 0.909 |
+| 325 UC | 4.385 | 4.435 | −1.1% | 4.447 | 4.472 | 4.559 |
+| 660 UC | 8.618 | 8.870 | −2.8% | 8.894 | 8.739 | 9.118 |
+| 1800 UC | 21.319 | 22.176 | −3.9% | 22.236 | 22.912 | 22.989 |
+| 3850 UC | 41.328 | 44.295 | −6.7% | 44.295 | 44.518 | 44.944 |
+| 8100 UC | 82.656 | 88.200 | −6.3% | 88.591 | 88.001 | 91.335 |
+
+- The page groups the PUBG Mobile UC packs into five routes: Web Purchase (6 packs, names `WEB 60 UC` …), Auto (29 products, UC plus WOW coins, Prime, passes), Fast, Manual and Reserve (6 UC packs each). The savings grow with pack size, so the larger packs matter most.
+- Web Purchase stock is shown as 1,000 per pack (999 for 660 UC); every other route shows 999,999. 999,999 is the adapter's "unlimited" (see "Catalog"), so 1,000 is a **real, small, finite stock**: a large order or a few orders can empty a pack.
+- The page shows no product ids and says nothing about how Web Purchase works, its speed, or refunds (it only says "Instant automated delivery" for the store in general). Its images are served from `reseller.fazercards.com`, which suggests WDG resells FazerCards; unconfirmed.
+- Prices move by a few tenths of a cent between reads (see "Refunds and money"): the table is one reading, not a stable spread.
+
+### Read-only API check (2026-10-15, owner's key, `GET /products?type=topup` only)
+
+- **No `type=topup` product of PUBG Mobile has `Web`/`Web Purchase` in its name or category**: the Web Purchase packs are **not** automatic top-ups in the API, so the adapter does not see them and the store cannot route to them today.
+- The Auto packs match the page and the table above: ids 235203–235208 (60, 325, 660, 1800, 3850, 8100 UC), `category_id` 14693, `category` `Auto`, `type` `topup`, price 0.887 / 4.435 / 8.870 / 22.176 / 44.295 / 88.200, `stock` 999999, `required_fields` `player_id` (text).
+- **`GET /products?type=manual` (same day, whole scan): the six packs are `type: manual`**, ids 286552–286557 (`WEB 60 UC` … `WEB 8100 UC`), `category_id` 928542, `category` `Web Purchase`, brand `PUBG Mobile`, prices and stock as in the table (stock 1000, 999 for 660 UC), `available: true`, `requires_player_id: true` but **`required_fields` empty**.
+- **Conclusion:** Web Purchase is a manual product: the adapter leaves `manual` out (V1 sells automatic delivery only), the API gives no field list to build the order from, and delivery is by hand at WDG. It is **not** an automatic route for the store and the cheaper price cannot be used by the order engine as it is. The routing gap below is therefore secondary until WDG makes it automatic (question 12).
+
+### Not confirmed
+
+1. **API `type`:** answered above: `type=manual`, not `topup`. Their product ids, `category_id`, `category` (expected `Web Purchase`), `required_fields`, `stock` and `available`. The page lists the Manual route's UC packs too, so the page cannot tell the types apart.
+2. **Delivery:** speed, success rate and refund behaviour of Web Purchase. If the packs are `type=manual`, they would be fulfilled by hand at WDG and are not an automatic route for us at all.
+3. **Fields:** whether `WEB` packs ask only for `player_id` like Auto.
+
+To settle 1 and 3 with read-only calls (owner's approval to use the supplier key needed): `GET /products?type=topup&limit=100&page=N` filtered for `brand` "PUBG Mobile" and a name or category containing `WEB`/`Web Purchase`, and the same with `type=manual`. In the admin, the supplier catalog (S16) shows them after the next sync if they are `topup`.
+
+### Routing: can both offers map to one store product?
+
+ADR 0005's router builds candidates from a product's enabled routes and orders them by lowest cost, then health, then delivery time, then priority; a definitive failure moves on to the next candidate, and an out-of-stock offer is not a candidate. That is exactly the wanted behaviour (cheaper Web Purchase first, Auto when it is out of stock or fails). **Gap:** `product_routes` has a unique index on `(product_id, supplier_id)` among live rows (`packages/db/src/schema/suppliers.ts:472`), so a product can have **one route per supplier**: a second WDGZone offer cannot be mapped to the same product. Other consequences to decide before any change:
+- Health is per supplier (ADR 0005), so Web Purchase failures and Auto failures would share one health score.
+- The `supplier_offers_supplier_id_offer_id` and `product_routes_offer_id_live` indexes are fine (each offer maps once).
+- The "route already tried is skipped" rule works per route, so it would still work once the index allows two WDG routes.
+- Finite Web Purchase stock needs the sync to mark it out of stock quickly (sync runs every 15 minutes, "Catalog"); an order can still reach an emptied pack and fail definitively with `OUT_OF_STOCK`, after which Auto is tried (no customer impact, a few seconds lost).
+- Unresolved: the margin guard and price basis (ADR 0020) use the cheapest healthy route; selling at the Web Purchase cost would drop the store price when Web Purchase runs out and Auto (dearer) is used, so the guard may pause the product at the Auto cost. This needs the owner's decision.
+
+No code was changed. A change would be: relax the index to `(product_id, offer_id)` (migration, `/db-migration`), allow two routes of one supplier in the admin mapping screen, and review S07/S16 rules that assume one route per supplier. Proposed only after the open questions below are answered.
+
+### Open questions (to add to the list above)
+
+12. **Web Purchase:** is it automatic and what does it mean (a web top-up by script, a reserved pool, a different source)? Typical delivery time, success rate, and are failures refunded to the wallet like Auto's `410`? Why is the stock limited to about 1,000 and is it replenished? Is the price stable or a promotion?
+13. **Owner:** approve read-only calls with the supplier key to identify the `WEB` products (item 1 above), and decide the pricing question under "Routing".
+
+Draft question for WDG support (English, for the owner to send):
+
+> Hello, on your PUBG Mobile (ID) catalog page there is a "Web Purchase" route (products named "WEB 60 UC" … "WEB 8100 UC") priced 1–7% below the Auto route, with about 1,000 in stock per pack. Through the reseller API: (1) are these returned by `GET /products?type=topup` as automatic top-ups, and what are their product ids? (2) How does Web Purchase deliver (typical time, success rate), and are failed orders refunded to the wallet automatically as with Auto (`410`, `order.refunded`)? (3) Why is the stock limited and how often is it replenished? (4) Do they need only `player_id`? Thank you.

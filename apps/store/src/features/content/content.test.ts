@@ -42,7 +42,7 @@ describe('ageText (S14 LA4)', () => {
 describe('updatedText (S14 PG2)', () => {
   it('names the day in Damascus with Latin digits', () => {
     // 22:30 UTC is already the next day in Damascus (UTC+3).
-    expect(updatedText('2026-10-10T22:30:00.000Z')).toBe('آخر تحديث: 11 أكتوبر 2026');
+    expect(updatedText('2026-10-10T22:30:00.000Z')).toBe('آخر تحديث: 11 تشرين الأول 2026');
   });
 });
 

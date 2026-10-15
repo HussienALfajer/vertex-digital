@@ -9,7 +9,12 @@ import {
 } from '@vertex-digital/db';
 import { BASE_ERROR_CODES, type BetterAuthPlugin, betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { APIError, createAuthEndpoint, createAuthMiddleware } from 'better-auth/api';
+import {
+  APIError,
+  createAuthEndpoint,
+  createAuthMiddleware,
+  getSessionFromCtx,
+} from 'better-auth/api';
 import { setSessionCookie } from 'better-auth/cookies';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -56,7 +61,10 @@ const DISABLED_PATHS = [
   '/delete-user',
   '/delete-user/callback',
   '/request-password-reset',
+  '/forget-password',
   '/reset-password',
+  // Server-only in Better Auth 1.7 (`scope: "server"`); listed so no version ever serves it.
+  '/verify-password',
   '/verify-email',
   '/send-verification-email',
   '/update-session',
@@ -109,7 +117,7 @@ const toApiError = (error: unknown): unknown =>
     : error;
 
 /**
- * `POST /api/auth/email-otp/verify-email` (rule C7): the code verifies the email, then the
+ * `POST /api/auth/email-otp/verify-email` (rule C7): the code and the password verify the email, then the
  * customer is signed in with one session. A Better Auth endpoint, so the session cookie is set the
  * way every other session's is; the verification itself is the account service's transaction.
  */
@@ -121,22 +129,31 @@ const verifyEmailPlugin = (accounts: AuthAccountService) =>
         '/email-otp/verify-email',
         {
           method: 'POST',
-          body: z.object({ email: z.string().max(254), otp: z.string().max(10) }),
+          body: z.object({
+            email: z.string().max(254),
+            otp: z.string().max(10),
+            password: z.string().min(1).max(128),
+          }),
         },
         async (ctx) => {
-          let customerId: string;
+          let proof: { customerId: string; passwordHash: string };
           try {
-            customerId = await accounts.verifyEmail(
-              ctx.body.email,
-              ctx.body.otp,
-              metaOf(ctx.request?.headers),
-            );
+            proof = await accounts.verifyEmail(ctx.body, metaOf(ctx.request?.headers));
           } catch (error) {
             throw toApiError(error);
           }
-          const user = await ctx.context.internalAdapter.findUserById(customerId);
+          const user = await ctx.context.internalAdapter.findUserById(proof.customerId);
           if (!user) throw new APIError('BAD_REQUEST', BASE_ERROR_CODES.USER_NOT_FOUND);
-          const session = await ctx.context.internalAdapter.createSession(customerId);
+          const session = await ctx.context.internalAdapter.createSession(proof.customerId);
+          // A reset (or an archive) between the check and this session: the session goes, and no
+          // cookie is set (2026-10-15 audit).
+          if (!(await accounts.proofStillHolds(proof.customerId, proof.passwordHash))) {
+            await ctx.context.internalAdapter.deleteSession(session.token);
+            throw new APIError('BAD_REQUEST', {
+              code: 'PASSWORD_MISMATCH',
+              message: 'The password changed meanwhile',
+            });
+          }
           await setSessionCookie(ctx, { session, user });
           return ctx.json({
             status: true,
@@ -253,6 +270,17 @@ export function createCustomerAuth(
         // By the matched endpoint, so no spelling of the URL reaches a disabled one.
         if (DISABLED_ROUTES.includes(ctx.path) || DISABLED_PATHS.includes(ctx.path)) {
           throw new APIError('NOT_FOUND');
+        }
+        // Rules C14, A2: signing out ends the session and audits it in one transaction (2026-10-15
+        // audit); Better Auth then clears the cookie, finding the session already gone.
+        if (ctx.path === '/sign-out') {
+          const current = await getSessionFromCtx(ctx);
+          if (current) {
+            await accounts.signOut(
+              { id: current.user.id, sessionId: current.session.id },
+              metaOf(ctx.headers),
+            );
+          }
         }
         if (ctx.path === '/sign-in/email' && failures.blocked(emailOf(ctx.body))) {
           try {

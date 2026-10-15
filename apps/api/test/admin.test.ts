@@ -1,7 +1,7 @@
 import { adminSessions, adminUsers } from '@vertex-digital/db';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createAdmin } from '../src/modules/admin/index.js';
+import { createAdmin, resetAdminPassword } from '../src/modules/admin/index.js';
 import {
   api,
   auditOf,
@@ -9,6 +9,7 @@ import {
   cookieHeader,
   PASSWORD,
   removeAccounts,
+  seedAdmin,
   seedCustomer,
   totp,
   uniqueEmail,
@@ -278,6 +279,28 @@ describe('own sessions and backup codes (rule D7)', () => {
     });
   });
 
+  it('lists only the sessions that still sign in, never cached', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const expired = await sessionOf(await client.signInAdmin(admin.email, admin.secret));
+    const idle = await sessionOf(await client.signInAdmin(admin.email, admin.secret));
+    const live = await sessionOf(await client.signInAdmin(admin.email, admin.secret));
+    await test.db
+      .update(adminSessions)
+      .set({ expiresAt: new Date(Date.now() - MINUTE) })
+      .where(eq(adminSessions.id, expired.id));
+    await test.db
+      .update(adminSessions)
+      .set({ lastActiveAt: new Date(Date.now() - 31 * MINUTE) })
+      .where(eq(adminSessions.id, idle.id));
+    const response = await client.get('/api/admin/me/sessions', { cookie: admin.cookie });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const ids = ((await response.json()) as { id: string }[]).map((session) => session.id);
+    expect(ids).toContain(live.id);
+    expect(ids).not.toContain(expired.id);
+    expect(ids).not.toContain(idle.id);
+  });
+
   it('regenerates the backup codes with the password, audited', async () => {
     const admin = await client.adminWithTotp(test.db);
     seeded.push(admin.id);
@@ -361,5 +384,121 @@ describe('hardening (review of S01)', () => {
       expect(response.status, path).toBe(404);
     }
     expect((await client.get('/api/admin/probe/admin', { cookie: admin.cookie })).status).toBe(200);
+  });
+});
+
+describe('second review (findings R1–R6)', () => {
+  /** The password step only: the pending TOTP challenge's cookie. */
+  const passwordStep = async (email: string, password = PASSWORD, extra = {}) => {
+    const response = await client.post('/api/admin/auth/sign-in/email', {
+      body: { email, password, ...extra },
+    });
+    expect(response.status).toBe(200);
+    return cookieHeader(response);
+  };
+  const totpStep = (cookie: string, secret: string) =>
+    client.post('/api/admin/auth/two-factor/verify-totp', {
+      cookie,
+      body: { code: totp(secret) },
+    });
+
+  it('R1: enrolling TOTP signs out every session that never passed it', async () => {
+    const admin = await seedAdmin(test.db);
+    seeded.push(admin.id);
+    const before = await client.signInAdmin(admin.email);
+    const { cookie } = await client.enrolTotp(await client.signInAdmin(admin.email));
+    expect((await client.get('/api/admin/probe/admin', { cookie: before })).status).toBe(401);
+    expect((await client.get('/api/admin/probe/admin', { cookie })).status).toBe(200);
+  });
+
+  it('R2: a session never outlives 12 hours, even when asked not to be remembered', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const pending = await passwordStep(admin.email, PASSWORD, { rememberMe: false });
+    const verified = await totpStep(pending, admin.secret);
+    expect(verified.status).toBe(200);
+    const session = await sessionOf(cookieHeader(verified));
+    const lifetime = session.expiresAt.getTime() - session.createdAt.getTime();
+    expect(lifetime).toBeLessThanOrEqual(12 * 60 * MINUTE);
+  });
+
+  it('R3: a password change or reset voids a pending TOTP step', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const pending = await passwordStep(admin.email);
+    const changed = await client.post('/api/admin/auth/change-password', {
+      cookie: admin.cookie,
+      body: { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+    });
+    expect(changed.status).toBe(200);
+    expect((await totpStep(pending, admin.secret)).status).toBe(401);
+
+    const again = await passwordStep(admin.email, NEW_PASSWORD);
+    await resetAdminPassword(test.db, admin.email);
+    expect((await totpStep(again, admin.secret)).status).toBe(401);
+  });
+
+  it('R4: of two password changes at once, the one whose session ended is refused', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const other = await client.signInAdmin(admin.email, admin.secret);
+    const passwords = [NEW_PASSWORD, 'b8Lr-green-sea-lake'];
+    const answers = await Promise.all(
+      [admin.cookie, other].map((cookie, index) =>
+        client.post('/api/admin/auth/change-password', {
+          cookie,
+          body: { currentPassword: PASSWORD, newPassword: passwords[index] },
+        }),
+      ),
+    );
+    const statuses = answers.map((answer) => answer.status);
+    expect([...statuses].sort()).toEqual([200, 401]);
+    const kept = passwords[statuses.indexOf(200)];
+    const lost = passwords[statuses.indexOf(401)];
+    expect(
+      (
+        await client.post('/api/admin/auth/sign-in/email', {
+          body: { email: admin.email, password: lost },
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await client.post('/api/admin/auth/sign-in/email', {
+          body: { email: admin.email, password: kept },
+        })
+      ).status,
+    ).toBe(200);
+  });
+
+  it('R5: backup codes wait for the CLI-issued password to be changed', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const { password } = await resetAdminPassword(test.db, admin.email);
+    const verified = await totpStep(await passwordStep(admin.email, password), admin.secret);
+    expect(verified.status).toBe(200);
+    const codes = await client.post('/api/admin/auth/two-factor/generate-backup-codes', {
+      cookie: cookieHeader(verified),
+      body: { password },
+    });
+    expect(await body(codes)).toMatchObject({ status: 403, code: 'PASSWORD_CHANGE_REQUIRED' });
+  });
+
+  it('R6: the admin’s actions on Better Auth routes count as activity', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const session = await sessionOf(admin.cookie);
+    await test.db
+      .update(adminSessions)
+      .set({ lastActiveAt: new Date(Date.now() - 20 * MINUTE) })
+      .where(eq(adminSessions.id, session.id));
+    const codes = await client.post('/api/admin/auth/two-factor/generate-backup-codes', {
+      cookie: admin.cookie,
+      body: { password: PASSWORD },
+    });
+    expect(codes.status).toBe(200);
+    expect((await sessionOf(admin.cookie)).lastActiveAt.getTime()).toBeGreaterThan(
+      Date.now() - MINUTE,
+    );
   });
 });

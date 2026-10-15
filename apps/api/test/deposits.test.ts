@@ -459,6 +459,16 @@ describe('creating a deposit (rules SC2–SC6)', () => {
     expect(
       await body(await create(someone.cookie, { currency: 'USD', amountUnits: 60 * USD })),
     ).toMatchObject({ details: { limit: 'per_deposit', limitUnits: 50 * USD } });
+    // Edge case 12 (F3-7): pounds worth more than the safe integers meet the per-deposit limit.
+    expect(
+      await body(
+        await create(someone.cookie, { currency: 'SYP', amountUnits: 9_000_000_000_000_000 }),
+      ),
+    ).toMatchObject({
+      status: 422,
+      code: 'DEPOSIT_LIMIT_EXCEEDED',
+      details: { limit: 'per_deposit', limitUnits: 50 * USD },
+    });
     await submitted(someone.cookie, { currency: 'USD', amountUnits: 50 * USD });
     await submitted(someone.cookie, { currency: 'USD', amountUnits: 40 * USD });
     expect(
@@ -591,6 +601,23 @@ describe('quotes (rules SC9, SC10)', () => {
     const without = await submit(someone.cookie, deposit.id);
     expect(await body(without)).toMatchObject({ status: 409, code: 'QUOTE_EXPIRED' });
   });
+
+  it('answers parallel requotes beyond the pool size, each reading the rate in its transaction (F3-4)', async () => {
+    const someone = await customer();
+    const deposit = await created(someone.cookie, { currency: 'SYP', amountUnits: 200_000 });
+    // The pool holds 10 connections: 11 requotes queue on the deposit's lock, each holding one
+    // (11 keeps this file under the route's 20 a minute from one address).
+    const answers = await Promise.all(
+      Array.from({ length: 11 }, () =>
+        client.post(`/api/deposits/${deposit.id}/quote`, { cookie: someone.cookie }),
+      ),
+    );
+    expect(answers.map((answer) => answer.status)).toEqual(Array(11).fill(200));
+    expect(await actionsOf(deposit.id)).toEqual([
+      'deposit.created',
+      ...Array(11).fill('deposit.requoted'),
+    ]);
+  }, 15_000);
 
   it('refuses a requote of a USD deposit or a fixed rate', async () => {
     const someone = await customer();

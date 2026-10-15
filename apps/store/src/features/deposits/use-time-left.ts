@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { serverNow } from '@/lib/server-clock';
 
-/** Seconds left until `iso`, every second; 0 once it passed. */
+/** Seconds left until `iso` on the server's clock, every second; 0 once it passed. */
 export function useTimeLeft(iso: string | null): number {
   const [left, setLeft] = useState(() => secondsUntil(iso));
   useEffect(() => {
@@ -17,7 +18,7 @@ export function useTimeLeft(iso: string | null): number {
 
 function secondsUntil(iso: string | null): number {
   if (!iso) return 0;
-  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 1000));
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - serverNow()) / 1000));
 }
 
 /** `14:05` for minutes and seconds, `3:14:05` past an hour; Latin digits. */

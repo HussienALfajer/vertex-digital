@@ -31,7 +31,23 @@ export function readPendingEmail(): PendingEmail | null {
   }
 }
 
+/*
+ * The password just typed at sign-up or at an unverified sign-in, which the code must come with
+ * (rule C7, F2-7). Held in this page's memory only, never in storage: it survives the move to
+ * /verify-email and is gone after a reload, when the code page asks for it.
+ */
+let heldPassword: string | null = null;
+
+export function holdPassword(password: string): void {
+  heldPassword = password;
+}
+
+export function readHeldPassword(): string | null {
+  return heldPassword;
+}
+
 export function clearPendingEmail(): void {
+  heldPassword = null;
   try {
     sessionStorage.removeItem(KEY);
   } catch {

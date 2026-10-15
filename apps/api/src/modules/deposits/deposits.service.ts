@@ -175,8 +175,9 @@ export class DepositsService {
         await checkNotFrozen(tx, customerId);
         await checkCreation(tx, customerId);
         const limits = await limitsOf(tx, customerId, settings);
-        const breach = depositLimitBreach(limits, declaredUsdUnits);
-        if (breach) {
+        // Pounds worth more than the safe integers are above any per-deposit limit (edge case 12).
+        const breach = depositLimitBreach(limits, declaredUsdUnits ?? Number.POSITIVE_INFINITY);
+        if (breach || declaredUsdUnits === null) {
           throw new CodedException(422, 'DEPOSIT_LIMIT_EXCEEDED', 'Outside the limits', breach);
         }
         const created = await insertDeposit(tx, {
@@ -256,12 +257,13 @@ export class DepositsService {
       const deposit = await lockDeposit(tx, id, eq(deposits.customerId, customerId));
       if (!(await isOpen(tx, deposit))) throw stateConflict(openStatus(deposit));
       if (deposit.currency !== 'SYP' || deposit.rateFixedAt) throw stateConflict(deposit.status);
-      const rate = await this.currentRateOrRefuse();
+      const rate = await this.currentRateOrRefuse(tx);
       const declaredUsdUnits = depositCreditUsdUnits(
         'SYP',
         deposit.declaredAmountUnits,
         rate.sypPerUsd,
       );
+      if (declaredUsdUnits === null) throw amountTooLarge();
       const [updated] = await tx
         .update(deposits)
         .set({
@@ -454,8 +456,8 @@ export class DepositsService {
     return this.view(row);
   }
 
-  private async currentRateOrRefuse(): Promise<CurrentRate> {
-    const rate = await this.rates.current();
+  private async currentRateOrRefuse(db: Database | Transaction): Promise<CurrentRate> {
+    const rate = await this.rates.current(db);
     if (!rate) throw new CodedException(409, 'RATE_UNAVAILABLE', 'No exchange rate yet');
     return rate;
   }
@@ -475,19 +477,24 @@ export class DepositsService {
     const fixing = deposit.currency === 'SYP' && deposit.rateFixedAt === null;
     if (fixing) {
       const valid = await isTrue(db, deposit.id, sql`${deposits.quoteExpiresAt} > now()`);
-      if (!valid || rateId !== deposit.rateId) await this.refuseExpiredQuote(deposit);
+      if (!valid || rateId !== deposit.rateId) await this.refuseExpiredQuote(db, deposit);
     }
     return fixing;
   }
 
   /** Rule SC9: the customer sees the current rate and what the pounds would get, then accepts. */
-  private async refuseExpiredQuote(deposit: DepositRow): Promise<never> {
-    const rate = await this.currentRateOrRefuse();
-    const offer: QuoteOffer = {
-      rateId: rate.id,
-      rate: rate.sypPerUsd,
-      declaredUsdUnits: depositCreditUsdUnits('SYP', deposit.declaredAmountUnits, rate.sypPerUsd),
-    };
+  private async refuseExpiredQuote(
+    db: Database | Transaction,
+    deposit: DepositRow,
+  ): Promise<never> {
+    const rate = await this.currentRateOrRefuse(db);
+    const declaredUsdUnits = depositCreditUsdUnits(
+      'SYP',
+      deposit.declaredAmountUnits,
+      rate.sypPerUsd,
+    );
+    if (declaredUsdUnits === null) throw amountTooLarge();
+    const offer: QuoteOffer = { rateId: rate.id, rate: rate.sypPerUsd, declaredUsdUnits };
     throw new CodedException(409, 'QUOTE_EXPIRED', 'The quote expired; accept a new one', offer);
   }
 
@@ -587,6 +594,13 @@ function unavailableReason(
 /** The status a refusal names: a `pending` deposit refused as not open is past its expiry. */
 const openStatus = (deposit: DepositRow) =>
   deposit.status === 'pending' ? 'expired' : deposit.status;
+
+/** A declared amount worth more than the safe integers at the current rate (edge case 12). */
+function amountTooLarge(): CodedException {
+  return new CodedException(422, 'VALIDATION_FAILED', 'The amount is too large at this rate', [
+    { path: ['amountUnits'], message: 'Worth more than the largest amount' },
+  ]);
+}
 
 function quoteOf(row: DepositRow) {
   if (!row.rateId || !row.rate) throw new Error(`Deposit ${row.id} has no quote`);

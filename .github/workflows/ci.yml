@@ -16,13 +16,39 @@ concurrency:
 # Third-party actions are pinned to full commit SHAs (the tag in the comment); Dependabot
 # proposes updates (.github/dependabot.yml). Jobs and steps arrive with their first subject.
 jobs:
-  checks:
-    name: Typecheck, lint, test, build
+  # Pull requests that change only Markdown no check reads (everything outside brand/) skip the
+  # checks; the gate jobs below still report, so branch protection and auto-merge work.
+  changes:
+    name: Changes
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    # The superuser only creates the app role and databases (scripts/setup-local-db.mjs); the tests
-    # run as the app role, which is not a superuser, as locally and in production: a superuser
-    # would bypass the ledger privileges under test.
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          code=true
+          if git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            changed=$(git diff --name-only "$BASE" HEAD)
+            if [ -n "$changed" ] && ! echo "$changed" | grep -qvE '\.md$' && ! echo "$changed" | grep -q '^brand/'; then
+              code=false
+            fi
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Checks needed: $code"
+
+  static:
+    name: Lint, typecheck, build
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The dev database the built API and worker start against (last step).
     services:
       postgres:
         image: postgres:17
@@ -43,6 +69,13 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Turborepo's cache across runs: tasks whose inputs did not change are replayed, not rerun
+      # (a merge to main replays its pull request's tasks).
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .turbo/cache
+          key: turbo-${{ github.job }}-${{ github.sha }}
+          restore-keys: turbo-${{ github.job }}-
       - name: .env, app role, dev and test databases
         run: node scripts/setup-local-db.mjs
         env:
@@ -51,7 +84,6 @@ jobs:
         run: pnpm audit --prod --audit-level=high
       - run: pnpm lint
       - run: pnpm typecheck
-      - run: pnpm test
       - run: pnpm build
       - name: Migrations match the schema
         run: |
@@ -91,13 +123,33 @@ jobs:
             cat api.log worker.log
             exit 1
           fi
+      # The cache only grows (each run adds its new task results): start over past 1.5 GB.
+      - name: Keep the Turborepo cache small
+        if: always()
+        run: |
+          if [ -d .turbo/cache ] && [ "$(du -sm .turbo/cache | cut -f1)" -gt 1500 ]; then rm -rf .turbo/cache; fi
 
-  # The store and the admin panel against a mocked API (no database): smoke, sign-in flows, the
-  # store's performance budget, and RTL screenshots in both themes.
-  e2e:
-    name: E2E
+  test:
+    name: Tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The superuser only creates the app role and databases (scripts/setup-local-db.mjs); the tests
+    # run as the app role, which is not a superuser, as locally and in production: a superuser
+    # would bypass the ledger privileges under test.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -106,21 +158,100 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Turborepo's cache across runs: tasks whose inputs did not change are replayed, not rerun
+      # (a merge to main replays its pull request's tasks).
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .turbo/cache
+          key: turbo-${{ github.job }}-${{ github.sha }}
+          restore-keys: turbo-${{ github.job }}-
+      - name: .env, app role, dev and test databases
+        run: node scripts/setup-local-db.mjs
+        env:
+          PGPASSWORD: postgres
+      - run: pnpm test
+      # The cache only grows (each run adds its new task results): start over past 1.5 GB.
+      - name: Keep the Turborepo cache small
+        if: always()
+        run: |
+          if [ -d .turbo/cache ] && [ "$(du -sm .turbo/cache | cut -f1)" -gt 1500 ]; then rm -rf .turbo/cache; fi
+
+  # The store and the admin panel against a mocked API (no database): smoke, sign-in flows, the
+  # store's performance budget, and RTL screenshots in both themes.
+  e2e:
+    name: E2E shard ${{ matrix.shard }}
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Each app's tests split over four runners (Playwright --shard).
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Turborepo's cache across runs: tasks whose inputs did not change are replayed, not rerun
+      # (a merge to main replays its pull request's tasks).
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .turbo/cache
+          key: turbo-${{ github.job }}-${{ matrix.shard }}-${{ github.sha }}
+          restore-keys: turbo-${{ github.job }}-${{ matrix.shard }}-
       - run: pnpm --filter @vertex-digital/store exec playwright install --with-deps chromium
       # Both apps run to the end: without it a failure in one cancels the other mid-test, and the
       # cancelled tests are reported as failures of their own ("Test was interrupted").
-      - run: pnpm test:e2e --continue=dependencies-successful
+      - run: pnpm turbo run test:e2e --continue=dependencies-successful -- --shard=${{ matrix.shard }}/4
       # The reports and the RTL screenshots are the review evidence of each run.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             apps/store/playwright-report
             apps/store/test-results
             apps/admin/playwright-report
             apps/admin/test-results
           retention-days: 14
+      # The cache only grows (each run adds its new task results): start over past 1.5 GB.
+      - name: Keep the Turborepo cache small
+        if: always()
+        run: |
+          if [ -d .turbo/cache ] && [ "$(du -sm .turbo/cache | cut -f1)" -gt 1500 ]; then rm -rf .turbo/cache; fi
+
+  # The checks branch protection requires: they pass when every job behind them passed or was
+  # skipped (documentation only), and fail otherwise.
+  checks:
+    name: Typecheck, lint, test, build
+    needs: [changes, static, test]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS"
+          ! echo "$NEEDS" | grep -qE '"result": "(failure|cancelled)"'
+
+  e2e-gate:
+    name: E2E
+    needs: [changes, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS"
+          ! echo "$NEEDS" | grep -qE '"result": "(failure|cancelled)"'
 
   gitleaks:
     name: Secret scan

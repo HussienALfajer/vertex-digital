@@ -88,7 +88,8 @@ function BackupCodesCard() {
     link.href = url;
     link.download = t('account.backupCodes.fileName');
     link.click();
-    URL.revokeObjectURL(url);
+    // Released after the browser has started the download: revoking at once can cancel it.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   return (

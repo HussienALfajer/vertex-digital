@@ -12,13 +12,14 @@ import {
   adminAccounts,
   adminSessions,
   adminUsers,
+  adminVerifications,
   type Database,
   recordAudit,
 } from '@vertex-digital/db';
 import { APIError } from 'better-auth/api';
 import { hashPassword, verifyPassword } from 'better-auth/crypto';
 import { fromNodeHeaders } from 'better-auth/node';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
@@ -35,7 +36,12 @@ export class AdminAccountService {
     private readonly admins: AdminAuthService,
   ) {}
 
-  /** Rules D1, D7: needs the current password; clears a pending change; other sessions end. */
+  /**
+   * Rules D1, D7: needs the current password; clears a pending change; other sessions end, and so
+   * do sign-ins waiting at their TOTP step (they proved the old password). The admin row is locked
+   * and the session and password checked again inside: of two changes at once, the one whose
+   * session the other ended is refused.
+   */
   async changePassword(
     admin: AdminIdentity,
     input: AdminChangePassword,
@@ -50,6 +56,17 @@ export class AdminAccountService {
     const passwordHash = await hashPassword(input.newPassword);
     await this.db.transaction(async (tx) => {
       await tx
+        .select({ id: adminUsers.id })
+        .from(adminUsers)
+        .where(eq(adminUsers.id, admin.id))
+        .for('update');
+      const [session] = await tx
+        .select({ id: adminSessions.id })
+        .from(adminSessions)
+        .where(eq(adminSessions.id, admin.sessionId));
+      if (!session) throw new CodedException(401, 'UNAUTHORIZED', 'Sign in first');
+      await this.assertPassword(admin.id, input.currentPassword, tx);
+      await tx
         .update(adminAccounts)
         .set({ password: passwordHash })
         .where(and(eq(adminAccounts.userId, admin.id), eq(adminAccounts.providerId, 'credential')));
@@ -61,6 +78,7 @@ export class AdminAccountService {
         .delete(adminSessions)
         .where(and(eq(adminSessions.userId, admin.id), ne(adminSessions.id, admin.sessionId)))
         .returning({ id: adminSessions.id });
+      await tx.delete(adminVerifications).where(eq(adminVerifications.value, admin.id));
       await recordAudit(tx, {
         action: 'admin.password_changed',
         ...this.byAdmin(admin.id, meta),
@@ -103,11 +121,22 @@ export class AdminAccountService {
     };
   }
 
+  /**
+   * The sessions that still open the panel: past their 12 hours or idle for 30 minutes, a row
+   * stays until it is next read by its cookie, but it signs nobody in (rule D4).
+   */
   async sessions(admin: AdminIdentity): Promise<AdminSession[]> {
+    const now = Date.now();
     const rows = await this.db
       .select()
       .from(adminSessions)
-      .where(eq(adminSessions.userId, admin.id))
+      .where(
+        and(
+          eq(adminSessions.userId, admin.id),
+          gt(adminSessions.expiresAt, new Date(now)),
+          gt(adminSessions.lastActiveAt, new Date(now - ADMIN_SESSION_RULES.idleTimeoutMs)),
+        ),
+      )
       .orderBy(desc(adminSessions.lastActiveAt));
     return rows.map((row) => ({
       id: row.id,
@@ -148,8 +177,12 @@ export class AdminAccountService {
     } as const;
   }
 
-  private async assertPassword(adminId: string, password: string): Promise<void> {
-    const [account] = await this.db
+  private async assertPassword(
+    adminId: string,
+    password: string,
+    tx: Pick<Database, 'select'> = this.db,
+  ): Promise<void> {
+    const [account] = await tx
       .select({ password: adminAccounts.password })
       .from(adminAccounts)
       .where(and(eq(adminAccounts.userId, adminId), eq(adminAccounts.providerId, 'credential')));

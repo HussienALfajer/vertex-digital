@@ -33,8 +33,9 @@ export const ratesQuery = infiniteQueryOptions({
 });
 
 /**
- * Rule FX1: a new rate, after re-authentication. Every SYP display reads it, so the wallets and
- * the deposits are read again too.
+ * Rule FX1: a new rate, after re-authentication. SYP shows on many screens (wallets, deposits,
+ * products, prices, orders, the dashboard, treasury), so every query is read again (rule FX4: a
+ * change applies at once to every display).
  */
 export function useChangeRate() {
   const queryClient = useQueryClient();
@@ -42,11 +43,6 @@ export function useChangeRate() {
   return useMutation({
     mutationFn: (body: ChangeRate) =>
       withReauthentication(() => call(api.POST('/api/admin/rates', { body }))),
-    onSuccess: () =>
-      Promise.all(
-        ['rates', 'wallet', 'deposits'].map((key) =>
-          queryClient.invalidateQueries({ queryKey: [key] }),
-        ),
-      ),
+    onSuccess: () => queryClient.invalidateQueries(),
   });
 }

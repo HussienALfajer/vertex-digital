@@ -16,10 +16,11 @@ import { FormAlert } from '@/components/form-alert';
 import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
+import { clearErrorOnInput } from '@/lib/field-errors';
 import { t } from '@/lib/i18n';
 import { safeRedirect } from '@/lib/safe-redirect';
 import { useSearchParam } from '@/lib/use-search-param';
-import { savePendingEmail } from './pending-email';
+import { holdPassword, savePendingEmail } from './pending-email';
 import { DEFAULT_COUNTRY, toE164 } from './phone';
 import { PhoneField } from './phone-field';
 import { signUp } from './requests';
@@ -64,6 +65,7 @@ export function SignUpForm({ onClosed }: { onClosed: () => void }) {
     const result = await signUp({ name, email, password, phone: e164 });
     if (result.ok) {
       savePendingEmail({ email, next: safeRedirect(next) });
+      holdPassword(password);
       router.push('/verify-email');
       return;
     }
@@ -77,7 +79,13 @@ export function SignUpForm({ onClosed }: { onClosed: () => void }) {
   };
 
   return (
-    <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+    <form
+      ref={ref}
+      noValidate
+      onSubmit={onSubmit}
+      onInput={clearErrorOnInput(setErrors)}
+      className="flex flex-col gap-5"
+    >
       <Field invalid={!!errors.name}>
         <FieldLabel>{t('fields.name')}</FieldLabel>
         <Input

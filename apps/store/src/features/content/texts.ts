@@ -34,12 +34,12 @@ export function ageText(deliveredAt: string, now: Date): string {
   return t(`content.activity.ago.${unit}.${form(count)}` as MessageKey, { count });
 }
 
-const damascusDate = new Intl.DateTimeFormat('ar-u-nu-latn', {
+const damascusDate = new Intl.DateTimeFormat('ar-SY-u-nu-latn', {
   dateStyle: 'long',
   timeZone: 'Asia/Damascus',
 });
 
-/** PG2: "آخر تحديث: 11 أكتوبر 2026", the day in Damascus whoever renders it. */
+/** PG2: "آخر تحديث: 11 تشرين الأول 2026", the day in Damascus whoever renders it. */
 export function updatedText(iso: string): string {
   return t('content.pages.updated', { date: damascusDate.format(new Date(iso)) });
 }

@@ -53,6 +53,8 @@ export const ERROR_CODES = [
   'INVALID_OTP',
   /** The email code expired: request a new one (rule C4). */
   'OTP_EXPIRED',
+  /** A right email code for an account holding another password: set one by "forgot password" (rule C7, F2-7). */
+  'PASSWORD_MISMATCH',
   /** Five wrong tries voided the email code: request a new one (rule C4). */
   'TOO_MANY_ATTEMPTS',
   /** Test funds for a customer who is not a test customer (S02 rule J4). */

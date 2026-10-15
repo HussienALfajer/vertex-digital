@@ -6,8 +6,10 @@ import {
   auditOf,
   body,
   emailsTo,
+  PASSWORD,
   removeAccounts,
   seedCustomer,
+  totp,
   uniqueEmail,
 } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
@@ -26,6 +28,15 @@ beforeAll(async () => {
   seeded.push(admin.id);
 });
 
+/** Creating and resetting issue a working password: both are sensitive (rule D5). */
+async function reauthenticate() {
+  const response = await client.post('/api/admin/me/reauthenticate', {
+    cookie: admin.cookie,
+    body: { password: PASSWORD, totpCode: totp(admin.secret) },
+  });
+  expect(response.status).toBe(200);
+}
+
 afterAll(async () => {
   await removeAccounts(test.db, seeded);
   await test.app.close();
@@ -39,6 +50,25 @@ async function create(email: string) {
 }
 
 describe('test customers', () => {
+  it('need a recent re-authentication to be created or reset', async () => {
+    const email = uniqueEmail('not-reauthenticated');
+    expect(await body(await create(email))).toMatchObject({
+      status: 403,
+      code: 'REAUTHENTICATION_REQUIRED',
+    });
+    const real = await seedCustomer(test.db);
+    seeded.push(real.id);
+    expect(
+      await body(
+        await client.post(`/api/admin/test-customers/${real.id}/reset-password`, {
+          cookie: admin.cookie,
+        }),
+      ),
+    ).toMatchObject({ status: 403, code: 'REAUTHENTICATION_REQUIRED' });
+    expect(await test.db.select().from(customers).where(eq(customers.email, email))).toEqual([]);
+    await reauthenticate();
+  });
+
   it('are created verified and flagged, with a password shown once that signs in', async () => {
     const email = uniqueEmail('test-customer');
     const response = await create(email);

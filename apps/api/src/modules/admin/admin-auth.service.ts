@@ -8,7 +8,12 @@ import { AltchaService } from '../../core/altcha/altcha.service.js';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
-import { type AdminAuth, createAdminAuth, isIdle } from './admin-auth.config.js';
+import {
+  ACTIVITY_GRANULARITY_MS,
+  type AdminAuth,
+  createAdminAuth,
+  isIdle,
+} from './admin-auth.config.js';
 
 /** The signed-in admin of a request, as the access guard sees them. */
 export interface AdminIdentity {
@@ -22,9 +27,6 @@ export interface AdminIdentity {
   /** The last re-authentication on this session (rule D5). */
   reauthenticatedAt: Date | null;
 }
-
-/** Activity is written at most this often: one update a minute is enough for a 30-minute rule. */
-const ACTIVITY_GRANULARITY_MS = 60 * 1000;
 
 /** Owns the admin Better Auth instance: its HTTP handler and session lookups. */
 @Injectable()

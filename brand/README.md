@@ -15,7 +15,7 @@ Visual identity rules: [identity.md](identity.md).
 | `logo/svg/favicon.svg` | Sand mark on a green rounded square | Browser favicon |
 | `apps/store/src/app/favicon.ico` | `favicon.svg` rendered at 16, 32 and 48 px (PNG frames in one ICO) | The store's `/favicon.ico` (2026-10-14): browsers ask for it on their own, and a 404 there repeated until the server's `nginx-4xx-flood` jail banned the visitor. The App Router serves it only from `src/app/`, so it is the one derived copy outside `brand/`: re-render it when `favicon.svg` changes |
 | `logo/png/vertex-mark-{green,gold,white}.png` | 512 px, transparent | Email clients and tools without SVG |
-| `logo/png/vertex-logo-{green,gold,white}.png` | 1024 px wide, transparent | Email clients and tools without SVG |
+| `logo/png/vertex-logo-{green,gold,white}.png` | 1024 px wide, transparent | Email clients and tools without SVG; `vertex-logo-gold.png` is the customer emails' header, sent inside each email (`apps/worker/src/jobs/email/email-templates.ts`) |
 | `logo/png/icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | Sand mark on Vertex Green | PWA manifest and home-screen icons (`icon-192.png` re-rendered from `icon-512.png` at exactly 192 × 192 in S15: the manifest names its size) |
 | `logo/png/icon-maskable-512.png` | Sand mark on full-bleed Vertex Green, the mark inside the central 80% safe zone | The manifest's maskable icon (S15 PW1): Android crops it to its own shape |
 | `logo/png/badge-96.png` | White mark, transparent | The monochrome badge of a push notification (S15 SW6): Android shows only its alpha |

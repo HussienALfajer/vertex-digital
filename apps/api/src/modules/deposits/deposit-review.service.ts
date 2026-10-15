@@ -501,7 +501,7 @@ export class DepositReviewService {
       creditUsdUnits: plan.creditedUsdUnits,
       approvalRefusal: telegramApprovalRefusal({
         method: row.method,
-        customerFrozen: await this.customerFrozen(row.customerId),
+        customerFrozen: await this.customerFrozen(this.db, row.customerId),
         flagCount: plan.expectedFlags.length,
         creditUsdUnits: plan.creditedUsdUnits,
         limitUsdUnits: settings?.telegramApprovalMaxUsdUnits ?? 0,
@@ -510,8 +510,9 @@ export class DepositReviewService {
   }
 
   /** S12 CF4: whether the deposit's customer is frozen now. */
-  private async customerFrozen(customerId: string): Promise<boolean> {
-    return (await this.customers.depositCustomers([customerId])).get(customerId)?.frozen ?? false;
+  private async customerFrozen(db: Database | Transaction, customerId: string): Promise<boolean> {
+    const found = await this.customers.depositCustomers([customerId], db);
+    return found.get(customerId)?.frozen ?? false;
   }
 
   private async row(id: string): Promise<DepositRow> {
@@ -522,15 +523,16 @@ export class DepositReviewService {
 
   /** Rule TC4: refused when the deposit changed since the prompt, is flagged or over the limit. */
   private async refuseForTelegram(
+    db: Database | Transaction,
     actor: DecisionActor,
     deposit: DepositRow,
     approval: { creditedUsdUnits: number; expectedFlags: readonly string[] },
   ): Promise<void> {
     if (!sameInstant(deposit.submittedAt, actor.submittedAt)) throw new TelegramRefused('changed');
-    const settings = await this.settings.current();
+    const settings = await this.settings.current(db);
     const refusal = telegramApprovalRefusal({
       method: deposit.method,
-      customerFrozen: await this.customerFrozen(deposit.customerId),
+      customerFrozen: await this.customerFrozen(db, deposit.customerId),
       flagCount: approval.expectedFlags.length,
       creditUsdUnits: approval.creditedUsdUnits,
       limitUsdUnits: settings?.telegramApprovalMaxUsdUnits ?? 0,
@@ -557,7 +559,7 @@ export class DepositReviewService {
     // Rule RV4, before anything is written: the credit and every flag the approval would carry.
     const plan = await this.planApproval(this.db, current, input);
     // From Telegram the limit (at most $100) and "no flag" take the re-authentication's place.
-    if (actor.channel === 'telegram') await this.refuseForTelegram(actor, current, plan);
+    if (actor.channel === 'telegram') await this.refuseForTelegram(this.db, actor, current, plan);
     else if (
       approvalNeedsReauthentication(plan.creditedUsdUnits, plan.expectedFlags.length) &&
       !actor.reauthenticated
@@ -575,7 +577,9 @@ export class DepositReviewService {
         if (deposit.decisionIdempotencyKey === idempotencyKey) throw new AlreadyDecided();
         if (deposit.status !== 'submitted') throw stateConflict(deposit.status);
         const approval = await this.planApproval(tx, deposit, input);
-        if (actor.channel === 'telegram') await this.refuseForTelegram(actor, deposit, approval);
+        if (actor.channel === 'telegram') {
+          await this.refuseForTelegram(tx, actor, deposit, approval);
+        }
         if (!sameFlags(input.acknowledgedFlags, approval.expectedFlags)) {
           throw new CodedException(409, 'FLAGS_NOT_ACKNOWLEDGED', 'Acknowledge every flag', {
             expected: approval.expectedFlags,
@@ -847,7 +851,7 @@ export class DepositReviewService {
       if (deposit.rateId && deposit.rate) {
         rate = { id: deposit.rateId, value: rateFromNumeric(deposit.rate) };
       } else {
-        const current = await this.rates.current();
+        const current = await this.rates.current(db);
         if (!current) throw new CodedException(409, 'RATE_UNAVAILABLE', 'No exchange rate yet');
         rate = { id: current.id, value: current.sypPerUsd };
       }
@@ -857,6 +861,11 @@ export class DepositReviewService {
       input.receivedAmountUnits,
       rate?.value ?? null,
     );
+    if (creditedUsdUnits === null) {
+      throw new CodedException(400, 'VALIDATION_FAILED', 'The credit is too large', [
+        { path: ['receivedAmountUnits'], message: 'Worth more than the largest amount' },
+      ]);
+    }
     if (creditedUsdUnits <= 0) {
       throw new CodedException(400, 'VALIDATION_FAILED', 'The credit is below one cent', [
         { path: ['receivedAmountUnits'], message: 'Worth less than one cent' },

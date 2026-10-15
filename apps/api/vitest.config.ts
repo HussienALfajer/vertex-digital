@@ -1,20 +1,23 @@
 import { fileURLToPath } from 'node:url';
-import { testDatabaseUrl } from '@vertex-digital/db/testing';
+import { TEST_WORKERS } from '@vertex-digital/db/testing';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   // Nest injects by the constructor parameter types: emit legacy decorators and their metadata.
   oxc: { decorator: { legacy: true, emitDecoratorMetadata: true } },
   test: {
-    // Files share one test database; some checks read global rows (the active owner).
-    fileParallelism: false,
+    // Each worker has its own test database (packages/db testing.ts): files run in parallel, and
+    // files in one worker run one after another on it, so a check that reads global rows (the
+    // active owner) sees only its worker's files.
+    maxWorkers: TEST_WORKERS,
     globalSetup: ['./test/global-setup.ts'],
-    setupFiles: ['./test/no-concurrent-queries.ts'],
+    setupFiles: ['./test/worker-env.ts', './test/no-concurrent-queries.ts'],
     // Set explicitly: the root .env (loaded to find the test database) must not leak in.
     env: {
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
-      DATABASE_URL: testDatabaseUrl(),
+      // test/worker-env.ts sets DATABASE_URL to the worker's database.
+      TEST_DATABASE_SUITE: 'api',
       STORE_URL: 'http://127.0.0.1:3001',
       ADMIN_URL: 'http://127.0.0.1:5173',
       SENTRY_DSN: '',

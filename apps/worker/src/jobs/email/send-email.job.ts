@@ -20,6 +20,29 @@ export const MAX_EMAIL_ATTEMPTS = 6;
 export type SendOutcome = 'sent' | 'skipped' | 'expired';
 
 /**
+ * A failed send as the logs, Sentry, the alert channel and `last_error` may see it: Nodemailer's
+ * error code, the SMTP command and the SMTP status only. The server's own text can name the
+ * recipient ("550 <name@example.com>: recipient rejected"), so it never leaves this file
+ * (2026-10-15 feature 2 audit).
+ */
+export class EmailSendError extends Error {
+  override name = 'EmailSendError';
+
+  static from(error: unknown): EmailSendError {
+    const failure = (error ?? {}) as { code?: unknown; command?: unknown; responseCode?: unknown };
+    const word = (value: unknown) =>
+      typeof value === 'string' && /^[A-Za-z_ ]{1,32}$/.test(value) ? value : 'unknown';
+    const status =
+      typeof failure.responseCode === 'number' && Number.isInteger(failure.responseCode)
+        ? failure.responseCode
+        : 'none';
+    return new EmailSendError(
+      `SMTP send failed (code ${word(failure.code)}, command ${word(failure.command)}, status ${status})`,
+    );
+  }
+}
+
+/**
  * `email.send` (S01 rules E1–E5): sends one outbox row. Safe to run twice: the row is locked and
  * sent only while `pending`. A code email past its expiry is marked failed without sending; a
  * sent code email loses its code. A failure is recorded on the row and thrown, so pg-boss retries
@@ -70,14 +93,15 @@ export class SendEmailJob implements OnApplicationBootstrap {
           to: row.toAddress,
           ...renderEmail(row.template, params as never, this.env.STORE_URL),
         });
-      } catch (error) {
+      } catch (raw) {
+        const error = EmailSendError.from(raw);
         const failed = attempts >= MAX_EMAIL_ATTEMPTS;
         await tx
           .update(emailOutbox)
           .set({
             attempts,
             status: failed ? 'failed' : 'pending',
-            lastError: `${(error as Error).name}: ${(error as Error).message}`.slice(0, 500),
+            lastError: `${error.name}: ${error.message}`.slice(0, 500),
             ...(failed && code && { params: null }),
           })
           .where(eq(emailOutbox.id, row.id));
