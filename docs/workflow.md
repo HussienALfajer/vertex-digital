@@ -37,7 +37,7 @@ Steps inside a session:
 2. **Plan** (`/feature-slice`, first step): the agent splits the feature into PRs and writes `TASKS.md`; the owner approves before any code.
 3. **Implement** (`/feature-slice`): one layer at a time, contracts → db → api/worker → bridge (OpenAPI) → admin/store → E2E, each followed by a check gate through the `checker` subagent. The wiring checklist is in `.claude/skills/feature-slice/wiring.md`.
 4. **Review:** the `reviewer` subagent (fresh context) checks the branch against the spec and the rules, with a money, security and fraud checklist, and reports blocking issues only.
-5. **Accept and open the PR at once:** the owner tries it in the browser; in the same turn the agent follows "Finishing a task" in `AGENTS.md`: updates `docs/ROADMAP.md`, runs only the checks that have not already passed on the same files (`scripts/check-record.mjs`), commits, pushes, opens the PR and enables auto-merge. There is no separate shipping command (owner, 2026-10-06). CI runs every check on every PR before the merge.
+5. **Accept and open the PR at once:** the owner tries it in the browser; in the same turn the agent follows "Finishing a task" in `AGENTS.md`: updates `docs/ROADMAP.md`, runs the checks through the `checker` (Turbo's cache replays every task whose inputs did not change, so only what changed since the last run runs again), commits, pushes, opens the PR and enables auto-merge. There is no separate shipping command (owner, 2026-10-06). CI runs every check on every PR before the merge (the full E2E suite over four shards); a PR that changes only Markdown outside `brand/` skips them.
 
 ## How the instructions are layered
 

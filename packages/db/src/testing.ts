@@ -11,14 +11,49 @@ function requireEnv(key: string): string {
   return url;
 }
 
+/**
+ * Parallel Vitest workers of each app suite (`api`, `worker`). Each worker has a test database of
+ * its own, so test files run in parallel without seeing each other's rows; files in one worker
+ * run one after another, as the whole suite did on a single database before. Keep in step with
+ * TEST_WORKERS in scripts/setup-local-db.mjs, which creates the databases.
+ */
+export const TEST_WORKERS = 4;
+
+/** `<test database>_<suite>_<worker>`: the database of one Vitest worker of an app suite. */
+export function workerDatabaseUrl(url: string, suite: string, worker: number | string): string {
+  const parsed = new URL(url);
+  parsed.pathname = `${parsed.pathname}_${suite}_${worker}`;
+  return parsed.href;
+}
+
+/**
+ * Inside a Vitest worker of an app suite (TEST_DATABASE_SUITE set by its config), the worker's
+ * own database; elsewhere (the db package's tests, the config, global setup) the test database.
+ */
+function forWorker(url: string): string {
+  const suite = process.env.TEST_DATABASE_SUITE;
+  const worker = process.env.VITEST_POOL_ID;
+  return suite && worker ? workerDatabaseUrl(url, suite, worker) : url;
+}
+
 /** The test database as the app role, which the tests use (ADR 0014). */
 export function testDatabaseUrl(): string {
-  return requireEnv('TEST_DATABASE_URL');
+  return forWorker(requireEnv('TEST_DATABASE_URL'));
 }
 
 /** The test database as the owner role: migrations, and tests that prove a guard refuses even it. */
 export function testOwnerDatabaseUrl(): string {
-  return requireEnv('TEST_DATABASE_OWNER_URL');
+  return forWorker(requireEnv('TEST_DATABASE_OWNER_URL'));
+}
+
+/** The app-role and owner-role URLs of every worker database of an app suite. */
+export function workerDatabases(suite: string): { url: string; ownerUrl: string }[] {
+  const url = requireEnv('TEST_DATABASE_URL');
+  const ownerUrl = requireEnv('TEST_DATABASE_OWNER_URL');
+  return Array.from({ length: TEST_WORKERS }, (_, index) => ({
+    url: workerDatabaseUrl(url, suite, index + 1),
+    ownerUrl: workerDatabaseUrl(ownerUrl, suite, index + 1),
+  }));
 }
 
 /**
@@ -36,8 +71,13 @@ const SHARED_ACCOUNTS = [
 
 /** Vitest global setup: bring the test database schema up to date before any test runs. */
 export async function setup(): Promise<void> {
-  await runMigrations(testOwnerDatabaseUrl());
-  const connection = createDatabase(testDatabaseUrl());
+  await prepareTestDatabase(testOwnerDatabaseUrl(), testDatabaseUrl());
+}
+
+/** Migrates a test database as the owner, then creates the shared accounts as the app role. */
+export async function prepareTestDatabase(ownerUrl: string, url: string): Promise<void> {
+  await runMigrations(ownerUrl);
+  const connection = createDatabase(url);
   try {
     for (const account of SHARED_ACCOUNTS) {
       await connection.db.transaction((tx) => ensureSystemAccount(tx, account));

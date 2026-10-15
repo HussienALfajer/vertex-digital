@@ -30,7 +30,7 @@
       "Bash(pnpm --filter * test:e2e)",
       "Bash(pnpm --filter * exec vitest run*)",
       "Bash(bash -n *)",
-      "Bash(node scripts/check-record.mjs *)",
+      "Bash(pnpm --filter * exec playwright test*)",
       "Bash(git status*)",
       "Bash(git diff*)",
       "Bash(git log*)",

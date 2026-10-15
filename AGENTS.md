@@ -43,8 +43,8 @@ Run from the repository root (Node 24, pnpm via Corepack: `corepack enable`).
 | Local databases: `.env` with random passwords and a local VAPID key pair for web push (S15), the owner and app roles (ADR 0014), dev and test databases with the `pgboss` schema (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
 | Dev: api, worker, store (http://127.0.0.1:3001) and admin (http://127.0.0.1:5173) in watch mode | `pnpm dev` |
 | Typecheck · lint · lint fix | `pnpm typecheck` · `pnpm lint` · `pnpm lint:fix` |
-| Unit + integration tests (need the test database URLs in `.env`) | `pnpm test` |
-| E2E (Playwright: builds, then store and admin against a mocked API; first time: `pnpm --filter @vertex-digital/store exec playwright install chromium`) | `pnpm test:e2e` |
+| Unit + integration tests (need the test database URLs in `.env`, and the per-worker test databases from `pnpm db:setup-local`); Turbo replays packages whose inputs did not change | `pnpm test` |
+| E2E (Playwright: builds, then store and admin against a mocked API; first time: `pnpm --filter @vertex-digital/store exec playwright install chromium`): the full suite (CI runs it over four shards) · only the specs changed against `main` (after `pnpm build`) | `pnpm test:e2e` · `pnpm --filter @vertex-digital/<store or admin> exec playwright test --only-changed=origin/main` |
 | Migration after a schema change · apply to the dev database (Drizzle migrations, then pg-boss, as the owner role) | `pnpm db:generate` · `pnpm db:migrate` |
 | OpenAPI document and the admin client after an API change (after `pnpm build`; commit `apps/api/openapi.json` and `apps/admin/src/lib/api/schema.gen.ts`) | `pnpm --filter @vertex-digital/api openapi:export` · `pnpm --filter @vertex-digital/admin api:generate` |
 | The admin account (prints a generated password once; there is only one, ADR 0016) · reset its password (printed once) · reset its TOTP | `pnpm --filter @vertex-digital/api admin:create --email <email> --name <name>` · `pnpm --filter @vertex-digital/api admin:reset-password --email <email>` · `pnpm --filter @vertex-digital/api admin:reset-two-factor --email <email>` |
@@ -85,7 +85,7 @@ Keep this table true: the PR that adds or changes a command updates it.
 
 - Search before reading, then read only the relevant range. For `v1-scope.md`, read the feature's section, not the whole file.
 - Never read generated or lock files: `pnpm-lock.yaml`, `packages/db/migrations/meta/`, `routeTree.gen.ts`, `.next/`, `dist/`, `.turbo/`. Open Playwright screenshots only to verify a UI change.
-- Run the narrowest check first (one package, one test file), and the full set once before the PR. With Turborepo, add `--output-logs=errors-only`.
+- Run the narrowest check first (one package, one test file), and the full set once before the PR, in one turbo command (`pnpm turbo run typecheck test build`) so the tasks run in parallel and Turbo's cache skips what did not change. Add `--output-logs=errors-only`. Run the `checker` in the background and keep working (the reviewer can run at the same time).
 - In replies, point to `path:line` instead of pasting files or diffs.
 
 ## Git
@@ -101,7 +101,7 @@ When a task's work is done (a spec approved, a `/feature-slice` PR accepted, a s
 1. **Branch:** not `main`; if on `main`, create the branch named by type. `TASKS.md` has no open items for this PR.
 2. **Docs:** update `docs/ROADMAP.md` when a feature or roadmap item is done, and every doc the change made stale (`docs/architecture.md`, a folder `CLAUDE.md`, `docs/open-questions.md`, the commands table above).
 3. **Secrets:** `git status` and `git diff --stat` show no `.env`, key, receipt image, customer data or real supplier response; fixtures are sanitized.
-4. **Checks:** lint, typecheck, test and build, plus `e2e` when `apps/store`, `apps/admin` or `packages/ui` changed and `drift` when `packages/db` changed. Run `node scripts/check-record.mjs status <checks…>` first: documentation-only changes run no local checks (CI runs them all); otherwise run only the checks marked `needed`, through the `checker` subagent (a check marked `recorded` already passed on this exact tree). Everything must pass; fix root causes.
+4. **Checks:** lint, typecheck, test and build, plus the changed E2E specs when `apps/store`, `apps/admin` or `packages/ui` changed and `drift` when `packages/db` changed, through the `checker` subagent. Turbo's cache replays every task whose inputs did not change, so this run costs only what changed since the last one: run it again after any fix rather than reasoning about what already passed. Documentation-only changes run no local checks (CI skips them as well). CI runs everything, the full E2E suite over four shards. Everything must pass; fix root causes.
 5. **Review:** for feature and supplier work, the `reviewer` subagent has run and its blocking findings are fixed.
 6. **Commit:** stage the intended files only; Conventional Commit subject, a body with what and why, ending with the session's attribution line.
 7. **Pull request:** `git push -u origin <branch>`, `gh pr create --base main` with `## Summary` (what and why, in bullets) and `## Test plan` (the checks as ticked boxes, each marked run now or reused from the record; for docs only, "documentation only, CI runs the checks"), ending with the session's attribution line; then immediately `gh pr merge <number> --auto --merge`.
