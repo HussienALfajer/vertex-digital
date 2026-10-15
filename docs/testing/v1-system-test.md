@@ -36,7 +36,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 |---|---|---|---|---|
 | 1 | Admin access, 2FA and audit log | F02 | Every later step is an admin action that must be authenticated, re-authenticated and audited; the audit log is the tool used to verify the rest | Accepted 2026-10-15 |
 | 2 | Customer accounts | F01 | Every customer case needs sign-in, sessions and account emails working | Accepted 2026-10-15 |
-| 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | Steps written 2026-10-15 |
+| 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | Accepted 2026-10-15 |
 | 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | — |
 | 5 | USDT deposits | F06 | The automatic money-in path | — |
 | 6 | Wallet and ledger | F03 | Checked once real deposits exist: balances as sums, history, journals | — |
@@ -94,6 +94,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F2-21 | 2 | Second review | A malformed `next` (`//[`) made `safeRedirect` throw after the sign-in had worked, leaving the form stuck | minor | A destination the browser cannot parse goes home; unit and E2E tests | Fixed |
 | F2-22 | 2 | Second review | The links between sign-in, sign-up and the code page dropped `next`: from the cart a new customer ended on the home page | minor | `withNext` carries the checked destination on those links; E2E | Fixed |
 | F2-23 | 2 | Second review | Signing out of this device (Better Auth's `/sign-out`) wrote no audit entry, unlike the other session endings (A2, C14) | minor | The sign-out hook ends the session and audits it in one transaction before Better Auth clears the cookie; tested | Fixed |
+| F3-1 | 3 | 3.4 | Step 2 said "press the $10 preset", but with "ل.س" chosen the presets show their amount in pounds ("1,400 ل.س"), as S03 asks; the owner did not find a "$10" button | — | Not a bug: the step names the button by its pounds, with this file's PR | Closed |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -526,7 +527,7 @@ Result: ✅ 2026-10-15; SU3 of the re-run archived the same way.
 3. Expected: "سجل الأسعار" lists at least the rate set on 2026-10-15, with time, rate, step, change and "بواسطة" the admin. The first rate ever has no change percent.
 4. Expected: no stale-rate banner at the top of any panel page (the rate is less than 48 hours old).
 
-Result:
+Result: ✅ 2026-10-15
 
 ### 3.2 Wrong values are refused before anything is saved
 
@@ -538,7 +539,7 @@ Result:
 4. Expected: each is refused under the step with "أدخل عددًا صحيحًا من الليرات بين 1 و50."; nothing saved.
 5. Empty the form (reload the page).
 
-Result:
+Result: ✅ 2026-10-15
 
 ### 3.3 SYP next to USD in the store and the panel
 
@@ -553,21 +554,21 @@ Result:
 7. In the panel open "المحافظ" → TC1's wallet (`/wallets/<id>`). Expected: the header shows the SYP value at 140.
 8. Expected everywhere: Latin digits, "ل.س" after the number, the number not broken across the line.
 
-Result:
+Result: ✅ 2026-10-15
 
 ### 3.4 A SYP deposit quote locks the rate for 15 minutes
 
 **What this checks:** the customer sees exactly how many dollars their pounds will give before they send anything, and that number is held for 15 minutes.
 
 1. Note the time. In the store as TC1, "المحفظة" → "إيداع" → "شام كاش".
-2. Choose "ل.س". Press the $10 preset. Expected: the amount becomes 1,400 (USD 10 × 140, rounded up to the step).
+2. Choose "ل.س". Under the amount field the presets ($5, $10, $25, $50) show in pounds: press "1,400 ل.س" (the $10 preset). Expected: the amount becomes 1,400 (USD 10 × 140, rounded up to the step).
 3. Replace the amount with `2000`. Expected: "ستحصل على $14.28" (not $14.29), "بسعر 140 ل.س للدولار" and "السعر مقفل 15 دقيقة بعد المتابعة".
 4. Press "متابعة" (the browser check solves itself).
 5. Expected: the deposit page shows the amount 2,000 ل.س, "يُضاف إلى محفظتك $14.28", and "السعر 140 ل.س للدولار مقفل لمدة" with a countdown starting near 15:00 and going down.
 6. Reload the page. Expected: the countdown continues from the right time (it does not restart at 15:00).
 7. Do **not** add a receipt. Go to 3.5 straight away, keeping this page open.
 
-Result:
+Result: ✅ 2026-10-15. Step 2 named a "$10" button the form does not show: with "ل.س" chosen each preset reads its amount in pounds (F3-1, the step's wording corrected).
 
 ### 3.5 A small rate change: no confirmation, open quotes keep their rate
 
@@ -578,7 +579,7 @@ Result:
 3. In the store, reload TC1's deposit page from 3.4. Expected: still "السعر 140 ل.س للدولار مقفل لمدة …" and "$14.28": the lock holds.
 4. Reload "المحفظة" and the game page from 3.3. Expected: "حسب سعر اليوم 145", and each pack's SYP value is now USD × 145 rounded up to the step.
 
-Result:
+Result: ✅ 2026-10-15
 
 ### 3.6 When the lock ends, the customer must accept the new rate
 
@@ -593,7 +594,7 @@ Meanwhile do 3.9.
 5. Expected: the deposit is still waiting for a receipt; nothing was sent. In the panel, "الإيداعات" → "قيد المراجعة" does not list it, and the badge did not change.
 6. On the deposit page press "إلغاء الإيداع" and confirm. Expected: the cancelled state with "إيداع جديد"; "إيداعاتي" lists it as cancelled.
 
-Result:
+Result: ✅ 2026-10-15
 
 ### 3.7 A large change needs the rate typed twice
 
@@ -608,7 +609,7 @@ Do 3.7 and 3.8 in one sitting (re-authentication lasts 5 minutes).
 5. Type `160`, press "حفظ السعر". Expected: saved; the history's top row is 160, +10.35%.
 6. Put the rate back: `140`, confirmation `140`. Expected: -12.50% with the confirmation field; saved; current rate 140.
 
-Result:
+Result: ✅ 2026-10-15
 
 ### 3.8 The display step and its limit
 
@@ -620,7 +621,7 @@ Result:
 4. Reload a game page in the store. Expected: each SYP value is now exactly USD × 140 rounded up to the whole pound.
 5. Put the step back to the value you noted before starting. Expected: saved; the store's SYP values are back to the ones from 3.3 step 3 (at 140).
 
-Result:
+Result: ✅ 2026-10-15
 
 ### 3.9 Only the admin can change the rate
 
@@ -629,7 +630,7 @@ Result:
 1. In the store browser (signed in as TC1) open `https://digital-admin.vertexmedia.pro/api/admin/rates`. Expected: 401, no rate data.
 2. Open `https://digital.vertexmedia.pro/api/admin/rates` (the store host). Expected: 404.
 
-Result:
+Result: ✅ 2026-10-15
 
 ### 3.10 The audit log has every rate change and the deposit
 
@@ -640,7 +641,7 @@ Result:
 3. Open the 160 entry. Expected: labelled before and after values (rate and step) and the change percent.
 4. Filter TC1 as actor (or the entity type deposit). Expected: the deposit's creation (currency SYP, 2,000, $14.28, the rate) and its cancellation; **no** requote and **no** submission entry.
 
-Result:
+Result: ✅ 2026-10-15
 
 ### 3.11 Screens quality on desktop and phone
 
@@ -650,13 +651,13 @@ Result:
 2. On the phone, open "سعر الصرف" in the panel. Expected: the form and the history fit, the history table scrolls inside its card, no horizontal page scroll.
 3. On the phone, as TC1, open "المحفظة", a game page and the deposit form with "ل.س" chosen, in both themes. Expected: the SYP lines readable, the number keyboard on the amount field, no horizontal scroll.
 
-Result:
+Result: ✅ 2026-10-15
 
 ### Feature 3 sign-off
 
 | Item | Value |
 |---|---|
-| Cases passed | — of 11 |
-| Findings | — |
-| Accepted by the owner on | — |
-| PR | — |
+| Cases passed | 11 of 11 |
+| Findings | F3-1 (not a bug: a step's wording, corrected) |
+| Accepted by the owner on | 2026-10-15 |
+| PR | #106 (the steps), and this record |
