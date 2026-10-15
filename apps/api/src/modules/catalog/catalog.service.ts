@@ -77,13 +77,22 @@ import {
 /** The categories' order has no parent row to lock: a transaction-level advisory lock instead. */
 const CATEGORY_ORDER_KEY = sql`hashtext('catalog_categories_order')`;
 
+/**
+ * A column with its table's name written out. In a select from one table Drizzle drops the table
+ * from the columns at the top of a selected expression, which would bind a correlated subquery's
+ * outer column to the inner table (`"category_id" = "id"` compares a game with itself).
+ */
+const qualified = (column: Column) => sql`${column.table}.${sql.identifier(column.name)}`;
+
 /** Unarchived games in a category (rule CT2). */
 const gameCount = sql<number>`(select count(*)::int from ${catalogGames}
-  where ${catalogGames.categoryId} = ${catalogCategories.id} and ${catalogGames.archivedAt} is null)`;
+  where ${qualified(catalogGames.categoryId)} = ${qualified(catalogCategories.id)}
+  and ${qualified(catalogGames.archivedAt)} is null)`;
 
 /** Unarchived products of a game. */
 const productCount = sql<number>`(select count(*)::int from ${catalogProducts}
-  where ${catalogProducts.gameId} = ${catalogGames.id} and ${catalogProducts.archivedAt} is null)`;
+  where ${qualified(catalogProducts.gameId)} = ${qualified(catalogGames.id)}
+  and ${qualified(catalogProducts.archivedAt)} is null)`;
 
 type GameValues = Pick<
   GameRow,
