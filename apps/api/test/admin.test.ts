@@ -442,7 +442,7 @@ describe('second review (findings R1–R6)', () => {
     const admin = await client.adminWithTotp(test.db);
     seeded.push(admin.id);
     const other = await client.signInAdmin(admin.email, admin.secret);
-    const passwords = [NEW_PASSWORD, 'b8Lr-green-hill-stone'];
+    const passwords = [NEW_PASSWORD, 'b8Lr-green-sea-lake'];
     const answers = await Promise.all(
       [admin.cookie, other].map((cookie, index) =>
         client.post('/api/admin/auth/change-password', {
