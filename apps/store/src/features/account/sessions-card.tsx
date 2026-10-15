@@ -19,7 +19,7 @@ import { FormAlert } from '@/components/form-alert';
 import { clearStoredCart } from '@/features/cart/cart-keys';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { type CustomerSession, revokeAllSessions, revokeSession } from './requests';
 
@@ -100,7 +100,8 @@ export function SessionsCard({
                   </span>
                   {session.ipAddress && (
                     <span className="text-sm text-muted-foreground">
-                      {t('account.sessions.ip', { ip: session.ipAddress })}
+                      {/* The address kept whole and left to right inside the Arabic line (feature 2 audit). */}
+                      {t('account.sessions.ip', { ip: ltr(session.ipAddress) })}
                     </span>
                   )}
                 </div>

@@ -12,6 +12,7 @@ import { FormAlert } from '@/components/form-alert';
 import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
+import { clearErrorOnInput } from '@/lib/field-errors';
 import { t } from '@/lib/i18n';
 import { CodeInput } from '../auth/code-input';
 import { codeError, currentPasswordError, emailError } from '../auth/validation';
@@ -92,7 +93,13 @@ function RequestStep({
   };
 
   return (
-    <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+    <form
+      ref={ref}
+      noValidate
+      onSubmit={onSubmit}
+      onInput={clearErrorOnInput(setErrors)}
+      className="flex flex-col gap-5"
+    >
       <Field invalid={!!errors.newEmail}>
         <FieldLabel>{t('fields.newEmail')}</FieldLabel>
         <Input
@@ -165,7 +172,15 @@ function CodeStep({
     <div className="flex flex-col gap-5">
       <SentTo text={t('changeEmail.codeSubtitle')} email={newEmail} />
       <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
-        <CodeInput value={code} onValueChange={setCode} error={codeFailure} autoFocus />
+        <CodeInput
+          value={code}
+          onValueChange={(value) => {
+            setCode(value);
+            setCodeFailure(undefined);
+          }}
+          error={codeFailure}
+          autoFocus
+        />
         {failure && <FormAlert>{errorText(failure)}</FormAlert>}
         <Button type="submit" size="xl" disabled={pending}>
           {pending ? t('changeEmail.submitting') : t('changeEmail.submit')}

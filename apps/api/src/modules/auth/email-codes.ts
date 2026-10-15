@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { EMAIL_CODE_TTL_SECONDS } from '@vertex-digital/contracts';
 import { customerVerifications, type Transaction } from '@vertex-digital/db';
-import { eq } from 'drizzle-orm';
+import { eq, lt } from 'drizzle-orm';
 
 /*
  * Email codes (S01 rule C4): 6 digits, valid 10 minutes, void after 5 wrong tries, one per
@@ -60,15 +60,21 @@ export async function issueDecoyCode(
   tx: Transaction,
   purpose: CodePurpose,
   subject: string,
+  { keepLiveCode = false }: { keepLiveCode?: boolean } = {},
 ): Promise<void> {
+  const now = new Date();
   const value = `${hashOf(randomBytes(32).toString('hex'), '').toString('hex')}:0`;
-  const expiresAt = new Date(Date.now() + EMAIL_CODE_TTL_SECONDS * 1000);
+  const expiresAt = new Date(now.getTime() + EMAIL_CODE_TTL_SECONDS * 1000);
   await tx
     .insert(customerVerifications)
     .values({ identifier: identifierOf(purpose, subject), value, expiresAt })
     .onConflictDoUpdate({
       target: customerVerifications.identifier,
-      set: { value, expiresAt, createdAt: new Date() },
+      set: { value, expiresAt, createdAt: now },
+      // `keepLiveCode`: a code still valid stays (F2-3: the same person's first code still
+      // works); only a stale one is replaced, so the subject always ends with a live code, as a
+      // new sign-up would (2026-10-15 audit).
+      ...(keepLiveCode && { setWhere: lt(customerVerifications.expiresAt, now) }),
     });
 }
 
@@ -89,7 +95,9 @@ export async function checkCode(
     .from(customerVerifications)
     .where(eq(customerVerifications.identifier, identifier))
     .for('update');
-  if (!row) return { ok: false, code: 'INVALID_OTP' };
+  // No code and an expired code answer the same: "request a new one". Told apart, they would show
+  // whether an address holds an abandoned sign-up (2026-10-15 audit).
+  if (!row) return { ok: false, code: 'OTP_EXPIRED' };
   const remove = () => tx.delete(customerVerifications).where(eq(customerVerifications.id, row.id));
   if (row.expiresAt.getTime() < Date.now()) {
     await remove();

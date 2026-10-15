@@ -239,7 +239,46 @@ describe('email.send', () => {
     expect(message).toContain('482913');
     expect(message).toContain('dir=3D"rtl"');
     expect(message).toMatch(/Subject: =\?UTF-8\?/);
+    // The brand logo travels inside the email, named by the HTML (F2-5).
+    expect(message).toContain('cid:logo@vertex-digital');
+    expect(message).toContain('Content-ID: <logo@vertex-digital>');
+    expect(message).toContain('Content-Disposition: inline');
     expect(await rowOf(id)).toMatchObject({ status: 'sent', attempts: 1, params: null });
+  });
+
+  it('names an unknown device in Arabic in the sign-in email', () => {
+    const email = renderEmail(
+      'customer_new_sign_in',
+      { at: '2026-10-07T09:30:00.000Z', browser: 'Unknown', system: 'Unknown', ipAddress: null },
+      'https://digital.example',
+    );
+    expect(email.text).toContain('الجهاز: غير معروف على غير معروف.');
+    expect(email.text).not.toContain('Unknown');
+  });
+
+  it('frames every email in the brand: the logo, the title and the store address', () => {
+    const email = renderEmail(
+      'customer_new_sign_in',
+      {
+        at: '2026-10-07T09:30:00.000Z',
+        browser: 'Chrome',
+        system: 'Android',
+        ipAddress: '203.0.113.7',
+      },
+      'https://digital.example',
+    );
+    expect(email.html).toContain('src="cid:logo@vertex-digital"');
+    expect(email.html).toContain('#004139');
+    expect(email.html).toContain('>تسجيل دخول جديد إلى حسابك</h1>');
+    expect(email.html).toContain('href="https://digital.example"');
+    expect(email.text.startsWith('تسجيل دخول جديد إلى حسابك')).toBe(true);
+    expect(email.attachments).toEqual([
+      {
+        cid: 'logo@vertex-digital',
+        path: expect.stringMatching(/vertex-logo-gold\.png$/),
+        filename: 'vertex-digital.png',
+      },
+    ]);
   });
 
   it('writes the wallet adjustment email with its link', async () => {
@@ -278,18 +317,25 @@ describe('email.send', () => {
       app.get(PgBossService),
       {
         send: async () => {
-          throw new Error('SMTP connection refused');
+          // As Nodemailer rejects a recipient: the server's text names the customer.
+          throw Object.assign(
+            new Error("Can't send mail - all recipients were rejected: 550 <someone@example.com>"),
+            { code: 'EENVELOPE', command: 'RCPT TO', responseCode: 550 },
+          );
         },
       } as unknown as Mailer,
       db,
       app.get<Env>(ENV),
     );
-    await expect(failing.send(id)).rejects.toThrow('SMTP connection refused');
+    const thrown = (await failing.send(id).catch((error: unknown) => error)) as Error;
+    // Only the code, the command and the status reach the logs, Sentry and the alert channel.
+    expect(thrown.message).toBe('SMTP send failed (code EENVELOPE, command RCPT TO, status 550)');
     expect(await rowOf(id)).toMatchObject({
       status: 'pending',
       attempts: 1,
-      lastError: 'Error: SMTP connection refused',
+      lastError: 'EmailSendError: SMTP send failed (code EENVELOPE, command RCPT TO, status 550)',
     });
+    expect(JSON.stringify(await rowOf(id))).not.toContain('someone@example.com');
     for (let attempt = 2; attempt <= MAX_EMAIL_ATTEMPTS; attempt += 1) {
       await expect(failing.send(id)).rejects.toThrow();
     }

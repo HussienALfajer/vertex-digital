@@ -17,6 +17,7 @@ import { FormAlert } from '@/components/form-alert';
 import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
+import { clearErrorOnInput } from '@/lib/field-errors';
 import { t } from '@/lib/i18n';
 import { CodeInput } from './code-input';
 import { requestPasswordReset, resetPassword } from './requests';
@@ -61,7 +62,13 @@ function EmailStep({ onSent }: { onSent: (email: string) => void }) {
   };
 
   return (
-    <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+    <form
+      ref={ref}
+      noValidate
+      onSubmit={onSubmit}
+      onInput={() => setError(undefined)}
+      className="flex flex-col gap-5"
+    >
       <Field invalid={!!error}>
         <FieldLabel>{t('fields.email')}</FieldLabel>
         <Input
@@ -121,8 +128,22 @@ function ResetStep({ email, onOtherEmail }: { email: string; onOtherEmail: () =>
   return (
     <div className="flex flex-col gap-5">
       <SentTo text={t('forgotPassword.codeSubtitle')} email={email} />
-      <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
-        <CodeInput value={code} onValueChange={setCode} error={errors.code} autoFocus />
+      <form
+        ref={ref}
+        noValidate
+        onSubmit={onSubmit}
+        onInput={clearErrorOnInput(setErrors)}
+        className="flex flex-col gap-5"
+      >
+        <CodeInput
+          value={code}
+          onValueChange={(value) => {
+            setCode(value);
+            setErrors((current) => ({ ...current, code: undefined }));
+          }}
+          error={errors.code}
+          autoFocus
+        />
         <Field invalid={!!errors.password}>
           <FieldLabel>{t('fields.newPassword')}</FieldLabel>
           <PasswordInput

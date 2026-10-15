@@ -9,11 +9,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
+import { withNext } from '@/lib/safe-redirect';
+import { useSearchParam } from '@/lib/use-search-param';
 import { registrationState } from './requests';
 import { SignUpForm } from './sign-up-form';
 
 /** The sign-up form while registration is open; a calm "opens soon" otherwise (rule C16). */
 export function SignUpPanel() {
+  const next = useSearchParam('next');
   const [state, setState] = useState<'loading' | 'open' | 'closed' | 'failed'>('loading');
 
   const read = useCallback(() => {
@@ -42,7 +45,7 @@ export function SignUpPanel() {
         title={t('signUp.closedTitle')}
         description={t('signUp.closedBody')}
         action={
-          <Button variant="outline" size="xl" render={<Link href="/sign-in" />}>
+          <Button variant="outline" size="xl" render={<Link href={withNext('/sign-in', next)} />}>
             {t('signUp.signInLink')}
           </Button>
         }
@@ -55,7 +58,7 @@ export function SignUpPanel() {
       <p className="text-center text-sm text-muted-foreground">
         {t('signUp.haveAccount')}{' '}
         <Link
-          href="/sign-in"
+          href={withNext('/sign-in', next)}
           className="inline-flex min-h-11 items-center font-medium text-accent-text hover:underline"
         >
           {t('signUp.signInLink')}

@@ -26,6 +26,7 @@ The owner's end-to-end test of every V1 feature on production, before the pilot 
 | TC1 | Main customer: deposits, purchases, cart, saved IDs, notifications, phone |
 | TC2 | Administration target: freeze, caps, overrides, archive |
 | TC3 | Receiver: gifts, purchases on behalf, compensation |
+| SU | Feature 2 only: a real sign-up to test the sign-up flow, archived at the end of feature 2 |
 
 ## Feature order
 
@@ -34,7 +35,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | # | Feature | Scope IDs | Why here | Status |
 |---|---|---|---|---|
 | 1 | Admin access, 2FA and audit log | F02 | Every later step is an admin action that must be authenticated, re-authenticated and audited; the audit log is the tool used to verify the rest | Accepted 2026-10-15 |
-| 2 | Customer accounts | F01 | Every customer case needs sign-in, sessions and account emails working | — |
+| 2 | Customer accounts | F01 | Every customer case needs sign-in, sessions and account emails working | Accepted 2026-10-15 |
 | 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | — |
 | 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | — |
 | 5 | USDT deposits | F06 | The automatic money-in path | — |
@@ -60,7 +61,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 
 | ID | Feature | Case | What happened | Severity | Fix (PR) | Status |
 |---|---|---|---|---|---|---|
-| F1-1 | 1 | Code audit | Admin API answers (audit log, sessions) carried no `Cache-Control`: a shared computer's browser could keep private data in its cache | minor | Every `/api/admin/*` answer defaults to `no-store` (`core/http/admin-no-store.ts`), with this file's PR | Fixed |
+| F1-1 | 1 | Code audit | Admin API answers (audit log, sessions) carried no `Cache-Control`: a shared computer's browser could keep private data in its cache | minor | Every `/api/admin/*` answer defaults to `no-store` (`core/http/admin-no-store.ts`, since F2-10 `private-no-store.ts`), with this file's PR | Fixed |
 | F1-2 | 1 | Code audit (1.8) | The own-sessions list kept sessions past their 12 hours or idle for 30 minutes, which sign nobody in | minor | Only live sessions are listed (`AdminAccountService.sessions`), with this file's PR | Fixed |
 | F1-3 | 1 | Code audit (1.10) | The backup-codes download released its file at the moment of the click, which can cancel the download in some browsers | minor | Released a second later, with this file's PR | Fixed |
 | F1-4 | 1 | Code audit | The re-authentication password and the current password of a password change had no length limit | minor | Bounded at 128 like every password, with this file's PR | Fixed |
@@ -70,6 +71,29 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F1-8 | 1 | Second review | Two password changes at once both succeeded; the second wrote after its session was ended | major | The change locks the admin row and checks the session and the password again inside its transaction | Fixed |
 | F1-9 | 1 | Second review | Backup codes could be generated before the CLI-issued password was changed | minor | Refused with `PASSWORD_CHANGE_REQUIRED` | Fixed |
 | F1-10 | 1 | Second review | The admin's actions on Better Auth routes (backup codes) did not count as activity for the idle timeout | minor | They update the session's last activity, polling excepted | Fixed |
+| F2-1 | 2 | 2.2 | The copy button of the test-customer password said "تعذّر النسخ": the in-app test browser denies `clipboard-write` (checked: permission `denied`, "Document is not focused"). The panel's fallback toast worked as designed | — | Not a bug; re-checked in Chrome at the next password dialog | Closed |
+| F2-2 | 2 | 2.3 | `password123` was accepted: the common-password list (SecLists 10k, entries of 8+ characters) lacks it and other well-known ones (`admin123`, `password1234`, `p@ssw0rd`, `aa123456`) | major | None: the owner keeps the current list (the customer chooses the password; rate limits and ALTCHA slow guessing). Step 4 now uses `qwerty123`, which the list refuses | Accepted |
+| F2-3 | 2 | 2.3 / 2.5 | The code page showed "محاولات كثيرة خلال وقت قصير". Production records (read-only, owner's approval): "إنشاء الحساب" was sent again with the same unverified `+su` address at 18:27; rule C2 treated it as an existing account, so the first code was voided by a decoy, `+su` got "someone tried to sign up with your email" about itself, and the next "send a new code" presses hit the per-address limits (every hit counts). A customer coming back from the code page to sign up again loses the code the same way | major | A second sign-up for an unverified account no longer voids its pending code (`AuthAccountService.signUp`, S01 C2 and edge case 4a); it still sends only the attempt notice, so the address's owner never receives an account that holds someone else's password (the reviewer refused a first fix that sent a new code for this reason). Test in `apps/api/test/auth.test.ts`, with this file's PR | Fixed |
+| F2-4 | 2 | 2.5 | The store's code page uses one plain field, not the slot-style code field the panel uses for TOTP (`OtpField`) | minor | The email code fields (verify email, forgot password, change email) use `OtpField`: six slots, numeric keyboard, one-time-code autofill, a pasted code fills every slot (`features/auth/code-input.tsx`), with this file's PR | Fixed |
+| F2-5 | 2 | 2.14 | The owner wants the account emails and screens more professional and distinctive: the logo and the brand colours | minor | Emails: the sand logo on a Vertex Green band (sent inside the email as an inline image, so no client fetches it), the title with the sand start bar, the code in a framed block, the action button in Vertex Green, a footer with the store's address (`email-templates.ts`). Screens: sign-in, sign-up, the code page and forgot password share `AuthFrame`, one card with a brand panel (sand logo, 60° hairlines, three plain promises from `md`) beside the form, with this file's PR | Fixed |
+| F2-6 | 2 | 2.14 | Dates said "أكتوبر": `ar-u-nu-latn` gives Egyptian month names, while `brand/identity.md` §10 asks for the names read in Damascus (تشرين الأول) | minor | `ar-SY-u-nu-latn` in the emails, the store and the panel, with this file's PR | Fixed |
+| F2-7 | 2 | Review of F2-3 | Before this test (not new): someone who signs up first with another person's address and never verifies keeps a password on that unverified account. If the real owner then presses "send a new code" on the code page and enters it, the owner is signed in to an account whose password the first person knows | major (registration is closed until the pilot) | The owner chose to fix it here. Verifying the email takes the code and the account's password (S01 C7): the store sends the password just typed at sign-up or sign-in (held in the page's memory, never stored) and asks for it after a reload; a right code with another password answers `PASSWORD_MISMATCH` and points to "forgot password". Tests in `apps/api/test/auth.test.ts` and `apps/store/e2e/accounts.spec.ts`, with this file's PR | Fixed |
+| F2-8 | 2 | Audit | The change-password and change-email forms compared the current password with no limit but the route's 10 a minute per address: a stolen session could keep guessing the password that lets it move the account to another email | major | 10 current-password checks per customer in 15 minutes, any address (`AuthAccountService.assertPassword`); tested | Fixed |
+| F2-9 | 2 | Audit | Creating a test customer and resetting its password issue a working password, yet the API did not require the recent re-authentication the panel already asks for | major | Both routes are `@Sensitive()`; tested | Fixed |
+| F2-10 | 2 | Audit | The customer's own private answers (`/api/account`, the session and its device list under `/api/auth`) carried no `Cache-Control`, unlike the admin's (F1-1) | minor | `privateNoStore` (`core/http/private-no-store.ts`) adds `no-store` to `/api/auth` and `/api/account` as well; tested | Fixed |
+| F2-11 | 2 | Audit | A name could hold invisible direction marks or overrides (U+202E…), which can make it read as other text in the panel, the audit log or a Telegram card | minor | `fullNameSchema` refuses them; tested | Fixed |
+| F2-12 | 2 | Audit (2.3 screenshots) | A field's error stayed under it after the customer corrected it, until the next submit | minor | The account forms clear a field's error as soon as it is edited (`lib/field-errors.ts`, the code fields on change) | Fixed |
+| F2-13 | 2 | Audit | The device list read "IP: 5.0.0.1 عنوان" (the address broke the Arabic line), and the sign-in email named an unrecognised device "Unknown" | minor | "عنوان الإنترنت" with the address kept left to right; "غير معروف" in the email; tested | Fixed |
+| F2-14 | 2 | Audit (independent review) | An abandoned sign-up could be found with one request and no ALTCHA: a code check answered `OTP_EXPIRED` for its stale code and `INVALID_OTP` for an unknown or a verified email; after F2-3 a second sign-up also left it without a live code | major | A missing and an expired code both answer `OTP_EXPIRED`; a second sign-up replaces only a stale code with a decoy (`email-codes.ts`, `issueDecoyCode` `keepLiveCode`); tested for the three kinds of address | Fixed |
+| F2-15 | 2 | Audit (independent review) | Names still accepted the line and paragraph separators (U+2028, U+2029), which could fake a line in a Telegram card; Better Auth's `/verify-password` and `/forget-password` were not on the disabled list (the first is server-only in 1.7) | minor | Both separators refused in names; both paths disabled, with a test that walks every Better Auth endpoint and expects 404 for all but the seven the store uses | Fixed |
+| F2-16 | 2 | Second review (another model) | Two password changes at once, from two sessions, could both write: the current password was checked before the transaction, and the second wrote after its session was ended by the first (also against a reset) | major | The change locks the customer, then checks its session and the current password inside the transaction; the email-change confirmation checks its session the same way; tested with two changes in parallel | Fixed |
+| F2-17 | 2 | Second review | The email verification created its session after its transaction: a password reset landing between them left a session opened on the old password | major | The session is kept only if the verified password is still the account's (`proofStillHolds`), else deleted with no cookie; tested | Fixed |
+| F2-18 | 2 | Second review | F2-14 again through the try counter: a code used up before a second sign-up kept its count for an unverified account only, so the next try answered `TOO_MANY_ATTEMPTS` there and `INVALID_OTP` elsewhere | major | Every failed code check answers `INVALID_OTP` with the same message whatever the reason (wrong, expired, used, voided; a first version still named the reason in the message, caught by the review); the store's text says "wrong or no longer valid: check it or ask for a new one"; tested | Fixed |
+| F2-19 | 2 | Second review | The header's sign-out ignored a failed answer and went home anyway: on a shared device a 429 or 500 left the account open | major | Only a confirmed sign-out (or 401) leaves the page; otherwise an alert with a retry; E2E | Fixed |
+| F2-20 | 2 | Second review | A failed email's SMTP text (which can name the recipient) went as is to `last_error`, the logs, Sentry and the Telegram alert | minor | `EmailSendError` keeps Nodemailer's code, the SMTP command and status only; tested with a rejected recipient | Fixed |
+| F2-21 | 2 | Second review | A malformed `next` (`//[`) made `safeRedirect` throw after the sign-in had worked, leaving the form stuck | minor | A destination the browser cannot parse goes home; unit and E2E tests | Fixed |
+| F2-22 | 2 | Second review | The links between sign-in, sign-up and the code page dropped `next`: from the cart a new customer ended on the home page | minor | `withNext` carries the checked destination on those links; E2E | Fixed |
+| F2-23 | 2 | Second review | Signing out of this device (Better Auth's `/sign-out`) wrote no audit entry, unlike the other session endings (A2, C14) | minor | The sign-out hook ends the session and audits it in one transaction before Better Auth clears the cookie; tested | Fixed |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -257,3 +281,218 @@ Result: ✅ (2026-10-15). Read from the panel's own sessions list (`GET /api/adm
 | Findings | F1-1 to F1-4 (code audit, minor), F1-5 to F1-10 (second review: 1 blocker, 3 major, 2 minor); all fixed |
 | Accepted by the owner on | 2026-10-15 |
 | PR | — |
+
+---
+
+## Feature 2 — Customer accounts (F01)
+
+**What it covers:** the customer's account on the store (S01 C1–C17, T1–T4, E1–E5): registration closed by default, test customers created by the admin, sign-up with an email code, sign-in with its limits, forgot password, profile, password and email changes, the sessions list, the security emails, and the store screens on phone and desktop.
+
+**How to read a case:** each case starts with **What this checks**, one plain sentence on why it matters. Then do the numbered steps in order. A line starting with "Expected" is what you must see; if you see something else, mark the case ❌ and write what you saw.
+
+**Before you start**
+
+- Four email inboxes you can read. The simplest way: your own mailbox with a `+` alias per account (for example `yourname+tc1@…`, `yourname+tc2@…`, `yourname+tc3@…`, `yourname+su@…`). Mail sent to an alias arrives in your normal inbox. Also a fifth alias (`+su2`) for case 2.12.
+- The panel open on the PC (signed in), the store open in a second browser or a private window on the PC, and your phone.
+- Your password manager: every case that sets a password saves it there at once.
+- About 70 minutes. Codes are valid 10 minutes, and one address may ask for a new code once a minute and 5 times an hour: never press "send code" repeatedly.
+- **SU** is a temporary real sign-up (not a test customer) used only in this feature; case 2.15 archives it at the end, so it never shows in reports.
+
+**Not tested here:** freezing, limits and customer search (feature 16), notification preferences (feature 19), and the registration switch's history (feature 21).
+
+### 2.1 Registration is closed by default
+
+**What this checks:** before the pilot, strangers cannot create accounts.
+
+1. In the store browser (signed out), open `https://digital.vertexmedia.pro/`.
+2. Expected: the header shows "تسجيل الدخول" and **no** "إنشاء حساب" link.
+3. Open `https://digital.vertexmedia.pro/sign-up`.
+4. Expected: the calm message "التسجيل يفتح قريبًا", and no form.
+5. In the panel open "المفاتيح" (`/settings/switches`). Expected: "التسجيل" shows "مغلق".
+
+Result: ✅ 2026-10-15
+
+### 2.2 Test customers from the panel (TC1, TC2, TC3)
+
+**What this checks:** the admin can make verified accounts for testing while registration is closed, and their passwords are shown only once.
+
+1. In the panel open "عملاء الاختبار" (`/test-customers`). Press "إضافة عميل اختبار".
+2. Enter a name, the `+tc1` address and a Syrian mobile in the local form (`09…`). Press "إنشاء الحساب".
+3. Expected: a dialog shows the password once with a copy button and the warning "لن تظهر كلمة المرور هذه مرة أخرى". Copy it to the password manager, press "تم".
+4. Expected: the row shows the phone as `+963 9…` (normalized), and no email arrives at `+tc1` (test customers get no welcome email).
+5. Repeat for TC2 (`+tc2`) and TC3 (`+tc3`).
+6. Try to add a fourth one with the `+tc1` address again. Expected: refused with "email already used"; nothing is created.
+7. In "سجل التدقيق" filter the action "إنشاء عميل اختبار". Expected: three entries, and no password anywhere in their details.
+8. In the store browser sign in as TC1 with its password. Expected: signed in at once (no code step), the header shows TC1's initial.
+
+Result: ✅ 2026-10-15. The copy button answered "تعذّر النسخ" in the in-app test browser, which denies the clipboard (F2-1); the password was copied by hand.
+
+### 2.3 Sign-up while registration is open (SU)
+
+**What this checks:** a new customer can create an account with name, email, password and phone, protected by the browser check (ALTCHA), and no session exists before the email is proven.
+
+Do 2.3 to 2.5 in one sitting: registration stays open only for those minutes.
+
+1. In the panel, "المفاتيح" → "التسجيل" → open it. Confirm the dialog (the re-authentication dialog may ask for your password and code).
+2. In the store browser, signed out, reload the home page. Expected: "إنشاء حساب" is now in the header.
+3. Open "إنشاء حساب". Leave every field empty and press "إنشاء الحساب". Expected: an error under each field; the first one gets the focus.
+4. Enter a name, the `+su` address, the password `qwerty123` (a common password). Expected: refused as too common.
+5. Enter a strong password, and a phone in the local form `09…`. Press "إنشاء الحساب".
+6. Expected: you go to the code page "تأكيد البريد الإلكتروني", which shows the `+su` address. Within a minute an Arabic email with a 6-digit code arrives.
+7. Do **not** enter the code yet: go to 2.4.
+
+Result: ✅ 2026-10-15, re-run after the deploy of aba5ee3 with a new address (SU3): `qwerty123` refused, a second sign-up with the same address sent the attempt notice and no new code (F2-3). First run ❌: `password123` accepted (F2-2, accepted) and the code voided by a second sign-up (F2-3).
+
+### 2.4 An address that already has an account reveals nothing
+
+**What this checks:** nobody can find out whether an email is registered by trying to sign up with it (account enumeration).
+
+1. In a private window, open "إنشاء حساب" and sign up with TC2's address (`+tc2`), any name, a strong password and a phone.
+2. Expected: exactly the same code page as in 2.3: nothing says the address is taken.
+3. Expected: the `+tc2` inbox receives "someone tried to sign up with your email" (no code inside). TC2's password still works (nothing changed).
+4. Close the private window.
+
+Result: ✅ 2026-10-15
+
+### 2.5 Email code: wrong code, resend, then success
+
+**What this checks:** the 6-digit code proves the address, a new code voids the old one, and the first session is created only by a right code.
+
+1. Back on SU's code page, enter a wrong code (any 6 digits), once. Expected: "wrong code"; you stay on the page.
+2. Expected: "أرسل رمزًا جديدًا" counts down 60 seconds before it can be pressed. When it opens, press it. Expected: "أرسلنا رمزًا جديدًا. الرمز السابق لم يعد صالحًا." and a second email.
+3. Enter the **first** code. Expected: refused (the old code is void).
+4. Copy the second code from the email and paste it into the first box. Expected: all six digits fill at once.
+5. Submit. Expected: signed in as SU, back on the home page.
+6. Expected: **no** "new sign-in" email for this session (the code page's sign-in does not send one).
+7. In the panel, "المفاتيح" → "التسجيل" → close it again. In the store browser sign out, reload: "إنشاء حساب" is gone again.
+
+Result: ✅ 2026-10-15, re-run after the deploy of aba5ee3: the six-slot field filled from one paste (F2-4); after a reload the page asked for the password and the code with it signed in (F2-7).
+
+### 2.6 Sign-in, its errors and the new sign-in email
+
+**What this checks:** sign-in works, errors never say whether the email exists, and every new sign-in is reported to the customer by email.
+
+1. In the store, "تسجيل الدخول": SU's address with a wrong password, once. Expected: a general error ("email or password is wrong").
+2. An address that has no account (`+nobody`) with any password, once. Expected: the same error, word for word.
+3. Sign in as SU with the right password. Expected: signed in.
+4. Expected: the `+su` inbox gets a "new sign-in" email with the time, the browser and system, and the IP address.
+5. Open `https://digital.vertexmedia.pro/account` signed out (private window). Expected: the sign-in page; after signing in you land on `/account`.
+
+Result: ✅ 2026-10-15
+
+### 2.7 The browser check after 3 failed sign-ins
+
+**What this checks:** a password-guessing script is slowed down: after 3 failures on one email, sign-in needs the ALTCHA check.
+
+Wait 10 minutes after any earlier failed sign-in before this case, to stay far from the server's ban threshold.
+
+1. Signed out, enter TC3's address with a wrong password three times.
+2. Expected: before or at the fourth try the store shows the browser check ("جارٍ التحقق من المتصفح…"), which solves itself in a few seconds.
+3. Sign in with TC3's right password. Expected: signed in. Sign out.
+
+Result: ✅ 2026-10-15
+
+### 2.8 Forgot password
+
+**What this checks:** a customer who forgot the password gets back in by email code, every other device is signed out, and the page never tells whether the email is registered.
+
+1. Sign in as TC1 on the phone (keep it signed in).
+2. On the PC store (signed out): "نسيت كلمة المرور؟" → enter the `+nobody` address → "أرسل الرمز". Expected: the code step with "إن كان لهذا البريد حساب فقد أرسلنا إليه رمزًا"; no email arrives anywhere. Press "استخدم بريدًا آخر".
+3. Enter TC1's address → "أرسل الرمز". Expected: the same code step, and an email with a code.
+4. Enter the code and a new strong password (save it). Press "تعيين كلمة المرور".
+5. Expected: the sign-in page with "تغيّرت كلمة المرور. سجّل الدخول بكلمة المرور الجديدة."; you are **not** signed in yet.
+6. On the phone, tap any link. Expected: TC1 is signed out there.
+7. On the PC sign in with the old password: refused. With the new one: signed in.
+
+Result: ✅ 2026-10-15
+
+### 2.9 Profile: name and phone
+
+**What this checks:** the customer can fix their name and phone, wrong values are refused, and every change is recorded with before and after.
+
+1. As TC1 open "حسابي" (`/account`). Expected: name, email, phone and "عضو منذ …".
+2. "تعديل": clear the name and type one letter. Press "حفظ". Expected: refused with a field error.
+3. Enter a phone like `0912` (too short). Expected: refused.
+4. Enter a correct new name and phone `+963 9…` with spaces. Press "حفظ". Expected: "حُفظت التغييرات.", the phone shown normalized.
+5. In the panel's audit log filter the action "تعديل بيانات العميل". Expected: an entry with "customer" as actor and the before and after values.
+
+Result: ✅ 2026-10-15
+
+### 2.10 Change password
+
+**What this checks:** changing the password needs the current one, signs out every other device, and the customer is told by email.
+
+1. Sign in as TC1 on the phone too.
+2. On the PC, "حسابي" → "كلمة المرور": a wrong current password, once. Expected: "current password is wrong" under the field.
+3. The right current password and a new strong one (save it). Expected: "تغيّرت كلمة المرور، وسُجّل خروجك من الأجهزة الأخرى."; the PC stays signed in.
+4. On the phone, tap any link. Expected: signed out.
+5. Expected: the `+tc1` inbox gets "your password was changed" (no password inside).
+
+Result: ✅ 2026-10-15
+
+### 2.11 Sessions list and signing out
+
+**What this checks:** the customer sees every signed-in device and can end one or all of them, for example after losing a phone.
+
+1. Sign TC1 in on the phone again, so TC1 has the PC and the phone.
+2. On the PC, "حسابي" → "الأجهزة المسجّل دخولها". Expected: two rows with browser and system, IP and last activity; the PC row has "هذا الجهاز".
+3. Press "تسجيل الخروج" on the phone's row. Expected: the row goes; on the phone the next tap signs out.
+4. Sign in on the phone once more. On the PC press "تسجيل الخروج من كل الأجهزة" → confirm.
+5. Expected: the PC goes to the sign-in page with "سُجّل خروجك من كل الأجهزة"; the phone is signed out at its next tap.
+
+Result: ✅ 2026-10-15
+
+### 2.12 Change email
+
+**What this checks:** an account cannot be stolen by changing its email: it needs the password and a code sent to the new address, the old address is told, and other devices are signed out.
+
+1. Sign SU in on the PC and the phone.
+2. On the PC, "حسابي" → email "تغيير". Enter TC3's address (`+tc3`) and SU's password. Expected: the same "code sent" step as for a free address, no code arrives at `+tc3`, and `+tc3` gets "someone tried to sign up with your email" (TC3, not TC2: that notice goes to one address at most once an hour). Go back.
+3. Enter the new address `+su2` with a **wrong** password, once. Expected: refused.
+4. Enter `+su2` with the right password. Expected: a code arrives at `+su2` (not at `+su`).
+5. Enter the code. Expected: "تغيّر بريدك الإلكتروني، وأرسلنا إشعارًا إلى بريدك السابق."; the profile shows `+su2`.
+6. Expected: `+su` (the old address) gets "your email was changed"; the phone is signed out at its next tap.
+7. Sign out, then sign in with `+su2`. Expected: works; `+su` no longer signs in.
+
+Result: ✅ 2026-10-15
+
+### 2.13 The admin resets a test customer's password
+
+**What this checks:** the admin can reset a test account (never a real one) and that signs it out everywhere.
+
+1. Sign TC2 in on the phone.
+2. In the panel "عملاء الاختبار" → TC2's row → "إعادة تعيين كلمة المرور" → confirm.
+3. Expected: the new password is shown once (save it); an audit entry "إعادة تعيين كلمة مرور عميل اختبار" without the password.
+4. On the phone, tap any link. Expected: TC2 is signed out; the old password is refused; the new one works.
+5. Expected: SU does **not** appear on the test-customers page (it is a real sign-up).
+
+Result: ✅ 2026-10-15
+
+### 2.14 Emails and screens quality
+
+**What this checks:** what the customer sees looks professional and trustworthy on a phone and on a computer.
+
+1. Look at the emails from this feature (code, attempt notice, new sign-in, password changed, email changed). Expected: Arabic, right to left, the store's sender name, a plain readable layout, no link carrying a token, no password; check that none landed in spam (if one did, note which).
+2. On the phone, open sign-in, forgot password, the code page and "حسابي" in the light and dark themes. Expected: readable, no horizontal scroll, the code field opens the number keyboard, Latin digits everywhere.
+3. On the PC, the same pages at full width. Expected: the forms stay centred and readable.
+
+Result: ✅ 2026-10-15, re-run after the deploy of aba5ee3: the emails carry the logo and the brand colours with the Damascus month names, none in spam (F2-5, F2-6); the account screens checked by Claude on production at phone and desktop width. First run: the owner asked for the logo and the brand colours.
+
+### 2.15 Clean-up: archive SU
+
+**What this checks:** an archived account cannot sign in and its open sessions stop at once; this also keeps SU out of reports.
+
+1. Sign SU in on the phone.
+2. In the panel open "العملاء", find SU (by `+su2`) → "إجراءات العميل" → "أرشفة", with the reason "temporary sign-up test". Confirm (re-authentication if asked).
+3. Expected: on the phone, the next tap signs SU out; signing in again is refused with the general error.
+
+Result: ✅ 2026-10-15; SU3 of the re-run archived the same way.
+
+### Feature 2 sign-off
+
+| Item | Value |
+|---|---|
+| Cases passed | 15 of 15 (2.3, 2.5 and 2.14 after the fixes, deployed as aba5ee3) |
+| Findings | F2-1 (not a bug), F2-2 (accepted: the owner keeps the common-password list), F2-3 to F2-7 (fixed) |
+| Accepted by the owner on | 2026-10-15 |
+| PR | —

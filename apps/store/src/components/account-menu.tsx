@@ -19,6 +19,8 @@ import {
   UserRoundIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
+import { FormAlert } from '@/components/form-alert';
 import { clearStoredCart } from '@/features/cart/cart-keys';
 import { useInstall } from '@/features/pwa/install-button';
 import { t } from '@/lib/i18n';
@@ -32,13 +34,23 @@ import { useTheme } from '@/lib/theme';
 export function AccountMenu({ name, email }: { name: string; email: string }) {
   const { theme, toggle } = useTheme();
   const install = useInstall();
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const signOut = async () => {
-    clearStoredCart();
+    setSignOutFailed(false);
     // Its own chunk, as the header's refresh: fetched only on sign-out.
     await import('@/features/push/device').then((device) => device.forgetDevice()).catch(() => {});
-    await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin' }).catch(
-      () => {},
-    );
+    const response = await fetch('/api/auth/sign-out', {
+      method: 'POST',
+      credentials: 'same-origin',
+    }).catch(() => null);
+    // Only a confirmed sign-out leaves the page: on a shared device, a failure that looked like
+    // one would leave the account open for the next person (2026-10-15 audit). 401: the session
+    // had already ended, which is signed out all the same.
+    if (!response || (!response.ok && response.status !== 401)) {
+      setSignOutFailed(true);
+      return;
+    }
+    clearStoredCart();
     // A full load, so nothing rendered for the customer stays on screen.
     window.location.assign('/');
   };
@@ -90,6 +102,19 @@ export function AccountMenu({ name, email }: { name: string; email: string }) {
         </DropdownMenuContent>
       </DropdownMenu>
       {install.steps}
+      {signOutFailed && (
+        <div className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md flex-col gap-3 rounded-lg border border-border bg-surface p-4 shadow-lg">
+          <FormAlert>{t('header.signOutFailed')}</FormAlert>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="xl" onClick={() => setSignOutFailed(false)}>
+              {t('header.dismiss')}
+            </Button>
+            <Button size="xl" onClick={signOut}>
+              {t('header.signOutRetry')}
+            </Button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -21,7 +21,7 @@ import {
 } from '@vertex-digital/contracts';
 import type { Request } from 'express';
 import type { z } from 'zod';
-import { AdminRoute, CurrentAdmin } from '../../core/access/index.js';
+import { AdminRoute, CurrentAdmin, Sensitive } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
 import { requestMeta } from '../../core/http/request-meta.js';
 import type { AdminIdentity } from '../admin/index.js';
@@ -47,6 +47,8 @@ export class AuthAdminController {
 
   @Post()
   @AdminRoute()
+  // It issues a working password: a recent password and TOTP check first (feature 2 audit).
+  @Sensitive()
   @HttpCode(200)
   // The generated password is shown once: never cached anywhere.
   @Header('cache-control', 'no-store')
@@ -65,6 +67,7 @@ export class AuthAdminController {
 
   @Post(':id/reset-password')
   @AdminRoute()
+  @Sensitive()
   @HttpCode(200)
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: generatedPasswordSchema })

@@ -12,10 +12,11 @@ import { FormAlert } from '@/components/form-alert';
 import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
+import { clearErrorOnInput } from '@/lib/field-errors';
 import { t } from '@/lib/i18n';
-import { safeRedirect } from '@/lib/safe-redirect';
+import { safeRedirect, withNext } from '@/lib/safe-redirect';
 import { useSearchParam } from '@/lib/use-search-param';
-import { savePendingEmail } from './pending-email';
+import { holdPassword, savePendingEmail } from './pending-email';
 import { registrationState, signIn } from './requests';
 import { currentPasswordError, emailError } from './validation';
 
@@ -67,6 +68,7 @@ export function SignInForm() {
     // The API sent a new code to an unverified account (account states): enter it next.
     if (result.reason === 'EMAIL_NOT_VERIFIED') {
       savePendingEmail({ email, next: safeRedirect(next) });
+      holdPassword(password);
       router.push('/verify-email');
       return;
     }
@@ -79,7 +81,13 @@ export function SignInForm() {
   return (
     <div className="flex flex-col gap-5">
       {noticeKey && <FormAlert tone="success">{t(noticeKey)}</FormAlert>}
-      <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+      <form
+        ref={ref}
+        noValidate
+        onSubmit={onSubmit}
+        onInput={clearErrorOnInput(setErrors)}
+        className="flex flex-col gap-5"
+      >
         <Field invalid={!!errors.email}>
           <FieldLabel>{t('fields.email')}</FieldLabel>
           <Input
@@ -127,7 +135,7 @@ export function SignInForm() {
         <p className="text-center text-sm text-muted-foreground">
           {t('signIn.noAccount')}{' '}
           <Link
-            href="/sign-up"
+            href={withNext('/sign-up', next)}
             className="inline-flex min-h-11 items-center font-medium text-accent-text hover:underline"
           >
             {t('signIn.signUpLink')}

@@ -75,6 +75,17 @@ describe('names', () => {
   });
 });
 
+describe('names and direction marks (feature 2 audit)', () => {
+  it('refuse invisible direction marks and overrides, which could disguise a name', () => {
+    for (const point of [0x061c, 0x200e, 0x200f, 0x2028, 0x2029, 0x202a, 0x202e, 0x2066, 0x2069]) {
+      const name = `سارة${String.fromCodePoint(point)}الأحمد`;
+      expect(fullNameSchema.safeParse(name).success, JSON.stringify(name)).toBe(false);
+    }
+    // Arabic diacritics and a Latin name stay valid.
+    expect(fullNameSchema.parse('سَارة Ahmad')).toBe('سَارة Ahmad');
+  });
+});
+
 describe('phones (rule C6, edge case 14)', () => {
   it('normalize Syrian local and international forms to E.164', () => {
     for (const typed of ['0944 123 456', '+963 944 123 456', '00963944123456', '0944-123-456']) {

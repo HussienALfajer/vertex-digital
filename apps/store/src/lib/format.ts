@@ -3,7 +3,7 @@
  * browser: the server's zone is not the customer's.
  */
 
-const LOCALE = 'ar-u-nu-latn';
+const LOCALE = 'ar-SY-u-nu-latn';
 
 const dateTime = new Intl.DateTimeFormat(LOCALE, { dateStyle: 'medium', timeStyle: 'short' });
 const date = new Intl.DateTimeFormat(LOCALE, { dateStyle: 'long' });

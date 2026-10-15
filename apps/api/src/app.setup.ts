@@ -3,7 +3,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { ENV, type Env } from './core/config/env.js';
-import { adminNoStore } from './core/http/admin-no-store.js';
+import { privateNoStore } from './core/http/private-no-store.js';
 import { sameOriginOnly } from './core/http/same-origin.js';
 import {
   ADMIN_AUTH_BASE_PATH,
@@ -31,7 +31,7 @@ export function configureApp(app: NestExpressApplication): void {
   // nginx on the same machine sets X-Forwarded-For (ADR 0009); nobody else is trusted with it.
   server.set('trust proxy', 'loopback');
   app.use(sameOriginOnly({ store: env.STORE_URL, admin: env.ADMIN_URL }));
-  app.use(adminNoStore);
+  app.use(privateNoStore);
   // Before Nest's body parser, which Nest registers when the app initializes.
   server.post(TELEGRAM_WEBHOOK_PATH, telegramWebhookBodyLimit);
   server.post(SUPPLIER_WEBHOOK_ROUTE, supplierWebhookBody);

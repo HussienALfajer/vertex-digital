@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { safeRedirect } from './safe-redirect';
+import { safeRedirect, withNext } from './safe-redirect';
 
 const origin = 'https://digital.vertexmedia.pro';
 
@@ -16,7 +16,19 @@ describe('safeRedirect', () => {
     '/\\evil.example/',
     '/\n/evil.example',
     'orders',
+    // Not a URL the browser can open: it threw after the sign-in had worked (2026-10-15 audit).
+    '//[',
   ])('sends %j home', (target) => {
     expect(safeRedirect(target, origin)).toBe('/');
+  });
+});
+
+describe('withNext', () => {
+  it('keeps where the customer was heading, encoded, between the account screens', () => {
+    expect(withNext('/sign-up', '/cart?line=2', origin)).toBe('/sign-up?next=%2Fcart%3Fline%3D2');
+  });
+
+  it.each([null, undefined, '', '/', '//evil.example/', '//['])('drops %j', (next) => {
+    expect(withNext('/sign-in', next, origin)).toBe('/sign-in');
   });
 });

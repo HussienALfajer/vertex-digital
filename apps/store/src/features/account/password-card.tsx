@@ -15,6 +15,7 @@ import { FormAlert } from '@/components/form-alert';
 import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
+import { clearErrorOnInput } from '@/lib/field-errors';
 import { t } from '@/lib/i18n';
 import { currentPasswordError, newPasswordError } from '../auth/validation';
 import { changePassword } from './requests';
@@ -66,7 +67,13 @@ export function PasswordCard({ onChanged }: { onChanged: () => void }) {
         <CardTitle>{t('account.password.title')}</CardTitle>
         <CardDescription>{t('account.password.description')}</CardDescription>
       </CardHeader>
-      <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+      <form
+        ref={ref}
+        noValidate
+        onSubmit={onSubmit}
+        onInput={clearErrorOnInput(setErrors)}
+        className="flex flex-col gap-5"
+      >
         <Field invalid={!!errors.currentPassword}>
           <FieldLabel>{t('fields.currentPassword')}</FieldLabel>
           <PasswordInput

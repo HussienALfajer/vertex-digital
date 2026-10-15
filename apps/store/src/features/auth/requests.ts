@@ -79,11 +79,16 @@ export function sendVerificationCode(email: string, fetcher: Fetcher = fetch) {
   );
 }
 
-/** Rule C7: the right code verifies the email and signs the customer in. */
-export function verifyEmail(email: string, otp: string, fetcher: Fetcher = fetch) {
+/** Rule C7: the right code with the account's password verifies the email and signs the customer in. */
+export function verifyEmail(
+  email: string,
+  otp: string,
+  password: string,
+  fetcher: Fetcher = fetch,
+) {
   return apiRequest('/api/auth/email-otp/verify-email', {
     method: 'POST',
-    body: { email, otp },
+    body: { email, otp, password },
     fetcher,
   });
 }

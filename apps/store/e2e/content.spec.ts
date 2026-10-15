@@ -187,7 +187,7 @@ test.describe('content pages (PG2, FQ5, FQ7)', () => {
   }, testInfo) => {
     await page.goto(at('/faq'));
     await expect(page.getByRole('heading', { level: 1, name: c.faq.title })).toBeVisible();
-    await expect(page.getByText('آخر تحديث: 11 أكتوبر 2026')).toBeVisible();
+    await expect(page.getByText('آخر تحديث: 11 تشرين الأول 2026')).toBeVisible();
     const chips = page.getByRole('navigation', { name: c.faq.sections }).getByRole('link');
     await expect(chips).toHaveText(['الشحن', 'المحفظة']);
     await expect(chips.first()).toHaveAttribute('href', '#s-000000d1');
@@ -212,7 +212,7 @@ test.describe('content pages (PG2, FQ5, FQ7)', () => {
     await page.goto(at('/terms'));
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('الشروط والأحكام');
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-    await expect(page.getByText('آخر تحديث: 11 أكتوبر 2026')).toBeVisible();
+    await expect(page.getByText('آخر تحديث: 11 تشرين الأول 2026')).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'المحفظة' })).toHaveAttribute(
       'id',
       'section-1',
