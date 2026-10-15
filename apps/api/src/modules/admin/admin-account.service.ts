@@ -18,7 +18,7 @@ import {
 import { APIError } from 'better-auth/api';
 import { hashPassword, verifyPassword } from 'better-auth/crypto';
 import { fromNodeHeaders } from 'better-auth/node';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
@@ -103,11 +103,22 @@ export class AdminAccountService {
     };
   }
 
+  /**
+   * The sessions that still open the panel: past their 12 hours or idle for 30 minutes, a row
+   * stays until it is next read by its cookie, but it signs nobody in (rule D4).
+   */
   async sessions(admin: AdminIdentity): Promise<AdminSession[]> {
+    const now = Date.now();
     const rows = await this.db
       .select()
       .from(adminSessions)
-      .where(eq(adminSessions.userId, admin.id))
+      .where(
+        and(
+          eq(adminSessions.userId, admin.id),
+          gt(adminSessions.expiresAt, new Date(now)),
+          gt(adminSessions.lastActiveAt, new Date(now - ADMIN_SESSION_RULES.idleTimeoutMs)),
+        ),
+      )
       .orderBy(desc(adminSessions.lastActiveAt));
     return rows.map((row) => ({
       id: row.id,
