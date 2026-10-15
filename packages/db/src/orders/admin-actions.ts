@@ -7,7 +7,7 @@ import {
   type SupplierCode,
 } from '@vertex-digital/contracts';
 import { and, eq, isNotNull } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import { newId } from '../id.js';
 import { productRoutingStates, type RouteState, type RoutingContext } from '../pricing/routing.js';
 import {
@@ -117,12 +117,15 @@ const remainingUnits = (order: OrderRow) =>
  * order's remaining units (S08 R2, R4), every route it already tried counted, the open one too.
  */
 async function judgedRoutes(db: Executor, order: OrderRow, context: RoutingContext) {
-  const [states, tried] = await Promise.all([
-    productRoutingStates(db, [order.productId], context),
-    db
-      .select({ routeId: fulfilmentAttempts.routeId })
-      .from(fulfilmentAttempts)
-      .where(and(eq(fulfilmentAttempts.orderId, order.id), isNotNull(fulfilmentAttempts.routeId))),
+  const [states, tried] = await readAll(db, [
+    () => productRoutingStates(db, [order.productId], context),
+    () =>
+      db
+        .select({ routeId: fulfilmentAttempts.routeId })
+        .from(fulfilmentAttempts)
+        .where(
+          and(eq(fulfilmentAttempts.orderId, order.id), isNotNull(fulfilmentAttempts.routeId)),
+        ),
   ]);
   const routes = (states.get(order.productId)?.routes ?? []).filter(
     (route) => route.archivedAt === null,

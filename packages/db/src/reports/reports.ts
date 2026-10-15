@@ -15,7 +15,7 @@ import {
   TREASURY_PLACES,
 } from '@vertex-digital/contracts';
 import { type SQL, sql } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 
 /*
  * The reports (S13 rules RP1–RP9, ADR 0025): read-only SQL over the orders, attempts, deposits,
@@ -307,25 +307,28 @@ export async function refundsReport(
   db: Executor,
   period: ReportPeriod,
 ): Promise<Omit<RefundsReport, 'generatedAt'>> {
-  const [reasons, products, suppliers] = await Promise.all([
-    db.execute<{ reason: string; orders: string; usd: string }>(sql`
+  const [reasons, products, suppliers] = await readAll(db, [
+    () =>
+      db.execute<{ reason: string; orders: string; usd: string }>(sql`
       select refund_reason::text as reason, count(*) as orders, sum(refunded_usd_units) as usd
       from (${finishedOrders(period)}) o
       where refunded_quantity > 0 group by refund_reason order by 3 desc`),
-    db.execute<{
-      id: string;
-      name_ar: string;
-      game_name_ar: string;
-      game_id: string;
-      finished: string;
-      refunded: string;
-    }>(sql`
+    () =>
+      db.execute<{
+        id: string;
+        name_ar: string;
+        game_name_ar: string;
+        game_id: string;
+        finished: string;
+        refunded: string;
+      }>(sql`
       select p.id, p.name_ar, g.name_ar as game_name_ar, g.id as game_id, count(*) as finished,
         count(*) filter (where o.status in ('refunded', 'partially_refunded')) as refunded
       from (${finishedOrders(period)}) o
       join catalog_products p on p.id = o.product_id join catalog_games g on g.id = o.game_id
       group by p.id, p.name_ar, g.id, g.name_ar`),
-    db.execute<{ code: string; name_ar: string; resolved: string; failed: string }>(sql`
+    () =>
+      db.execute<{ code: string; name_ar: string; resolved: string; failed: string }>(sql`
       select s.code::text as code, s.name_ar, count(*) as resolved,
         count(*) filter (where f.status = 'failed') as failed
       from fulfilment_attempts f

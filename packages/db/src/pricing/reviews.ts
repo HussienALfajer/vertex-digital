@@ -1,6 +1,6 @@
 import type { PriceReviewStatus, ProductPrice, SupplierCode } from '@vertex-digital/contracts';
 import { and, count, desc, eq, inArray, type SQL } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import {
   catalogGames,
   catalogProducts,
@@ -56,20 +56,22 @@ export async function priceReviewPage(
     eq(priceReviews.status, query.status),
     query.supplier ? eq(suppliers.code, query.supplier) : undefined,
   );
-  const [rows, [total]] = await Promise.all([
-    reviewsQuery(db, where)
-      .orderBy(
-        query.status === 'open' ? priceReviews.createdAt : desc(priceReviews.decidedAt),
-        priceReviews.id,
-      )
-      .limit(query.pageSize)
-      .offset((query.page - 1) * query.pageSize),
-    db
-      .select({ total: count() })
-      .from(priceReviews)
-      .innerJoin(productRoutes, eq(productRoutes.id, priceReviews.routeId))
-      .innerJoin(suppliers, eq(suppliers.id, productRoutes.supplierId))
-      .where(where),
+  const [rows, [total]] = await readAll(db, [
+    () =>
+      reviewsQuery(db, where)
+        .orderBy(
+          query.status === 'open' ? priceReviews.createdAt : desc(priceReviews.decidedAt),
+          priceReviews.id,
+        )
+        .limit(query.pageSize)
+        .offset((query.page - 1) * query.pageSize),
+    () =>
+      db
+        .select({ total: count() })
+        .from(priceReviews)
+        .innerJoin(productRoutes, eq(productRoutes.id, priceReviews.routeId))
+        .innerJoin(suppliers, eq(suppliers.id, productRoutes.supplierId))
+        .where(where),
   ]);
   return { rows, total: total?.total ?? 0 };
 }
@@ -86,17 +88,22 @@ export async function productPricePage(
   productId: string,
   page: { page: number; pageSize: number },
 ): Promise<{ items: ProductPrice[]; total: number }> {
-  const [rows, [total]] = await Promise.all([
-    db
-      .select({ price: productPrices, supplierCode: suppliers.code })
-      .from(productPrices)
-      .innerJoin(productRoutes, eq(productRoutes.id, productPrices.routeId))
-      .innerJoin(suppliers, eq(suppliers.id, productRoutes.supplierId))
-      .where(eq(productPrices.productId, productId))
-      .orderBy(desc(productPrices.createdAt), desc(productPrices.id))
-      .limit(page.pageSize)
-      .offset((page.page - 1) * page.pageSize),
-    db.select({ total: count() }).from(productPrices).where(eq(productPrices.productId, productId)),
+  const [rows, [total]] = await readAll(db, [
+    () =>
+      db
+        .select({ price: productPrices, supplierCode: suppliers.code })
+        .from(productPrices)
+        .innerJoin(productRoutes, eq(productRoutes.id, productPrices.routeId))
+        .innerJoin(suppliers, eq(suppliers.id, productRoutes.supplierId))
+        .where(eq(productPrices.productId, productId))
+        .orderBy(desc(productPrices.createdAt), desc(productPrices.id))
+        .limit(page.pageSize)
+        .offset((page.page - 1) * page.pageSize),
+    () =>
+      db
+        .select({ total: count() })
+        .from(productPrices)
+        .where(eq(productPrices.productId, productId)),
   ]);
   return {
     items: rows.map(({ price, supplierCode }) => ({

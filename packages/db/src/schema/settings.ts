@@ -9,15 +9,7 @@ import { id } from './columns.js';
  * Append-only (migration 0019).
  */
 
-/**
- * ADR 0031: the enum keeps the dropped `shop2topup_paused`, in its place, until the release that
- * removed it is deployed (expand, then contract); no row holds it. Back on `STORE_SWITCHES` then.
- */
-export const storeSwitchEnum = pgEnum('store_switch', [
-  ...STORE_SWITCHES.slice(0, 6),
-  'shop2topup_paused',
-  ...STORE_SWITCHES.slice(6),
-] as [string, ...string[]]);
+export const storeSwitchEnum = pgEnum('store_switch', STORE_SWITCHES);
 
 export const switchChannelEnum = pgEnum('switch_channel', SWITCH_CHANNELS);
 

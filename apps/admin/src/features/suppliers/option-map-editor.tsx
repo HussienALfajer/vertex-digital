@@ -81,6 +81,7 @@ export function OptionMapEditor({
           <div
             key={supplierKey}
             className="flex flex-col gap-2 rounded-md border border-border p-3"
+            data-invalid={missing.includes(supplierKey) ? '' : undefined}
           >
             <div className="flex flex-wrap items-center gap-1.5 text-sm">
               <bdi dir="ltr" className="font-medium">

@@ -1,5 +1,5 @@
 import { desc, eq, inArray } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import { contentPageVersions, customers } from '../schema/index.js';
 
 /*
@@ -28,9 +28,9 @@ async function newestVersionId(tx: Executor, page: 'terms' | 'privacy') {
 export async function acceptedVersionsNow(
   tx: Transaction,
 ): Promise<{ termsVersionId: string | null; privacyVersionId: string | null }> {
-  const [termsVersionId, privacyVersionId] = await Promise.all([
-    newestVersionId(tx, 'terms'),
-    newestVersionId(tx, 'privacy'),
+  const [termsVersionId, privacyVersionId] = await readAll(tx, [
+    () => newestVersionId(tx, 'terms'),
+    () => newestVersionId(tx, 'privacy'),
   ]);
   return { termsVersionId, privacyVersionId };
 }

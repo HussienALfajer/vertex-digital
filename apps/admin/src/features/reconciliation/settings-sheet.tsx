@@ -15,10 +15,11 @@ import {
   SheetContent,
   SheetTitle,
   toast,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { useUpdateSettings } from './reconciliation.queries';
 
@@ -61,6 +62,7 @@ function SettingsForm({
   const { t } = useTranslation();
   const update = useUpdateSettings();
   const [errors, setErrors] = useState<{ tolerance?: boolean; days?: boolean }>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -74,7 +76,7 @@ function SettingsForm({
     });
     const paths = new Set(parsed.error?.issues.map((issue) => issue.path[0]));
     setErrors({ tolerance: paths.has('toleranceUsdUnits'), days: paths.has('countStaleDays') });
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await update.mutateAsync(parsed.data);
       toast.add({ title: t('reconciliation.settings.saved'), type: 'success' });
@@ -85,7 +87,7 @@ function SettingsForm({
   }
 
   return (
-    <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+    <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
       <Field invalid={errors.tolerance}>
         <FieldLabel>{t('reconciliation.settings.tolerance')}</FieldLabel>
         <Input
@@ -113,6 +115,7 @@ function SettingsForm({
         <FieldError match={!!errors.days}>{t('reconciliation.settings.errors.days')}</FieldError>
       </Field>
       {failure && <FormAlert>{failure}</FormAlert>}
+      <InvalidAlert show={!!(errors.tolerance || errors.days)} />
       <div className="flex gap-2">
         <Button type="submit" disabled={update.isPending}>
           {update.isPending ? t('reconciliation.saving') : t('reconciliation.settings.submit')}

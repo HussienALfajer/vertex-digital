@@ -19,11 +19,12 @@ import {
   FieldLabel,
   Input,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { InfoIcon, TriangleAlertIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
@@ -59,6 +60,7 @@ export function StateChangeDialog({
   const change = useCustomerStateChange(customer.id);
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const blockers = archiveBlockers(failure);
   const destructive = action === 'freeze' || action === 'archive' || action === 'revoke';
 
@@ -69,7 +71,7 @@ export function StateChangeDialog({
       reason: String(new FormData(event.currentTarget).get('reason') ?? ''),
     });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await change.mutateAsync({ action, body: parsed.data });
       onDone();
@@ -88,7 +90,7 @@ export function StateChangeDialog({
           })}
         </DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         {action === 'freeze' && (
           <Callout
             tone={customer.counts.reservations > 0 ? 'warning' : 'neutral'}
@@ -184,6 +186,7 @@ export function LimitsDialog({
     {},
   );
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref: limitsRef, focusInvalid: focusLimits } = useFocusInvalid();
   const { limits } = customer;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -211,7 +214,7 @@ export function LimitsDialog({
       below,
     };
     setErrors(next);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusLimits();
     try {
       await update.mutateAsync(parsed.data);
       onDone();
@@ -226,7 +229,7 @@ export function LimitsDialog({
         <DialogTitle>{t('customers.limits.dialogTitle', { name: customer.name })}</DialogTitle>
         <DialogDescription>{t('customers.limits.dialogDescription')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={limitsRef} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         {LIMIT_FIELDS.map((field) => {
           const effective = limits.effective[EFFECTIVE_OF[field]];
           const wrong = !!errors[field] || (field === 'dailyDepositUsdUnits' && !!errors.below);
@@ -265,6 +268,7 @@ export function LimitsDialog({
           <FieldError match={!!errors.reason}>{t('customers.dialogs.reasonError')}</FieldError>
         </Field>
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" disabled={update.isPending}>
             {update.isPending ? t('customers.dialogs.submitting') : t('customers.limits.submit')}

@@ -125,7 +125,7 @@ test.describe('wallets', () => {
       note: 'رصيد للتجربة',
     });
     await reauthenticate(page);
-    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
 
     await expect(rows(page).nth(1)).toContainText(ar.wallets.categories.test_funds);
     await expect(rows(page).nth(1)).toContainText('+$25.00');

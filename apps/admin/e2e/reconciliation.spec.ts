@@ -124,7 +124,7 @@ test('an opening balance asks for re-authentication and the typed amount, with o
   await recordOpening(page);
   await page.getByRole('dialog').getByRole('button', { name: r.movement.submit }).click();
   await reauthenticate(page);
-  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   const keys = admin.requests
     .filter((request) => request.key === 'POST /api/admin/treasury/movements')
     .map((request) => request.headers['idempotency-key']);

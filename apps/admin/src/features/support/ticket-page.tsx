@@ -23,6 +23,7 @@ import {
   PageHeader,
   Skeleton,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, CircleAlertIcon, LockIcon, RotateCcwIcon, SendIcon } from 'lucide-react';
 import { type FormEvent, type KeyboardEvent, useRef, useState } from 'react';
@@ -231,7 +232,6 @@ function ReplyBox({ ticket }: { ticket: AdminTicket }) {
   const { t } = useTranslation();
   const keyFor = useIdempotencyKey();
   const sent = useRef(0);
-  const form = useRef<HTMLFormElement>(null);
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const reply = useReplyTicket(ticket.id, () => {
@@ -241,6 +241,7 @@ function ReplyBox({ ticket }: { ticket: AdminTicket }) {
   });
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -249,7 +250,7 @@ function ReplyBox({ ticket }: { ticket: AdminTicket }) {
     const text = body.trim() === '' && files.length > 0 ? t('support.reply.imageOnly') : body;
     const parsed = ticketMessageSchema.safeParse({ body: text });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     const key = keyFor({
       sent: sent.current,
       body: parsed.data.body,
@@ -265,7 +266,7 @@ function ReplyBox({ ticket }: { ticket: AdminTicket }) {
   function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
-      form.current?.requestSubmit();
+      ref.current?.requestSubmit();
     }
   }
 
@@ -274,7 +275,7 @@ function ReplyBox({ ticket }: { ticket: AdminTicket }) {
       {ticket.status === 'closed' && (
         <Callout tone="info" icon={<RotateCcwIcon />} title={t('support.reply.reopens')} />
       )}
-      <form ref={form} className="flex flex-col gap-4" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t('support.reply.label')}</FieldLabel>
           <Textarea

@@ -1,6 +1,6 @@
 import { type DayBounds, REVIEW_TIME_ZONE } from '@vertex-digital/contracts';
 import { and, count, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import { fulfilmentAttempts, orderEvents, orders } from '../schema/index.js';
 import { damascusDate } from '../suppliers/validations.js';
 
@@ -45,24 +45,26 @@ const finishedIn = (from: Date, to: Date) =>
 
 /** Rule DB2: the orders finished in `[from, to)`. */
 async function period(db: Executor, from: Date, to: Date): Promise<PeriodFigures> {
-  const [[row], [cost]] = await Promise.all([
-    db
-      .select({
-        sales: sql<string>`coalesce(sum(${orders.deliveredQuantity}::bigint * ${orders.unitPriceUsdUnits}), 0)::text`,
-        delivered: sql<number>`(count(*) filter (where ${orders.status} in ('delivered', 'partially_refunded')))::int`,
-        refunds: sql<number>`(count(*) filter (where ${orders.status} in ('refunded', 'partially_refunded')))::int`,
-        refunded: sql<string>`coalesce(sum(${orders.refundedUsdUnits}), 0)::text`,
-      })
-      .from(orders)
-      .where(finishedIn(from, to)),
+  const [[row], [cost]] = await readAll(db, [
+    () =>
+      db
+        .select({
+          sales: sql<string>`coalesce(sum(${orders.deliveredQuantity}::bigint * ${orders.unitPriceUsdUnits}), 0)::text`,
+          delivered: sql<number>`(count(*) filter (where ${orders.status} in ('delivered', 'partially_refunded')))::int`,
+          refunds: sql<number>`(count(*) filter (where ${orders.status} in ('refunded', 'partially_refunded')))::int`,
+          refunded: sql<string>`coalesce(sum(${orders.refundedUsdUnits}), 0)::text`,
+        })
+        .from(orders)
+        .where(finishedIn(from, to)),
     // The cost of those orders: their delivered attempts' units at each attempt's cost.
-    db
-      .select({
-        units: sql<string>`coalesce(sum(${fulfilmentAttempts.deliveredQuantity}::bigint * ${fulfilmentAttempts.unitCostUsdUnits}), 0)::text`,
-      })
-      .from(fulfilmentAttempts)
-      .innerJoin(orders, eq(orders.id, fulfilmentAttempts.orderId))
-      .where(and(finishedIn(from, to), eq(fulfilmentAttempts.status, 'delivered'))),
+    () =>
+      db
+        .select({
+          units: sql<string>`coalesce(sum(${fulfilmentAttempts.deliveredQuantity}::bigint * ${fulfilmentAttempts.unitCostUsdUnits}), 0)::text`,
+        })
+        .from(fulfilmentAttempts)
+        .innerJoin(orders, eq(orders.id, fulfilmentAttempts.orderId))
+        .where(and(finishedIn(from, to), eq(fulfilmentAttempts.status, 'delivered'))),
   ]);
   return {
     salesUsdUnits: Number(row?.sales ?? 0),
@@ -88,45 +90,54 @@ export async function orderFigures(
     inArray(orderEvents.reason, CONFLICT_REASONS),
     gte(orderEvents.createdAt, conflictSince),
   );
-  const [today, yesterday, [median], line, [open], [conflictCount], conflictOrders] =
-    await Promise.all([
-      period(db, bounds.todayStart, now),
-      period(db, bounds.yesterdayStart, bounds.sameTimeYesterday),
-      db
-        .select({
-          ms: sql<string | null>`(percentile_disc(0.5) within group (order by
+  const [today, yesterday, [median], line, [open], [conflictCount], conflictOrders] = await readAll(
+    db,
+    [
+      () => period(db, bounds.todayStart, now),
+      () => period(db, bounds.yesterdayStart, bounds.sameTimeYesterday),
+      () =>
+        db
+          .select({
+            ms: sql<string | null>`(percentile_disc(0.5) within group (order by
             extract(epoch from ${orders.deliveredAt} - ${orders.paidAt}) * 1000))::bigint::text`,
-        })
-        .from(orders)
-        .where(and(finishedIn(bounds.todayStart, now), eq(orders.status, 'delivered'))),
-      db
-        .select({
-          day,
-          sales: sql<string>`coalesce(sum(${orders.deliveredQuantity}::bigint * ${orders.unitPriceUsdUnits}), 0)::text`,
-        })
-        .from(orders)
-        .where(finishedIn(lineStart, now))
-        .groupBy(day),
-      db
-        .select({
-          value: sql<string>`coalesce(sum((${orders.quantity} - ${orders.deliveredQuantity} - ${orders.refundedQuantity})::bigint * ${orders.unitPriceUsdUnits}), 0)::text`,
-        })
-        .from(orders)
-        .where(
-          and(real, inArray(orders.status, ['paid', 'sent_to_supplier', 'failed', 'needs_review'])),
-        ),
-      db.select({ count: count() }).from(orderEvents).where(conflict),
-      db
-        .selectDistinctOn([orders.id], {
-          id: orders.id,
-          number: orders.number,
-          at: orderEvents.createdAt,
-        })
-        .from(orderEvents)
-        .innerJoin(orders, eq(orders.id, orderEvents.orderId))
-        .where(conflict)
-        .orderBy(orders.id, desc(orderEvents.createdAt)),
-    ]);
+          })
+          .from(orders)
+          .where(and(finishedIn(bounds.todayStart, now), eq(orders.status, 'delivered'))),
+      () =>
+        db
+          .select({
+            day,
+            sales: sql<string>`coalesce(sum(${orders.deliveredQuantity}::bigint * ${orders.unitPriceUsdUnits}), 0)::text`,
+          })
+          .from(orders)
+          .where(finishedIn(lineStart, now))
+          .groupBy(day),
+      () =>
+        db
+          .select({
+            value: sql<string>`coalesce(sum((${orders.quantity} - ${orders.deliveredQuantity} - ${orders.refundedQuantity})::bigint * ${orders.unitPriceUsdUnits}), 0)::text`,
+          })
+          .from(orders)
+          .where(
+            and(
+              real,
+              inArray(orders.status, ['paid', 'sent_to_supplier', 'failed', 'needs_review']),
+            ),
+          ),
+      () => db.select({ count: count() }).from(orderEvents).where(conflict),
+      () =>
+        db
+          .selectDistinctOn([orders.id], {
+            id: orders.id,
+            number: orders.number,
+            at: orderEvents.createdAt,
+          })
+          .from(orderEvents)
+          .innerJoin(orders, eq(orders.id, orderEvents.orderId))
+          .where(conflict)
+          .orderBy(orders.id, desc(orderEvents.createdAt)),
+    ],
+  );
   const salesOf = new Map(line.map((row) => [row.day, Number(row.sales)]));
   const newest = [...conflictOrders]
     .sort((a, b) => b.at.getTime() - a.at.getTime())

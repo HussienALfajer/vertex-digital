@@ -27,12 +27,13 @@ import {
   SheetContent,
   SheetTitle,
   Skeleton,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
 import { CircleCheckIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
 import { type FormEvent, type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { categoriesQuery } from '../catalog/catalog.queries';
@@ -133,6 +134,7 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
   const [refusals, setRefusals] = useState<Map<string, RowRefusal>>(new Map());
   const [failure, setFailure] = useState<string | null>(null);
   const [result, setResult] = useState<CategoryImportResult | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const selected = rows.filter((row) => row.selected).length;
 
   const setRow = (offerId: string, next: Partial<PackRow>) =>
@@ -182,7 +184,7 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
       if (issues.some((issue) => issue.path[0] === 'rows' && issue.path.length === 1)) {
         setFailure(t('suppliers.importCategory.errors.rows', { max: MAX_IMPORT_ROWS }));
       }
-      return;
+      return focusInvalid();
     }
     try {
       setResult(await importCategory.mutateAsync(parsed.data));
@@ -192,6 +194,7 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
       if (refused?.length) {
         setRefusals(refusalsByOffer(refused, sent));
         setFailure(t('suppliers.importCategory.refused'));
+        focusInvalid();
       } else if (error instanceof ApiError && error.code === 'IMAGE_FETCH_FAILED') {
         setUseSupplierImage(false);
         setFailure(t('suppliers.importCategory.imageFailed'));
@@ -238,7 +241,7 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
   }));
 
   return (
-    <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
+    <form ref={ref} className="flex flex-col gap-6" onSubmit={submit} noValidate>
       <Section title={t('suppliers.importCategory.sections.game')}>
         <div className="grid gap-4 md:grid-cols-[1fr_16rem]">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -374,6 +377,7 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
               // biome-ignore lint/suspicious/noArrayIndexKey: rows are edited in place by index.
               key={index}
               className="flex flex-col gap-3 rounded-md border border-border p-3"
+              data-invalid={fieldErrors.includes(index) ? '' : undefined}
             >
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 {field.supplierKey ? (
@@ -532,6 +536,12 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
       </Section>
 
       {failure && <FormAlert>{failure}</FormAlert>}
+      <InvalidAlert
+        show={
+          !failure &&
+          (Object.values(gameErrors).some(Boolean) || fieldErrors.length > 0 || rowErrors.size > 0)
+        }
+      />
       <div className="sticky bottom-0 -mx-6 flex justify-end border-t border-border bg-surface px-6 py-3">
         <Button type="submit" disabled={importCategory.isPending || selected === 0}>
           {importCategory.isPending

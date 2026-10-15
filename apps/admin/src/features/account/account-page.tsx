@@ -15,6 +15,7 @@ import {
   PasswordInput,
   Skeleton,
   toast,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { DownloadIcon, MonitorSmartphoneIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
@@ -60,18 +61,24 @@ function BackupCodesCard() {
   const [codes, setCodes] = useState<string[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const generateCodes = useGenerateBackupCodes();
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const password = String(new FormData(form).get('password') ?? '');
-    if (!password) return setFailure({ message: t('changePassword.errors.current'), field: true });
+    if (!password) {
+      setFailure({ message: t('changePassword.errors.current'), field: true });
+      return focusInvalid();
+    }
     setFailure(null);
     try {
       setCodes(await generateCodes.mutateAsync(password));
       form.reset();
     } catch (error) {
-      setFailure(passwordFailure(t, error));
+      const refused = passwordFailure(t, error);
+      setFailure(refused);
+      if (refused.field) focusInvalid();
     }
   }
 
@@ -107,7 +114,7 @@ function BackupCodesCard() {
           </div>
         </div>
       ) : (
-        <form className="flex flex-col gap-5" onSubmit={generate} noValidate>
+        <form ref={ref} className="flex flex-col gap-5" onSubmit={generate} noValidate>
           <Field invalid={failure?.field}>
             <FieldLabel>{t('account.backupCodes.password')}</FieldLabel>
             <PasswordInput

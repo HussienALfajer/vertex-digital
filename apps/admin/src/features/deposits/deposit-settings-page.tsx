@@ -23,11 +23,12 @@ import {
   PageHeader,
   Skeleton,
   Switch,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { InfoIcon, UploadIcon } from 'lucide-react';
 import { type FormEvent, type ReactNode, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
 import {
@@ -126,6 +127,7 @@ function SettingsForm({ settings }: { settings: DepositSettings }) {
   const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   const text = (name: keyof Texts) => ({
     name,
@@ -169,7 +171,7 @@ function SettingsForm({ settings }: { settings: DepositSettings }) {
       found[field] ??= t(`depositSettings.errors.${field}`);
     }
     setErrors(found);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await save.mutateAsync(parsed.data);
       setSaved(true);
@@ -180,7 +182,7 @@ function SettingsForm({ settings }: { settings: DepositSettings }) {
 
   const open = counts.data ? counts.data.pending + counts.data.submitted : null;
   return (
-    <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
+    <form ref={ref} className="flex flex-col gap-6" onSubmit={submit} noValidate>
       {!settings.saved && (
         <Callout
           tone="info"
@@ -365,6 +367,7 @@ function SettingsForm({ settings }: { settings: DepositSettings }) {
         </div>
       </Card>
       {failure && <FormAlert>{failure}</FormAlert>}
+      <InvalidAlert show={Object.values(errors).some(Boolean)} />
       {saved && (
         <p role="status" className="text-sm font-medium text-status-success-foreground">
           {t('depositSettings.saved')}
@@ -418,6 +421,7 @@ function CurrencyCard({
   const upload = useUploadQr();
   const input = useRef<HTMLInputElement>(null);
   const switchId = useId();
+  const errorId = useId();
   const [failure, setFailure] = useState<string | null>(null);
 
   async function choose(file: File | undefined) {
@@ -434,7 +438,10 @@ function CurrencyCard({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
+    <div
+      className="flex flex-col gap-3 rounded-lg border border-border p-4"
+      data-invalid={error ? '' : undefined}
+    >
       <div className="flex items-center justify-between gap-3">
         <label htmlFor={switchId} className="text-base font-medium">
           {t(`depositSettings.currencies.${currency}`)}
@@ -469,6 +476,8 @@ function CurrencyCard({
         size="sm"
         className="self-start"
         disabled={upload.isPending}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error || failure ? errorId : undefined}
         onClick={() => input.current?.click()}
       >
         <UploadIcon />
@@ -479,7 +488,7 @@ function CurrencyCard({
             : t('depositSettings.currencies.upload')}
       </Button>
       {(error || failure) && (
-        <p role="alert" className="text-sm text-destructive-text">
+        <p id={errorId} role="alert" className="text-sm text-destructive-text">
           {failure ?? error}
         </p>
       )}

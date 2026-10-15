@@ -26,11 +26,12 @@ import {
   SheetContent,
   SheetTitle,
   Skeleton,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { CircleCheckIcon, XIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { allGamesQuery, gameQuery } from '../catalog/catalog.queries';
@@ -184,6 +185,7 @@ function LinkForm({
   const [optionMissing, setOptionMissing] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
   const [result, setResult] = useState<CategoryImportResult | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const products = (game.data?.products ?? []).filter((item) => item.archivedAt === null);
   const productItems = products.map((item) => ({ value: item.id, label: item.nameAr }));
   const sentCount = rows.filter((row) => row.selected).length;
@@ -213,7 +215,7 @@ function LinkForm({
       } else if (issues.some((issue) => issue.path[0] === 'rows' && issue.path.length === 1)) {
         setFailure(t('suppliers.importCategory.errors.rows', { max: MAX_IMPORT_ROWS }));
       }
-      return;
+      return focusInvalid();
     }
     try {
       setResult(await link.mutateAsync(parsed.data));
@@ -228,9 +230,12 @@ function LinkForm({
         setMissing(named('ROUTE_FIELDS_UNMAPPED'));
         setOptionMissing(named('FIELD_OPTIONS_DIFFER'));
         setFailure(t('suppliers.importCategory.refused'));
+        focusInvalid();
       } else {
-        setMissing(unmappedOf(error));
+        const unmapped = unmappedOf(error);
+        setMissing(unmapped);
         setFailure(errorMessage(t, error));
+        if (unmapped.length > 0) focusInvalid();
       }
     }
   }
@@ -267,7 +272,7 @@ function LinkForm({
   ];
 
   return (
-    <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
+    <form ref={ref} className="flex flex-col gap-6" onSubmit={submit} noValidate>
       <FieldMapEditor
         entries={entries}
         fields={gameFields}
@@ -425,6 +430,7 @@ function LinkForm({
         ))}
       </Section>
       {failure && <FormAlert>{failure}</FormAlert>}
+      <InvalidAlert show={!failure && rowErrors.size > 0} />
       <div className="sticky bottom-0 -mx-6 flex justify-end border-t border-border bg-surface px-6 py-3">
         <Button type="submit" disabled={link.isPending}>
           {link.isPending

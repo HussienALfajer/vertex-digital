@@ -25,6 +25,7 @@ import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/fie
 import { Input } from '@vertex-digital/ui/components/input';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { SlideToPay } from '@vertex-digital/ui/components/slide-to-pay';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import {
   ArrowRightIcon,
   CircleCheckIcon,
@@ -38,6 +39,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { InvalidAlert } from '@/components/invalid-alert';
 import { savePendingEmail } from '@/features/auth/pending-email';
 import {
   addToCart,
@@ -264,6 +266,13 @@ export function BuyBox({
       gameSaved.some((item) => fieldsKey(item.fields) === fieldsKey(fieldsCheck.values))
     );
   const labelValid = savedPlayerLabelSchema.safeParse(save.label).success;
+  const { ref, focusInvalid } = useFocusInvalid<HTMLDivElement>();
+  /** Fields, gift texts or the label refused by the last press (the confirmation has its own). */
+  const refusedFields =
+    showErrors === 'all' &&
+    (!fieldsCheck.ok ||
+      Object.keys(giftProblems).length > 0 ||
+      (canSave && save.on && !labelValid));
   const savePlayer = canSave && save.on && labelValid ? { label: save.label.trim() } : undefined;
 
   /** Rule PV8: a checkable pack needs the confirmation unless its id is known `valid`. */
@@ -402,11 +411,18 @@ export function BuyBox({
     setShowErrors('all');
     setNotice(null);
     setAdded(null);
-    if (!fieldsCheck.ok || Object.keys(giftProblems).length > 0) return null;
-    if (canSave && save.on && !labelValid) return null;
+    if (
+      !fieldsCheck.ok ||
+      Object.keys(giftProblems).length > 0 ||
+      (canSave && save.on && !labelValid)
+    ) {
+      focusInvalid();
+      return null;
+    }
     const result = checkable && !isTrusted ? (check ?? (await playerCheck.run())) : null;
     if (needsConfirm(result) && !confirmed) {
       setConfirmMissing(true);
+      focusInvalid();
       return null;
     }
     return { result };
@@ -522,11 +538,13 @@ export function BuyBox({
         setConfirmed(false);
         setConfirmMissing(true);
         setStep('details');
+        focusInvalid();
         return setSending({ status: 'idle' });
       case 'VALIDATION_FAILED':
         setShowErrors('all');
         setStep('details');
         setSending({ status: 'idle' });
+        focusInvalid();
         return setNotice(errorText(reason));
       case 'PURCHASE_LIMIT_EXCEEDED':
         again();
@@ -718,7 +736,7 @@ export function BuyBox({
   // Rule CT1: without storage the cart is off and its button is hidden.
   const cartOn = Array.isArray(cart);
   return (
-    <div className="flex flex-col gap-5">
+    <div ref={ref} className="flex flex-col gap-5">
       {header}
       {product.kind === 'code' && (product.regionAr || product.redemptionAr) && (
         <div className="flex flex-col gap-1 text-sm">
@@ -835,6 +853,7 @@ export function BuyBox({
         )}
       </div>
       {notice && <FormAlert>{notice}</FormAlert>}
+      <InvalidAlert show={refusedFields && !notice} />
       {!bundle && !editing && (
         <Actions
           customer={customer}

@@ -56,6 +56,7 @@ export function FieldMapEditor({
             // biome-ignore lint/suspicious/noArrayIndexKey: a typed field name can change.
             key={index}
             className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2rem] items-center gap-2"
+            data-invalid={missing.includes(entry.field) ? '' : undefined}
           >
             {entry.required ? (
               <span className="flex flex-col">
@@ -85,7 +86,10 @@ export function FieldMapEditor({
                 update(index, { key: value && value !== NONE ? value : '' })
               }
             >
-              <SelectTrigger aria-label={label}>
+              <SelectTrigger
+                aria-label={label}
+                aria-invalid={missing.includes(entry.field) ? true : undefined}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

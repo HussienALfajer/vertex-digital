@@ -12,6 +12,7 @@ import {
 import {
   type Database,
   newId,
+  readAll,
   supportAttachments,
   supportMessages,
   supportTickets,
@@ -234,9 +235,9 @@ const iso = (date: Date | null) => date?.toISOString() ?? null;
 
 /** A ticket as the lists show it (TK12). */
 export async function ticketSummary(db: Executor, row: TicketRow): Promise<TicketSummary> {
-  const [order, deposit] = await Promise.all([
-    row.orderId ? ticketOrderLink(db, row.orderId) : null,
-    row.depositId ? ticketDepositLink(db, row.depositId) : null,
+  const [order, deposit] = await readAll(db, [
+    () => (row.orderId ? ticketOrderLink(db, row.orderId) : null),
+    () => (row.depositId ? ticketDepositLink(db, row.depositId) : null),
   ]);
   const customerAt = row.lastCustomerMessageAt?.getTime() ?? 0;
   const adminAt = row.lastAdminMessageAt?.getTime() ?? 0;

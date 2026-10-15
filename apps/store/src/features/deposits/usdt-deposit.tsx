@@ -28,6 +28,7 @@ import {
 } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
 import { Progress } from '@vertex-digital/ui/components/progress';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import {
   CircleAlertIcon,
   ClockIcon,
@@ -186,10 +187,14 @@ function TxidForm({
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (normalizeTxid(text) === null) return setError(errorText('TXID_INVALID'));
+    if (normalizeTxid(text) === null) {
+      setError(errorText('TXID_INVALID'));
+      return focusInvalid();
+    }
     setError(null);
     setBusy(true);
     const result = await submitTxid(deposit.id, text.trim());
@@ -197,11 +202,12 @@ function TxidForm({
     if (result.ok) return onChange(result.data);
     if (result.reason === 'DEPOSIT_STATE_CONFLICT') return onChange(null);
     setError(errorText(result.reason));
+    focusInvalid();
   }
 
   return (
     <Card>
-      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>
         <Field invalid={!!error}>
           <FieldLabel>{t('deposits.usdt.txidLabel')}</FieldLabel>
           <Input

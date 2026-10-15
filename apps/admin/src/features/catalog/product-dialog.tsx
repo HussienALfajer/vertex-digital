@@ -23,10 +23,11 @@ import {
   Textarea,
   ToggleGroup,
   ToggleGroupItem,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { useCreateProduct, useUpdateProduct } from './catalog.queries';
 import { catalogFailure } from './catalog-parts';
@@ -70,6 +71,7 @@ export function ProductDialog({
   const [maxQuantity, setMaxQuantity] = useState(
     String(product?.maxQuantity ?? DEFAULT_MAX_QUANTITY.direct),
   );
+  const { ref, focusInvalid } = useFocusInvalid();
   const [errors, setErrors] = useState<Partial<Record<ProductField, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const pending = create.isPending || update.isPending;
@@ -108,7 +110,7 @@ export function ProductDialog({
       }
     }
     setErrors(found);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       if (product) await update.mutateAsync({ id: product.id, body: parsed.data });
       else await create.mutateAsync(parsed.data as Parameters<typeof create.mutateAsync>[0]);
@@ -116,6 +118,7 @@ export function ProductDialog({
     } catch (error) {
       if (error instanceof ApiError && error.code === 'NAME_TAKEN') {
         setErrors({ nameAr: catalogFailure(t, error) });
+        focusInvalid();
       } else {
         setFailure(catalogFailure(t, error));
       }
@@ -130,7 +133,7 @@ export function ProductDialog({
         </DialogTitle>
         <DialogDescription>{t('catalog.products.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field>
           <FieldLabel render={<span />}>{t('catalog.products.kind')}</FieldLabel>
           <ToggleGroup<ProductKind>
@@ -223,6 +226,7 @@ export function ProductDialog({
           </>
         )}
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" disabled={pending}>
             {product ? t('catalog.actions.save') : t('catalog.products.addSubmit')}

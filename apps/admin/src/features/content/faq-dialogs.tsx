@@ -24,10 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useDeferredValue, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { useSaveItem, useSaveSection } from './content.queries';
 import {
@@ -52,6 +53,7 @@ export function FaqSectionDialog({
   const save = useSaveSection();
   const [error, setError] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,13 +62,14 @@ export function FaqSectionDialog({
       title: String(new FormData(event.currentTarget).get('title') ?? ''),
     });
     setError(parsed.success ? null : t('content.faq.errors.title'));
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await save.mutateAsync({ id: section?.id, body: parsed.data });
       onDone();
     } catch (refusal) {
-      if (refusedFields(refusal).has('title')) setError(t('content.faq.errors.title'));
-      else setFailure(errorMessage(t, refusal));
+      if (!refusedFields(refusal).has('title')) return setFailure(errorMessage(t, refusal));
+      setError(t('content.faq.errors.title'));
+      focusInvalid();
     }
   }
 
@@ -77,7 +80,7 @@ export function FaqSectionDialog({
           {section ? t('content.faq.editSection') : t('content.faq.addSection')}
         </DialogTitle>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={!!error}>
           <FieldLabel>{t('content.faq.sectionTitle')}</FieldLabel>
           <Input name="title" defaultValue={section?.title} maxLength={60} autoComplete="off" />
@@ -121,6 +124,7 @@ export function FaqItemDialog({
   const [errors, setErrors] = useState<{ question?: string; answer?: string }>({});
   const [serverProblems, setServerProblems] = useState<typeof problems>([]);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -136,7 +140,7 @@ export function FaqItemDialog({
           ? t('content.faq.errors.answer')
           : undefined,
     });
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await save.mutateAsync({ id: item?.id, body: parsed.data });
       onDone();
@@ -144,6 +148,7 @@ export function FaqItemDialog({
       const lines = refusedProblems(refusal, 'answer');
       setServerProblems(lines);
       if (lines.length === 0) setFailure(errorMessage(t, refusal));
+      else focusInvalid();
     }
   }
 
@@ -156,7 +161,12 @@ export function FaqItemDialog({
         </DialogTitle>
         <DialogDescription>{t('content.faq.questionDescription')}</DialogDescription>
       </DialogHeader>
-      <form className="grid items-start gap-6 lg:grid-cols-2" onSubmit={submit} noValidate>
+      <form
+        ref={ref}
+        className="grid items-start gap-6 lg:grid-cols-2"
+        onSubmit={submit}
+        noValidate
+      >
         <div className="flex flex-col gap-5">
           <Field>
             <FieldLabel render={<span />}>{t('content.faq.section')}</FieldLabel>
@@ -203,6 +213,7 @@ export function FaqItemDialog({
           <ProblemList problems={shownProblems} />
           <LinkWarnings source={deferredAnswer} />
           {failure && <FormAlert>{failure}</FormAlert>}
+          <InvalidAlert show={!!(errors.question || errors.answer) || serverProblems.length > 0} />
           <DialogFooter>
             <Button type="submit" disabled={save.isPending}>
               {t('content.actions.save')}

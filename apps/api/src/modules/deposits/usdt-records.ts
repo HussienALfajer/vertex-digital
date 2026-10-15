@@ -12,6 +12,7 @@ import {
   type Database,
   depositFlags,
   deposits,
+  readAll,
   type Transaction,
   usdtCandidateMatch,
   usdtDeposits,
@@ -42,22 +43,24 @@ export async function usdtRecords(
   depositIds: readonly string[],
 ): Promise<Map<string, UsdtRecord>> {
   if (depositIds.length === 0) return new Map();
-  const [rows, flags] = await Promise.all([
-    db
-      .select({ row: usdtDeposits, transfer: usdtTransfers })
-      .from(usdtDeposits)
-      .leftJoin(usdtTransfers, eq(usdtTransfers.id, usdtDeposits.transferId))
-      .where(inArray(usdtDeposits.depositId, [...depositIds])),
-    db
-      .selectDistinct({ depositId: depositFlags.depositId, code: depositFlags.code })
-      .from(depositFlags)
-      .where(
-        and(
-          inArray(depositFlags.depositId, [...depositIds]),
-          inArray(depositFlags.code, [...USDT_REVIEW_FLAG_CODES]),
-        ),
-      )
-      .orderBy(depositFlags.code),
+  const [rows, flags] = await readAll(db, [
+    () =>
+      db
+        .select({ row: usdtDeposits, transfer: usdtTransfers })
+        .from(usdtDeposits)
+        .leftJoin(usdtTransfers, eq(usdtTransfers.id, usdtDeposits.transferId))
+        .where(inArray(usdtDeposits.depositId, [...depositIds])),
+    () =>
+      db
+        .selectDistinct({ depositId: depositFlags.depositId, code: depositFlags.code })
+        .from(depositFlags)
+        .where(
+          and(
+            inArray(depositFlags.depositId, [...depositIds]),
+            inArray(depositFlags.code, [...USDT_REVIEW_FLAG_CODES]),
+          ),
+        )
+        .orderBy(depositFlags.code),
   ]);
   return new Map(
     rows.map(({ row, transfer }) => [

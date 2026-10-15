@@ -31,11 +31,12 @@ import {
   Textarea,
   ToggleGroup,
   ToggleGroupItem,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ShieldCheckIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
@@ -69,6 +70,7 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
   const [note, setNote] = useState('');
   const [errors, setErrors] = useState<Partial<Record<ApproveField, string>>>({});
   const [failure, setFailure] = useState<{ message: string; holder?: unknown } | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   const receivedUnits = parseAmount(currency, amount);
   const rate = currency === 'SYP' ? (deposit.approvalRate?.rate ?? null) : null;
@@ -142,7 +144,7 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
       found.flags = t('deposits.approve.errors.flags');
     }
     setErrors(found);
-    if (!parsed.success || Object.keys(found).length > 0) return;
+    if (!parsed.success || Object.keys(found).length > 0) return focusInvalid();
     try {
       await approve.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
       onDone();
@@ -154,8 +156,9 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
       } else if (code === 'FLAGS_NOT_ACKNOWLEDGED') {
         setErrors({ flags: errorMessage(t, error) });
       } else {
-        setFailure({ message: errorMessage(t, error) });
+        return setFailure({ message: errorMessage(t, error) });
       }
+      focusInvalid();
     }
   }
 
@@ -166,7 +169,7 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
         <ShieldCheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         {t('deposits.approve.verify')}
       </p>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={!!errors.transaction}>
           <FieldLabel>{t('deposits.approve.transaction')}</FieldLabel>
           <Input
@@ -244,12 +247,13 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
           </dd>
         </dl>
         {allFlags.length > 0 && (
-          <fieldset className="flex flex-col gap-2">
+          <fieldset className="flex flex-col gap-2" data-invalid={errors.flags ? '' : undefined}>
             <legend className="mb-2 text-sm font-medium">{t('deposits.approve.flags')}</legend>
             {allFlags.map((code) => (
               // biome-ignore lint/a11y/noLabelWithoutControl: the checkbox inside is the control.
               <label key={code} className="flex items-start gap-2 text-sm">
                 <Checkbox
+                  aria-invalid={errors.flags && !ticked.includes(code) ? true : undefined}
                   checked={ticked.includes(code)}
                   onCheckedChange={(checked) =>
                     setTicked((previous) =>
@@ -286,6 +290,7 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
           <p className="text-sm text-muted-foreground">{t('deposits.approve.reauthentication')}</p>
         )}
         {failure?.message && <FormAlert>{failure.message}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <Button type="submit" className="self-start" disabled={approve.isPending}>
           {approve.isPending
             ? t('deposits.approve.submitting')

@@ -1462,9 +1462,9 @@ describe('suppliers.sync: categories, offer fields and stock (S16 SC2, SC3, SF2)
         current = stocked(stock, inStock);
         runs.push(await sync.sync(payload(), tx));
       }
-      const alerted = await Promise.all(
-        runs.map(async (one) => (await message(tx, `stock:${one?.id}`))?.params),
-      );
+      // One after another: the transaction's client runs one query at a time.
+      const alerted: unknown[] = [];
+      for (const one of runs) alerted.push((await message(tx, `stock:${one?.id}`))?.params);
       expect(alerted.map((params) => params !== undefined)).toEqual([
         true, // ok → low
         false, // low stays low
