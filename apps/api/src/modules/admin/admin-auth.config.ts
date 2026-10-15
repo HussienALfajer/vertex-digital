@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import { ADMIN_SESSION_RULES } from '@vertex-digital/contracts';
+import { ADMIN_SESSION_RULES, BACKGROUND_REQUEST_HEADER } from '@vertex-digital/contracts';
 import {
   adminAccounts,
   adminSessions,
@@ -14,7 +14,7 @@ import { BASE_ERROR_CODES, betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 import { twoFactor } from 'better-auth/plugins';
-import { eq } from 'drizzle-orm';
+import { and, eq, lt, ne } from 'drizzle-orm';
 // Straight from the file: `core/altcha/index.ts` reaches back here through `core/access`.
 import { ALTCHA_HEADER } from '../../core/altcha/altcha.guard.js';
 import type { Env } from '../../core/config/env.js';
@@ -114,6 +114,12 @@ const metaOf = (headers: Headers | undefined | null): RequestMeta => ({
   ipAddress: headers?.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
   userAgent: headers?.get('user-agent')?.slice(0, 500) ?? null,
 });
+
+/** Activity is written at most this often: one update a minute is enough for a 30-minute rule. */
+export const ACTIVITY_GRANULARITY_MS = 60 * 1000;
+
+/** Paths that need the CLI-issued password changed first (rule D1). */
+const AFTER_PASSWORD_CHANGE_PATHS = ['/two-factor/enable', '/two-factor/generate-backup-codes'];
 
 /** Whether a session saw no activity for the idle timeout (rule D4). */
 export const isIdle = (lastActiveAt: Date, now = Date.now()) =>
@@ -223,6 +229,12 @@ export function createAdminAuth(
             if (!admin || admin.archivedAt) {
               throw APIError.from('UNAUTHORIZED', BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD);
             }
+            // Rule D4: 12 hours at most, whatever the sign-in asked (`rememberMe: false` would
+            // give Better Auth's one day).
+            const createdAt = new Date(session.createdAt ?? Date.now()).getTime();
+            const latest = new Date(createdAt + ADMIN_SESSION_RULES.absoluteLifetimeMs);
+            const expiresAt = new Date(session.expiresAt);
+            return { data: { ...session, expiresAt: expiresAt > latest ? latest : expiresAt } };
           },
           // The TOTP step completed (sign-in or enrolment): the session is usable.
           after: async (session, ctx) => {
@@ -278,9 +290,26 @@ export function createAdminAuth(
             message: 'The session ended after 30 minutes without activity',
           });
         }
-        // Rule D1: the CLI-issued password is changed before TOTP is enrolled.
+        // Rule D4: the admin's own requests count as activity; the panel's polling does not.
+        if (
+          ctx.path !== '/get-session' &&
+          ctx.headers?.get(BACKGROUND_REQUEST_HEADER) !== '1' &&
+          (!lastActiveAt || Date.now() - new Date(lastActiveAt).getTime() > ACTIVITY_GRANULARITY_MS)
+        ) {
+          const now = Date.now();
+          await db
+            .update(adminSessions)
+            .set({ lastActiveAt: new Date(now) })
+            .where(
+              and(
+                eq(adminSessions.id, current.session.id),
+                lt(adminSessions.lastActiveAt, new Date(now - ACTIVITY_GRANULARITY_MS)),
+              ),
+            );
+        }
+        // Rule D1: the CLI-issued password is changed before TOTP or backup codes.
         const mustChange = (current.user as { mustChangePassword?: boolean }).mustChangePassword;
-        if (ctx.path === '/two-factor/enable' && mustChange) {
+        if (AFTER_PASSWORD_CHANGE_PATHS.includes(ctx.path) && mustChange) {
           throw new APIError('FORBIDDEN', {
             code: 'PASSWORD_CHANGE_REQUIRED',
             message: 'Change the password first',
@@ -304,6 +333,23 @@ export function createAdminAuth(
             failures.clear(email);
           }
           return;
+        }
+        // TOTP enrolled on a session (not the sign-in step, which has none): the sessions opened
+        // with the password alone never passed it, so only the new one stays (ADR 0007).
+        if (
+          ctx.path === '/two-factor/verify-totp' &&
+          !(returned instanceof APIError) &&
+          ctx.context.session &&
+          ctx.context.newSession
+        ) {
+          await db
+            .delete(adminSessions)
+            .where(
+              and(
+                eq(adminSessions.userId, ctx.context.newSession.user.id),
+                ne(adminSessions.id, ctx.context.newSession.session.id),
+              ),
+            );
         }
         if (ctx.path === '/two-factor/generate-backup-codes' && !(returned instanceof APIError)) {
           const current = ctx.context.session;

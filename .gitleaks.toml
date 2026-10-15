@@ -8,4 +8,4 @@ useDefault = true
 [allowlist]
 description = "Made-up passwords (S01: they must look strong to pass the password rules), supplier credentials (S07: long enough to get a hint) and the WDGZone adapter test's attempt id (a UUID once named KEY) in tests"
 regexTarget = "secret"
-regexes = ['''^a7Kq-blue-moon(-river)?$''', '''^b8Lr-green-sea-lake$''', '''^abcdefghi-a1b2$''', '''^0190f1c2-7a3b-7c4d-8e5f-0123456789ab$''']
+regexes = ['''^a7Kq-blue-moon(-river)?$''', '''^b8Lr-green-(sea-lake|hill-stone)$''', '''^abcdefghi-a1b2$''', '''^0190f1c2-7a3b-7c4d-8e5f-0123456789ab$''']
