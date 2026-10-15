@@ -4,6 +4,7 @@ import {
   adminSessions,
   adminTwoFactors,
   adminUsers,
+  adminVerifications,
   type Database,
   newId,
   recordAudit,
@@ -75,11 +76,13 @@ async function lockAdmin(tx: Transaction, email: string): Promise<string> {
   return admin.id;
 }
 
+/** Ends every session and every sign-in waiting at its TOTP step (it proved the old password). */
 async function signOutEverywhere(tx: Transaction, adminId: string): Promise<number> {
   const removed = await tx
     .delete(adminSessions)
     .where(eq(adminSessions.userId, adminId))
     .returning({ id: adminSessions.id });
+  await tx.delete(adminVerifications).where(eq(adminVerifications.value, adminId));
   return removed.length;
 }
 
