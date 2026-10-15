@@ -4,7 +4,7 @@ Production runs on the owner's VPS (`ssh vertex`), shared with other sites, foll
 
 Server work needs the owner's explicit approval in the current conversation (AGENTS.md). Deploys happen once per phase, in their own session (`docs/workflow.md`).
 
-Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`); Phases 1–3 deployed together on 2026-10-12 (commit `6230b05`); S16 deployed on 2026-10-13 (commit `0495047`); the worker memory fixes on 2026-10-14 (commits `58dbeee`, then `39ead74`); the SHOP2TOPUP drop on 2026-10-14 (ADR 0031 step 1, migration 0060, commit `e849fa5`; step 2, migration 0061, commit `c2ac68e`: a rollback to `39ead74` or older now needs a restore, since that code sends `shop2topup_paused`); the health timer is on. Sentry (Q15) is configured (`SENTRY_DSN` in `shared/.env`). Customer registration stays closed until the pilot. The Telegram bot (S05, ADR 0019) is set up as "Telegram admin bot" below says.
+Status: provisioned and first deployed on 2026-10-07 (Phase 0, commit `3074d0c`); Phases 1–3 deployed together on 2026-10-12 (commit `6230b05`); S16 deployed on 2026-10-13 (commit `0495047`); the worker memory fixes on 2026-10-14 (commits `58dbeee`, then `39ead74`); the SHOP2TOPUP drop on 2026-10-14 (ADR 0031 step 1, migration 0060, commit `e849fa5`; step 2, migration 0061, commit `c2ac68e`: a rollback to `39ead74` or older now needs a restore, since that code sends `shop2topup_paused`); the launch hardening on 2026-10-14 (commit `0ce64f0`, with `provision.sh` re-run for the `/favicon.ico` location) and the catalog counts fix on 2026-10-15 (commit `b0794fa`); the health timer is on. Sentry (Q15, resolved) is configured for the API and the worker (`SENTRY_DSN` in `shared/.env`). Customer registration stays closed until the pilot. The Telegram bot (S05, ADR 0019) is set up as "Telegram admin bot" below says.
 
 ## Layout
 
@@ -157,7 +157,7 @@ Backups stay on the server until an off-server destination is chosen. That is re
 Done on 2026-10-07 (ports 3060 and 3061 confirmed free in `/root/SERVER.md`, both A records added at Hostinger). For a rebuilt server, in a deploy session with the owner:
 1. Read `/root/SERVER.md` on the server and confirm the ports 3060 (API) and 3061 (store) are free in its port map; if not, change them in every file listed in `deploy/CLAUDE.md`.
 2. Confirm the server address in `provision.sh` (`SERVER_IP`, the address of `ssh vertex`) and point both DNS records (`digital`, `digital-admin` under `vertexmedia.pro`) at it.
-3. Confirm the Sentry account (open question Q15); its DSN goes into `shared/.env` after provisioning (`SENTRY_DSN`); the Telegram bot as "Telegram admin bot" below says.
+3. The Sentry DSN (the owner's account, Q15) goes into `shared/.env` after provisioning (`SENTRY_DSN`); the Telegram bot as "Telegram admin bot" below says.
 
 Then, from a checkout:
 

@@ -1,6 +1,6 @@
 # FazerCards (`fazercards`): evaluation, not integrated
 
-A B2B aggregator of game top-ups, gift cards, game keys, Steam and Telegram products. **Status: evaluated on 2026-10-15, no adapter, not routed.** WDGZone stays the only automatic supplier (ADR 0031) until the owner decides otherwise and `docs/open-questions.md` Q17 is answered.
+A B2B aggregator of game top-ups, gift cards, game keys, Steam and Telegram products. **Status: evaluated on 2026-10-15, no adapter, not routed.** WDGZone stays the only automatic supplier (ADR 0031) until the owner decides otherwise and `docs/open-questions.md` Q17 is answered. The owner will choose a second supplier only after the full system test (`docs/ROADMAP.md`, Pilot).
 
 Sources, all read on 2026-10-15: the public site and API reference (https://reseller.fazercards.com/en, `/en/docs`, `/en/docs/webhooks`, `/en/pricing`, `/en/terms`, `/en/suppliers`), the OpenAPI document (`https://api.fzr.cards/public/docs/openapi.json`, "FazerCards Public API" 0.1.0, 47 paths), the official Node SDK (`fazercards` 0.2.0 on npm, MIT, whose types say they were checked against live replies), and the owner's trial account in the reseller panel (read only: nothing was bought, funded, activated or written). Trustpilot reviews were read for the risk section.
 
