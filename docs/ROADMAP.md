@@ -12,7 +12,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] `apps/worker` skeleton: pg-boss wiring, heartbeat job, Sentry, Telegram alert channel
 - [x] `apps/store` skeleton: Next.js 16, Cache Components, Arabic RTL shell, dark default, customer sign-in page, performance budget, Playwright smoke and screenshots
 - [x] `apps/admin` skeleton: Vite, TanStack Router/Query, RTL shell, staff sign-in with TOTP and enrolment, client typed from OpenAPI, Playwright smoke and screenshots
-- [x] Design system: tokens from `brand/identity.md`, Vertex Hub components copied and adapted, VERTEX DIGITAL logo draft (Q16: designer files may replace it; fonts: Madani pending its license, fallback until then)
+- [x] Design system: tokens from `brand/identity.md`, Vertex Hub components copied and adapted, VERTEX DIGITAL logo (final, Q16 resolved 2026-10-15; fonts: Noto Kufi Arabic and Montserrat, Q2 resolved 2026-10-14)
 - [x] Auth skeletons: customer and staff Better Auth instances, staff TOTP enforcement, first-owner CLI, permission map skeleton in `packages/contracts`, sign-in pages in the store and the panel
 - [x] CI: typecheck, lint, test, build, gitleaks and migration drift (PostgreSQL 17 service, non-superuser app role), OpenAPI and admin client drift, a start check of the built API and worker, E2E (store and panel, screenshots as artifacts)
 - [x] Deployment skeleton: `deploy/` (both hosts, TLS, nginx limits and headers, Brotli when available, fail2ban jail, PM2 store/api/worker, atomic releases with rollback, health checks, daily backups) and `docs/deployment.md` written; provisioned and first deployed on 2026-10-07
@@ -52,7 +52,11 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] Production deploys of 2026-10-14: the worker memory fixes (commits `58dbeee`, then `39ead74`), then the SHOP2TOPUP drop, ADR 0031 step 1 (commit `e849fa5`, all of `main`: migration 0060 applied, 61 migrations, the SHOP2TOPUP supplier row deleted with nothing referencing it; no new secret, and `deploy/ecosystem.config.cjs` is read from the release, so `provision.sh` was not re-run); the API, store and worker came back online and no new worker error was logged after the switch
 - [x] ADR 0031 step 2: migration 0061 drops the `supplier_code` value `shop2topup` and the `store_switch` value `shop2topup_paused`; deployed on 2026-10-14 (commit `c2ac68e`, all of `main`: 62 migrations applied, neither enum holds a SHOP2TOPUP value; no new secret and no `deploy/` change, so `provision.sh` was not re-run); the API, store and worker came back online and the API health check answers 200
 
+- [x] Production deploys of 2026-10-14 and 2026-10-15: the launch hardening (PR #94, commit `0ce64f0`, 2026-10-14; `provision.sh` re-run for the store's `/favicon.ico` nginx location), then the catalog counts and covers fix (PR #97, commit `b0794fa`, 2026-10-15); no migration (62 applied), no new secret; checked on 2026-10-15: `current/REVISION` is `b0794fa`, the installed nginx site matches the repository, `/favicon.ico` and `/api/health` answer 200, the three PM2 processes online with no unstable restart
+
 ## Pilot — open quiet launch
+- [ ] Full system test of every V1 feature on production, end to end, before any second supplier is added (owner, 2026-10-15)
+- [ ] Second automatic supplier, chosen by the owner after the full system test (`/supplier-adapter`; Q17 answered first; FazerCards evaluated in `docs/suppliers/fazercards.md`)
 - [ ] Launch checklist done (below)
 - [ ] Registration opened with the F26 switch, without promotion; low deposit and purchase limits
 - [ ] Limits raised step by step as reconciliation stays clean
