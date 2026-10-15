@@ -203,8 +203,11 @@ test.describe('deposits', () => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     signedIn(api).on('GET /api/deposits/sham-cash/options', 200, OPTIONS);
     await page.goto('/wallet/deposit');
-    // The $10 preset in pounds: 10 × 118 = 1,180, rounded up to the 5-pound step.
-    await page.getByRole('button', { name: '1,180 ل.س' }).click();
+    // The $10 preset in pounds: 10 × 118 = 1,180, rounded up to the 5-pound step, and it says
+    // which dollar amount it stands for (F3-1).
+    const preset = page.getByRole('button', { name: '1,180 ل.س' });
+    await expect(preset).toContainText('$10.00');
+    await preset.click();
     await expect(page.getByLabel(ar.deposits.form.amountSyp)).toHaveValue('1180');
     await page.getByLabel(ar.deposits.form.amountSyp).fill('2000');
     await expect(

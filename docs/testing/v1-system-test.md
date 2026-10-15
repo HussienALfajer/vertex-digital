@@ -94,7 +94,9 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F2-21 | 2 | Second review | A malformed `next` (`//[`) made `safeRedirect` throw after the sign-in had worked, leaving the form stuck | minor | A destination the browser cannot parse goes home; unit and E2E tests | Fixed |
 | F2-22 | 2 | Second review | The links between sign-in, sign-up and the code page dropped `next`: from the cart a new customer ended on the home page | minor | `withNext` carries the checked destination on those links; E2E | Fixed |
 | F2-23 | 2 | Second review | Signing out of this device (Better Auth's `/sign-out`) wrote no audit entry, unlike the other session endings (A2, C14) | minor | The sign-out hook ends the session and audits it in one transaction before Better Auth clears the cookie; tested | Fixed |
-| F3-1 | 3 | 3.4 | Step 2 said "press the $10 preset", but with "ل.س" chosen the presets show their amount in pounds ("1,400 ل.س"), as S03 asks; the owner did not find a "$10" button | — | Not a bug: the step names the button by its pounds, with this file's PR | Closed |
+| F3-1 | 3 | 3.4 | Step 2 said "press the $10 preset", but with "ل.س" chosen the presets showed only their amount in pounds ("1,400 ل.س"); the owner did not find a "$10" button | minor | A pound preset also shows the dollars it stands for ("1,400 ل.س $10.00", `deposit-form.tsx`), and the step names the button by both; E2E | Fixed |
+| F3-2 | 3 | Audit | The quote, deposit and reservation countdowns ran on the device's clock: a phone set minutes off showed the 15-minute lock still running after the server had ended it (the customer then meets `QUOTE_EXPIRED` and maybe a worse rate), or ended while it still held | major | Countdowns run on the server's clock, learned from the `Date` header of each `no-store` API answer (`lib/server-clock.ts`, `apiRequest`); the independent review caught that a first version also learned from cacheable answers, whose `Date` can be minutes old; unit tests | Fixed |
+| F3-3 | 3 | Audit | After a rate change the panel read again only the rates, wallets and deposits: products, prices, orders, the dashboard and treasury kept SYP at the old rate until their next read | minor | A rate change reads every panel query again (`rates.queries.ts`, rule FX4) | Fixed |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -561,14 +563,14 @@ Result: ✅ 2026-10-15
 **What this checks:** the customer sees exactly how many dollars their pounds will give before they send anything, and that number is held for 15 minutes.
 
 1. Note the time. In the store as TC1, "المحفظة" → "إيداع" → "شام كاش".
-2. Choose "ل.س". Under the amount field the presets ($5, $10, $25, $50) show in pounds: press "1,400 ل.س" (the $10 preset). Expected: the amount becomes 1,400 (USD 10 × 140, rounded up to the step).
+2. Choose "ل.س". Under the amount field each preset ($5, $10, $25, $50) shows its pounds and the dollars it stands for: press "1,400 ل.س $10.00". Expected: the amount becomes 1,400 (USD 10 × 140, rounded up to the step).
 3. Replace the amount with `2000`. Expected: "ستحصل على $14.28" (not $14.29), "بسعر 140 ل.س للدولار" and "السعر مقفل 15 دقيقة بعد المتابعة".
 4. Press "متابعة" (the browser check solves itself).
 5. Expected: the deposit page shows the amount 2,000 ل.س, "يُضاف إلى محفظتك $14.28", and "السعر 140 ل.س للدولار مقفل لمدة" with a countdown starting near 15:00 and going down.
 6. Reload the page. Expected: the countdown continues from the right time (it does not restart at 15:00).
 7. Do **not** add a receipt. Go to 3.5 straight away, keeping this page open.
 
-Result: ✅ 2026-10-15. Step 2 named a "$10" button the form does not show: with "ل.س" chosen each preset reads its amount in pounds (F3-1, the step's wording corrected).
+Result: ✅ 2026-10-15. Step 2 named a "$10" button the form did not show: with "ل.س" chosen each preset read only its pounds (F3-1, fixed: the preset now also shows the dollars).
 
 ### 3.5 A small rate change: no confirmation, open quotes keep their rate
 
@@ -658,6 +660,6 @@ Result: ✅ 2026-10-15
 | Item | Value |
 |---|---|
 | Cases passed | 11 of 11 |
-| Findings | F3-1 (not a bug: a step's wording, corrected) |
-| Accepted by the owner on | 2026-10-15 |
-| PR | #106 (the steps), and this record |
+| Findings | F3-1, F3-3 (minor), F3-2 (major, from the code audit); all fixed. The independent review of the whole feature (rules FX1–FX9, SC9, SC10, RV3, P9: rounding, the typed confirmation, the step limit, re-authentication, audit, quote and submission races, leaks) found nothing else |
+| Accepted by the owner on | 2026-10-15; audit and fixes by Claude on 2026-10-15 |
+| PR | #106 (the steps), and this record with the fixes |

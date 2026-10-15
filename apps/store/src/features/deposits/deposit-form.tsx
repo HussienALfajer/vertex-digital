@@ -378,6 +378,10 @@ function ShamCashForm({
                 }}
               >
                 {amountText(currency, preset)}
+                {/* A preset is a dollar amount: in pounds it says which one (F3-1). */}
+                {currency === 'SYP' && (
+                  <span className="text-sm font-normal text-muted-foreground">{usdText(usd)}</span>
+                )}
               </Button>
             );
           })}
