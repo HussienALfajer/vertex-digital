@@ -33,7 +33,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 
 | # | Feature | Scope IDs | Why here | Status |
 |---|---|---|---|---|
-| 1 | Admin access, 2FA and audit log | F02 | Every later step is an admin action that must be authenticated, re-authenticated and audited; the audit log is the tool used to verify the rest | Steps written |
+| 1 | Admin access, 2FA and audit log | F02 | Every later step is an admin action that must be authenticated, re-authenticated and audited; the audit log is the tool used to verify the rest | Accepted 2026-10-15 |
 | 2 | Customer accounts | F01 | Every customer case needs sign-in, sessions and account emails working | — |
 | 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | — |
 | 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | — |
@@ -60,7 +60,10 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 
 | ID | Feature | Case | What happened | Severity | Fix (PR) | Status |
 |---|---|---|---|---|---|---|
-| — | | | | | | |
+| F1-1 | 1 | Code audit | Admin API answers (audit log, sessions) carried no `Cache-Control`: a shared computer's browser could keep private data in its cache | minor | Every `/api/admin/*` answer defaults to `no-store` (`core/http/admin-no-store.ts`), with this file's PR | Fixed |
+| F1-2 | 1 | Code audit (1.8) | The own-sessions list kept sessions past their 12 hours or idle for 30 minutes, which sign nobody in | minor | Only live sessions are listed (`AdminAccountService.sessions`), with this file's PR | Fixed |
+| F1-3 | 1 | Code audit (1.10) | The backup-codes download released its file at the moment of the click, which can cancel the download in some browsers | minor | Released a second later, with this file's PR | Fixed |
+| F1-4 | 1 | Code audit | The re-authentication password and the current password of a password change had no length limit | minor | Bounded at 128 like every password, with this file's PR | Fixed |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -86,7 +89,7 @@ Severity: **blocker** (money, security or a broken flow; fixed before the featur
 4. Enter the current code.
 5. Expected: the dashboard opens.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.2 Wrong password and wrong code are refused (one try each)
 
@@ -97,7 +100,7 @@ Result: ☐
 5. Sign in with the right password; at the code step enter a wrong code, once.
 6. Expected: "the code is wrong" error; you stay on the code step. Enter the right code: the dashboard opens.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.3 Signing in with a backup code
 
@@ -107,7 +110,7 @@ Result: ☐
 4. Sign out and try the same backup code again.
 5. Expected: refused with "الرمز الاحتياطي غير صحيح أو استُخدم من قبل.". Sign in with the authenticator code.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.4 The panel and its API refuse anyone not signed in
 
@@ -118,7 +121,7 @@ Result: ☐
 5. Open `https://digital.vertexmedia.pro/api/admin/audit` (the store host).
 6. Expected: 404: admin routes do not exist on the store host.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.5 A customer session cannot use the panel
 
@@ -126,7 +129,7 @@ Result: ☐
 2. In the same browser open `https://digital-admin.vertexmedia.pro/` and `https://digital-admin.vertexmedia.pro/api/admin/audit`.
 3. Expected: the panel shows `/login`; the API answers 401. The customer's store session is untouched (reload the store: still signed in).
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.6 Re-authentication for sensitive actions
 
@@ -142,7 +145,7 @@ Use a harmless sensitive save: "إعدادات الدعم" (`/settings/support`)
 8. Wait 6 minutes (do 1.8 meanwhile), press "حفظ" again. Expected: the dialog appears again.
 9. Press "إلغاء" or close the dialog. Expected: nothing is saved and no error remains on the page.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.7 Idle timeout after 30 minutes
 
@@ -151,7 +154,7 @@ Result: ☐
 3. Click any link in the sidebar, for example "الكتالوج".
 4. Expected: `/login` with the notice "انتهت الجلسة بعد 30 دقيقة دون نشاط…"; after signing in you return to the page you clicked.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.8 Own sessions and signing one out
 
@@ -161,7 +164,7 @@ Result: ☐
 4. Sign out the phone's session from the PC.
 5. Expected: on the phone, the next action (tap any link) goes to `/login`. The PC session is untouched.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.9 Changing the admin password
 
@@ -177,7 +180,7 @@ Have the password manager ready; save the new password before pressing the butto
 8. Expected: success. The phone session is signed out (next tap goes to `/login`); the PC session stays.
 9. Sign out on the PC and sign in with the new password and the authenticator code. Expected: works. The old password is refused (try it once).
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.10 Regenerating backup codes
 
@@ -188,7 +191,7 @@ Result: ☐
 5. Sign out, sign in with the password and one of the **old** backup codes. Expected: refused.
 6. Sign in with one of the **new** codes. Expected: works; mark it used.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.11 The audit log records every admin action
 
@@ -200,7 +203,7 @@ Result: ☐
 6. Open the rate entry's detail sheet. Expected: labelled before and after values (no rate → 140, step 1), IP and browser.
 7. Open the password-change and backup-code entries. Expected: no password, code, hash or token anywhere in the details.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.12 Audit log filters and paging
 
@@ -212,34 +215,39 @@ Result: ☐
 6. Combine filters that match nothing. Expected: "no entries match these filters" empty state.
 7. Clear filters and press "load more" until the end. Expected: older rows load in order without duplicates.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.13 The audit log cannot be changed
 
 1. In `/audit` and its detail sheet, look for any edit, delete or hide control.
 2. Expected: none. Entries are read-only (append-only by database trigger and grants; covered by the automated tests).
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
 ### 1.14 Panel quality on desktop and phone
 
 1. On the PC, switch between the light and dark themes (top bar). Expected: every screen used above is readable in both; RTL layout, Latin digits.
 2. On the phone, open `/audit` and `/account`. Expected: the sidebar becomes a menu button, tables fit or scroll inside their card, no horizontal page scroll, dialogs fit the screen.
 
-Result: ☐
+Result: ✅ (2026-10-15)
 
-### 1.15 Absolute session limit (observation, optional)
+### 1.15 Absolute session limit of 12 hours
 
-1. Keep one panel session in use (an action at least every 20 minutes) for more than 12 hours after its sign-in, or note the time when a long working day ends.
-2. Expected: 12 hours after sign-in the next action returns to `/login` even though the session was active.
+The session is never extended by use (`disableSessionRefresh`, S01 D4), so its end is fixed at sign-in and shows as the session cookie's expiry. No 12-hour wait is needed.
 
-Result: ☐
+1. Sign out and sign in again on the PC (Chrome). Note the time.
+2. Press F12 → "Application" → "Cookies" → `https://digital-admin.vertexmedia.pro`. Find the session cookie (its name contains `session_token`).
+3. Expected: its "Expires" is your sign-in time plus 12 hours (shown in UTC: Damascus is UTC+3).
+4. Use the panel for a few minutes (open pages, save something harmless), then reload the cookie list.
+5. Expected: "Expires" has not moved.
+
+Result: ✅ (2026-10-15). Read from the panel's own sessions list (`GET /api/admin/me/sessions`): each session's `expiresAt` is its `createdAt` plus exactly 12 hours, and the current session, used for about two hours, was not extended.
 
 ### Feature 1 sign-off
 
 | Item | Value |
 |---|---|
-| Cases passed | — of 15 |
-| Findings | — |
-| Accepted by the owner on | — |
+| Cases passed | 15 of 15 |
+| Findings | F1-1 to F1-4 (code audit, all minor, fixed) |
+| Accepted by the owner on | 2026-10-15 |
 | PR | — |

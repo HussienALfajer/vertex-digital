@@ -11636,7 +11636,8 @@
         "properties": {
           "currentPassword": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 128
           },
           "newPassword": {
             "type": "string",
@@ -11669,7 +11670,8 @@
         "properties": {
           "password": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 128
           },
           "totpCode": {
             "type": "string",

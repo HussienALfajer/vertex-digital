@@ -278,6 +278,28 @@ describe('own sessions and backup codes (rule D7)', () => {
     });
   });
 
+  it('lists only the sessions that still sign in, never cached', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const expired = await sessionOf(await client.signInAdmin(admin.email, admin.secret));
+    const idle = await sessionOf(await client.signInAdmin(admin.email, admin.secret));
+    const live = await sessionOf(await client.signInAdmin(admin.email, admin.secret));
+    await test.db
+      .update(adminSessions)
+      .set({ expiresAt: new Date(Date.now() - MINUTE) })
+      .where(eq(adminSessions.id, expired.id));
+    await test.db
+      .update(adminSessions)
+      .set({ lastActiveAt: new Date(Date.now() - 31 * MINUTE) })
+      .where(eq(adminSessions.id, idle.id));
+    const response = await client.get('/api/admin/me/sessions', { cookie: admin.cookie });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const ids = ((await response.json()) as { id: string }[]).map((session) => session.id);
+    expect(ids).toContain(live.id);
+    expect(ids).not.toContain(expired.id);
+    expect(ids).not.toContain(idle.id);
+  });
+
   it('regenerates the backup codes with the password, audited', async () => {
     const admin = await client.adminWithTotp(test.db);
     seeded.push(admin.id);

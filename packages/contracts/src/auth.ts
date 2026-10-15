@@ -154,7 +154,8 @@ export type RequestEmailChange = z.infer<typeof requestEmailChangeSchema>;
 
 /** `POST /api/admin/me/reauthenticate` (rule D5): backup codes are not accepted. */
 export const reauthenticateSchema = z
-  .object({ password: z.string().min(1), totpCode: totpCodeSchema })
+  // Bounded like every password (128): scrypt never runs on an oversized body.
+  .object({ password: z.string().min(1).max(128), totpCode: totpCodeSchema })
   .meta({ id: 'Reauthenticate' });
 
 export type Reauthenticate = z.infer<typeof reauthenticateSchema>;
@@ -175,7 +176,7 @@ export type ChangePassword = z.infer<typeof changePasswordSchema>;
 
 /** `POST /api/admin/auth/change-password` (rules D1, D7): the admin's password rules. */
 export const adminChangePasswordSchema = z
-  .object({ currentPassword: z.string().min(1), newPassword: adminPasswordSchema })
+  .object({ currentPassword: z.string().min(1).max(128), newPassword: adminPasswordSchema })
   // A CLI-issued password must really change: "changing" it to itself would keep it (rule D1).
   .refine((value) => value.newPassword !== value.currentPassword, {
     path: ['newPassword'],
