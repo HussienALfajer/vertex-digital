@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from 'node:http';
 import { Inject, Injectable } from '@nestjs/common';
 import type { CursorQuery, WalletCustomer } from '@vertex-digital/contracts';
-import { customers, type Database } from '@vertex-digital/db';
+import { customers, type Database, type Transaction } from '@vertex-digital/db';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
 import { and, desc, eq, ilike, inArray, isNull, like, ne, or } from 'drizzle-orm';
 // Straight from the file: `core/altcha/index.ts` reaches back here through `core/access`.
@@ -119,9 +119,13 @@ export class AuthService {
   }
 
   /** Customers by id for the deposit screens (S03). */
-  async depositCustomers(ids: readonly string[]): Promise<Map<string, DepositCustomer>> {
+  async depositCustomers(
+    ids: readonly string[],
+    db: Database | Transaction = this.db,
+  ): Promise<Map<string, DepositCustomer>> {
     if (ids.length === 0) return new Map();
-    const rows = await this.db
+    // Inside a transaction, read through it: never the pool while holding a lock (F3-4).
+    const rows = await db
       .select({
         ...walletCustomerColumns,
         createdAt: customers.createdAt,

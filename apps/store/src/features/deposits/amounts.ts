@@ -40,8 +40,11 @@ export function presetUnits(
   return sypDisplayPrice(usdUnits, rate.sypPerUsd, rate.displayStepSypUnits);
 }
 
-/** What a SYP amount gets in USD (rule FX6), for the live preview. */
-export function previewUsd(sypUnits: number, rate: string): number {
+/**
+ * What a SYP amount gets in USD (rule FX6), for the live preview; null for pounds worth more than
+ * the safe integers, which the per-deposit limit refuses (edge case 12).
+ */
+export function previewUsd(sypUnits: number, rate: string): number | null {
   return sypDepositUsd(sypUnits, rate);
 }
 

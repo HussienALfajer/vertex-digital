@@ -301,13 +301,14 @@ const positiveUnitsSchema = amountUnitsSchema.refine((units) => units > 0, 'Expe
 /**
  * The USD an amount is worth to the store: USD as is; SYP converted at `rate` with rule FX6.
  * Used for a deposit's declared USD (rule SC2) and an approval's credit (rule RV2, with the rate
- * of rule RV3). `rate` is required for pounds.
+ * of rule RV3). `rate` is required for pounds. Null for pounds worth more than the safe integers
+ * (edge case 12): the caller refuses them as too large, never fails on them (F3-7).
  */
 export function depositCreditUsdUnits(
   receivedCurrency: Currency,
   receivedAmountUnits: number,
   rate: string | null,
-): number {
+): number | null {
   if (receivedCurrency === 'USD') return receivedAmountUnits;
   if (rate === null) throw new RangeError('Converting pounds needs a rate');
   return sypDepositUsd(receivedAmountUnits, rate);

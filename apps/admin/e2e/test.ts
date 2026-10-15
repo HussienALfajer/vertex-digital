@@ -713,7 +713,8 @@ export class AdminApi {
       const atApproval = approvalFlags(deposit, input);
       const expected = [...new Set([...deposit.flags.map((flag) => flag.code), ...atApproval])];
       const rate = input.receivedCurrency === 'SYP' ? (deposit.approvalRate?.rate ?? null) : null;
-      const credit = depositCreditUsdUnits(input.receivedCurrency, input.receivedAmountUnits, rate);
+      const credit =
+        depositCreditUsdUnits(input.receivedCurrency, input.receivedAmountUnits, rate) ?? 0;
       if (approvalNeedsReauthentication(credit, expected.length) && this.reauthenticationRequired) {
         return apiError(403, 'REAUTHENTICATION_REQUIRED');
       }

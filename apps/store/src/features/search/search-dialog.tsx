@@ -33,8 +33,14 @@ type Option =
   | { kind: 'product'; product: SearchIndexProduct; gameName: string; href: string }
   | { kind: 'recent'; query: string };
 
-// The index stays for the page's life: a second open needs no request.
+/*
+ * The index is kept between opens, read again once older than the API's 30-second cache life
+ * (rule SR2): prices and SYP follow a price or rate change (F3-5). An old index shows until the
+ * new one arrives, and stays if the read fails.
+ */
+const INDEX_FRESH_MS = 30_000;
 let cachedIndex: SearchIndex | null = null;
+let cachedAt = 0;
 
 /**
  * The search dialog (S09 rule SR5): a full-screen sheet on phones, a dialog from `sm`. Results
@@ -61,12 +67,16 @@ export function SearchDialog({
   useEffect(() => {
     if (!open) return;
     setRecent(readRecentSearches());
-    if (cachedIndex) return;
+    if (cachedIndex && Date.now() - cachedAt < INDEX_FRESH_MS) return;
     let live = true;
     void getSearchIndex().then((result) => {
       if (!live) return;
-      if (!result.ok) return setState({ status: 'failed', reason: result.reason });
+      if (!result.ok) {
+        if (!cachedIndex) setState({ status: 'failed', reason: result.reason });
+        return;
+      }
       cachedIndex = result.data;
+      cachedAt = Date.now();
       setState({ status: 'ready', index: result.data });
     });
     return () => {

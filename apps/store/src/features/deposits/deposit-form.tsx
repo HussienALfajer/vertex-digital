@@ -287,12 +287,16 @@ function ShamCashForm({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    if (units === null || declaredUsd === null) {
+    // Pounds too large to convert are above any per-deposit limit (edge case 12, F3-7).
+    const tooLarge = currency === 'SYP' && units !== null && !!rate && declaredUsd === null;
+    if (units === null || (declaredUsd === null && !tooLarge)) {
       return refuse(
         t(currency === 'SYP' ? 'deposits.form.invalidSyp' : 'deposits.form.invalidUsd'),
       );
     }
-    const breach = options.limits ? depositLimitBreach(options.limits, declaredUsd) : null;
+    const breach = options.limits
+      ? depositLimitBreach(options.limits, declaredUsd ?? Number.POSITIVE_INFINITY)
+      : null;
     if (breach) return refuse(limitText(breach));
     const body = { currency, amountUnits: units };
     const sent = JSON.stringify(body);
