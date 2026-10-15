@@ -36,7 +36,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 |---|---|---|---|---|
 | 1 | Admin access, 2FA and audit log | F02 | Every later step is an admin action that must be authenticated, re-authenticated and audited; the audit log is the tool used to verify the rest | Accepted 2026-10-15 |
 | 2 | Customer accounts | F01 | Every customer case needs sign-in, sessions and account emails working | Accepted 2026-10-15 |
-| 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | — |
+| 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | Steps written 2026-10-15 |
 | 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | — |
 | 5 | USDT deposits | F06 | The automatic money-in path | — |
 | 6 | Wallet and ledger | F03 | Checked once real deposits exist: balances as sums, history, journals | — |
@@ -496,3 +496,167 @@ Result: ✅ 2026-10-15; SU3 of the re-run archived the same way.
 | Findings | F2-1 (not a bug), F2-2 (accepted: the owner keeps the common-password list), F2-3 to F2-23 (fixed) |
 | Accepted by the owner on | 2026-10-15 |
 | PR | #104 (fixes F2-16 to F2-23), and this record |
+
+---
+
+## Feature 3 — Exchange rate and SYP display (F04)
+
+**What it covers:** the admin's USD→SYP rate (S03 FX1–FX9): setting it with history, re-authentication and a typed confirmation above a 5% change, the display step and its bounds (FX3, S07 P9), the SYP value shown next to USD in the store and the panel, and the 15-minute rate lock on a SYP deposit quote with its countdown and the new-rate offer after it ends (FX5, SC9). No money moves in this feature: the one SYP deposit it opens is cancelled before any receipt is accepted.
+
+**How to read a case:** as in feature 2: **What this checks** first, then the numbered steps; a line starting with "Expected" is what you must see.
+
+**Before you start**
+
+- The panel open on the PC (signed in), the store open as TC1 in a second browser, and your phone.
+- In the panel, "إعدادات الإيداع" (`/settings/deposits`): Sham Cash in ل.س is enabled. If not, enable it for this feature (re-authentication) and note it here; the deposit itself is feature 4.
+- Note the current rate and step from "سعر الصرف" (`/rates`) before you start (expected: 140 and the step set on 2026-10-15). Cases 3.7 and 3.8 put both back.
+- A harmless image on the PC for case 3.6 (any screenshot, **not** a real receipt): the server refuses it before reading it, so it is never stored.
+- About 45 minutes, of which 15 are waiting in case 3.6. Re-authentication lasts 5 minutes: each case that saves a rate does its saves in one sitting.
+
+**Worked numbers used below** (rate 140): 2,000 ل.س is $14.2857, credited as **$14.28** (always rounded down to the cent, FX6). At 145 the same 2,000 ل.س is **$13.79**. A store price in SYP is the USD price × the rate, rounded **up** to the next multiple of the step (for example $1.10 × 140 = 154 → 155 with a step of 5).
+
+**Not tested on production (by design):** the stale-rate banner after 48 hours without a change (FX7) and the state with no rate at all (FX8): the first needs two idle days, the second an empty rate history, which production can never return to (rates are append-only). Both are covered by the automated tests (S03 tests, admin E2E). The rate each money record stores is checked where the records are made: deposits in feature 4, orders in feature 11, reports in feature 22. The wallet's SYP value rounding down needs a balance and is checked in feature 6.
+
+### 3.1 The current rate and its history
+
+**What this checks:** the admin sees at a glance which rate the store uses, since when, and every earlier rate with who set it.
+
+1. In the panel open "سعر الصرف" (`/rates`).
+2. Expected: "السعر الحالي" shows "140 ل.س لكل دولار", the display step ("خطوة العرض") in ل.س, and "منذ" with the date and time it was set (your time zone, Damascus month names).
+3. Expected: "سجل الأسعار" lists at least the rate set on 2026-10-15, with time, rate, step, change and "بواسطة" the admin. The first rate ever has no change percent.
+4. Expected: no stale-rate banner at the top of any panel page (the rate is less than 48 hours old).
+
+Result:
+
+### 3.2 Wrong values are refused before anything is saved
+
+**What this checks:** a typo cannot reach the store: the form refuses rates and steps that make no sense.
+
+1. In "تغيير السعر", enter each of these as the rate, one at a time, and press "حفظ السعر": `0`, `abc`, `140.12345` (5 decimals), `١٤٠` (Arabic digits).
+2. Expected: each is refused under the field with "أدخل سعرًا أكبر من صفر بأرقام لاتينية، حتى 4 منازل عشرية."; no re-authentication dialog, nothing in the history.
+3. Enter a valid rate (`140`) and the step `0`, then `51`, then `2.5`.
+4. Expected: each is refused under the step with "أدخل عددًا صحيحًا من الليرات بين 1 و50."; nothing saved.
+5. Empty the form (reload the page).
+
+Result:
+
+### 3.3 SYP next to USD in the store and the panel
+
+**What this checks:** the customer always sees the price in the pounds they pay with, computed from today's rate and rounded to a clean number.
+
+1. In the store as TC1 open "المحفظة" (`/wallet`).
+2. Expected: under the balance, "≈ … ل.س حسب سعر اليوم 140".
+3. Open a game page (for example PUBG Mobile). Pick two packs and write down their USD price and SYP line ("≈ … ل.س").
+4. Expected: each SYP value is USD × 140, rounded **up** to the next multiple of the step (never down, never with a remainder).
+5. Open the search (top bar), type the game's name. Expected: the same SYP values as on the game page.
+6. Choose one pack and look at its buy box (do **not** buy). Expected: the total shows the same SYP value; with quantity 2 (if the pack allows it) the SYP total follows.
+7. In the panel open "المحافظ" → TC1's wallet (`/wallets/<id>`). Expected: the header shows the SYP value at 140.
+8. Expected everywhere: Latin digits, "ل.س" after the number, the number not broken across the line.
+
+Result:
+
+### 3.4 A SYP deposit quote locks the rate for 15 minutes
+
+**What this checks:** the customer sees exactly how many dollars their pounds will give before they send anything, and that number is held for 15 minutes.
+
+1. Note the time. In the store as TC1, "المحفظة" → "إيداع" → "شام كاش".
+2. Choose "ل.س". Press the $10 preset. Expected: the amount becomes 1,400 (USD 10 × 140, rounded up to the step).
+3. Replace the amount with `2000`. Expected: "ستحصل على $14.28" (not $14.29), "بسعر 140 ل.س للدولار" and "السعر مقفل 15 دقيقة بعد المتابعة".
+4. Press "متابعة" (the browser check solves itself).
+5. Expected: the deposit page shows the amount 2,000 ل.س, "يُضاف إلى محفظتك $14.28", and "السعر 140 ل.س للدولار مقفل لمدة" with a countdown starting near 15:00 and going down.
+6. Reload the page. Expected: the countdown continues from the right time (it does not restart at 15:00).
+7. Do **not** add a receipt. Go to 3.5 straight away, keeping this page open.
+
+Result:
+
+### 3.5 A small rate change: no confirmation, open quotes keep their rate
+
+**What this checks:** a normal daily change is quick to make, applies at once to every price, and never changes what a customer was already promised.
+
+1. In the panel, "سعر الصرف" → rate `145`, keep the step. Expected, before saving: "التغيير عن السعر الحالي: +3.58%" in normal colour, and **no** "أعد كتابة السعر" field.
+2. Press "حفظ السعر". Expected: the re-authentication dialog (password and authenticator code); after it, "حُفظ السعر الجديد، ويُطبَّق فورًا على العرض والإيداعات الجديدة.", the current rate reads 145, and the history has a new top row: 145, +3.58%, the admin.
+3. In the store, reload TC1's deposit page from 3.4. Expected: still "السعر 140 ل.س للدولار مقفل لمدة …" and "$14.28": the lock holds.
+4. Reload "المحفظة" and the game page from 3.3. Expected: "حسب سعر اليوم 145", and each pack's SYP value is now USD × 145 rounded up to the step.
+
+Result:
+
+### 3.6 When the lock ends, the customer must accept the new rate
+
+**What this checks:** after 15 minutes nobody can send a receipt at an old rate: the store shows the new rate and the new dollars and waits for the customer's yes.
+
+Meanwhile do 3.9.
+
+1. On TC1's deposit page wait until the countdown reaches zero (15 minutes after "متابعة" in 3.4). Expected: "انتهت مدة السعر".
+2. Add the harmless image (paste or the file picker) and press "أرسل الإيصال".
+3. Expected: the sheet "تغيّر سعر الصرف" with "السعر الجديد (ل.س للدولار)" 145 and "يُضاف إلى محفظتك" $13.79, and the button "أوافق وأرسل".
+4. Do **not** accept: close the sheet (the close button or Esc).
+5. Expected: the deposit is still waiting for a receipt; nothing was sent. In the panel, "الإيداعات" → "قيد المراجعة" does not list it, and the badge did not change.
+6. On the deposit page press "إلغاء الإيداع" and confirm. Expected: the cancelled state with "إيداع جديد"; "إيداعاتي" lists it as cancelled.
+
+Result:
+
+### 3.7 A large change needs the rate typed twice
+
+**What this checks:** a slip of the finger (1,450 for 145) cannot go live: above 5% the admin must type the new rate again, by hand.
+
+Do 3.7 and 3.8 in one sitting (re-authentication lasts 5 minutes).
+
+1. In "سعر الصرف" enter the rate `160`. Expected: "التغيير عن السعر الحالي: +10.35%" in the warning colour, and the field "أعد كتابة السعر" with "التغيير أكبر من 5%…".
+2. Leave the confirmation empty, press "حفظ السعر". Expected: "أعد كتابة السعر الجديد للتأكيد." under it; nothing saved.
+3. Copy `160` from the rate field and try to paste it into the confirmation. Expected: the paste does nothing.
+4. Type `161` in the confirmation, press "حفظ السعر" (re-authenticate if asked). Expected: refused under the confirmation (the two rates do not match); the current rate is still 145.
+5. Type `160`, press "حفظ السعر". Expected: saved; the history's top row is 160, +10.35%.
+6. Put the rate back: `140`, confirmation `140`. Expected: -12.50% with the confirmation field; saved; current rate 140.
+
+Result:
+
+### 3.8 The display step and its limit
+
+**What this checks:** the step keeps SYP prices clean, but can never push the cheapest pack's price up by more than 2% (ADR 0003).
+
+1. Keep the rate `140`, set the step to `50`, press "حفظ السعر".
+2. Expected: refused under the step with "هذه الخطوة تزيد سعر أرخص باقة متوفرة بأكثر من 2%. أكبر خطوة مسموحة الآن … ل.س."; write down the largest step it names. Nothing saved.
+3. Set the step to `1`. Expected: saved (a step change alone needs no confirmation); a new history row with rate 140 and step 1 ل.س, change 0%.
+4. Reload a game page in the store. Expected: each SYP value is now exactly USD × 140 rounded up to the whole pound.
+5. Put the step back to the value you noted before starting. Expected: saved; the store's SYP values are back to the ones from 3.3 step 3 (at 140).
+
+Result:
+
+### 3.9 Only the admin can change the rate
+
+**What this checks:** the rate is set on the server by the signed-in admin only; a customer or a stranger cannot read or change it through the API.
+
+1. In the store browser (signed in as TC1) open `https://digital-admin.vertexmedia.pro/api/admin/rates`. Expected: 401, no rate data.
+2. Open `https://digital.vertexmedia.pro/api/admin/rates` (the store host). Expected: 404.
+
+Result:
+
+### 3.10 The audit log has every rate change and the deposit
+
+**What this checks:** every rate the store ever used can be traced to who set it, when, and from what.
+
+1. In "سجل التدقيق" filter the entity type "سعر الصرف" (exchange rate).
+2. Expected: one entry per save of this feature (145, 160, 140, step 1, the step back), newest first, the admin as actor, and none for the refused attempts of 3.2, 3.7 and 3.8.
+3. Open the 160 entry. Expected: labelled before and after values (rate and step) and the change percent.
+4. Filter TC1 as actor (or the entity type deposit). Expected: the deposit's creation (currency SYP, 2,000, $14.28, the rate) and its cancellation; **no** requote and **no** submission entry.
+
+Result:
+
+### 3.11 Screens quality on desktop and phone
+
+**What this checks:** the rate and the pounds read clearly for the admin and for a customer on a phone.
+
+1. On the PC, open "سعر الصرف" in the light and dark themes. Expected: readable, RTL, Latin digits; the rate and confirmation fields keep their digits left to right.
+2. On the phone, open "سعر الصرف" in the panel. Expected: the form and the history fit, the history table scrolls inside its card, no horizontal page scroll.
+3. On the phone, as TC1, open "المحفظة", a game page and the deposit form with "ل.س" chosen, in both themes. Expected: the SYP lines readable, the number keyboard on the amount field, no horizontal scroll.
+
+Result:
+
+### Feature 3 sign-off
+
+| Item | Value |
+|---|---|
+| Cases passed | — of 11 |
+| Findings | — |
+| Accepted by the owner on | — |
+| PR | — |
