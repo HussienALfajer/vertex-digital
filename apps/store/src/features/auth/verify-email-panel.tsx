@@ -18,6 +18,7 @@ import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
+import { withNext } from '@/lib/safe-redirect';
 import { CodeInput } from './code-input';
 import {
   clearPendingEmail,
@@ -171,7 +172,7 @@ function VerifyEmailForm({ pending: { email, next } }: { pending: PendingEmail }
               ? t('verifyEmail.resendIn', { seconds: countdown.left })
               : t('verifyEmail.resend')}
           </Button>
-          <Button variant="ghost" size="xl" render={<Link href="/sign-up" />}>
+          <Button variant="ghost" size="xl" render={<Link href={withNext('/sign-up', next)} />}>
             {t('verifyEmail.changeEmail')}
           </Button>
         </div>

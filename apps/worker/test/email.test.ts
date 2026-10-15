@@ -317,18 +317,25 @@ describe('email.send', () => {
       app.get(PgBossService),
       {
         send: async () => {
-          throw new Error('SMTP connection refused');
+          // As Nodemailer rejects a recipient: the server's text names the customer.
+          throw Object.assign(
+            new Error("Can't send mail - all recipients were rejected: 550 <someone@example.com>"),
+            { code: 'EENVELOPE', command: 'RCPT TO', responseCode: 550 },
+          );
         },
       } as unknown as Mailer,
       db,
       app.get<Env>(ENV),
     );
-    await expect(failing.send(id)).rejects.toThrow('SMTP connection refused');
+    const thrown = (await failing.send(id).catch((error: unknown) => error)) as Error;
+    // Only the code, the command and the status reach the logs, Sentry and the alert channel.
+    expect(thrown.message).toBe('SMTP send failed (code EENVELOPE, command RCPT TO, status 550)');
     expect(await rowOf(id)).toMatchObject({
       status: 'pending',
       attempts: 1,
-      lastError: 'Error: SMTP connection refused',
+      lastError: 'EmailSendError: SMTP send failed (code EENVELOPE, command RCPT TO, status 550)',
     });
+    expect(JSON.stringify(await rowOf(id))).not.toContain('someone@example.com');
     for (let attempt = 2; attempt <= MAX_EMAIL_ATTEMPTS; attempt += 1) {
       await expect(failing.send(id)).rejects.toThrow();
     }

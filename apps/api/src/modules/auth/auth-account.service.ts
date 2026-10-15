@@ -19,7 +19,7 @@ import {
   withinLimits,
 } from '@vertex-digital/db';
 import { hashPassword, verifyPassword } from 'better-auth/crypto';
-import { and, eq, isNull, ne } from 'drizzle-orm';
+import { and, eq, gt, isNull, ne } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -67,8 +67,15 @@ const passwordCheckLimit = (customerId: string): Limit => ({
 
 const rateLimited = () => new CodedException(429, 'RATE_LIMITED', 'Too many codes, try later');
 
-const codeError = (check: Exclude<CodeCheck, { ok: true }>) =>
-  new CodedException(400, check.code, 'The code is not valid');
+/**
+ * Every failed code check answers the same `INVALID_OTP` and the same message, whatever the reason
+ * (wrong, expired, used, or voided after 5 wrong tries): any difference, in the code or in the
+ * message the client receives, could tell an abandoned sign-up from an unknown or a verified
+ * address (2026-10-15 audit, F2-14, F2-18). The store says "wrong or no longer valid: check it or
+ * ask for a new one".
+ */
+const codeError = (_check: Exclude<CodeCheck, { ok: true }>) =>
+  new CodedException(400, 'INVALID_OTP', 'The code is not valid');
 
 const passwordEqualsEmailError = (field: string) =>
   new CodedException(400, 'VALIDATION_FAILED', 'Invalid input', [
@@ -203,7 +210,7 @@ export class AuthAccountService {
   async verifyEmail(
     input: { email: string; otp: string; password: string },
     meta: RequestMeta,
-  ): Promise<string> {
+  ): Promise<{ customerId: string; passwordHash: string }> {
     const email = input.email.trim().toLowerCase();
     const outcome = await this.db.transaction(async (tx) => {
       const [customer] = await tx
@@ -227,9 +234,9 @@ export class AuthAccountService {
       const valid = account?.password
         ? await verifyPassword({ hash: account.password, password: input.password })
         : false;
-      if (!valid) return { ok: false, mismatch: true } as const;
+      if (!valid || !account?.password) return { ok: false, mismatch: true } as const;
       await this.markVerified(tx, customer, email, meta);
-      return { ok: true, id: customer.id } as const;
+      return { ok: true, id: customer.id, passwordHash: account.password } as const;
     });
     if (!outcome.ok) {
       if ('mismatch' in outcome) {
@@ -241,7 +248,28 @@ export class AuthAccountService {
       }
       throw codeError(outcome);
     }
-    return outcome.id;
+    return { customerId: outcome.id, passwordHash: outcome.passwordHash };
+  }
+
+  /**
+   * Whether a session may still be opened on a verification's proof: the customer is not archived
+   * and the password it checked is still the account's. Read after the session is created, so a
+   * password reset that ended every session between the check and the session cannot leave one
+   * opened on the old password (2026-10-15 audit).
+   */
+  async proofStillHolds(customerId: string, passwordHash: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ password: customerAccounts.password })
+      .from(customerAccounts)
+      .innerJoin(customers, eq(customers.id, customerAccounts.userId))
+      .where(
+        and(
+          eq(customerAccounts.userId, customerId),
+          eq(customerAccounts.providerId, 'credential'),
+          isNull(customers.archivedAt),
+        ),
+      );
+    return row?.password === passwordHash;
   }
 
   /** Rule C5, C7: a password-reset code for an existing account; silent otherwise. */
@@ -295,12 +323,17 @@ export class AuthAccountService {
 
   /** Rule C11: needs the current password; every other session is signed out. */
   async changePassword(holder: AccountHolder, input: ChangePassword, meta: RequestMeta) {
-    await this.assertPassword(holder.id, input.currentPassword);
-    if (passwordEqualsEmail(input.newPassword, holder.email)) {
-      throw passwordEqualsEmailError('newPassword');
-    }
+    await this.countPasswordCheck(holder.id);
     const passwordHash = await hashPassword(input.newPassword);
     await this.db.transaction(async (tx) => {
+      // The customer locked, then the session and the current password checked inside: of two
+      // changes at once, or a change racing a reset, the second finds its session ended or the
+      // password changed, and writes nothing (2026-10-15 audit).
+      await this.lockLiveSession(tx, holder);
+      await this.verifyPasswordIn(tx, holder.id, input.currentPassword);
+      if (passwordEqualsEmail(input.newPassword, holder.email)) {
+        throw passwordEqualsEmailError('newPassword');
+      }
       await this.setPassword(tx, holder.id, passwordHash);
       const others = await this.signOutOthers(tx, holder);
       await recordAudit(tx, {
@@ -368,6 +401,8 @@ export class AuthAccountService {
     let outcome: CodeCheck;
     try {
       outcome = await this.db.transaction(async (tx) => {
+        // A session ended meanwhile (a password change or reset) changes nothing.
+        await this.lockLiveSession(tx, holder);
         const check = await checkCode(tx, 'change-email', holder.id, input.otp, newEmail);
         if (!check.ok) return check;
         await tx
@@ -406,6 +441,24 @@ export class AuthAccountService {
         .where(and(eq(customerSessions.token, token), eq(customerSessions.userId, holder.id)))
         .returning({ id: customerSessions.id });
       if (removed.length === 0) throw new CodedException(404, 'NOT_FOUND', 'No such session');
+      await recordAudit(tx, {
+        action: 'customer.sessions_revoked',
+        ...this.byCustomer(holder.id, meta),
+        details: { count: removed.length },
+      });
+    });
+  }
+
+  /** Rule C14: signing out of this device; audited as the other session endings are. */
+  async signOut(holder: { id: string; sessionId: string }, meta: RequestMeta): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const removed = await tx
+        .delete(customerSessions)
+        .where(
+          and(eq(customerSessions.id, holder.sessionId), eq(customerSessions.userId, holder.id)),
+        )
+        .returning({ id: customerSessions.id });
+      if (removed.length === 0) return;
       await recordAudit(tx, {
         action: 'customer.sessions_revoked',
         ...this.byCustomer(holder.id, meta),
@@ -580,10 +633,43 @@ export class AuthAccountService {
   }
 
   private async assertPassword(customerId: string, password: string): Promise<void> {
+    await this.countPasswordCheck(customerId);
+    await this.verifyPasswordIn(this.db, customerId, password);
+  }
+
+  /** F2-8: every current-password check counts, right or wrong, before it is compared. */
+  private async countPasswordCheck(customerId: string): Promise<void> {
     if (!(await withinLimits(this.db, [passwordCheckLimit(customerId)]))) {
       throw new CodedException(429, 'RATE_LIMITED', 'Too many password checks, try later');
     }
-    const [account] = await this.db
+  }
+
+  /** The customer's row locked and the request's session still open, or `401 UNAUTHORIZED`. */
+  private async lockLiveSession(tx: Transaction, holder: AccountHolder): Promise<void> {
+    await tx
+      .select({ id: customers.id })
+      .from(customers)
+      .where(eq(customers.id, holder.id))
+      .for('update');
+    const [session] = await tx
+      .select({ id: customerSessions.id })
+      .from(customerSessions)
+      .where(
+        and(
+          eq(customerSessions.id, holder.sessionId),
+          eq(customerSessions.userId, holder.id),
+          gt(customerSessions.expiresAt, new Date()),
+        ),
+      );
+    if (!session) throw new CodedException(401, 'UNAUTHORIZED', 'Sign in first');
+  }
+
+  private async verifyPasswordIn(
+    executor: Database | Transaction,
+    customerId: string,
+    password: string,
+  ): Promise<void> {
+    const [account] = await executor
       .select({ password: customerAccounts.password })
       .from(customerAccounts)
       .where(

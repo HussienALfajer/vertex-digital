@@ -14,7 +14,7 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { clearErrorOnInput } from '@/lib/field-errors';
 import { t } from '@/lib/i18n';
-import { safeRedirect } from '@/lib/safe-redirect';
+import { safeRedirect, withNext } from '@/lib/safe-redirect';
 import { useSearchParam } from '@/lib/use-search-param';
 import { holdPassword, savePendingEmail } from './pending-email';
 import { registrationState, signIn } from './requests';
@@ -135,7 +135,7 @@ export function SignInForm() {
         <p className="text-center text-sm text-muted-foreground">
           {t('signIn.noAccount')}{' '}
           <Link
-            href="/sign-up"
+            href={withNext('/sign-up', next)}
             className="inline-flex min-h-11 items-center font-medium text-accent-text hover:underline"
           >
             {t('signIn.signUpLink')}

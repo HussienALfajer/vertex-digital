@@ -416,6 +416,58 @@ test.describe('account', () => {
     await page.getByRole('menuitem', { name: ar.header.signOut }).click();
     await expect(page.getByRole('link', { name: ar.header.signIn })).toBeVisible();
   });
+
+  test('a failed sign-out stays on the page and says so, with a retry (2026-10-15 audit)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api);
+    api.on('POST /api/auth/sign-out', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/account');
+    await page.getByRole('button', { name: ar.header.menu }).click();
+    await page.getByRole('menuitem', { name: ar.header.signOut }).click();
+    await expect(page.getByText(ar.header.signOutFailed)).toBeVisible();
+    await expect(page).toHaveURL('/account');
+    // The retry works once the server answers.
+    api.on('POST /api/auth/sign-out', 200, { success: true });
+    api.on('GET /api/auth/get-session', 200, null);
+    await page.getByRole('button', { name: ar.header.signOutRetry }).click();
+    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('link', { name: ar.header.signIn })).toBeVisible();
+  });
+});
+
+test('the way to the cart is kept from sign-in to sign-up and to the code page (2026-10-15 audit)', async ({
+  page,
+  api,
+}) => {
+  api.on('POST /api/auth/sign-up/email', 200, { status: 'code_sent' });
+  await page.goto('/sign-in?next=%2Fcart');
+  await page.getByRole('link', { name: ar.signIn.signUpLink }).click();
+  await expect(page).toHaveURL('/sign-up?next=%2Fcart');
+  await expect(page.getByRole('link', { name: ar.signUp.signInLink })).toHaveAttribute(
+    'href',
+    '/sign-in?next=%2Fcart',
+  );
+  await signUp(page);
+  await expect(page).toHaveURL('/verify-email');
+  await expect(page.getByRole('link', { name: ar.verifyEmail.changeEmail })).toHaveAttribute(
+    'href',
+    '/sign-up?next=%2Fcart',
+  );
+});
+
+test('a malformed destination signs in all the same and goes home (2026-10-15 audit)', async ({
+  page,
+  api,
+}) => {
+  api.on('POST /api/auth/sign-in/email', 200, { redirect: false });
+  await page.goto('/sign-in?next=%2F%2F%5B');
+  await field(page, ar.fields.email).fill(EMAIL);
+  await field(page, ar.fields.password).fill(PASSWORD);
+  signedIn(api);
+  await page.getByRole('button', { name: ar.signIn.submit }).click();
+  await expect(page).toHaveURL('/');
 });
 
 // RTL screenshots of a refused sign-up (launch hardening, 2026-10-14), dark and light.

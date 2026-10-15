@@ -1,8 +1,9 @@
 import { customerRateLimits, customerSessions, customers } from '@vertex-digital/db';
 import { eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CUSTOMER_AUTH_NEST_PATHS } from '../src/modules/auth/auth.config.js';
 import { AuthService } from '../src/modules/auth/auth.service.js';
+import { AuthAccountService } from '../src/modules/auth/auth-account.service.js';
 import {
   api,
   auditOf,
@@ -181,9 +182,8 @@ describe('sign-up (rules C1, C2, C16)', () => {
     expect(mismatch.headers.getSetCookie()).toEqual([]);
     const [customer] = await test.db.select().from(customers).where(eq(customers.email, email));
     expect(customer?.emailVerified).toBe(false);
-    // The code is used: it does not work a second time, even with the first password; it is gone,
-    // so the answer says to ask for a new one.
-    expect(await body(await verify(email, code))).toMatchObject({ code: 'OTP_EXPIRED' });
+    // The code is used: it does not work a second time, even with the first password.
+    expect(await body(await verify(email, code))).toMatchObject({ code: 'INVALID_OTP' });
   });
 
   it('asks for the password with the code', async () => {
@@ -282,9 +282,12 @@ describe('email verification (rules C4, C7, C10)', () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       expect(await body(await verify(email, wrong))).toMatchObject({ code: 'INVALID_OTP' });
     }
-    expect(await body(await verify(email, code))).toMatchObject({ code: 'TOO_MANY_ATTEMPTS' });
-    // The voided code is gone: the answer says to ask for a new one, as for any missing code.
-    expect(await body(await verify(email, code))).toMatchObject({ code: 'OTP_EXPIRED' });
+    // The sixth try, right, is refused all the same: the code was voided by the five wrong ones.
+    expect(await body(await verify(email, code))).toMatchObject({ code: 'INVALID_OTP' });
+    expect(await body(await verify(email, code))).toMatchObject({ code: 'INVALID_OTP' });
+    expect(
+      (await test.db.select().from(customers).where(eq(customers.email, email)))[0]?.emailVerified,
+    ).toBe(false);
   });
 
   it('replaces the previous code when a new one is sent', async () => {
@@ -540,6 +543,121 @@ describe('the account (rules C11–C14)', () => {
     }
   });
 
+  it('lets only one of two password changes at once write, from two sessions (2026-10-15 audit)', async () => {
+    const customer = await seedCustomer(test.db);
+    seeded.push(customer.id);
+    const first = await client.signInCustomer(customer.email);
+    const second = await client.signInCustomer(customer.email);
+    const change = (cookie: string, newPassword: string) =>
+      client.post('/api/auth/change-password', {
+        cookie,
+        body: { currentPassword: PASSWORD, newPassword },
+      });
+    const answers = await Promise.all([
+      change(first, 'first-new-passphrase'),
+      change(second, 'second-new-passphrase'),
+    ]);
+    const statuses = answers.map((answer) => answer.status).sort();
+    // The second finds its session ended by the first (401), or the password changed (400).
+    expect(statuses[0]).toBe(200);
+    expect([400, 401]).toContain(statuses[1]);
+    const signIns = await Promise.all(
+      ['first-new-passphrase', 'second-new-passphrase'].map(
+        async (password) =>
+          (
+            await client.post('/api/auth/sign-in/email', {
+              body: { email: customer.email, password },
+            })
+          ).status,
+      ),
+    );
+    expect(signIns.sort()).toEqual([200, 401]);
+    expect(
+      (await auditOf(test.db, customer.id)).filter(
+        (entry) => entry.action === 'customer.password_changed',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('audits signing out of this device, and the session ends (rules C14, A2)', async () => {
+    const customer = await seedCustomer(test.db);
+    seeded.push(customer.id);
+    const cookie = await client.signInCustomer(customer.email);
+    const out = await client.post('/api/auth/sign-out', { cookie, body: {} });
+    expect(out.status).toBe(200);
+    expect((await client.get('/api/account', { cookie })).status).toBe(401);
+    expect((await auditOf(test.db, customer.id)).at(-1)).toMatchObject({
+      action: 'customer.sessions_revoked',
+      actorKind: 'customer',
+      details: { count: 1 },
+    });
+  });
+
+  it('opens no session on a verification whose password was reset meanwhile (2026-10-15 audit)', async () => {
+    const accounts = test.app.get(AuthAccountService);
+    const email = uniqueEmail('verify-race');
+    expect((await signUp(email)).status).toBe(200);
+    const id = await idOf(email);
+    const proof = await accounts.verifyEmail(
+      { email, otp: await lastCode(test.db, email), password: PASSWORD },
+      { ipAddress: null, userAgent: null },
+    );
+    expect(await accounts.proofStillHolds(id, proof.passwordHash)).toBe(true);
+    // A reset lands between the check and the session.
+    await test.db.execute(
+      sql.raw(
+        `update customer_rate_limits set last_request = last_request - 61000 where key like 'code-email-minute:${email}'`,
+      ),
+    );
+    await client.post('/api/auth/email-otp/request-password-reset', {
+      body: { email },
+      headers: await client.altcha(),
+    });
+    const reset = await client.post('/api/auth/email-otp/reset-password', {
+      body: { email, otp: await lastCode(test.db, email), password: NEW_PASSWORD },
+    });
+    expect(reset.status).toBe(200);
+    expect(await accounts.proofStillHolds(id, proof.passwordHash)).toBe(false);
+  });
+
+  it('answers PASSWORD_MISMATCH with no cookie and no session when a reset lands before the session (2026-10-15 audit)', async () => {
+    const accounts = test.app.get(AuthAccountService);
+    const email = uniqueEmail('verify-race-http');
+    expect((await signUp(email)).status).toBe(200);
+    const id = await idOf(email);
+    const code = await lastCode(test.db, email);
+    const original = accounts.verifyEmail.bind(accounts);
+    const spy = vi.spyOn(accounts, 'verifyEmail').mockImplementationOnce(async (...args) => {
+      const proof = await original(...args);
+      // The check passed; a reset lands before the endpoint opens the session.
+      await test.db.execute(
+        sql.raw(
+          `update customer_rate_limits set last_request = last_request - 61000 where key like 'code-email-minute:${email}'`,
+        ),
+      );
+      await client.post('/api/auth/email-otp/request-password-reset', {
+        body: { email },
+        headers: await client.altcha(),
+      });
+      const reset = await client.post('/api/auth/email-otp/reset-password', {
+        body: { email, otp: await lastCode(test.db, email), password: NEW_PASSWORD },
+      });
+      expect(reset.status).toBe(200);
+      return proof;
+    });
+    try {
+      const verified = await verify(email, code);
+      expect(cookieHeader(verified)).not.toMatch(/session_token=/);
+      expect(await body(verified)).toMatchObject({ status: 400, code: 'PASSWORD_MISMATCH' });
+      expect(spy).toHaveBeenCalledOnce();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(
+      await test.db.select().from(customerSessions).where(eq(customerSessions.userId, id)),
+    ).toHaveLength(0);
+  });
+
   it('stops guessing the current password after 10 checks in 15 minutes, from any address', async () => {
     const customer = await seedCustomer(test.db);
     seeded.push(customer.id);
@@ -629,6 +747,47 @@ describe('the account (rules C11–C14)', () => {
     expect((await emailsTo(test.db, email)).map((row) => row.template)).toContain(
       'customer_email_changed',
     );
+  });
+
+  it('answers 401 and keeps the code when the session ends before the email-change confirmation (2026-10-15 audit)', async () => {
+    const { id, email, cookie } = await signedUp('change-race');
+    const newEmail = uniqueEmail('change-race-new');
+    const requested = await client.post('/api/auth/email-otp/request-email-change', {
+      cookie,
+      body: { newEmail, password: PASSWORD },
+      headers: await client.altcha(),
+    });
+    expect(await body(requested)).toEqual({ status: 200, success: true });
+    const code = await lastCode(test.db, newEmail);
+    const accounts = test.app.get(AuthAccountService);
+    const original = accounts.confirmEmailChange.bind(accounts);
+    const spy = vi.spyOn(accounts, 'confirmEmailChange').mockImplementationOnce(async (...args) => {
+      // The guard let the request through; the session ends before the change's transaction.
+      await test.db.delete(customerSessions).where(eq(customerSessions.userId, id));
+      return original(...args);
+    });
+    try {
+      const confirmed = await client.post('/api/auth/email-otp/change-email', {
+        cookie,
+        body: { newEmail, otp: code },
+      });
+      expect(await body(confirmed)).toMatchObject({ status: 401, code: 'UNAUTHORIZED' });
+      expect(spy).toHaveBeenCalledOnce();
+    } finally {
+      spy.mockRestore();
+    }
+    const [row] = await test.db
+      .select({ email: customers.email })
+      .from(customers)
+      .where(eq(customers.id, id));
+    expect(row?.email).toBe(email);
+    // The code was not used: a new session confirms with it.
+    const again = await client.signInCustomer(email);
+    const retried = await client.post('/api/auth/email-otp/change-email', {
+      cookie: again,
+      body: { newEmail, otp: code },
+    });
+    expect(await body(retried)).toEqual({ status: 200, success: true });
   });
 
   it('answers an email change to a taken address the same, with a notice instead of a code', async () => {
@@ -753,10 +912,15 @@ describe('the account (rules C11–C14)', () => {
 describe('code checks tell nothing about accounts (rules C2, C12)', () => {
   const wrongTries = async (send: () => Promise<Response>) => {
     const codes: unknown[] = [];
-    for (let attempt = 0; attempt < 6; attempt += 1) codes.push((await body(await send())).code);
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      // The whole answer, message included: the reason must not show anywhere (F2-18).
+      const { code, message } = await body(await send());
+      codes.push(`${code}: ${message}`);
+    }
     return codes;
   };
-  const expected = [...Array(5).fill('INVALID_OTP'), 'TOO_MANY_ATTEMPTS'];
+  // Every failed check answers INVALID_OTP, whatever the reason (2026-10-15 audit).
+  const expected = Array(6).fill('INVALID_OTP: The code is not valid');
 
   it('answers wrong reset codes the same for known and unknown emails', async () => {
     const known = await seedCustomer(test.db);
@@ -789,6 +953,33 @@ describe('code checks tell nothing about accounts (rules C2, C12)', () => {
     await idOf(fresh);
   });
 
+  it('answers the same after a code used up before a second sign-up (2026-10-15 audit, follow-up)', async () => {
+    const verified = await seedCustomer(test.db);
+    seeded.push(verified.id);
+    const unverified = await seedCustomer(test.db, { emailVerified: false });
+    seeded.push(unverified.id);
+    const unknown = uniqueEmail('used-up');
+    for (const email of [unverified.email, verified.email, unknown]) {
+      // A code asked for, five wrong tries, then a sign-up a minute later.
+      await client.post('/api/auth/email-otp/send-verification-otp', {
+        body: { email },
+        headers: await client.altcha(),
+      });
+      for (let attempt = 0; attempt < 5; attempt += 1) await verify(email, '999999');
+      await test.db.execute(
+        sql.raw(
+          `update customer_rate_limits set last_request = last_request - 61000 where key like 'code-email-minute:${email}'`,
+        ),
+      );
+      expect((await signUp(email)).status, email).toBe(200);
+      expect(await body(await verify(email, '999999')), email).toMatchObject({
+        code: 'INVALID_OTP',
+        message: 'The code is not valid',
+      });
+    }
+    await idOf(unknown);
+  });
+
   it('never tells an abandoned sign-up apart from an unknown or a verified email (2026-10-15 audit)', async () => {
     const verified = await seedCustomer(test.db);
     seeded.push(verified.id);
@@ -804,7 +995,10 @@ describe('code checks tell nothing about accounts (rules C2, C12)', () => {
     const unknown = uniqueEmail('never-signed-up');
     // One probe without a sign-up: the same answer for the three.
     for (const email of [abandoned, unknown, verified.email]) {
-      expect((await body(await verify(email, '999999'))).code, email).toBe('OTP_EXPIRED');
+      expect(await body(await verify(email, '999999')), email).toMatchObject({
+        code: 'INVALID_OTP',
+        message: 'The code is not valid',
+      });
     }
     // A sign-up first, then six wrong tries: the same answers for the three (rule C2).
     await test.db.execute(
