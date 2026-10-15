@@ -21,15 +21,22 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "cache": false
+      "outputs": []
     },
-    "@vertex-digital/api#test": {
-      "dependsOn": ["^build", "@vertex-digital/db#test"],
-      "cache": false
+    "@vertex-digital/admin#test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/deploy/nginx/**"],
+      "outputs": []
     },
-    "@vertex-digital/worker#test": {
-      "dependsOn": ["^build", "@vertex-digital/api#test", "@vertex-digital/db#test"],
-      "cache": false
+    "@vertex-digital/ui#test": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/brand/**",
+        "$TURBO_ROOT$/apps/store/src/**",
+        "$TURBO_ROOT$/apps/admin/src/**"
+      ],
+      "outputs": []
     },
     "test:e2e": {
       "dependsOn": ["build"],

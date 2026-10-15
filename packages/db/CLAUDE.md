@@ -18,7 +18,7 @@ Drizzle schema, migrations, the database client and the shared money write paths
 - `src/jobs.ts`: `PG_BOSS_SCHEMA` and `createPgBoss` (app role: no schema changes, no index rebuilds). The `pgboss` schema itself is created, owned by the owner role with default privileges for the app role, by `scripts/setup-local-db.mjs` and the production provisioning.
 - `src/errors.ts`: `withoutQueryParameters(error)`: log and report a failed query by its cause, never with the parameters Drizzle puts in its message.
 - `src/jobs.ts` also exports `transactionExecutor(tx)`: `boss.send(queue, data, { db: transactionExecutor(tx) })` sends a job in the caller's transaction.
-- `src/testing.ts` (`@vertex-digital/db/testing`): test database URLs and the Vitest global setup the apps reuse.
+- `src/testing.ts` (`@vertex-digital/db/testing`): test database URLs, the per-worker databases of the app suites (`TEST_WORKERS`, `workerDatabases`, `prepareTestDatabase`) and the Vitest global setup.
 
 ## Roles (ADR 0014)
 - The owner role (`DATABASE_OWNER_URL`) owns every table and runs the migrations (`pnpm db:migrate`, the migrate CLI, the tests' global setup). No app process uses it.
@@ -61,6 +61,6 @@ Drizzle schema, migrations, the database client and the shared money write paths
 - Migrations must stay backward compatible (expand, then contract); never edit one once generated; hand-written SQL goes in `drizzle-kit generate --custom`; never `drizzle-kit push`.
 
 ## Tests
-Vitest's global setup migrates the test database as the owner (`TEST_DATABASE_OWNER_URL`); the tests run as the app role (`TEST_DATABASE_URL`), and as the owner only to prove a guard refuses it. Both roles come from `pnpm db:setup-local`; neither may be a superuser, or the privilege tests prove nothing. Ledger rows written by tests stay in the test database (append-only by design); every test uses new accounts and keys, so runs never collide.
+Vitest's global setup migrates the test database as the owner (`TEST_DATABASE_OWNER_URL`); the api and worker suites run on `TEST_WORKERS` databases of their own each (`<test database>_<suite>_<n>`, all created by `pnpm db:setup-local`; keep `TEST_WORKERS` in step with the script), so the three suites run at once; the tests run as the app role (`TEST_DATABASE_URL`), and as the owner only to prove a guard refuses it. Both roles come from `pnpm db:setup-local`; neither may be a superuser, or the privilege tests prove nothing. Ledger rows written by tests stay in the test database (append-only by design); every test uses new accounts and keys, so runs never collide.
 
 Run: `pnpm --filter @vertex-digital/db test`. CI fails if `pnpm db:generate` produces a diff: commit the schema and its migration together.
