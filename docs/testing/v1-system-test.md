@@ -35,7 +35,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | # | Feature | Scope IDs | Why here | Status |
 |---|---|---|---|---|
 | 1 | Admin access, 2FA and audit log | F02 | Every later step is an admin action that must be authenticated, re-authenticated and audited; the audit log is the tool used to verify the rest | Accepted 2026-10-15 |
-| 2 | Customer accounts | F01 | Every customer case needs sign-in, sessions and account emails working | Steps written |
+| 2 | Customer accounts | F01 | Every customer case needs sign-in, sessions and account emails working | Accepted 2026-10-15 |
 | 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | — |
 | 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | — |
 | 5 | USDT deposits | F06 | The automatic money-in path | — |
@@ -319,7 +319,7 @@ Do 2.3 to 2.5 in one sitting: registration stays open only for those minutes.
 6. Expected: you go to the code page "تأكيد البريد الإلكتروني", which shows the `+su` address. Within a minute an Arabic email with a 6-digit code arrives.
 7. Do **not** enter the code yet: go to 2.4.
 
-Result: ❌ 2026-10-15. `password123` was accepted as a password (F2-2); the sign-up then went on to the code page. A "too many attempts" alert showed on the code page (F2-3).
+Result: ✅ 2026-10-15, re-run after the deploy of aba5ee3 with a new address (SU3): `qwerty123` refused, a second sign-up with the same address sent the attempt notice and no new code (F2-3). First run ❌: `password123` accepted (F2-2, accepted) and the code voided by a second sign-up (F2-3).
 
 ### 2.4 An address that already has an account reveals nothing
 
@@ -344,7 +344,7 @@ Result: ✅ 2026-10-15
 6. Expected: **no** "new sign-in" email for this session (the code page's sign-in does not send one).
 7. In the panel, "المفاتيح" → "التسجيل" → close it again. In the store browser sign out, reload: "إنشاء حساب" is gone again.
 
-Result: ✅ 2026-10-15. The owner asks for the slot-style code field of the panel (F2-4).
+Result: ✅ 2026-10-15, re-run after the deploy of aba5ee3: the six-slot field filled from one paste (F2-4); after a reload the page asked for the password and the code with it signed in (F2-7).
 
 ### 2.6 Sign-in, its errors and the new sign-in email
 
@@ -454,7 +454,7 @@ Result: ✅ 2026-10-15
 2. On the phone, open sign-in, forgot password, the code page and "حسابي" in the light and dark themes. Expected: readable, no horizontal scroll, the code field opens the number keyboard, Latin digits everywhere.
 3. On the PC, the same pages at full width. Expected: the forms stay centred and readable.
 
-Result: ⏳ 2026-10-15. Readable and correct, but the owner wants the emails and the account screens more professional and distinctive: the logo and the brand colours (F2-5).
+Result: ✅ 2026-10-15, re-run after the deploy of aba5ee3: the emails carry the logo and the brand colours with the Damascus month names, none in spam (F2-5, F2-6); the account screens checked by Claude on production at phone and desktop width. First run: the owner asked for the logo and the brand colours.
 
 ### 2.15 Clean-up: archive SU
 
@@ -464,13 +464,13 @@ Result: ⏳ 2026-10-15. Readable and correct, but the owner wants the emails and
 2. In the panel open "العملاء", find SU (by `+su2`) → "إجراءات العميل" → "أرشفة", with the reason "temporary sign-up test". Confirm (re-authentication if asked).
 3. Expected: on the phone, the next tap signs SU out; signing in again is refused with the general error.
 
-Result: ✅ 2026-10-15
+Result: ✅ 2026-10-15; SU3 of the re-run archived the same way.
 
 ### Feature 2 sign-off
 
 | Item | Value |
 |---|---|
-| Cases passed | — of 15 |
-| Findings | — |
-| Accepted by the owner on | — |
-| PR | — |
+| Cases passed | 15 of 15 (2.3, 2.5 and 2.14 after the fixes, deployed as aba5ee3) |
+| Findings | F2-1 (not a bug), F2-2 (accepted: the owner keeps the common-password list), F2-3 to F2-7 (fixed) |
+| Accepted by the owner on | 2026-10-15 |
+| PR | —
