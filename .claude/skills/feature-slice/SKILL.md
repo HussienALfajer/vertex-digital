@@ -31,19 +31,19 @@ Finish a layer, run its gate through the `checker` subagent, fix root causes, ti
 | 4 | worker | Jobs (`jobs/<area>/<name>.job.ts`): safe to run twice, retries with backoff, classified errors, supplier calls only through `packages/suppliers`; tests with the fake supplier and fixtures | `worker` test, `worker` typecheck |
 | 5 | bridge | `pnpm build`, then the OpenAPI export and the admin client generation (commands in `AGENTS.md`) | `admin` typecheck |
 | 6 | admin / store | Admin: `features/<module>/` queries, pages, forms, thin routes, navigation, i18n keys. Store: server components and cached reads with tags, client components only for interaction, i18n keys. Loading, empty and error states everywhere | `admin`/`store` typecheck, lint, test |
-| 7 | e2e | The feature's flow spec with the fake supplier, RTL screenshots (store: phone width, dark and light; admin: light and dark) | `pnpm test:e2e`; open the new screenshots and look at them |
+| 7 | e2e | The feature's flow spec with the fake supplier, RTL screenshots (store: phone width, dark and light; admin: light and dark) | the changed specs (`checker`: E2E changed specs; CI runs the full suite); open the new screenshots and look at them |
 
 Layers a PR does not include are skipped. Helpers that ADR 0011 says arrive with their first use are written in the layer that first needs them, in the shared place ADR 0011 names.
 
 ## 3. Close each PR
 1. Walk the wiring checklist in `wiring.md` against the diff (`git diff main...HEAD --stat`).
-2. Full checks once, through `checker`: lint, typecheck, test, build; add E2E when a front end or `packages/ui` changed and migration drift when db changed. The finishing steps reuse passes recorded on the same tree; any later fix invalidates the record.
-3. Run the `reviewer` subagent with the spec path. Fix every blocking finding, then re-run the affected gates.
+2. Start the full checks through `checker` in the background: lint, typecheck, test, build; add the changed E2E specs when a front end or `packages/ui` changed and migration drift when db changed.
+3. While they run, run the `reviewer` subagent with the spec path. Fix every blocking finding and every check failure, then run the checks again: Turbo's cache replays what the fixes did not touch, so the re-run costs only the changed packages.
 4. Owner acceptance, in Arabic:
    - PR with screens: turn the spec's "Acceptance" section into numbered browser steps (`pnpm dev`, which account to sign in as, what to click, what they should see), using the fake supplier and test deposits. Ask before `pnpm db:migrate` on the dev database.
    - PR without screens: summarize the endpoints and jobs and their rules; the owner may try them at `http://127.0.0.1:<api port>/api/docs`.
-   Fix what the owner reports in the same session, then repeat steps 2–3 for what changed.
-5. Tick the PR's items in `TASKS.md`, then, as soon as the owner accepts, finish the PR in the same turn: follow "Finishing a task" in `AGENTS.md` (docs and `docs/ROADMAP.md`, secrets check, recorded checks, commit, push, `gh pr create`, `gh pr merge <number> --auto --merge`, report with the cleanup line and the next session's first message).
+   Fix what the owner reports in the same session, then run the checks again (only what changed runs) and the reviewer on the fix.
+5. Tick the PR's items in `TASKS.md`, then, as soon as the owner accepts, finish the PR in the same turn: follow "Finishing a task" in `AGENTS.md` (docs and `docs/ROADMAP.md`, secrets check, checks, commit, push, `gh pr create`, `gh pr merge <number> --auto --merge`, report with the cleanup line and the next session's first message).
 
 ## Stop and ask when
 - The spec is ambiguous in a way that changes the result, or the work needs an answer from `docs/open-questions.md`.

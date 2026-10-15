@@ -65,6 +65,12 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F1-2 | 1 | Code audit (1.8) | The own-sessions list kept sessions past their 12 hours or idle for 30 minutes, which sign nobody in | minor | Only live sessions are listed (`AdminAccountService.sessions`), with this file's PR | Fixed |
 | F1-3 | 1 | Code audit (1.10) | The backup-codes download released its file at the moment of the click, which can cancel the download in some browsers | minor | Released a second later, with this file's PR | Fixed |
 | F1-4 | 1 | Code audit | The re-authentication password and the current password of a password change had no length limit | minor | Bounded at 128 like every password, with this file's PR | Fixed |
+| F1-5 | 1 | Second review (another model) | A session opened with the password alone before TOTP was enrolled became a full panel session once TOTP was enrolled in another browser | blocker | Enrolling TOTP ends every other session of the admin (`admin-auth.config.ts`, after hook) | Fixed |
+| F1-6 | 1 | Second review | A sign-in sent with `rememberMe: false` got a 24-hour session instead of 12 | major | Every admin session's expiry is capped at 12 hours from its creation (session create hook) | Fixed |
+| F1-7 | 1 | Second review | A password change or reset left sign-ins waiting at their TOTP step valid: they proved the old password | major | Both void the admin's pending TOTP steps (`admin_verifications`) | Fixed |
+| F1-8 | 1 | Second review | Two password changes at once both succeeded; the second wrote after its session was ended | major | The change locks the admin row and checks the session and the password again inside its transaction | Fixed |
+| F1-9 | 1 | Second review | Backup codes could be generated before the CLI-issued password was changed | minor | Refused with `PASSWORD_CHANGE_REQUIRED` | Fixed |
+| F1-10 | 1 | Second review | The admin's actions on Better Auth routes (backup codes) did not count as activity for the idle timeout | minor | They update the session's last activity, polling excepted | Fixed |
 | F2-1 | 2 | 2.2 | The copy button of the test-customer password said "تعذّر النسخ": the in-app test browser denies `clipboard-write` (checked: permission `denied`, "Document is not focused"). The panel's fallback toast worked as designed | — | Not a bug; re-checked in Chrome at the next password dialog | Closed |
 | F2-2 | 2 | 2.3 | `password123` was accepted: the common-password list (SecLists 10k, entries of 8+ characters) lacks it and other well-known ones (`admin123`, `password1234`, `p@ssw0rd`, `aa123456`) | major | None: the owner keeps the current list (the customer chooses the password; rate limits and ALTCHA slow guessing). Step 4 now uses `qwerty123`, which the list refuses | Accepted |
 | F2-3 | 2 | 2.3 / 2.5 | The code page showed "محاولات كثيرة خلال وقت قصير". Production records (read-only, owner's approval): "إنشاء الحساب" was sent again with the same unverified `+su` address at 18:27; rule C2 treated it as an existing account, so the first code was voided by a decoy, `+su` got "someone tried to sign up with your email" about itself, and the next "send a new code" presses hit the per-address limits (every hit counts). A customer coming back from the code page to sign up again loses the code the same way | major | A second sign-up for an unverified account no longer voids its pending code (`AuthAccountService.signUp`, S01 C2 and edge case 4a); it still sends only the attempt notice, so the address's owner never receives an account that holds someone else's password (the reviewer refused a first fix that sent a new code for this reason). Test in `apps/api/test/auth.test.ts`, with this file's PR | Fixed |
@@ -256,7 +262,7 @@ Result: ✅ (2026-10-15). Read from the panel's own sessions list (`GET /api/adm
 | Item | Value |
 |---|---|
 | Cases passed | 15 of 15 |
-| Findings | F1-1 to F1-4 (code audit, all minor, fixed) |
+| Findings | F1-1 to F1-4 (code audit, minor), F1-5 to F1-10 (second review: 1 blocker, 3 major, 2 minor); all fixed |
 | Accepted by the owner on | 2026-10-15 |
 | PR | — |
 

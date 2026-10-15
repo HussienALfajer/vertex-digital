@@ -1,6 +1,6 @@
-// Creates the database roles and the dev and test databases in a native PostgreSQL install, as
-// ADR 0014 sets them up: an owner role that owns the tables and runs the migrations, and the app
-// role, which owns nothing. Also run by CI and by cloud sessions.
+// Creates the database roles and the dev and test databases (with one test database per parallel
+// test worker) in a native PostgreSQL install, as ADR 0014 sets them up: an owner role that owns
+// the tables and runs the migrations, and the app role, which owns nothing. Also run by CI and by cloud sessions.
 //
 //   pnpm db:setup-local              create or complete .env, then the roles and databases (psql asks
 //                                    for the PostgreSQL superuser password once)
@@ -106,7 +106,17 @@ if (app.pathname !== owner.pathname || testApp.pathname !== testOwner.pathname) 
 const name = (url) => decodeURIComponent(url.username);
 const appRole = name(app);
 const ownerRole = name(owner);
-const databases = [app, testApp].map((url) => decodeURIComponent(url.pathname.slice(1)));
+// One test database per parallel Vitest worker of each app suite: `<test database>_<suite>_<n>`.
+// Keep in step with TEST_WORKERS in packages/db/src/testing.ts.
+const TEST_WORKERS = 4;
+const testDatabase = decodeURIComponent(testApp.pathname.slice(1));
+const databases = [
+  decodeURIComponent(app.pathname.slice(1)),
+  testDatabase,
+  ...['api', 'worker'].flatMap((suite) =>
+    Array.from({ length: TEST_WORKERS }, (_, index) => `${testDatabase}_${suite}_${index + 1}`),
+  ),
+];
 
 const literal = (value) => `'${value.replaceAll("'", "''")}'`;
 const ident = (value) => `"${value.replaceAll('"', '""')}"`;

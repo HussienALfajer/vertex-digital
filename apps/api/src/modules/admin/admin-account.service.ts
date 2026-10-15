@@ -12,6 +12,7 @@ import {
   adminAccounts,
   adminSessions,
   adminUsers,
+  adminVerifications,
   type Database,
   recordAudit,
 } from '@vertex-digital/db';
@@ -35,7 +36,12 @@ export class AdminAccountService {
     private readonly admins: AdminAuthService,
   ) {}
 
-  /** Rules D1, D7: needs the current password; clears a pending change; other sessions end. */
+  /**
+   * Rules D1, D7: needs the current password; clears a pending change; other sessions end, and so
+   * do sign-ins waiting at their TOTP step (they proved the old password). The admin row is locked
+   * and the session and password checked again inside: of two changes at once, the one whose
+   * session the other ended is refused.
+   */
   async changePassword(
     admin: AdminIdentity,
     input: AdminChangePassword,
@@ -50,6 +56,17 @@ export class AdminAccountService {
     const passwordHash = await hashPassword(input.newPassword);
     await this.db.transaction(async (tx) => {
       await tx
+        .select({ id: adminUsers.id })
+        .from(adminUsers)
+        .where(eq(adminUsers.id, admin.id))
+        .for('update');
+      const [session] = await tx
+        .select({ id: adminSessions.id })
+        .from(adminSessions)
+        .where(eq(adminSessions.id, admin.sessionId));
+      if (!session) throw new CodedException(401, 'UNAUTHORIZED', 'Sign in first');
+      await this.assertPassword(admin.id, input.currentPassword, tx);
+      await tx
         .update(adminAccounts)
         .set({ password: passwordHash })
         .where(and(eq(adminAccounts.userId, admin.id), eq(adminAccounts.providerId, 'credential')));
@@ -61,6 +78,7 @@ export class AdminAccountService {
         .delete(adminSessions)
         .where(and(eq(adminSessions.userId, admin.id), ne(adminSessions.id, admin.sessionId)))
         .returning({ id: adminSessions.id });
+      await tx.delete(adminVerifications).where(eq(adminVerifications.value, admin.id));
       await recordAudit(tx, {
         action: 'admin.password_changed',
         ...this.byAdmin(admin.id, meta),
@@ -159,8 +177,12 @@ export class AdminAccountService {
     } as const;
   }
 
-  private async assertPassword(adminId: string, password: string): Promise<void> {
-    const [account] = await this.db
+  private async assertPassword(
+    adminId: string,
+    password: string,
+    tx: Pick<Database, 'select'> = this.db,
+  ): Promise<void> {
+    const [account] = await tx
       .select({ password: adminAccounts.password })
       .from(adminAccounts)
       .where(and(eq(adminAccounts.userId, adminId), eq(adminAccounts.providerId, 'credential')));

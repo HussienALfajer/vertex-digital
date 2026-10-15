@@ -1,24 +1,26 @@
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { testDatabaseUrl } from '@vertex-digital/db/testing';
+import { TEST_WORKERS } from '@vertex-digital/db/testing';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   // Nest injects by the constructor parameter types: emit legacy decorators and their metadata.
   oxc: { decorator: { legacy: true, emitDecoratorMetadata: true } },
   test: {
-    // Files share one test database and some act on global rows: `deposits.expire` expires every
-    // overdue pending deposit, including the one `deposits-usdt.test.ts` keeps overdue on purpose.
-    fileParallelism: false,
+    // Each worker has its own test database (packages/db testing.ts): files run in parallel, and
+    // files in one worker run one after another on it, so a job that acts on global rows
+    // (`deposits.expire` expires every overdue pending deposit) sees only its worker's files.
+    maxWorkers: TEST_WORKERS,
     globalSetup: ['./test/global-setup.ts'],
-    setupFiles: ['./test/no-concurrent-queries.ts'],
+    setupFiles: ['./test/worker-env.ts', './test/no-concurrent-queries.ts'],
     // Set explicitly: the root .env (loaded to find the test database) must not leak in.
     env: {
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
       WORKER_NAME: `test-${randomUUID()}`,
-      DATABASE_URL: testDatabaseUrl(),
+      // test/worker-env.ts sets DATABASE_URL to the worker's database.
+      TEST_DATABASE_SUITE: 'worker',
       SENTRY_DSN: '',
       TELEGRAM_BOT_TOKEN: '',
       // Bot messages are files in a directory of their own per run.
