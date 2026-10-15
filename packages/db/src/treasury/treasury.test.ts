@@ -276,6 +276,7 @@ describe('recording movements', () => {
   });
 
   it('shows each place with its books and proposes an opening (rules LS2, T6)', async () => {
+    const before = await committedBooks();
     await rolledBack(async (tx) => {
       await recordMovement(
         tx,
@@ -291,7 +292,6 @@ describe('recording movements', () => {
       const outside = places.find((place) => place.place === 'outside_usd');
       expect(wdgzone?.currency).toBe('USD');
       // The movement adds 50 to what the supplier holds and to what came from outside.
-      const before = await rolledBackBooks();
       expect(wdgzone?.booksUnits).toBe((before.get('supplier:wdgzone') ?? 0) + 50 * USD);
       expect(outside?.booksUnits).toBe((before.get('outside_usd') ?? 0) + 50 * USD);
       expect(places.find((place) => place.place === 'supplier:manual')?.external).toBeNull();
@@ -299,8 +299,8 @@ describe('recording movements', () => {
   });
 });
 
-/** The committed books of each place, read outside the test's transaction. */
-async function rolledBackBooks(): Promise<Map<string, number>> {
+/** The committed books of each place, read before the test's transaction (F3-4: never inside it). */
+async function committedBooks(): Promise<Map<string, number>> {
   const { places } = await moneyPlaces(db);
   return new Map(places.map((place) => [place.place, place.booksUnits]));
 }

@@ -346,7 +346,7 @@ export class CatalogService {
           .from(catalogProducts)
           .where(eq(catalogProducts.gameId, id))
           .orderBy(sql`${catalogProducts.archivedAt} is not null`, asc(catalogProducts.sortOrder)),
-      () => this.images([row]),
+      () => this.images([row], executor),
     ]);
     return {
       ...toGame(row, images, products.filter((product) => !product.archivedAt).length),
@@ -385,7 +385,7 @@ export class CatalogService {
       accentColor: input.accentColor ?? null,
       regionNotesAr: input.regionNotesAr ?? null,
     };
-    await this.checkImages(values);
+    await this.checkImages(values, tx);
     checkAccent(values.accentColor);
     const id = newId();
     await tx.insert(catalogGames).values({
@@ -455,7 +455,7 @@ export class CatalogService {
         };
         const changed = changes(beforeValues, after);
         if (!changed) return this.game(id, tx);
-        await this.checkImages(changed.after);
+        await this.checkImages(changed.after, tx);
         if (changed.after.accentColor !== undefined) checkAccent(after.accentColor);
         await tx
           .update(catalogGames)
@@ -499,7 +499,10 @@ export class CatalogService {
         .from(catalogGames)
         .where(and(eq(catalogGames.categoryId, categoryId), isNull(catalogGames.archivedAt)))
         .orderBy(asc(catalogGames.sortOrder));
-      const images = await this.images(rows.map(({ row }) => row));
+      const images = await this.images(
+        rows.map(({ row }) => row),
+        tx,
+      );
       return rows.map(({ row, productCount }) => toGame(row, images, productCount));
     });
   }
@@ -598,13 +601,11 @@ export class CatalogService {
   async pricingTarget(
     scope: Exclude<MarginScope, 'global'>,
     id: string,
+    db: Database | Transaction = this.db,
   ): Promise<PricingTarget | null> {
     if (!isUuid(id)) return null;
     if (scope === 'category') {
-      const [row] = await this.db
-        .select()
-        .from(catalogCategories)
-        .where(eq(catalogCategories.id, id));
+      const [row] = await db.select().from(catalogCategories).where(eq(catalogCategories.id, id));
       return row
         ? {
             nameAr: row.nameAr,
@@ -615,7 +616,7 @@ export class CatalogService {
         : null;
     }
     if (scope === 'game') {
-      const [row] = await this.db
+      const [row] = await db
         .select({ game: catalogGames, categoryArchivedAt: catalogCategories.archivedAt })
         .from(catalogGames)
         .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
@@ -629,7 +630,7 @@ export class CatalogService {
           }
         : null;
     }
-    const [row] = await this.db
+    const [row] = await db
       .select({
         product: catalogProducts,
         categoryId: catalogGames.categoryId,
@@ -702,9 +703,10 @@ export class CatalogService {
   /** Products with their game's name, keyed by id (offers' mapped products). */
   async productNames(
     ids: readonly string[],
+    db: Database | Transaction = this.db,
   ): Promise<Map<string, { nameAr: string; gameId: string; gameNameAr: string }>> {
     if (ids.length === 0) return new Map();
-    const rows = await this.db
+    const rows = await db
       .select({
         id: catalogProducts.id,
         nameAr: catalogProducts.nameAr,
@@ -756,8 +758,10 @@ export class CatalogService {
   }
 
   /** The path of every product a customer can see (product, game and category unarchived). */
-  livePricingPaths(): Promise<{ productId: string; gameId: string; categoryId: string }[]> {
-    return this.db
+  livePricingPaths(
+    db: Database | Transaction = this.db,
+  ): Promise<{ productId: string; gameId: string; categoryId: string }[]> {
+    return db
       .select({
         productId: catalogProducts.id,
         gameId: catalogProducts.gameId,
@@ -810,19 +814,22 @@ export class CatalogService {
   }
 
   /** The image ids set by a change must be catalog images (`NOT_FOUND` otherwise). */
-  private async checkImages(values: Partial<Pick<GameValues, 'coverFileId' | 'idGuideFileId'>>) {
+  private async checkImages(
+    values: Partial<Pick<GameValues, 'coverFileId' | 'idGuideFileId'>>,
+    tx: Transaction,
+  ) {
     const ids = [values.coverFileId, values.idGuideFileId].filter(
       (id): id is string => typeof id === 'string',
     );
-    const found = await this.files.dimensions(ids, 'catalog_image');
+    const found = await this.files.dimensions(ids, 'catalog_image', tx);
     if (ids.some((id) => !found.has(id))) throw refusals.notFound('catalog image');
   }
 
-  private async images(rows: readonly GameRow[]) {
+  private async images(rows: readonly GameRow[], db: Database | Transaction = this.db) {
     const ids = rows.flatMap((row) =>
       [row.coverFileId, row.idGuideFileId].filter((id): id is string => id !== null),
     );
-    return this.files.dimensions(ids, 'catalog_image');
+    return this.files.dimensions(ids, 'catalog_image', db);
   }
 }
 

@@ -314,6 +314,16 @@ describe('approval from Telegram (rule TC4)', () => {
     expect((await depositRow(id))?.status).toBe('credited');
   });
 
+  it('answers confirmations beyond the pool size, each deciding in its update transaction (F3-4)', async () => {
+    const { id } = await submitted(11);
+    const promptId = await askToApprove(id, transactionNumber());
+    // The pool holds 10 connections: 11 updates queue on the prompt's lock, each holding one, so
+    // the decision of the first must not wait for another connection.
+    await Promise.all(Array.from({ length: 11 }, () => tap(`ok:${promptId}`)));
+    expect(await journalsOf(id)).toHaveLength(1);
+    expect((await depositRow(id))?.status).toBe('credited');
+  }, 15_000);
+
   it('refuses a flagged deposit, one over the limit, and every approval at limit 0', async () => {
     // A new account's deposit of $25 or more is flagged (S03 rule FL3).
     const flagged = await submitted(30);

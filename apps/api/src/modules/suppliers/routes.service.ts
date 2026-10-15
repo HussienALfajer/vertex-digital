@@ -444,7 +444,7 @@ export class RoutesService {
         ),
       );
     if (holder) {
-      const names = await this.catalog.productNames([holder.productId]);
+      const names = await this.catalog.productNames([holder.productId], tx);
       throw refusals.offerMapped({
         productId: holder.productId,
         productNameAr: names.get(holder.productId)?.nameAr ?? '',

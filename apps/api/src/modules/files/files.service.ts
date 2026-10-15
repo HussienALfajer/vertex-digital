@@ -218,9 +218,10 @@ export class FilesService {
   async dimensions(
     fileIds: readonly string[],
     kind: StoredFileKind,
+    db: Database | Transaction = this.db,
   ): Promise<Map<string, { width: number; height: number }>> {
     if (fileIds.length === 0) return new Map();
-    const rows = await this.db
+    const rows = await db
       .select({ id: storedFiles.id, width: storedFiles.width, height: storedFiles.height })
       .from(storedFiles)
       .where(and(inArray(storedFiles.id, [...fileIds]), eq(storedFiles.kind, kind)));

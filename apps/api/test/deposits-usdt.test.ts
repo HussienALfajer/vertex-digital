@@ -571,6 +571,7 @@ describe('creating a USDT deposit (rules U2–U5)', () => {
     for (let tail = 100; tail <= 9_900; tail += 100) {
       if (pays.has(declared + tail)) continue;
       const depositId = newId();
+      const referenceCode = await freeReferenceCode();
       await test.db.transaction(async (tx) => {
         await tx.insert(deposits).values({
           id: depositId,
@@ -578,7 +579,7 @@ describe('creating a USDT deposit (rules U2–U5)', () => {
           method: 'usdt_trc20',
           status: 'submitted',
           submittedAt: new Date(),
-          referenceCode: await freeReferenceCode(),
+          referenceCode,
           currency: 'USD',
           declaredAmountUnits: declared,
           declaredUsdUnits: declared,
