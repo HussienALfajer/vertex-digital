@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { GiftIcon, ShoppingCartIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
@@ -227,6 +228,7 @@ function RevokeDialog({
   const { t } = useTranslation();
   const revoke = useRevokeShareLink(order.id);
   const [invalid, setInvalid] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -236,7 +238,7 @@ function RevokeDialog({
       reason: String(new FormData(event.currentTarget).get('reason') ?? ''),
     });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await revoke.mutateAsync({ linkId: link.id, body: parsed.data });
       onDone();
@@ -256,7 +258,7 @@ function RevokeDialog({
           })}
         </DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t('orders.decisions.reason')}</FieldLabel>
           <Textarea name="reason" rows={3} maxLength={500} />

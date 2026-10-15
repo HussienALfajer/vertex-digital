@@ -20,6 +20,7 @@ import {
   faqPublications,
   faqSections,
   queueStoreRevalidate,
+  readAll,
   type Transaction,
 } from '@vertex-digital/db';
 import { and, asc, count, desc, eq, isNull, max, sql } from 'drizzle-orm';
@@ -55,19 +56,22 @@ export class ContentFaqService {
     archived: boolean,
     executor: Database | Transaction = this.db,
   ): Promise<FaqWorkingCopy> {
-    const [[settings], sections, items, [newest]] = await Promise.all([
-      executor.select({ revision: contentSettings.faqRevision }).from(contentSettings),
-      executor
-        .select()
-        .from(faqSections)
-        .where(archived ? undefined : isNull(faqSections.archivedAt))
-        .orderBy(asc(sql`${faqSections.archivedAt} is not null`), asc(faqSections.position)),
-      executor
-        .select()
-        .from(faqItems)
-        .where(archived ? undefined : isNull(faqItems.archivedAt))
-        .orderBy(asc(sql`${faqItems.archivedAt} is not null`), asc(faqItems.position)),
-      executor.select().from(faqPublications).orderBy(desc(faqPublications.publishedAt)).limit(1),
+    const [[settings], sections, items, [newest]] = await readAll(executor, [
+      () => executor.select({ revision: contentSettings.faqRevision }).from(contentSettings),
+      () =>
+        executor
+          .select()
+          .from(faqSections)
+          .where(archived ? undefined : isNull(faqSections.archivedAt))
+          .orderBy(asc(sql`${faqSections.archivedAt} is not null`), asc(faqSections.position)),
+      () =>
+        executor
+          .select()
+          .from(faqItems)
+          .where(archived ? undefined : isNull(faqItems.archivedAt))
+          .orderBy(asc(sql`${faqItems.archivedAt} is not null`), asc(faqItems.position)),
+      () =>
+        executor.select().from(faqPublications).orderBy(desc(faqPublications.publishedAt)).limit(1),
     ]);
     const changedAt = [...sections, ...items].reduce<Date | null>(
       (latest, row) => (latest === null || row.updatedAt > latest ? row.updatedAt : latest),

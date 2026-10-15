@@ -10,7 +10,7 @@ import {
 } from '@vertex-digital/contracts';
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import {
   catalogProducts,
   customers,
@@ -228,11 +228,11 @@ export async function walletTimeline(
   if (!first) return { entries: [], more };
 
   const journalIds = pageRows.map((row) => row.journalId);
-  const [balance, adjustments, depositsByJournal, ordersByJournal] = await Promise.all([
-    walletBalanceAfter(db, accountId, first.journalId),
-    adjustmentsOf(db, journalIds),
-    depositsOf(db, journalIds),
-    ordersOf(db, journalIds),
+  const [balance, adjustments, depositsByJournal, ordersByJournal] = await readAll(db, [
+    () => walletBalanceAfter(db, accountId, first.journalId),
+    () => adjustmentsOf(db, journalIds),
+    () => depositsOf(db, journalIds),
+    () => ordersOf(db, journalIds),
   ]);
   let balanceAfter = balance;
   const entries = pageRows.map((row): TimelineEntry => {
@@ -388,26 +388,28 @@ export async function ledgerSummary(db: Executor): Promise<LedgerSummaryRows> {
     .leftJoin(ledgerPostings, eq(ledgerPostings.accountId, ledgerAccounts.id))
     .groupBy(ledgerAccounts.id)
     .as('balances');
-  const [wallets, systemAccounts] = await Promise.all([
-    db
-      .select({
-        real: sql<string>`coalesce(sum(${balances.balance}) filter (where not ${customers.isTest}), 0)::text`,
-        test: sql<string>`coalesce(sum(${balances.balance}) filter (where ${customers.isTest}), 0)::text`,
-        withBalance: sql<number>`(count(*) filter (where ${balances.balance} > 0))::int`,
-      })
-      .from(balances)
-      .innerJoin(customers, eq(customers.id, balances.customerId))
-      .where(eq(balances.kind, 'customer_wallet')),
-    db
-      .select({
-        kind: balances.kind,
-        code: balances.code,
-        currency: balances.currency,
-        balance: sql<string>`${balances.balance}::text`,
-      })
-      .from(balances)
-      .where(sql`${balances.kind} <> 'customer_wallet'`)
-      .orderBy(balances.kind, balances.code),
+  const [wallets, systemAccounts] = await readAll(db, [
+    () =>
+      db
+        .select({
+          real: sql<string>`coalesce(sum(${balances.balance}) filter (where not ${customers.isTest}), 0)::text`,
+          test: sql<string>`coalesce(sum(${balances.balance}) filter (where ${customers.isTest}), 0)::text`,
+          withBalance: sql<number>`(count(*) filter (where ${balances.balance} > 0))::int`,
+        })
+        .from(balances)
+        .innerJoin(customers, eq(customers.id, balances.customerId))
+        .where(eq(balances.kind, 'customer_wallet')),
+    () =>
+      db
+        .select({
+          kind: balances.kind,
+          code: balances.code,
+          currency: balances.currency,
+          balance: sql<string>`${balances.balance}::text`,
+        })
+        .from(balances)
+        .where(sql`${balances.kind} <> 'customer_wallet'`)
+        .orderBy(balances.kind, balances.code),
   ]);
   const totals = wallets[0];
   return {

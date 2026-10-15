@@ -17,11 +17,12 @@ import {
   FieldError,
   FieldLabel,
   Input,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ImageIcon, UploadIcon } from 'lucide-react';
 import { type DragEvent, type FormEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { useSaveBanner, useUploadBannerImage } from './content.queries';
@@ -44,6 +45,9 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
   const [altText, setAltText] = useState(banner?.altText ?? '');
   const [errors, setErrors] = useState<Partial<Record<BannerField, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
+  // The alert follows a refused save, not an upload refused on its own (shown under the image).
+  const [refused, setRefused] = useState(false);
 
   async function choose(file: File | undefined) {
     if (!file) return;
@@ -69,6 +73,7 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFailure(null);
+    setRefused(false);
     const data = new FormData(event.currentTarget);
     const text = (name: string) => String(data.get(name) ?? '').trim();
     const time = (name: string) =>
@@ -86,7 +91,10 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
       found[field] = t(`content.banners.errors.${field}`);
     }
     setErrors(found);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      setRefused(true);
+      return focusInvalid();
+    }
     try {
       await save.mutateAsync({ id: banner?.id, body: parsed.data });
       onDone();
@@ -107,6 +115,8 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
           ]),
         ),
       );
+      setRefused(true);
+      focusInvalid();
     }
   }
 
@@ -119,9 +129,17 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
         </DialogTitle>
         <DialogDescription>{t('content.banners.description')}</DialogDescription>
       </DialogHeader>
-      <form className="grid items-start gap-6 lg:grid-cols-2" onSubmit={submit} noValidate>
+      <form
+        ref={ref}
+        className="grid items-start gap-6 lg:grid-cols-2"
+        onSubmit={submit}
+        noValidate
+      >
         <div className="flex flex-col gap-5">
-          <fieldset className="flex flex-col gap-2">
+          <fieldset
+            className="flex flex-col gap-2"
+            data-invalid={errors.imageFileId ? '' : undefined}
+          >
             <legend className="mb-2 text-sm font-medium">{t('content.banners.image')}</legend>
             <button
               type="button"
@@ -209,6 +227,7 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
             errors={errors}
           />
           {failure && <FormAlert>{failure}</FormAlert>}
+          <InvalidAlert show={refused && Object.values(errors).some(Boolean)} />
           <DialogFooter>
             <Button type="submit" disabled={save.isPending || upload.isPending}>
               {t('content.actions.save')}

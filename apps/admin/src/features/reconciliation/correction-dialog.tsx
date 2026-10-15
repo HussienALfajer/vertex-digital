@@ -21,10 +21,11 @@ import {
   Textarea,
   ToggleGroup,
   ToggleGroupItem,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import { ConfirmAmountField } from '../wallet/adjustment-form';
 import { useCreateCorrection } from './reconciliation.queries';
@@ -67,6 +68,7 @@ export function CorrectionDialog({
   const [confirmText, setConfirmText] = useState('');
   const [forceConfirm, setForceConfirm] = useState(false);
   const [errors, setErrors] = useState<TreasuryFieldErrors>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
   const amountUnits = parsePlaceAmount(place, amountText);
   const needsConfirmation = useNeedsConfirmation('USD', amountUnits) || forceConfirm;
@@ -97,7 +99,7 @@ export function CorrectionDialog({
       found.confirm = t('wallets.adjust.errors.confirm');
     }
     setErrors(found);
-    if (!parsed.success || Object.keys(found).length > 0) return;
+    if (!parsed.success || Object.keys(found).length > 0) return focusInvalid();
 
     const request: CreateSupplierCorrection = parsed.data;
     try {
@@ -106,8 +108,9 @@ export function CorrectionDialog({
     } catch (error) {
       const shown = treasuryFailure(t, error, FIELDS);
       if (shown.field === 'confirm') setForceConfirm(true);
-      if (shown.field) setErrors({ [shown.field]: shown.message });
-      else setFailure(shown.message);
+      if (!shown.field) return setFailure(shown.message);
+      setErrors({ [shown.field]: shown.message });
+      focusInvalid();
     }
   }
 
@@ -119,7 +122,7 @@ export function CorrectionDialog({
           {t('reconciliation.correction.description', { place: placeLabel(t, place) })}
         </DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field>
           <FieldLabel>{t('reconciliation.correction.direction')}</FieldLabel>
           <ToggleGroup<SupplierCorrectionDirection>
@@ -177,6 +180,7 @@ export function CorrectionDialog({
           <FieldError match={!!errors.reason}>{errors.reason}</FieldError>
         </Field>
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" disabled={correct.isPending}>
             {correct.isPending ? t('reconciliation.saving') : t('reconciliation.correction.submit')}

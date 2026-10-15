@@ -18,6 +18,7 @@ import {
   productRoutes,
   productRoutingStates,
   type RouteState,
+  readAll,
   repriceProducts,
   supplierCostChanges,
   supplierOffers,
@@ -122,9 +123,9 @@ export class RoutesService {
 
   /** `GET /api/admin/catalog/products/:id/routes`. */
   async routing(productId: string, executor: Database | Transaction = this.db) {
-    const [states, policy] = await Promise.all([
-      productRoutingStates(executor, [productId], routingContext(this.env)),
-      currentSupplierPolicy(executor),
+    const [states, policy] = await readAll(executor, [
+      () => productRoutingStates(executor, [productId], routingContext(this.env)),
+      () => currentSupplierPolicy(executor),
     ]);
     const state = states.get(productId);
     if (!state) throw refusals.notFound('product');

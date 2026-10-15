@@ -7,7 +7,7 @@ import {
   stockLevel,
 } from '@vertex-digital/contracts';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
-import type { Database, Transaction } from '../client.js';
+import { type Database, readAll, type Transaction } from '../client.js';
 import { currentSupplierPolicy } from '../pricing/routing.js';
 import {
   catalogGames,
@@ -40,19 +40,22 @@ export async function supplierCategoryTree(
   db: Executor,
   supplierId: string,
 ): Promise<{ rows: SupplierCategoryRow[]; standings: Map<string, CategoryStanding> }> {
-  const [rows, offers] = await Promise.all([
-    db.select().from(supplierCategories).where(eq(supplierCategories.supplierId, supplierId)),
-    db
-      .select({
-        categoryId: supplierOffers.categoryId,
-        mapped: offerMapped,
-        ignored: sql<boolean>`${supplierOffers.ignoredAt} is not null`,
-        supported: sql<boolean>`${supplierOffers.unsupportedReason} is null`,
-        inStock: supplierOffers.inStock,
-        missing: sql<boolean>`${supplierOffers.missingSince} is not null`,
-      })
-      .from(supplierOffers)
-      .where(and(eq(supplierOffers.supplierId, supplierId), isNotNull(supplierOffers.categoryId))),
+  const [rows, offers] = await readAll(db, [
+    () => db.select().from(supplierCategories).where(eq(supplierCategories.supplierId, supplierId)),
+    () =>
+      db
+        .select({
+          categoryId: supplierOffers.categoryId,
+          mapped: offerMapped,
+          ignored: sql<boolean>`${supplierOffers.ignoredAt} is not null`,
+          supported: sql<boolean>`${supplierOffers.unsupportedReason} is null`,
+          inStock: supplierOffers.inStock,
+          missing: sql<boolean>`${supplierOffers.missingSince} is not null`,
+        })
+        .from(supplierOffers)
+        .where(
+          and(eq(supplierOffers.supplierId, supplierId), isNotNull(supplierOffers.categoryId)),
+        ),
   ]);
   const nodes: CategoryNodeFacts[] = rows.map((row) => ({
     categoryId: row.categoryId,

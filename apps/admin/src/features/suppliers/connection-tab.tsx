@@ -28,12 +28,13 @@ import {
   PasswordInput,
   Skeleton,
   Switch,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { KeyRoundIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
 import { switchesQuery, useChangeSwitch } from '../settings/settings.queries';
@@ -130,6 +131,7 @@ function CredentialsDialog({ supplier, onDone }: { supplier: SupplierDetail; onD
     Object.fromEntries(supplier.credentialFields.map((field) => [field, ''])),
   );
   const [invalid, setInvalid] = useState<string[]>([]);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -142,7 +144,7 @@ function CredentialsDialog({ supplier, onDone }: { supplier: SupplierDetail; onD
           parsed.error.issues.some((issue) => issue.path[1] === field),
         );
     setInvalid(found);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await setCredentials.mutateAsync(parsed.data);
       onDone();
@@ -159,7 +161,7 @@ function CredentialsDialog({ supplier, onDone }: { supplier: SupplierDetail; onD
         </DialogTitle>
         <DialogDescription>{t('suppliers.credentials.dialogDescription')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         {supplier.credentialFields.map((field) => (
           <Field key={field} invalid={invalid.includes(field)}>
             <FieldLabel>{credentialLabel(t, field)}</FieldLabel>
@@ -183,6 +185,7 @@ function CredentialsDialog({ supplier, onDone }: { supplier: SupplierDetail; onD
           </Field>
         ))}
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={invalid.length > 0} />
         <DialogFooter>
           <Button type="submit" disabled={setCredentials.isPending}>
             {setCredentials.isPending
@@ -253,6 +256,7 @@ function ThresholdCard({ supplier }: { supplier: SupplierDetail }) {
   const update = useUpdateSupplier(supplier.code);
   const [text, setText] = useState(() => formatAmountInput('USD', supplier.lowBalanceUsdUnits));
   const [invalid, setInvalid] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -262,7 +266,7 @@ function ThresholdCard({ supplier }: { supplier: SupplierDetail }) {
     setSaved(false);
     const parsed = updateSupplierSchema.safeParse({ lowBalanceUsdUnits: parseUsd(text) });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await update.mutateAsync(parsed.data);
       setSaved(true);
@@ -279,7 +283,7 @@ function ThresholdCard({ supplier }: { supplier: SupplierDetail }) {
           {t('suppliers.threshold.current', { amount: formatUsd(supplier.lowBalanceUsdUnits) })}
         </p>
       </div>
-      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t('suppliers.threshold.label')}</FieldLabel>
           <Input
@@ -319,6 +323,7 @@ function ValidationQuotaCard({ supplier }: { supplier: SupplierDetail }) {
   const update = useSetValidationQuota(supplier.code);
   const [text, setText] = useState(String(supplier.validationQuota));
   const [invalid, setInvalid] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -331,7 +336,7 @@ function ValidationQuotaCard({ supplier }: { supplier: SupplierDetail }) {
       quota: /^[0-9]+$/.test(typed) ? Number(typed) : Number.NaN,
     });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await update.mutateAsync(parsed.data);
       setSaved(true);
@@ -353,7 +358,7 @@ function ValidationQuotaCard({ supplier }: { supplier: SupplierDetail }) {
               })}
         </p>
       </div>
-      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t('suppliers.validationQuota.label')}</FieldLabel>
           <Input

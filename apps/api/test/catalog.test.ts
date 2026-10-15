@@ -266,6 +266,28 @@ describe('categories (rules CT1, CT2, CT5)', () => {
     );
   });
 
+  it('counts unarchived games per category and products per game', async () => {
+    const category = await newCategory();
+    const kept = await activeGame(category.id);
+    const archived = await newGame(category.id);
+    await json(await post(`/games/${archived.id}/archive`), 200);
+    const categories = await json<{ id: string; gameCount: number }[]>(
+      await get('/categories'),
+      200,
+    );
+    expect(categories.find((row) => row.id === category.id)?.gameCount).toBe(1);
+    const renamed = await json<{ gameCount: number }>(
+      await patch(`/categories/${category.id}`, { nameAr: `${category.nameAr} 2` }),
+      200,
+    );
+    expect(renamed.gameCount).toBe(1);
+    const ordered = await json<{ id: string; productCount: number }[]>(
+      await put(`/categories/${category.id}/games/order`, { ids: [kept.id] }),
+      200,
+    );
+    expect(ordered).toMatchObject([{ id: kept.id, productCount: 1 }]);
+  });
+
   it('creates, renames and audits; slugs and live names are taken', async () => {
     const category = await newCategory();
     expect(await auditOf(test.db, category.id)).toMatchObject([

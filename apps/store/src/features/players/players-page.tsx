@@ -22,6 +22,7 @@ import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/fie
 import { IconTile } from '@vertex-digital/ui/components/icon-tile';
 import { Input } from '@vertex-digital/ui/components/input';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import {
   CircleAlertIcon,
   IdCardIcon,
@@ -167,9 +168,11 @@ function PlayerRow({ player, onChange }: { player: SavedPlayer; onChange: () => 
   const [failure, setFailure] = useState<Failure | null>(null);
   const value = mainValue(player);
   const labelValid = savedPlayerLabelSchema.safeParse(label).success;
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function rename() {
-    if (!labelValid) return;
+    // Enter submits even while the button is disabled.
+    if (!labelValid) return focusInvalid();
     setFailure(null);
     setBusy(true);
     const result = await renameSavedPlayer(player.id, label.trim());
@@ -193,6 +196,7 @@ function PlayerRow({ player, onChange }: { player: SavedPlayer; onChange: () => 
     <div className="flex flex-col gap-3">
       {renaming ? (
         <form
+          ref={ref}
           className="flex flex-col gap-2"
           onSubmit={(event) => {
             event.preventDefault();

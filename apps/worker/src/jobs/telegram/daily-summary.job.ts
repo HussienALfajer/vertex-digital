@@ -25,6 +25,7 @@ import {
   priceReviews,
   productRoutingStates,
   queueTelegramMessage,
+  readAll,
   reconciliationRuns,
   storeSwitchChanges,
   supplierCalls,
@@ -121,75 +122,84 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       summary,
       switches,
       [settings],
-    ] = await Promise.all([
-      db
-        .select({
-          method: deposits.method,
-          count: count(),
-          usdUnits: sql<string>`coalesce(sum(${deposits.creditedUsdUnits}), 0)::text`,
-        })
-        .from(deposits)
-        .where(
-          and(eq(deposits.status, 'credited'), gte(deposits.decidedAt, dayStart), realCustomer),
-        )
-        .groupBy(deposits.method)
-        .orderBy(deposits.method),
-      db
-        .select({ count: count() })
-        .from(deposits)
-        .where(
-          and(
-            eq(deposits.status, 'credited'),
-            gte(deposits.decidedAt, dayStart),
-            // A decision from Telegram is keyed by its prompt's id (S05 rule TC4).
-            sql`exists (select 1 from ${telegramPrompts} where ${telegramPrompts.id} = ${deposits.decisionIdempotencyKey})`,
-            realCustomer,
+    ] = await readAll(db, [
+      () =>
+        db
+          .select({
+            method: deposits.method,
+            count: count(),
+            usdUnits: sql<string>`coalesce(sum(${deposits.creditedUsdUnits}), 0)::text`,
+          })
+          .from(deposits)
+          .where(
+            and(eq(deposits.status, 'credited'), gte(deposits.decidedAt, dayStart), realCustomer),
+          )
+          .groupBy(deposits.method)
+          .orderBy(deposits.method),
+      () =>
+        db
+          .select({ count: count() })
+          .from(deposits)
+          .where(
+            and(
+              eq(deposits.status, 'credited'),
+              gte(deposits.decidedAt, dayStart),
+              // A decision from Telegram is keyed by its prompt's id (S05 rule TC4).
+              sql`exists (select 1 from ${telegramPrompts} where ${telegramPrompts.id} = ${deposits.decisionIdempotencyKey})`,
+              realCustomer,
+            ),
           ),
-        ),
-      db
-        .select({ count: count() })
-        .from(deposits)
-        .where(
-          and(eq(deposits.status, 'rejected'), gte(deposits.decidedAt, dayStart), realCustomer),
-        ),
-      db
-        .select({ count: count() })
-        .from(deposits)
-        .where(
-          and(eq(deposits.status, 'expired'), gte(deposits.updatedAt, dayStart), realCustomer),
-        ),
-      waitingDeposits(db),
-      db
-        .select({ count: count() })
-        .from(usdtTransfers)
-        .where(and(gte(usdtTransfers.createdAt, dayStart), eq(usdtTransferState, 'unmatched'))),
-      db
-        .select({ count: count() })
-        .from(usdtTransfers)
-        .where(
-          and(
-            sql`${usdtTransfers.createdAt} > now() - make_interval(days => ${UNMATCHED_OPEN_DAYS})`,
-            eq(usdtTransferState, 'unmatched'),
+      () =>
+        db
+          .select({ count: count() })
+          .from(deposits)
+          .where(
+            and(eq(deposits.status, 'rejected'), gte(deposits.decidedAt, dayStart), realCustomer),
           ),
-        ),
-      db
-        .select({ count: count() })
-        .from(customers)
-        .where(and(gte(customers.createdAt, dayStart), eq(customers.isTest, false))),
-      ledgerSummary(db),
-      db
-        .selectDistinctOn([storeSwitchChanges.switch])
-        .from(storeSwitchChanges)
-        .orderBy(
-          storeSwitchChanges.switch,
-          desc(storeSwitchChanges.createdAt),
-          desc(storeSwitchChanges.id),
-        ),
-      db
-        .select()
-        .from(depositSettings)
-        .orderBy(desc(depositSettings.createdAt), desc(depositSettings.id))
-        .limit(1),
+      () =>
+        db
+          .select({ count: count() })
+          .from(deposits)
+          .where(
+            and(eq(deposits.status, 'expired'), gte(deposits.updatedAt, dayStart), realCustomer),
+          ),
+      () => waitingDeposits(db),
+      () =>
+        db
+          .select({ count: count() })
+          .from(usdtTransfers)
+          .where(and(gte(usdtTransfers.createdAt, dayStart), eq(usdtTransferState, 'unmatched'))),
+      () =>
+        db
+          .select({ count: count() })
+          .from(usdtTransfers)
+          .where(
+            and(
+              sql`${usdtTransfers.createdAt} > now() - make_interval(days => ${UNMATCHED_OPEN_DAYS})`,
+              eq(usdtTransferState, 'unmatched'),
+            ),
+          ),
+      () =>
+        db
+          .select({ count: count() })
+          .from(customers)
+          .where(and(gte(customers.createdAt, dayStart), eq(customers.isTest, false))),
+      () => ledgerSummary(db),
+      () =>
+        db
+          .selectDistinctOn([storeSwitchChanges.switch])
+          .from(storeSwitchChanges)
+          .orderBy(
+            storeSwitchChanges.switch,
+            desc(storeSwitchChanges.createdAt),
+            desc(storeSwitchChanges.id),
+          ),
+      () =>
+        db
+          .select()
+          .from(depositSettings)
+          .orderBy(desc(depositSettings.createdAt), desc(depositSettings.id))
+          .limit(1),
     ]);
     const hours = settings && {
       start: settings.reviewHoursStart.slice(0, 5),
@@ -247,15 +257,16 @@ export class DailySummaryJob implements OnApplicationBootstrap {
    * null without any.
    */
   private async ownerOrdersLine(db: Database | Transaction, dayStart: SQL) {
-    const [[row], policy] = await Promise.all([
-      db
-        .select({
-          count: count(),
-          used: sql<string>`coalesce(sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits}), 0)::text`,
-        })
-        .from(orders)
-        .where(and(eq(orders.payer, 'owner'), gte(orders.paidAt, dayStart))),
-      currentOrderPolicy(db),
+    const [[row], policy] = await readAll(db, [
+      () =>
+        db
+          .select({
+            count: count(),
+            used: sql<string>`coalesce(sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits}), 0)::text`,
+          })
+          .from(orders)
+          .where(and(eq(orders.payer, 'owner'), gte(orders.paidAt, dayStart))),
+      () => currentOrderPolicy(db),
     ]);
     if (!row || row.count === 0) return null;
     return {
@@ -311,34 +322,37 @@ export class DailySummaryJob implements OnApplicationBootstrap {
    */
   private async reservationLines(db: Database | Transaction, dayStart: SQL) {
     const real = eq(orders.isTest, false);
-    const [validations, [paid], [expired]] = await Promise.all([
-      db
-        .select({ supplierNameAr: suppliers.nameAr, count: count() })
-        .from(supplierCalls)
-        .innerJoin(suppliers, eq(suppliers.id, supplierCalls.supplierId))
-        .where(
-          and(
-            eq(supplierCalls.operation, 'validate_player'),
-            gte(supplierCalls.createdAt, dayStart),
+    const [validations, [paid], [expired]] = await readAll(db, [
+      () =>
+        db
+          .select({ supplierNameAr: suppliers.nameAr, count: count() })
+          .from(supplierCalls)
+          .innerJoin(suppliers, eq(suppliers.id, supplierCalls.supplierId))
+          .where(
+            and(
+              eq(supplierCalls.operation, 'validate_player'),
+              gte(supplierCalls.createdAt, dayStart),
+            ),
+          )
+          .groupBy(suppliers.nameAr)
+          .orderBy(suppliers.nameAr),
+      () =>
+        db
+          .select({ count: count() })
+          .from(orders)
+          .where(and(real, isNotNull(orders.reservedAt), gte(orders.paidAt, dayStart))),
+      () =>
+        db
+          .select({ count: count() })
+          .from(orders)
+          .where(
+            and(
+              real,
+              eq(orders.status, 'cancelled'),
+              eq(orders.cancelReason, 'expired'),
+              gte(orders.finishedAt, dayStart),
+            ),
           ),
-        )
-        .groupBy(suppliers.nameAr)
-        .orderBy(suppliers.nameAr),
-      db
-        .select({ count: count() })
-        .from(orders)
-        .where(and(real, isNotNull(orders.reservedAt), gte(orders.paidAt, dayStart))),
-      db
-        .select({ count: count() })
-        .from(orders)
-        .where(
-          and(
-            real,
-            eq(orders.status, 'cancelled'),
-            eq(orders.cancelReason, 'expired'),
-            gte(orders.finishedAt, dayStart),
-          ),
-        ),
     ]);
     return {
       validations,
@@ -353,32 +367,38 @@ export class DailySummaryJob implements OnApplicationBootstrap {
    */
   private async orderLines(db: Database | Transaction, dayStart: SQL) {
     const endedToday = and(eq(orders.isTest, false), gte(orders.finishedAt, dayStart));
-    const [ended, [review], [manual], [median]] = await Promise.all([
-      db
-        .select({ status: orders.status, count: count() })
-        .from(orders)
-        .where(
-          and(endedToday, inArray(orders.status, ['delivered', 'partially_refunded', 'refunded'])),
-        )
-        .groupBy(orders.status),
-      db.select({ count: count() }).from(orders).where(eq(orders.status, 'needs_review')),
-      db
-        .select({ count: count() })
-        .from(fulfilmentAttempts)
-        .innerJoin(suppliers, eq(suppliers.id, fulfilmentAttempts.supplierId))
-        .where(
-          and(
-            eq(suppliers.code, 'manual'),
-            inArray(fulfilmentAttempts.status, ['sending', 'pending', 'unknown']),
+    const [ended, [review], [manual], [median]] = await readAll(db, [
+      () =>
+        db
+          .select({ status: orders.status, count: count() })
+          .from(orders)
+          .where(
+            and(
+              endedToday,
+              inArray(orders.status, ['delivered', 'partially_refunded', 'refunded']),
+            ),
+          )
+          .groupBy(orders.status),
+      () => db.select({ count: count() }).from(orders).where(eq(orders.status, 'needs_review')),
+      () =>
+        db
+          .select({ count: count() })
+          .from(fulfilmentAttempts)
+          .innerJoin(suppliers, eq(suppliers.id, fulfilmentAttempts.supplierId))
+          .where(
+            and(
+              eq(suppliers.code, 'manual'),
+              inArray(fulfilmentAttempts.status, ['sending', 'pending', 'unknown']),
+            ),
           ),
-        ),
-      db
-        .select({
-          ms: sql<string | null>`(percentile_disc(0.5) within group (order by
+      () =>
+        db
+          .select({
+            ms: sql<string | null>`(percentile_disc(0.5) within group (order by
             extract(epoch from ${orders.deliveredAt} - ${orders.paidAt}) * 1000))::bigint::text`,
-        })
-        .from(orders)
-        .where(and(endedToday, eq(orders.status, 'delivered'))),
+          })
+          .from(orders)
+          .where(and(endedToday, eq(orders.status, 'delivered'))),
     ]);
     const ofStatus = (status: string) => ended.find((row) => row.status === status)?.count ?? 0;
     return {
@@ -397,12 +417,13 @@ export class DailySummaryJob implements OnApplicationBootstrap {
    */
   private async supplierLines(db: Database | Transaction, now: Date) {
     const context = { now, fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED };
-    const [open, states] = await Promise.all([
-      db
-        .select({ productId: priceReviews.productId })
-        .from(priceReviews)
-        .where(eq(priceReviews.status, 'open')),
-      supplierStates(db, context),
+    const [open, states] = await readAll(db, [
+      () =>
+        db
+          .select({ productId: priceReviews.productId })
+          .from(priceReviews)
+          .where(eq(priceReviews.status, 'open')),
+      () => supplierStates(db, context),
     ]);
     const routing = await productRoutingStates(
       db,
@@ -410,15 +431,17 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       context,
     );
     const inUse = states.filter((state) => state.available && state.code !== 'manual');
-    const [newPacks, stock] = await Promise.all([
-      newOfferCounts(
-        db,
-        inUse.map((state) => state.id),
-      ),
-      lowStockCounts(
-        db,
-        inUse.map((state) => state.id),
-      ),
+    const [newPacks, stock] = await readAll(db, [
+      () =>
+        newOfferCounts(
+          db,
+          inUse.map((state) => state.id),
+        ),
+      () =>
+        lowStockCounts(
+          db,
+          inUse.map((state) => state.id),
+        ),
     ]);
     const stockLow = { low: 0, out: 0 };
     for (const count of stock.values()) {

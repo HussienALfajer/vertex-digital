@@ -10,13 +10,14 @@ import {
   FieldLabel,
   Input,
   PasswordInput,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, KeyRoundIcon, SmartphoneIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { AuthHeading, AuthLayout } from '../../components/auth-layout';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ALTCHA_HEADER, solveAltcha } from '../../lib/altcha';
 import { authClient, sessionQuery, setupStep } from '../../lib/auth';
 import { errorMessage } from '../../lib/errors';
@@ -100,6 +101,7 @@ function SignInForm({
   const { t } = useTranslation();
   const [failure, setFailure] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
   const {
     register,
     handleSubmit,
@@ -109,38 +111,41 @@ function SignInForm({
     defaultValues: { email: '', password: '' },
   });
 
-  const onSubmit = handleSubmit(async (values) => {
-    setFailure(null);
-    let { data, error } = await authClient.signIn.email(values);
-    // After repeated failures on this account the API asks for proof of work (ADR 0008): solve it
-    // in the browser and send the same sign-in again, once.
-    if (error?.code === 'ALTCHA_REQUIRED' || error?.code === 'ALTCHA_INVALID') {
-      setVerifying(true);
-      let altcha: string;
-      try {
-        altcha = await solveAltcha();
-      } catch {
+  const onSubmit = handleSubmit(
+    async (values) => {
+      setFailure(null);
+      let { data, error } = await authClient.signIn.email(values);
+      // After repeated failures on this account the API asks for proof of work (ADR 0008): solve it
+      // in the browser and send the same sign-in again, once.
+      if (error?.code === 'ALTCHA_REQUIRED' || error?.code === 'ALTCHA_INVALID') {
+        setVerifying(true);
+        let altcha: string;
+        try {
+          altcha = await solveAltcha();
+        } catch {
+          setVerifying(false);
+          setFailure(t('errors.ALTCHA_FAILED'));
+          return;
+        }
         setVerifying(false);
-        setFailure(t('errors.ALTCHA_FAILED'));
+        ({ data, error } = await authClient.signIn.email(values, {
+          headers: { [ALTCHA_HEADER]: altcha },
+        }));
+      }
+      if (error) {
+        // Wrong email and password together, or a block (account or address): about the whole form.
+        setFailure(errorMessage(t, error));
         return;
       }
-      setVerifying(false);
-      ({ data, error } = await authClient.signIn.email(values, {
-        headers: { [ALTCHA_HEADER]: altcha },
-      }));
-    }
-    if (error) {
-      // Wrong email and password together, or a block (account or address): about the whole form.
-      setFailure(errorMessage(t, error));
-      return;
-    }
-    // With 2FA enrolled, the admin gets a second step before the session exists.
-    if (data && 'twoFactorRedirect' in data && data.twoFactorRedirect) return onTwoFactor();
-    await onSignedIn();
-  });
+      // With 2FA enrolled, the admin gets a second step before the session exists.
+      if (data && 'twoFactorRedirect' in data && data.twoFactorRedirect) return onTwoFactor();
+      await onSignedIn();
+    },
+    () => focusInvalid(),
+  );
 
   return (
-    <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
+    <form ref={ref} className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
       <Field invalid={!!errors.email}>
         <FieldLabel>{t('login.email')}</FieldLabel>
         <Input type="email" dir="ltr" autoComplete="username" autoFocus {...register('email')} />
@@ -157,6 +162,7 @@ function SignInForm({
         <FieldError match={!!errors.password}>{t('login.errors.password')}</FieldError>
       </Field>
       {failure && <FormAlert>{failure}</FormAlert>}
+      <InvalidAlert show={Object.keys(errors).length > 0} />
       <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
         {verifying
           ? t('login.verifying')
@@ -173,23 +179,28 @@ function BackupCodeForm({ onVerified }: { onVerified: () => Promise<void> }) {
   const [code, setCode] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const parsed = backupCodeSchema.safeParse(code);
-    if (!parsed.success) return setFailure(t('login.twoFactor.backupError'));
+    if (!parsed.success) {
+      setFailure(t('login.twoFactor.backupError'));
+      return focusInvalid();
+    }
     setFailure(null);
     setPending(true);
     const { error } = await authClient.twoFactor.verifyBackupCode({ code: parsed.data });
     if (error) {
       setPending(false);
-      return setFailure(errorMessage(t, error));
+      setFailure(errorMessage(t, error));
+      return focusInvalid();
     }
     await onVerified();
   }
 
   return (
-    <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+    <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
       <Field invalid={!!failure}>
         <FieldLabel>{t('login.twoFactor.backupCode')}</FieldLabel>
         <Input

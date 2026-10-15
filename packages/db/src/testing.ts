@@ -46,3 +46,21 @@ export async function setup(): Promise<void> {
     await connection.close();
   }
 }
+
+/** pg's warning for a query sent on a client already running one; pg 9 refuses the query. */
+const CONCURRENT_QUERY = /already executing a query/;
+
+/**
+ * Collects pg's concurrent-query warning from now on (launch hardening, 2026-10-14): each app's
+ * Vitest setup file fails a test file that triggered it. Node prints a deprecation only once per
+ * process, so the listener must be in place before the first query.
+ */
+export function concurrentQueryWarnings(): string[] {
+  const seen: string[] = [];
+  process.on('warning', (warning) => {
+    if (warning.name === 'DeprecationWarning' && CONCURRENT_QUERY.test(warning.message)) {
+      seen.push(warning.stack ?? warning.message);
+    }
+  });
+  return seen;
+}

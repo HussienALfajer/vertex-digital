@@ -4,7 +4,7 @@ import {
   type PriceChangeCause,
 } from '@vertex-digital/contracts';
 import { asc, eq, inArray, isNull } from 'drizzle-orm';
-import type { Transaction } from '../client.js';
+import { readAll, type Transaction } from '../client.js';
 import { newId } from '../id.js';
 import {
   catalogGames,
@@ -123,9 +123,9 @@ export async function repriceProducts(
   const result: RepriceResult = { repriced: 0, reviewsOpened: 0 };
   const ids = await lockProductsForPricing(tx, input.productIds);
   if (ids.length === 0) return result;
-  const [states, policy] = await Promise.all([
-    productRoutingStates(tx, ids, input.context),
-    currentSupplierPolicy(tx),
+  const [states, policy] = await readAll(tx, [
+    () => productRoutingStates(tx, ids, input.context),
+    () => currentSupplierPolicy(tx),
   ]);
   for (const id of ids) {
     const state = states.get(id);

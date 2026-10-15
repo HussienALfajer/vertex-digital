@@ -41,6 +41,7 @@ test('serves the manifest with its icons, linked from every page (PW1, PW2)', as
   ).toEqual(['192x192 any', '512x512 any', '512x512 maskable']);
   for (const icon of manifest.icons) {
     const file = await request.get(icon.src);
+    expect(file.status()).toBe(200);
     expect(file.headers()['content-type']).toBe('image/png');
   }
 
@@ -58,6 +59,27 @@ test('serves the manifest with its icons, linked from every page (PW1, PW2)', as
     'content',
     'VERTEX DIGITAL',
   );
+});
+
+// Launch hardening (2026-10-14): a browser asks for /favicon.ico on its own, whatever the page
+// links; a 404 there repeated until the server-wide nginx-4xx-flood jail banned the visitor.
+test('answers /favicon.ico and every icon the head links with 200', async ({ page, request }) => {
+  const favicon = await request.get('/favicon.ico');
+  expect(favicon.status()).toBe(200);
+  expect(favicon.headers()['content-type']).toBe('image/x-icon');
+  expect((await favicon.body()).subarray(0, 4)).toEqual(Buffer.from([0, 0, 1, 0]));
+
+  await page.goto('/');
+  const links = await page
+    .locator('link[rel~="icon"], link[rel="apple-touch-icon"]')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href') ?? ''));
+  expect(links).toEqual(
+    expect.arrayContaining([
+      expect.stringMatching(/^\/favicon\.ico/),
+      expect.stringMatching(/\.svg$/),
+    ]),
+  );
+  for (const href of links) expect((await request.get(href)).status(), href).toBe(200);
 });
 
 test('serves /sw.js and /offline uncached, the offline page never indexed (SW1, SW5)', async ({

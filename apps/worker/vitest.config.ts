@@ -12,6 +12,7 @@ export default defineConfig({
     // overdue pending deposit, including the one `deposits-usdt.test.ts` keeps overdue on purpose.
     fileParallelism: false,
     globalSetup: ['./test/global-setup.ts'],
+    setupFiles: ['./test/no-concurrent-queries.ts'],
     // Set explicitly: the root .env (loaded to find the test database) must not leak in.
     env: {
       NODE_ENV: 'test',

@@ -9,16 +9,18 @@ import {
 } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
 import { PasswordInput } from '@vertex-digital/ui/components/password-input';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
 import { CodeInput } from './code-input';
 import { requestPasswordReset, resetPassword } from './requests';
-import { codeError, emailError, focusFirst, newPasswordError } from './validation';
+import { codeError, emailError, newPasswordError } from './validation';
 import { SentTo } from './verify-email-panel';
 
 /**
@@ -37,6 +39,7 @@ export function ForgotPasswordPanel() {
 
 function EmailStep({ onSent }: { onSent: (email: string) => void }) {
   const [error, setError] = useState<string | undefined>();
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<Failure | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -48,8 +51,7 @@ function EmailStep({ onSent }: { onSent: (email: string) => void }) {
     setError(invalid);
     setFailure(null);
     if (invalid) {
-      focusFirst(form, { email: invalid });
-      return;
+      return focusInvalid();
     }
     setPending(true);
     const result = await requestPasswordReset(email);
@@ -59,7 +61,7 @@ function EmailStep({ onSent }: { onSent: (email: string) => void }) {
   };
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+    <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
       <Field invalid={!!error}>
         <FieldLabel>{t('fields.email')}</FieldLabel>
         <Input
@@ -88,6 +90,7 @@ function ResetStep({ email, onOtherEmail }: { email: string; onOtherEmail: () =>
   const router = useRouter();
   const [code, setCode] = useState('');
   const [errors, setErrors] = useState<{ code?: string; password?: string }>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<Failure | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -99,8 +102,7 @@ function ResetStep({ email, onOtherEmail }: { email: string; onOtherEmail: () =>
     setErrors(found);
     setFailure(null);
     if (found.code || found.password) {
-      focusFirst(form, found);
-      return;
+      return focusInvalid();
     }
     setPending(true);
     const result = await resetPassword({ email, otp: code, password });
@@ -112,13 +114,14 @@ function ResetStep({ email, onOtherEmail }: { email: string; onOtherEmail: () =>
     if (result.reason === 'INVALID_OTP') setErrors({ code: errorText(result.reason) });
     else if (result.reason === 'PASSWORD_TOO_COMMON') {
       setErrors({ password: t('validation.passwordCommon') });
-    } else setFailure(result.reason);
+    } else return setFailure(result.reason);
+    focusInvalid();
   };
 
   return (
     <div className="flex flex-col gap-5">
       <SentTo text={t('forgotPassword.codeSubtitle')} email={email} />
-      <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+      <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
         <CodeInput value={code} onValueChange={setCode} error={errors.code} autoFocus />
         <Field invalid={!!errors.password}>
           <FieldLabel>{t('fields.newPassword')}</FieldLabel>
@@ -134,6 +137,7 @@ function ResetStep({ email, onOtherEmail }: { email: string; onOtherEmail: () =>
           <FieldError match={!!errors.password}>{errors.password}</FieldError>
         </Field>
         {failure && <FormAlert>{errorText(failure)}</FormAlert>}
+        <InvalidAlert show={!!(errors.code || errors.password)} />
         <Button type="submit" size="xl" disabled={pending}>
           {pending ? t('forgotPassword.submitting') : t('forgotPassword.submit')}
         </Button>

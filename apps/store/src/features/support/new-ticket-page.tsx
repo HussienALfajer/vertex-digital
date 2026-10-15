@@ -12,6 +12,7 @@ import { Input } from '@vertex-digital/ui/components/input';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { Textarea } from '@vertex-digital/ui/components/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@vertex-digital/ui/components/toggle-group';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import {
   CircleHelpIcon,
   LoaderCircleIcon,
@@ -23,6 +24,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { InvalidAlert } from '@/components/invalid-alert';
 import { useCustomer } from '@/features/purchase/session';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
@@ -99,6 +101,7 @@ export function NewTicketPage() {
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const attempt = useRef<{ signature: string; key: string } | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   useEffect(() => {
     const initial = draftFromUrl();
@@ -121,7 +124,7 @@ export function NewTicketPage() {
     event.preventDefault();
     setShowErrors(true);
     setRefusal(null);
-    if (draftProblems(draft, files.length).length > 0 || !draft.category) return;
+    if (draftProblems(draft, files.length).length > 0 || !draft.category) return focusInvalid();
     const fields = {
       category: draft.category,
       orderId: draft.category === 'order' ? draft.orderId : null,
@@ -154,7 +157,12 @@ export function NewTicketPage() {
   if (!ready || customer.status !== 'signedIn') return <NewTicketSkeleton />;
 
   return (
-    <form className="flex flex-col gap-6" noValidate onSubmit={(event) => void submit(event)}>
+    <form
+      ref={ref}
+      className="flex flex-col gap-6"
+      noValidate
+      onSubmit={(event) => void submit(event)}
+    >
       <Field invalid={problems.has('category')}>
         <FieldLabel render={<span />}>{t('support.new.category')}</FieldLabel>
         <ToggleGroup<TicketCategory>
@@ -259,6 +267,7 @@ export function NewTicketPage() {
       </div>
 
       {refusal && <RefusalAlert refusal={refusal} />}
+      <InvalidAlert show={problems.size > 0} />
 
       <Button type="submit" size="xl" disabled={sending}>
         {sending && <LoaderCircleIcon className="animate-spin" aria-hidden="true" />}

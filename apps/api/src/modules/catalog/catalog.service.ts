@@ -30,6 +30,7 @@ import {
   type ProductRoutingState,
   productDeliveryStats,
   productRoutingStates,
+  readAll,
   type Transaction,
 } from '@vertex-digital/db';
 import {
@@ -76,13 +77,22 @@ import {
 /** The categories' order has no parent row to lock: a transaction-level advisory lock instead. */
 const CATEGORY_ORDER_KEY = sql`hashtext('catalog_categories_order')`;
 
+/**
+ * A column with its table's name written out. In a select from one table Drizzle drops the table
+ * from the columns at the top of a selected expression, which would bind a correlated subquery's
+ * outer column to the inner table (`"category_id" = "id"` compares a game with itself).
+ */
+const qualified = (column: Column) => sql`${column.table}.${sql.identifier(column.name)}`;
+
 /** Unarchived games in a category (rule CT2). */
 const gameCount = sql<number>`(select count(*)::int from ${catalogGames}
-  where ${catalogGames.categoryId} = ${catalogCategories.id} and ${catalogGames.archivedAt} is null)`;
+  where ${qualified(catalogGames.categoryId)} = ${qualified(catalogCategories.id)}
+  and ${qualified(catalogGames.archivedAt)} is null)`;
 
 /** Unarchived products of a game. */
 const productCount = sql<number>`(select count(*)::int from ${catalogProducts}
-  where ${catalogProducts.gameId} = ${catalogGames.id} and ${catalogProducts.archivedAt} is null)`;
+  where ${qualified(catalogProducts.gameId)} = ${qualified(catalogGames.id)}
+  and ${qualified(catalogProducts.archivedAt)} is null)`;
 
 type GameValues = Pick<
   GameRow,
@@ -320,21 +330,23 @@ export class CatalogService {
       : [];
     if (!found) throw refusals.notFound('game');
     const { row } = found;
-    const [fields, products, images] = await Promise.all([
-      executor
-        .select()
-        .from(catalogInputFields)
-        .where(eq(catalogInputFields.gameId, id))
-        .orderBy(
-          sql`${catalogInputFields.archivedAt} is not null`,
-          asc(catalogInputFields.sortOrder),
-        ),
-      executor
-        .select()
-        .from(catalogProducts)
-        .where(eq(catalogProducts.gameId, id))
-        .orderBy(sql`${catalogProducts.archivedAt} is not null`, asc(catalogProducts.sortOrder)),
-      this.images([row]),
+    const [fields, products, images] = await readAll(executor, [
+      () =>
+        executor
+          .select()
+          .from(catalogInputFields)
+          .where(eq(catalogInputFields.gameId, id))
+          .orderBy(
+            sql`${catalogInputFields.archivedAt} is not null`,
+            asc(catalogInputFields.sortOrder),
+          ),
+      () =>
+        executor
+          .select()
+          .from(catalogProducts)
+          .where(eq(catalogProducts.gameId, id))
+          .orderBy(sql`${catalogProducts.archivedAt} is not null`, asc(catalogProducts.sortOrder)),
+      () => this.images([row]),
     ]);
     return {
       ...toGame(row, images, products.filter((product) => !product.archivedAt).length),
@@ -554,11 +566,11 @@ export class CatalogService {
    */
   async products(executor: Database | Transaction, rows: ProductRow[]): Promise<Product[]> {
     const ids = rows.map((row) => row.id);
-    const [states, rate, delivery, policy] = await Promise.all([
-      productRoutingStates(executor, ids, routingContext(this.env)),
-      this.rates.current(),
-      productDeliveryStats(executor, ids),
-      currentSupplierPolicy(executor),
+    const [states, rate, delivery, policy] = await readAll(executor, [
+      () => productRoutingStates(executor, ids, routingContext(this.env)),
+      () => this.rates.current(),
+      () => productDeliveryStats(executor, ids),
+      () => currentSupplierPolicy(executor),
     ]);
     return rows.map((row) => {
       const state = states.get(row.id) as ProductRoutingState;

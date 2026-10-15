@@ -324,7 +324,16 @@ function GameCard({
     <article className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface">
       <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-muted">
         {game.cover ? (
-          <img src={game.cover.url} alt="" className="absolute inset-0 size-full object-cover" />
+          // The whole cover, whatever its shape: shown contained over a blurred copy of itself.
+          <>
+            <img
+              src={game.cover.url}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 size-full scale-110 object-cover opacity-60 blur-xl"
+            />
+            <img src={game.cover.url} alt="" className="relative size-full object-contain" />
+          </>
         ) : (
           <ImageIcon className="size-8 text-muted-foreground" aria-hidden="true" />
         )}

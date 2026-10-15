@@ -18,6 +18,7 @@ import { EmptyState } from '@vertex-digital/ui/components/empty-state';
 import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/field';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { Textarea } from '@vertex-digital/ui/components/textarea';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import {
   ArrowRightIcon,
   CircleAlertIcon,
@@ -330,13 +331,14 @@ function ReplyBox({
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const attempt = useRef<{ signature: string; key: string } | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const invalid = showError && !bodyValid(text, files.length);
 
   async function send(event: FormEvent) {
     event.preventDefault();
     setShowError(true);
     setRefusal(null);
-    if (!bodyValid(text, files.length)) return;
+    if (!bodyValid(text, files.length)) return focusInvalid();
     const body = messageBody(text, files.length, t('support.images.attached'));
     const signature = attemptSignature({ ticket: ticket.id, body }, files);
     if (attempt.current?.signature !== signature) {
@@ -367,7 +369,7 @@ function ReplyBox({
         : null;
 
   return (
-    <form noValidate onSubmit={(event) => void send(event)}>
+    <form ref={ref} noValidate onSubmit={(event) => void send(event)}>
       <Card className="gap-4">
         {ticket.status === 'closed' && (
           <p className="flex items-center gap-2 rounded-md bg-status-info px-4 py-3 text-sm text-status-info-foreground">

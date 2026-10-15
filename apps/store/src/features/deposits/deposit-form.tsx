@@ -18,10 +18,12 @@ import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/fie
 import { Input } from '@vertex-digital/ui/components/input';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@vertex-digital/ui/components/toggle-group';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { ArrowRightIcon, CircleAlertIcon, ClockIcon, LockIcon, WalletIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { InvalidAlert } from '@/components/invalid-alert';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
@@ -253,6 +255,7 @@ function ShamCashForm({
   const [currency, setCurrency] = useState<Currency>(initialCurrency);
   const [text, setText] = useState(() => prefillText(prefillUnits, options.limits?.minUnits));
   const [error, setError] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [submitting, setSubmitting] = useState(false);
   // One `Idempotency-Key` per request body: a retry of the same amount after a lost answer
   // returns the first deposit (rule SC2); a changed amount is a new attempt.
@@ -275,16 +278,22 @@ function ShamCashForm({
     setError(null);
   }
 
+  /** Every refusal here is about the amount: shown under it, with the focus moved there. */
+  function refuse(message: string | null) {
+    setError(message);
+    focusInvalid();
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     if (units === null || declaredUsd === null) {
-      return setError(
+      return refuse(
         t(currency === 'SYP' ? 'deposits.form.invalidSyp' : 'deposits.form.invalidUsd'),
       );
     }
     const breach = options.limits ? depositLimitBreach(options.limits, declaredUsd) : null;
-    if (breach) return setError(limitText(breach));
+    if (breach) return refuse(limitText(breach));
     const body = { currency, amountUnits: units };
     const sent = JSON.stringify(body);
     if (attempt.current?.body !== sent) attempt.current = { body: sent, key: crypto.randomUUID() };
@@ -298,7 +307,7 @@ function ShamCashForm({
     if (result.reason === 'DEPOSIT_ALREADY_PENDING' && typeof pendingId === 'string') {
       return router.replace(`/wallet/deposits/${pendingId}`);
     }
-    setError(
+    refuse(
       result.reason === 'DEPOSIT_LIMIT_EXCEEDED'
         ? (limitText(result.details) ?? errorText(result.reason))
         : errorText(result.reason),
@@ -306,7 +315,7 @@ function ShamCashForm({
   }
 
   return (
-    <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
+    <form ref={ref} className="flex flex-col gap-6" onSubmit={submit} noValidate>
       <Card className="gap-5">
         <Field>
           <FieldLabel>{t('deposits.form.currency')}</FieldLabel>
@@ -400,6 +409,7 @@ function ShamCashForm({
         )}
         <ReviewTime options={options} />
       </Card>
+      <InvalidAlert show={!!error} />
       <Button type="submit" size="xl" disabled={submitting}>
         {submitting ? t('deposits.form.submitting') : t('deposits.form.submit')}
       </Button>

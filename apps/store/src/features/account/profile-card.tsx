@@ -5,16 +5,18 @@ import { Button } from '@vertex-digital/ui/components/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@vertex-digital/ui/components/card';
 import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import Link from 'next/link';
 import { type FormEvent, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { countryOf, formatPhone, nationalPhone, toE164 } from '../auth/phone';
 import { PhoneField } from '../auth/phone-field';
-import { focusFirst, nameError } from '../auth/validation';
+import { nameError } from '../auth/validation';
 import { updateProfile } from './requests';
 
 /** Name and phone, editable at any time (rule C13); the email changes on its own page. */
@@ -103,6 +105,7 @@ function ProfileForm({
   const [country, setCountry] = useState(() => countryOf(profile.phone));
   const [phone, setPhone] = useState(() => nationalPhone(profile.phone));
   const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<Failure | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -118,8 +121,7 @@ function ProfileForm({
     setErrors(found);
     setFailure(null);
     if (found.name || found.phone || !e164) {
-      focusFirst(form, found);
-      return;
+      return focusInvalid();
     }
     // Only what changed, so the audit entry names it (rule C13).
     const changes: UpdateCustomerProfile = {};
@@ -134,7 +136,7 @@ function ProfileForm({
   };
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+    <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
       <Field invalid={!!errors.name}>
         <FieldLabel>{t('fields.name')}</FieldLabel>
         <Input
@@ -154,6 +156,7 @@ function ProfileForm({
         error={errors.phone}
       />
       {failure && <FormAlert>{errorText(failure)}</FormAlert>}
+      <InvalidAlert show={!!(errors.name || errors.phone)} />
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="xl" disabled={pending}>
           {pending ? t('account.profile.saving') : t('account.profile.save')}

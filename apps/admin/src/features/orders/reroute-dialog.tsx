@@ -20,11 +20,12 @@ import {
   TableHeader,
   TableRow,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { RouteOffIcon, TriangleAlertIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatSince } from '../../lib/format';
@@ -47,6 +48,7 @@ export function RerouteDialog({ order, onDone }: { order: AdminOrder; onDone: ()
   const [routeId, setRouteId] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ route?: boolean; reason?: boolean }>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const eligible = options.data?.routes.filter((route) => route.eligible) ?? [];
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -56,7 +58,7 @@ export function RerouteDialog({ order, onDone }: { order: AdminOrder; onDone: ()
     const parsed = rerouteOrderSchema.safeParse({ routeId, reason });
     const paths = new Set((parsed.error?.issues ?? []).map((issue) => issue.path[0]));
     setErrors({ route: paths.has('routeId'), reason: paths.has('reason') });
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await reroute.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
       onDone();
@@ -80,7 +82,7 @@ export function RerouteDialog({ order, onDone }: { order: AdminOrder; onDone: ()
           {t('orders.reroute.description', { number: order.number })}
         </DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         {options.isPending && <Skeleton className="h-40 w-full" aria-hidden="true" />}
         {options.isError && <FormAlert>{errorMessage(t, options.error)}</FormAlert>}
         {options.isSuccess && eligible.length === 0 && (
@@ -92,7 +94,7 @@ export function RerouteDialog({ order, onDone }: { order: AdminOrder; onDone: ()
           />
         )}
         {options.isSuccess && options.data.routes.length > 0 && (
-          <fieldset className="flex flex-col gap-2">
+          <fieldset className="flex flex-col gap-2" data-invalid={errors.route ? '' : undefined}>
             <legend className="mb-2 text-sm font-medium">
               {t('orders.reroute.routes', { units: options.data.remainingUnits })}
             </legend>
@@ -210,6 +212,7 @@ export function RerouteDialog({ order, onDone }: { order: AdminOrder; onDone: ()
           />
         )}
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={!!(errors.route || errors.reason)} />
         <DialogFooter>
           <Button type="submit" disabled={reroute.isPending || eligible.length === 0}>
             {reroute.isPending ? t('orders.decisions.submitting') : t('orders.reroute.submit')}

@@ -23,11 +23,12 @@ import {
   FieldLabel,
   Input,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ImageIcon, TriangleAlertIcon, UploadIcon } from 'lucide-react';
 import { type DragEvent, type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
@@ -72,6 +73,7 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
   const [uploadFailure, setUploadFailure] = useState<string | null>(null);
   const [errors, setErrors] = useState<Partial<Record<FieldName, boolean>>>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   // The manual offer's cost, once read, unless the admin already typed one.
   useEffect(() => {
@@ -140,7 +142,7 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
       reason: paths.has('reason'),
     };
     setErrors(next);
-    if (!parsed.success || Object.values(next).some(Boolean)) return;
+    if (!parsed.success || Object.values(next).some(Boolean)) return focusInvalid();
     try {
       await fulfil.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
       onDone();
@@ -149,6 +151,8 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
       if (error instanceof ApiError && error.code === 'PROOF_INVALID') {
         setProof(null);
         setPreview(null);
+        setErrors((previous) => ({ ...previous, proof: true }));
+        focusInvalid();
       }
     }
   }
@@ -164,7 +168,7 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
           {t('orders.fulfil.description', { number: order.number })}
         </DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={!!errors.quantity}>
           <FieldLabel>{t('orders.fulfil.quantity')}</FieldLabel>
           <Input
@@ -244,7 +248,10 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
             )}
           </div>
         )}
-        <fieldset className="flex flex-col gap-2">
+        <fieldset
+          className="flex flex-col gap-2"
+          data-invalid={uploadFailure || errors.proof ? '' : undefined}
+        >
           <legend className="mb-2 text-sm font-medium">{t('orders.fulfil.proof')}</legend>
           <button
             type="button"
@@ -323,6 +330,7 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
           />
         )}
         {failure && <FormAlert>{failure}</FormAlert>}
+        <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" disabled={fulfil.isPending || upload.isPending}>
             {fulfil.isPending ? t('orders.decisions.submitting') : t('orders.fulfil.submit')}

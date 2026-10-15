@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
   Skeleton,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,6 +61,7 @@ export function AddRouteDialog({
   const [optionMap, setOptionMap] = useState<OptionMap>({});
   const [missing, setMissing] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid<HTMLDivElement>();
   const offers = useQuery({
     ...offersQuery(code ?? 'fake', { q: query, mapped: 'false', missing: 'false' }),
     enabled: code !== null,
@@ -88,8 +90,10 @@ export function AddRouteDialog({
       await create.mutateAsync({ offerId: offer.id, fieldMap: toFieldMap(entries), optionMap });
       onDone();
     } catch (error) {
-      setMissing(unmappedOf(error));
+      const unmapped = unmappedOf(error);
+      setMissing(unmapped);
       setFailure(errorMessage(t, error));
+      if (unmapped.length > 0) focusInvalid();
     }
   }
 
@@ -101,7 +105,7 @@ export function AddRouteDialog({
           <bdi>{product.nameAr}</bdi>
         </DialogDescription>
       </DialogHeader>
-      <div className="flex flex-col gap-5">
+      <div ref={ref} className="flex flex-col gap-5">
         <Field>
           <FieldLabel>{t('suppliers.routes.supplier')}</FieldLabel>
           {suppliers.isPending ? (

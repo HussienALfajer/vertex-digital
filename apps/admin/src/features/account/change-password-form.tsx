@@ -12,12 +12,13 @@ import {
   FieldError,
   FieldLabel,
   PasswordInput,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
 import { useState } from 'react';
 import { type FieldError as FormFieldError, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
+import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorCode, errorMessage } from '../../lib/errors';
 import { useChangePassword } from './account.queries';
 
@@ -54,6 +55,7 @@ export function ChangePasswordForm({
   const { t } = useTranslation();
   const changePassword = useChangePassword();
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const {
     register,
     handleSubmit,
@@ -65,26 +67,31 @@ export function ChangePasswordForm({
     defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
   });
 
-  const onSubmit = handleSubmit(async ({ currentPassword, newPassword }) => {
-    setFailure(null);
-    try {
-      await changePassword.mutateAsync({ currentPassword, newPassword });
-    } catch (error) {
-      const code = errorCode(error);
-      if (code === 'INVALID_PASSWORD') {
-        return setError('currentPassword', { type: 'server', message: errorMessage(t, error) });
+  const onSubmit = handleSubmit(
+    async ({ currentPassword, newPassword }) => {
+      setFailure(null);
+      try {
+        await changePassword.mutateAsync({ currentPassword, newPassword });
+      } catch (error) {
+        const code = errorCode(error);
+        if (code === 'INVALID_PASSWORD') {
+          setError('currentPassword', { type: 'server', message: errorMessage(t, error) });
+          return focusInvalid();
+        }
+        if (code === 'PASSWORD_TOO_COMMON') {
+          setError('newPassword', { message: PASSWORD_TOO_COMMON });
+          return focusInvalid();
+        }
+        return setFailure(errorMessage(t, error));
       }
-      if (code === 'PASSWORD_TOO_COMMON') {
-        return setError('newPassword', { message: PASSWORD_TOO_COMMON });
-      }
-      return setFailure(errorMessage(t, error));
-    }
-    reset();
-    await onChanged();
-  });
+      reset();
+      await onChanged();
+    },
+    () => focusInvalid(),
+  );
 
   return (
-    <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
+    <form ref={ref} className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
       <Field invalid={!!errors.currentPassword}>
         <FieldLabel>{t('changePassword.current')}</FieldLabel>
         <PasswordInput
@@ -125,6 +132,7 @@ export function ChangePasswordForm({
         </FieldError>
       </Field>
       {failure && <FormAlert>{failure}</FormAlert>}
+      <InvalidAlert show={Object.keys(errors).length > 0} />
       <Button type="submit" size="lg" className={submitClassName} disabled={isSubmitting}>
         {isSubmitting ? t('changePassword.submitting') : t('changePassword.submit')}
       </Button>

@@ -4,10 +4,12 @@ import { Button } from '@vertex-digital/ui/components/button';
 import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
 import { PasswordInput } from '@vertex-digital/ui/components/password-input';
+import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
@@ -15,7 +17,7 @@ import { safeRedirect } from '@/lib/safe-redirect';
 import { useSearchParam } from '@/lib/use-search-param';
 import { savePendingEmail } from './pending-email';
 import { registrationState, signIn } from './requests';
-import { currentPasswordError, emailError, focusFirst } from './validation';
+import { currentPasswordError, emailError } from './validation';
 
 /** Why the customer arrived here, from `?notice=`: shown above the form. */
 const NOTICES = {
@@ -31,6 +33,7 @@ export function SignInForm() {
   const [verifying, setVerifying] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [failure, setFailure] = useState<Failure | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [canSignUp, setCanSignUp] = useState(false);
 
   useEffect(() => {
@@ -51,8 +54,7 @@ export function SignInForm() {
     setErrors(found);
     setFailure(null);
     if (found.email || found.password) {
-      focusFirst(form, found);
-      return;
+      return focusInvalid();
     }
     setPending(true);
     const result = await signIn(email, password, { onVerifying: () => setVerifying(true) });
@@ -77,7 +79,7 @@ export function SignInForm() {
   return (
     <div className="flex flex-col gap-5">
       {noticeKey && <FormAlert tone="success">{t(noticeKey)}</FormAlert>}
-      <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+      <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
         <Field invalid={!!errors.email}>
           <FieldLabel>{t('fields.email')}</FieldLabel>
           <Input
@@ -112,6 +114,7 @@ export function SignInForm() {
           <FieldError match={!!errors.password}>{errors.password}</FieldError>
         </Field>
         {failure && <FormAlert>{errorText(failure)}</FormAlert>}
+        <InvalidAlert show={!!(errors.email || errors.password)} />
         <Button type="submit" size="xl" disabled={pending}>
           {verifying
             ? t('signIn.verifying')

@@ -20,6 +20,7 @@ import {
   FieldDescription,
   FieldLabel,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ExternalLinkIcon, ShieldCheckIcon } from 'lucide-react';
 import { type FormEvent, type ReactNode, useState } from 'react';
@@ -244,6 +245,7 @@ export function UsdtApproveForm({
   const [ticked, setTicked] = useState<DepositFlagCode[]>([]);
   const [note, setNote] = useState('');
   const [flagsError, setFlagsError] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
 
   const flags = [...new Set(deposit.flags.map((flag) => flag.code))];
@@ -253,7 +255,8 @@ export function UsdtApproveForm({
     event.preventDefault();
     setFailure(null);
     if (flags.some((code) => !ticked.includes(code))) {
-      return setFlagsError(t('deposits.approve.errors.flags'));
+      setFlagsError(t('deposits.approve.errors.flags'));
+      return focusInvalid();
     }
     setFlagsError(null);
     const body: ApproveUsdtDeposit = {
@@ -266,6 +269,7 @@ export function UsdtApproveForm({
     } catch (error) {
       if (error instanceof ApiError && error.code === 'FLAGS_NOT_ACKNOWLEDGED') {
         setFlagsError(errorMessage(t, error));
+        focusInvalid();
       } else {
         setFailure(errorMessage(t, error));
       }
@@ -279,7 +283,7 @@ export function UsdtApproveForm({
         <ShieldCheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         {t('deposits.usdt.approveVerify')}
       </p>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <dl className="flex flex-col gap-1 rounded-lg border border-border p-3">
           <dt className="text-sm text-muted-foreground">{t('deposits.approve.credit')}</dt>
           <dd className="text-2xl font-bold tabular-nums">
@@ -288,12 +292,13 @@ export function UsdtApproveForm({
           <dd className="text-sm text-muted-foreground">{t('deposits.usdt.creditHint')}</dd>
         </dl>
         {flags.length > 0 && (
-          <fieldset className="flex flex-col gap-2">
+          <fieldset className="flex flex-col gap-2" data-invalid={flagsError ? '' : undefined}>
             <legend className="mb-2 text-sm font-medium">{t('deposits.approve.flags')}</legend>
             {flags.map((code) => (
               // biome-ignore lint/a11y/noLabelWithoutControl: the checkbox inside is the control.
               <label key={code} className="flex items-start gap-2 text-sm">
                 <Checkbox
+                  aria-invalid={flagsError && !ticked.includes(code) ? true : undefined}
                   checked={ticked.includes(code)}
                   onCheckedChange={(checked) =>
                     setTicked((previous) =>

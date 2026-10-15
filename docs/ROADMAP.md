@@ -49,6 +49,8 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
   - [x] PR 4: two fields and select fields, WDG delivery replies (MF1–MF5; Q19 answered on 2026-10-13)
 - [x] Production deploy of Phase 3: deployed on 2026-10-12 in one release with Phases 1 and 2 (commit `6230b05`, all of `main`); the server was rebooted afterwards and every site's health check passed. The owner still checks pushes on real phones in Syria (S15)
 - [x] Production deploy of S16: deployed on 2026-10-13 (commit `0495047`, all of `main`: migrations 0050–0059, no new secret and no `deploy/` change, so `provision.sh` was not re-run); the health checks passed and no error was logged after the switch
+- [x] Production deploys of 2026-10-14: the worker memory fixes (commits `58dbeee`, then `39ead74`), then the SHOP2TOPUP drop, ADR 0031 step 1 (commit `e849fa5`, all of `main`: migration 0060 applied, 61 migrations, the SHOP2TOPUP supplier row deleted with nothing referencing it; no new secret, and `deploy/ecosystem.config.cjs` is read from the release, so `provision.sh` was not re-run); the API, store and worker came back online and no new worker error was logged after the switch
+- [x] ADR 0031 step 2: migration 0061 drops the `supplier_code` value `shop2topup` and the `store_switch` value `shop2topup_paused`; deployed on 2026-10-14 (commit `c2ac68e`, all of `main`: 62 migrations applied, neither enum holds a SHOP2TOPUP value; no new secret and no `deploy/` change, so `provision.sh` was not re-run); the API, store and worker came back online and the API health check answers 200
 
 ## Pilot — open quiet launch
 - [ ] Launch checklist done (below)
@@ -72,4 +74,4 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] Arabic typeface: the owner keeps Noto Kufi Arabic and Montserrat for launch (Q2 resolved 2026-10-14; Madani not licensed)
 - [x] Terms, privacy and refund policies published (with "من نحن", version 1 of each, 2026-10-13; texts in `docs/content/`)
 - [x] Admin account with 2FA; Telegram bot linked (2026-10-12: `info@vertexmedia.pro`, TOTP enrolled, the bot linked and its test message received)
-- [ ] USDT receiving addresses and chain-reader keys in the server environment; one small live USDT deposit per network approved by the owner (S04; addresses, TronGrid key and BSC RPC in `shared/.env` and both live readers on, checked 2026-10-14; the live deposits are left)
+- [x] USDT receiving addresses and chain-reader keys in the server environment; one small live USDT deposit per network approved by the owner (S04; 2026-10-14: TRC20 $1.50 (1.5024 USDT) found by the scanner and credited in about a minute; BEP20 $3.00 (3.0075 USDT) credited once `BSC_RPC_URL` moved from the keyless public endpoint, which refuses `eth_getTransactionReceipt`, to a NodeReal key; each with its three-posting journal, audit entries and the credited email)
