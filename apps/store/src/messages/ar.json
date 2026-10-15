@@ -155,7 +155,7 @@
       "device": "{browser} على {system}",
       "thisDevice": "هذا الجهاز",
       "lastActive": "آخر نشاط {date}",
-      "ip": "عنوان IP: {ip}",
+      "ip": "عنوان الإنترنت: {ip}",
       "signOut": "تسجيل الخروج",
       "signOutLabel": "تسجيل خروج {device}",
       "signOutEverywhere": "تسجيل الخروج من كل الأجهزة",

@@ -246,6 +246,16 @@ describe('email.send', () => {
     expect(await rowOf(id)).toMatchObject({ status: 'sent', attempts: 1, params: null });
   });
 
+  it('names an unknown device in Arabic in the sign-in email', () => {
+    const email = renderEmail(
+      'customer_new_sign_in',
+      { at: '2026-10-07T09:30:00.000Z', browser: 'Unknown', system: 'Unknown', ipAddress: null },
+      'https://digital.example',
+    );
+    expect(email.text).toContain('الجهاز: غير معروف على غير معروف.');
+    expect(email.text).not.toContain('Unknown');
+  });
+
   it('frames every email in the brand: the logo, the title and the store address', () => {
     const email = renderEmail(
       'customer_new_sign_in',

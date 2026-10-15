@@ -54,6 +54,17 @@ const attemptNoticeLimit = (email: string): Limit => ({
   windowMs: HOUR,
 });
 
+/**
+ * Current-password checks per customer (change password, change email): 10 in 15 minutes, so a
+ * stolen session cannot guess the password that would let it take the account over (2026-10-15
+ * feature 2 audit). Every check counts, right or wrong.
+ */
+const passwordCheckLimit = (customerId: string): Limit => ({
+  key: `password-check:${customerId}`,
+  max: 10,
+  windowMs: 15 * MINUTE,
+});
+
 const rateLimited = () => new CodedException(429, 'RATE_LIMITED', 'Too many codes, try later');
 
 const codeError = (check: Exclude<CodeCheck, { ok: true }>) =>
@@ -115,9 +126,11 @@ export class AuthAccountService {
       // person signing up twice can still enter the first code. No new code is sent, so whoever
       // signed up first never hands the address's owner an account holding their own password:
       // the owner goes through "forgot password", which sets the password (edge case 7).
-      if (existing.emailVerified || existing.archivedAt) {
-        await this.db.transaction((tx) => issueDecoyCode(tx, 'email-verification', email));
-      }
+      await this.db.transaction((tx) =>
+        issueDecoyCode(tx, 'email-verification', email, {
+          keepLiveCode: !existing.emailVerified && !existing.archivedAt,
+        }),
+      );
       await this.sendAttemptNotice(email, existing.id);
       return;
     }
@@ -567,6 +580,9 @@ export class AuthAccountService {
   }
 
   private async assertPassword(customerId: string, password: string): Promise<void> {
+    if (!(await withinLimits(this.db, [passwordCheckLimit(customerId)]))) {
+      throw new CodedException(429, 'RATE_LIMITED', 'Too many password checks, try later');
+    }
     const [account] = await this.db
       .select({ password: customerAccounts.password })
       .from(customerAccounts)

@@ -175,6 +175,12 @@ test.describe('sign-up and the email code', () => {
     await password.click();
     await page.keyboard.type('x');
     await expect(password).toBeFocused();
+
+    // Correcting a field takes its error away at once, before any new submit (F2-12).
+    await expect(page.getByText(ar.validation.emailInvalid)).toBeVisible();
+    await email.fill('sara@example.com');
+    await expect(page.getByText(ar.validation.emailInvalid)).toHaveCount(0);
+    await expect(email).toHaveAttribute('aria-invalid', 'false');
   });
 
   test('a common password is refused before any request', async ({ page, api }) => {

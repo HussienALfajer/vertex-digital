@@ -110,8 +110,24 @@ function VerifyEmailForm({ pending: { email, next } }: { pending: PendingEmail }
   return (
     <div className="flex flex-col gap-5">
       <SentTo text={t('verifyEmail.subtitle')} email={email} />
-      <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
-        <CodeInput value={code} onValueChange={setCode} error={codeFailure} autoFocus />
+      <form
+        ref={ref}
+        noValidate
+        onSubmit={onSubmit}
+        onInput={(event) => {
+          if ((event.target as HTMLInputElement).name === 'password') setPasswordFailure(undefined);
+        }}
+        className="flex flex-col gap-5"
+      >
+        <CodeInput
+          value={code}
+          onValueChange={(value) => {
+            setCode(value);
+            setCodeFailure(undefined);
+          }}
+          error={codeFailure}
+          autoFocus
+        />
         {!held && (
           <Field invalid={!!passwordFailure}>
             <FieldLabel>{t('fields.password')}</FieldLabel>

@@ -96,6 +96,9 @@ const CANCEL_REASON_LABELS: Record<Exclude<CancelReason, 'customer'>, string> = 
   frozen: 'أُوقف حسابك مؤقتاً، تواصل مع الدعم',
 };
 
+/** A browser or system the user agent did not name reads as "unknown", in Arabic (feature 2 audit). */
+const deviceName = (name: string) => (name === 'Unknown' ? 'غير معروف' : name);
+
 const orderPage = (orderId: string) => ({ label: 'عرض الطلب', path: `/orders/${orderId}` });
 
 const depositPage = (depositId: string) => ({
@@ -148,7 +151,7 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     subject: 'تسجيل دخول جديد إلى حسابك',
     lines: [
       `سُجّل الدخول إلى حسابك في Vertex Digital بتاريخ ${formatTime(at)}.`,
-      `الجهاز: ${browser} على ${system}${ipAddress ? `، العنوان: ${ipAddress}` : ''}.`,
+      `الجهاز: ${deviceName(browser)} على ${deviceName(system)}${ipAddress ? `، عنوان الإنترنت: ${ipAddress}` : ''}.`,
       NOT_YOU,
     ],
   }),

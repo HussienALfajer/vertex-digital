@@ -56,7 +56,10 @@ const DISABLED_PATHS = [
   '/delete-user',
   '/delete-user/callback',
   '/request-password-reset',
+  '/forget-password',
   '/reset-password',
+  // Server-only in Better Auth 1.7 (`scope: "server"`); listed so no version ever serves it.
+  '/verify-password',
   '/verify-email',
   '/send-verification-email',
   '/update-session',

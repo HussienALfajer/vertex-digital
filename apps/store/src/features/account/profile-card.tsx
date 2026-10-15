@@ -12,6 +12,7 @@ import { FormAlert } from '@/components/form-alert';
 import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
+import { clearErrorOnInput } from '@/lib/field-errors';
 import { formatDate } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { countryOf, formatPhone, nationalPhone, toE164 } from '../auth/phone';
@@ -136,7 +137,13 @@ function ProfileForm({
   };
 
   return (
-    <form ref={ref} noValidate onSubmit={onSubmit} className="flex flex-col gap-5">
+    <form
+      ref={ref}
+      noValidate
+      onSubmit={onSubmit}
+      onInput={clearErrorOnInput(setErrors)}
+      className="flex flex-col gap-5"
+    >
       <Field invalid={!!errors.name}>
         <FieldLabel>{t('fields.name')}</FieldLabel>
         <Input

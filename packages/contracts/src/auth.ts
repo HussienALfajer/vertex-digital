@@ -81,7 +81,11 @@ export const fullNameSchema = z
   .trim()
   .min(2)
   .max(60)
-  .regex(/^[^\p{Cc}]+$/u);
+  // No control characters, line or paragraph separators (U+2028, U+2029), and no invisible
+  // direction marks or overrides (U+061C, U+200E–U+200F, U+202A–U+202E, U+2066–U+2069): they could
+  // fake a line or make a name read as other text in the panel, the audit log or a Telegram card
+  // (2026-10-15 feature 2 audit).
+  .regex(/^[^\p{Cc}\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]+$/u);
 
 /**
  * A phone number in any form a person types (`09…` in Syria, `+963…`, `00963…`, with spaces or

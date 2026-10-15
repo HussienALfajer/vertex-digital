@@ -1,6 +1,8 @@
 import { customerRateLimits, customerSessions, customers } from '@vertex-digital/db';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CUSTOMER_AUTH_NEST_PATHS } from '../src/modules/auth/auth.config.js';
+import { AuthService } from '../src/modules/auth/auth.service.js';
 import {
   api,
   auditOf,
@@ -179,8 +181,9 @@ describe('sign-up (rules C1, C2, C16)', () => {
     expect(mismatch.headers.getSetCookie()).toEqual([]);
     const [customer] = await test.db.select().from(customers).where(eq(customers.email, email));
     expect(customer?.emailVerified).toBe(false);
-    // The code is used: it does not work a second time, even with the first password.
-    expect(await body(await verify(email, code))).toMatchObject({ code: 'INVALID_OTP' });
+    // The code is used: it does not work a second time, even with the first password; it is gone,
+    // so the answer says to ask for a new one.
+    expect(await body(await verify(email, code))).toMatchObject({ code: 'OTP_EXPIRED' });
   });
 
   it('asks for the password with the code', async () => {
@@ -280,7 +283,8 @@ describe('email verification (rules C4, C7, C10)', () => {
       expect(await body(await verify(email, wrong))).toMatchObject({ code: 'INVALID_OTP' });
     }
     expect(await body(await verify(email, code))).toMatchObject({ code: 'TOO_MANY_ATTEMPTS' });
-    expect(await body(await verify(email, code))).toMatchObject({ code: 'INVALID_OTP' });
+    // The voided code is gone: the answer says to ask for a new one, as for any missing code.
+    expect(await body(await verify(email, code))).toMatchObject({ code: 'OTP_EXPIRED' });
   });
 
   it('replaces the previous code when a new one is sent', async () => {
@@ -491,6 +495,80 @@ describe('the account (rules C11–C14)', () => {
     expect((await emailsTo(test.db, customer.email)).map((row) => row.template)).toContain(
       'customer_password_changed',
     );
+  });
+
+  it('serves no Better Auth endpoint but the ones the store uses (2026-10-15 audit)', async () => {
+    const served = new Set<string>([
+      '/sign-in/email',
+      '/sign-out',
+      '/get-session',
+      '/list-sessions',
+      '/email-otp/verify-email',
+      '/ok',
+      '/error',
+      // Answered by the auth module's Nest routes, tested above.
+      ...CUSTOMER_AUTH_NEST_PATHS,
+    ]);
+    const paths = Object.values(test.app.get(AuthService).auth.api)
+      .map((endpoint) => (endpoint as { path?: unknown }).path)
+      .filter((path): path is string => typeof path === 'string');
+    expect(paths).toContain('/verify-password');
+    let probe = 0;
+    for (const path of paths.filter((each) => !served.has(each))) {
+      const url = `/api/auth${path.replace(/:\w+/g, 'x')}`;
+      for (const method of ['GET', 'POST'] as const) {
+        probe += 1;
+        // An address per probe: the per-address limits are not what refuses them.
+        const ip = `10.88.${Math.floor(probe / 250)}.${probe % 250}`;
+        const response =
+          method === 'GET'
+            ? await client.get(url, { ip })
+            : await client.post(url, { ip, body: {} });
+        expect(response.status, `${method} ${url}`).toBe(404);
+      }
+    }
+  });
+
+  it('answers the profile and the session with no-store, so no shared browser keeps them', async () => {
+    const customer = await seedCustomer(test.db);
+    seeded.push(customer.id);
+    const cookie = await client.signInCustomer(customer.email);
+    for (const path of ['/api/account', '/api/auth/get-session', '/api/auth/list-sessions']) {
+      const response = await client.get(path, { cookie });
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get('cache-control'), path).toBe('no-store');
+    }
+  });
+
+  it('stops guessing the current password after 10 checks in 15 minutes, from any address', async () => {
+    const customer = await seedCustomer(test.db);
+    seeded.push(customer.id);
+    const cookie = await client.signInCustomer(customer.email);
+    const change = (currentPassword: string, attempt: number) =>
+      client.post('/api/auth/change-password', {
+        cookie,
+        // A new address each time: the per-address limit is not what stops it.
+        ip: `10.77.0.${attempt}`,
+        body: { currentPassword, newPassword: NEW_PASSWORD },
+      });
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      expect(await body(await change(`guess-number-${attempt}`, attempt))).toMatchObject({
+        code: 'INVALID_PASSWORD',
+      });
+    }
+    // The 11th check is refused before the password is compared, even the right one.
+    expect(await body(await change(PASSWORD, 11))).toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+    });
+    // The email change checks the same counter.
+    const emailChange = await client.post('/api/auth/email-otp/request-email-change', {
+      cookie,
+      ip: '10.77.0.12',
+      body: { newEmail: uniqueEmail('moved'), password: PASSWORD },
+      headers: await client.altcha(),
+    });
+    expect(await body(emailChange)).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
   });
 
   it('edits name and phone, audited with before and after', async () => {
@@ -709,6 +787,36 @@ describe('code checks tell nothing about accounts (rules C2, C12)', () => {
       expect(tries, email).toEqual(expected);
     }
     await idOf(fresh);
+  });
+
+  it('never tells an abandoned sign-up apart from an unknown or a verified email (2026-10-15 audit)', async () => {
+    const verified = await seedCustomer(test.db);
+    seeded.push(verified.id);
+    const abandoned = uniqueEmail('abandoned');
+    expect((await signUp(abandoned)).status).toBe(200);
+    await idOf(abandoned);
+    // Its code has expired, as for someone who signed up and left.
+    await test.db.execute(
+      sql.raw(
+        `update customer_verifications set expires_at = now() - interval '1 minute' where identifier = 'email-verification-otp-${abandoned}'`,
+      ),
+    );
+    const unknown = uniqueEmail('never-signed-up');
+    // One probe without a sign-up: the same answer for the three.
+    for (const email of [abandoned, unknown, verified.email]) {
+      expect((await body(await verify(email, '999999'))).code, email).toBe('OTP_EXPIRED');
+    }
+    // A sign-up first, then six wrong tries: the same answers for the three (rule C2).
+    await test.db.execute(
+      sql.raw(
+        `update customer_rate_limits set last_request = last_request - 61000 where key like 'code-email-minute:%'`,
+      ),
+    );
+    for (const email of [abandoned, unknown, verified.email]) {
+      expect((await signUp(email)).status, email).toBe(200);
+      expect(await wrongTries(() => verify(email, '999999')), email).toEqual(expected);
+    }
+    await idOf(unknown);
   });
 
   it('answers wrong email-change codes the same for a taken and a free address', async () => {
