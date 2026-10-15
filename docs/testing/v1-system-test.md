@@ -341,7 +341,7 @@ Do 2.3 to 2.5 in one sitting: registration stays open only for those minutes.
 6. Expected: you go to the code page "تأكيد البريد الإلكتروني", which shows the `+su` address. Within a minute an Arabic email with a 6-digit code arrives.
 7. Do **not** enter the code yet: go to 2.4.
 
-Result: ✅ 2026-10-15, re-run after the deploy of aba5ee3 with a new address (SU3): `qwerty123` refused, a second sign-up with the same address sent the attempt notice and no new code (F2-3). First run ❌: `password123` accepted (F2-2, accepted) and the code voided by a second sign-up (F2-3).
+Result: ✅ 2026-10-15, re-run after the deploy of aba5ee3 with a new address (SU3): `qwerty123` refused, a second sign-up with the same address sent the attempt notice and no new code (F2-3). First run ❌: `password123` accepted (F2-2, accepted) and the code voided by a second sign-up (F2-3). Second re-run after the deploy of a2bfdb7 (fixes F2-8 to F2-23), with a fresh address: ✅.
 
 ### 2.4 An address that already has an account reveals nothing
 
@@ -366,7 +366,7 @@ Result: ✅ 2026-10-15
 6. Expected: **no** "new sign-in" email for this session (the code page's sign-in does not send one).
 7. In the panel, "المفاتيح" → "التسجيل" → close it again. In the store browser sign out, reload: "إنشاء حساب" is gone again.
 
-Result: ✅ 2026-10-15, re-run after the deploy of aba5ee3: the six-slot field filled from one paste (F2-4); after a reload the page asked for the password and the code with it signed in (F2-7).
+Result: ✅ 2026-10-15, re-run after the deploy of aba5ee3: the six-slot field filled from one paste (F2-4); after a reload the page asked for the password and the code with it signed in (F2-7). Second re-run after the deploy of a2bfdb7: ✅.
 
 ### 2.6 Sign-in, its errors and the new sign-in email
 
@@ -428,7 +428,7 @@ Result: ✅ 2026-10-15
 4. On the phone, tap any link. Expected: signed out.
 5. Expected: the `+tc1` inbox gets "your password was changed" (no password inside).
 
-Result: ✅ 2026-10-15
+Result: ✅ 2026-10-15; re-run 2026-10-15 after the deploy of a2bfdb7 (fixes F2-8 to F2-23): ✅
 
 ### 2.11 Sessions list and signing out
 
@@ -440,7 +440,7 @@ Result: ✅ 2026-10-15
 4. Sign in on the phone once more. On the PC press "تسجيل الخروج من كل الأجهزة" → confirm.
 5. Expected: the PC goes to the sign-in page with "سُجّل خروجك من كل الأجهزة"; the phone is signed out at its next tap.
 
-Result: ✅ 2026-10-15
+Result: ✅ 2026-10-15; re-run 2026-10-15 after the deploy of a2bfdb7 (fixes F2-8 to F2-23): ✅
 
 ### 2.12 Change email
 
@@ -454,7 +454,7 @@ Result: ✅ 2026-10-15
 6. Expected: `+su` (the old address) gets "your email was changed"; the phone is signed out at its next tap.
 7. Sign out, then sign in with `+su2`. Expected: works; `+su` no longer signs in.
 
-Result: ✅ 2026-10-15
+Result: ✅ 2026-10-15; re-run 2026-10-15 after the deploy of a2bfdb7 (fixes F2-8 to F2-23): ✅
 
 ### 2.13 The admin resets a test customer's password
 
@@ -492,7 +492,7 @@ Result: ✅ 2026-10-15; SU3 of the re-run archived the same way.
 
 | Item | Value |
 |---|---|
-| Cases passed | 15 of 15 (2.3, 2.5 and 2.14 after the fixes, deployed as aba5ee3) |
-| Findings | F2-1 (not a bug), F2-2 (accepted: the owner keeps the common-password list), F2-3 to F2-7 (fixed) |
+| Cases passed | 15 of 15 (2.3, 2.5 and 2.14 after the fixes, deployed as aba5ee3; 2.3, 2.5, 2.10, 2.11 and 2.12 again after the audit fixes, deployed as a2bfdb7) |
+| Findings | F2-1 (not a bug), F2-2 (accepted: the owner keeps the common-password list), F2-3 to F2-23 (fixed) |
 | Accepted by the owner on | 2026-10-15 |
-| PR | —
+| PR | #104 (fixes F2-16 to F2-23), and this record |
