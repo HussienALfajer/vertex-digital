@@ -38,7 +38,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | 2 | Customer accounts | F01 | Every customer case needs sign-in, sessions and account emails working | Accepted 2026-10-15 |
 | 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | Accepted 2026-10-15 |
 | 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | Accepted 2026-10-16 (4.12 step 2 on 2026-10-17) |
-| 5 | USDT deposits | F06 | The automatic money-in path | Steps written 2026-10-16 |
+| 5 | USDT deposits | F06 | The automatic money-in path | Accepted 2026-10-16 |
 | 6 | Wallet and ledger | F03 | Checked once real deposits exist: balances as sums, history, journals | — |
 | 7 | Catalog | F08 | What is sold: games, packs, fields, images, states | — |
 | 8 | Pricing engine | F10 | Prices, margins, review queue, loss guard | — |
@@ -117,6 +117,11 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F4-14 | 4 | Second review | A card sent as text (its receipt unreadable) was edited with `editMessageCaption`, which Telegram refuses on text, so it kept its old content and buttons | minor | A refused caption edit ("no caption") is retried as a text edit (`deposit-card.job.ts`); worker test with a Bot API stub that enforces the message kind | Fixed |
 | F4-15 | 4 | Second review | A submission decided before its first card job ran (the worker behind) never got a card | minor | Such a card is sent with its outcome and no buttons when the chat was linked at the submission; a chat linked later still gets no old cards (S05 edge cases 1 and 2); worker test | Fixed |
 | F4-16 | 4 | Second review | A decision replayed with its key and another internal note answered success instead of `IDEMPOTENCY_KEY_REUSED` (RV9) | minor | The replay compares the note with the decision's audit entry (`AuditService.reasonOf`); API test for approval and rejection | Fixed |
+| F5-1 | 5 | 5.6 | "الإيداعات المرشحة" read "لا إيداعات مرشحة." where step 5 expected C itself. The panel is right: candidates are the other reserved deposits a transfer may belong to (U11), so a deposit never lists itself; the step was wrong | minor | The step is corrected, and the empty text says "لا إيداعات أخرى مرشحة." so it reads as designed | Fixed |
+| F5-2 | 5 | 5.6 (screenshot) | The USDT review's flag said "المعلن $4.0056، والمستلم $3.0056" under "المبلغ أو العملة المستلمة تختلف عن المعلنة": beside "المبلغ المعلن $4.00" in the facts, "المعلن" named the amount to send, and USDT amounts read as dollars with four decimals | minor | A USDT deposit's mismatch reads "المبلغ المستلم على الشبكة يختلف عن المبلغ المطلوب إرساله." and "المطلوب 4.0056 USDT، والمستلم 3.0056 USDT" (`deposit-flags.tsx`); E2E | Fixed |
+| F5-3 | 5 | 5.4 | The BEP20 transfer was found by the scanner and credited before the owner could paste its TXID, so the searching and confirming pages were not seen on production | — | None: on BSC the scanner reads final blocks within seconds, which is the design (U12); the TXID states are covered by the worker tests and the store E2E screenshots | Accepted |
+| F5-4 | 5 | 5.1 | The owner asked to change the receiving addresses from the panel, to upload a QR, or to style the QR for wallets per network | — | None: the addresses stay in the server environment (owner 2026-10-08, ADR 0018: a stolen admin session must not redirect deposits, and a crypto transfer cannot be reversed); an uploaded QR could encode another address than the text shown; a styled QR (network logo in the middle, high contrast) is a possible later store change, owner's call | Closed |
+| F5-5 | 5 | 5.3 | The owner asked for automatic matching without the tail | — | None for V1: the alternatives are per-deposit addresses (sweeping fees and keys, ADR 0006), a payment processor (fees, availability for Syria unconfirmed), or a TXID claim alone (anyone can claim a public transfer); the tail stays, answered in chat | Closed |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -937,7 +942,7 @@ Send from the wallet or exchange of the 2026-10-14 live check, which delivered f
 1. In the panel open "إعدادات الإيداع". Expected: the USDT section with "عنوان الاستلام" for TRC20 (`T…`) and BEP20 (`0x…`), each exactly your wallet's address (compare every character with your wallet), with "يُغيَّر من إعدادات الخادم فقط" and no way to edit it; each network's switch and "آخر قراءة ناجحة:".
 2. In the store as TC1 open "المحفظة" → "إيداع". Expected: the method choice offers "شام كاش", "USDT (TRC20)" and "USDT (BEP20)", all enabled.
 
-Result:
+Result: ✅ (2026-10-16). The owner asked why the addresses cannot be changed from the panel, and about a wallet-style QR: answered in chat (kept server-only, ADR 0018); see F5-4
 
 ### 5.2 The form and its limits
 
@@ -949,7 +954,7 @@ Result:
 4. Enter `5.123`, then `٥`. Expected: each refused with "أدخل مبلغًا بالدولار بأرقام لاتينية، مثل 25 أو 25.50."
 5. Choose "USDT (BEP20)". Expected: the note reads "أرسل على شبكة BNB Smart Chain (BEP20) فقط".
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 5.3 An exact transfer found with no TXID (deposit A, TRC20)
 
@@ -965,7 +970,7 @@ Real money: **$5 + tail on TRC20**.
 6. Expected, within about 2 minutes, on A's page without a reload: "أُضيف المبلغ إلى محفظتك" with $5.00, the TXID link and the time. The bell: "أُضيف $5.00 إلى رصيدك (VD-…)". The credited email, with no TXID and no address in it. TC1's balance $20.00.
 7. In the panel open A. Expected: read-only, decided "تلقائي"; "رقم العملية (TXID)" with "اكتشاف تلقائي" and the explorer link (it opens your transaction); the transfer from your address to the store's, "المستلم" "مطابق تمامًا", block and time. "تحويلات USDT" ("الكل") lists it "مُضاف" with TC1. No Telegram message for A.
 
-Result:
+Result: ✅ (2026-10-16). The owner asked for a way to credit automatically without the tail: answered in chat; see F5-5
 
 ### 5.4 An exact transfer with its TXID pasted (deposit B, BEP20)
 
@@ -980,7 +985,7 @@ Real money: **$5 + tail on BEP20**.
 5. In the panel open B. Expected: "تلقائي", the TXID source "أرسله العميل" (or "اكتشاف تلقائي" if the scanner was first: note which), "مرات إرسال الرقم" 1, "مطابق تمامًا".
 6. Telegram: expected no message for B. If "⚠️ تحويل USDT غير مطابق" arrived for B's amount (the scanner saw the transfer while its TXID was being checked), note it.
 
-Result:
+Result: ✅ (2026-10-16), with F5-3: the scanner found and credited the transfer before the TXID could be pasted, so steps 2–4's searching and confirming were not seen on production
 
 ### 5.5 A TXID that is not a transfer to the store (deposit C, no money)
 
@@ -991,7 +996,7 @@ Result:
 3. Expected, within about a minute: C waiting again, with "التحويل ليس إلى عنوان المتجر" and "تحقّق من رقم العملية وأرسله من جديد. ما زلنا نراقب عنوان المتجر تلقائيًا." above; its amount, address and time left unchanged. No email.
 4. In the panel open C. Expected: "بانتظار التحويل", "آخر خطأ" "ليست إلى عنوان المتجر", "مرات إرسال الرقم" 1, "لا تحويل مرتبط بهذا الإيداع بعد."; "تحويلات USDT" did not gain that transaction.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 5.6 A short payment goes to review (deposit C)
 
@@ -1003,10 +1008,10 @@ Real money: **C's amount minus exactly $1 on BEP20** (for `5.0052` send `4.0052`
 2. Expected on C's page, within about a minute: "قيد المراجعة" with "المبلغ المستلم 4.00xx يختلف عن المطلوب 5.00xx." and the review time. No email.
 3. Telegram: a card "🔎 مراجعة USDT VD-… · USDT BEP20" with "المستلم 4.00xx USDT، المطلوب 5.00xx", the TXID shortened with its BscScan link, the panel link and one button, "رفض" (no approval from Telegram). Do not press it. A "⚠️ تحويل USDT غير مطابق" message for 4.00xx may come first (the scanner saw it before the TXID check): note whether it did.
 4. In the panel: the "الإيداعات" badge shows 1; "قيد المراجعة" lists C with "USDT (BEP20)" and the flag "مبلغ مختلف".
-5. Open C. Expected: the facts ("الشبكة", "العنوان المعروض للعميل", "المبلغ المطلوب" 5.00xx, "الكسر المميِّز", the declared $5.00); the TXID "أرسله العميل" with its explorer link; the transfer with "المستلم" 4.00xx and "أقل بـ $1.00"; the flag; "الإيداعات المرشحة" (C itself, by its tail); the customer panel.
+5. Open C. Expected: the facts ("الشبكة", "العنوان المعروض للعميل", "المبلغ المطلوب" 5.00xx, "الكسر المميِّز", the declared $5.00); the TXID "أرسله العميل" with its explorer link; the transfer with "المستلم" 4.00xx and "أقل بـ $1.00"; the flag; "الإيداعات المرشحة" lists other reserved deposits with this amount or tail, so here "لا إيداعات أخرى مرشحة." (F5-1); the customer panel.
 6. Press "إعادة التحقق". Expected: "أُرسل التحقق"; C stays in review with the same facts.
 
-Result:
+Result: ✅ (2026-10-16), with F5-1 and F5-2. C was a $4.00 deposit (4.0056) and 3.0056 was sent, the owner's choice; "الإيداعات المرشحة" read "لا إيداعات مرشحة."
 
 ### 5.7 Approving the received amount in the panel (deposit C)
 
@@ -1018,7 +1023,7 @@ Result:
 4. In the store: C's page "أُضيف المبلغ إلى محفظتك" with $4.00; the bell and the email with $4.00. TC1's balance $29.00.
 5. "تحويلات USDT" ("الكل"): C's transfer "مُضاف" with TC1; "غير المطابقة" empty.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 5.8 An unmatched transfer, a rejection from Telegram and a manual deposit (deposit D)
 
@@ -1034,7 +1039,7 @@ Real money: **`1.37` USDT on BEP20**.
 6. "تحويلات USDT" ("غير المطابقة"): the transfer "غير مطابق" again. Press "تسجيل إيداع يدوي", choose TC1 (search by email), and check the prefilled form: "إيداع مسجَّل يدوياً", BEP20, the TXID, $1.37. Type the internal reason (for example `System test 5.8: 1.37 USDT sent with no deposit`) and save (re-authentication if asked).
 7. Expected: the transfer "مُضاف" with TC1; "غير المطابقة" empty and the badge gone; TC1's wallet shows "إيداع مسجَّل يدوياً" +$1.37, balance $30.37.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 5.9 A TXID counts once (deposit E)
 
@@ -1045,7 +1050,7 @@ Result:
 3. Paste B's TXID (5.4), this time as its BscScan link. Expected: the same refusal.
 4. Press "إلغاء الإيداع". Expected: the dialog "إن كنت أرسلت المبلغ فلا تلغِ: سنكتشف التحويل تلقائيًا…"; confirm; E reads "أُلغي الإيداع".
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 5.10 A network switched off
 
@@ -1055,7 +1060,7 @@ Result:
 2. In the store as TC1 open "إيداع". Expected: "USDT (TRC20)" disabled with "غير متاح حاليًا"; "USDT (BEP20)" and "شام كاش" enabled.
 3. Turn TRC20 on again and save. Expected: after a reload the store offers it again.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 5.11 Only the right people see USDT deposits and transfers
 
@@ -1066,7 +1071,7 @@ Result:
 3. Open `https://digital.vertexmedia.pro/api/admin/usdt-transfers`. Expected: 404.
 4. TC1's "إيداعاتي": A, B and C credited, D rejected, E cancelled, labelled "USDT (TRC20)" or "USDT (BEP20)", besides feature 4's deposits.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 5.12 The audit log has every USDT step and decision
 
@@ -1077,7 +1082,7 @@ Result:
 3. Open C's credit. Expected: the received amount, credited $4.00, the acknowledged flag, the journal and the balance after, your internal note.
 4. The manual deposit of 5.8 with its TXID and reason (wallet adjustment entries); the deposit settings: the two saves of 5.10.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 5.13 Screens and emails quality on desktop and phone
 
@@ -1088,13 +1093,13 @@ Result:
 3. The emails of this feature (credited, rejected): the brand header, Arabic RTL, the right amount and reference code, a working link to the deposit, no TXID, address or internal note.
 4. The Telegram messages (review card, unmatched transfer): Arabic, complete, amounts with Latin digits, the explorer and panel links working.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### Feature 5 sign-off
 
 | Item | Value |
 |---|---|
-| Cases passed | |
-| Findings | |
-| Accepted by the owner on | |
-| PR | the steps (this PR); the results and fixes in the next PR |
+| Cases passed | 13 of 13 |
+| Findings | F5-1 (step error, the empty-list text made clearer), F5-2 (USDT mismatch line) fixed, F5-3 accepted (the TXID states rest on the automated tests), F5-4 and F5-5 owner questions answered, no change |
+| Accepted by the owner on | 2026-10-16 |
+| PR | the steps (#115); the results and fixes in the next PR |

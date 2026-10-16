@@ -4,6 +4,7 @@ import {
   type DepositFlag,
   type DepositFlagCode,
   formatUsd,
+  formatUsdtAmount,
 } from '@vertex-digital/contracts';
 import { Badge } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
@@ -15,10 +16,19 @@ import { receiptUrl } from './deposits.queries';
 /**
  * The deposit's flags (A10), each with its words and what was found. For a reused or similar
  * receipt (FL1, FL2), links open the other deposit and its receipt, and say whether it is this
- * customer's or another's; a shared phone (FL5) links each other account (F4-6). The customer
- * never sees them.
+ * customer's or another's; a shared phone (FL5) links each other account (F4-6). A USDT amount
+ * mismatch compares the amount to send with what arrived, in USDT (F5-2). The customer never sees
+ * them.
  */
-export function DepositFlags({ flags, customerId }: { flags: DepositFlag[]; customerId: string }) {
+export function DepositFlags({
+  flags,
+  customerId,
+  usdt,
+}: {
+  flags: DepositFlag[];
+  customerId: string;
+  usdt: boolean;
+}) {
   const { t } = useTranslation();
   if (flags.length === 0) {
     return <p className="text-sm text-muted-foreground">{t('deposits.flags.none')}</p>;
@@ -28,8 +38,12 @@ export function DepositFlags({ flags, customerId }: { flags: DepositFlag[]; cust
       {flags.map((flag) => (
         <li key={flag.id} className="flex flex-col gap-1 rounded-md border border-border p-3">
           <Badge tone="warning">{t(`deposits.flags.${flag.code}.label`)}</Badge>
-          <p className="text-sm">{t(`deposits.flags.${flag.code}.description`)}</p>
-          <FlagDetails flag={flag} customerId={customerId} />
+          <p className="text-sm">
+            {usdt && flag.code === 'amount_mismatch'
+              ? t('deposits.flags.amount_mismatch.usdtDescription')
+              : t(`deposits.flags.${flag.code}.description`)}
+          </p>
+          <FlagDetails flag={flag} customerId={customerId} usdt={usdt} />
         </li>
       ))}
     </ul>
@@ -37,9 +51,17 @@ export function DepositFlags({ flags, customerId }: { flags: DepositFlag[]; cust
 }
 
 /** The details as their contract reads them; anything unexpected shows nothing more. */
-function FlagDetails({ flag, customerId }: { flag: DepositFlag; customerId: string }) {
+function FlagDetails({
+  flag,
+  customerId,
+  usdt,
+}: {
+  flag: DepositFlag;
+  customerId: string;
+  usdt: boolean;
+}) {
   const { t } = useTranslation();
-  const line = detailLine(t, flag.code, flag.details);
+  const line = detailLine(t, flag.code, flag.details, usdt);
   const shared =
     flag.code === 'shared_phone'
       ? DEPOSIT_FLAG_DETAILS.shared_phone.safeParse(flag.details).data?.customerIds
@@ -128,8 +150,13 @@ function matchesOf(flag: DepositFlag): Match[] {
   return [];
 }
 
-/** One line for the flags whose details are numbers. */
-export function detailLine(t: TFunction, code: DepositFlagCode, details: unknown): string | null {
+/** One line for the flags whose details are numbers; `usdt` reads an amount mismatch in USDT. */
+function detailLine(
+  t: TFunction,
+  code: DepositFlagCode,
+  details: unknown,
+  usdt: boolean,
+): string | null {
   switch (code) {
     case 'new_account_large': {
       const parsed = DEPOSIT_FLAG_DETAILS.new_account_large.safeParse(details);
@@ -154,6 +181,12 @@ export function detailLine(t: TFunction, code: DepositFlagCode, details: unknown
       if (!parsed.success) return null;
       const { declaredCurrency, declaredAmountUnits, receivedCurrency, receivedAmountUnits } =
         parsed.data;
+      if (usdt) {
+        return t('deposits.flags.usdtMismatchLine', {
+          asked: ltr(formatUsdtAmount(declaredAmountUnits)),
+          received: ltr(formatUsdtAmount(receivedAmountUnits)),
+        });
+      }
       return t('deposits.flags.mismatchLine', {
         declared: depositAmount(t, declaredCurrency, declaredAmountUnits),
         received: depositAmount(t, receivedCurrency, receivedAmountUnits),
