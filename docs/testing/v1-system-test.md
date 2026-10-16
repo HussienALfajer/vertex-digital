@@ -38,7 +38,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | 2 | Customer accounts | F01 | Every customer case needs sign-in, sessions and account emails working | Accepted 2026-10-15 |
 | 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | Accepted 2026-10-15 |
 | 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | Accepted 2026-10-16 (4.12 step 2 on 2026-10-17) |
-| 5 | USDT deposits | F06 | The automatic money-in path | — |
+| 5 | USDT deposits | F06 | The automatic money-in path | Steps written 2026-10-16 |
 | 6 | Wallet and ledger | F03 | Checked once real deposits exist: balances as sums, history, journals | — |
 | 7 | Catalog | F08 | What is sold: games, packs, fields, images, states | — |
 | 8 | Pricing engine | F10 | Prices, margins, review queue, loss guard | — |
@@ -894,4 +894,207 @@ Result: step 1 done 2026-10-16 15:34 Damascus (E is VD-M5YGF); step 2 due after 
 | Cases passed | 12 of 13; 4.12 step 1 done, step 2 due after 2026-10-17 15:39 |
 | Findings | F4-1 (setup, closed); F4-2 to F4-16 fixed: one blocker (F4-3), three major (F4-9 to F4-11), the rest minor; an independent review, a review of its fixes, and a second review by another model |
 | Accepted by the owner on | 2026-10-16 |
-| PR | the steps (#110); the results and fixes in the next PR, not opened yet |
+| PR | the steps (#110); the results and fixes (#113), merged and deployed to production on 2026-10-16 (`18336fe`, recorded in #114) |
+
+---
+
+## Feature 5 — USDT deposits (F06, with the USDT parts of F07 and F27)
+
+**What it covers:** the customer's USDT deposit on TRON (TRC20) and BNB Smart Chain (BEP20) from the form to the credit (S04): the networks offered and why one is unavailable, the USDT minimum and the shared limits (U5), the exact amount with its sub-cent tail, the address with its QR and groups of four, the warnings; the automatic detection of an exact transfer with no TXID (U12), the optional TXID and its states (searching, confirming with progress; U8, U9), a TXID that is not a transfer to the store bounced with its reason (U10), a short payment sent to review (U11); the admin's side: the queue and its badge, the USDT deposit page with the transfer, the difference and the candidates, the re-check (U17), approval of the received amount with the flag and re-authentication (U15), rejection from Telegram (U16, S05 TC5), the incoming transfers list with an unmatched transfer recorded through the manual deposit form (U13), a TXID counted once across deposits and manual deposits; the per-network switches of the deposit settings; the USDT parts of F07 (the review card with "رفض" only, TC3; the unmatched-transfer message, TC7) and of F27 (the bell, the credited and rejected emails).
+
+**How to read a case:** as in features 2 to 4: **What this checks** first, then the numbered steps; a line starting with "Expected" is what you must see.
+
+**Real money in this feature:** four real USDT transfers from your own wallet or exchange to the store's addresses, **$15.37 plus the tails and the network fees**, all credited to TC1:
+
+| Case | Network | You send | TC1 gets |
+|---|---|---|---|
+| 5.3 | TRC20 | $5 + the tail its page shows (for example `5.0037`) | $5.00, automatically |
+| 5.4 | BEP20 | $5 + the tail its page shows | $5.00, automatically |
+| 5.6 | BEP20 | **exactly $1 less** than its page shows (`4.0052` for `5.0052`) | $4.00, approved by you in 5.7 |
+| 5.8 | BEP20 | `1.37`, with no deposit open | $1.37, recorded by you as a manual deposit |
+
+Send from the wallet or exchange of the 2026-10-14 live check, which delivered four decimals in full (1.5024 and 3.0075). **What arrives must be what the page shows:** if your platform takes its withdrawal fee out of the amount, add the fee, or the exact cases go to review instead. TC1 keeps the $15.37 for the purchases of features 11–14; features 6 and 22 check them again. **Never record a manual deposit for a transfer you cannot see on the explorer**: a credit without real USDT behind it would break the reconciliation of feature 22.
+
+**Before you start**
+
+- The panel open on the PC (signed in), the store as TC1 in a second browser, the store as TC3 in a private window, and your phone with the bot's Telegram chat and the wallet or exchange you send from (about $16 of USDT across the two networks, plus their fees). Tronscan and BscScan open in tabs help to read TXIDs.
+- Any time of day: USDT is checked automatically day and night. The cases take about 1 hour 30 minutes.
+- "تيليجرام" (`/settings/telegram`) shows the bot linked to your chat.
+- "إعدادات الإيداع" (`/settings/deposits`), written down before you start: in the USDT section both networks show their "عنوان الاستلام" (read-only) with the switch on and "آخر قراءة ناجحة:" within the last few minutes, no "التحقق متأخر"; "أقل مبلغ لإيداع USDT" $5.00 (note it if the live check left it lower); the limits as feature 4 left them (TC1 is established: $300.00 per deposit, $1,000.00 per 24 hours).
+- No deposit method is paused in the store switches (pausing is feature 21).
+- TC1 has no deposit waiting: feature 4's are all decided. TC3 still has deposit E of 4.12 waiting until 2026-10-17 15:39, so TC3 only reads in this feature.
+- Note TC1's balance on `/wallet` (expected: $15.00, feature 4's three credits). TC1's email preferences are all on.
+- "تحويلات USDT" in the panel: "الكل" lists the live check's two transfers as "مُضاف"; "غير المطابقة" is empty.
+
+**Worked numbers used below:** a $5.00 deposit shows `5.00xx` USDT, where `xx` is its own tail (0.0001 to 0.0099; two open deposits of one network never share an amount). The tail goes to the store's rounding account and the customer is credited the $5.00 asked for. A transfer that is not exact is credited, if approved, at what arrived floored to the cent: `4.0052` is **$4.00**, `1.37` is **$1.37**.
+
+**Not tested on production (by design):** a TXID not found after 30 minutes and 10 reads, a failed transaction, a fake "USDT" token, a transfer under $1 (dust), a transfer on the other network (`wrong_network`), an exact transfer sent before its deposit, the network "التحقق متأخر" (the scanner stopped for 10 minutes), all 99 tails of one amount busy, the 5 TXID submissions per deposit and 20 per hour, the 24-hour expiry of a USDT deposit (the job 4.12 checks), and two credits of one transfer at the same instant: the automated tests cover them (S04 rule and concurrency tests). The ledger postings and the rounding account are checked in feature 6, the per-method pause and the emergency stop in feature 21, the bot's commands and daily summary in feature 20, the on-chain balances against the books in feature 22, web push in feature 19.
+
+### 5.1 The settings and the networks offered
+
+**What this checks:** the receiving addresses are the owner's and cannot be changed from the panel, and the store offers only the networks that work.
+
+1. In the panel open "إعدادات الإيداع". Expected: the USDT section with "عنوان الاستلام" for TRC20 (`T…`) and BEP20 (`0x…`), each exactly your wallet's address (compare every character with your wallet), with "يُغيَّر من إعدادات الخادم فقط" and no way to edit it; each network's switch and "آخر قراءة ناجحة:".
+2. In the store as TC1 open "المحفظة" → "إيداع". Expected: the method choice offers "شام كاش", "USDT (TRC20)" and "USDT (BEP20)", all enabled.
+
+Result:
+
+### 5.2 The form and its limits
+
+**What this checks:** the customer sees the network and the limits before anything is created, and a wrong amount is refused before a deposit exists.
+
+1. Choose "USDT (TRC20)". Expected: "أرسل على شبكة TRON (TRC20) فقط" with "التحويل على شبكة أخرى لا يُضاف تلقائيًا."; the amount in dollars with presets within the limits; the limits line (minimum $5.00, per deposit $300.00, the remaining 24-hour amount); "رسوم الشبكة والمنصة على المرسل."
+2. Enter `4.99` and press "متابعة". Expected: "أقل مبلغ للإيداع $5.00. أدخل مبلغًا أكبر."; "إيداعاتي" lists no new deposit.
+3. Enter `300.01`. Expected: "أقصى مبلغ للإيداع الواحد في حسابك $300.00. أدخل مبلغًا أصغر."
+4. Enter `5.123`, then `٥`. Expected: each refused with "أدخل مبلغًا بالدولار بأرقام لاتينية، مثل 25 أو 25.50."
+5. Choose "USDT (BEP20)". Expected: the note reads "أرسل على شبكة BNB Smart Chain (BEP20) فقط".
+
+Result:
+
+### 5.3 An exact transfer found with no TXID (deposit A, TRC20)
+
+**What this checks:** a customer who just sends the amount shown, and does nothing else, is credited within minutes without the admin.
+
+Real money: **$5 + tail on TRC20**.
+
+1. "USDT (TRC20)", `5`, "متابعة". Expected, the deposit page: "أرسل هذا المبلغ بالضبط" with `5.00xx` large, its last two digits highlighted, "الرقمان الأخيران يميّزان إيداعك عن غيره…" and "انسخ المبلغ"; the badge "TRON · TRC20"; "عنوان المتجر" with the QR (tap to enlarge), the address in groups of four, "انسخ العنوان" and "انسخ العنوان من هنا دائمًا، لا من سجل محفظتك."; the warning "يجب أن يصل المبلغ كاملًا"; "ننتظر وصول التحويل وسنكتشفه تلقائيًا."; the field "سرّع التحقق (اختياري)"; "ينتهي الإيداع إن لم يصل التحويل خلال" about 24 hours; "إلغاء الإيداع". This is **A**: write down its reference code and amount.
+2. Press both copy buttons and paste each into any text field. Expected: the amount and the address exact, with no space or mark. Scan the QR with your wallet: the same address.
+3. Open "إيداع" again. Expected: you land back on A (one waiting deposit at a time).
+4. In the panel, "الإيداعات" → "بانتظار الدفع": A with TC1, the chip "USDT (TRC20)" and $5.00; the "الإيداعات" badge did not change.
+5. From your wallet send A's exact amount on **TRON (TRC20)** to the address copied from A's page. **Do not paste the TXID.** Note the time.
+6. Expected, within about 2 minutes, on A's page without a reload: "أُضيف المبلغ إلى محفظتك" with $5.00, the TXID link and the time. The bell: "أُضيف $5.00 إلى رصيدك (VD-…)". The credited email, with no TXID and no address in it. TC1's balance $20.00.
+7. In the panel open A. Expected: read-only, decided "تلقائي"; "رقم العملية (TXID)" with "اكتشاف تلقائي" and the explorer link (it opens your transaction); the transfer from your address to the store's, "المستلم" "مطابق تمامًا", block and time. "تحويلات USDT" ("الكل") lists it "مُضاف" with TC1. No Telegram message for A.
+
+Result:
+
+### 5.4 An exact transfer with its TXID pasted (deposit B, BEP20)
+
+**What this checks:** a customer who pastes the TXID sees each step of the check, and a typo is caught before anything is sent.
+
+Real money: **$5 + tail on BEP20**.
+
+1. "إيداع" → "USDT (BEP20)", `5`, "متابعة" (this is **B**). Expected: the badge "BNB Smart Chain · BEP20" and an address starting with `0x`.
+2. In "سرّع التحقق" paste `abc` and press "تحقّق الآن". Expected: "رقم العملية غير صالح. الصق رقم العملية (TXID) أو رابطها من Tronscan أو BscScan."; B still waiting.
+3. Send B's exact amount on **BNB Smart Chain (BEP20)**. As soon as your wallet shows the TXID (or the BscScan link), paste it into "سرّع التحقق" and press "تحقّق الآن".
+4. Expected, without a reload: "نبحث عن العملية على الشبكة" with the TXID and "افتح العملية في مستكشف الشبكة", then "وصل التحويل، ننتظر تأكيد الشبكة" with "تأكيدات الشبكة" "n من 15 تأكيدًا" (on BSC this can pass in seconds: note what you saw), then "أُضيف المبلغ إلى محفظتك" with $5.00. The bell and the email as in 5.3. TC1's balance $25.00.
+5. In the panel open B. Expected: "تلقائي", the TXID source "أرسله العميل" (or "اكتشاف تلقائي" if the scanner was first: note which), "مرات إرسال الرقم" 1, "مطابق تمامًا".
+6. Telegram: expected no message for B. If "⚠️ تحويل USDT غير مطابق" arrived for B's amount (the scanner saw the transfer while its TXID was being checked), note it.
+
+Result:
+
+### 5.5 A TXID that is not a transfer to the store (deposit C, no money)
+
+**What this checks:** a customer who pastes a wrong TXID is told why it does not count and can try again; nothing is credited.
+
+1. "إيداع" → "USDT (BEP20)", `5`, "متابعة" (this is **C**; 5.6 uses it again). Write down its exact amount.
+2. On BscScan open the BSC-USD (USDT) token page, "Transfers", and copy the transaction hash of a recent transfer between two other addresses. Paste it into C's "سرّع التحقق" and press "تحقّق الآن".
+3. Expected, within about a minute: C waiting again, with "التحويل ليس إلى عنوان المتجر" and "تحقّق من رقم العملية وأرسله من جديد. ما زلنا نراقب عنوان المتجر تلقائيًا." above; its amount, address and time left unchanged. No email.
+4. In the panel open C. Expected: "بانتظار التحويل", "آخر خطأ" "ليست إلى عنوان المتجر", "مرات إرسال الرقم" 1, "لا تحويل مرتبط بهذا الإيداع بعد."; "تحويلات USDT" did not gain that transaction.
+
+Result:
+
+### 5.6 A short payment goes to review (deposit C)
+
+**What this checks:** money that arrives but does not match is never credited on its own: it waits for the admin, with the reason in plain words for the customer, and the admin learns of it on the phone.
+
+Real money: **C's amount minus exactly $1 on BEP20** (for `5.0052` send `4.0052`).
+
+1. Send C's amount minus $1 on BEP20, then paste its TXID into C's "سرّع التحقق" and press "تحقّق الآن".
+2. Expected on C's page, within about a minute: "قيد المراجعة" with "المبلغ المستلم 4.00xx يختلف عن المطلوب 5.00xx." and the review time. No email.
+3. Telegram: a card "🔎 مراجعة USDT VD-… · USDT BEP20" with "المستلم 4.00xx USDT، المطلوب 5.00xx", the TXID shortened with its BscScan link, the panel link and one button, "رفض" (no approval from Telegram). Do not press it. A "⚠️ تحويل USDT غير مطابق" message for 4.00xx may come first (the scanner saw it before the TXID check): note whether it did.
+4. In the panel: the "الإيداعات" badge shows 1; "قيد المراجعة" lists C with "USDT (BEP20)" and the flag "مبلغ مختلف".
+5. Open C. Expected: the facts ("الشبكة", "العنوان المعروض للعميل", "المبلغ المطلوب" 5.00xx, "الكسر المميِّز", the declared $5.00); the TXID "أرسله العميل" with its explorer link; the transfer with "المستلم" 4.00xx and "أقل بـ $1.00"; the flag; "الإيداعات المرشحة" (C itself, by its tail); the customer panel.
+6. Press "إعادة التحقق". Expected: "أُرسل التحقق"; C stays in review with the same facts.
+
+Result:
+
+### 5.7 Approving the received amount in the panel (deposit C)
+
+**What this checks:** the admin credits what really arrived, never a typed amount, and only after acknowledging the flag and confirming who they are.
+
+1. On C's page, the approve form. Expected: the button "اعتماد وإضافة $4.00", "المبلغ المضاف هو المستلم على الشبكة مقرّبًا إلى السنت الأدنى، ولا يُكتب يدويًا…", no amount field, the flag's tick, an internal note, and "يُطلب تأكيد الهوية دائمًا قبل اعتماد إيداع USDT."
+2. Press the button without ticking the flag. Expected: refused until the flag is ticked.
+3. Tick the flag, type an internal note, press it. Expected: the re-authentication dialog (unless you re-authenticated in the last 5 minutes); then C credited $4.00, decided by you, read-only. The Telegram card shows the outcome, with no button.
+4. In the store: C's page "أُضيف المبلغ إلى محفظتك" with $4.00; the bell and the email with $4.00. TC1's balance $29.00.
+5. "تحويلات USDT" ("الكل"): C's transfer "مُضاف" with TC1; "غير المطابقة" empty.
+
+Result:
+
+### 5.8 An unmatched transfer, a rejection from Telegram and a manual deposit (deposit D)
+
+**What this checks:** money that matches no deposit is never lost: the admin sees it, can refuse a customer's claim to it from the phone, and records it once, for the right customer, with its TXID.
+
+Real money: **`1.37` USDT on BEP20**.
+
+1. With no TC1 deposit waiting, send exactly `1.37` on BEP20 to the store's BEP20 address (from B's page or the panel's settings). Write down the TXID.
+2. Expected, within about 2 minutes: Telegram "⚠️ تحويل USDT غير مطابق على USDT BEP20" with "المبلغ: 1.3700 USDT", your address shortened, no candidates, and the panel link. In the panel "تحويلات USDT" carries the badge "تحويلات غير مطابقة: 1"; "غير المطابقة" lists it "غير مطابق" with "تسجيل إيداع يدوي". Do not record it yet.
+3. As TC1: "إيداع" → "USDT (BEP20)", `5`, "متابعة" (this is **D**). Paste the TXID of step 1 and press "تحقّق الآن".
+4. Expected on D's page: "قيد المراجعة" with "المبلغ المستلم 1.3700 يختلف عن المطلوب 5.00xx." and "أُرسل التحويل قبل إنشاء الإيداع."; a review card for D in Telegram. In the panel D carries "مبلغ مختلف" and "تحويل أقدم من الإيداع", and "تحويلات USDT" ("الكل") shows the transfer "قيد المراجعة".
+5. On D's Telegram card press "رفض", choose "التحويل يخص طلب إيداع آخر", then send an internal note (for example `System test: transfer sent before this deposit`). Expected: D rejected and its card shows it; TC1's D page "رُفض الإيداع" with the reason and "إيداع جديد"; the bell and the rejection email. TC1's balance unchanged, $29.00.
+6. "تحويلات USDT" ("غير المطابقة"): the transfer "غير مطابق" again. Press "تسجيل إيداع يدوي", choose TC1 (search by email), and check the prefilled form: "إيداع مسجَّل يدوياً", BEP20, the TXID, $1.37. Type the internal reason (for example `System test 5.8: 1.37 USDT sent with no deposit`) and save (re-authentication if asked).
+7. Expected: the transfer "مُضاف" with TC1; "غير المطابقة" empty and the badge gone; TC1's wallet shows "إيداع مسجَّل يدوياً" +$1.37, balance $30.37.
+
+Result:
+
+### 5.9 A TXID counts once (deposit E)
+
+**What this checks:** a transfer already credited, by a deposit or a manual deposit, can never be claimed again.
+
+1. As TC1: "إيداع" → "USDT (BEP20)", `5`, "متابعة" (this is **E**; no money is sent).
+2. Paste the TXID of 5.8 and press "تحقّق الآن". Expected at once: "رقم العملية هذا مستخدم من قبل."; E still waiting.
+3. Paste B's TXID (5.4), this time as its BscScan link. Expected: the same refusal.
+4. Press "إلغاء الإيداع". Expected: the dialog "إن كنت أرسلت المبلغ فلا تلغِ: سنكتشف التحويل تلقائيًا…"; confirm; E reads "أُلغي الإيداع".
+
+Result:
+
+### 5.10 A network switched off
+
+**What this checks:** the admin can stop new deposits on one network, and customers see it as unavailable instead of failing.
+
+1. In "إعدادات الإيداع" turn the TRC20 switch off and save (re-authentication).
+2. In the store as TC1 open "إيداع". Expected: "USDT (TRC20)" disabled with "غير متاح حاليًا"; "USDT (BEP20)" and "شام كاش" enabled.
+3. Turn TRC20 on again and save. Expected: after a reload the store offers it again.
+
+Result:
+
+### 5.11 Only the right people see USDT deposits and transfers
+
+**What this checks:** a customer reaches only their own deposits, and the transfers list is the admin's alone.
+
+1. Copy the address of TC1's deposit B page and open it in TC3's private window. Expected: not found, nothing of B shown.
+2. In TC1's browser open `https://digital-admin.vertexmedia.pro/api/admin/usdt-transfers`. Expected: 401, no data.
+3. Open `https://digital.vertexmedia.pro/api/admin/usdt-transfers`. Expected: 404.
+4. TC1's "إيداعاتي": A, B and C credited, D rejected, E cancelled, labelled "USDT (TRC20)" or "USDT (BEP20)", besides feature 4's deposits.
+
+Result:
+
+### 5.12 The audit log has every USDT step and decision
+
+**What this checks:** every USDT deposit can be traced from its creation to its credit, with who decided and on which transfer.
+
+1. In "سجل التدقيق" filter the entity type deposit.
+2. Expected, per deposit: A created, "ربط تحويل USDT بإيداع" (exact, source scan), credited (actor system); B created, "إرسال رقم عملية USDT", bound (exact), credited (system); C created, the TXID of 5.5, "رفض رقم عملية USDT تلقائيًا" (`not_to_store`), the TXID of 5.6, bound (review), "إعادة التحقق من إيداع USDT", credited by you with the acknowledged flag; D created, its TXID, bound (review, both flags), rejected (channel Telegram); E created, cancelled. Nothing for the refused amounts of 5.2 or the refused TXIDs of 5.4 step 2 and 5.9.
+3. Open C's credit. Expected: the received amount, credited $4.00, the acknowledged flag, the journal and the balance after, your internal note.
+4. The manual deposit of 5.8 with its TXID and reason (wallet adjustment entries); the deposit settings: the two saves of 5.10.
+
+Result:
+
+### 5.13 Screens and emails quality on desktop and phone
+
+**What this checks:** a customer on a phone and the admin on either device can do every step without guessing.
+
+1. On the phone as TC1, in both themes: the USDT form, a waiting deposit (the QR enlarged, the amount with its highlighted digits, the address in groups, the copy buttons), the searching, confirming, review, credited, rejected and cancelled pages, a bounce error, "إيداعاتي" and the wallet history. Expected: readable, RTL, Latin digits, the amount, address and TXID left to right, a numeric keyboard on the amount, no horizontal scroll.
+2. On the PC, the panel in the light and dark themes: the queue with a USDT row, a USDT deposit page with its transfer and candidates, "تحويلات USDT", the USDT section of the deposit settings. On the phone: the queue, a USDT deposit page and the transfers list usable.
+3. The emails of this feature (credited, rejected): the brand header, Arabic RTL, the right amount and reference code, a working link to the deposit, no TXID, address or internal note.
+4. The Telegram messages (review card, unmatched transfer): Arabic, complete, amounts with Latin digits, the explorer and panel links working.
+
+Result:
+
+### Feature 5 sign-off
+
+| Item | Value |
+|---|---|
+| Cases passed | |
+| Findings | |
+| Accepted by the owner on | |
+| PR | the steps (this PR); the results and fixes in the next PR |
