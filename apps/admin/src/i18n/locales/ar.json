@@ -1315,7 +1315,8 @@
       },
       "amount_mismatch": {
         "label": "مبلغ مختلف",
-        "description": "المبلغ أو العملة المستلمة تختلف عن المعلنة."
+        "description": "المبلغ أو العملة المستلمة تختلف عن المعلنة.",
+        "usdtDescription": "المبلغ المستلم على الشبكة يختلف عن المبلغ المطلوب إرساله."
       },
       "reference_missing": {
         "label": "رمز المرجع مفقود",
@@ -1344,6 +1345,7 @@
       "velocityLine": "{{submissions}} إيصالات خلال 24 ساعة، والحد {{threshold}}",
       "sharedPhoneLine": "عدد الحسابات الأخرى: {{customers}}",
       "mismatchLine": "المعلن {{declared}}، والمستلم {{received}}",
+      "usdtMismatchLine": "المطلوب {{asked}} USDT، والمستلم {{received}} USDT",
       "wrongNetworkLine": "الإيداع على {{deposit}}، والتحويل على {{transfer}}",
       "sentBeforeLine": "وقت التحويل {{block}}، وأُنشئ الإيداع {{created}}"
     },
@@ -1536,7 +1538,7 @@
       "blockTime": "وقت الكتلة",
       "explorer": "افتح في مستكشف الشبكة",
       "candidates": "الإيداعات المرشحة",
-      "noCandidates": "لا إيداعات مرشحة.",
+      "noCandidates": "لا إيداعات أخرى مرشحة.",
       "approveVerify": "المبلغ المضاف هو المستلم على الشبكة مقرّبًا إلى السنت الأدنى، ولا يُكتب يدويًا. لمبلغ آخر ارفض الإيداع وسجّل تعديلًا يدويًا.",
       "creditHint": "المستلم على الشبكة مقرّبًا إلى السنت الأدنى.",
       "reauthentication": "يُطلب تأكيد الهوية دائمًا قبل اعتماد إيداع USDT.",

@@ -260,6 +260,16 @@ test.describe('USDT deposits', () => {
     await open(page, admin, `/deposits/${REVIEW_DEPOSIT}`);
     await expect(page.getByText(BSC_ADDRESS).first()).toBeVisible();
     await expect(page.getByText(SENDER)).toBeVisible();
+    // The flag compares the amount to send with what arrived, in USDT (F5-2).
+    await expect(page.getByText(ar.deposits.flags.amount_mismatch.usdtDescription)).toBeVisible();
+    await expect(
+      page.getByText(
+        fill(ar.deposits.flags.usdtMismatchLine, {
+          asked: usd('10.0042'),
+          received: usd('9.0042'),
+        }),
+      ),
+    ).toBeVisible();
     await expect(
       page.getByText(fill(ar.deposits.usdt.less, { amount: usd('1.0000 USDT') })),
     ).toBeVisible();
