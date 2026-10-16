@@ -37,7 +37,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | 1 | Admin access, 2FA and audit log | F02 | Every later step is an admin action that must be authenticated, re-authenticated and audited; the audit log is the tool used to verify the rest | Accepted 2026-10-15 |
 | 2 | Customer accounts | F01 | Every customer case needs sign-in, sessions and account emails working | Accepted 2026-10-15 |
 | 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | Accepted 2026-10-15 |
-| 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | — |
+| 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | Accepted 2026-10-16 (4.12 step 2 on 2026-10-17) |
 | 5 | USDT deposits | F06 | The automatic money-in path | — |
 | 6 | Wallet and ledger | F03 | Checked once real deposits exist: balances as sums, history, journals | — |
 | 7 | Catalog | F08 | What is sold: games, packs, fields, images, states | — |
@@ -101,6 +101,14 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F3-5 | 3 | Second review | The store's search kept its index for the tab's life: after a rate or price change, reopening the search showed the old SYP (and USD) until a full reload | minor | The index is read again once older than 30 seconds, the API's cache life (rule SR2); the old one shows until the new one arrives; E2E | Fixed |
 | F3-6 | 3 | Second review | When another session changed the rate after the page loaded, a change the page judged under 5% was refused with `RATE_CONFIRMATION_REQUIRED`, but the confirmation field stayed hidden (computed from the old rate), so saving again failed the same way | minor | On a confirmation refusal the page reads the rate again and keeps what was typed, so the change percent and the confirmation field follow the new rate; the form clears itself after a save (it no longer remounts), and its step follows the current rate's until edited, so it never sends back a step another session replaced (caught by the independent review); E2E | Fixed |
 | F3-7 | 3 | Second review | Twelve digits of pounds at a low rate (999,999,999,999 at 100) are worth more than the largest safe number of USD units: the conversion threw before the limit check, so the store form fell to its error screen and the API answered 500 (edge case 12 says the per-deposit limit stops them) | minor | Such an amount converts to null (`sypDepositUsdWithinRange`): creation answers the per-deposit limit, the store refuses with the limit's text, a requote or an approval answers `VALIDATION_FAILED`, and the panel's approval form says the amount is too large; unit and API tests | Fixed |
+| F4-1 | 4 | 4.4 / 4.5 | A's Telegram card carried "⚠️ رقم هاتف مشترك" and only "رفض": TC1's phone is also another customer's, a precondition of the feature missed. The store behaved as designed (a flagged deposit is approved in the panel only, FL rules); flags are fixed at submission, so A keeps it | — (setup) | None: A approved in the panel with the flag acknowledged; TC1's phone changed to one no other customer has; the Telegram approval tested on a new deposit A2 (case 4.5b, a third real 700 ل.س, owner's approval) | Closed |
+| F4-2 | 4 | 4.5 | Rotating the receipt a quarter turn in the panel's viewer swung the image out of its frame: its top was cut off and a horizontal scrollbar appeared; a zoomed receipt's start edge was out of reach of the scroll. The viewer rotated and zoomed with a CSS transform, which keeps the unturned layout box | minor | The image is laid out at its turned and zoomed size in a box that scrolls to every edge (`receipt-viewer.tsx`, `receipt-layout.ts`); unit test and E2E with a tall receipt | Fixed |
+| F4-3 | 4 | Audit (independent review) | A transaction number compared only trimmed and upper-cased: the same transfer typed with Arabic-Indic digits (an Arabic keyboard in the bot), pasted with a direction or zero-width mark (copied from the right-to-left Sham Cash app), or with a space inside was a new claim, so one real transfer could be credited twice (deposit and deposit, or deposit and manual adjustment) | blocker | References are cleaned when typed (`cleanPaymentReference`: NFKC, format marks and spaces removed, Arabic-Indic and Persian digits to Latin) and normalized before every claim and lookup (`normalizePaymentReference`, `payment-references.ts`), whatever path they came by; the input refuses anything but printable ASCII once cleaned, and migration 0062 adds the same check to `payment_references` (a second review found that claims written before the fix keep their old spelling: on a table holding such a row the migration, and so the deploy, stops for the owner; production read 2026-10-16, read-only with the owner's approval: 5 claims, none with another spelling, so 0062 applies cleanly); tests for seven spellings on the deposit and adjustment paths and for the check | Fixed |
+| F4-4 | 4 | Audit (independent review) | The panel's approval sent neither the credit on its button nor the receipt on screen: a rate change while the page was open credited another amount than the one confirmed (RV2), and a stale tab could approve a new receipt sent after a clearer-receipt request; the $100 re-authentication was decided before the lock | minor | The panel sends `expectedCreditUsdUnits` and `submittedAt`; inside the lock a different credit answers `DEPOSIT_CREDIT_CHANGED`, another receipt `DEPOSIT_STATE_CONFLICT`, and RV4 is checked again on the locked values; API test | Fixed |
+| F4-5 | 4 | Audit (independent review) | Between a deposit's expiry and the expiry job (minutes, longer if the worker is down) the store showed the receipt form with "00:00", whose send button silently did nothing | minor | Past its expiry on the server's clock a pending Sham Cash deposit reads expired, with "إيداع جديد" (`deposit-page.tsx`); `useTimeLeft` reads the time at each render; E2E | Fixed |
+| F4-6 | 4 | Audit (independent review) | A reused or similar receipt (FL1, FL2) did not say whether the other deposit was this customer's or another's, and a shared phone (FL5) gave only a count | minor | Each match reads "العميل نفسه" or links "عميل آخر" to that customer; FL5 links each other account (`deposit-flags.tsx`) | Fixed |
+| F4-7 | 4 | Audit (independent review) | The credited and rejected emails named Sham Cash, but the same events serve USDT deposits | minor | Words that name neither method, the rejection naming both proofs (`email-templates.ts`); tested | Fixed |
+| F4-8 | 4 | Audit (independent review) | The "الإيداعات" badge counted USDT deposits the worker was still checking, which need nothing from the admin | minor | `GET /api/admin/deposits/counts` adds `waiting` and `waitingFlagged` (Sham Cash submitted, USDT in review); the badge reads them; tested | Fixed |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -676,7 +684,7 @@ Result: ✅ 2026-10-15
 
 **How to read a case:** as in feature 2: **What this checks** first, then the numbered steps; a line starting with "Expected" is what you must see.
 
-**Real money in this feature:** two real transfers from your own Sham Cash account to the store's Sham Cash account, **700 ل.س each** (1,400 ل.س, $10.00 at 140), in cases 4.3 and 4.6, both credited to TC1. They stay in TC1's wallet for the purchases of features 11–14, and features 6 and 22 check them again. Every other deposit in this feature carries a harmless image and is rejected, which moves no money. **Never approve a deposit whose transfer you cannot see in the store's Sham Cash account**: a credit without real pounds behind it would break the reconciliation of feature 22.
+**Real money in this feature:** three real transfers from your own Sham Cash account to the store's Sham Cash account, **700 ل.س each** (2,100 ل.س, $15.00 at 140), in cases 4.3, 4.5b and 4.6, all credited to TC1 (the third was added during the run, F4-1). They stay in TC1's wallet for the purchases of features 11–14, and features 6 and 22 check them again. Every other deposit in this feature carries a harmless image and is rejected, which moves no money. **Never approve a deposit whose transfer you cannot see in the store's Sham Cash account**: a credit without real pounds behind it would break the reconciliation of feature 22.
 
 **Before you start**
 
@@ -703,7 +711,7 @@ Result: ✅ 2026-10-15
 4. Enter `7100`. Expected: "أقصى مبلغ للإيداع الواحد في حسابك $50.00. أدخل مبلغًا أصغر."
 5. Enter `700.5`, then `٧٠٠`. Expected: each refused with "أدخل عددًا صحيحًا من الليرات بأرقام لاتينية، مثل 2000."
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 4.2 The deposit page: account, QR, amount and reference code (deposit A)
 
@@ -716,7 +724,7 @@ Result:
 5. Open "المحفظة" → "إيداع" again. Expected: you land back on A (one deposit waiting for a receipt at a time).
 6. In the panel open "الإيداعات" → "بانتظار الدفع". Expected: A is listed with TC1 and 700; the navigation badge did not change (it counts deposits in review only).
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 4.3 The first real transfer and its receipt (deposit A)
 
@@ -729,7 +737,7 @@ Real money: **700 ل.س**.
 3. Add A's receipt (on the PC, or on the phone signed in as TC1). Expected: a preview with "إزالة". Press "أرسل الإيصال".
 4. Expected: "قيد المراجعة", "نراجع التحويل في حساب المتجر. تتحدّث هذه الصفحة تلقائيًا.", the expected time (about 15 minutes, the target, until 5 deposits have been decided), the amount and the reference code. Keep this page open.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 4.4 The review queue and the Telegram card (deposit A)
 
@@ -740,9 +748,11 @@ Result:
 3. Open the card's panel link on the PC. Expected: A's page: the receipt with zoom, rotate and "فتح الصورة في نافذة جديدة"; "بيانات الإيداع" with 700, $5.00, rate 140 "ثابت منذ …"; "لا تنبيهات على هذا الإيداع."; the customer panel with "حساب جديد", "إيداعات مضافة" 0, feature 3's cancelled deposit under "آخر الإيداعات", and the balance.
 4. In "الكل", search A's reference code, then TC1's email. Expected: A found both ways.
 
-Result:
+Result: ✅ (2026-10-16), accepted by the owner with F4-1: A's card carried "رقم هاتف مشترك" (TC1's phone is also another customer's), so the flag chip in step 1 and "لا تنبيهات" in step 3 did not hold, a setup issue; everything else as expected. The store behaved as designed.
 
 ### 4.5 Approval from Telegram (deposit A)
+
+**Run as changed (F4-1):** A carries a flag, so its card offers only "رفض" and A is approved **in the panel**: steps 1 and 6–8 as written, and instead of steps 2–5, "اعتماد الإيداع" on A's page with its transaction number, 700 ل.س, reference "يطابق", the "رقم هاتف مشترك" flag ticked (re-authentication); in step 8 the decision has no "من تيليجرام" badge in the deposit's audit trail (only bot decisions carry one). Then change TC1's phone on `/account` to one no other customer has (TC3's too if it shares it). The Telegram approval itself is case 4.5b.
 
 **What this checks:** an ordinary deposit is credited from the phone in under a minute, only with the real transaction number and a confirm step, and the customer sees it at once without reloading.
 
@@ -755,7 +765,20 @@ Result:
 7. TC1's inbox: the credited email with $5.00, A's code and a link to A. Expected: no transaction number, no receipt, no note.
 8. In the panel reload A. Expected: "القرار" with "المضاف" $5.00, "المستلم" 700 ل.س, the rate, the transaction number, "مطابقة الرمز" يطابق, the journal, the admin and "من تيليجرام". The badge is back to 0.
 
-Result:
+Result: ✅ as changed (2026-10-16): A approved in the panel, the decision card as expected; F4-2 noticed on the receipt viewer.
+
+### 4.5b Approval from Telegram (deposit A2)
+
+**What this checks:** the steps 2–8 of 4.5 on a deposit with no flag, since A could not be approved from Telegram (F4-1).
+
+Real money: **700 ل.س**.
+
+1. As TC1 (phone already changed), "إيداع" → "ل.س" → `700`. Expected: "ستحصل على $5.00", and the limits line "أقصى مبلغ للإيداع $300.00 · المتبقي اليوم $995.00" (TC1 is established since A). Press "متابعة": this is **A2**.
+2. Send 700 ل.س with A2's code in the note, add its receipt and send it.
+3. Telegram: A2's card has no "⚠️", "العميل: … · 1 إيداعات سابقة", and the buttons "اعتماد $5.00" and "رفض". If it still says "رقم هاتف مشترك", stop: another customer still has TC1's phone.
+4. Run steps 1–8 of 4.5 on A2 (A2's transaction number, A2's code). Expected as written there, with the balance $10.00 more than noted and the bell at 2.
+
+Result: ✅ (2026-10-16)
 
 ### 4.6 Approval in the panel: a different amount and no reference (deposit B)
 
@@ -764,16 +787,16 @@ Result:
 Real money: **700 ل.س**. Do steps 1 and 9 in one sitting each (re-authentication lasts 5 minutes).
 
 1. In the panel, "إعدادات الإيداع": set "حد الاعتماد من تيليجرام ($)" to `1` and save (re-authentication).
-2. As TC1, "إيداع" → "ل.س" → `1000`. Expected: "ستحصل على $7.14", and the limits line now reads "أقصى مبلغ للإيداع $300.00 · المتبقي اليوم $995.00" (TC1 is established since A: $1,000.00 less the $5.00 credited). Press "متابعة" and write down the code: this is **B**.
+2. As TC1, "إيداع" → "ل.س" → `1000`. Expected: "ستحصل على $7.14", and the limits line now reads "أقصى مبلغ للإيداع $300.00 · المتبقي اليوم $990.00" (TC1 is established since A: $1,000.00 less the $10.00 of A and A2). Press "متابعة" and write down the code: this is **B**.
 3. In Sham Cash send **700** ل.س (not 1,000) to the store's account, **without** any note. Add the screenshot to B and send it.
-4. Telegram: B's card reads "المبلغ: 1,000 ل.س ≈ $7.14 (السعر 140)", "العميل: … · 1 إيداعات سابقة", the line "فوق حد تيليجرام، الاعتماد من اللوحة", and only the button "رفض".
+4. Telegram: B's card reads "المبلغ: 1,000 ل.س ≈ $7.14 (السعر 140)", "العميل: … · 2 إيداعات سابقة", the line "فوق حد تيليجرام، الاعتماد من اللوحة", and only the button "رفض".
 5. In the panel open B in two tabs. In the first, "اعتماد الإيداع": Expected, the warning "اعتمد فقط بعد رؤية التحويل في سجل حساب شام كاش للمتجر نفسه…". Enter the transaction number of the second transfer, keep "العملة المستلمة" in pounds, change "المبلغ المستلم بالليرة" from 1,000 to `700`, and choose "مفقود" for the reference. Expected: "يُضاف إلى المحفظة" $5.00; two flags to tick: "مبلغ مختلف" ("المعلن 1,000 ل.س، والمستلم 700 ل.س") and "رمز المرجع مفقود"; and "يُطلب تأكيد الهوية قبل الاعتماد…".
 6. Press "اعتماد وإضافة $5.00" without ticking. Expected: "أكّد الاطلاع على كل التنبيهات قبل الاعتماد."; nothing credited.
-7. Tick both, press again. Expected: the re-authentication dialog, then B is decided with "المضاف" $5.00 and "المستلم" 700 ل.س, and both flags shown. Telegram: B's card starts with "✅ أُضيف $5.00 (من اللوحة)". TC1: the bell grows by one, the balance is $10.00 more than noted, and the credited email arrives.
+7. Tick both, press again. Expected: the re-authentication dialog, then B is decided with "المضاف" $5.00 and "المستلم" 700 ل.س, and both flags shown. Telegram: B's card starts with "✅ أُضيف $5.00 (من اللوحة)". TC1: the bell grows by one, the balance is $15.00 more than noted, and the credited email arrives.
 8. In the second tab (still showing the form) fill the same values and approve. Expected: "تغيّرت حالة الإيداع. أعد تحميل الصفحة."; TC1's balance does not change.
 9. Put "حد الاعتماد من تيليجرام ($)" back to 100 (re-authentication).
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 4.7 Another customer's receipt (deposit C, TC3)
 
@@ -791,26 +814,26 @@ No transfer in this case.
 8. As TC3: C's page "رُفض الإيداع" with "الإيصال مستخدم في إيداع سابق" and "إيداع جديد"; the bell, and "رُفض الإيداع VD-…: الإيصال مستخدم في إيداع سابق." in "الإشعارات"; TC3's inbox has the rejection email with the reason and without the internal note.
 9. Copy C's address from TC3's window and open it in TC1's browser. Expected: the 404 page.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 4.8 Bad files, the reminder, a clearer receipt and a rejection in the panel (deposit D)
 
 **What this checks:** a wrong file is refused with a clear message; a receipt left waiting is pushed to the admin; the admin can send a deposit back once for a better image, and reject it with a note only the customer sees; an email turned off stops only that email.
 
-No transfer in this case. **D's first card has an "اعتماد" button: never press it.**
+No transfer in this case. **Never approve D**, whatever its card offers.
 
 1. As TC1, `/account` → "الإشعارات": turn off "عند رفض إيداع". Expected: "حُفظ اختيارك."; the security row "رسائل الأمان (رموز التحقق، تغيير كلمة المرور، تسجيل دخول جديد)" reads "تصل دائمًا" and cannot be changed.
 2. "إيداع": if "الإيداع بالدولار" is on, choose "$" and `5`; otherwise "ل.س" and `700`. Press "متابعة" (this is **D**). Note which currency was used.
 3. Add the PDF or text file and press "أرسل الإيصال". Expected: "الملف ليس صورة صالحة. أرسل لقطة شاشة بصيغة JPEG أو PNG أو WebP." (when the picker or the browser stops it first, a message to choose an image); D still waits for a receipt.
-4. Add harmless image 1 and send it. Note the time. Expected: a new Telegram card for D (TC1's third receipt today: no flag).
+4. Add harmless image 1 and send it. Note the time. Expected: a new Telegram card for D with "⚠️ إيداعات متلاحقة" (TC1's fourth receipt in 24 hours, after A, A2 and B, F4-1) and "عليه علامات، الاعتماد من اللوحة": only "رفض".
 5. Leave D waiting. Expected: between 15 and 20 minutes after step 4, a Telegram reminder "⏰ 1 إيداع بانتظار المراجعة، أقدمها منذ … د" with D's code and its wait, and the panel link. Optional: a second reminder about 30 minutes after the first while D still waits.
 6. In the panel open D → "طلب إيصال أوضح": customer note `أرسل لقطة الشاشة كاملة`, internal note `System test: clearer receipt`, "إرسال الطلب". Expected: D is back in "بانتظار الدفع"; "طلب إيصال أوضح" is no longer offered on D; the card starts with "↩️ طُلب إيصال أوضح" and has no buttons.
 7. As TC1: "نحتاج إيصالًا أوضح للإيداع VD-…. افتحه وأرسل صورة جديدة." in "الإشعارات"; the email (that preference is still on). D's page shows "طُلب إيصال أوضح", "الإيصال السابق غير واضح. أضف صورة أوضح للتحويل نفسه." and your note; for pounds "السعر ثابت: 140 ل.س للدولار" with no countdown (the rate was fixed by the first receipt); the deposit's time left is again about 24 hours.
-8. Add harmless image 2 and send it. Expected: a new card with "⚠️ إيداعات متلاحقة" (TC1's fourth receipt in 24 hours) and "عليه علامات، الاعتماد من اللوحة". In the panel D shows "إيداعات متلاحقة" with "4 إيصالات خلال 24 ساعة، والحد 3", and the viewer has "الإيصال الأحدث" and "الإيصال السابق".
+8. Add harmless image 2 and send it. Expected: a new card with "⚠️ إيداعات متلاحقة" (TC1's fifth receipt in 24 hours) and "عليه علامات، الاعتماد من اللوحة". In the panel D shows "إيداعات متلاحقة" with "5 إيصالات خلال 24 ساعة، والحد 3", and the viewer has "الإيصال الأحدث" and "الإيصال السابق".
 9. "رفض": reason "الإيصال غير صالح أو معدَّل", customer note `System test: no real transfer`, an internal note, "رفض الإيداع". Expected: D rejected; its card starts with "❌ رُفض: الإيصال غير صالح أو معدَّل"; TC1's D page shows the reason and the customer note; "الإشعارات" has the rejection; **no** rejection email in TC1's inbox.
 10. Turn "عند رفض إيداع" back on.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 4.9 Only the right people see deposits and receipts
 
@@ -819,20 +842,20 @@ Result:
 1. In TC1's browser open `https://digital-admin.vertexmedia.pro/api/admin/deposits`. Expected: 401, no data.
 2. Open `https://digital.vertexmedia.pro/api/admin/deposits`. Expected: 404.
 3. In the panel open A's receipt with "فتح الصورة في نافذة جديدة" and copy that address; open it in TC1's browser. Expected: 401, no image.
-4. TC1's "إيداعاتي": A and B credited, D rejected, feature 3's cancelled deposit; C is not listed.
+4. TC1's "إيداعاتي": A, A2 and B credited, D rejected, feature 3's cancelled deposit; C is not listed.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 4.10 The audit log has every deposit step and decision
 
 **What this checks:** every deposit can be traced from its creation to its decision, with who decided, from where, and on what evidence.
 
 1. In "سجل التدقيق" filter the entity type deposit.
-2. Expected, per deposit: A created, submitted, credited (channel Telegram); B created, submitted, credited (panel); C created, submitted, rejected (Telegram); D created, submitted, clearer receipt requested, submitted, rejected. Nothing for the refused attempts of 4.1 or the refused approvals of 4.6 and 4.7.
+2. Expected, per deposit: A created, submitted, credited (panel, F4-1); A2 created, submitted, credited (channel Telegram); B created, submitted, credited (panel); C created, submitted, rejected (Telegram); D created, submitted, clearer receipt requested, submitted, rejected. Nothing for the refused attempts of 4.1 or the refused approvals of 4.6 and 4.7.
 3. Open B's credit. Expected: labelled transaction number, received currency and amount, credited $5.00, the reference check "مفقود", both acknowledged flags, the journal and the balance after; the internal note if you typed one.
 4. Filter the entity type deposit settings: the two saves of 4.6 (limit 100 → 1 → 100). Filter TC1 as actor: the two email-preference changes of 4.8. No wallet adjustment from 4.7.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 4.11 Screens and emails quality on desktop and phone
 
@@ -843,7 +866,7 @@ Result:
 3. The emails of this feature (credited, clearer receipt, rejected): the brand header, Arabic RTL, the right amount and code, a working link to the deposit, nothing internal.
 4. The Telegram cards: the receipt readable, the caption Arabic and complete, amounts with Latin digits.
 
-Result:
+Result: ✅ (2026-10-16)
 
 ### 4.12 A deposit with no receipt expires after 24 hours (deposit E, the next day)
 
@@ -854,13 +877,13 @@ Steps 1 and 2 can be run after the rest; the feature is accepted once step 2 pas
 1. At the end of the sitting, as TC3: "إيداع" → "ل.س" → `700` → "متابعة" (this is **E**). Send nothing. Note the time.
 2. The next day, more than 24 hours and 5 minutes later: TC3's E page reads "انتهت مدة الإيداع" with "لم يصل إيصال خلال 24 ساعة…" and "إيداع جديد"; the panel lists E as "منتهي"; the audit log has E's expiry with the system as actor. No email, no Telegram card.
 
-Result:
+Result: step 1 done 2026-10-16 15:34 Damascus (E is VD-M5YGF); step 2 due after 2026-10-17 15:39.
 
 ### Feature 4 sign-off
 
 | Item | Value |
 |---|---|
-| Cases passed | — of 12 |
-| Findings | — |
-| Accepted by the owner on | — |
-| PR | this PR (the steps) |
+| Cases passed | 12 of 13; 4.12 step 1 done, step 2 due after 2026-10-17 15:39 |
+| Findings | F4-1 (setup, closed); F4-2 to F4-8 fixed: one blocker (F4-3), seven minor or setup; audit by an independent review and a second review of the fixes |
+| Accepted by the owner on | 2026-10-16 |
+| PR | the steps (#110); the results and fixes in the next PR, not opened yet |

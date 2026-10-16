@@ -159,6 +159,9 @@ const keyReused = () =>
  */
 const flagged = sql<boolean>`exists (select 1 from ${depositFlags} where ${depositFlags.depositId} = ${sql.identifier('deposits')}.${sql.identifier('id')})`;
 
+/** A deposit the admin must decide (F4-8): Sham Cash submitted, or USDT in review. */
+const waitsForAdmin = sql`${deposits.status} = 'submitted' and (${deposits.method} = 'sham_cash' or ${usdtDeposits.checkStatus} = 'review')`;
+
 /** The queue's cursor (rule RV10): flagged first, then oldest submission, then id. */
 interface QueuePosition {
   flagged: boolean;
@@ -262,8 +265,11 @@ export class DepositReviewService {
         submitted: sql<number>`(count(*) filter (where ${deposits.status} = 'submitted'))::int`,
         submittedFlagged: sql<number>`(count(*) filter (where ${deposits.status} = 'submitted' and ${flagged}))::int`,
         pending: sql<number>`(count(*) filter (where ${deposits.status} = 'pending'))::int`,
+        waiting: sql<number>`(count(*) filter (where ${waitsForAdmin}))::int`,
+        waitingFlagged: sql<number>`(count(*) filter (where ${waitsForAdmin} and ${flagged}))::int`,
       })
       .from(deposits)
+      .leftJoin(usdtDeposits, eq(usdtDeposits.depositId, deposits.id))
       .where(inArray(deposits.status, ['submitted', 'pending']));
     const [[review], [unmatched]] = await readAll(db, [
       () =>
@@ -288,6 +294,8 @@ export class DepositReviewService {
       submittedFlagged: row?.submittedFlagged ?? 0,
       pending: row?.pending ?? 0,
       usdtReview: review?.count ?? 0,
+      waiting: row?.waiting ?? 0,
+      waitingFlagged: row?.waitingFlagged ?? 0,
       unmatchedTransfers: unmatched?.count ?? 0,
     };
   }
@@ -600,6 +608,36 @@ export class DepositReviewService {
         const approval = await this.planApproval(tx, deposit, input);
         if (actor.channel === 'telegram') {
           await this.refuseForTelegram(tx, actor, deposit, approval);
+        } else {
+          // F4-4: the receipt and the credit the panel showed, and rule RV4 on the locked values
+          // (the rate may have moved the credit past $100 since the check above).
+          if (input.submittedAt && !sameInstant(deposit.submittedAt, new Date(input.submittedAt))) {
+            throw stateConflict(deposit.status);
+          }
+          if (
+            input.expectedCreditUsdUnits !== undefined &&
+            input.expectedCreditUsdUnits !== approval.creditedUsdUnits
+          ) {
+            throw new CodedException(
+              409,
+              'DEPOSIT_CREDIT_CHANGED',
+              'The credit changed since the page was read',
+              { creditedUsdUnits: approval.creditedUsdUnits },
+            );
+          }
+          if (
+            approvalNeedsReauthentication(
+              approval.creditedUsdUnits,
+              approval.expectedFlags.length,
+            ) &&
+            !actor.reauthenticated
+          ) {
+            throw new CodedException(
+              403,
+              'REAUTHENTICATION_REQUIRED',
+              'Confirm your password and code first',
+            );
+          }
         }
         if (!sameFlags(input.acknowledgedFlags, approval.expectedFlags)) {
           throw new CodedException(409, 'FLAGS_NOT_ACKNOWLEDGED', 'Acknowledge every flag', {

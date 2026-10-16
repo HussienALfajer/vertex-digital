@@ -167,7 +167,21 @@ describe('payment_references guards', () => {
              values ($1, 'sham_cash', $2, $3)`,
             [newId(), value, id],
           ),
-        ).rejects.toThrow(/payment_references_reference_check/);
+          // A space or an empty value breaks both checks; PostgreSQL names the first it tries.
+        ).rejects.toThrow(/payment_references_reference(_ascii)?_check/);
+      });
+    }
+    // F4-3: another spelling of a transfer (Arabic-Indic digits, a direction mark, a space
+    // inside) is never stored, whoever writes the row.
+    for (const value of ['٥٢٣٦٠٤٩٦١', '‎523604961', '5236 04961']) {
+      await rolledBack(connection.pool, async (client) => {
+        await expect(
+          client.query(
+            `insert into payment_references (id, method, reference, wallet_adjustment_id)
+             values ($1, 'sham_cash', $2, $3)`,
+            [newId(), value, id],
+          ),
+        ).rejects.toThrow(/payment_references_reference_ascii_check/);
       });
     }
   });

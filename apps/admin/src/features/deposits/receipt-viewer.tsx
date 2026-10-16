@@ -18,16 +18,19 @@ import {
   ZoomInIcon,
   ZoomOutIcon,
 } from 'lucide-react';
-import { useState } from 'react';
+import { type RefObject, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '../../lib/format';
 import { receiptUrl } from './deposits.queries';
+import { receiptLayout } from './receipt-layout';
 
 const ZOOMS = [1, 1.5, 2, 3] as const;
 
 /**
  * The receipt, zoomed and rotated (the review reads small print on phone screenshots); after a
- * clearer-receipt request both receipts, the newest first.
+ * clearer-receipt request both receipts, the newest first. The image is laid out at its turned
+ * and zoomed size (F4-2): a CSS transform alone keeps the unturned box, so a quarter turn cut the
+ * receipt's top off and a zoom pushed its start edge out of reach of the scroll.
  */
 export function ReceiptViewer({ deposit }: { deposit: AdminDeposit }) {
   const { t } = useTranslation();
@@ -35,18 +38,29 @@ export function ReceiptViewer({ deposit }: { deposit: AdminDeposit }) {
   const [shown, setShown] = useState(receipts[0]?.id ?? '');
   const [zoom, setZoom] = useState(0);
   const [turns, setTurns] = useState(0);
+  const frame = useRef<HTMLDivElement>(null);
+  const frameWidth = useContentWidth(frame);
+  const [ratio, setRatio] = useState<number | null>(null);
 
   if (receipts.length === 0) {
     return <EmptyState icon={<ImageOffIcon />} title={t('deposits.receipt.none')} />;
   }
   const receipt = receipts.find((item) => item.id === shown) ?? receipts[0];
   const url = receiptUrl(deposit.id, receipt?.id ?? '');
+  const size =
+    ratio && frameWidth ? receiptLayout(frameWidth, ratio, turns, ZOOMS[zoom] ?? 1) : null;
 
   return (
     <Card className="gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {receipts.length > 1 ? (
-          <Tabs value={receipt?.id} onValueChange={(value) => setShown(String(value))}>
+          <Tabs
+            value={receipt?.id}
+            onValueChange={(value) => {
+              setShown(String(value));
+              setRatio(null);
+            }}
+          >
             <TabsList>
               {receipts.map((item, index) => (
                 <TabsTrigger key={item.id} value={item.id}>
@@ -93,13 +107,34 @@ export function ReceiptViewer({ deposit }: { deposit: AdminDeposit }) {
           </Tooltip>
         </div>
       </div>
-      <div className="flex max-h-[70vh] min-h-64 justify-center overflow-auto rounded-md border border-border bg-muted p-2">
-        <img
-          src={url}
-          alt={t('deposits.receipt.alt', { reference: deposit.referenceCode })}
-          className="h-fit max-w-full origin-top object-contain transition-transform duration-200 ease-out"
-          style={{ transform: `rotate(${turns * 90}deg) scale(${ZOOMS[zoom]})` }}
-        />
+      <div
+        ref={frame}
+        className="max-h-[70vh] min-h-64 overflow-auto rounded-md border border-border bg-muted p-2"
+      >
+        <div
+          className="mx-auto grid grid-cols-1 grid-rows-1 place-items-center"
+          style={size ? { width: size.boxWidth, height: size.boxHeight } : undefined}
+        >
+          <img
+            key={url}
+            src={url}
+            alt={t('deposits.receipt.alt', { reference: deposit.referenceCode })}
+            onLoad={(event) => {
+              const image = event.currentTarget;
+              if (image.naturalWidth > 0) setRatio(image.naturalHeight / image.naturalWidth);
+            }}
+            className={size ? 'max-w-none' : 'max-w-full'}
+            style={
+              size
+                ? {
+                    width: size.width,
+                    height: size.height,
+                    transform: `rotate(${turns * 90}deg)`,
+                  }
+                : undefined
+            }
+          />
+        </div>
       </div>
       {receipt && (
         <p className="text-xs text-muted-foreground">
@@ -108,6 +143,21 @@ export function ReceiptViewer({ deposit }: { deposit: AdminDeposit }) {
       )}
     </Card>
   );
+}
+
+/** The element's content width, followed as the window or the layout changes. */
+function useContentWidth(ref: RefObject<HTMLElement | null>) {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return width;
 }
 
 function ToolButton({

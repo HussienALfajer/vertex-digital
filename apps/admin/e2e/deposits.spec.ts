@@ -318,6 +318,9 @@ test.describe('deposits', () => {
       receivedAmountUnits: 290_000,
       referenceCheck: 'matches',
       acknowledgedFlags: ['new_account_large', 'receipt_reused', 'amount_mismatch'],
+      // F4-4: the credit on the button and the receipt on screen.
+      expectedCreditUsdUnits: 24_570_000,
+      submittedAt: admin.deposits.find((deposit) => deposit.id === SYP_DEPOSIT)?.submittedAt,
     });
     // The retry after re-authentication carries the first attempt's key (rule RV9).
     const keys = admin.requests
@@ -341,6 +344,63 @@ test.describe('deposits', () => {
       .click();
     await expect(page.getByText(ar.errors.api.EXTERNAL_REFERENCE_TAKEN)).toBeVisible();
     await expect(page.getByText('0199a000-0000-7000-8000-0000000000b9')).toBeVisible();
+  });
+
+  test('a turned or zoomed receipt stays whole inside its frame (F4-2)', async ({
+    page,
+    admin,
+  }) => {
+    queue(admin);
+    // A phone screenshot: twice as tall as wide.
+    await page.route(/\/api\/admin\/deposits\/[^/]+\/receipts\/[^/]+$/, (route) =>
+      route.fulfill({
+        contentType: 'image/svg+xml',
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="600"><rect width="300" height="600" fill="#c8a96a"/></svg>',
+      }),
+    );
+    await open(page, admin, `/deposits/${SYP_DEPOSIT}`);
+    const image = page.getByRole('img', { name: /VD-/ });
+    const frame = image.locator('xpath=../..');
+    await expect(image).toBeVisible();
+
+    const whole = async () => {
+      const outer = await frame.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return {
+          top: box.top,
+          left: box.left,
+          right: box.right,
+          scrollWidth: element.scrollWidth,
+          scrollHeight: element.scrollHeight,
+          clientWidth: element.clientWidth,
+          clientHeight: element.clientHeight,
+        };
+      });
+      const inner = await image.evaluate((element) => element.getBoundingClientRect().toJSON());
+      return { outer, inner };
+    };
+
+    await page.getByRole('button', { name: ar.deposits.receipt.rotate }).click();
+    await expect(async () => {
+      const { outer, inner } = await whole();
+      // Turned, the receipt reads across the frame: nothing above or beside it, no sideways scroll.
+      expect(inner.top).toBeGreaterThanOrEqual(outer.top);
+      expect(inner.left).toBeGreaterThanOrEqual(outer.left - 1);
+      expect(inner.right).toBeLessThanOrEqual(outer.right + 1);
+      expect(inner.width).toBeGreaterThan(inner.height);
+      expect(outer.scrollWidth).toBeLessThanOrEqual(outer.clientWidth);
+    }).toPass();
+
+    // Zoomed, every part of it can be scrolled to: the frame scrolls by the whole overflow.
+    await page.getByRole('button', { name: ar.deposits.receipt.zoomIn }).click();
+    await expect(async () => {
+      const { outer, inner } = await whole();
+      expect(outer.scrollWidth).toBeGreaterThanOrEqual(Math.floor(inner.width));
+      expect(outer.scrollHeight).toBeGreaterThanOrEqual(Math.floor(inner.height));
+    }).toPass();
+    await frame.evaluate((element) => element.scrollTo({ left: -element.scrollWidth, top: 0 }));
+    const { outer, inner } = await whole();
+    expect(inner.left).toBeGreaterThanOrEqual(outer.left - 1);
   });
 
   test('a clearer receipt once, then a rejection with its reasons', async ({ page, admin }) => {

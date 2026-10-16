@@ -232,6 +232,11 @@ export const paymentReferences = pgTable(
       'payment_references_reference_check',
       sql`char_length(${table.reference}) between 1 and 100 and ${table.reference} = upper(btrim(${table.reference}))`,
     ),
+    // F4-3: references are claimed in their normalized form (`normalizePaymentReference`), so
+    // only printable ASCII is stored: an Arabic-Indic digit, a direction mark or a space inside
+    // is another spelling of a claimed transfer. Added on a table with rows, the check stops the
+    // migration if a claim written before the fix holds one, for the owner to decide.
+    check('payment_references_reference_ascii_check', sql`${table.reference} ~ '^[!-~]+$'`),
     check(
       'payment_references_owner_check',
       sql`num_nonnulls(${table.walletAdjustmentId}, ${table.depositId}) = 1`,

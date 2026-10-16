@@ -616,6 +616,17 @@ export class AdminApi {
         usdtReview: submitted.filter(
           (deposit) => (deposit.usdt as { checkStatus?: string } | null)?.checkStatus === 'review',
         ).length,
+        ...(() => {
+          const waiting = submitted.filter(
+            (deposit) =>
+              deposit.method === 'sham_cash' ||
+              (deposit.usdt as { checkStatus?: string } | null)?.checkStatus === 'review',
+          );
+          return {
+            waiting: waiting.length,
+            waitingFlagged: waiting.filter((deposit) => deposit.flags.length > 0).length,
+          };
+        })(),
         unmatchedTransfers: this.transfersWithState().filter(
           (transfer) => transfer.state === 'unmatched',
         ).length,

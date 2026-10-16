@@ -3,17 +3,18 @@
 import { useEffect, useState } from 'react';
 import { serverNow } from '@/lib/server-clock';
 
-/** Seconds left until `iso` on the server's clock, every second; 0 once it passed. */
+/**
+ * Seconds left until `iso` on the server's clock, every second; 0 once it passed. Read at each
+ * render, so a time that just arrived (a deposit loaded) is right at once, never 0 for a frame.
+ */
 export function useTimeLeft(iso: string | null): number {
-  const [left, setLeft] = useState(() => secondsUntil(iso));
+  const [, setTicks] = useState(0);
   useEffect(() => {
-    const tick = () => setLeft(secondsUntil(iso));
-    tick();
     if (!iso) return;
-    const timer = setInterval(tick, 1000);
+    const timer = setInterval(() => setTicks((ticks) => ticks + 1), 1000);
     return () => clearInterval(timer);
   }, [iso]);
-  return left;
+  return secondsUntil(iso);
 }
 
 function secondsUntil(iso: string | null): number {

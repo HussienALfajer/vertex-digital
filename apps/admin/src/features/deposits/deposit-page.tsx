@@ -134,7 +134,7 @@ export function DepositPage({ id }: { id: string }) {
         <div className="flex flex-col gap-6">
           <Card className="gap-3">
             <CardTitle>{t('deposits.detail.flags')}</CardTitle>
-            <DepositFlags flags={data.flags} />
+            <DepositFlags flags={data.flags} customerId={data.customer.id} />
           </Card>
           {usdt && (
             <Card className="gap-3">

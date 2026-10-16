@@ -14,9 +14,11 @@ import { receiptUrl } from './deposits.queries';
 
 /**
  * The deposit's flags (A10), each with its words and what was found. For a reused or similar
- * receipt (FL1, FL2), links open the other deposit and its receipt. The customer never sees them.
+ * receipt (FL1, FL2), links open the other deposit and its receipt, and say whether it is this
+ * customer's or another's; a shared phone (FL5) links each other account (F4-6). The customer
+ * never sees them.
  */
-export function DepositFlags({ flags }: { flags: DepositFlag[] }) {
+export function DepositFlags({ flags, customerId }: { flags: DepositFlag[]; customerId: string }) {
   const { t } = useTranslation();
   if (flags.length === 0) {
     return <p className="text-sm text-muted-foreground">{t('deposits.flags.none')}</p>;
@@ -27,7 +29,7 @@ export function DepositFlags({ flags }: { flags: DepositFlag[] }) {
         <li key={flag.id} className="flex flex-col gap-1 rounded-md border border-border p-3">
           <Badge tone="warning">{t(`deposits.flags.${flag.code}.label`)}</Badge>
           <p className="text-sm">{t(`deposits.flags.${flag.code}.description`)}</p>
-          <FlagDetails flag={flag} />
+          <FlagDetails flag={flag} customerId={customerId} />
         </li>
       ))}
     </ul>
@@ -35,16 +37,52 @@ export function DepositFlags({ flags }: { flags: DepositFlag[] }) {
 }
 
 /** The details as their contract reads them; anything unexpected shows nothing more. */
-function FlagDetails({ flag }: { flag: DepositFlag }) {
+function FlagDetails({ flag, customerId }: { flag: DepositFlag; customerId: string }) {
   const { t } = useTranslation();
   const line = detailLine(t, flag.code, flag.details);
-  if (line) return <p className="text-sm text-muted-foreground tabular-nums">{line}</p>;
+  const shared =
+    flag.code === 'shared_phone'
+      ? DEPOSIT_FLAG_DETAILS.shared_phone.safeParse(flag.details).data?.customerIds
+      : undefined;
+  if (line) {
+    return (
+      <>
+        <p className="text-sm text-muted-foreground tabular-nums">{line}</p>
+        {shared && (
+          <ul className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+            {shared.map((id, index) => (
+              <li key={id}>
+                <Link
+                  to="/customers/$id"
+                  params={{ id }}
+                  className="rounded-sm underline underline-offset-4"
+                >
+                  {t('deposits.flags.sharedCustomer', { number: index + 1 })}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
+    );
+  }
   const matches = matchesOf(flag);
   if (matches.length === 0) return null;
   return (
     <ul className="flex flex-col gap-1 text-sm">
       {matches.map((match) => (
         <li key={match.receiptId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {match.customerId === customerId ? (
+            <Badge tone="neutral">{t('deposits.flags.sameCustomer')}</Badge>
+          ) : (
+            <Link
+              to="/customers/$id"
+              params={{ id: match.customerId }}
+              className="rounded-sm font-medium text-destructive-text underline underline-offset-4"
+            >
+              {t('deposits.flags.otherCustomer')}
+            </Link>
+          )}
           <Link
             to="/deposits/$id"
             params={{ id: match.depositId }}
@@ -74,6 +112,7 @@ function FlagDetails({ flag }: { flag: DepositFlag }) {
 interface Match {
   depositId: string;
   receiptId: string;
+  customerId: string;
   distance?: number;
 }
 

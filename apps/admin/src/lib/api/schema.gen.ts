@@ -4914,6 +4914,8 @@ export interface components {
             submittedFlagged: number;
             pending: number;
             usdtReview: number;
+            waiting: number;
+            waitingFlagged: number;
             unmatchedTransfers: number;
         };
         AdminDeposit: {
@@ -5086,6 +5088,9 @@ export interface components {
             referenceCheck: components["schemas"]["DepositReferenceCheck"];
             acknowledgedFlags: components["schemas"]["DepositFlagCode"][];
             internalNote?: string;
+            expectedCreditUsdUnits?: number;
+            /** Format: date-time */
+            submittedAt?: string;
         };
         RejectDeposit: {
             reason: components["schemas"]["DepositRejectReason"];

@@ -25,6 +25,7 @@ import { Line, Panel } from './panel';
 import { PendingDeposit } from './pending-deposit';
 import { getDeposit } from './requests';
 import { UsdtAwaiting, UsdtChecking, UsdtCreditedLines } from './usdt-deposit';
+import { useTimeLeft } from './use-time-left';
 
 /** While in review the page reads the deposit again this often, when visible (S03 screens). */
 const REFRESH_MS = 30_000;
@@ -94,6 +95,13 @@ export function DepositPage() {
     return () => clearInterval(timer);
   }, [open, usdt, load]);
 
+  // F4-5: past its expiry a pending Sham Cash deposit is closed (the API refuses its receipt), even
+  // before the expiry job, which runs every few minutes, marks it: show it expired, not a form
+  // whose button no longer works.
+  const loaded = state.status === 'ready' ? state.deposit : null;
+  const expiresAt = loaded?.status === 'pending' && !loaded.usdt ? loaded.expiresAt : null;
+  const overdue = useTimeLeft(expiresAt) === 0 && expiresAt !== null;
+
   if (state.status === 'missing') notFound();
   if (state.status === 'loading') return <DepositSkeleton />;
   if (state.status === 'failed') {
@@ -117,7 +125,7 @@ export function DepositPage() {
     );
   }
 
-  const { deposit } = state;
+  const deposit: Deposit = overdue ? { ...state.deposit, status: 'expired' } : state.deposit;
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">

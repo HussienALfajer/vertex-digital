@@ -178,8 +178,9 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
       link: { label: 'عرض المحفظة', path: '/wallet' },
     };
   },
+  // F4-7: the same events serve Sham Cash and USDT deposits, so the words name neither.
   customer_deposit_credited: ({ at, depositId, referenceCode, creditedUsdUnits }) => ({
-    subject: `أُضيف ${formatUsd(creditedUsdUnits)} إلى رصيدك من إيداع شام كاش`,
+    subject: `أُضيف ${formatUsd(creditedUsdUnits)} إلى رصيدك من إيداعك ${referenceCode}`,
     lines: [
       `اعتُمد إيداعك ${referenceCode} وأُضيف ${formatUsd(creditedUsdUnits)} إلى رصيد محفظتك بتاريخ ${formatTime(at)}.`,
       'تجد تفاصيل الإيداع ورصيدك الحالي في صفحة الإيداع. إذا كان لديك سؤال، تواصل مع الدعم.',
@@ -191,7 +192,7 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     lines: [
       `راجعنا إيداعك ${referenceCode} ولم نتمكن من اعتماده، ولم يُضف شيء إلى رصيدك.`,
       `السبب: ${REJECT_REASON_LABELS[reason]}.`,
-      'إذا كنت حوّلت المبلغ فعلًا، تواصل مع الدعم ومعك رقم العملية من تطبيق شام كاش.',
+      'إذا كنت حوّلت المبلغ فعلًا، تواصل مع الدعم ومعك إثبات التحويل: رقم العملية من تطبيق شام كاش، أو رمز التحويل (TXID) لإيداع USDT.',
     ],
     link: depositPage(depositId),
   }),

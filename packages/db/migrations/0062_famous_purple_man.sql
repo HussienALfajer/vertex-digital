@@ -1,0 +1,1 @@
+ALTER TABLE "payment_references" ADD CONSTRAINT "payment_references_reference_ascii_check" CHECK ("payment_references"."reference" ~ '^[!-~]+$');
