@@ -23,6 +23,7 @@ import {
   supplierCategories,
   supplierOrderMatches,
   suppliers,
+  type Transaction,
 } from '@vertex-digital/db';
 import {
   type SupplierAdapter,
@@ -102,8 +103,8 @@ export class SupplierLiveService {
   }
 
   /** The supplier of a row's `supplier_id`. */
-  async supplierById(id: string): Promise<SupplierRef> {
-    const [row] = await this.db
+  async supplierById(id: string, db: Database | Transaction = this.db): Promise<SupplierRef> {
+    const [row] = await db
       .select({ id: suppliers.id, code: suppliers.code })
       .from(suppliers)
       .where(eq(suppliers.id, id));

@@ -32,6 +32,7 @@ import {
   depositFlags,
   depositReceipts,
   deposits,
+  type Executor,
   LedgerError,
   lockCustomerWallet,
   newId,
@@ -39,6 +40,7 @@ import {
   postDepositCredit,
   queueDepositCard,
   queuePayWaiting,
+  readAll,
   recordAudit,
   type Transaction,
   usdtDeposits,
@@ -254,8 +256,8 @@ export class DepositReviewService {
   }
 
   /** `GET /api/admin/deposits/counts`: the navigation badge. */
-  async counts(): Promise<AdminDepositCounts> {
-    const [row] = await this.db
+  async counts(db: Executor = this.db): Promise<AdminDepositCounts> {
+    const [row] = await db
       .select({
         submitted: sql<number>`(count(*) filter (where ${deposits.status} = 'submitted'))::int`,
         submittedFlagged: sql<number>`(count(*) filter (where ${deposits.status} = 'submitted' and ${flagged}))::int`,
@@ -263,21 +265,23 @@ export class DepositReviewService {
       })
       .from(deposits)
       .where(inArray(deposits.status, ['submitted', 'pending']));
-    const [[review], [unmatched]] = await Promise.all([
-      this.db
-        .select({ count: count() })
-        .from(usdtDeposits)
-        .innerJoin(deposits, eq(deposits.id, usdtDeposits.depositId))
-        .where(and(eq(deposits.status, 'submitted'), eq(usdtDeposits.checkStatus, 'review'))),
-      this.db
-        .select({ count: count() })
-        .from(usdtTransfers)
-        .where(
-          and(
-            sql`${usdtTransfers.createdAt} > now() - interval '30 days'`,
-            eq(usdtTransferState, 'unmatched'),
+    const [[review], [unmatched]] = await readAll(db, [
+      () =>
+        db
+          .select({ count: count() })
+          .from(usdtDeposits)
+          .innerJoin(deposits, eq(deposits.id, usdtDeposits.depositId))
+          .where(and(eq(deposits.status, 'submitted'), eq(usdtDeposits.checkStatus, 'review'))),
+      () =>
+        db
+          .select({ count: count() })
+          .from(usdtTransfers)
+          .where(
+            and(
+              sql`${usdtTransfers.createdAt} > now() - interval '30 days'`,
+              eq(usdtTransferState, 'unmatched'),
+            ),
           ),
-        ),
     ]);
     return {
       submitted: row?.submitted ?? 0,
@@ -290,15 +294,19 @@ export class DepositReviewService {
 
   /**
    * What waits for the admin (S05 rule RM2, the bot's `/status`): Sham Cash deposits submitted and
-   * USDT deposits in review; and the open unmatched transfers.
+   * USDT deposits in review; and the open unmatched transfers. The bot reads them in its update's
+   * transaction (`db`).
    */
-  async waitingCounts(): Promise<{ waiting: number; unmatchedTransfers: number }> {
-    const [counts, [shamCash]] = await Promise.all([
-      this.counts(),
-      this.db
-        .select({ count: count() })
-        .from(deposits)
-        .where(and(eq(deposits.status, 'submitted'), eq(deposits.method, 'sham_cash'))),
+  async waitingCounts(
+    db: Executor = this.db,
+  ): Promise<{ waiting: number; unmatchedTransfers: number }> {
+    const [counts, [shamCash]] = await readAll(db, [
+      () => this.counts(db),
+      () =>
+        db
+          .select({ count: count() })
+          .from(deposits)
+          .where(and(eq(deposits.status, 'submitted'), eq(deposits.method, 'sham_cash'))),
     ]);
     return {
       waiting: (shamCash?.count ?? 0) + counts.usdtReview,
@@ -410,20 +418,23 @@ export class DepositReviewService {
       channel: 'admin',
       reauthenticated: isRecentlyReauthenticated(admin),
     } as const;
-    return this.approveAs(actor, id, idempotencyKey, input, meta);
+    const { row, created } = await this.approveAs(actor, id, idempotencyKey, input, meta);
+    return { deposit: await this.view(row), created };
   }
 
   /**
    * Rule TC4 step 3: the panel's approval with the declared amount, the reference matching, no
    * flag and the prompt's id as the decision key, re-checked at this moment: the submission the prompt
-   * was opened on, no flag, within the Telegram limit.
+   * was opened on, no flag, within the Telegram limit. Runs in the bot update's transaction `tx`
+   * (the decision in a savepoint of it), never through the pool while `tx` holds a connection.
    */
   async approveFromTelegram(
+    tx: Transaction,
     adminId: string,
     prompt: { id: string; depositId: string; submittedAt: Date | null },
     transactionNumber: string,
   ): Promise<TelegramDecision> {
-    const row = await this.row(prompt.depositId);
+    const row = await this.row(tx, prompt.depositId);
     const input: ApproveDeposit = {
       transactionNumber,
       receivedCurrency: row.currency,
@@ -433,11 +444,11 @@ export class DepositReviewService {
     };
     const actor = { adminId, channel: 'telegram', submittedAt: prompt.submittedAt } as const;
     try {
-      const { deposit } = await this.approveAs(actor, row.id, prompt.id, input, TELEGRAM_META);
+      const approved = await this.approveAs(actor, row.id, prompt.id, input, TELEGRAM_META, tx);
       return {
         outcome: 'approved',
         referenceCode: row.referenceCode,
-        creditedUsdUnits: deposit.credit?.creditedUsdUnits ?? 0,
+        creditedUsdUnits: approved.row.creditedUsdUnits ?? 0,
       };
     } catch (error) {
       return {
@@ -448,17 +459,22 @@ export class DepositReviewService {
     }
   }
 
-  /** Rule TC5: the panel's rejection, without a customer note, with the prompt's id as the key. */
+  /**
+   * Rule TC5: the panel's rejection, without a customer note, with the prompt's id as the key; in
+   * the bot update's transaction `tx`, like the approval.
+   */
   async rejectFromTelegram(
+    tx: Transaction,
     adminId: string,
     prompt: { id: string; depositId: string; submittedAt: Date | null },
     reason: RejectDeposit['reason'],
     internalNote: string,
   ): Promise<TelegramDecision> {
-    const row = await this.row(prompt.depositId);
+    const row = await this.row(tx, prompt.depositId);
     const actor = { adminId, channel: 'telegram', submittedAt: prompt.submittedAt } as const;
     try {
-      await this.rejectAs(actor, row.id, prompt.id, { reason, internalNote }, TELEGRAM_META);
+      const input = { reason, internalNote };
+      await this.rejectAs(actor, row.id, prompt.id, input, TELEGRAM_META, tx);
       return { outcome: 'rejected', referenceCode: row.referenceCode, reason };
     } catch (error) {
       return {
@@ -469,11 +485,12 @@ export class DepositReviewService {
     }
   }
 
-  /** What the bot shows of a deposit before a decision (rules TC2–TC5); null when unknown. */
-  async telegramFacts(id: string): Promise<TelegramDepositFacts | null> {
-    const [row] = isUuid(id)
-      ? await this.db.select().from(deposits).where(eq(deposits.id, id))
-      : [];
+  /**
+   * What the bot shows of a deposit before a decision (rules TC2–TC5), read in the bot update's
+   * transaction `tx`; null when unknown.
+   */
+  async telegramFacts(tx: Transaction, id: string): Promise<TelegramDepositFacts | null> {
+    const [row] = isUuid(id) ? await tx.select().from(deposits).where(eq(deposits.id, id)) : [];
     if (!row) return null;
     const submitted = row.status === 'submitted';
     const facts = {
@@ -481,19 +498,20 @@ export class DepositReviewService {
       referenceCode: row.referenceCode,
       method: row.method,
       submittedAt: row.submittedAt,
-      waiting: submitted && (row.method === 'sham_cash' || (await this.inReview(this.db, row.id))),
+      waiting: submitted && (row.method === 'sham_cash' || (await this.inReview(tx, row.id))),
       creditUsdUnits: row.declaredUsdUnits,
     };
     if (row.method !== 'sham_cash') return { ...facts, approvalRefusal: 'panel_only' };
-    const [plan, settings] = await Promise.all([
-      this.planApproval(this.db, row, {
-        transactionNumber: '-',
-        receivedCurrency: row.currency,
-        receivedAmountUnits: row.declaredAmountUnits,
-        referenceCheck: 'matches',
-        acknowledgedFlags: [],
-      }).catch(() => null),
-      this.settings.current(),
+    const [plan, settings] = await readAll(tx, [
+      () =>
+        this.planApproval(tx, row, {
+          transactionNumber: '-',
+          receivedCurrency: row.currency,
+          receivedAmountUnits: row.declaredAmountUnits,
+          referenceCheck: 'matches',
+          acknowledgedFlags: [],
+        }).catch(() => null),
+      () => this.settings.current(tx),
     ]);
     if (!plan) return { ...facts, approvalRefusal: 'panel_only' };
     return {
@@ -501,7 +519,7 @@ export class DepositReviewService {
       creditUsdUnits: plan.creditedUsdUnits,
       approvalRefusal: telegramApprovalRefusal({
         method: row.method,
-        customerFrozen: await this.customerFrozen(this.db, row.customerId),
+        customerFrozen: await this.customerFrozen(tx, row.customerId),
         flagCount: plan.expectedFlags.length,
         creditUsdUnits: plan.creditedUsdUnits,
         limitUsdUnits: settings?.telegramApprovalMaxUsdUnits ?? 0,
@@ -515,8 +533,8 @@ export class DepositReviewService {
     return found.get(customerId)?.frozen ?? false;
   }
 
-  private async row(id: string): Promise<DepositRow> {
-    const [row] = await this.db.select().from(deposits).where(eq(deposits.id, id));
+  private async row(db: Executor, id: string): Promise<DepositRow> {
+    const [row] = await db.select().from(deposits).where(eq(deposits.id, id));
     if (!row) throw notFound();
     return row;
   }
@@ -540,26 +558,29 @@ export class DepositReviewService {
     if (refusal) throw new TelegramRefused(refusal);
   }
 
+  /**
+   * The approval, through the pool, or inside the caller's transaction `db` (the bot's) with the
+   * decision in a savepoint: a refusal leaves the caller's transaction usable.
+   */
   private async approveAs(
     actor: DecisionActor,
     id: string,
     idempotencyKey: string,
     input: ApproveDeposit,
     meta: RequestMeta,
-  ): Promise<{ deposit: AdminDeposit; created: boolean }> {
-    const replayed = await this.replayApproval(id, idempotencyKey, input);
-    if (replayed) return { deposit: replayed, created: false };
-    const [current] = isUuid(id)
-      ? await this.db.select().from(deposits).where(eq(deposits.id, id))
-      : [];
+    db: Executor = this.db,
+  ): Promise<{ row: DepositRow; created: boolean }> {
+    const replayed = await this.replayApproval(db, id, idempotencyKey, input);
+    if (replayed) return { row: replayed, created: false };
+    const [current] = isUuid(id) ? await db.select().from(deposits).where(eq(deposits.id, id)) : [];
     if (!current) throw notFound();
     if (current.status !== 'submitted') throw stateConflict(current.status);
     // A USDT deposit is approved from its transfer, never with typed amounts (S04 rule U15).
     if (current.method !== 'sham_cash') throw stateConflict(current.status);
     // Rule RV4, before anything is written: the credit and every flag the approval would carry.
-    const plan = await this.planApproval(this.db, current, input);
+    const plan = await this.planApproval(db, current, input);
     // From Telegram the limit (at most $100) and "no flag" take the re-authentication's place.
-    if (actor.channel === 'telegram') await this.refuseForTelegram(this.db, actor, current, plan);
+    if (actor.channel === 'telegram') await this.refuseForTelegram(db, actor, current, plan);
     else if (
       approvalNeedsReauthentication(plan.creditedUsdUnits, plan.expectedFlags.length) &&
       !actor.reauthenticated
@@ -571,7 +592,7 @@ export class DepositReviewService {
       );
     }
     try {
-      const row = await this.db.transaction(async (tx) => {
+      const row = await db.transaction(async (tx) => {
         // RV7, steps 1–2.
         const deposit = await lockDeposit(tx, id);
         if (deposit.decisionIdempotencyKey === idempotencyKey) throw new AlreadyDecided();
@@ -680,11 +701,11 @@ export class DepositReviewService {
         await queuePayWaiting(tx, this.jobs, deposit.customerId);
         return updated;
       });
-      return { deposit: await this.view(row), created: true };
+      return { row, created: true };
     } catch (error) {
       if (error instanceof AlreadyDecided || isUniqueViolation(error)) {
-        const again = await this.replayApproval(id, idempotencyKey, input);
-        if (again) return { deposit: again, created: false };
+        const again = await this.replayApproval(db, id, idempotencyKey, input);
+        if (again) return { row: again, created: false };
       }
       throw error;
     }
@@ -698,22 +719,27 @@ export class DepositReviewService {
     input: RejectDeposit,
     meta: RequestMeta,
   ): Promise<{ deposit: AdminDeposit; created: boolean }> {
-    return this.rejectAs({ adminId, channel: 'admin' }, id, idempotencyKey, input, meta);
+    const actor = { adminId, channel: 'admin' } as const;
+    const { row, created } = await this.rejectAs(actor, id, idempotencyKey, input, meta);
+    return { deposit: await this.view(row), created };
   }
 
+  /** The rejection, through the pool or in a savepoint of the caller's transaction `db`. */
   private async rejectAs(
     actor: DecisionActor,
     id: string,
     idempotencyKey: string,
     input: RejectDeposit,
     meta: RequestMeta,
-  ): Promise<{ deposit: AdminDeposit; created: boolean }> {
+    db: Executor = this.db,
+  ): Promise<{ row: DepositRow; created: boolean }> {
     const { adminId } = actor;
     const customerNote = input.customerNote ?? null;
-    const replayed = await this.replayRejection(id, idempotencyKey, input.reason, customerNote);
-    if (replayed) return { deposit: replayed, created: false };
+    const replay = () => this.replayRejection(db, id, idempotencyKey, input.reason, customerNote);
+    const replayed = await replay();
+    if (replayed) return { row: replayed, created: false };
     try {
-      const row = await this.db.transaction(async (tx) => {
+      const row = await db.transaction(async (tx) => {
         const deposit = await lockDeposit(tx, id);
         if (deposit.decisionIdempotencyKey === idempotencyKey) throw new AlreadyDecided();
         if (deposit.status !== 'submitted') throw stateConflict(deposit.status);
@@ -764,11 +790,11 @@ export class DepositReviewService {
         await queueDepositCard(tx, this.jobs, deposit.id);
         return updated;
       });
-      return { deposit: await this.view(row), created: true };
+      return { row, created: true };
     } catch (error) {
       if (error instanceof AlreadyDecided || isUniqueViolation(error)) {
-        const again = await this.replayRejection(id, idempotencyKey, input.reason, customerNote);
-        if (again) return { deposit: again, created: false };
+        const again = await replay();
+        if (again) return { row: again, created: false };
       }
       throw error;
     }
@@ -882,13 +908,14 @@ export class DepositReviewService {
 
   /** The credited deposit of an earlier approval with this key, or null; another body is refused. */
   private async replayApproval(
+    db: Executor,
     id: string,
     idempotencyKey: string,
     input: ApproveDeposit,
-  ): Promise<AdminDeposit | null> {
-    const row = await this.decidedWith(idempotencyKey);
+  ): Promise<DepositRow | null> {
+    const row = await this.decidedWith(db, idempotencyKey);
     if (!row) return null;
-    const [flags] = await Promise.all([this.flagCodes([row.id])]);
+    const flags = await this.flagCodes([row.id], db);
     const same =
       row.id === id &&
       row.status === 'credited' &&
@@ -898,16 +925,17 @@ export class DepositReviewService {
       row.referenceCheck === input.referenceCheck &&
       sameFlags(input.acknowledgedFlags, flags.get(row.id) ?? []);
     if (!same) throw keyReused();
-    return this.view(row);
+    return row;
   }
 
   private async replayRejection(
+    db: Executor,
     id: string,
     idempotencyKey: string,
     reason: RejectDeposit['reason'],
     customerNote: string | null,
-  ): Promise<AdminDeposit | null> {
-    const row = await this.decidedWith(idempotencyKey);
+  ): Promise<DepositRow | null> {
+    const row = await this.decidedWith(db, idempotencyKey);
     if (!row) return null;
     const same =
       row.id === id &&
@@ -915,11 +943,11 @@ export class DepositReviewService {
       row.rejectReason === reason &&
       row.customerNote === customerNote;
     if (!same) throw keyReused();
-    return this.view(row);
+    return row;
   }
 
-  private async decidedWith(idempotencyKey: string): Promise<DepositRow | null> {
-    const [row] = await this.db
+  private async decidedWith(db: Executor, idempotencyKey: string): Promise<DepositRow | null> {
+    const [row] = await db
       .select()
       .from(deposits)
       .where(eq(deposits.decisionIdempotencyKey, idempotencyKey));
@@ -940,9 +968,12 @@ export class DepositReviewService {
   }
 
   /** Each deposit's distinct flag codes. */
-  private async flagCodes(ids: string[]): Promise<Map<string, DepositFlagCode[]>> {
+  private async flagCodes(
+    ids: string[],
+    db: Executor = this.db,
+  ): Promise<Map<string, DepositFlagCode[]>> {
     if (ids.length === 0) return new Map();
-    const rows = await this.db
+    const rows = await db
       .selectDistinct({ depositId: depositFlags.depositId, code: depositFlags.code })
       .from(depositFlags)
       .where(inArray(depositFlags.depositId, ids))

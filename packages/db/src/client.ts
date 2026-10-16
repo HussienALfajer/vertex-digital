@@ -39,8 +39,23 @@ export interface DatabaseConnection {
   close: () => Promise<void>;
 }
 
-export function createDatabase(connectionString: string): DatabaseConnection {
-  const pool = new pg.Pool({ connectionString });
+/**
+ * The limits of the API's and the worker's pools (F3-4 safeguard): a request or job that waits
+ * 10 s for a connection, or a statement that waits 15 s for a lock, fails instead of queueing for
+ * ever. A transaction that reads through the pool while holding a lock (the F3-4 slip) then fails
+ * in seconds, rolls back and frees its connection and lock, where ten of them used to stop the
+ * process. CLIs and migrations keep no limit: a migration may wait on its advisory lock.
+ */
+export const APP_POOL_LIMITS = {
+  connectionTimeoutMillis: 10_000,
+  lock_timeout: 15_000,
+} satisfies pg.PoolConfig;
+
+export function createDatabase(
+  connectionString: string,
+  limits: Pick<pg.PoolConfig, 'connectionTimeoutMillis' | 'lock_timeout'> = {},
+): DatabaseConnection {
+  const pool = new pg.Pool({ ...limits, connectionString });
   const db = drizzle({ client: pool, schema, casing: 'snake_case' });
   return { db, pool, close: () => pool.end() };
 }

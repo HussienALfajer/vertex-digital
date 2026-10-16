@@ -11,7 +11,11 @@ export default defineConfig({
     // active owner) sees only its worker's files.
     maxWorkers: TEST_WORKERS,
     globalSetup: ['./test/global-setup.ts'],
-    setupFiles: ['./test/worker-env.ts', './test/no-concurrent-queries.ts'],
+    setupFiles: [
+      './test/worker-env.ts',
+      './test/no-concurrent-queries.ts',
+      './test/no-pool-reads-in-transactions.ts',
+    ],
     // Set explicitly: the root .env (loaded to find the test database) must not leak in.
     env: {
       NODE_ENV: 'test',

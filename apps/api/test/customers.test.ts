@@ -355,7 +355,8 @@ describe('freezing (CF1–CF6)', () => {
       200,
     );
     await json(await change(owner, 'freeze'), 200);
-    const facts = await test.app.get(DepositReviewService).telegramFacts(deposit.id);
+    const review = test.app.get(DepositReviewService);
+    const facts = await test.db.transaction((tx) => review.telegramFacts(tx, deposit.id));
     expect(facts?.approvalRefusal).toBe('frozen');
     const page = await json<{ customer: { marks: { status: string } } }>(
       await adminGet(`/api/admin/deposits/${deposit.id}`),

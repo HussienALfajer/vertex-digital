@@ -21,6 +21,7 @@ import {
   type Database,
   newId,
   queueTelegramMessage,
+  readAll,
   recordAudit,
   type Transaction,
   telegramLinkCodes,
@@ -185,9 +186,9 @@ export class TelegramBotService {
     }
     switch (command?.[1]) {
       case 'status': {
-        const [switches, counts] = await Promise.all([
-          this.settings.values(tx),
-          this.deposits.waitingCounts(),
+        const [switches, counts] = await readAll(tx, [
+          () => this.settings.values(tx),
+          () => this.deposits.waitingCounts(tx),
         ]);
         await this.reply(tx, link.chatId, { reply: 'status', switches, ...counts });
         return;
@@ -237,7 +238,7 @@ export class TelegramBotService {
       await this.reply(tx, link.chatId, { reply: 'help' });
       return;
     }
-    const facts = await this.deposits.telegramFacts(prompt.depositId);
+    const facts = await this.deposits.telegramFacts(tx, prompt.depositId);
     if (!facts) throw new Error(`Prompt ${prompt.id} names no deposit`);
     if (prompt.kind === 'approve_number') {
       // Edge case 4: resubmitted since "اعتماد" was pressed; the new card is the one to use.
@@ -289,6 +290,7 @@ export class TelegramBotService {
       }
       await this.closePrompt(tx, prompt.id);
       const decision = await this.deposits.rejectFromTelegram(
+        tx,
         link.adminId,
         depositPromptRef(prompt),
         reason,
@@ -407,6 +409,7 @@ export class TelegramBotService {
     if (prompt.kind === 'approve_confirm' && isDepositPrompt(prompt)) {
       const { transactionNumber } = TELEGRAM_PROMPT_DATA.approve_confirm.parse(prompt.data);
       const decision = await this.deposits.approveFromTelegram(
+        tx,
         link.adminId,
         depositPromptRef(prompt),
         transactionNumber,
@@ -444,7 +447,7 @@ export class TelegramBotService {
     query: CallbackQuery,
     callback: Extract<TelegramCallback, { action: 'approve' | 'reject' }>,
   ): Promise<CallbackAnswer> {
-    const facts = await this.deposits.telegramFacts(callback.depositId);
+    const facts = await this.deposits.telegramFacts(tx, callback.depositId);
     if (!facts?.waiting) return answer(query, ANSWERS.decided);
     if (callback.action === 'approve') {
       if (facts.approvalRefusal) return answer(query, APPROVAL_ANSWERS[facts.approvalRefusal]);
@@ -476,7 +479,7 @@ export class TelegramBotService {
     if (prompt.kind !== 'reject_note' || !isDepositPrompt(prompt)) {
       return answer(query, ANSWERS.expired);
     }
-    const facts = await this.deposits.telegramFacts(prompt.depositId);
+    const facts = await this.deposits.telegramFacts(tx, prompt.depositId);
     if (!facts?.waiting) return answer(query, ANSWERS.decided);
     if (!telegramRejectReasons(facts.method).includes(reason)) return answer(query);
     await tx

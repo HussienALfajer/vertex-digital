@@ -1,4 +1,7 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { TREASURY_ACCOUNTS } from '@vertex-digital/contracts';
+import { NodePgSession } from 'drizzle-orm/node-postgres';
+import pg from 'pg';
 import { createDatabase } from './client.js';
 import { loadRootEnv } from './env.js';
 import { ensureSystemAccount } from './ledger/wallet.js';
@@ -102,5 +105,66 @@ export function concurrentQueryWarnings(): string[] {
       seen.push(warning.stack ?? warning.message);
     }
   });
+  return seen;
+}
+
+/**
+ * Collects every query sent through a pool while a transaction of the same async flow holds one
+ * of that pool's connections (F3-4, 2026-10-15): the transaction keeps its connection, and often a
+ * row or advisory lock, while the read waits for another; ten such requests take every connection
+ * of the pool and stop the app. Reads inside a transaction go through it. pg-boss's own pool (its
+ * start and queue creation on a process's first send) is another pool and not counted. Each app's
+ * Vitest setup file fails a test file that triggered it. Patches drizzle's node-postgres session
+ * and pg's pool, so it must run before the first transaction.
+ */
+export function poolReadsInTransactions(): string[] {
+  const seen: string[] = [];
+  const open = new AsyncLocalStorage<{ pool: pg.Pool; open: boolean; begun: string }>();
+  // The app's own frames: drizzle, pg and this guard say nothing about where the code is.
+  const appFrames = (message: string) => {
+    const limit = Error.stackTraceLimit;
+    Error.stackTraceLimit = 60;
+    const stack = new Error(message).stack ?? message;
+    Error.stackTraceLimit = limit;
+    return stack
+      .split('\n')
+      .filter((line) => !/node_modules|node:internal|testing\.ts/.test(line))
+      .join('\n');
+  };
+  const holding = (pool: pg.Pool) => {
+    const state = open.getStore();
+    return state?.open === true && state.pool === pool ? state : undefined;
+  };
+  // A Drizzle query is a thenable, which drops the async stack: the read's own frames often say
+  // nothing, so each entry also names where the holding transaction began.
+  const record = (what: string, begun: string) => {
+    seen.push(`${appFrames(what)}\n  inside the transaction begun:\n${begun}`);
+  };
+  const begin = NodePgSession.prototype.transaction;
+  NodePgSession.prototype.transaction = function (this: NodePgSession<never, never>, ...args) {
+    // `client` is private: the pool for `db.transaction`, a client for a transaction's own.
+    const { client } = this as unknown as { client: unknown };
+    if (!(client instanceof pg.Pool)) return begin.apply(this, args);
+    const outer = holding(client);
+    if (outer) record('a transaction was started through the pool', outer.begun);
+    const state = { pool: client, open: true, begun: appFrames('transaction') };
+    return open.run(state, async () => {
+      try {
+        return await begin.apply(this, args);
+      } finally {
+        state.open = false;
+      }
+    });
+  } as typeof begin;
+  const query = pg.Pool.prototype.query;
+  pg.Pool.prototype.query = function (this: pg.Pool, ...args: unknown[]) {
+    const outer = holding(this);
+    if (outer) {
+      const [sent] = args as [string | { text?: string } | undefined];
+      const text = typeof sent === 'string' ? sent : sent?.text;
+      record(`a query was sent through the pool: ${String(text).slice(0, 120)}`, outer.begun);
+    }
+    return (query as (...args: unknown[]) => unknown).apply(this, args);
+  } as typeof query;
   return seen;
 }

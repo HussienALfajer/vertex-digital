@@ -573,7 +573,7 @@ export class SupplierCatalogService {
             : { ignoredAt: null, ignoredAdminId: null },
         )
         .where(eq(supplierOffers.id, row.id));
-      const supplier = await this.live.supplierById(row.supplierId);
+      const supplier = await this.live.supplierById(row.supplierId, tx);
       await auditSuppliers(
         tx,
         actor,

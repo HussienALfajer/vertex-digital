@@ -147,7 +147,7 @@ export class PricingService {
   ): Promise<string> {
     const targetId = input.targetId ?? null;
     if (input.scope !== 'global') {
-      const target = await this.catalog.pricingTarget(input.scope, targetId as string);
+      const target = await this.catalog.pricingTarget(input.scope, targetId as string, tx);
       if (!target || target.archived) throw notFound('catalog target');
     }
     const after = valuesOf(input);
@@ -470,7 +470,7 @@ export class PricingService {
     const key = { global: null, category: 'categoryId', game: 'gameId', product: 'productId' }[
       scope
     ] as 'categoryId' | 'gameId' | 'productId' | null;
-    const productIds = (await this.catalog.livePricingPaths())
+    const productIds = (await this.catalog.livePricingPaths(tx))
       .filter((path) => key === null || path[key] === targetId)
       .map((path) => path.productId);
     await repriceProducts(tx, {
