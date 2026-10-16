@@ -11,6 +11,10 @@
   --color-*: initial;
   --color-white: #ffffff;
 
+  /* Payment networks (§6): each network's own color, a frame edge and a dot beside its name only. */
+  --color-network-tron: #eb0029;
+  --color-network-bnb: #f0b90b;
+
   /* Tonal scales (§2). Vertex Green = green-800, Vertex Sand = gold-400. */
   --color-green-50: #e8fcf8;
   --color-green-100: #dbf3ee;

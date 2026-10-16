@@ -122,6 +122,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F5-3 | 5 | 5.4 | The BEP20 transfer was found by the scanner and credited before the owner could paste its TXID, so the searching and confirming pages were not seen on production | — | None: on BSC the scanner reads final blocks within seconds, which is the design (U12); the TXID states are covered by the worker tests and the store E2E screenshots | Accepted |
 | F5-4 | 5 | 5.1 | The owner asked to change the receiving addresses from the panel, to upload a QR, or to style the QR for wallets per network | — | None: the addresses stay in the server environment (owner 2026-10-08, ADR 0018: a stolen admin session must not redirect deposits, and a crypto transfer cannot be reversed); an uploaded QR could encode another address than the text shown; a styled QR (network logo in the middle, high contrast) is a possible later store change, owner's call | Closed |
 | F5-5 | 5 | 5.3 | The owner asked for automatic matching without the tail | — | None for V1: the alternatives are per-deposit addresses (sweeping fees and keys, ADR 0006), a payment processor (fees, availability for Syria unconfirmed), or a TXID claim alone (anyone can claim a public transfer); the tail stays, answered in chat | Closed |
+| F5-6 | 5 | 5.1 (owner request) | The owner asked for a wallet-style QR, as the large exchanges show it | minor | The address QR is green-950 on white in both themes (error correction H) with the Vertex mark in its middle, framed by the network's color with "USDT" and the network named above it; a tap opens it larger with the address in groups of four (`usdt-qr.tsx`, theme tokens `network-tron` and `network-bnb`, `brand/identity.md` §6). Token and network logos are not used: §7 allows payment logos only as provided files, and BNB Chain asks for approval before its logo is used. E2E and screenshots | Fixed |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -1102,4 +1103,4 @@ Result: ✅ (2026-10-16)
 | Cases passed | 13 of 13 |
 | Findings | F5-1 (step error, the empty-list text made clearer), F5-2 (USDT mismatch line) fixed, F5-3 accepted (the TXID states rest on the automated tests), F5-4 and F5-5 owner questions answered, no change |
 | Accepted by the owner on | 2026-10-16 |
-| PR | the steps (#115); the results and fixes in the next PR |
+| PR | the steps (#115); the results and the first fixes (#116); the wallet-style QR and the external audit's fixes on `fix/feature-5-audit`, PR after the audit |
