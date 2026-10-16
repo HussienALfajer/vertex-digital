@@ -13283,8 +13283,7 @@
           },
           "externalReference": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 100
+            "maxLength": 400
           }
         },
         "required": [
@@ -14753,6 +14752,16 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "waiting": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "waitingFlagged": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "unmatchedTransfers": {
             "type": "integer",
             "minimum": 0,
@@ -14764,6 +14773,8 @@
           "submittedFlagged",
           "pending",
           "usdtReview",
+          "waiting",
+          "waitingFlagged",
           "unmatchedTransfers"
         ],
         "additionalProperties": false
@@ -15492,8 +15503,7 @@
         "properties": {
           "transactionNumber": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 64
+            "maxLength": 256
           },
           "receivedCurrency": {
             "$ref": "#/components/schemas/Currency"
@@ -15517,6 +15527,16 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 500
+          },
+          "expectedCreditUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           }
         },
         "required": [
@@ -15542,6 +15562,11 @@
             "type": "string",
             "minLength": 5,
             "maxLength": 500
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           }
         },
         "required": [

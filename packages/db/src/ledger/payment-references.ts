@@ -1,4 +1,8 @@
-import { isUsdtMethod, type PaymentMethod } from '@vertex-digital/contracts';
+import {
+  isUsdtMethod,
+  normalizePaymentReference,
+  type PaymentMethod,
+} from '@vertex-digital/contracts';
 import { and, eq, inArray, or, type SQLWrapper, sql } from 'drizzle-orm';
 import type { Database, Transaction } from '../client.js';
 import { deposits, paymentReferences, walletAdjustments } from '../schema/index.js';
@@ -16,10 +20,12 @@ export interface PaymentReferenceOwner {
 }
 
 /**
- * How references compare: trimmed and upper-cased by PostgreSQL (`' test-001 '` is `TEST-001`),
- * as the table's check, the S02 backfill and S02's unique index do, whatever the characters.
+ * How references compare: `normalizePaymentReference` first (direction marks, spaces, Arabic-Indic
+ * digits, F4-3), whatever path the reference came by, then trimmed and upper-cased by PostgreSQL
+ * as the table's check, the S02 backfill and S02's unique index do.
  */
-const normalized = (reference: string) => sql<string>`upper(btrim(${reference}))`;
+const normalized = (reference: string) =>
+  sql<string>`upper(btrim(${normalizePaymentReference(reference)}))`;
 
 /**
  * The forms a reference may be stored in. A TXID (S04) is claimed as its 64 hex characters, as
@@ -29,7 +35,7 @@ const normalized = (reference: string) => sql<string>`upper(btrim(${reference}))
  */
 const storedForms = (method: PaymentMethod, reference: string) =>
   isUsdtMethod(method)
-    ? [normalized(reference), sql<string>`'0X' || upper(btrim(${reference}))`]
+    ? [normalized(reference), sql<string>`'0X' || ${normalized(reference)}`]
     : [normalized(reference)];
 
 /** The record that holds the claim on `reference`, or null when it is free. */

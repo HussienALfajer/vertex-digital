@@ -3,11 +3,12 @@ import { DEPOSIT_SETTINGS_DEFAULTS } from '@vertex-digital/contracts';
 import {
   deposits,
   ledgerJournals,
+  telegramDepositCards,
   telegramLinks,
   telegramMessages,
   telegramPrompts,
 } from '@vertex-digital/db';
-import { asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -65,14 +66,51 @@ const sendText = async (text: string) => {
   expect(response.status).toBe(200);
 };
 
-/** Presses a button; resolves with the inline answer's text, if any. */
-const tap = async (data: string, id = updateId()): Promise<string | undefined> => {
+/**
+ * The message id of the deposit's card for its current submission, recorded as the worker records
+ * a sent card (the bot acts only on a deposit's current card, F4-12).
+ */
+const cardOf = async (depositId: string): Promise<number> => {
+  const row = await depositRow(depositId);
+  if (!row?.submittedAt) return 2;
+  await test.db
+    .insert(telegramDepositCards)
+    .values({
+      depositId,
+      submittedAt: row.submittedAt,
+      chatId: owner.chat.id,
+      messageId: 1_000_000 + randomInt(1_000_000_000),
+    })
+    .onConflictDoNothing();
+  const [card] = await test.db
+    .select({ messageId: telegramDepositCards.messageId })
+    .from(telegramDepositCards)
+    .where(
+      and(
+        eq(telegramDepositCards.depositId, depositId),
+        eq(telegramDepositCards.submittedAt, row.submittedAt),
+      ),
+    );
+  return card?.messageId ?? 2;
+};
+
+/**
+ * Presses a button; resolves with the inline answer's text, if any. A deposit's "اعتماد" or "رفض"
+ * is pressed on its current card unless `messageId` names another.
+ */
+const tap = async (
+  data: string,
+  id = updateId(),
+  messageId?: number,
+): Promise<string | undefined> => {
+  const decision = /^(ap|rj):(.+)$/.exec(data);
+  const message = messageId ?? (decision?.[2] ? await cardOf(decision[2]) : 2);
   const response = await webhook({
     update_id: id,
     callback_query: {
       id: `q${id}`,
       from: owner.from,
-      message: { message_id: 2, chat: owner.chat },
+      message: { message_id: message, chat: owner.chat },
       data,
     },
   });
@@ -399,6 +437,66 @@ describe('approval from Telegram (rule TC4)', () => {
     expect(await lastReply()).toMatchObject({ reply: 'decision_refused', refusal: 'changed' });
     expect(await openPromptId()).toBeUndefined();
     expect((await depositRow(id))?.status).toBe('submitted');
+  });
+
+  it("refuses a button of a card older than its deposit's receipt (F4-12)", async () => {
+    const { id, customer: by } = await submitted(7);
+    const oldCard = await cardOf(id);
+    const requested = await client.post(`/api/admin/deposits/${id}/request-receipt`, {
+      cookie: admin.cookie,
+      body: { internalNote: 'The image is blurred' },
+    });
+    expect(requested.status).toBe(200);
+    const again = await client.post(`/api/deposits/${id}/receipt`, {
+      cookie: by.cookie,
+      form: form(await image()),
+    });
+    expect(again.status).toBe(200);
+    expect(await tap(`ap:${id}`, updateId(), oldCard)).toMatch(/بطاقته الأحدث/);
+    expect(await tap(`rj:${id}`, updateId(), oldCard)).toMatch(/بطاقته الأحدث/);
+    expect(await openPromptId()).toBeUndefined();
+    // The new card's buttons work.
+    expect(await tap(`ap:${id}`)).toBeUndefined();
+    expect(await lastReply()).toMatchObject({ reply: 'approve_number' });
+    await tap(`no:${(await openPromptId()) ?? ''}`);
+  });
+
+  it('lets an unlink wait for a confirmation in flight, so nothing acts after it (F4-11)', async () => {
+    const { id } = await submitted(9);
+    const promptId = await askToApprove(id, transactionNumber());
+    // The deposit is held, so the confirmation waits for it after reading the live link.
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held = () => {};
+    const isHeld = new Promise<void>((resolve) => {
+      held = resolve;
+    });
+    const holding = test.db.transaction(async (tx) => {
+      await tx.execute(sql`select id from deposits where id = ${id} for update`);
+      held();
+      await released;
+    });
+    await isHeld;
+    const order: string[] = [];
+    const confirmation = tap(`ok:${promptId}`).then(() => order.push('confirmation'));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const unlink = client
+      .delete('/api/admin/telegram/link', { cookie: admin.cookie })
+      .then(() => order.push('unlink'));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    // The unlink has not returned while the confirmation is in flight.
+    expect(order).toEqual([]);
+    release();
+    await Promise.all([holding, confirmation, unlink]);
+    expect(order).toEqual(['confirmation', 'unlink']);
+    expect((await depositRow(id))?.status).toBe('credited');
+    // Linked again for the next tests.
+    const code = await client.post('/api/admin/telegram/link-code', { cookie: admin.cookie });
+    const { deepLink } = (await code.json()) as { deepLink: string };
+    await sendText(`/start ${new URL(deepLink).searchParams.get('start')}`);
+    expect(await lastReply()).toEqual({ reply: 'welcome' });
   });
 
   it('answers a transaction number already recorded', async () => {

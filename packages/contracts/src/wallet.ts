@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { depositMethodSchema } from './deposits.js';
+import { depositMethodSchema, paymentReferenceInputSchema } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import {
   amountUnitsSchema,
@@ -174,7 +174,7 @@ export const createAdjustmentSchema = z
     /** `manual_deposit` only, and then required (rule J8). */
     depositMethod: manualDepositMethodSchema.optional(),
     /** The Sham Cash transaction number or the TXID; with `depositMethod` only. */
-    externalReference: z.string().trim().min(1).max(100).optional(),
+    externalReference: paymentReferenceInputSchema(100).optional(),
   })
   .superRefine((input, context) => {
     if (!isAllowedAdjustment(input.category, input.direction)) {

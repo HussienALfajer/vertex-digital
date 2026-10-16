@@ -394,6 +394,19 @@ test.describe('deposits', () => {
     );
   });
 
+  test('a pending deposit past its expiry reads expired before the job marks it (F4-5)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on(`GET ${DEPOSIT_PATH}`, 200, deposit({ expiresAt: minutesFromNow(-1) }));
+    await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);
+    await expect(
+      page.getByRole('heading', { name: ar.deposits.detail.expiredTitle }),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: ar.deposits.newDeposit })).toBeVisible();
+    await expect(page.getByRole('button', { name: ar.deposits.pending.submit })).toBeHidden();
+  });
+
   test('another customer’s deposit is the 404 page', async ({ page, api }) => {
     signedIn(api).on(`GET ${DEPOSIT_PATH}`, 404, { code: 'NOT_FOUND' });
     await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);

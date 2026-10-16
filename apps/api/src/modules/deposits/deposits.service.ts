@@ -23,6 +23,7 @@ import {
   depositFlags,
   depositReceipts,
   deposits,
+  expireDueDeposits,
   newId,
   queueDepositCard,
   recordAudit,
@@ -30,7 +31,7 @@ import {
   usdtDeposits,
   withinLimits,
 } from '@vertex-digital/db';
-import { and, count, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, ne, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -70,6 +71,9 @@ const HOUR_MS = 60 * 60 * 1000;
  * receipt submission and cancellation. Every change locks the deposit row and writes its audit
  * entry in the same transaction; customers only ever reach their own deposits.
  */
+/** Serializes receipt submissions so FL1 and FL2 compare with every receipt before them. */
+const RECEIPT_CHECK_LOCK = sql`select pg_advisory_xact_lock(hashtext('deposit_receipts'))`;
+
 @Injectable()
 export class DepositsService {
   constructor(
@@ -91,7 +95,14 @@ export class DepositsService {
       this.db
         .select({ id: deposits.id })
         .from(deposits)
-        .where(and(eq(deposits.customerId, customerId), eq(deposits.status, 'pending'))),
+        // F4-13: an elapsed deposit is not the open one, even before the job marks it.
+        .where(
+          and(
+            eq(deposits.customerId, customerId),
+            eq(deposits.status, 'pending'),
+            gt(deposits.expiresAt, sql`now()`),
+          ),
+        ),
     ]);
     const option = (currency: Currency) => {
       const reason = unavailableReason(settings, rate, currency);
@@ -173,6 +184,9 @@ export class DepositsService {
         if (written) throw new AlreadyCreated();
         await checkNotStopped(this.switches, tx, 'sham_cash');
         await checkNotFrozen(tx, customerId);
+        // F4-13: the customer's own elapsed deposit is closed here, as the expiry job would, so
+        // it never blocks this one while the job has not run.
+        await expireDueDeposits(tx, this.jobs, { limit: 10, channel: 'store', customerId });
         await checkCreation(tx, customerId);
         const limits = await limitsOf(tx, customerId, settings);
         // Pounds worth more than the safe integers are above any per-deposit limit (edge case 12).
@@ -324,6 +338,10 @@ export class DepositsService {
       const deposit = await lockDeposit(tx, id, eq(deposits.customerId, customerId));
       // Again under the lock: the expiry job or a requote may have committed meanwhile.
       const fixing = await this.checkSubmittable(tx, deposit, rateId);
+      // Receipts queue here, every customer's: two copies of one image sent at the same instant
+      // would otherwise each miss the other's uncommitted row and both pass FL1 and FL2 (F4-9).
+      // Taken after the deposit's lock, in this order only; the hold is one insert and two reads.
+      await tx.execute(RECEIPT_CHECK_LOCK);
       const fileId = await this.files.record(tx, prepared);
       const [receipt] = await tx
         .insert(depositReceipts)

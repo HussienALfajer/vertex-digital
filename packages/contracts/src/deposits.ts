@@ -979,6 +979,13 @@ export const adminDepositCountsSchema = z
     pending: z.int().nonnegative(),
     /** USDT deposits in review (S04 rule U11); also counted in `submitted`. */
     usdtReview: z.int().nonnegative(),
+    /**
+     * What waits for the admin, the navigation badge (F4-8): Sham Cash deposits submitted and USDT
+     * deposits in review, not a USDT deposit the worker is still checking; and how many of them
+     * carry a flag.
+     */
+    waiting: z.int().nonnegative(),
+    waitingFlagged: z.int().nonnegative(),
     /** USDT transfers of the last 30 days that no deposit or adjustment holds (rule U13). */
     unmatchedTransfers: z.int().nonnegative(),
   })
@@ -1124,17 +1131,63 @@ export type AdminDeposit = z.infer<typeof adminDepositSchema>;
 const internalNoteSchema = z.string().trim().min(5).max(500);
 const depositCustomerNoteSchema = z.string().trim().min(1).max(300);
 
+/**
+ * A payment reference (a Sham Cash transaction number, a TXID) as typed, cleaned (F4-3): NFKC
+ * (full-width forms), format and direction marks and every space removed, Arabic-Indic and
+ * Persian digits to Latin. A number typed on an Arabic keyboard, or pasted from the right-to-left
+ * Sham Cash app with a direction mark, reads as its plain form.
+ */
+export function cleanPaymentReference(reference: string): string {
+  return reference
+    .normalize('NFKC')
+    .replace(/[\p{Cf}\s]/gu, '')
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0));
+}
+
+/**
+ * How payment references compare and are claimed (rule SC14, F4-3): cleaned, then upper case, so
+ * one transfer can never be credited twice under two spellings.
+ */
+export const normalizePaymentReference = (reference: string) =>
+  cleanPaymentReference(reference).toUpperCase();
+
+/**
+ * A payment reference typed by the admin, cleaned before it is stored or compared (F4-3); then
+ * printable ASCII only, as the claims table stores (`payment_references_reference_ascii_check`).
+ */
+export const paymentReferenceInputSchema = (max: number) =>
+  z
+    .string()
+    .max(max * 4)
+    .transform(cleanPaymentReference)
+    .pipe(
+      z
+        .string()
+        .min(1)
+        .max(max)
+        .regex(/^[!-~]+$/),
+    );
+
 /** `POST /api/admin/deposits/:id/approve` (rules RV1–RV5, RV9). */
 export const approveDepositSchema = z
   .object({
     /** From the store's Sham Cash account history, never from the image alone (rule RV1). */
-    transactionNumber: z.string().trim().min(1).max(64),
+    transactionNumber: paymentReferenceInputSchema(64),
     receivedCurrency: currencySchema,
     receivedAmountUnits: positiveUnitsSchema,
     referenceCheck: depositReferenceCheckSchema,
     /** Every submission flag and every approval-time flag of this request (rule RV5). */
     acknowledgedFlags: z.array(depositFlagCodeSchema).max(DEPOSIT_FLAG_CODES.length * 2),
     internalNote: z.string().trim().min(1).max(500).optional(),
+    /**
+     * What the panel showed when the admin approved (F4-4): the credit on the button and the
+     * receipt's submission time. Refused when the rate or the receipt changed since, so the admin
+     * never confirms one amount or one image and credits another (rule RV2). The bot checks its
+     * own prompt instead.
+     */
+    expectedCreditUsdUnits: positiveUnitsSchema.optional(),
+    submittedAt: z.iso.datetime().optional(),
   })
   .superRefine((input, context) => {
     if (!isWholeDepositAmount(input.receivedCurrency, input.receivedAmountUnits)) {
@@ -1171,6 +1224,11 @@ export const rejectDepositSchema = z
     customerNote: depositCustomerNoteSchema.optional(),
     /** The audit entry's reason. */
     internalNote: internalNoteSchema,
+    /**
+     * The submission the panel showed when the dialog opened (F4-10): refused when the customer
+     * sent another receipt since, so a rejection of one image never closes the next.
+     */
+    submittedAt: z.iso.datetime().optional(),
   })
   .superRefine((input, context) => {
     if (input.reason === 'other' && input.customerNote === undefined) {

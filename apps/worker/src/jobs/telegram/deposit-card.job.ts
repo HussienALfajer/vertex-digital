@@ -43,6 +43,12 @@ type DepositRow = typeof deposits.$inferSelect;
 /** The edit Telegram refuses because the card already shows it: a second run's edit. */
 const NOT_MODIFIED = /message is not modified/i;
 
+/**
+ * The caption edit Telegram refuses on a text message: a card sent as text because its receipt
+ * could not be read (F4-14).
+ */
+const NO_CAPTION = /no caption/i;
+
 /** Refusals no retry can change: the bot blocked (403), a message gone or malformed (400). */
 const FINAL_STATUSES = new Set([400, 403]);
 
@@ -52,8 +58,10 @@ const FINAL_STATUSES = new Set([400, 403]);
  * receipt as a JPEG photo, a USDT review as text), or edits that card to the outcome and removes
  * its buttons. Safe twice: a card is one row per `(deposit, submission)`, sent once, and an edit
  * that changes nothing is accepted. With no live link nothing is sent and later decisions edit
- * nothing (edge case 2). A crash between Telegram and the insert can send one card twice: accepted,
- * as for messages.
+ * nothing (edge case 2). A submission decided before its card was sent (the worker was behind)
+ * gets its card at once with the outcome and no buttons, when the chat was linked by then (edge
+ * case 1, F4-15). A crash between Telegram and the insert can send one card twice: accepted, as
+ * for messages.
  */
 @Injectable()
 export class DepositCardJob implements OnApplicationBootstrap {
@@ -86,7 +94,7 @@ export class DepositCardJob implements OnApplicationBootstrap {
     const [deposit] = await db.select().from(deposits).where(eq(deposits.id, depositId));
     if (!deposit) return 'none';
     const [link] = await db
-      .select({ chatId: telegramLinks.chatId })
+      .select({ chatId: telegramLinks.chatId, linkedAt: telegramLinks.linkedAt })
       .from(telegramLinks)
       .where(isNull(telegramLinks.unlinkedAt));
     if (!this.bot.configured || !link) return 'skipped';
@@ -103,7 +111,11 @@ export class DepositCardJob implements OnApplicationBootstrap {
       );
     const message = renderDepositCard(view, { admin: this.adminUrl });
     try {
-      if (!view.outcome) {
+      // F4-15: a card never sent, its submission already decided, arrives with the outcome when
+      // the chat was linked at the submission (it was meant to get it); otherwise none (edge
+      // case 2: a chat linked later is not sent old cards).
+      const late = !card && Boolean(view.outcome) && link.linkedAt <= view.submittedAt;
+      if (!view.outcome || late) {
         if (card) return 'none';
         const messageId = await this.send(db, deposit, link.chatId, view, message);
         await db
@@ -174,7 +186,17 @@ export class DepositCardJob implements OnApplicationBootstrap {
       if (view.usdt) {
         await this.bot.call('editMessageText', { ...target, text: message.text, ...markup });
       } else {
-        await this.bot.call('editMessageCaption', { ...target, caption: message.text, ...markup });
+        try {
+          await this.bot.call('editMessageCaption', {
+            ...target,
+            caption: message.text,
+            ...markup,
+          });
+        } catch (error) {
+          // F4-14: the card went out as text (its receipt was unreadable): edit its text.
+          if (!(error instanceof TelegramApiError && NO_CAPTION.test(error.message))) throw error;
+          await this.bot.call('editMessageText', { ...target, text: message.text, ...markup });
+        }
       }
     } catch (error) {
       if (error instanceof TelegramApiError && NOT_MODIFIED.test(error.message)) return;

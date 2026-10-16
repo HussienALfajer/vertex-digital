@@ -4,6 +4,7 @@ import { type AdminDeposit, formatRate, formatUsd } from '@vertex-digital/contra
 import {
   Badge,
   Button,
+  Callout,
   Card,
   CardTitle,
   Dialog,
@@ -17,7 +18,7 @@ import {
   TableRow,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, ImageUpIcon, RefreshCwIcon, XCircleIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
@@ -44,6 +45,15 @@ export function DepositPage({ id }: { id: string }) {
   const { t } = useTranslation();
   const deposit = useQuery(depositQuery(id));
   const [dialog, setDialog] = useState<'reject' | 'request' | null>(null);
+  // F4-10: the submission first shown here; a newer one is announced, and the receipt and the
+  // approval form start again on it, so nothing typed or ticked for one image approves another.
+  const [firstSubmission, setFirstSubmission] = useState<string | null | undefined>(undefined);
+  const loadedSubmission = deposit.data?.submittedAt;
+  useEffect(() => {
+    if (loadedSubmission !== undefined && firstSubmission === undefined) {
+      setFirstSubmission(loadedSubmission);
+    }
+  }, [loadedSubmission, firstSubmission]);
 
   const back = (
     <Button variant="ghost" className="self-start" render={<Link to="/deposits" />}>
@@ -83,6 +93,11 @@ export function DepositPage({ id }: { id: string }) {
   const data = deposit.data;
   const usdt = data.usdt;
   const inReview = data.status === 'submitted' && (!usdt || usdt.checkStatus === 'review');
+  const resubmitted =
+    firstSubmission !== undefined &&
+    data.submittedAt !== firstSubmission &&
+    data.status === 'submitted';
+  const submission = `${data.id}:${data.submittedAt ?? ''}`;
   return (
     <>
       {back}
@@ -117,6 +132,14 @@ export function DepositPage({ id }: { id: string }) {
           )
         }
       />
+      {resubmitted && (
+        <Callout
+          tone="warning"
+          icon={<ImageUpIcon />}
+          title={t('deposits.detail.resubmittedTitle')}
+          description={t('deposits.detail.resubmittedBody')}
+        />
+      )}
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-6">
           {usdt ? (
@@ -126,7 +149,7 @@ export function DepositPage({ id }: { id: string }) {
             </>
           ) : (
             <>
-              <ReceiptViewer deposit={data} />
+              <ReceiptViewer key={submission} deposit={data} />
               <Facts deposit={data} />
             </>
           )}
@@ -134,7 +157,7 @@ export function DepositPage({ id }: { id: string }) {
         <div className="flex flex-col gap-6">
           <Card className="gap-3">
             <CardTitle>{t('deposits.detail.flags')}</CardTitle>
-            <DepositFlags flags={data.flags} />
+            <DepositFlags flags={data.flags} customerId={data.customer.id} />
           </Card>
           {usdt && (
             <Card className="gap-3">
@@ -147,7 +170,7 @@ export function DepositPage({ id }: { id: string }) {
             (usdt ? (
               <UsdtApproveForm key={data.id} deposit={data} usdt={usdt} />
             ) : (
-              <ApproveForm key={data.id} deposit={data} onDone={() => undefined} />
+              <ApproveForm key={submission} deposit={data} onDone={() => undefined} />
             ))}
           {(data.credit || data.rejection) && <Decision deposit={data} />}
         </div>

@@ -111,7 +111,7 @@ describe('the deposit emails (S03)', () => {
       },
       store,
     );
-    expect(email.subject).toBe('أُضيف $16.10 إلى رصيدك من إيداع شام كاش');
+    expect(email.subject).toBe('أُضيف $16.10 إلى رصيدك من إيداعك VD-7KQ2M');
     expect(email.text).toContain('VD-7KQ2M');
     expect(email.text).toContain(`عرض الإيداع: ${link}`);
     arabicRtl(email.html);

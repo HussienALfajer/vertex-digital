@@ -24,6 +24,8 @@ import {
   isWholeDepositAmount,
   isWithinReviewHours,
   nextReviewOpening,
+  normalizePaymentReference,
+  paymentReferenceInputSchema,
   referenceCodeSchema,
   rejectDepositSchema,
   reviewEta,
@@ -155,6 +157,36 @@ describe('approval-time flags (rules RV5, FL6)', () => {
   it('describes the details of every flag', () => {
     expect(Object.keys(DEPOSIT_FLAG_DETAILS).sort()).toEqual([...DEPOSIT_FLAG_CODES].sort());
     expect(DEPOSIT_FLAG_DETAILS.reference_missing.safeParse({ extra: 1 }).success).toBe(false);
+  });
+});
+
+describe('normalizePaymentReference (F4-3)', () => {
+  it('compares a reference without marks, spaces, other digits or case', () => {
+    for (const spelling of [
+      '523604961',
+      ' 523604961 ',
+      '‎523604961',
+      '523604961​',
+      '⁧523604961⁩',
+      '؜5236 04961',
+      '٥٢٣٦٠٤٩٦١',
+      '۵۲۳۶۰۴۹۶۱',
+      '５２３６０４９６１',
+    ]) {
+      expect(normalizePaymentReference(spelling)).toBe('523604961');
+    }
+    expect(normalizePaymentReference(' tx-0042‍ ')).toBe('TX-0042');
+  });
+
+  it('refuses a reference made only of marks and spaces', () => {
+    const schema = paymentReferenceInputSchema(64);
+    expect(schema.safeParse(' ‎​ ').success).toBe(false);
+    expect(schema.safeParse('٥'.repeat(65)).success).toBe(false);
+    expect(schema.parse('٥٢٣')).toBe('523');
+    // Letters outside ASCII are no transaction number the claims table can hold.
+    expect(schema.safeParse('رقم١٢٣').success).toBe(false);
+    // Stored as typed but cleaned: the case stays, only the claim compares upper case.
+    expect(schema.parse(' tx-0042‎ ')).toBe('tx-0042');
   });
 });
 

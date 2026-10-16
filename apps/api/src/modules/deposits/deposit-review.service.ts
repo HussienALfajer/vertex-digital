@@ -56,6 +56,7 @@ import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { AdminAuthService, type AdminIdentity } from '../admin/index.js';
+import { AuditService } from '../audit/index.js';
 import { AuthService } from '../auth/index.js';
 import { FilesService, type ServedFile } from '../files/index.js';
 import { NotificationsService } from '../notifications/index.js';
@@ -159,6 +160,9 @@ const keyReused = () =>
  */
 const flagged = sql<boolean>`exists (select 1 from ${depositFlags} where ${depositFlags.depositId} = ${sql.identifier('deposits')}.${sql.identifier('id')})`;
 
+/** A deposit the admin must decide (F4-8): Sham Cash submitted, or USDT in review. */
+const waitsForAdmin = sql`${deposits.status} = 'submitted' and (${deposits.method} = 'sham_cash' or ${usdtDeposits.checkStatus} = 'review')`;
+
 /** The queue's cursor (rule RV10): flagged first, then oldest submission, then id. */
 interface QueuePosition {
   flagged: boolean;
@@ -203,6 +207,7 @@ export class DepositReviewService {
     private readonly files: FilesService,
     private readonly notifications: NotificationsService,
     private readonly jobs: JobsService,
+    private readonly audit: AuditService,
   ) {}
 
   /** `GET /api/admin/deposits` (rule RV10). */
@@ -262,8 +267,11 @@ export class DepositReviewService {
         submitted: sql<number>`(count(*) filter (where ${deposits.status} = 'submitted'))::int`,
         submittedFlagged: sql<number>`(count(*) filter (where ${deposits.status} = 'submitted' and ${flagged}))::int`,
         pending: sql<number>`(count(*) filter (where ${deposits.status} = 'pending'))::int`,
+        waiting: sql<number>`(count(*) filter (where ${waitsForAdmin}))::int`,
+        waitingFlagged: sql<number>`(count(*) filter (where ${waitsForAdmin} and ${flagged}))::int`,
       })
       .from(deposits)
+      .leftJoin(usdtDeposits, eq(usdtDeposits.depositId, deposits.id))
       .where(inArray(deposits.status, ['submitted', 'pending']));
     const [[review], [unmatched]] = await readAll(db, [
       () =>
@@ -288,6 +296,8 @@ export class DepositReviewService {
       submittedFlagged: row?.submittedFlagged ?? 0,
       pending: row?.pending ?? 0,
       usdtReview: review?.count ?? 0,
+      waiting: row?.waiting ?? 0,
+      waitingFlagged: row?.waitingFlagged ?? 0,
       unmatchedTransfers: unmatched?.count ?? 0,
     };
   }
@@ -600,6 +610,36 @@ export class DepositReviewService {
         const approval = await this.planApproval(tx, deposit, input);
         if (actor.channel === 'telegram') {
           await this.refuseForTelegram(tx, actor, deposit, approval);
+        } else {
+          // F4-4: the receipt and the credit the panel showed, and rule RV4 on the locked values
+          // (the rate may have moved the credit past $100 since the check above).
+          if (input.submittedAt && !sameInstant(deposit.submittedAt, new Date(input.submittedAt))) {
+            throw stateConflict(deposit.status);
+          }
+          if (
+            input.expectedCreditUsdUnits !== undefined &&
+            input.expectedCreditUsdUnits !== approval.creditedUsdUnits
+          ) {
+            throw new CodedException(
+              409,
+              'DEPOSIT_CREDIT_CHANGED',
+              'The credit changed since the page was read',
+              { creditedUsdUnits: approval.creditedUsdUnits },
+            );
+          }
+          if (
+            approvalNeedsReauthentication(
+              approval.creditedUsdUnits,
+              approval.expectedFlags.length,
+            ) &&
+            !actor.reauthenticated
+          ) {
+            throw new CodedException(
+              403,
+              'REAUTHENTICATION_REQUIRED',
+              'Confirm your password and code first',
+            );
+          }
         }
         if (!sameFlags(input.acknowledgedFlags, approval.expectedFlags)) {
           throw new CodedException(409, 'FLAGS_NOT_ACKNOWLEDGED', 'Acknowledge every flag', {
@@ -735,7 +775,8 @@ export class DepositReviewService {
   ): Promise<{ row: DepositRow; created: boolean }> {
     const { adminId } = actor;
     const customerNote = input.customerNote ?? null;
-    const replay = () => this.replayRejection(db, id, idempotencyKey, input.reason, customerNote);
+    const replay = () =>
+      this.replayRejection(db, id, idempotencyKey, input.reason, customerNote, input.internalNote);
     const replayed = await replay();
     if (replayed) return { row: replayed, created: false };
     try {
@@ -750,6 +791,14 @@ export class DepositReviewService {
         }
         if (actor.channel === 'telegram' && !sameInstant(deposit.submittedAt, actor.submittedAt)) {
           throw new TelegramRefused('changed');
+        }
+        // F4-10: the panel's dialog names the submission it showed.
+        if (
+          actor.channel !== 'telegram' &&
+          input.submittedAt &&
+          !sameInstant(deposit.submittedAt, new Date(input.submittedAt))
+        ) {
+          throw stateConflict(deposit.status);
         }
         const [updated] = await tx
           .update(deposits)
@@ -923,7 +972,9 @@ export class DepositReviewService {
       row.receivedCurrency === input.receivedCurrency &&
       row.receivedAmountUnits === input.receivedAmountUnits &&
       row.referenceCheck === input.referenceCheck &&
-      sameFlags(input.acknowledgedFlags, flags.get(row.id) ?? []);
+      sameFlags(input.acknowledgedFlags, flags.get(row.id) ?? []) &&
+      // F4-16: the internal note is part of the body (rule RV9); it lives in the audit entry.
+      (await this.audit.reasonOf(db, row.id, 'deposit.credited')) === (input.internalNote ?? null);
     if (!same) throw keyReused();
     return row;
   }
@@ -934,6 +985,7 @@ export class DepositReviewService {
     idempotencyKey: string,
     reason: RejectDeposit['reason'],
     customerNote: string | null,
+    internalNote: string,
   ): Promise<DepositRow | null> {
     const row = await this.decidedWith(db, idempotencyKey);
     if (!row) return null;
@@ -941,7 +993,9 @@ export class DepositReviewService {
       row.id === id &&
       row.status === 'rejected' &&
       row.rejectReason === reason &&
-      row.customerNote === customerNote;
+      row.customerNote === customerNote &&
+      // F4-16: the internal note is part of the body (rule RV9); it lives in the audit entry.
+      (await this.audit.reasonOf(db, row.id, 'deposit.rejected')) === internalNote;
     if (!same) throw keyReused();
     return row;
   }

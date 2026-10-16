@@ -209,9 +209,10 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 function DepositsBadge() {
   const { t } = useTranslation();
   const counts = useQuery(depositCountsQuery);
-  const submitted = counts.data?.submitted ?? 0;
+  // F4-8: what the admin must decide, not a USDT deposit the worker is still checking.
+  const submitted = counts.data?.waiting ?? 0;
   if (submitted === 0) return null;
-  const flagged = (counts.data?.submittedFlagged ?? 0) > 0;
+  const flagged = (counts.data?.waitingFlagged ?? 0) > 0;
   return (
     <Badge
       tone={flagged ? 'danger' : 'gold'}

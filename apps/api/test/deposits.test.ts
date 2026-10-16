@@ -447,6 +447,25 @@ describe('creating a deposit (rules SC2–SC6)', () => {
     expect(await options.json()).toMatchObject({ pendingDepositId: first.id });
   });
 
+  it('closes an elapsed deposit at the next creation, before the expiry job (F4-13)', async () => {
+    const someone = await customer();
+    const first = await created(someone.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    await test.db
+      .update(deposits)
+      .set({ expiresAt: sql`now() - interval '1 minute'` })
+      .where(eq(deposits.id, first.id));
+    const options = await client.get('/api/deposits/sham-cash/options', { cookie: someone.cookie });
+    expect(await options.json()).toMatchObject({ pendingDepositId: null });
+    const second = await create(someone.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    expect(second.status, await second.clone().text()).toBe(201);
+    const [row] = await test.db.select().from(deposits).where(eq(deposits.id, first.id));
+    expect(row?.status).toBe('expired');
+    const [expiry] = (await auditOf(test.db, first.id)).filter(
+      (entry) => entry.action === 'deposit.expired',
+    );
+    expect(expiry).toMatchObject({ actorKind: 'system', channel: 'store' });
+  });
+
   it('enforces the minimum, the per-deposit and the daily limits (rule SC3)', async () => {
     const someone = await customer();
     expect(
@@ -896,6 +915,26 @@ describe('fraud flags (rules FL1–FL5)', () => {
     expect(await flagsOf(original.id)).toEqual([]);
   });
 
+  it('flags one of two copies of a new image sent at the same instant (F4-9)', async () => {
+    const first = await customer();
+    const second = await customer();
+    const png = await sharp(randomBytes(32 * 32 * 3), {
+      raw: { width: 32, height: 32, channels: 3 },
+    })
+      .png()
+      .toBuffer();
+    const input = { currency: 'USD', amountUnits: 5 * USD } as const;
+    const [a, b] = await Promise.all([created(first.cookie, input), created(second.cookie, input)]);
+    const responses = await Promise.all([
+      submit(first.cookie, a.id, png, {}),
+      submit(second.cookie, b.id, png, {}),
+    ]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    // Serialized, the later submission sees the earlier one, whichever it is.
+    const flagged = [...(await flagsOf(a.id)), ...(await flagsOf(b.id))];
+    expect(flagged).toEqual(['receipt_reused']);
+  });
+
   it('flags a large deposit of a new account (FL3)', async () => {
     const someone = await customer();
     const deposit = await submitted(someone.cookie, { currency: 'USD', amountUnits: 25 * USD });
@@ -974,11 +1013,23 @@ describe('the review queue (rule RV10)', () => {
     const unflagged = await page('?flagged=false&limit=100');
     expect(unflagged.items.every((item) => item.flags.length === 0)).toBe(true);
     const counts = await client.get('/api/admin/deposits/counts', { cookie: admin.cookie });
-    expect(await counts.json()).toMatchObject({
+    const read = (await counts.json()) as { waiting: number; waitingFlagged: number };
+    expect(read).toMatchObject({
       submitted: expect.any(Number),
       submittedFlagged: expect.any(Number),
       pending: expect.any(Number),
     });
+    // F4-8: the badge counts what the admin must decide, not a USDT deposit still being checked.
+    const [expected] = (
+      await test.db.execute<{ waiting: number }>(
+        sql`select count(*)::int as waiting from deposits
+          left join usdt_deposits on usdt_deposits.deposit_id = deposits.id
+          where deposits.status = 'submitted'
+            and (deposits.method = 'sham_cash' or usdt_deposits.check_status = 'review')`,
+      )
+    ).rows;
+    expect(read.waiting).toBe(expected?.waiting);
+    expect(read.waitingFlagged).toBeLessThanOrEqual(read.waiting);
   });
 
   it('shows the admin the deposit, its receipts, flags and customer', async () => {
@@ -1250,6 +1301,110 @@ describe('approving (rules RV1–RV5, RV7, RV9, M1–M3)', () => {
     expect(await body(loser)).toMatchObject({ status: 409, code: 'EXTERNAL_REFERENCE_TAKEN' });
   });
 
+  it('refuses one transfer written another way: marks, spaces, other digits (F4-3)', async () => {
+    const first = await customer();
+    const second = await customer();
+    const taken = await submitted(first.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    const number = String(100_000_000 + Math.floor(Math.random() * 800_000_000));
+    const usd = { receivedCurrency: 'USD', receivedAmountUnits: 5 * USD } as const;
+    expect((await approve(taken.id, { transactionNumber: number, ...usd })).status).toBe(200);
+    const shifted = (from: number) =>
+      [...number].map((digit) => String.fromCharCode(from + Number(digit))).join('');
+    const deposit = await submitted(second.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    for (const spelling of [
+      `‎${number}`,
+      `${number}​`,
+      `⁧${number}⁩`,
+      `${number.slice(0, 4)} ${number.slice(4)}`,
+      shifted(0x0660),
+      shifted(0x06f0),
+      shifted(0xff10),
+    ]) {
+      const refused = await approve(deposit.id, { transactionNumber: spelling, ...usd });
+      expect(await body(refused)).toMatchObject({
+        status: 409,
+        code: 'EXTERNAL_REFERENCE_TAKEN',
+        details: { kind: 'deposit', id: taken.id },
+      });
+    }
+    const adjustment = await client.post(`/api/admin/wallets/${second.id}/adjustments`, {
+      cookie: admin.cookie,
+      body: {
+        direction: 'credit',
+        amountUnits: 5 * USD,
+        category: 'manual_deposit',
+        reason: 'The same transfer again',
+        depositMethod: 'sham_cash',
+        externalReference: `‏${shifted(0x0660)}`,
+      },
+      headers: { 'idempotency-key': randomUUID() },
+    });
+    expect(await body(adjustment)).toMatchObject({
+      status: 409,
+      code: 'EXTERNAL_REFERENCE_TAKEN',
+      details: { kind: 'deposit', id: taken.id },
+    });
+    expect(await journalsOf(deposit.id)).toEqual([]);
+  });
+
+  it('refuses a replayed decision whose internal note changed (rule RV9, F4-16)', async () => {
+    const first = await customer();
+    const credited = await submitted(first.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    const key = randomUUID();
+    const input = {
+      transactionNumber: transactionNumber(),
+      receivedCurrency: 'USD',
+      receivedAmountUnits: 5 * USD,
+      internalNote: 'Seen in the account',
+    };
+    expect((await approve(credited.id, input, { key })).status).toBe(200);
+    expect((await approve(credited.id, input, { key })).status).toBe(200);
+    expect(
+      await body(await approve(credited.id, { ...input, internalNote: 'Another note' }, { key })),
+    ).toMatchObject({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+    const second = await customer();
+    const rejected = await submitted(second.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    const refusal = { reason: 'not_received', internalNote: 'Nothing arrived' };
+    const rejectKey = randomUUID();
+    expect((await reject(rejected.id, refusal, rejectKey)).status).toBe(200);
+    expect((await reject(rejected.id, refusal, rejectKey)).status).toBe(200);
+    expect(
+      await body(
+        await reject(rejected.id, { ...refusal, internalNote: 'Something else' }, rejectKey),
+      ),
+    ).toMatchObject({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+  });
+
+  it('refuses a panel approval whose credit or receipt is not the one shown (F4-4)', async () => {
+    const someone = await customer();
+    const deposit = await submitted(someone.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    const input = {
+      transactionNumber: transactionNumber(),
+      receivedCurrency: 'USD',
+      receivedAmountUnits: 5 * USD,
+    } as const;
+    const moved = await approve(deposit.id, { ...input, expectedCreditUsdUnits: 4 * USD });
+    expect(await body(moved)).toMatchObject({
+      status: 409,
+      code: 'DEPOSIT_CREDIT_CHANGED',
+      details: { creditedUsdUnits: 5 * USD },
+    });
+    const stale = await approve(deposit.id, {
+      ...input,
+      submittedAt: new Date(Date.now() - 3_600_000).toISOString(),
+    });
+    expect(await body(stale)).toMatchObject({ status: 409, code: 'DEPOSIT_STATE_CONFLICT' });
+    expect(await journalsOf(deposit.id)).toEqual([]);
+    const [row] = await test.db.select().from(deposits).where(eq(deposits.id, deposit.id));
+    const shown = await approve(deposit.id, {
+      ...input,
+      expectedCreditUsdUnits: 5 * USD,
+      submittedAt: row?.submittedAt?.toISOString(),
+    });
+    expect(shown.status).toBe(200);
+    expect(await journalsOf(deposit.id)).toHaveLength(1);
+  });
+
   it('leaves nothing behind when the transaction number is taken (rule RV7)', async () => {
     const first = await customer();
     const second = await customer();
@@ -1393,6 +1548,7 @@ describe('rejecting (rule RV6) and asking for a clearer receipt (rule RV8)', () 
         cookie: plainAdmin,
         body: input,
       });
+    const [first] = await test.db.select().from(deposits).where(eq(deposits.id, deposit.id));
     const response = await request({ customerNote: 'صورة أوضح من فضلك', internalNote: 'Blurred' });
     expect(await response.json()).toMatchObject({ status: 'pending', receiptRequestCount: 1 });
     const view = (await (
@@ -1416,6 +1572,15 @@ describe('rejecting (rule RV6) and asking for a clearer receipt (rule RV8)', () 
       await client.get(`/api/admin/deposits/${deposit.id}`, { cookie: admin.cookie })
     ).json()) as { receipts: unknown[] };
     expect(detail.receipts).toHaveLength(2);
+    // F4-10: a rejection opened on the first receipt never closes the second.
+    const stale = await reject(deposit.id, {
+      reason: 'receipt_invalid',
+      internalNote: 'The first image',
+      submittedAt: first?.submittedAt?.toISOString(),
+    });
+    expect(await body(stale)).toMatchObject({ status: 409, code: 'DEPOSIT_STATE_CONFLICT' });
+    const [still] = await test.db.select().from(deposits).where(eq(deposits.id, deposit.id));
+    expect(still?.status).toBe('submitted');
     expect((await depositEmails(someone.email)).map((email) => email.template)).toEqual([
       'customer_deposit_receipt_requested',
     ]);

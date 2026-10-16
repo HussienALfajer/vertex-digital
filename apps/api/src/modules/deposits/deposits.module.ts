@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AdminModule } from '../admin/index.js';
+import { AuditModule } from '../audit/index.js';
 import { AuthModule } from '../auth/index.js';
 import { FilesModule } from '../files/index.js';
 import { NotificationsModule } from '../notifications/index.js';
@@ -25,6 +26,7 @@ import { UsdtReviewService } from './usdt-review.service.js';
   imports: [
     AuthModule,
     AdminModule,
+    AuditModule,
     FilesModule,
     NotificationsModule,
     RatesModule,

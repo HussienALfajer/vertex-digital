@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
@@ -32,7 +32,7 @@ import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { DailySummaryJob, damascusDate } from '../src/jobs/telegram/daily-summary.job.js';
 import { DepositCardJob } from '../src/jobs/telegram/deposit-card.job.js';
 import { ReviewReminderJob } from '../src/jobs/telegram/review-reminder.job.js';
-import { TelegramBot } from '../src/telegram/bot-api.js';
+import { TelegramApiError, TelegramBot } from '../src/telegram/bot-api.js';
 import { renderDepositCard, renderTelegramMessage } from '../src/telegram/messages.js';
 
 /*
@@ -197,6 +197,107 @@ describe('the deposit card (rules TC1, TC2, TC6)', () => {
       expect(edit?.caption).toMatch(/^❌ رُفض: لم يصل التحويل/);
       // Safe twice.
       expect(await job.sync(id, tx)).toBe('edited');
+    });
+  });
+
+  it('edits a card sent as text to its outcome (F4-14)', async () => {
+    // A Bot API that keeps each message's kind and refuses a caption edit on text, as Telegram does.
+    const kinds = new Map<number, 'photo' | 'text'>();
+    const calls: { method: string; params: Record<string, unknown> }[] = [];
+    let next = 100;
+    const bot = {
+      configured: true,
+      async call(method: string, params: Record<string, unknown>) {
+        calls.push({ method, params });
+        if (method === 'sendMessage') {
+          next += 1;
+          kinds.set(next, 'text');
+          return { message_id: next };
+        }
+        if (method === 'editMessageCaption' && kinds.get(params.message_id as number) === 'text') {
+          throw new TelegramApiError(
+            400,
+            'Bad Request: there is no caption in the message to edit',
+          );
+        }
+        return true;
+      },
+      async callWithFile() {
+        throw new Error('A card with an unreadable receipt is sent as text');
+      },
+    } as unknown as TelegramBot;
+    const job = new DepositCardJob(pgBoss, bot, db, env);
+    await isolated(async (tx) => {
+      await link(tx);
+      const id = await submitted(tx, 20);
+      // The receipt's file is gone: the card goes out as text.
+      const [stored] = await tx
+        .select({ key: storedFiles.storageKey })
+        .from(depositReceipts)
+        .innerJoin(storedFiles, eq(storedFiles.id, depositReceipts.fileId))
+        .where(eq(depositReceipts.depositId, id));
+      await rm(join(FILES_ROOT, stored?.key ?? 'missing'), { force: true });
+      expect(await job.sync(id, tx)).toBe('sent');
+      expect(calls.at(-1)?.method).toBe('sendMessage');
+      await tx
+        .update(deposits)
+        .set({
+          status: 'rejected',
+          decidedAt: new Date(),
+          decidedBy: 'admin',
+          adminId: newId(),
+          rejectReason: 'not_received',
+          decisionIdempotencyKey: newId(),
+        })
+        .where(eq(deposits.id, id));
+      expect(await job.sync(id, tx)).toBe('edited');
+      expect(calls.at(-1)).toMatchObject({
+        method: 'editMessageText',
+        params: { reply_markup: { inline_keyboard: [] } },
+      });
+    });
+  });
+
+  it('sends a card decided before it was sent, with its outcome and no buttons (F4-15)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'vertex-digital-cards-'));
+    const job = new DepositCardJob(
+      pgBoss,
+      new TelegramBot({ transport: 'log', apiUrl: 'http://127.0.0.1:9', logDir: dir }),
+      db,
+      env,
+    );
+    await isolated(async (tx) => {
+      await tx.insert(telegramLinks).values({
+        id: newId(),
+        adminId: newId(),
+        chatId: 4242,
+        telegramUserId: 4242,
+        linkedAt: new Date(Date.now() - 3_600_000),
+      });
+      const decide = (id: string) =>
+        tx
+          .update(deposits)
+          .set({
+            status: 'rejected',
+            decidedAt: new Date(),
+            decidedBy: 'admin',
+            adminId: newId(),
+            rejectReason: 'not_received',
+            decisionIdempotencyKey: newId(),
+          })
+          .where(eq(deposits.id, id));
+      // The worker was behind: the deposit was decided before its first card job ran.
+      const id = await submitted(tx, 20);
+      await decide(id);
+      expect(await job.sync(id, tx)).toBe('sent');
+      const [card] = await readFiles(dir);
+      expect(card).toMatchObject({ method: 'sendPhoto', reply_markup: { inline_keyboard: [] } });
+      expect(card?.caption).toMatch(/^❌ رُفض/);
+      expect(await job.sync(id, tx)).toBe('edited');
+      // A submission made before the chat was linked gets no card, then or later (edge case 2).
+      const before = await submitted(tx, 20, new Date(Date.now() - 7_200_000));
+      await decide(before);
+      expect(await job.sync(before, tx)).toBe('none');
     });
   });
 

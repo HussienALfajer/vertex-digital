@@ -122,6 +122,9 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
       referenceCheck: referenceCheck ?? ('' as DepositReferenceCheck),
       acknowledgedFlags: ticked.filter((code) => allFlags.includes(code)),
       internalNote: note.trim() || undefined,
+      // F4-4: the credit on the button and the receipt on screen; the API refuses if either moved.
+      expectedCreditUsdUnits: credit ?? undefined,
+      submittedAt: deposit.submittedAt ?? undefined,
     };
     const parsed = approveDepositSchema.safeParse(body);
     for (const issue of parsed.error?.issues ?? []) {

@@ -14,6 +14,7 @@ import {
   ledgerPostings,
   newId,
   paymentReferences,
+  telegramDepositCards,
   telegramLinks,
   telegramMessages,
   usdtDeposits,
@@ -1180,8 +1181,20 @@ describe('USDT reviews from Telegram (S05 rules TC3, TC4, TC5)', () => {
     return text ? (JSON.parse(text) as { text?: string }).text : undefined;
   };
   const sendText = (text: string) => post({ message: { message_id: 1, from, chat, text } });
-  const tap = (data: string) =>
-    post({ callback_query: { id: 'q', from, message: { message_id: 2, chat }, data } });
+  const tap = (data: string, messageId = 2) =>
+    post({ callback_query: { id: 'q', from, message: { message_id: messageId, chat }, data } });
+  /** The deposit's card for its current submission, as the worker records it (F4-12). */
+  const cardOf = async (depositId: string) => {
+    const [row] = await test.db.select().from(deposits).where(eq(deposits.id, depositId));
+    const messageId = 1_000_000 + randomInt(1_000_000_000);
+    await test.db.insert(telegramDepositCards).values({
+      depositId,
+      submittedAt: row?.submittedAt ?? new Date(),
+      chatId,
+      messageId,
+    });
+    return messageId;
+  };
   const lastReply = async () =>
     (
       await test.db
@@ -1207,7 +1220,7 @@ describe('USDT reviews from Telegram (S05 rules TC3, TC4, TC5)', () => {
     const someone = await customer();
     const { deposit } = await inReview(someone);
     expect(await tap(`ap:${deposit.id}`)).toMatch(/اللوحة/);
-    expect(await tap(`rj:${deposit.id}`)).toBeUndefined();
+    expect(await tap(`rj:${deposit.id}`, await cardOf(deposit.id))).toBeUndefined();
     const reasons = await lastReply();
     expect(reasons).toMatchObject({ reply: 'reject_reasons' });
     expect(reasons?.reasons).toContain('transfer_other_customer');
