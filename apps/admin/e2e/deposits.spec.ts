@@ -346,6 +346,47 @@ test.describe('deposits', () => {
     await expect(page.getByText('0199a000-0000-7000-8000-0000000000b9')).toBeVisible();
   });
 
+  test('a receipt sent while the page was open is announced and starts the form again (F4-10)', async ({
+    page,
+    admin,
+  }) => {
+    queue(admin);
+    await open(page, admin, `/deposits/${USD_DEPOSIT}`);
+    const transaction = field(page, ar.deposits.approve.transaction);
+    await transaction.fill('TEST-002');
+    await page.getByRole('button', { name: ar.deposits.referenceChecks.matches }).click();
+    // Meanwhile a clearer receipt was asked for elsewhere and the customer sent a second one.
+    const resent = admin.deposits.find((deposit) => deposit.id === USD_DEPOSIT);
+    if (!resent) throw new Error('No USD deposit');
+    resent.submittedAt = new Date().toISOString();
+    resent.receipts = [
+      ...(resent.receipts as unknown[]),
+      { id: '0199a000-0000-7000-8000-0000000000ea', createdAt: resent.submittedAt },
+    ];
+    await page.route(`**/api/admin/deposits/${USD_DEPOSIT}/approve`, (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          statusCode: 409,
+          code: 'DEPOSIT_STATE_CONFLICT',
+          message: 'changed',
+          details: { status: 'submitted' },
+        }),
+      }),
+    );
+    await page
+      .getByRole('button', { name: fill(ar.deposits.approve.submit, { amount: usd('$20.00') }) })
+      .click();
+    await expect(page.getByText(ar.deposits.detail.resubmittedTitle)).toBeVisible();
+    // The newest receipt is shown and nothing typed for the first one is kept.
+    await expect(page.getByRole('tab', { name: ar.deposits.receipt.latest })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(field(page, ar.deposits.approve.transaction)).toHaveValue('');
+  });
+
   test('a turned or zoomed receipt stays whole inside its frame (F4-2)', async ({
     page,
     admin,
@@ -435,6 +476,8 @@ test.describe('deposits', () => {
       reason: 'other',
       customerNote: 'راجعنا الصورة',
       internalNote: 'إيصال معدّل',
+      // F4-10: the submission the dialog opened on.
+      submittedAt: admin.deposits.find((deposit) => deposit.id === USD_DEPOSIT)?.submittedAt,
     });
   });
 });

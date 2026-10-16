@@ -24,6 +24,7 @@ import {
   readAll,
   recordAudit,
   type Transaction,
+  telegramDepositCards,
   telegramLinkCodes,
   telegramLinks,
   telegramPrompts,
@@ -69,6 +70,7 @@ const ANSWERS = {
   expired: 'انتهت صلاحية هذا السؤال. أرسل الأمر من جديد.',
   failed: 'تعذّر التنفيذ. حاول من اللوحة.',
   decided: 'تم البت فيه مسبقاً.',
+  changed: 'وصل إيصال أحدث لهذا الإيداع. استعمل بطاقته الأحدث.',
   panelOnly: 'من اللوحة فقط.',
   flagged: 'عليه علامات، اعتمد من اللوحة.',
   overLimit: 'فوق حد تيليجرام، اعتمد من اللوحة.',
@@ -176,6 +178,7 @@ export class TelegramBotService {
       await this.link(tx, message, command[2]);
       return;
     }
+    await this.telegram.lockLinksShared(tx);
     const link = await this.telegram.liveLink(tx);
     if (
       !link ||
@@ -370,6 +373,7 @@ export class TelegramBotService {
     query: CallbackQuery,
     meta: RequestMeta,
   ): Promise<CallbackAnswer | null> {
+    await this.telegram.lockLinksShared(tx);
     const link = await this.telegram.liveLink(tx);
     if (!link || !query.message) return null;
     if (!isLinked(link, { userId: query.from.id, chatId: query.message.chat.id })) return null;
@@ -449,8 +453,15 @@ export class TelegramBotService {
   ): Promise<CallbackAnswer> {
     const facts = await this.deposits.telegramFacts(tx, callback.depositId);
     if (!facts?.waiting) return answer(query, ANSWERS.decided);
+    if (callback.action === 'approve' && facts.approvalRefusal) {
+      return answer(query, APPROVAL_ANSWERS[facts.approvalRefusal]);
+    }
+    // F4-12: the button's own card must show the deposit's current receipt; a card of an earlier
+    // submission (its edit still on the way) never opens a decision on the newer one.
+    if (!(await this.cardShowsCurrent(tx, query, callback.depositId, facts.submittedAt))) {
+      return answer(query, ANSWERS.changed);
+    }
     if (callback.action === 'approve') {
-      if (facts.approvalRefusal) return answer(query, APPROVAL_ANSWERS[facts.approvalRefusal]);
       await this.openPrompt(tx, 'approve_number', facts, {});
       await this.reply(tx, link.chatId, {
         reply: 'approve_number',
@@ -466,6 +477,26 @@ export class TelegramBotService {
       reasons: telegramRejectReasons(facts.method),
     });
     return answer(query);
+  }
+
+  /** True when the pressed message is this deposit's card for its current submission (F4-12). */
+  private async cardShowsCurrent(
+    tx: Transaction,
+    query: CallbackQuery,
+    depositId: string,
+    submittedAt: Date | null,
+  ): Promise<boolean> {
+    if (!query.message || !submittedAt) return false;
+    const [card] = await tx
+      .select({ depositId: telegramDepositCards.depositId, at: telegramDepositCards.submittedAt })
+      .from(telegramDepositCards)
+      .where(
+        and(
+          eq(telegramDepositCards.chatId, query.message.chat.id),
+          eq(telegramDepositCards.messageId, query.message.message_id),
+        ),
+      );
+    return card?.depositId === depositId && card.at.getTime() === submittedAt.getTime();
   }
 
   /** A reason button (rule TC5): kept on the prompt, then the note is asked for. */

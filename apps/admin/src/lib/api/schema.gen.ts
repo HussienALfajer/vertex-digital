@@ -5096,6 +5096,8 @@ export interface components {
             reason: components["schemas"]["DepositRejectReason"];
             customerNote?: string;
             internalNote: string;
+            /** Format: date-time */
+            submittedAt?: string;
         };
         RequestReceipt: {
             customerNote?: string;

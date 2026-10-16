@@ -25,6 +25,7 @@ import {
 import {
   type Database,
   deposits,
+  expireDueDeposits,
   paymentReferenceOwner,
   recordAudit,
   type Transaction,
@@ -33,7 +34,7 @@ import {
   usdtTransfers,
   withinLimits,
 } from '@vertex-digital/db';
-import { and, between, eq, ne, or, sql } from 'drizzle-orm';
+import { and, between, eq, gt, ne, or, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { isUniqueViolation } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
@@ -100,7 +101,14 @@ export class UsdtDepositsService {
       this.db
         .select({ id: deposits.id })
         .from(deposits)
-        .where(and(eq(deposits.customerId, customerId), eq(deposits.status, 'pending'))),
+        // F4-13: an elapsed deposit is not the open one, even before the job marks it.
+        .where(
+          and(
+            eq(deposits.customerId, customerId),
+            eq(deposits.status, 'pending'),
+            gt(deposits.expiresAt, sql`now()`),
+          ),
+        ),
     ]);
     return {
       networks: networks.map((network) => ({
@@ -153,6 +161,9 @@ export class UsdtDepositsService {
         if (written) throw new AlreadyCreated();
         await checkNotStopped(this.switches, tx, input.method);
         await checkNotFrozen(tx, customerId);
+        // F4-13: the customer's own elapsed deposit is closed here, as the expiry job would, so
+        // it never blocks this one while the job has not run.
+        await expireDueDeposits(tx, this.jobs, { limit: 10, channel: 'store', customerId });
         await checkCreation(tx, customerId);
         const limits = await limitsOf(
           tx,

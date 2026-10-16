@@ -74,6 +74,8 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
   const reject = useRejectDeposit(deposit.id);
   const keyFor = useIdempotencyKey();
   const [reason, setReason] = useState<DepositRejectReason | null>(null);
+  // F4-10: the receipt on screen when the dialog opened, even if the page reads a newer one.
+  const [shownSubmission] = useState(deposit.submittedAt);
   const reasons = rejectReasonsFor(deposit.method);
   const [errors, setErrors] = useState<Partial<Record<NoteField, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
@@ -88,6 +90,7 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
       reason: reason ?? ('' as DepositRejectReason),
       customerNote: customerNote || undefined,
       internalNote: String(data.get('internalNote') ?? ''),
+      submittedAt: shownSubmission ?? undefined,
     };
     const parsed = rejectDepositSchema.safeParse(body);
     setErrors(fieldErrors(t, parsed.error?.issues ?? []));

@@ -1224,6 +1224,11 @@ export const rejectDepositSchema = z
     customerNote: depositCustomerNoteSchema.optional(),
     /** The audit entry's reason. */
     internalNote: internalNoteSchema,
+    /**
+     * The submission the panel showed when the dialog opened (F4-10): refused when the customer
+     * sent another receipt since, so a rejection of one image never closes the next.
+     */
+    submittedAt: z.iso.datetime().optional(),
   })
   .superRefine((input, context) => {
     if (input.reason === 'other' && input.customerNote === undefined) {

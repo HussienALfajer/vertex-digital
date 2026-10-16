@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AuditEntry, AuditListQuery, AuditPage } from '@vertex-digital/contracts';
-import { auditEntries, type Database } from '@vertex-digital/db';
+import { auditEntries, type Database, type Executor } from '@vertex-digital/db';
 import { and, desc, eq, getTableColumns, gte, inArray, lte, type SQL } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
@@ -18,6 +18,25 @@ export class AuditService {
     private readonly customers: AuthService,
     private readonly admins: AdminAuthService,
   ) {}
+
+  /**
+   * The reason (the internal note) of a record's first entry with `action`, or undefined when
+   * there is none: what a decision's replay compares with (S03 rule RV9, F4-16). `db` is the
+   * caller's transaction when it has one.
+   */
+  async reasonOf(
+    db: Executor,
+    entityId: string,
+    action: string,
+  ): Promise<string | null | undefined> {
+    const [entry] = await db
+      .select({ reason: auditEntries.reason })
+      .from(auditEntries)
+      .where(and(eq(auditEntries.entityId, entityId), eq(auditEntries.action, action)))
+      .orderBy(auditEntries.occurredAt)
+      .limit(1);
+    return entry ? entry.reason : undefined;
+  }
 
   /**
    * `entityIds` (S12 CS4): the entries of these records only, for a customer's history (the

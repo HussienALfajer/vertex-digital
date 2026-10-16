@@ -65,6 +65,15 @@ export class TelegramService {
     await tx.execute(sql`select pg_advisory_xact_lock(${LINK_KEY})`);
   }
 
+  /**
+   * Held by a bot update from reading the live link to its commit (F4-11): an unlink or a new link
+   * (`lockLinks`, exclusive) waits for the updates in flight, and once it commits no update of the
+   * old chat acts, so a revoked chat can never approve a deposit after the panel said it ended.
+   */
+  async lockLinksShared(tx: Transaction): Promise<void> {
+    await tx.execute(sql`select pg_advisory_xact_lock_shared(${LINK_KEY})`);
+  }
+
   /** `GET /api/admin/telegram`. */
   async status(executor: Executor = this.db): Promise<TelegramLinkStatus> {
     const [link, [message]] = await readAll(executor, [
