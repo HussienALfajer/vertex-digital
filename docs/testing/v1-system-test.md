@@ -1103,4 +1103,4 @@ Result: ✅ (2026-10-16)
 | Cases passed | 13 of 13 |
 | Findings | F5-1 (step error, the empty-list text made clearer), F5-2 (USDT mismatch line) fixed, F5-3 accepted (the TXID states rest on the automated tests), F5-4 and F5-5 owner questions answered, no change |
 | Accepted by the owner on | 2026-10-16 |
-| PR | the steps (#115); the results and the first fixes (#116); the wallet-style QR and the external audit's fixes on `fix/feature-5-audit`, PR after the audit |
+| PR | the steps (#115); the results and the first fixes (#116); the wallet-style QR (F5-6) in the next PR; an external audit by another model may follow with its own PR |
