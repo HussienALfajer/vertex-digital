@@ -41,7 +41,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | 5 | USDT deposits | F06 | The automatic money-in path | Accepted 2026-10-16 |
 | 6 | Wallet and ledger | F03 | Checked once real deposits exist: balances as sums, history, journals | Accepted 2026-10-17 |
 | 7 | Catalog | F08 | What is sold: games, packs, fields, images, states | Accepted 2026-10-17 |
-| 8 | Pricing engine | F10 | Prices, margins, review queue, loss guard | — |
+| 8 | Pricing engine | F10 | Prices, margins, review queue, loss guard | Accepted 2026-10-17 |
 | 9 | Suppliers | F09 | Sync, health, balance, routes, supplier catalog browser, stock | — |
 | 10 | Store home, game pages and search | F12, F15 | The customer's way to a product | — |
 | 11 | Purchase, fulfilment and live tracking | F13, F11 | The core sale: success, manual route, unknown outcome, failure and refund, reservation | — |
@@ -177,6 +177,9 @@ The owner's decision (2026-10-17): once all 22 features are accepted, and before
 | F7-15 | 7 | Review of the audit fixes | A game's move reprices its packs under the destination's rule as it reads it; a margin rule change on that destination at the same instant lists its products before the move commits, so the moved packs can keep the previous rule's price until the next repricing. The price stays above cost (the database check), and before F7-5 a move never repriced at all | minor | None: one admin, two of their own changes in the same second; the next sync, route change or rule change reprices | Accepted |
 | F7-2 | 7 | Writing the steps (production read) | None of the 57 games has an ID guide image or an accent color, and no pack has an official price: the buy box shows no "where is my ID" guide for the 36 games that ask for an ID, every game uses the brand's sand, and no savings badge appears anywhere | minor (content) | None yet: the owner decides which games get an ID guide (first those whose ID customers most often get wrong) and whether to enter official prices, before the pilot | Deferred to the catalog build-out (owner, 2026-10-17) |
 | F8-1 | 8 | Writing the steps (production read, 2026-10-17) | The ground rules send failures, refunds and manual fulfilment through PUBG Mobile "60 شدة"'s manual route (cost $0.95), but the pack sells at $0.99 on WDGZone's $0.887: the manual route leaves $0.04, under the $0.10 minimum margin, so the router never fails over to it for an order paid at $0.99 (PR5, PR6: the undelivered units are refunded instead). It becomes the price basis, at $1.05, only while WDGZone is unusable for that pack (paused or down) | minor (steps) | None yet: before feature 11 the owner chooses how its manual case runs: with WDGZone paused for the pack (the price moves to $1.05 at once), the manual cost lowered to what the owner really pays if that is $0.89 or less, or the admin's manual fulfil of an order in review (S11), which needs no route | Open (feature 11) |
+| F9-1 | 9 | Writing the steps (production read, 2026-10-17) | Archiving a pack keeps its routes: the 18 archived PUBG Mobile packs "Fast ·", "Manual ·" and "Reserve ·" still hold 18 unarchived WDGZone routes, so their offers count among the 605 "mapped", are never "new packs" and cannot be routed to another pack (`OFFER_ALREADY_MAPPED`) until those routes are archived. No money risk: an archived pack is never sold, and a restore brings its routes back as designed (S07 edge case 9) | minor | None yet: in 9.6 the owner decides whether archiving a pack should also archive its routes, or whether those 18 routes are archived by hand during the catalog build-out | Open |
+| F9-2 | 9 | Writing the steps (production read) | WDGZone's wallet ($6.124) has been below its $50 low-balance threshold since 2026-10-13: 18 "💰 … تحت الحد" Telegram messages, one every 6 hours, so the alert no longer tells anything new. The balance also limits what can be sold: a route whose cost exceeds it is unusable (RT4), so PUBG Mobile "660 شدة" ($8.87) cannot sell today, and each real purchase of feature 11 lowers the ceiling further (the dearest active pack costs $5.963) | — (setup) | None yet: the owner sets the threshold in 9.14, and decides before feature 11 whether to fund the WDGZone wallet | Open |
+| F9-3 | 9 | Writing the steps (production read) | The health state flapped between سليم and متراجع six times on 2026-10-14 00:05–00:16 and twice on 2026-10-15 07:30, each with a Telegram message: with the minimum of 5 calls, one failed call among 9 (88.9% < 90%) degrades the supplier for a minute | minor | None yet: the owner decides in 9.3 step 5 whether to raise "أقل عدد طلبات" | Open |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -1852,3 +1855,302 @@ Result: ✅ (2026-10-17)
 | Checked by Claude (read-only, production, 2026-10-17, after 8.15) | Rules: only the global rule live (10%, $0, min $0.10, unchanged since 2026-10-12); the category (12%, $0, $0.15), game (20%, $0.05, $0.10) and pack (5%, $0, $0.05) rules set 21:15–21:21 and archived 21:24–21:26, each with its `margin_rule.set` (`before` null) and `margin_rule.archived` entry. The one review `accepted` at 21:08 ($5.23 → $5.95 on $4.75 → $5.407), one `price_review.accepted` entry; the PlayStation pack active at $5.95 (`review_accepted`). All 172 active packs of active games priced on the global rule, none below its minimum margin; PUBG Mobile "60 شدة" $0.99 and "325 شدة" $4.88. The test game's 13 price rows match the worked table (except the skipped $1.25 state, see 8.11); `system-test` and `system-test-7` archived, six live categories. From outside: `/api/admin/pricing/rules` 401 on the admin host and 404 on the store host; the storefront carries no cost, margin, rule, route or supplier field and no `system-test` |
 | Accepted by the owner on | the cases on 2026-10-17; the audit fixes accepted by Claude on 2026-10-17 (lint, typecheck, build, the admin E2E specs of suppliers and pricing and the full API suite green; `packages/db` `client.test.ts` and `deposits.test.ts` timed out once under the parallel run and passed alone and in a rerun; the reviewer found no blocking issue); Q21 answered by the owner and done the same day |
 | PR | the steps (#128); the results, the external audit's fixes F8-1 to F8-8 and Q21 (#129), merged and deployed to production on 2026-10-17 (`f4e3d88`) |
+
+---
+
+## Feature 9 — Suppliers (F09, with S16's supplier catalog)
+
+**What it covers:** how the store buys what it sells (S07 SP1–SP3, SY1–SY5, RT1–RT8, H1–H5, ADR 0005, 0021; S16 SC1–SC14, SF1–SF6): the supplier cards and pages as they stand on production; the stored key shown only by its last characters; the supplier policy with its bounds and re-authentication; a sync on request, its rate limit and its run; health, balances and their Telegram messages, read back from the real outage of 2026-10-17; offers with their cost history, stock and support; the supplier's category tree with ignore and unignore; the live statement and platform status; real routes read only (a pack following its cheapest usable route, a route the balance cannot pay); then, on the test game of features 7 and 8, a WDGZone route and its refusals, disabling it, pausing the manual supplier, archiving and restoring a route, importing a supplier category as a new paused game and "تفعيل الكل"; the low-balance threshold; who can read suppliers; the audit entries.
+
+**How to read a case:** as in features 2 to 8: **What this checks** first, then the numbered steps; a line starting with "Expected" is what you must see.
+
+**Real money in this feature:** none. No purchase, no deposit, no supplier order. The real calls are reads: one sync on request (WDGZone's catalog, about 100 seconds), the statement pages and the platform status. Every route, pause, import and activation is on the test category "اختبار النظام" and its games, restored for this feature (case 9.10) and archived again at the end (case 9.19). Never press "تفعيل الكل", "استيراد كلعبة جديدة", "ربط بلعبة موجودة", "فك الربط" or "إضافة مسار" on a real game or category, never pause **WDGZone**, and never change a real pack's route.
+
+**Worked numbers used below:** production as recorded (read-only query, 2026-10-17 23:20, deployed `f4e3d88`). Times are Damascus time, as the panel shows them.
+
+- **Suppliers:** WDGZone and يدوي (the fake supplier is off in production, so its card is hidden). WDGZone's key was set on **2026-10-13 15:49**, once; no supplier was ever paused (no switch change for `wdgzone_paused` or `manual_paused`). Low-balance threshold **$50.00** on both (ignored for يدوي).
+- **Supplier policy** (the seed of 2026-10-12, never changed): review threshold 10%, cost stale after 120 minutes, health window 30 minutes, at least 5 calls, degraded below 90% success or above 10,000 ms p90, down below 50% success or after 3 consecutive errors, probe 10 minutes after down, low stock below 10 units.
+- **WDGZone's catalog:** **11,640 offers**, none missing, none without a cost, none stale; 11,638 in stock; 5,807 with unlimited stock; **658 unsupported** ("حقول لا يمكن إرسالها"); none ignored. **605 mapped** (one route each, all enabled): 173 to active packs of active games, 415 to paused packs, 18 to the archived PUBG Mobile packs "Fast ·", "Manual ·" and "Reserve ·" of 2026-10-15 (F9-1). 3,577 supplier categories (353 roots), **57 linked** to our 57 games, none ignored or missing. About **2,700 "new packs"** across 37 linked games (a count by rule SC5; the panel's figure is the reference). One manual offer per manual route: **3** (PUBG Mobile "60 شدة" $0.95, the test game's `60 UC` $1.00 and `660 UC` $8.50).
+- **Syncs:** every 15 minutes since 2026-10-13 15:49: **418 runs**, 404 succeeded (2 from the panel) and 14 failed: 6 `ABANDONED` (a run cut by a deploy, closed by the next run), 8 `SUPPLIER_ERROR` ("Supplier timed out", "Supplier unreachable"; 2 of them from the panel on 2026-10-17 13:56 and 14:00). A run reads the categories and the 11,640 offers in about **95–100 seconds**. The latest runs change 0–4 costs and reprice nothing.
+- **Health** (13 changes, each with its Telegram message): short flaps between سليم and متراجع on 2026-10-14 00:05–00:16 and 2026-10-15 07:30 (one failed call in 9 gives 88% < 90%: F9-3); then the **real outage of 2026-10-17**: **متوقف at 13:46** ("3 consecutive errors"), the probe succeeded at **14:40** (متراجع), سليم at 14:56, متراجع at 14:57 (p90 10,501 ms > 10,000 ms), **سليم since 15:00**. During it, PUBG Mobile "60 شدة" moved to its manual route at **$1.05** (13:46) and back to WDGZone at **$0.99** (14:40); every pack with only a WDGZone route was unavailable for those 54 minutes. "فشلت مزامنة WDGZone 3 مرات متتالية (SUPPLIER_ERROR)" was sent at 14:00.
+- **Balance:** **$6.124** (read every 5 minutes, 1,237 reads, between $6.124 and $7.90), **below the $50 threshold since 2026-10-13**: 18 "💰 رصيد WDGZone تحت الحد" messages, one every 6 hours (F9-2). A route whose offer costs more than the balance is unusable ("رصيد المورد أقل من التكلفة", RT4): PUBG Mobile "660 شدة" ($8.87) cannot be sold today; the dearest active pack costs $5.963.
+- **Stock:** 6 offers mapped to active packs are low (below 10): ستاندوف 2 "100 ذهب" (1), ديسكورد نيترو "بيسك شهر" (4), and four Google Play cards (4–5). 12 "📉 مخزون منخفض" messages since 2026-10-15. One sync summary (2026-10-16 19:32: the PlayStation review of feature 8).
+- **Supplier calls:** 2,553 in all; failures only on 2026-10-14 and 17 (catalog, categories, balance, platform status); the two `place_order` calls are the walk-in admin orders **VO-QG75EJ** (2026-10-13) and **VO-5QXTCT** (2026-10-14), both delivered.
+- **PUBG Mobile "60 شدة"** (WDGZone offer `235203`, category "PUBG Mobile › Auto"): $0.887, unlimited stock, 8 cost changes (the last 2026-10-14 00:33, $0.881 → $0.887), price $0.99; its manual route $0.95 ("ملجأ أخير"); 3 price rows (13 Oct 15:56 $0.99 WDGZone, 17 Oct 13:46 $1.05 manual, 14:40 $0.99 WDGZone, all "تغيّر المسار").
+- **Audit:** 1 "تعيين مفاتيح مورد", 4 "طلب مزامنة مورد", 57 "استيراد فئة مورد كلعبة" and 58 "تفعيل كل باقات لعبة" (the catalog build of 2026-10-13 to 15), 608 "إضافة مسار", 2 "تعديل مسار" and 4 "تعيين تكلفة يدوية" (features 8 and the manual route of 2026-10-15); **no** "تعديل سياسة الموردين", "تعديل مورد", or any ignore, unignore, link or unlink.
+
+The price math is feature 8's (global rule: 10%, $0, min $0.10; SYP at 140 rounded up). The figures below use the costs of 2026-10-17; WDGZone's costs move with every sync, so when the panel shows another cost, note it and check the price from it.
+
+| Pack (test records) | Route | Cost | Price |
+|---|---|---|---|
+| `60 UC` (game A) | manual (8.10) | $1.00 | **$1.10** |
+| `60 UC` | + WDGZone "BD · 115 Diamonds" (`264043`, 9.11) | ≈ $0.607 | **$0.71** (100 ل.س) |
+| `660 UC` (game A) | manual | $8.50 | **$9.35** |
+| `660 UC` | + WDGZone "BD · 1132 Diamonds" (`264052`, 9.12) | ≈ $8.145, above the balance | stays **$9.35** |
+| "100 G-Coin" (game C, 9.13) | WDGZone `266059` | ≈ $0.893 | **$1.00** |
+| "500 + 10 G-Coin" (game C) | WDGZone `266060` | ≈ $4.316 | **$4.75** |
+
+The test records: category "اختبار النظام" (`system-test`) and game A "لعبة اختبار 7" (`system-test-7`, fields `player_id` and a select "السيرفر"), both archived since 8.15; game A stays **paused** except for a few minutes in 9.13. New in this feature, game C "لعبة اختبار 9" (`system-test-9`), imported in 9.13 from WDGZone's "PUBG: BATTLEGROUNDS › Global" (6 code packs, none linked) and archived at the end (its slug can never be used again). The two WDGZone offers mapped onto A's packs (`264043`, `264052`) are Free Fire offers under the linked فري فاير tree: they are chosen because they ask only `player_id` and one costs less than the balance, one more; their routes are archived in 9.19, so the offers count as "new packs" again.
+
+**Before you start**
+
+- The panel open on the PC (signed in), TC1 signed in to the store in a second browser, a private window signed out, your phone, and the Telegram chat linked to the panel (feature 4).
+- About 1 hour 30 minutes. Re-authentication lasts 5 minutes: 9.3, 9.12 and 9.14 need it.
+- Start 9.4 more than 3 minutes before a quarter hour (:00, :15, :30, :45), so the panel's sync does not meet a scheduled one (if it does, see 9.4 step 2).
+- Do 9.13 steps 7 to 9 in one sitting, in a few minutes: game A is active and visible to every store visitor only between them. Registration is closed, so only existing accounts can reach a buy button.
+- "سعر الصرف" (`/rates`): 140. Nothing is paused in the store switches (feature 21).
+- If the panel shows other counts than the worked numbers (a sync, a cost, a stock or a health change since 2026-10-17), note the difference here and use what the panel shows.
+
+**Not tested on production (by design):** wrong keys and the connection test failing (edge case 8: it would stop the real catalog; API and worker tests), `SUPPLIER_NOT_CONFIGURED` and `SUPPLIER_UNAVAILABLE` (no supplier without keys or adapter in production; API tests); `CATALOG_SUSPICIOUS`, missing offers, stale costs and the stale-price message (S07 acceptance 7, local with the fake supplier, worker tests); a cost change above 10% and its review (feature 8); the health transitions on demand and the probe (S07 acceptance 5; the real ones of 2026-10-17 are read in 9.5); pausing **WDGZone** (every real pack would stop: the failover to the manual route was seen for real in 9.5); a low-stock alert on demand (`--stock-count`, local; the real ones are read in 9.6); importing offers from "العروض" into an existing game (RT8) and linking a category to an existing game (SC8: API and E2E tests; the same write path as 9.13); a select field's option map (S16 MF2–MF3, API and E2E tests); the nearby supplier orders of an attempt refused on re-send (S16 RS3, SF4: feature 11); the display step's 2% limit (case 3.8); the player check and its daily quota on the connection tab (feature 11); the daily summary's supplier lines (feature 20); supplier funding and its reconciliation (feature 22).
+
+### 9.1 The suppliers as they stand
+
+**What this checks:** the admin sees in one page whether each supplier works, can pay, and is current.
+
+Read only: **press nothing** in this case but links.
+
+1. In the panel open "الموردون" (`/suppliers`). Expected: "الموردون" with "مفاتيح الموردين وعروضهم وتكاليفها، ومزامنتها كل 15 دقيقة، وحالتهم وأرصدتهم."; the navigation item carries "باقات جديدة في فئات مستوردة: …" (about 2,700, note it); **two** cards, WDGZone and يدوي (no "مورد تجريبي").
+2. The WDGZone card. Expected: "مورد آلي: تُقرأ عروضه وتكاليفه بالمزامنة، وتُنفَّذ الطلبات عبر واجهته."; chips "متاح" and **"سليم"** (no "غير مهيّأ", no "موقوف"); "الرصيد" **$6.124** with **"تحت الحد"** and "قُرئ" a few minutes ago; "آخر مزامنة" within the last 15 minutes, "نجحت", with its counts (عروض 11640 …); "العروض" 11,640, "المربوطة بباقات" **605**, "باقات جديدة" (the badge's number), "مخزون منخفض أو نافد" **6**; "حالة منصة المورد:" with "حُدّث كتالوجه …" (or "تعذّرت قراءة حالة المنصة": note it); "مزامنة الآن" (**not yet**).
+3. The يدوي card. Expected: "ملجأ أخير تنفّذه بنفسك: عروضه هي المسارات اليدوية للباقات وتكاليفها التي تكتبها."; "متاح", "سليم"; no balance; "العروض" **3**, "المربوطة بباقات" 3; no "مزامنة الآن".
+4. Press "عرض المخزون المنخفض" on WDGZone. Expected: "العروض" filtered "منخفض أو نافد": the 6 offers of the worked numbers with "مخزون منخفض" and their count (1, 4, 4, 5, 5, 5), each mapped to its pack.
+
+Result:
+
+### 9.2 Keys, pause switch and threshold, read only
+
+**What this checks:** a supplier key is never shown after it is saved, and the admin sees what protects the supplier's wallet.
+
+Read only: **save nothing** in this case.
+
+1. WDGZone → "الاتصال". Expected: "المفاتيح": "مفتاح الواجهة (API key)" shown only by its **last 4 characters** ("…xxxx"), "عُيّنت في 2026-10-13 15:49. تُعرض آخر 4 أحرف فقط."; "تعيين المفاتيح" (**do not press it** except in 9.15).
+2. "إيقاف المورد مؤقتاً": "يعمل: مساراته صالحة إن توفرت شروطها." (**never switch it**: it stops every real pack).
+3. "حد الرصيد المنخفض": "الحد الحالي $50.00. يصلك تنبيه حين يقل الرصيد عنه." (changed only in 9.14).
+4. Optional (developer tools, Network): the answer of `/api/admin/suppliers/wdgzone` carries the hint only (no key, no ciphertext) and `Cache-Control: no-store`.
+5. يدوي → "الاتصال". Expected: "المورد اليدوي لا يحتاج مفاتيح."; its pause switch "يعمل" (used in 9.12).
+
+Result:
+
+### 9.3 The supplier policy: bounds, one save, re-authentication
+
+**What this checks:** the limits that hold prices for review, retire old costs and judge a supplier's health stay within safe bounds and change only with a confirmed identity.
+
+1. `/suppliers` → "سياسة الموردين" (`/suppliers/policy`). Expected: "سياسة الموردين" with "حدود مراجعة الأسعار وقِدَم التكاليف وحساب صحة الموردين. كل حفظ يطلب إعادة التحقق ويُسجَّل."; "الأسعار": "حد المراجعة %" 10, "قِدَم التكلفة (دقائق)" 120; "الصحة": 30, 5, 90, 10000, 50, 3, 10; "حد المخزون المنخفض (وحدات)" 10; each with "الافتراضي: …".
+2. Wrong values, one at a time (nothing saved): "حد المراجعة %" `0.5` and `51`: "نسبة من 1 إلى 50."; "قِدَم التكلفة (دقائق)" `29`: "عدد دقائق من 30 إلى 1440."; "نجاح التوقف %" `95` (above the 90 of "نجاح التراجع %"): "نسبة من 0 إلى 99.99، أقل من نجاح التراجع."; "حد المخزون المنخفض (وحدات)" `0`: "عدد وحدات من 1 إلى 1000.". Put each back.
+3. "الفحص بعد التوقف (دقائق)" `15`. Wait until more than 5 minutes have passed since you last confirmed your identity, then "حفظ السياسة". Expected: the re-authentication dialog before anything is saved; confirm. Then "حُفظت السياسة."; reload: 15.
+4. Back to `10`, save (no new dialog within 5 minutes). Expected: "حُفظت السياسة."; every field at its default again.
+5. **Owner's decision (F9-3):** the flaps of 2026-10-14 and 15 came from one failed call in 9 or 10. If you want fewer health messages, raise "أقل عدد طلبات" now (for example to 10) and note it here; otherwise leave 5.
+
+Result:
+
+### 9.4 Sync now, its limit and its run
+
+**What this checks:** the admin can refresh the supplier's costs at once, one run at a time, without flooding the supplier.
+
+1. WDGZone → "المزامنة". Expected: "المزامنات: 418" or more (about 4 more per hour since 2026-10-17 23:20); the newest first, each with "مجدولة" or "من اللوحة", "نجحت" or "فشلت", its duration (about 95–100 ث) and counts. Filter nothing; scroll to find the failed runs: "توقفت المزامنة دون نهاية وأُغلقت." (6) and "لم يُجب المورد إجابة صالحة (مهلة أو خطأ اتصال)." (8, two "من اللوحة" on 2026-10-17 13:56 and 14:00).
+2. `/suppliers` → "مزامنة الآن" on WDGZone. Expected: the card's last run becomes "جارية" (or, if a scheduled run was already running, the panel follows that one: note it); after about 100 seconds "نجحت" with its counts (عروض 11640, جديدة 0, a few تكاليف تغيّرت, اختفت 0, مراجعات 0).
+3. Within a minute of step 2, press "مزامنة الآن" again. Expected: refused, "محاولات كثيرة خلال وقت قصير. انتظر دقيقة ثم أعد المحاولة."; no new run.
+4. More than a minute after step 2 but while its run is still "جارية" (if it already ended, skip this step): press again. Expected: no second run: the panel follows the one running (the runs list holds only one new "من اللوحة" row).
+5. "المزامنة". Expected: the new run on top, "من اللوحة", "نجحت".
+
+Result:
+
+### 9.5 Health, balance and the real outage of 2026-10-17
+
+**What this checks:** when a supplier fails, the store stops selling through it, falls back to the next route, tells the admin, and returns by itself once the supplier answers again.
+
+Read only.
+
+1. WDGZone → "الصحة". Expected: "الحالة" **سليم** "منذ" 2026-10-17 15:00; the window figures ("الطلبات", "النجاح" 100%, "زمن الاستجابة p90" a few hundred ms) and "السبب: النجاح 100%".
+2. "سجل الحالة": the 13 changes, newest first: 15:00 سليم; 14:57 متراجع "زمن الاستجابة p90 10501 ms أعلى من 10000 ms"; 14:56 سليم; **14:40 متراجع "نجح الفحص بعد التوقف"**; **13:46 متوقف "آخر 3 طلبات فشلت متتالية"**; then the flaps of 2026-10-15 07:30–07:31 and 2026-10-14 00:05–00:16 ("النجاح 88% أقل من 90%" and back). Every reason in Arabic.
+3. "قراءات الرصيد": a read every 5 minutes, $6.124 for the latest.
+4. Telegram: scroll to 2026-10-17. Expected: "⛔ WDGZone متوقف …" at 13:46, "⚠️ فشلت مزامنة WDGZone 3 مرات متتالية (SUPPLIER_ERROR)" at 14:00, "⚠️ WDGZone متراجع" at 14:40, "✅ WDGZone عاد سليماً" at 14:56 and 15:00; each with a link to `/suppliers/wdgzone`. And the latest "💰 رصيد WDGZone تحت الحد: $6.124 (الحد $50.00)" (21:50, every 6 hours).
+5. ببجي موبايل → "الباقات" → "المسارات" on "60 شدة" → "سجل السعر". Expected: three rows, newest first: 2026-10-17 14:40 $0.99 (WDGZone, "تغيّر المسار"), **13:46 $1.05 (يدوي, cost $0.95, "تغيّر المسار")**, 2026-10-13 15:56 $0.99 (WDGZone): during the outage the pack kept selling on its manual route at a price that still covers it, and went back at once. Close the drawer without changing anything.
+
+Result:
+
+### 9.6 Offers, costs and their history
+
+**What this checks:** every cost the store relies on can be traced to what the supplier listed and when, and unusable offers are marked as such.
+
+Read only: **select nothing** for import.
+
+1. WDGZone → "العروض". Expected: "العروض: 11640"; columns العرض، المجموعة، النوع، التكلفة، المخزون، الحقول، الباقة؛ no "اختفى" and no "السعر قديم" anywhere.
+2. Search `235203`. Expected: one row, "60 UC" in "PUBG Mobile › Auto", direct, **$0.887**, "غير محدود", field "Player ID" (نص), mapped to "60 شدة" (ببجي موبايل). Open its cost history: "سجل التكلفة": 8 rows "المزامنة", the newest 2026-10-14 00:33 from $0.881 to $0.887.
+3. Filters: "الدعم" → "غير مدعومة": **658**, each "حقول لا يمكن إرسالها" and no selection box. "الربط" → "مربوطة": **605**. "المخزون المنخفض" → "منخفض أو نافد": 6 (as in 9.1). Clear the filters.
+4. Search `235226`. Expected: "Fast · 60 UC" (PUBG Mobile › Fast), mapped to the **archived** pack "Fast · 60 UC" of ببجي موبايل (F9-1). Note how the panel shows an archived pack here; the 18 offers of the archived "Fast ·", "Manual ·" and "Reserve ·" packs stay mapped until their routes are archived.
+5. يدوي → "العروض". Expected: the 3 manual offers with their packs: "60 شدة" $0.95, `60 UC` $1.00 and `660 UC` $8.50 (the last two on the archived test game).
+
+Result:
+
+### 9.7 The supplier catalog tree, ignore and unignore
+
+**What this checks:** the admin can see everything a supplier sells, what is already in the store and what is new, and hide what will never be sold, reversibly.
+
+1. WDGZone → "الكتالوج". Expected: "الفئات: 353" (roots), each with its thumbnail (or a placeholder), name, kind, "عند المورد: … باقة، … متوفرة · عندنا: … مربوطة، … غير مربوطة، … متجاهلة، … غير مدعومة" and its state chip.
+2. Search `PUBG`. Expected: the 11 nodes with their paths: "PUBG Mobile" **"مربوطة بـ ببجي موبايل"**; its children "Auto" (29), "Fast", "Manual", "Reserve" (6 each) and "Web Purchase" "ضمن ببجي موبايل"; "PUBG: New State" "مربوطة بـ …"; "PUBG: BATTLEGROUNDS" and its child "Global" (6 code packs) **"غير مستوردة"**.
+3. "عرض الباقات" on "PUBG Mobile › Auto". Expected: "باقات الفئة": 29 packs, each with its offer id, cost, stock "غير محدود", and its mapped pack (e.g. `235203` → "60 شدة").
+4. "PUBG: BATTLEGROUNDS" → menu → "تجاهل". Expected: the node "متجاهلة"; with the state filter on "غير مستوردة" it is no longer listed. Then "إلغاء التجاهل": back to "غير مستوردة".
+5. Search `Free Fire`, open "BD" (under the linked فري فاير, "باقات جديدة: …"; note the number) → "عرض الباقات" → "تجاهل BD · 25 Diamonds" (`264040`). Expected: the pack "متجاهل"; the node's "باقات جديدة" one less, and the navigation badge one less (reload). Then "إلغاء تجاهل": both back.
+
+Result:
+
+### 9.8 The statement and the platform status
+
+**What this checks:** the admin can compare the supplier's own records with the store's orders, so a double purchase at the supplier would be seen.
+
+Read only: these are live reads of WDGZone, nothing is stored.
+
+1. WDGZone → "كشف الحساب". Expected: "يُقرأ مباشرة من المورد صفحة صفحة، ولا يُحفظ عندنا. قراءة واحدة كل 5 ثوانٍ."; "الطلبات" first.
+2. "الطلبات". Expected: WDGZone's orders, newest first, each with "طلب المورد", "العرض", "الكمية", "المبلغ", "الحالة", "الوقت" and "المطابقة": the two orders of 2026-10-13 and 14 matched to **VO-QG75EJ** and **VO-5QXTCT** (links to the orders); any other order "غير مطابق لطلب عندنا" (one you placed on WDGZone's own site, if any: note it, it is not a store order).
+3. "حركات المحفظة". Expected: the wallet movements with "النوع", "المبلغ", "الرصيد بعدها" ending at **$6.124**, "المرجع" and "الوقت"; the two purchases link to their orders.
+4. "تحديث" twice within 5 seconds. Expected: the second refused, "محاولات كثيرة خلال وقت قصير. انتظر دقيقة ثم أعد المحاولة." (the page stays as it was).
+5. The WDGZone card (or page): "حالة منصة المورد:" with its status and "حُدّث كتالوجه …".
+
+Result:
+
+### 9.9 Real routes, read only
+
+**What this checks:** each real pack follows its cheapest usable route, and a route the supplier's balance cannot pay is never offered.
+
+Read only: **change nothing** in the drawers.
+
+1. ببجي موبايل → "الباقات" → "المسارات" on "60 شدة". Expected: "مسارات 60 شدة", "السعر يتبع أرخص مسار صالح: الموردون السليمون، ثم المتراجعون، ثم اليدوي ملجأً أخيرًا."; "السعر الحالي" $0.99 (139 ل.س), "يتبع" WDGZone; WDGZone "تلقائي" "الأساس" (`235203`, $0.887, "الحقول: player_id ← معرّف اللاعب", "مفعّل", "الأولوية" 1); يدوي "ملجأ أخير" $0.95.
+2. "المسارات" on **"660 شدة"** (paused). Expected: "السعر الحالي" "لا سعر بعد", "يتبع" **"لا مسار صالح"**; its WDGZone route ($8.87) marked **"رصيد المورد أقل من التكلفة"** (the balance $6.124 cannot pay it).
+3. ببجي موبايل's game page: "فئات الموردين" lists "PUBG Mobile" (WDGZone) with "فك الربط" (**do not press it**) and "استخدام صورة المورد" (**do not press it**).
+4. The store, private window: `/games/pubg-mobile`. Expected: "60 شدة" $0.99 buyable (**do not buy**); "660 شدة" not shown or "غير متوفرة حاليًا" (paused).
+
+Result:
+
+### 9.10 Setup: the test game back
+
+**What this checks:** a restored game comes back with its routes and prices, still paused.
+
+1. "الكتالوج" → "إدارة الفئات" → archived tab: "استعادة" on "اختبار النظام". Expected: back, 7th, "الألعاب: 0".
+2. Its archived filter: "استعادة" on "لعبة اختبار 7" (A). Expected: A **"متوقفة"**, with `60 UC` **$1.10** and `660 UC` **$9.35** (their manual routes, "غير متوفرة: متوقفة") and `325 UC` paused "لا سعر بعد". Leave "تطبيق اختبار 7" (B) archived.
+3. `60 UC` → "المسارات": يدوي "ملجأ أخير" "الأساس" at $1.00; "سجل السعر" ends with the $1.10 of 8.11 (or a restore row at the same price).
+
+Result:
+
+### 9.11 Adding a WDGZone route and its refusals
+
+**What this checks:** a pack can be linked only to an offer that can really deliver it, with the fields the supplier needs, and then follows the cheaper supplier at once.
+
+1. A → `325 UC` → "المسارات" → "إضافة مسار". Expected: "إضافة مسار"; "المورد" WDGZone; "عروض المورد غير المربوطة": search `236558` ("60 UC", a **code** offer). Choose it, "إضافة المسار". Expected: refused, "نوع العرض لا يطابق نوع الباقة."; nothing added. Close.
+2. A → `60 UC` → "المسارات" → "إضافة مسار", WDGZone, search `264043` ("BD · 115 Diamonds", about $0.607, "Player ID"). Leave its field unmapped and press "إضافة المسار". Expected: refused, the field marked "مطلوب ولم يُربط" (or "حقول يطلبها المورد غير مربوطة بحقول اللعبة."); nothing added.
+3. Map `player_id` to A's "معرّف اللاعب"; add. Expected: two routes: WDGZone **"تلقائي"** marked **"الأساس"** (≈ $0.607) and يدوي "ملجأ أخير" ($1.00); "السعر الحالي" **$0.71** (100 ل.س) at once; "سجل السعر": a new row "تغيّر المسار" (no review: a new route applies at once, P3).
+4. "إضافة مسار" again, WDGZone, search `264040` ("BD · 25 Diamonds"), map `player_id`; add. Expected: refused, "للباقة مسار غير مؤرشف إلى هذا المورد من قبل."; one WDGZone route only.
+5. WDGZone → "العروض", search `264043`: now mapped to `60 UC` (لعبة اختبار 7); "الكتالوج", Free Fire › BD: "باقات جديدة" one less than in 9.7.
+
+Result:
+
+### 9.12 A route disabled, a supplier paused, a route archived and restored
+
+**What this checks:** the price always follows the cheapest route that can serve right now, and a route the supplier cannot pay or a paused supplier is never used.
+
+1. A → `660 UC` → "المسارات" → "إضافة مسار", WDGZone, search `264052` ("BD · 1132 Diamonds", about $8.145), map `player_id`; add. Expected: the route added but **"رصيد المورد أقل من التكلفة"**, not the basis; "يتبع" يدوي, the price stays **$9.35**. (If WDGZone's balance is above its cost by then, it becomes the basis instead: note the price, cost + 10% rounded up.)
+2. `60 UC` → "المسارات": switch "مفعّل" off on the WDGZone route. Expected: the route "معطّل"; "يتبع" يدوي; **$1.10** at once. Switch it on: back to WDGZone, **$0.71**.
+3. "الأولوية" of the WDGZone route: 3, then back to 1. Expected: no price change (priority only breaks ties within a tier).
+4. يدوي → "الاتصال" → "إيقاف المورد مؤقتاً" → the dialog "إيقاف المورد اليدوي مؤقتاً؟" with "تصبح مسارات هذا المورد غير صالحة فوراً، وتتبع الأسعار المسار التالي أو تصبح الباقات غير متوفرة. المزامنة وقراءة الرصيد تستمران."; "إيقاف مؤقت" (confirm your identity if asked). Expected: the يدوي card "موقوف"; Telegram: the switch notice.
+5. While paused: `660 UC`'s drawer: يدوي "المورد موقوف", WDGZone "رصيد المورد أقل من التكلفة", "يتبع" **"لا مسار صالح"**, the price kept at $9.35 (unsold: no usable route). `60 UC`: still WDGZone $0.71. ببجي موبايل "60 شدة": its manual route "المورد موقوف", still $0.99 on WDGZone. The store: "60 شدة" still buyable.
+6. Resume يدوي ("استئناف المورد اليدوي؟" → "استئناف"). Expected: "يعمل"; `660 UC` "يتبع" يدوي $9.35 again; Telegram: the switch notice. **Do not leave it paused.**
+7. `660 UC`: "أرشفة" on the WDGZone route. Expected: the route "مؤرشف" (with the archive filter) and the offer `264052` unmapped again ("العروض"). "استعادة" it: back, still "رصيد المورد أقل من التكلفة". Archive it again.
+
+Result:
+
+### 9.13 Importing a supplier category as a new game, then "تفعيل الكل"
+
+**What this checks:** a supplier's game can be brought into the store in one step, always paused first, with prices from real costs, and a game is opened for sale with every pack that can really sell.
+
+1. WDGZone → "الكتالوج", search `PUBG`: on "PUBG Mobile › Fast" (under the linked "PUBG Mobile") open its menu. Expected: no "استيراد كلعبة جديدة", or, if pressed, refused "هذه الفئة أو فئة فوقها أو تحتها مربوطة بلعبة أخرى.". Nothing created.
+2. "PUBG: BATTLEGROUNDS › Global" → "استيراد كلعبة جديدة". Expected: "استيراد «Global» كلعبة جديدة" with three sections: "اللعبة" (suggested names, a store section, a slug, the supplier's cover), "حقول الحساب" ("لا يطلب المورد حقولًا لهذه الباقات."), "الباقات (محدد … من 100)": the 6 G-Coin packs with cost, stock and "سعر المتجر".
+3. Fill: "الاسم بالعربية" `لعبة اختبار 9`, "الاسم بالإنجليزية" `System Test 9`, "قسم المتجر" "اختبار النظام", "الرابط (slug)" `system-test-9`, the supplier's cover. Select only "100 G-Coin" and "500 + 10 G-Coin" (names as suggested). Expected: their store prices **≈ $1.00** and **≈ $4.75**.
+4. "إنشاء اللعبة مع 2 باقة". Expected: "تم إنشاء اللعبة موقوفة", "أُنشئت 2 باقة موقوفة بأسعارها. راجعها ثم فعّلها." (if the cover fails: "تعذّر تنزيل صورة المورد ولم يُنشأ شيء: ارفع صورة غلاف ثم أعد المحاولة."; upload any non-personal image and send again). The node now "مربوطة بـ لعبة اختبار 9"; nothing visible in the store (the game is paused).
+5. "فتح صفحة اللعبة" (C). Expected: "متوقفة", its cover (re-encoded), the two packs paused with $1.00 and $4.75, each "المسارات" WDGZone "الأساس" with stock (about 2,327 and 208); "فئات الموردين": "Global" (WDGZone). The store, private window: `/games/system-test-9` the not-found page.
+6. On A: pause `60 UC` (so A has paused packs of both kinds: one that can sell, `60 UC`, and one that cannot, `325 UC`). Then, **before step 7, archive `60 UC`'s WDGZone route** (as 9.12 step 7), so A sells only through its manual routes.
+7. A → "تفعيل الكل". Expected: "تفعيل اللعبة وباقاتها" with "ستُفعَّل اللعبة وكل باقة موقوفة تستطيع البيع الآن (2 موقوفة، منها ما أوقفته يدويًا). ما لا يستطيع البيع يبقى موقوفًا مع السبب."; confirm.
+8. Expected: "نتيجة التفعيل": "فُعّلت اللعبة.", "فُعّلت: 1" (`60 UC`), "بقيت موقوفة: 1" (`325 UC` "لا سعر"). The store: `/games/system-test-7` opens with `60 UC` $1.10 and `660 UC` $9.35 (**do not buy**).
+9. At once: A → "إيقاف" (pause the game). Expected: `/games/system-test-7` the not-found page again.
+
+Result:
+
+### 9.14 The low-balance alert and its threshold (owner's decision)
+
+**What this checks:** the admin is told when the supplier's wallet runs low and when it is refilled, without being flooded.
+
+**The owner decides before step 1** what WDGZone's threshold should be until the pilot (F9-2): today's $50 sends "💰 … تحت الحد" every 6 hours while the wallet holds about $6. Steps 1 and 2 test the recovery message; step 3 sets the value you choose.
+
+1. WDGZone → "الاتصال" → "حد الرصيد المنخفض": `5`, "حفظ الحد" (confirm your identity if asked). Expected: "حُفظ الحد."; the card no longer shows "تحت الحد" (at the next read, within 5 minutes).
+2. Within 5 minutes, Telegram: "✅ رصيد WDGZone عاد إلى الحد أو فوقه: $6.124".
+3. Set your chosen value (for example `3`, or `50` again) and save. If it is above the balance: within 5 minutes "💰 رصيد WDGZone تحت الحد: $6.124 (الحد …)" and "تحت الحد" on the card. Note the final value here.
+4. Wrong values (nothing saved): `-1` and `100000.01`: "مبلغ من 0 إلى 100000 بسنتات كاملة.".
+
+Result:
+
+### 9.15 Replacing the WDGZone key (owner's decision)
+
+**What this checks:** a key can be replaced from the panel, is stored encrypted and never shown again, and the replacement is proven by a sync.
+
+**The owner decides whether to run this case.** Recommended if the WDGZone key in use is the one pasted in a chat on 2026-10-06 (rotate it before the pilot; the key was set in the panel on 2026-10-13). Skip it otherwise and mark it "skipped".
+
+1. On WDGZone's site, create a new API key (keep the old one active until step 3 passes).
+2. WDGZone → "الاتصال" → "تعيين المفاتيح". Expected: "مفاتيح WDGZone", "اكتب كل الحقول. تُحفظ مشفّرة ولا تُعرض بعد الحفظ، ثم تُشغَّل مزامنة لاختبار الاتصال."; one password field "مفتاح الواجهة (API key)" with "إظهار القيمة". Paste the new key, "حفظ المفاتيح", confirm your identity.
+3. Expected: the hint shows the new key's last 4 characters, "عُيّنت في" now; the connection test (a sync "من اللوحة") runs and **"نجحت"** about 100 seconds later.
+4. Only then revoke the old key on WDGZone's site. Within 15 minutes the next scheduled sync succeeds and the balance read goes on (health stays سليم).
+5. Never paste the key anywhere else: not in Telegram, not in this file, not in a ticket.
+
+Result:
+
+### 9.16 Only the admin reads suppliers
+
+**What this checks:** costs, offers, keys and routes are never visible to customers or to anyone not signed in to the panel.
+
+1. In TC1's browser open `https://digital-admin.vertexmedia.pro/api/admin/suppliers` and `https://digital-admin.vertexmedia.pro/api/admin/suppliers/wdgzone/offers`. Expected: 401, no data.
+2. Open `https://digital.vertexmedia.pro/api/admin/suppliers`. Expected: 404.
+3. The private window: `https://digital.vertexmedia.pro/api/catalog/storefront`. Expected: prices and availability only (no cost, supplier, offer, route or stock count); no "اختبار النظام".
+4. Optional (developer tools, Network, in the panel): `/api/admin/suppliers` carries `Cache-Control: no-store`; a category thumbnail (`…/categories/…/image`) carries `private, max-age=86400` and comes from the panel's own host, never WDGZone's.
+
+Result:
+
+### 9.17 The audit log has every supplier decision
+
+**What this checks:** every change to how the store buys can be traced to who made it and when; the supplier's own changes live in their history tables, not in the audit log.
+
+1. "سجل التدقيق", entity type "سياسة الموردين". Expected: two "تعديل سياسة الموردين" (9.3), each with the values before and after (probe 10 → 15, then 15 → 10), plus one more if you changed the minimum calls in 9.3 step 5.
+2. Entity type "مورد". Expected: "طلب مزامنة مورد" for 9.4 (one only: the refused press wrote nothing); "تعديل مورد" for each threshold save of 9.14 (before and after); "تعيين مفاتيح مورد" for 9.15 if run: field names and the hint only, **never the key**.
+3. Entity type "مسار باقة". Expected: "إضافة مسار" for 9.11 step 3 and 9.12 step 1; "تعديل مسار" for the enable switch and the priority of 9.12 (four); "أرشفة مسار" and "استعادة مسار" for 9.12 step 7 and 9.13 step 6; and the two routes of the import (9.13). Nothing for the refused adds of 9.11.
+4. Entity type "فئة مورد": "تجاهل فئة مورد" and "إلغاء تجاهل فئة مورد" (9.7), "استيراد فئة مورد كلعبة" (9.13, with the game and count 2). Entity type "عرض مورد": "تجاهل عرض مورد" and "إلغاء تجاهل عرض مورد" (9.7).
+5. Entity type "لعبة": "تفعيل كل باقات لعبة" (9.13, with activated and skipped), the restores of 9.10. The switch changes of 9.12 under the store switches.
+6. No entry for the scheduled syncs, cost changes, health changes or balance reads (by design: their own tables).
+
+Result:
+
+### 9.18 Screens quality on desktop and phone
+
+**What this checks:** the admin can run suppliers from either device without misreading a figure.
+
+1. On the PC, light and dark themes: `/suppliers` (both cards), each WDGZone tab (الاتصال، العروض with the cost history، المزامنة، الصحة، الكتالوج with a node's packs، كشف الحساب), `/suppliers/policy` with an error, a routes drawer with an unusable route, the import sheet, the "تفعيل الكل" result. Expected: readable, RTL, Latin digits; amounts, offer ids, `ms` and percents kept whole left to right (`$6.124`, `10501 ms`, `88%`); supplier names shown as text.
+2. On the phone: `/suppliers`, the offers table and the tree (scrolling within their frame), a routes drawer, the policy page; no horizontal page scroll.
+3. With the keyboard only (PC): "مزامنة الآن", a filter of "العروض", a node's menu in "الكتالوج", and a route's "مفعّل" switch.
+
+Result:
+
+### 9.19 Clean-up: the test records archived again
+
+**What this checks:** the test leaves no route, game or visible price behind, and nothing real changed but the decided threshold (and the key, if 9.15 ran).
+
+1. A → `60 UC` and `660 UC`: their WDGZone routes archived (9.12, 9.13); `264043` and `264052` unmapped in "العروض". C → each pack → "المسارات" → "أرشفة" its WDGZone route, so `266059` and `266060` are unmapped again (F9-1: an archived pack keeps its routes otherwise). C's game page → "فئات الموردين" → "فك الربط" on "Global" ("تُفك «Global» عن اللعبة. تبقى اللعبة وباقاتها ومساراتها كما هي."): the node "غير مستوردة" again.
+2. Archive game C, then game A (paused, its manual routes stay with its archived packs). "إدارة الفئات": archive "اختبار النظام". Expected: six categories, in their order.
+3. The store (reload): the six real categories; `/games/system-test-7` and `/games/system-test-9` the not-found page.
+4. `/suppliers`: WDGZone "سليم", the policy at its defaults (or your 9.3 step 5 value), يدوي "يعمل", WDGZone's threshold at your 9.14 value, "المربوطة بباقات" **605** again, the "باقات جديدة" badge back to its 9.1 number (± what the supplier added since). ببجي موبايل "60 شدة" $0.99 with both routes.
+
+Result:
+
+### Feature 9 sign-off
+
+| Item | Value |
+|---|---|
+| Cases passed | |
+| Findings | |
+| Checked by Claude (read-only, production, after 9.19) | |
+| Accepted by the owner on | |
+| PR | the steps (this branch) |
