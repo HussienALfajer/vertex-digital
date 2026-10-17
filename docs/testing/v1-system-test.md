@@ -1602,7 +1602,7 @@ Result: ✅ (2026-10-17)
 | Item | Value |
 |---|---|
 | Cases passed | 14 of 14 |
-| Findings | F7-1 and F7-2 (found while writing the steps from the production records: catalog content) deferred to "After the last feature: the professional catalog" (owner, 2026-10-17); F7-3 (nginx's 413 read as an unexpected error in the panel) fixed with the results |
+| Findings | F7-1 and F7-2 (found while writing the steps from the production records: catalog content) deferred to "After the last feature: the professional catalog" (owner, 2026-10-17); F7-3 (nginx's 413 read as an unexpected error in the panel) fixed with the results; F7-4 to F7-14 from an external audit by another model (GPT 6.1 sol, review only, 11 findings: five major, six minor, no blocker), each confirmed in the code (and, for A1, A2 and A3, with a test that fails without the fix) and fixed; F7-15 (a rare race noted by the reviewer) accepted |
 | Checked by Claude (read-only, production, 2026-10-17, after 7.14) | Real catalog unchanged: 6 categories, 57 active games, 587 unarchived packs (172 active), 41 fields, PUBG Mobile 29 live and 18 archived packs, no real game or pack updated or audited that day; `system-test`, `system-test-7` and `system-test-7-app` archived. The day's catalog audit entries match 7.12 (category: 1 created, 2 updated, 2 reordered, 1 archived; game: 2 created, 6 updated, 3 archived, 1 restored; field: 2 created, 1 updated, 1 archived, 1 restored; pack: 5 created, 3 updated, 2 archived, 1 restored; 4 pack reorders), with one game reorder and two field reorders more than the steps name, from the keyboard check of 7.13 |
-| Accepted by the owner on | 2026-10-17 |
-| PR | the steps (#125); the results and the F7-3 fix (this file's PR) |
+| Accepted by the owner on | 2026-10-17; the audit fixes accepted by Claude on 2026-10-17 (every check green, the reviewer's two findings closed) |
+| PR | the steps (#125); the results and the F7-3 fix (#126); the external audit's fixes, F7-4 to F7-15 (this file's PR) |
