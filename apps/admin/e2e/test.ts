@@ -7,6 +7,7 @@ import {
   DEPOSIT_SETTINGS_DEFAULTS,
   depositCreditUsdUnits,
   floorToWholeCents,
+  type LedgerSummary,
   rateChangePercent,
   rateConfirmationError,
   STORE_SWITCH_DEFAULTS,
@@ -248,6 +249,8 @@ export class AdminApi {
   ];
   /** The wallet's adjustments, oldest first, and the request keys already answered (rule J9). */
   adjustments: Adjustment[] = [];
+  /** System accounts beside the adjustments' (deposits' receipts, exchange, rounding), set per test. */
+  ledgerAccounts: LedgerSummary['systemAccounts'] = [];
   private readonly adjustmentKeys = new Map<string, Adjustment>();
   private pendingTwoFactor = false;
   /** The exchange rates, newest first: one set an hour ago, so the stale banner stays hidden. */
@@ -1128,8 +1131,8 @@ export class AdminApi {
           owedToCustomersUnits: 0,
           owedToTestCustomersUnits: owed,
           walletsWithBalance: owed > 0 ? 1 : 0,
-          systemAccounts: [...new Set(this.adjustments.map((item) => item.category))].map(
-            (category) => ({
+          systemAccounts: [...new Set(this.adjustments.map((item) => item.category))]
+            .map((category) => ({
               kind: 'adjustments',
               code: `adjustments:${category}`,
               currency: 'USD',
@@ -1140,8 +1143,8 @@ export class AdminApi {
                     sum + (item.direction === 'credit' ? item.amountUnits : -item.amountUnits),
                   0,
                 ),
-            }),
-          ),
+            }))
+            .concat(this.ledgerAccounts),
         });
       }
       case 'GET /api/admin/wallets': {

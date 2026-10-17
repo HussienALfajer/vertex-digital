@@ -28,6 +28,7 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
+import { money } from '../reconciliation/reconciliation-labels';
 import { ledgerSummaryQuery, walletSearchQuery } from './wallet.queries';
 
 /** The shortest search the API accepts (`walletSearchQuerySchema`). */
@@ -122,7 +123,7 @@ function Summary({ summary }: { summary: LedgerSummary }) {
                       </code>
                     </TableCell>
                     <TableCell className="tabular-nums">
-                      <bdi dir="ltr">{formatUsd(account.balanceUnits)}</bdi>
+                      {money(t, account.currency, account.balanceUnits)}
                     </TableCell>
                   </TableRow>
                 ))}

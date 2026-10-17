@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import type { LedgerSummary } from '@vertex-digital/contracts';
 import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
 import {
   type AdminApi,
@@ -77,6 +78,35 @@ async function reauthenticate(page: Page) {
 
 const rows = (page: Page) => page.getByRole('table').getByRole('row');
 
+/** The books of three 700 ل.س deposits at 140 and two USDT deposits (S03 M2, S04 M1). */
+const DEPOSIT_ACCOUNTS: LedgerSummary['systemAccounts'] = [
+  {
+    kind: 'sham_cash_receipts',
+    code: 'sham_cash_receipts:SYP',
+    currency: 'SYP',
+    balanceUnits: -210_000,
+  },
+  {
+    kind: 'currency_exchange',
+    code: 'currency_exchange:SYP',
+    currency: 'SYP',
+    balanceUnits: 210_000,
+  },
+  {
+    kind: 'currency_exchange',
+    code: 'currency_exchange:USD',
+    currency: 'USD',
+    balanceUnits: -15_000_000,
+  },
+  {
+    kind: 'usdt_receipts',
+    code: 'usdt_receipts:usdt_trc20',
+    currency: 'USD',
+    balanceUnits: -5_003_700,
+  },
+  { kind: 'deposit_rounding', code: 'deposit_rounding:USD', currency: 'USD', balanceUnits: 9_300 },
+];
+
 test.describe('wallets', () => {
   test('the summary, then a search by name and by phone opens the wallet', async ({
     page,
@@ -109,6 +139,19 @@ test.describe('wallets', () => {
     await expect(page).toHaveURL(`/wallets/${CUSTOMER_ID}`);
     await expect(page.getByRole('heading', { name: 'سارة الأحمد' })).toBeVisible();
     await expect(page.getByText(ar.wallets.detail.emptyTitle)).toBeVisible();
+  });
+
+  test('system accounts show each balance in its own currency (F6-1)', async ({ page, admin }) => {
+    admin.ledgerAccounts = DEPOSIT_ACCOUNTS;
+    await open(page, admin, '/wallets');
+    await page.getByRole('button', { name: ar.wallets.summary.systemAccounts }).click();
+    const row = (code: string) => page.getByRole('row').filter({ hasText: code });
+    await expect(row('sham_cash_receipts:SYP')).toContainText('−2,100 ل.س');
+    await expect(row('currency_exchange:SYP')).toContainText('2,100 ل.س');
+    await expect(row('currency_exchange:SYP')).not.toContainText('$');
+    await expect(row('currency_exchange:USD')).toContainText('-$15.00');
+    await expect(row('usdt_receipts:usdt_trc20')).toContainText('-$5.0037');
+    await expect(row('deposit_rounding:USD')).toContainText('$0.0093');
   });
 
   test('a test credit asks for re-authentication, then retries with the same key', async ({
@@ -298,6 +341,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await screenshot(page, testInfo, `wallet-adjust-${colorScheme}`);
       await page.keyboard.press('Escape');
 
+      admin.ledgerAccounts = DEPOSIT_ACCOUNTS;
       await page.goto('/wallets?q=%D8%B3%D8%A7%D8%B1%D8%A9');
       await expect(page.getByRole('cell', { name: 'sara@example.com' })).toBeVisible();
       await page.getByRole('button', { name: ar.wallets.summary.systemAccounts }).click();
