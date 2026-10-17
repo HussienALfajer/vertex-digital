@@ -29,13 +29,14 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { CopyButton } from '@/features/deposits/copy-button';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
+import { useIdempotentRequest } from '@/lib/idempotency';
 import { attemptSignature, BODY_MAX, bodyLength, bodyValid, messageBody } from './form';
 import { ImagePicker } from './image-picker';
 import { categoryText, newTicketHref, STATUS_TONES, statusText } from './labels';
@@ -330,7 +331,7 @@ function ReplyBox({
   const [showError, setShowError] = useState(false);
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
-  const attempt = useRef<{ signature: string; key: string } | null>(null);
+  const sendOnce = useIdempotentRequest();
   const { ref, focusInvalid } = useFocusInvalid();
   const invalid = showError && !bodyValid(text, files.length);
 
@@ -340,15 +341,12 @@ function ReplyBox({
     setRefusal(null);
     if (!bodyValid(text, files.length)) return focusInvalid();
     const body = messageBody(text, files.length, t('support.images.attached'));
-    const signature = attemptSignature({ ticket: ticket.id, body }, files);
-    if (attempt.current?.signature !== signature) {
-      attempt.current = { signature, key: crypto.randomUUID() };
-    }
     setSending(true);
-    const result = await replyToTicket(ticket.id, body, files, attempt.current.key);
+    const result = await sendOnce(attemptSignature({ ticket: ticket.id, body }, files), (key) =>
+      replyToTicket(ticket.id, body, files, key),
+    );
     setSending(false);
     if (result.ok) {
-      attempt.current = null;
       setText('');
       setFiles([]);
       setShowError(false);

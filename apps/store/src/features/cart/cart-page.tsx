@@ -34,7 +34,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { savePendingEmail } from '@/features/auth/pending-email';
 import { centsParam } from '@/features/deposits/amounts';
-import { attemptKey, clearAttempt } from '@/features/purchase/attempt';
+import { sendAttempt } from '@/features/purchase/attempt';
 import { useBalance, usePurchasesStopped } from '@/features/purchase/customer';
 import { purchaseRefusalText } from '@/features/purchase/refusals';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
@@ -51,18 +51,30 @@ import { useCart } from './use-cart';
 const ATTEMPT = 'cart';
 
 /**
- * The checkout's refusals decided before anything is written (rule CT5): no checkout holds the
- * key, so the changed cart may go with a new one. Anything else keeps the key: the first request
- * may have paid.
+ * The checkout's refusals decided after the API looked the key up (rule CT5): no checkout holds
+ * the key, so the changed cart may go with a new one. `IDEMPOTENCY_KEY_REUSED` too: the key's
+ * first checkout was written and the customer is told to check their orders (F6-14).
  */
-const REFUSED_BEFORE_PAYMENT: ReadonlySet<Failure> = new Set<Failure>([
+const REFUSED_AFTER_LOOKUP: ReadonlySet<Failure> = new Set<Failure>([
   'CHECKOUT_REFUSED',
   'INSUFFICIENT_BALANCE',
   'PURCHASES_STOPPED',
-  'VALIDATION_FAILED',
   'IDEMPOTENCY_KEY_REUSED',
+]);
+
+/** Refusals answered before the key is looked up (the body's schema, the access guard). */
+const REFUSED_BEFORE_LOOKUP: ReadonlySet<Failure> = new Set<Failure>([
+  'VALIDATION_FAILED',
   'EMAIL_NOT_VERIFIED',
 ]);
+
+/**
+ * Whether a refusal frees the key: one decided after the lookup, or one answered before it while
+ * no earlier answer was lost. Anything else keeps the key: the first request may have paid.
+ */
+function freesKey(reason: Failure, unsettled: boolean): boolean {
+  return REFUSED_AFTER_LOOKUP.has(reason) || (REFUSED_BEFORE_LOOKUP.has(reason) && !unsettled);
+}
 
 type Prices =
   | { status: 'loading' }
@@ -192,19 +204,22 @@ export function CartPage() {
 
   async function send(body: CheckoutRequest) {
     // One `Idempotency-Key` per body, kept in session storage: a retry after a lost answer gets
-    // the first checkout back (rule CT5), even after a reload.
-    const key = attemptKey(ATTEMPT, JSON.stringify(body));
+    // the first checkout back (rule CT5), even after a reload, and a cart changed after a lost
+    // answer keeps the key, so it cannot pay twice (F6-14).
     lastBody.current = body;
     setNotice(null);
     setSending({ status: 'sending' });
-    const result = await payCart(body, key);
+    const result = await sendAttempt(
+      ATTEMPT,
+      JSON.stringify(body),
+      (key) => payCart(body, key),
+      freesKey,
+    );
     if (result.ok) {
-      clearAttempt(ATTEMPT);
       clearCart();
       router.push(`/orders?checkout=${encodeURIComponent(result.data.id)}`);
       return;
     }
-    if (REFUSED_BEFORE_PAYMENT.has(result.reason)) clearAttempt(ATTEMPT);
     refused(result.reason, result.details, body);
   }
 
