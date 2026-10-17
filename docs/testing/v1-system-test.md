@@ -145,6 +145,8 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F6-12 | 6 | External audit A9 | The ledger summary read the customer totals and the system accounts in two statements: a write between them made the summary look unbalanced | minor | One statement, one snapshot | Fixed |
 | F6-13 | 6 | External audit A10 | The wrong-session test did not cover a customer session on `/entries` and `/reverse` | minor | Both added, the reversal on a real adjustment | Fixed |
 | F6-14 | 6 | Checking A1 | The store's purchase, cart, deposit and ticket keys follow the same rule (a new key once the body changed, `features/purchase/attempt.ts`, `deposits/deposit-form.tsx`, `deposits/usdt-form.tsx`, `support/new-ticket-page.tsx`, `support/ticket-page.tsx`): a lost answer then an edited retry can buy or open twice | major | One rule in `apps/store/src/lib/idempotency.ts`: after no answer, a server fault or `IDEMPOTENCY_KEY_REUSED` the key stays whatever the body until a success (the buy box and the cart keep that state in session storage across reloads; after a lost answer they free the key only on a refusal decided after the API looked the key up, `IDEMPOTENCY_KEY_REUSED` included, never on one answered before it such as the body's schema or the email check); a new key only for a changed body after a clear refusal. `errors.IDEMPOTENCY_KEY_REUSED` now says the first attempt was recorded and to check orders, deposits or tickets before retrying. Unit tests per helper, E2E for the edited purchase | Fixed (#122) |
+| F7-1 | 7 | Writing the steps (production read, 2026-10-17) | None of the 223 code packs has a region or redemption instructions (CT8), while the region notes of several code games tell the customer the code arrives "مع خطوات الاستخدام": the buy box and the order page show instructions only when the pack has them, so a code buyer today gets the code with no steps | minor (content) | None yet: the owner decides, before feature 11's code purchase, whether to write the region and instructions per code pack (the pack dialog) or reword those region notes | Open |
+| F7-2 | 7 | Writing the steps (production read) | None of the 57 games has an ID guide image or an accent color, and no pack has an official price: the buy box shows no "where is my ID" guide for the 36 games that ask for an ID, every game uses the brand's sand, and no savings badge appears anywhere | minor (content) | None yet: the owner decides which games get an ID guide (first those whose ID customers most often get wrong) and whether to enter official prices, before the pilot | Open |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -1336,3 +1338,241 @@ Result: ✅ (2026-10-17)
 | Findings | F6-1 (found while writing the steps, fixed in #120 and deployed to production on 2026-10-17, `d5cad4d`, before 6.3 was run); F6-2 (the worked numbers rewritten from the production records before 6.1); F6-3 open (the live check's customer is not a test customer; decide in feature 16); F6-4 to F6-13 from an external audit by another model (GPT 6.1 sol, review only), each confirmed in the code and fixed: one blocker (F6-4, a lost answer then an edited retry adjusting twice), five major, four minor; F6-14 (the store's keys, found while checking A1) fixed in #122 |
 | Accepted by the owner on | 2026-10-17; the audit fixes accepted by Claude on 2026-10-17 (every check green, the reviewer's findings closed) |
 | PR | the steps (#119); the F6-1 fix (#120); the store's keys, F6-14 (#122); the results, the corrected numbers and the external audit's fixes, F6-4 to F6-13 (#123); #122 and #123 merged and deployed to production on 2026-10-17 (`0e7de6b`) |
+
+## Feature 7 — Catalog (F08)
+
+**What it covers:** what the store sells (S06 CT1–CT10, ADR 0020), first as it stands on production, then on two test games: the categories with their order, rename and archive (CT2, CT5); a game's data, its slug fixed at creation and unique even once archived, new games paused, activation only when complete (CT3); the cover and ID guide uploads re-encoded to WebP and the public image route (CT10); the accent color and its contrast against the dark surface and white (CT6); input fields with their key and type fixed (CT7); packs of both kinds with their defaults, and region and redemption instructions for codes (CT8); pause, resume, reorder, archive and restore at each level (CT1, CT4, CT5); the availability the panel shows and what customers see (CT9, S09 SF1); the audit entries; who can change the catalog.
+
+**How to read a case:** as in features 2 to 6: **What this checks** first, then the numbered steps; a line starting with "Expected" is what you must see.
+
+**Real money in this feature:** none. No purchase, no supplier call, no price change. The real catalog is only **read**: every create, edit, pause, reorder and archive is on a test category and its two test games, which end the feature archived (case 7.14). Never press "شراء", "المسارات" or "تفعيل الكل" here (features 9 and 14), and never pause, edit or archive a real game or pack.
+
+**Worked numbers used below:** the production catalog as recorded (read-only query, 2026-10-17, deployed `0e7de6b`):
+
+| # | Category | Slug | Games (unarchived) |
+|---|---|---|---|
+| 1 | ألعاب الموبايل | `games` | 21 |
+| 2 | ألعاب الورق والتسلية | `card-board-games` | 5 |
+| 3 | تطبيقات الدردشة والبث المباشر | `apps` | 11 |
+| 4 | بطاقات الألعاب والمنصات | `gaming-cards` | 10 |
+| 5 | بطاقات المتاجر الرقمية | `gift-cards` | 3 |
+| 6 | الاشتراكات والخدمات الرقمية | `subscriptions` | 7 |
+
+- **57 games**, all active, none archived. Each has a cover (57 distinct `catalog_image` files, 61 uploaded in all); **none** has an ID guide image or an accent color (F7-2).
+- **587 unarchived packs**: 364 direct (133 active, 231 paused) and 223 code (39 active, 184 paused); 18 archived, all in PUBG Mobile. Every direct pack has a maximum quantity of 1, every code pack 10. **No pack** has an official price, and **no code pack** has a region or redemption instructions (F7-1). No game mixes the two kinds.
+- **41 input fields**, all required, none archived: 31 games have one (`digits` 1–32 or `text` 1–64), 5 have two (Mobile Legends `player_id` + `server_id`; Genshin Impact, Honkai: Star Rail and Zenless Zone Zero `player_id` + a `select` "السيرفر" of 4 options; Solo Leveling: Arise `user_id` + a text "السيرفر"), and the 21 games with code packs only have none. Telegram's field is the only one with help text; it and CapCut Pro's have bounds of their own (5–33 and 3–64).
+- **7 games have no active pack** (Fortnite, Chamet, Spotify, Netflix, Valorant, CapCut Pro, Yalla): every pack paused, so the store shows them unavailable.
+- **PUBG Mobile** (`pubg-mobile`, first in ألعاب الموبايل): one field `player_id` "معرّف اللاعب" (digits, 1–32, required); 8 search terms; **29** live packs in this order: 60 شدة, 325 شدة, 660 شدة, 1,800 شدة, 3,850 شدة, 8,100 شدة, then the Prime and Prime Plus months, the Royale Pass packs, the bundles, the two weekly offers and the six WOW coin packs; **14 active, 15 paused**. Its **18 archived** packs are the "Fast ·", "Manual ·" and "Reserve ·" UC packs of 2026-10-15. At the time of writing "60 شدة" sells at **$0.99** (≈ 139 ل.س at 140, rounded up) and "325 شدة" at **$4.88** (≈ 684 ل.س); "660 شدة" is paused, with no price.
+- The audit log holds the catalog's build of 2026-10-13 to 15: 57 "إضافة لعبة", 605 "إضافة باقة", 41 "إضافة حقل إدخال", 18 "أرشفة باقة", 3 "إضافة فئة" and 3 "تعديل فئة" (the seeds renamed), and the reorders.
+
+The contrast ratios of 7.6 (WCAG 2, rounded down to 2 decimals, `contrastRatio`): `#2E7D6A` 2.99:1 against the dark surface `#0B2D28` (refused); `#2E7D6B` exactly **3:1** (accepted, the boundary) and 4.92:1 against white; `#F2A900` 7.35:1 against the dark surface and **2:1** against white (the light-theme warning).
+
+The test records (all archived at the end; their slugs can never be used again):
+
+| Record | Arabic name | English name | Slug |
+|---|---|---|---|
+| Test category | اختبار النظام | — | `system-test` |
+| Game A (direct packs) | لعبة اختبار 7 | System Test 7 | `system-test-7` |
+| Game B (a code pack) | تطبيق اختبار 7 | System Test 7 App | `system-test-7-app` |
+
+**Before you start**
+
+- The panel open on the PC (signed in), the store as TC1 in a second browser, a private window signed out, and your phone.
+- About 1 hour 30 minutes. Game A is **active and visible to every store visitor** only between steps 1 and 5 of case 7.8: do those steps in one sitting, in a few minutes.
+- On the PC: two images that are not receipts or personal data (a screenshot wider than 1600 px, e.g. 1920 × 1080, for the cover; any PNG or JPEG for the ID guide), a text file renamed to `fake.png`, and an image between 5 and 6 MB (or any photo above 5 MB).
+- "سعر الصرف" (`/rates`): 140. Nothing is paused in the store switches (feature 21).
+- If the panel shows other counts than the worked numbers (a game or pack added, paused or archived since 2026-10-17), note the difference here and use what the panel shows.
+
+**Not tested on production (by design):** two tabs saving one game, two reorders, or two creations with one name at the same instant (S06 concurrency tests); a decompression bomb, a 25-megapixel image and metadata stripping (`files` tests); the limits of 10 fields and 100 packs per game (`CATALOG_LIMIT_REACHED`, API tests); a reorder sent with a stale list (API test, edge case 2); a field's values checked at purchase, the pack's quantity limit, the ID guide in the buy box and the redemption text on a code order (features 10 to 13). Supplier offers, routes, stock, "تفعيل الكل" and availability from a route are feature 9 (the 18 archived PUBG packs still hold their routes: checked there); margins, prices and the "التسعير" tab are feature 8; the store's home, game pages and search are feature 10.
+
+### 7.1 The catalog in the panel as it stands
+
+**What this checks:** the admin sees the whole catalog in the order customers see it, and can find any game in seconds.
+
+1. In the panel open "الكتالوج" (`/catalog`). Expected: "الكتالوج" with "الفئات والألعاب والتطبيقات، وحقول إدخالها وباقاتها."; "إدارة الفئات" and "إضافة لعبة"; the six category tabs in the order of the worked table, "ألعاب الموبايل" chosen.
+2. Expected: the 21 games of ألعاب الموبايل as cards in order (ببجي موبايل first, ستيت أوف سرفايفل last), each with its cover, Arabic and English names, "نشطة" and "الباقات: <n>": ببجي موبايل **"الباقات: 29"** (unarchived packs only, not 47), فري فاير "الباقات: 5", موبايل ليجندز "الباقات: 29".
+3. Open each other tab. Expected: 5, 11, 10, 3 and 7 games; Fortnite (بطاقات الألعاب والمنصات) still reads "نشطة" with "الباقات: 9" (its packs are paused, not the game).
+4. In ألعاب الموبايل search `pubg`, then `ببجي`. Expected: ببجي موبايل and ببجي نيو ستيت each time. Search `zzzq`: "لا توجد ألعاب تطابق هذا البحث".
+5. Clear the search. "الحالة" → "متوقفة": no game (all 21 are active). "الأرشيف" → "المؤرشفة": no game. Back to "كل الحالات" and "غير المؤرشفة".
+6. "إدارة الفئات". Expected: the six categories in order, each with "الألعاب: <n>" as in the worked table; its archived tab "لا توجد فئات مؤرشفة.". Close it.
+
+Result:
+
+### 7.2 PUBG Mobile in the panel, read only
+
+**What this checks:** one real game shows everything the store sells under it, and its current state, without opening the database.
+
+Read only: **change nothing** in this case.
+
+1. Open ببجي موبايل. Expected: the header "ببجي موبايل" with "نشطة" and `PUBG Mobile` (left to right); "العودة إلى الكتالوج" and "أرشفة" (**do not press it**); the tabs "البيانات", "حقول الإدخال", "الباقات", "التسعير".
+2. "البيانات". Expected: the names; "العنوان (slug)" `pubg-mobile`, read-only, with "هذا عنوان صفحة اللعبة في المتجر، ولا يتغيّر بعد إنشائها."; the category; the cover with its size in pixels; "صورة دليل المعرّف" empty (F7-2); "لون التمييز" empty; the region notes; 8 search terms; "نشطة في المتجر" on, with "اللعبة ظاهرة للعملاء، وكل باقة نشطة فيها تُعرض.".
+3. "حقول الإدخال". Expected: one row "معرّف اللاعب", `player_id`, "أرقام", "إلزامي". Its archived tab: "لا توجد حقول مؤرشفة".
+4. "الباقات". Expected: the 29 packs in the order of the worked numbers, each "شحن مباشر" with its amount, no official price, max quantity 1, and its status (14 "نشطة", 15 "متوقفة"): "60 شدة" "متوفرة" with $0.99; "660 شدة" "غير متوفرة: متوقفة" with "لا سعر بعد".
+5. The packs' archived filter. Expected: the 18 "Fast ·", "Manual ·" and "Reserve ·" packs, each with "استعادة" (**do not press it**).
+
+Result:
+
+### 7.3 What customers see of the real catalog
+
+**What this checks:** the store shows only what is active, in the panel's order, and a paused pack never looks buyable.
+
+1. In the private window (signed out) open `https://digital.vertexmedia.pro`. Expected: the six categories in the panel's order, with their games in the panel's order.
+2. Open ببجي موبايل. Expected: the field "معرّف اللاعب" and the 29 packs in the panel's order: the 14 active ones with a price ("60 شدة" $0.99, ≈ 139 ل.س); the 15 paused ones greyed out in place with "غير متوفرة حاليًا", no price and no buy action; none of the 18 archived packs.
+3. Open فورتنايت (every pack paused). Expected: the page opens, every pack greyed "غير متوفرة حاليًا"; on the home page its card reads "غير متوفرة حاليًا".
+4. Open `https://digital.vertexmedia.pro/games/system-test-7`. Expected: the not-found page (the game does not exist yet; 7.5 opens the same address once it exists, paused).
+
+Result:
+
+### 7.4 Categories: add, refuse, rename, reorder
+
+**What this checks:** the admin shapes the store's sections, and a page address or a name can never be taken twice.
+
+1. "إدارة الفئات" → "فئة جديدة": name `اختبار النظام`, slug `System Test`; "إضافة الفئة". Expected: under the slug "العنوان من 2 إلى 48 حرفًا: أحرف لاتينية صغيرة وأرقام وشرطات بين الكلمات، مثل pubg-mobile."; nothing added.
+2. Slug `games`. Expected: "هذا العنوان (slug) مستخدم من قبل، ولو في سجل مؤرشف. اختر عنوانًا آخر.". Slug `system-test` with the name `ألعاب الموبايل`: "يوجد عنصر آخر بهذا الاسم في المكان نفسه. اختر اسمًا آخر.".
+3. Name `اختبار النظام`, slug `system-test`. Expected: added **last** (7th) with "الألعاب: 0"; the catalog shows a seventh tab.
+4. Rename it `اختبار النظام 7` ("إعادة تسمية", "حفظ"), then back to `اختبار النظام`. Expected: the name changes in the dialog and the tab each time.
+5. "تحريك اختبار النظام للأعلى". Expected: it is 6th, الاشتراكات والخدمات الرقمية 7th. "تحريك اختبار النظام للأسفل": back to 7th, the six real categories in their order.
+6. The store's home page (reload). Expected: no "اختبار النظام" section (a category with no active game is not shown).
+
+Result:
+
+### 7.5 A new game starts paused and cannot go live incomplete
+
+**What this checks:** nothing half-built reaches customers: a new game stays hidden until it has what a customer needs.
+
+1. In the "اختبار النظام" tab press "إضافة لعبة". Expected: "لعبة أو تطبيق جديد" with "تبدأ اللعبة متوقفة حتى تكتمل بياناتها وتفعّلها."; the category "اختبار النظام" chosen; under the slug "عنوان الصفحة في المتجر، ولا يتغيّر بعد الحفظ: أحرف لاتينية صغيرة وأرقام وشرطات."; "تُنشأ اللعبة متوقفة. فعّلها بعد رفع صورة الغلاف وإضافة حقل إدخال مطلوب إن كانت لها باقات شحن مباشر.".
+2. Arabic name `لعبة اختبار 7`, English name `لعبة`, slug `system-test-7`; "إنشاء اللعبة". Expected: "اكتب الاسم بالإنجليزية بأحرف لاتينية، حتى 60 حرفًا."; nothing created.
+3. English name `System Test 7`, slug `pubg-mobile`. Expected: the `SLUG_TAKEN` text of 7.4. Arabic name `ببجي موبايل` with slug `system-test-7`: the `NAME_TAKEN` text.
+4. Arabic name `لعبة اختبار 7`, slug `system-test-7`, no images; create. Expected: the page of game **A**, "لعبة اختبار 7" with "متوقفة"; the slug read-only; "نشطة في المتجر" off with "اللعبة متوقفة: باقاتها تظهر للعملاء غير متوفرة.".
+5. Turn "نشطة في المتجر" on. Expected: refused, "ينقصها: صورة الغلاف"; still "متوقفة".
+6. Open `https://digital.vertexmedia.pro/games/system-test-7` (private window). Expected: the not-found page (a paused game is shown nowhere on the store, SF1).
+7. Back in the catalog, "اختبار النظام": A's card with "متوقفة" and "الباقات: 0". Create game **B** the same way: `تطبيق اختبار 7`, `System Test 7 App`, `system-test-7-app`. Expected: B after A, "متوقفة".
+
+Result:
+
+### 7.6 Images and the accent color
+
+**What this checks:** the store's images are always safe, light WebP files, and a game's color stays readable on the store's dark surface.
+
+1. A → "البيانات" → "صورة الغلاف" → "رفع صورة": `fake.png` (choose "All files" in the file dialog if needed). Expected: "الملف ليس صورة صالحة. ارفع صورة PNG أو JPEG أو WebP حتى 5 ميغابايت و25 ميغابكسل."; no preview.
+2. The image above 5 MB. Expected: "الملف أكبر من 5 ميغابايت." (a file above 6 MB is stopped by nginx before the API: note the text you see).
+3. The wide screenshot. Expected: "جارٍ الرفع…", then its preview and its size fitted within 1600 px ("1600 × 900 بكسل" for 1920 × 1080), with "استبدال الصورة" and "إزالة". "صورة دليل المعرّف": the other image, its preview and size.
+4. "لون التمييز" `#2E7D6A`. Expected, as you type: "التباين مع الخلفية الداكنة 2.99:1، أقل من 3:1 ولن يُقبل.". "حفظ التغييرات": refused with "تباين اللون مع الخلفية الداكنة 2.99:1، والحد الأدنى 3:1. اختر لونًا أفتح."; both images still in the form.
+5. `#2e7d6b` (lower case). Expected: "التباين مع الخلفية الداكنة 3:1، مقبول." and "التباين مع الأبيض 4.92:1."; save: "حُفظت التغييرات."; reload: the color reads `#2E7D6B` (stored upper case), both images kept.
+6. `#F2A900`. Expected: "التباين مع الخلفية الداكنة 7.35:1، مقبول." and "التباين مع الأبيض 2:1، أقل من 3:1: سيظهر في الوضع الفاتح شريطًا بلا نص."; save.
+7. Open the cover preview in a new tab (right-click → open image). Expected: `https://digital-admin.vertexmedia.pro/api/catalog/images/<id>` shows the image. The same path on `https://digital.vertexmedia.pro`: the same image. Optional (developer tools, Network): `Content-Type: image/webp`, `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`.
+8. Change the last character of the id in that address (still 36 characters). Expected: 404.
+
+Result:
+
+### 7.7 Input fields
+
+**What this checks:** a direct top-up cannot go live without the player ID it needs, and the fields that orders and suppliers refer to never change under them.
+
+1. A → "الباقات" → "إضافة باقة": "شحن مباشر", name `60 UC`, amount `60`; "إضافة الباقة". Expected: the pack listed, "نشطة", max quantity 1, "غير متوفرة: متوقفة" (the game is paused).
+2. "البيانات": turn "نشطة في المتجر" on. Expected: refused, "ينقصها: حقل إدخال مطلوب".
+3. "حقول الإدخال". Expected: "أضف حقل معرّف اللاعب قبل تفعيل باقات الشحن المباشر". "إضافة حقل": key `Player-ID`. Expected: "المفتاح من 2 إلى 32 حرفًا: يبدأ بحرف لاتيني صغير، ثم أحرف وأرقام وشرطة سفلية.".
+4. Key `player_id`, type "أرقام", label `معرّف اللاعب`, help `ستجده في ملفك الشخصي داخل اللعبة.`, min `15`, max `5`, "إلزامي". Expected: "الحدود أرقام صحيحة ضمن المسموح، وأقل طول لا يتجاوز أقصاه.". Min `5`, max `15`; "إضافة الحقل". Expected: the row "معرّف اللاعب", `player_id`, "أرقام", "إلزامي".
+5. "إضافة حقل": key `player_id`, type "نص", label `معرّف آخر`. Expected: "لهذه اللعبة حقل بهذا المفتاح من قبل، ولو مؤرشفًا. اختر مفتاحًا آخر.".
+6. Key `server`, type "قائمة خيارات", label `السيرفر`, "اختياري", one option `eu` "أوروبا". Expected: "من 2 إلى 50 خيارًا، لكل خيار قيمة لاتينية فريدة واسم.". Add a second option `eu` "آسيا": the same refusal. Change its value to `asia`; add. Expected: the row "السيرفر", `server`, "قائمة خيارات", "اختياري", after "معرّف اللاعب".
+7. Edit "السيرفر". Expected: "تعديل حقل الإدخال" with "المفتاح والنوع ثابتان بعد الإنشاء."; the key and type cannot be changed. Change its label to `المنطقة`, save: the row reads "المنطقة".
+8. Move "المنطقة" up, then down. Expected: first, then back after "معرّف اللاعب".
+
+Result:
+
+### 7.8 Going live, and back
+
+**What this checks:** a complete game reaches customers at once and leaves at once when paused, and an active game can never lose its required field.
+
+Do steps 1–5 in one sitting: game A is visible to every store visitor between steps 1 and 5.
+
+1. A → "البيانات": turn "نشطة في المتجر" on. Expected: "نشطة", with "اللعبة ظاهرة للعملاء، وكل باقة نشطة فيها تُعرض."; in "الباقات", `60 UC` "غير متوفرة: لا مسار صالح" (no supplier route, feature 9).
+2. The store's home page in the private window (reload; allow up to a minute). Expected: a last section "اختبار النظام" with "لعبة اختبار 7", its cover and "غير متوفرة حاليًا". Open it (`/games/system-test-7`): the fields "معرّف اللاعب" (with its help text) and "المنطقة" (with "أوروبا" and "آسيا"), and `60 UC` greyed "غير متوفرة حاليًا", no price, no buy action.
+3. In the panel, A → "حقول الإدخال": archive "معرّف اللاعب". Expected: refused, "ينقصها: حقل إدخال مطلوب" (the last required field of an active game with a direct pack, CT3); the field still listed.
+4. A → "البيانات": turn "نشطة في المتجر" off. Expected: "متوقفة" at once.
+5. The store (reload; allow up to a minute). Expected: no "اختبار النظام" section; `/games/system-test-7` the not-found page.
+6. A → "حقول الإدخال": archive "معرّف اللاعب" now that A is paused. Expected: accepted; the list shows only "المنطقة", the archived tab "معرّف اللاعب". Restore it: back in the list.
+
+Result:
+
+### 7.9 Packs of both kinds
+
+**What this checks:** each pack carries what the customer needs to choose it and, for a code, to use it; a pack's kind never changes once created.
+
+1. A → "الباقات" → "إضافة باقة": name `60 UC`. Expected: "يوجد عنصر آخر بهذا الاسم في المكان نفسه. اختر اسمًا آخر.". Name `325 UC`, amount `0`: "الكمية رقم صحيح أكبر من صفر.". Amount `325`, official price `0.995`: "السعر بالدولار بسنتات كاملة، مثل 0.99، حتى 10000.". Official price `4.99`, max quantity `51`: "أقصى كمية من 1 إلى 50.". Max quantity `1`; add. Expected: `325 UC` with the official price $4.99, last.
+2. Add `660 UC` (amount 660, no official price). Expected: `60 UC`, `325 UC`, `660 UC` in that order.
+3. Edit `325 UC`. Expected: "تعديل الباقة" with "نوع الباقة ثابت بعد الإنشاء."; the kind cannot be changed; no region or instructions fields. Close it.
+4. Move `660 UC` up twice. Expected: `660 UC`, `60 UC`, `325 UC`. Down twice: back to `60 UC`, `325 UC`, `660 UC`.
+5. "إيقاف" on `325 UC`. Expected: "متوقفة", "غير متوفرة: متوقفة"; "استئناف" brings back "نشطة". Pause it again and leave it paused.
+6. B → "الباقات" → "إضافة باقة": "كود". Expected: "يستلم العميل كودًا يستخدمه بنفسه."; the max quantity turns to **10** by itself; "المنطقة" and "تعليمات الاستخدام" (with "نص عادي حتى 2000 حرف، تظهر للعميل مع الكود.") appear. Name `بطاقة 10$`, amount `10`, region `الولايات المتحدة`, instructions `افتح المتجر واختر استبدال بطاقة.` and, on a second line, `الصق الكود ثم أكّد.`; add. Expected: "كود", max quantity 10.
+7. Edit it. Expected: the region and both lines of the instructions as typed (plain text, the line break kept). Close it.
+8. B → "البيانات": turn "نشطة في المتجر" on. Expected: refused, "ينقصها: صورة الغلاف" only (a game with code packs only needs no input field). Leave B paused.
+
+Result:
+
+### 7.10 Archive and restore
+
+**What this checks:** nothing in the catalog is ever deleted: an archived item leaves the store and comes back exactly as it was, and never into a place that no longer exists.
+
+1. A → "الباقات": archive `660 UC`. Expected: gone from the list; the archived filter shows it with "استعادة". Add a new `660 UC` (amount 660), then restore the archived one: refused, "يوجد عنصر آخر بهذا الاسم في المكان نفسه. اختر اسمًا آخر.". Archive the new one, restore the first: back in the list with amount 660.
+2. "إدارة الفئات": archive "اختبار النظام". Expected: "أرشفة الفئة" with "ستختفي فئة «اختبار النظام» من المتجر. لا يمكن أرشفتها ما دامت فيها ألعاب غير مؤرشفة."; confirm: refused, "في هذه الفئة ألعاب غير مؤرشفة: لعبة اختبار 7، تطبيق اختبار 7. انقلها إلى فئة أخرى أو أرشفها أولًا." (the two names in either order).
+3. B → "البيانات": category "ألعاب الموبايل", save. Expected: "نقل اللعبة إلى فئة أخرى يضعها في آخر ترتيبها."; in the catalog B is **last** in ألعاب الموبايل (22nd), "متوقفة"; the store unchanged (B is paused). Move it back to "اختبار النظام": after A.
+4. In "اختبار النظام" move B up. Expected: B, A; move it down: A, B.
+5. On B's page "أرشفة". Expected: "أرشفة اللعبة" with "ستختفي «تطبيق اختبار 7» وباقاتها من المتجر. قواعد تسعيرها تبقى وتعود عند الاستعادة."; after it, "هذه اللعبة مؤرشفة" with "لا تظهر في المتجر. استعدها لتعود كما كانت."; the catalog's archived filter (in "اختبار النظام") lists B. "استعادة": B back in "اختبار النظام", "متوقفة", with its code pack, region and instructions unchanged.
+
+Result:
+
+### 7.11 Only the admin changes the catalog
+
+**What this checks:** the catalog changes only through the signed-in panel; anyone else reads only what the store shows.
+
+1. In TC1's browser open `https://digital-admin.vertexmedia.pro/api/admin/catalog/games` and `https://digital-admin.vertexmedia.pro/api/admin/catalog/categories`. Expected: 401, no data.
+2. Open `https://digital.vertexmedia.pro/api/admin/catalog/games`. Expected: 404.
+3. In the private window (signed out) open `https://digital.vertexmedia.pro/api/catalog/storefront`. Expected: the six real categories with their active games only; no "اختبار النظام", no paused game, no supplier, cost or margin field.
+4. Optional (developer tools, Network, in the panel): the answer of `/api/admin/catalog/games` carries `Cache-Control: no-store`.
+
+Result:
+
+### 7.12 The audit log has every catalog change
+
+**What this checks:** every change to what the store sells can be traced to who made it and when, with what it was before.
+
+Reorders are filed under their parent: games under the category, fields and packs under the game.
+
+1. In "سجل التدقيق" filter the entity type "فئة". Expected, newest first: "ترتيب الألعاب" (twice, 7.10 step 4), "ترتيب الفئات" (twice, 7.4), "تعديل فئة" (twice) and "إضافة فئة" (اختبار النظام); actor you, channel admin. **Nothing** for the refused archive of 7.10 or the refusals of 7.4.
+2. Entity type "لعبة". Expected: "إضافة لعبة" for A and B; "تعديل لعبة" for the image and accent saves, A's status changes of 7.8 and B's moves of 7.10; "أرشفة لعبة" and "استعادة لعبة" for B; "ترتيب حقول الإدخال" (twice, 7.7) and "ترتيب الباقات" (four times, 7.9). Open A's activation: `status` before "paused", after "active". Open the cover save: the file ids. **Nothing** for the refused activations, the refused accent or the image uploads by themselves.
+3. Entity type "حقل إدخال". Expected: "إضافة حقل إدخال" (2), "تعديل حقل إدخال" (the label), "أرشفة حقل إدخال" and "استعادة حقل إدخال"; the key shown as `identifier`. Nothing for the refused archive of 7.8.
+4. Entity type "باقة". Expected: the five creations of 7.7, 7.9 and 7.10; "تعديل باقة" with `status` before and after for the pause, resume and pause of 7.9; the archives and restores of 7.10 step 1. Before today's entries, the latest are those of 2026-10-15.
+
+Result:
+
+### 7.13 Screens quality on desktop and phone
+
+**What this checks:** the admin can run the catalog from either device without guessing.
+
+1. On the PC, the panel in the light and dark themes: `/catalog` with its tabs, cards and filters, the categories dialog, A's tabs (the data form with both images and the contrast readout, the fields with the select field, the packs with the archived filter), the field and pack dialogs of both kinds, B's archived notice. Expected: readable, RTL, Latin digits; slugs, keys, colors and ids left to right; every refusal under its field or at the top of its form, the typed values kept.
+2. On the phone: `/catalog` (the tabs scroll, the cards in one column), A's tabs, the packs table scrolling within its frame, the move buttons reachable; no horizontal page scroll.
+3. With the keyboard only (PC): reach "إضافة لعبة", a card's move buttons and the status switch, and use them.
+
+Result:
+
+### 7.14 Clean-up: the test records archived
+
+**What this checks:** test items leave the store for good while their history stays.
+
+1. Archive game A, then game B. Expected: "هذه اللعبة مؤرشفة" on each.
+2. "إدارة الفئات": archive "اختبار النظام". Expected: accepted (no unarchived game left); its archived tab lists it; six categories left, in their order.
+3. Open A again (from its audit entry or the browser's history). Expected: "هذه اللعبة مؤرشفة" with "فئتها مؤرشفة أيضًا: استعد الفئة أولًا."; "استعادة" is refused with "العنصر الأب مؤرشف. استعده أولًا.".
+4. The store (reload). Expected: the six real categories as in 7.3; `/games/system-test-7` and `/games/system-test-7-app` the not-found page.
+5. The panel: the counts of 7.1 (57 games, ببجي موبايل "الباقات: 29") and PUBG Mobile's packs as in 7.2: nothing real changed.
+
+Result:
+
+### Feature 7 sign-off
+
+| Item | Value |
+|---|---|
+| Cases passed | — of 14 |
+| Findings | F7-1 and F7-2 open (found while writing the steps from the production records: content for the owner to decide) |
+| Accepted by the owner on | — |
+| PR | the steps (this file's PR) |
