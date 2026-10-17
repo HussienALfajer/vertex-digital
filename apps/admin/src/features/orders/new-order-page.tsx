@@ -42,7 +42,7 @@ import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { allGamesQuery, gameQuery } from '../catalog/catalog.queries';
 import { customerListQuery } from '../customers/customers.queries';
 import { StockChip } from '../suppliers/offer-cells';
@@ -93,7 +93,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
   const { ref, focusInvalid } = useFocusInvalid();
   /** `OWNER_DAILY_CAP_EXCEEDED` links to the policy beside its message. */
   const [capReached, setCapReached] = useState(false);
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const create = useCreateAdminOrder();
   const playerCheck = useAdminPlayerCheck();
 
@@ -156,7 +156,9 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
     }
     setErrors({});
     try {
-      const order = await create.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
+      const order = await send(parsed.data, (key) =>
+        create.mutateAsync({ body: parsed.data, key }),
+      );
       await navigate({ to: '/orders/$id', params: { id: order.id } });
     } catch (error) {
       setFailure(refusal(error));

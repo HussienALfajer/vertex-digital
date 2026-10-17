@@ -122,12 +122,13 @@ export class WalletService {
   async adminWallet(customerId: string): Promise<AdminWallet> {
     const customer = isUuid(customerId) ? await this.customers.walletCustomer(customerId) : null;
     if (!customer) throw new CodedException(404, 'NOT_FOUND', 'No such customer');
+    // The stored id, not the path's spelling: the wallet's code holds the lower-case form (A2).
     const [wallet, [adjustments]] = await Promise.all([
-      this.wallet(customerId),
+      this.wallet(customer.id),
       this.db
         .select({ count: count() })
         .from(walletAdjustments)
-        .where(eq(walletAdjustments.customerId, customerId)),
+        .where(eq(walletAdjustments.customerId, customer.id)),
     ]);
     return { ...wallet, customer, adjustmentCount: adjustments?.count ?? 0 };
   }
@@ -136,7 +137,7 @@ export class WalletService {
   async adminEntries(customerId: string, query: CursorQuery): Promise<AdminWalletEntryPage> {
     const customer = isUuid(customerId) ? await this.customers.walletCustomer(customerId) : null;
     if (!customer) throw new CodedException(404, 'NOT_FOUND', 'No such customer');
-    const page = await this.timeline(customerId, query);
+    const page = await this.timeline(customer.id, query);
     const adminNames = await this.admins.namesOf([
       ...new Set(page.entries.flatMap((entry) => entry.adjustment?.adminId ?? [])),
     ]);

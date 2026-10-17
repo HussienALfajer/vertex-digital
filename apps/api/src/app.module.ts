@@ -9,7 +9,7 @@ import { ConfigModule } from './core/config/config.module.js';
 import { ENV, type Env } from './core/config/env.js';
 import { DatabaseModule } from './core/database/database.module.js';
 import { createValidationPipe, ErrorFilter } from './core/errors/index.js';
-import { LOG_REDACT_PATHS } from './core/http/secret-headers.js';
+import { LOG_REDACT_PATHS, LOG_SERIALIZERS } from './core/http/secret-headers.js';
 import { JobsModule } from './core/jobs/index.js';
 import { throttlerOptions } from './core/rate-limit/rate-limit.js';
 import { AdminModule } from './modules/admin/index.js';
@@ -44,6 +44,7 @@ import { WalletModule } from './modules/wallet/index.js';
         pinoHttp: {
           level: env.LOG_LEVEL,
           redact: LOG_REDACT_PATHS,
+          serializers: LOG_SERIALIZERS,
           ...(env.NODE_ENV === 'development' && { transport: { target: 'pino-pretty' } }),
         },
       }),

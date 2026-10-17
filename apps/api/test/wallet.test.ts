@@ -3,6 +3,7 @@ import { CURRENCY_SCALE } from '@vertex-digital/contracts';
 import {
   customers,
   emailOutbox,
+  ledgerAccounts,
   ledgerJournals,
   paymentReferences,
   walletAdjustments,
@@ -124,6 +125,7 @@ describe('access', () => {
     for (const path of [
       '/api/admin/wallets?q=abc',
       `/api/admin/wallets/${customer.id}`,
+      `/api/admin/wallets/${customer.id}/entries`,
       '/api/admin/ledger/summary',
     ]) {
       expect((await client.get(path, { cookie: customer.cookie })).status).toBe(401);
@@ -134,6 +136,17 @@ describe('access', () => {
       headers: { 'idempotency-key': randomUUID() },
     });
     expect(adjusted.status).toBe(401);
+    // A real adjustment, so a missing guard on the reversal would answer 201, not 404 (audit A10).
+    const original = await json<{ id: string }>(await credit(customer.id, 1));
+    const reversed = await client.post(`/api/admin/wallet-adjustments/${original.id}/reverse`, {
+      cookie: customer.cookie,
+      body: { reason: 'Reversed by the customer' },
+      headers: { 'idempotency-key': randomUUID() },
+    });
+    expect(reversed.status).toBe(401);
+    expect(await json(await client.get('/api/wallet', { cookie: customer.cookie }))).toMatchObject({
+      balanceUnits: DOLLAR,
+    });
   });
 
   it('needs a re-authentication to adjust and to reverse (rule J7)', async () => {
@@ -267,6 +280,36 @@ describe('the admin wallet screens', () => {
       expect(await body(await credit(id, 1))).toMatchObject({ status: 404, code: 'NOT_FOUND' });
       expect(await body(await reverse(id))).toMatchObject({ status: 404, code: 'NOT_FOUND' });
     }
+  });
+
+  it('keep one wallet whatever case the customer id is written in (audit A2)', async () => {
+    const customer = await newCustomer();
+    const upper = customer.id.toUpperCase();
+    const key = randomUUID();
+    const input = { direction: 'credit', amountUnits: 3 * DOLLAR, category: 'compensation' };
+    expect((await adjust(upper, input, key)).status).toBe(201);
+    // A retry of the same request with the id in lower case is the same request.
+    expect((await adjust(customer.id, input, key)).status).toBe(200);
+    expect((await credit(customer.id, 2)).status).toBe(201);
+
+    expect(await json(await client.get('/api/wallet', { cookie: customer.cookie }))).toMatchObject({
+      balanceUnits: 5 * DOLLAR,
+    });
+    for (const id of [upper, customer.id]) {
+      expect(await json(await adminGet(`/api/admin/wallets/${id}`))).toMatchObject({
+        balanceUnits: 5 * DOLLAR,
+        adjustmentCount: 2,
+      });
+      const page = await json<{ items: unknown[] }>(
+        await adminGet(`/api/admin/wallets/${id}/entries`),
+      );
+      expect(page.items).toHaveLength(2);
+    }
+    const [account] = await test.db
+      .select({ code: ledgerAccounts.code })
+      .from(ledgerAccounts)
+      .where(eq(ledgerAccounts.customerId, customer.id));
+    expect(account?.code).toBe(`customer_wallet:${customer.id}`);
   });
 
   it('show the admin the reason, the admin and the reversal links', async () => {

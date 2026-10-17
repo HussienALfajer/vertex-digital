@@ -37,7 +37,7 @@ import {
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import {
   type AdjustmentField,
   type AdjustmentFieldErrors,
@@ -88,7 +88,7 @@ export function AdjustDialog({
 }) {
   const { t } = useTranslation();
   const adjust = useCreateAdjustment(wallet.customer.id);
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const [direction, setDirection] = useState<AdjustmentDirection>('credit');
   const [category, setCategory] = useState<AdjustmentCategory | null>(
     prefill ? 'manual_deposit' : null,
@@ -143,7 +143,7 @@ export function AdjustDialog({
 
     const request: CreateAdjustment = parsed.data;
     try {
-      await adjust.mutateAsync({ body: request, key: keyFor(request) });
+      await send(request, (key) => adjust.mutateAsync({ body: request, key }));
       onDone();
     } catch (error) {
       const shown = failureOf(t, error);

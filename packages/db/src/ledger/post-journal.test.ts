@@ -1,5 +1,5 @@
 import { CURRENCY_SCALE, type Currency, type LedgerAccountKind } from '@vertex-digital/contracts';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../client.js';
 import { newId } from '../id.js';
@@ -7,6 +7,7 @@ import { customers, ledgerAccounts, ledgerJournals, ledgerPostings } from '../sc
 import { accountBalance } from './balance.js';
 import { LedgerError } from './errors.js';
 import { type JournalInput, postJournal } from './post-journal.js';
+import { walletBalanceAfter } from './wallet.js';
 
 /*
  * Ledger rows written here stay in the test database: it is append-only by design. Every test
@@ -407,5 +408,85 @@ describe('postJournal under concurrency', () => {
 
     expect(await balance(first)).toBe(4 * DOLLAR);
     expect(await balance(second)).toBe(4 * DOLLAR);
+  });
+
+  it('writes a credit after a debit that held the wallet first (audit A4)', async () => {
+    const wallet = await fundedWallet(10 * DOLLAR);
+    const debit = await purchase(wallet, 10 * DOLLAR);
+    const receipts = await account('sham_cash_receipts');
+    const credit: JournalInput = {
+      idempotencyKey: newKey(),
+      kind: 'refund',
+      postings: [
+        { accountId: wallet, amountUnits: 5 * DOLLAR },
+        { accountId: receipts, amountUnits: -5 * DOLLAR },
+      ],
+    };
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held = () => {};
+    const holding = new Promise<void>((resolve) => {
+      held = resolve;
+    });
+
+    // The debit holds the wallet's lock before it posts, as the API's write paths do.
+    const first = db.transaction(async (tx) => {
+      await tx
+        .select({ id: ledgerAccounts.id })
+        .from(ledgerAccounts)
+        .where(eq(ledgerAccounts.id, wallet))
+        .for('update');
+      held();
+      await released;
+      return postJournal(tx, debit);
+    });
+    await holding;
+    const second = post(credit);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    release();
+    const [debited, credited] = await Promise.all([first, second]);
+
+    const position = async (journalId: string) => {
+      const [row] = await db
+        .select({ position: ledgerPostings.position })
+        .from(ledgerPostings)
+        .where(and(eq(ledgerPostings.journalId, journalId), eq(ledgerPostings.accountId, wallet)));
+      return Number(row?.position);
+    };
+    expect(await position(credited.journalId)).toBeGreaterThan(await position(debited.journalId));
+    expect(await walletBalanceAfter(db, wallet, debited.journalId)).toBe(0);
+    expect(await balance(wallet)).toBe(5 * DOLLAR);
+  });
+});
+
+describe('postJournal wallet ceiling', () => {
+  it('refuses a credit past the safe integer range and writes nothing (audit A3)', async () => {
+    const top = Number.MAX_SAFE_INTEGER - (Number.MAX_SAFE_INTEGER % 10_000);
+    const wallet = await account('customer_wallet');
+    const receipts = await account('sham_cash_receipts');
+    const deposit = (units: number): JournalInput => ({
+      idempotencyKey: newKey(),
+      kind: 'deposit',
+      postings: [
+        { accountId: wallet, amountUnits: units },
+        { accountId: receipts, amountUnits: -units },
+      ],
+    });
+    // Rolled back: a wallet this large left in the test database would push the ledger
+    // summary's totals past the safe range for every later run.
+    const rollback = new Error('rollback');
+    await expect(
+      db.transaction(async (tx) => {
+        await postJournal(tx, deposit(top));
+        const refusal = postJournal(tx, deposit(10_000));
+        await expect(refusal).rejects.toThrow('safe integer range');
+        await expect(refusal).rejects.not.toBeInstanceOf(LedgerError);
+        expect(await accountBalance(tx, wallet)).toBe(top);
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+    expect(await balance(wallet)).toBe(0);
   });
 });

@@ -22,7 +22,7 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { formatDateTime } from '../../lib/format';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { ConfirmAmountField } from '../wallet/adjustment-form';
 import { useReverseMovement } from './reconciliation.queries';
 import { money, placeLabel } from './reconciliation-labels';
@@ -55,7 +55,7 @@ export function ReverseMovementDialog({
 }) {
   const { t } = useTranslation();
   const reverse = useReverseMovement();
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const [confirmText, setConfirmText] = useState('');
   const [forceConfirm, setForceConfirm] = useState(false);
   const [errors, setErrors] = useState<TreasuryFieldErrors>({});
@@ -87,7 +87,7 @@ export function ReverseMovementDialog({
 
     const body: ReverseTreasuryMovement = parsed.data;
     try {
-      await reverse.mutateAsync({ id: movement.id, body, key: keyFor(body) });
+      await send(body, (key) => reverse.mutateAsync({ id: movement.id, body, key }));
       onDone();
     } catch (error) {
       const shown = treasuryFailure(t, error, FIELDS);

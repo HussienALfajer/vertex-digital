@@ -32,7 +32,7 @@ import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { rerouteOptionsQuery, useFulfilOrder, useUploadProof } from './orders.queries';
 
 type FieldName = 'quantity' | 'codes' | 'cost' | 'acceptLoss' | 'proof' | 'reference' | 'reason';
@@ -60,7 +60,7 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
   )?.unitCostUsdUnits;
   const fulfil = useFulfilOrder(order.id);
   const upload = useUploadProof(order.id);
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const fileInput = useRef<HTMLInputElement>(null);
   const lossId = useId();
   const [quantity, setQuantity] = useState(String(units));
@@ -144,7 +144,7 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
     setErrors(next);
     if (!parsed.success || Object.values(next).some(Boolean)) return focusInvalid();
     try {
-      await fulfil.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
+      await send(parsed.data, (key) => fulfil.mutateAsync({ body: parsed.data, key }));
       onDone();
     } catch (error) {
       setFailure(errorMessage(t, error));

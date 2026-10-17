@@ -32,7 +32,7 @@ import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { actorLabel } from '../audit/audit-labels';
 import { CustomerMarks } from '../customers/customer-marks';
 import { STATUS_TONES as DEPOSIT_TONES } from '../deposits/deposit-labels';
@@ -230,7 +230,7 @@ function MessageBubble({ ticket, message }: { ticket: AdminTicket; message: Tick
  */
 function ReplyBox({ ticket }: { ticket: AdminTicket }) {
   const { t } = useTranslation();
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const sent = useRef(0);
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<File[]>([]);
@@ -251,13 +251,13 @@ function ReplyBox({ ticket }: { ticket: AdminTicket }) {
     const parsed = ticketMessageSchema.safeParse({ body: text });
     setInvalid(!parsed.success);
     if (!parsed.success) return focusInvalid();
-    const key = keyFor({
+    const signature = {
       sent: sent.current,
       body: parsed.data.body,
       files: files.map((file) => [file.name, file.size, file.lastModified]),
-    });
+    };
     try {
-      await reply.mutateAsync({ body: parsed.data, files, key });
+      await send(signature, (key) => reply.mutateAsync({ body: parsed.data, files, key }));
     } catch (error) {
       setFailure(errorMessage(t, error));
     }
