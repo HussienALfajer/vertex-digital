@@ -1111,4 +1111,4 @@ Result: ✅ (2026-10-16)
 | Cases passed | 13 of 13 |
 | Findings | F5-1 (step error, the empty-list text made clearer), F5-2 (USDT mismatch line) fixed, F5-3 accepted (the TXID states rest on the automated tests), F5-4 and F5-5 owner questions answered, no change; F5-6 the wallet-style QR (owner request); F5-7 to F5-14 from an external audit by another model (GPT 6.1 sol, review only), each confirmed in the code and fixed: two blockers (F5-7 a cross-network double credit, F5-8 a provider key reaching Sentry), three major, three minor |
 | Accepted by the owner on | 2026-10-16; the audit fixes accepted by Claude on 2026-10-17 (every check green, the reviewer's findings closed) |
-| PR | the steps (#115); the results and the first fixes (#116); the wallet-style QR and the external audit's fixes (F5-6 to F5-14) in the next PR |
+| PR | the steps (#115); the results and the first fixes (#116); the wallet-style QR and the external audit's fixes, F5-6 to F5-14 (#117), merged and deployed to production on 2026-10-17 (`c00576e`) |
