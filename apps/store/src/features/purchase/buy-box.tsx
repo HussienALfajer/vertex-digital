@@ -58,7 +58,7 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { attemptKey, clearAttempt } from './attempt';
+import { sendAttempt } from './attempt';
 import { useBalance, usePurchasesStopped } from './customer';
 import { clearDraft, readDraft, saveDraft } from './draft';
 import { FieldInput } from './field-input';
@@ -110,22 +110,31 @@ function useSavedPlayers(enabled: boolean): Saved {
 }
 
 /**
- * The purchase's refusals decided after the API looked the key up and before anything is written
- * (rules O1–O6, PV8, RS2): no order holds the key, so the same body may go with a new one.
- * Anything else keeps the key, including a rate limit or a lost session: those are answered before
- * the key is looked up, so the first request may still have paid.
+ * The purchase's refusals decided after the API looked the key up (rules O1–O6, PV8, RS2): no
+ * order holds the key, so the same body may go with a new one. `IDEMPOTENCY_KEY_REUSED` too: the
+ * key's first request was written and the customer is told to check their orders, so a new slide
+ * is a new purchase (F6-14).
  */
-const REFUSED_BEFORE_PAYMENT: ReadonlySet<Failure> = new Set<Failure>([
+const REFUSED_AFTER_LOOKUP: ReadonlySet<Failure> = new Set<Failure>([
   'PRICE_CHANGED',
   'PRODUCT_UNAVAILABLE',
   'INSUFFICIENT_BALANCE',
   'PLAYER_NOT_CONFIRMED',
-  'VALIDATION_FAILED',
   'PURCHASES_STOPPED',
   'RESERVATIONS_LIMIT_REACHED',
-  'IDEMPOTENCY_KEY_REUSED',
   'NOT_FOUND',
+  'IDEMPOTENCY_KEY_REUSED',
 ]);
+
+/**
+ * Whether a refusal frees the key. `VALIDATION_FAILED` may come before the lookup (the body's
+ * schema) or after it, so it frees the key only when no earlier answer was lost. Anything else
+ * keeps the key, including a rate limit or a lost session: those are answered before the key is
+ * looked up, so the first request may still have paid (F6-14).
+ */
+function freesKey(reason: Failure, unsettled: boolean): boolean {
+  return REFUSED_AFTER_LOOKUP.has(reason) || (reason === 'VALIDATION_FAILED' && !unsettled);
+}
 
 type Sending =
   | { status: 'idle' }
@@ -487,22 +496,24 @@ export function BuyBox({
   }
 
   async function send(body: CreateOrder) {
-    const sent = JSON.stringify(body);
     // One `Idempotency-Key` per request body, kept in session storage: a retry of the same body
-    // after a lost answer gets the first order back (rule BB6), even after the box was reopened.
-    const key = attemptKey(product.id, sent);
+    // after a lost answer gets the first order back (rule BB6), even after the box was reopened,
+    // and an edited retry after a lost answer keeps the key, so it cannot pay twice (F6-14).
     lastBody.current = body;
     setSending({ status: 'sending' });
-    const result = await createOrder(body, key);
+    // Only a refusal known to come before the commit frees the key; any other answer (a lost
+    // one, a server error) may follow a paid order, so its retry must replay that order.
+    const result = await sendAttempt(
+      product.id,
+      JSON.stringify(body),
+      (key) => createOrder(body, key),
+      freesKey,
+    );
     if (result.ok) {
-      clearAttempt(product.id);
       clearDraft();
       router.push(`/orders/${result.data.id}`);
       return;
     }
-    // Only a refusal known to come before the commit frees the key; any other answer (a lost
-    // one, a server error) may follow a paid order, so its retry must replay that order.
-    if (REFUSED_BEFORE_PAYMENT.has(result.reason)) clearAttempt(product.id);
     refused(result.reason, result.details);
   }
 

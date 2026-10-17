@@ -14,10 +14,11 @@ import { Input } from '@vertex-digital/ui/components/input';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { NetworkIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useRef, useState } from 'react';
+import { type FormEvent, useState } from 'react';
 import { InvalidAlert } from '@/components/invalid-alert';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
+import { useIdempotentRequest } from '@/lib/idempotency';
 import {
   limitText,
   ONE_CENT_UNITS,
@@ -48,8 +49,9 @@ export function UsdtForm({
   const { ref, focusInvalid } = useFocusInvalid();
   const [busyAlternatives, setBusyAlternatives] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  // One `Idempotency-Key` per request body (rule U2, as S03 SC2).
-  const attempt = useRef<{ body: string; key: string } | null>(null);
+  // One `Idempotency-Key` per request body (rule U2, as S03 SC2), kept after a lost answer
+  // whatever the amount (F6-14).
+  const sendOnce = useIdempotentRequest();
 
   const units = parseDepositAmount('USD', text);
   const limits = options.limits;
@@ -74,10 +76,8 @@ export function UsdtForm({
     const breach = limits ? depositLimitBreach(limits, units) : null;
     if (breach) return refuse(limitText(breach));
     const body = { method, amountUnits: units };
-    const sent = JSON.stringify(body);
-    if (attempt.current?.body !== sent) attempt.current = { body: sent, key: crypto.randomUUID() };
     setSubmitting(true);
-    const result = await createUsdtDeposit(body, attempt.current.key);
+    const result = await sendOnce(JSON.stringify(body), (key) => createUsdtDeposit(body, key));
     if (result.ok) return router.push(`/wallet/deposits/${result.data.id}`);
     setSubmitting(false);
     if (result.reason === 'UNAUTHORIZED')
