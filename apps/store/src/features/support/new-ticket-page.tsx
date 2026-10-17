@@ -23,12 +23,13 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { InvalidAlert } from '@/components/invalid-alert';
 import { useCustomer } from '@/features/purchase/session';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
+import { useIdempotentRequest } from '@/lib/idempotency';
 import {
   attemptSignature,
   BODY_MAX,
@@ -100,7 +101,7 @@ export function NewTicketPage() {
   const [showErrors, setShowErrors] = useState(false);
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
-  const attempt = useRef<{ signature: string; key: string } | null>(null);
+  const sendOnce = useIdempotentRequest();
   const { ref, focusInvalid } = useFocusInvalid();
 
   useEffect(() => {
@@ -132,12 +133,10 @@ export function NewTicketPage() {
       subject: draft.subject.trim(),
       body: messageBody(draft.body, files.length, t('support.images.attached')),
     };
-    const signature = attemptSignature(fields, files);
-    if (attempt.current?.signature !== signature) {
-      attempt.current = { signature, key: crypto.randomUUID() };
-    }
     setSending(true);
-    const result = await openTicket(fields, files, attempt.current.key);
+    const result = await sendOnce(attemptSignature(fields, files), (key) =>
+      openTicket(fields, files, key),
+    );
     if (result.ok) {
       router.push(`/support/${result.data.id}`);
       return;

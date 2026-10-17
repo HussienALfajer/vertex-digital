@@ -22,12 +22,13 @@ import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import { ArrowRightIcon, CircleAlertIcon, ClockIcon, LockIcon, WalletIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { InvalidAlert } from '@/components/invalid-alert';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
+import { useIdempotentRequest } from '@/lib/idempotency';
 import { useSearchParam } from '@/lib/use-search-param';
 import {
   amountFromCentsParam,
@@ -258,8 +259,9 @@ function ShamCashForm({
   const { ref, focusInvalid } = useFocusInvalid();
   const [submitting, setSubmitting] = useState(false);
   // One `Idempotency-Key` per request body: a retry of the same amount after a lost answer
-  // returns the first deposit (rule SC2); a changed amount is a new attempt.
-  const attempt = useRef<{ body: string; key: string } | null>(null);
+  // returns the first deposit (rule SC2); a changed amount is a new attempt once an answer came
+  // back, never after a lost one (F6-14).
+  const sendOnce = useIdempotentRequest();
 
   const rate = options.rate;
   const units = parseDepositAmount(currency, text);
@@ -299,10 +301,8 @@ function ShamCashForm({
       : null;
     if (breach) return refuse(limitText(breach));
     const body = { currency, amountUnits: units };
-    const sent = JSON.stringify(body);
-    if (attempt.current?.body !== sent) attempt.current = { body: sent, key: crypto.randomUUID() };
     setSubmitting(true);
-    const result = await createShamCashDeposit(body, attempt.current.key);
+    const result = await sendOnce(JSON.stringify(body), (key) => createShamCashDeposit(body, key));
     if (result.ok) return router.push(`/wallet/deposits/${result.data.id}`);
     setSubmitting(false);
     if (result.reason === 'UNAUTHORIZED')

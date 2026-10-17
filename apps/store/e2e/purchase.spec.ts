@@ -300,6 +300,41 @@ test.describe('buy box', () => {
     expect(second?.headers['idempotency-key']).toBe(first?.headers['idempotency-key']);
   });
 
+  test('an edited retry after a server error keeps the key and is refused, not paid twice (F6-14)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on('POST /api/player-checks', 200, { result: 'not_supported' })
+      .on('POST /api/orders', 500, { statusCode: 500, code: 'INTERNAL_ERROR' });
+    await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
+    await idField(page).fill('51234567');
+    await buyBox(page).getByRole('button', { name: p.continue }).click();
+    await buyBox(page).getByRole('slider').focus();
+    await page.keyboard.press('End');
+    await expect(buyBox(page).getByRole('button', { name: p.retry })).toBeVisible();
+    const first = api.last('POST /api/orders');
+    // After a reload, another player ID: the first order may have been paid.
+    await page.reload();
+    await idField(page).fill('59876543');
+    await buyBox(page).getByRole('button', { name: p.continue }).click();
+    api.on('POST /api/orders', 409, { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+    await buyBox(page).getByRole('slider').focus();
+    await page.keyboard.press('End');
+    await expect(buyBox(page).getByText(ar.errors.IDEMPOTENCY_KEY_REUSED)).toBeVisible();
+    const second = api.last('POST /api/orders');
+    expect(second?.body).not.toEqual(first?.body);
+    expect(second?.headers['idempotency-key']).toBe(first?.headers['idempotency-key']);
+    // The customer was told the first was recorded: a new slide is a new purchase.
+    api.on('POST /api/orders', 201, order(p60)).on(`GET /api/orders/${ORDER_ID}`, 200, order(p60));
+    await buyBox(page).getByRole('slider').focus();
+    await page.keyboard.press('End');
+    await expect(page).toHaveURL(`/orders/${ORDER_ID}`);
+    expect(api.last('POST /api/orders')?.headers['idempotency-key']).not.toBe(
+      first?.headers['idempotency-key'],
+    );
+  });
+
   test('a rate limit after a lost answer keeps the key for the next slide (rule BB6)', async ({
     page,
     api,
