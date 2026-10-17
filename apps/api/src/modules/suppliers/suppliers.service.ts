@@ -85,7 +85,9 @@ import { SupplierAdaptersService } from './supplier-adapters.service.js';
 import { SupplierLiveService } from './supplier-live.service.js';
 import {
   auditSuppliers,
+  lockOffersToRoute,
   type OfferRow,
+  offerMaps,
   refusals,
   routeTakenRefusal,
   type SupplierRow,
@@ -564,22 +566,31 @@ export class SuppliersService {
     this.refuseRows(errors);
     const created = await this.db
       .transaction(async (tx) => {
+        // S16 SC6: an offer ignored (or gone) since the checks above is refused here.
+        const fresh = await lockOffersToRoute(tx, state.id, ids);
+        this.refuseRows(
+          input.rows.flatMap((row, index) => {
+            const error = importRowError(fresh.get(row.offerId), mappedIds, input, selects);
+            return error ? [{ index, ...error }] : [];
+          }),
+        );
+        const offerAt = (index: number) => fresh.get(input.rows[index]?.offerId ?? '') as OfferRow;
         const products = await this.items.importProductsIn(
           tx,
           actor,
           game.id,
-          input.rows.map((row) => {
-            const offer = offerOf.get(row.offerId) as OfferRow;
-            return { nameAr: row.nameAr, kind: offer.kind ?? input.kind ?? 'direct' };
-          }),
+          input.rows.map((row, index) => ({
+            nameAr: row.nameAr,
+            kind: offerAt(index).kind ?? input.kind ?? 'direct',
+          })),
         );
+        // Rule RT8: each route keeps only the fields its own offer asks for (`offerMaps`).
         const routes = products.map((product, index) => ({
           id: newId(),
           productId: product.id,
           supplierId: state.id,
-          offerId: input.rows[index]?.offerId as string,
-          fieldMap: input.fieldMap,
-          optionMap: input.optionMap,
+          offerId: offerAt(index).id,
+          ...offerMaps(offerAt(index), input),
         }));
         await tx.insert(productRoutes).values(routes);
         for (const route of routes) {

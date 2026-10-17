@@ -2,16 +2,18 @@ import type {
   AuditAction,
   AuditDetails,
   AuditEntityType,
+  OptionMap,
   SupplierCode,
   SyncRun,
 } from '@vertex-digital/contracts';
 import {
   recordAudit,
-  type supplierOffers,
+  supplierOffers,
   type supplierSyncRuns,
   type suppliers,
   type Transaction,
 } from '@vertex-digital/db';
+import { and, eq, inArray } from 'drizzle-orm';
 import { violatedConstraint } from '../../core/database/unique-violation.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { Actor } from '../catalog/index.js';
@@ -78,6 +80,48 @@ export function routeTakenRefusal(error: unknown): CodedException | null {
     return new CodedException(409, 'OFFER_ALREADY_MAPPED', 'The offer serves another product');
   }
   return null;
+}
+
+/**
+ * A batch's field and option maps limited to one offer's own fields (rules RT3, RT8, S16 MF2), all
+ * of them when the offer does not publish its fields: a supplier is never sent a field it did not
+ * ask for, and an adapter choosing among the account fields it is sent (WDGZone) never takes the
+ * one another offer of the batch asked for.
+ */
+export function offerMaps(
+  offer: Pick<OfferRow, 'requiredFields'>,
+  maps: { fieldMap: Readonly<Record<string, string>>; optionMap: OptionMap },
+): { fieldMap: Record<string, string>; optionMap: OptionMap } {
+  const own = new Set(offer.requiredFields ?? Object.keys(maps.fieldMap));
+  const mine = <Value>(map: Readonly<Record<string, Value>>) =>
+    Object.fromEntries(Object.entries(map).filter(([key]) => own.has(key)));
+  return { fieldMap: mine(maps.fieldMap), optionMap: mine(maps.optionMap) };
+}
+
+/**
+ * The supplier's offers a write is about to route, read again inside its transaction `FOR KEY SHARE`, the
+ * lock the route's foreign key takes anyway (a sync holding them `FOR NO KEY UPDATE` never waits
+ * on it). An ignore locks its offer `FOR UPDATE`, then looks for a route: it either waits for this
+ * write and finds its route, or is seen by it here (S16 SC6–SC8). Checked again by the caller.
+ */
+export async function lockOffersToRoute(
+  tx: Transaction,
+  supplierId: string,
+  ids: readonly string[],
+): Promise<Map<string, OfferRow>> {
+  if (ids.length === 0) return new Map();
+  const rows = await tx
+    .select()
+    .from(supplierOffers)
+    .where(
+      and(
+        eq(supplierOffers.supplierId, supplierId),
+        inArray(supplierOffers.id, [...new Set(ids)].sort()),
+      ),
+    )
+    .orderBy(supplierOffers.id)
+    .for('key share');
+  return new Map(rows.map((row) => [row.id, row]));
 }
 
 /** The audit entry of an admin change to suppliers, routes or the policy, in its transaction. */

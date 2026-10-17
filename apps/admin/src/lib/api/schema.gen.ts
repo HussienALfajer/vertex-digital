@@ -7204,7 +7204,7 @@ export interface components {
         /** @enum {string} */
         RouteTier: "healthy" | "degraded" | "manual";
         /** @enum {string} */
-        RouteUnusableReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "offer_unsupported" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low";
+        RouteUnusableReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "offer_unsupported" | "kind_mismatch" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low";
         CreateRoute: {
             /** Format: uuid */
             offerId: string;
@@ -7983,7 +7983,7 @@ export interface components {
             skipReason: components["schemas"]["RouteSkipReason"] | null;
         };
         /** @enum {string} */
-        RouteSkipReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "offer_unsupported" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low" | "test_customer" | "already_tried" | "unprofitable" | "balance_below_order";
+        RouteSkipReason: "archived" | "disabled" | "supplier_unavailable" | "supplier_not_configured" | "supplier_paused" | "supplier_down" | "offer_missing" | "offer_unsupported" | "kind_mismatch" | "out_of_stock" | "cost_unknown" | "cost_stale" | "fields_incomplete" | "balance_low" | "test_customer" | "already_tried" | "unprofitable" | "balance_below_order";
         /** @enum {string} */
         AttemptResolver: "supplier" | "poll" | "webhook" | "admin";
         /** @enum {string} */

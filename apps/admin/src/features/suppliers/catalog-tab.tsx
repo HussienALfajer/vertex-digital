@@ -132,6 +132,8 @@ export function CatalogTab({
       )}
       {search.node && (
         <CategoryPacks
+          // Another node starts at its first page: an earlier node's page may not exist in it.
+          key={`${supplier.code}:${search.node}`}
           supplier={supplier}
           categoryId={search.node}
           onClose={() => onSearch({ ...search, node: undefined })}

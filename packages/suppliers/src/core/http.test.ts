@@ -126,6 +126,44 @@ describe('SupplierHttp', () => {
   });
 });
 
+describe('SupplierHttp redirects', () => {
+  it('follows a read to the same origin, with the credentials', async () => {
+    server.reply(
+      { status: 301, headers: { location: '/api/v1/balance/' } },
+      { body: { balance: '3.00' } },
+    );
+    const before = server.requests.length;
+    const result = await http.request({ method: 'GET', path: 'balance', schema: balanceSchema });
+    expect(result).toEqual({ balance: '3.00' });
+    const sent = server.requests.slice(before);
+    expect(sent.map((request) => request.path)).toEqual(['/api/v1/balance', '/api/v1/balance/']);
+    expect(sent[1]?.headers).toMatchObject({ authorization: 'Bearer test-key' });
+  });
+
+  it('never carries the credentials to another origin', async () => {
+    server.reply({ status: 302, headers: { location: 'http://127.0.0.2:9/steal' } });
+    const error = await failure(
+      http.request({ method: 'GET', path: 'balance', schema: balanceSchema }),
+    );
+    expect(error).toMatchObject({ kind: 'retryable', details: { status: 302 } });
+  });
+
+  it('refuses a redirected order (its outcome stays unknown) and a redirect without end', async () => {
+    server.reply({ status: 307, headers: { location: '/api/v1/orders/2' } });
+    const order = await failure(
+      http.request({ method: 'POST', path: 'orders', body: {}, schema: balanceSchema }),
+    );
+    expect(outcomeOfOrderError(order).status).toBe('unknown');
+    server.reply({ status: 302, headers: { location: '/api/v1/loop' } });
+    const before = server.requests.length;
+    const loop = await failure(
+      http.request({ method: 'GET', path: 'loop', schema: balanceSchema }),
+    );
+    expect(loop.kind).toBe('retryable');
+    expect(server.requests.length - before).toBe(4);
+  });
+});
+
 describe('outcomeOfOrderError', () => {
   it('fails an order only on a definitive refusal', () => {
     expect(

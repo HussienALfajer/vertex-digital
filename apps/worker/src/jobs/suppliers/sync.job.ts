@@ -38,6 +38,7 @@ import {
   type SupplierState,
   supplierCategories,
   supplierCostChanges,
+  supplierCredentials,
   supplierOffers,
   supplierStates,
   supplierSyncRuns,
@@ -293,6 +294,20 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
     await this.closeAbandoned(db, supplier.id, payload.runId);
     const run = await this.start(db, supplier.id, payload);
     if (!run) return null;
+    const tested = await this.newestCredentialId(db, supplier.id);
+    try {
+      return await this.runWith(db, supplier, run);
+    } finally {
+      await this.testReplacedCredentials(db, supplier, tested);
+    }
+  }
+
+  /** The run's reads and writes, then its close; throws after closing it on an internal fault. */
+  private async runWith(
+    db: Executor,
+    supplier: SupplierState,
+    run: SyncRunRow,
+  ): Promise<SyncRunRow | null> {
     if (!supplier.configured) {
       return this.fail(db, supplier, run, 'SUPPLIER_NOT_CONFIGURED', 'No credentials');
     }
@@ -341,6 +356,39 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       await this.fail(db, supplier, run, 'INTERNAL', message);
       throw new Error(`Sync ${run.id} failed: ${message}`);
     }
+  }
+
+  private async newestCredentialId(db: Executor, supplierId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ id: supplierCredentials.id })
+      .from(supplierCredentials)
+      .where(eq(supplierCredentials.supplierId, supplierId))
+      .orderBy(desc(supplierCredentials.createdAt), desc(supplierCredentials.id))
+      .limit(1);
+    return row?.id ?? null;
+  }
+
+  /**
+   * Rule SP2: keys saved while a run was reading are tested by that run's success only if it used
+   * them. The API hands such a save the running run (one runs at a time), which read with the keys
+   * before; so once it closes, newer keys get an `admin` run of their own, their connection test.
+   */
+  private async testReplacedCredentials(
+    db: Executor,
+    supplier: SupplierState,
+    tested: string | null,
+  ): Promise<void> {
+    const newest = await this.newestCredentialId(db, supplier.id);
+    if (newest === null || newest === tested) return;
+    const payload: SuppliersSyncPayload = {
+      supplierId: supplier.id,
+      supplierCode: supplier.code,
+      trigger: 'admin',
+    };
+    await db.transaction((tx) =>
+      bossJobSender(this.pgBoss.boss).send(tx, QUEUES.suppliersSync, payload),
+    );
+    this.logger.log(`Credentials of ${supplier.code} replaced during a run: testing them`);
   }
 
   /** Runs left `running` over 10 minutes by a crash, but the payload's own (rule SY1). */

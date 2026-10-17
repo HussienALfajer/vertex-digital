@@ -46,7 +46,14 @@ import { CodedException } from '../../core/errors/index.js';
 import { type Actor, CatalogItemsService, CatalogService, mapTaken } from '../catalog/index.js';
 import { PricingService } from '../pricing/index.js';
 import { SupplierLiveService } from './supplier-live.service.js';
-import { auditSuppliers, type OfferRow, refusals, routeTakenRefusal } from './supplier-records.js';
+import {
+  auditSuppliers,
+  lockOffersToRoute,
+  type OfferRow,
+  offerMaps,
+  refusals,
+  routeTakenRefusal,
+} from './supplier-records.js';
 
 /*
  * The supplier catalog (S16 rules SC4–SC14): the category tree with its states, the import of a
@@ -814,7 +821,9 @@ export class SupplierCatalogService {
 
   /**
    * One enabled route per target (rules RT1–RT3), its field and option maps limited to the
-   * offer's own fields so a supplier is never sent a field it did not ask for; each audited.
+   * offer's own fields (`offerMaps`); each audited. The offers are read again under the lock an
+   * ignore waits on, so an offer ignored, gone or unsupported since the request's checks refuses
+   * its row (S16 SC6–SC8): targets are in the request's row order.
    */
   private async insertRoutes(
     tx: Transaction,
@@ -823,19 +832,25 @@ export class SupplierCatalogService {
     targets: readonly { productId: string; offer: OfferRow }[],
     maps: { fieldMap: Record<string, string>; optionMap: OptionMap },
   ): Promise<string[]> {
-    const routes = targets.map((target) => {
-      const required = target.offer.requiredFields ?? Object.keys(maps.fieldMap);
-      const own = <Value>(map: Record<string, Value>) =>
-        Object.fromEntries(Object.entries(map).filter(([key]) => required.includes(key)));
-      return {
-        id: newId(),
-        productId: target.productId,
-        supplierId: supplier.id,
-        offerId: target.offer.id,
-        fieldMap: own(maps.fieldMap),
-        optionMap: own(maps.optionMap),
-      };
-    });
+    const fresh = await lockOffersToRoute(
+      tx,
+      supplier.id,
+      targets.map((target) => target.offer.id),
+    );
+    refuseRows(
+      targets.flatMap((target, index) => {
+        const offer = fresh.get(target.offer.id);
+        const code = offer ? packRefusal(offer, new Set()) : 'NOT_FOUND';
+        return code ? [{ index, code }] : [];
+      }),
+    );
+    const routes = targets.map((target) => ({
+      id: newId(),
+      productId: target.productId,
+      supplierId: supplier.id,
+      offerId: target.offer.id,
+      ...offerMaps(target.offer, maps),
+    }));
     if (routes.length === 0) return [];
     await tx.insert(productRoutes).values(routes);
     for (const route of routes) {

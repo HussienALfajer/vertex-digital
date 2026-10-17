@@ -143,7 +143,9 @@ export class RoutesService {
         .select({ offer: supplierOffers, supplierCode: suppliers.code })
         .from(supplierOffers)
         .innerJoin(suppliers, eq(suppliers.id, supplierOffers.supplierId))
-        .where(eq(supplierOffers.id, input.offerId));
+        .where(eq(supplierOffers.id, input.offerId))
+        // The lock an ignore waits on (S16 SC6): an offer ignored meanwhile is seen below.
+        .for('key share', { of: supplierOffers });
       if (!found) throw refusals.notFound('offer');
       const { offer, supplierCode } = found;
       // A manual offer carries a cost the admin set for its own product (rule RT7): it is added
