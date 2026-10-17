@@ -26,7 +26,7 @@ import {
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { ConfirmAmountField } from '../wallet/adjustment-form';
 import { useCreateCorrection } from './reconciliation.queries';
 import { placeLabel } from './reconciliation-labels';
@@ -61,7 +61,7 @@ export function CorrectionDialog({
 }) {
   const { t } = useTranslation();
   const correct = useCreateCorrection();
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const place = supplierPlace(supplier);
   const [direction, setDirection] = useState<SupplierCorrectionDirection>('decrease');
   const [amountText, setAmountText] = useState('');
@@ -103,7 +103,7 @@ export function CorrectionDialog({
 
     const request: CreateSupplierCorrection = parsed.data;
     try {
-      await correct.mutateAsync({ body: request, key: keyFor(request) });
+      await send(request, (key) => correct.mutateAsync({ body: request, key }));
       onDone();
     } catch (error) {
       const shown = treasuryFailure(t, error, FIELDS);

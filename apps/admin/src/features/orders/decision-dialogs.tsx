@@ -25,7 +25,7 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { usePollAttempt, useRefundOrder, useResolveAttempt } from './orders.queries';
 
 /** The four decisions of rule D1, each its own dialog. */
@@ -55,7 +55,7 @@ export function DecisionDialog({
   const poll = usePollAttempt(order.id);
   const resolve = useResolveAttempt(order.id);
   const refund = useRefundOrder(order.id);
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<string | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
@@ -76,7 +76,7 @@ export function DecisionDialog({
         const parsed = refundOrderSchema.safeParse({ reason });
         setErrors({ reason: !parsed.success });
         if (!parsed.success) return focusInvalid();
-        await refund.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
+        await send(parsed.data, (key) => refund.mutateAsync({ body: parsed.data, key }));
       } else {
         const quantity = Number(String(form.get('quantity') ?? units).trim());
         const codes = String(form.get('codes') ?? '')
@@ -99,7 +99,7 @@ export function DecisionDialog({
           codes: paths.has('codes') || codesWrong,
         });
         if (!parsed.success || quantityWrong || codesWrong) return focusInvalid();
-        await resolve.mutateAsync({ attemptId, body, key: keyFor(body) });
+        await send(body, (key) => resolve.mutateAsync({ attemptId, body, key }));
       }
       onDone();
     } catch (error) {

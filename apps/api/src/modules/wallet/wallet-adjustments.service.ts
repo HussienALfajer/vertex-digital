@@ -113,8 +113,12 @@ export class WalletAdjustmentsService {
     input: CreateAdjustment & { reason: string },
     meta: RequestMeta,
   ): Promise<Written> {
+    const customer = isUuid(customerId) ? await this.customers.walletCustomer(customerId) : null;
+    if (!customer) throw new CodedException(404, 'NOT_FOUND', 'No such customer');
+    // The stored id, not the path's spelling: a wallet created from an upper-case id would hold a
+    // code no read finds (audit A2).
     const request: AdjustmentRequest = {
-      customerId,
+      customerId: customer.id,
       direction: input.direction,
       amountUnits: input.amountUnits,
       category: input.category,
@@ -127,8 +131,6 @@ export class WalletAdjustmentsService {
     const replayed = await this.replay(idempotencyKey, request);
     if (replayed) return replayed;
 
-    const customer = isUuid(customerId) ? await this.customers.walletCustomer(customerId) : null;
-    if (!customer) throw new CodedException(404, 'NOT_FOUND', 'No such customer');
     this.checkConfirmation(input.amountUnits, input.amountConfirmationUnits);
     if (input.category === 'test_funds' && !customer.isTest) {
       throw new CodedException(

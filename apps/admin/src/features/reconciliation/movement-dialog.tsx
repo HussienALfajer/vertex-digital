@@ -37,7 +37,7 @@ import {
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { ConfirmAmountField } from '../wallet/adjustment-form';
 import { useCreateMovement } from './reconciliation.queries';
 import { money, placeLabel } from './reconciliation-labels';
@@ -111,7 +111,7 @@ export function MovementDialog({
 }) {
   const { t } = useTranslation();
   const create = useCreateMovement();
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   // Rule T6: a place without an opening proposes one; the outside takes none.
   const opening = place !== null && !place.openingRecorded && !isOutsidePlace(place.place);
   const initial = place && opening ? openingAmounts(place) : { sent: '', received: '' };
@@ -204,7 +204,7 @@ export function MovementDialog({
 
     const request: CreateTreasuryMovement = parsed.data;
     try {
-      await create.mutateAsync({ body: request, key: keyFor(request) });
+      await send(request, (key) => create.mutateAsync({ body: request, key }));
       onDone();
     } catch (error) {
       const shown = treasuryFailure(t, error, FIELDS);

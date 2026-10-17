@@ -48,9 +48,10 @@ interface Line extends PostingInput {
  * - The idempotency key is claimed first. A key already posted with the same kind and postings
  *   returns that journal with `created: false`; with other content it is refused
  *   (`IDEMPOTENCY_KEY_REUSED`).
- * - Every customer wallet the journal takes from is locked (`FOR UPDATE`, in id order, so parallel
- *   debits queue instead of deadlocking) and its balance checked: a wallet never goes below zero
- *   (`INSUFFICIENT_BALANCE`).
+ * - Every customer wallet the journal touches is locked (`FOR UPDATE`, in id order, so parallel
+ *   journals queue instead of deadlocking) before its postings draw their write position, and its
+ *   balance checked: a wallet never goes below zero (`INSUFFICIENT_BALANCE`), nor above the safe
+ *   integer range the balance is read in (an `Error`: no real wallet holds $9 billion, audit A3).
  */
 export async function postJournal(tx: Transaction, input: JournalInput): Promise<PostedJournal> {
   checkShape(input);
@@ -127,31 +128,34 @@ async function checkWallets(tx: Transaction, lines: readonly Line[]): Promise<vo
     if (line.kind !== 'customer_wallet') continue;
     changes.set(line.accountId, (changes.get(line.accountId) ?? 0n) + BigInt(line.amountUnits));
   }
+  if (changes.size === 0) return;
   const debits = [...changes].filter(([, change]) => change < 0n);
-  if (debits.length === 0) return;
 
   // Under REPEATABLE READ the balance below would come from a snapshot taken before the lock,
   // missing the debits that queued ahead of this one.
-  const isolation = await tx.execute<{ level: string }>(
-    sql`select current_setting('transaction_isolation') as level`,
-  );
-  if (isolation.rows[0]?.level !== 'read committed') {
-    throw new Error('postJournal needs a READ COMMITTED transaction to debit a wallet');
+  if (debits.length > 0) {
+    const isolation = await tx.execute<{ level: string }>(
+      sql`select current_setting('transaction_isolation') as level`,
+    );
+    if (isolation.rows[0]?.level !== 'read committed') {
+      throw new Error('postJournal needs a READ COMMITTED transaction to debit a wallet');
+    }
   }
 
+  // Every wallet the journal touches, credits too: the postings' `position` (the timeline's write
+  // order) is drawn at insert, so a credit that did not wait here could draw a position before a
+  // debit holding the lock, then commit after it and change that debit's balance after (audit A4).
   await tx
     .select({ id: ledgerAccounts.id })
     .from(ledgerAccounts)
-    .where(
-      inArray(
-        ledgerAccounts.id,
-        debits.map(([accountId]) => accountId),
-      ),
-    )
+    .where(inArray(ledgerAccounts.id, [...changes.keys()]))
     .orderBy(ledgerAccounts.id)
     .for('update');
-  for (const [accountId, change] of debits) {
+  for (const [accountId, change] of changes) {
     const balance = await accountBalance(tx, accountId);
+    if (BigInt(balance) + change > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error(`Wallet ${accountId} would hold more than the safe integer range`);
+    }
     if (BigInt(balance) + change < 0n) {
       throw new LedgerError(
         'INSUFFICIENT_BALANCE',

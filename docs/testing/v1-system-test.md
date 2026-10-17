@@ -39,7 +39,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | 3 | Exchange rate and SYP display | F04 | SYP deposits and every SYP price depend on it | Accepted 2026-10-15 |
 | 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | Accepted 2026-10-16 (4.12 step 2 on 2026-10-17) |
 | 5 | USDT deposits | F06 | The automatic money-in path | Accepted 2026-10-16 |
-| 6 | Wallet and ledger | F03 | Checked once real deposits exist: balances as sums, history, journals | Steps written 2026-10-17 |
+| 6 | Wallet and ledger | F03 | Checked once real deposits exist: balances as sums, history, journals | Accepted 2026-10-17 |
 | 7 | Catalog | F08 | What is sold: games, packs, fields, images, states | — |
 | 8 | Pricing engine | F10 | Prices, margins, review queue, loss guard | — |
 | 9 | Suppliers | F09 | Sync, health, balance, routes, supplier catalog browser, stock | — |
@@ -132,6 +132,18 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F5-13 | 5 | External audit A7 | The new QR had no quiet zone of its own (`marginSize` 0): the label and frame edge sat closer than the four modules the standard asks | minor | Four modules of white inside the QR itself, the mark 18% of the whole (about 5% of the code's area) (`usdt-qr.tsx`); screenshots. A real wallet camera scan on both networks is still to be done on production | Fixed |
 | F5-14 | 5 | External audit A8 | The admin E2E listed the reviewed deposit as its own candidate, which the API never returns (F5-1) | minor | The fixture lists another customer's deposit; the test checks the deposit is not its own candidate and the empty text "لا إيداعات أخرى مرشحة." | Fixed |
 | F6-1 | 6 | Writing the steps (6.3) | The ledger summary's "الحسابات النظامية" formats every balance with `formatUsd` (`wallets-page.tsx`), whatever the account's currency: `sham_cash_receipts:SYP` at −2,100 ل.س (−210,000 units) would read "-$0.21", and `currency_exchange:SYP` "$0.21" | minor | Each balance is shown in its account's currency with the reconciliation page's `money()` (`−2,100 ل.س`, USD keeping its sub-cent digits); E2E with the deposit accounts in the summary and the screenshots | Fixed (#120), deployed to production on 2026-10-17 (`d5cad4d`) |
+| F6-2 | 6 | Before you start | The worked numbers were written from the plan of features 4 and 5, not from what the run recorded: TC1 holds **8** credits and **$28.98** (USDT A was a $2.00 deposit, a second BEP20 deposit with a pasted TXID was credited, the manual deposit was $2.98), not 7 and $29.37; the books table missed the four accounts of the two walk-in admin orders of 2026-10-13 and 14 (`owner_drawings`, `sales_revenue`, `cost_of_goods`, `supplier_prepaid:wdgzone`). Found by a read-only production query (owner's request) before 6.1 | minor (steps) | The worked tables and the expected values of 6.1, 6.3, 6.4, 6.8, 6.9 and 6.12 rewritten from the production records, with this file's PR; the owner ran the corrected steps | Fixed |
+| F6-3 | 6 | Before you start (6.3) | The live check's customer of 2026-10-14 (the owner's own account, $4.50 from the two USDT transfers) is not marked as a test customer, so its balance counts under "للعملاء الحقيقيين" and will appear in feature 22's reports as a real customer's | minor | None yet: decide in feature 16 (customers administration) whether to mark it as a test customer or keep it as the first real one, before feature 22 | Open (follow-up) |
+| F6-4 | 6 | External audit A1 (GPT 6.1 sol, review only) | The panel's `Idempotency-Key` changed as soon as a field changed, even after an attempt with no answer: an adjustment written whose answer was lost, then retried with an edited note, was written a second time | blocker | `useIdempotentRequest()` (`apps/admin/src/lib/idempotency.ts`) keeps the key whatever changed after an attempt with no answer, a server fault or `IDEMPOTENCY_KEY_REUSED`, until an answer comes back; every money dialog of the panel uses it; the `IDEMPOTENCY_KEY_REUSED` text tells the admin the first request was recorded; unit tests in `idempotency.test.ts` | Fixed |
+| F6-5 | 6 | External audit A2 | A first credit sent with the customer id in capitals created `customer_wallet:<CAPITALS>`: the customer's reads found no wallet ($0.00), and later writes failed on the wallet's unique customer | major | `customerWalletCode` keeps the id lower-case, the wallet services use the stored id; API test with an upper-case first credit, its replay in lower case, the reads and the account's code; production holds no wallet code in capitals (read-only, 2026-10-17: 0 of 6), so no existing wallet changes | Fixed |
+| F6-6 | 6 | External audit A3 | Nothing kept a wallet's balance inside the safe integer range the API reads it in: a refund on a wallet near $9 billion would make it unreadable | minor (needs billions) | `postJournal` refuses any journal that takes a wallet above `Number.MAX_SAFE_INTEGER` units; no cap on adjustments (S02 J6: none, owner 2026-10-07); db test | Fixed |
+| F6-7 | 6 | External audit A4 | A credit did not wait for the wallet's lock: it could draw its write position before a debit holding the lock and commit after it, changing that debit's balance after on the timeline and its replay | major | `postJournal` locks every wallet a journal touches, credits too, before its postings draw their position; db test that holds the lock, starts a credit and checks the order (it fails without the fix: the credit's position came first) | Fixed |
+| F6-8 | 6 | External audit A5 | A search by phone or email (`?q=`) was written to the API's logs in the URL and the query, and in the `Referer` the panel sends with each call; Sentry events carried it too (ADR 0008: logs scrub phone numbers) | major | pino serializers and Sentry's `beforeSend` replace the values of `q` in the URL, the query and the `Referer` (`core/http/secret-headers.ts`); the panel sends only its origin as the referrer (`<meta name="referrer" content="strict-origin">`); log test. The nginx access log of the panel still records the API URL with `q` (follow-up for the next deploy session: a log format without the query, checked against the fail2ban filters) | Fixed (app); nginx follow-up |
+| F6-9 | 6 | External audit A6 | The store's balance chip and the buy box's balance did not read again after a refund, a reservation paid or an admin purchase on the customer's wallet | major | `isMoneyEvent` covers `order_refunded`, `order_partially_refunded`, `order_paid` and `order_placed_for_you`; unit test | Fixed |
+| F6-10 | 6 | External audit A7 | On the store's wallet page an older answer could replace a newer balance, and a next page asked for before a live refresh was added to the new list, skipping entries | major | Each full read starts a generation; answers of an older read and next pages of a replaced list are dropped | Fixed |
+| F6-11 | 6 | External audit A8 | In the panel, "انتقل إلى التعديل المرتبط" did nothing when the original sat on a page not loaded yet | minor | The link reads further pages until the row is there, then goes to it | Fixed |
+| F6-12 | 6 | External audit A9 | The ledger summary read the customer totals and the system accounts in two statements: a write between them made the summary look unbalanced | minor | One statement, one snapshot | Fixed |
+| F6-13 | 6 | External audit A10 | The wrong-session test did not cover a customer session on `/entries` and `/reverse` | minor | Both added, the reversal on a real adjustment | Fixed |
 | F6-14 | 6 | Checking A1 | The store's purchase, cart, deposit and ticket keys follow the same rule (a new key once the body changed, `features/purchase/attempt.ts`, `deposits/deposit-form.tsx`, `deposits/usdt-form.tsx`, `support/new-ticket-page.tsx`, `support/ticket-page.tsx`): a lost answer then an edited retry can buy or open twice | major | One rule in `apps/store/src/lib/idempotency.ts`: after no answer, a server fault or `IDEMPOTENCY_KEY_REUSED` the key stays whatever the body until a success (the buy box and the cart keep that state in session storage across reloads; after a lost answer they free the key only on a refusal decided after the API looked the key up, `IDEMPOTENCY_KEY_REUSED` included, never on one answered before it such as the body's schema or the email check); a new key only for a changed body after a clear refusal. `errors.IDEMPOTENCY_KEY_REUSED` now says the first attempt was recorded and to check orders, deposits or tickets before retrying. Unit tests per helper, E2E for the edited purchase | Fixed (#122) |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
@@ -1125,58 +1137,65 @@ Result: ✅ (2026-10-16)
 
 **Real money in this feature:** none. TC1's balance must not change: it holds the real deposits for features 11–14. Every adjustment here is on **TC2** (a test customer), and TC2 ends the feature at **$0.00** with every adjustment reversed (case 6.12), so feature 22's reconciliation sees only books entries that cancel out.
 
-**Worked numbers used below:** TC1's real credits, oldest first, from features 4 and 5:
+**Worked numbers used below:** TC1's real credits, oldest first, as production recorded them in features 4 and 5 (read-only query, 2026-10-17; see F6-2):
 
 | # | Entry | Label in the store | Credit | Balance after |
 |---|---|---|---|---|
-| 1 | 4.5, deposit A | "إيداع شام كاش", A's code, "700 ل.س بسعر 140" | +$5.00 | $5.00 |
-| 2 | 4.5b, deposit A2 | "إيداع شام كاش", A2's code, "700 ل.س بسعر 140" | +$5.00 | $10.00 |
-| 3 | 4.6, deposit B (1,000 declared, 700 received) | "إيداع شام كاش", B's code, "700 ل.س بسعر 140" | +$5.00 | $15.00 |
-| 4 | 5.3, USDT A | "إيداع USDT (TRC20)", its code | +$5.00 | $20.00 |
-| 5 | 5.4, USDT B | "إيداع USDT (BEP20)", its code | +$5.00 | $25.00 |
-| 6 | 5.7, USDT C (4.0056 asked, 3.0056 received) | "إيداع USDT (BEP20)", its code | **+$3.00** | $28.00 |
-| 7 | 5.8, manual deposit | "تعديل الرصيد" with "إيداع مسجَّل يدوياً" | +$1.37 | **$29.37** |
+| 1 | Sham Cash `VD-D7SF9` | "إيداع شام كاش", "700 ل.س بسعر 140" | +$5.00 | $5.00 |
+| 2 | Sham Cash A2 `VD-9SM7P` | "إيداع شام كاش", "700 ل.س بسعر 140" | +$5.00 | $10.00 |
+| 3 | Sham Cash B `VD-V65JB` (1,000 declared, 700 received) | "إيداع شام كاش", "700 ل.س بسعر 140" | +$5.00 | $15.00 |
+| 4 | USDT `VD-7ERCC`, 2.0036 received | "إيداع USDT (TRC20)" | +$2.00 | $17.00 |
+| 5 | USDT `VD-9R7RS`, 3.0005 received | "إيداع USDT (BEP20)" | +$3.00 | $20.00 |
+| 6 | USDT B `VD-7Q86J`, TXID pasted, 3.0004 received | "إيداع USDT (BEP20)" | +$3.00 | $23.00 |
+| 7 | USDT C `VD-PQSVH` (4.0056 asked, 3.0056 received) | "إيداع USDT (BEP20)" | **+$3.00** | $26.00 |
+| 8 | Manual deposit (5.8), USDT BEP20, the unmatched 2.9865 transfer | "تعديل الرصيد" with "إيداع مسجَّل يدوياً" | +$2.98 | **$28.98** |
 
-Row 6: a USDT approval credits what arrived, floored to the cent (U15), so 3.0056 is $3.00 and 0.0056 goes to the rounding account. Cases 5.7 and 5.8 expected $4.00 and $30.37 (written for a transfer $1 short of a $5 deposit), but the run recorded C as a $4.00 deposit with 3.0056 sent. If TC1's wallet shows **+$4.00** for C, or a balance of $30.37, stop: log a blocker (a credit above what arrived).
+Row 7: a USDT approval credits what arrived, floored to the cent (U15), so 3.0056 is $3.00 and 0.0056 goes to the rounding account. If TC1's wallet shows **+$4.00** for C, or a balance of $29.98, stop: log a blocker (a credit above what arrived).
 
-The books behind them (S03 M2, S04 M1, S02 M1; every journal balances per currency):
+The live check of 2026-10-14 (two USDT transfers, 1.5024 TRC20 `VD-GPC6H` and 3.0075 BEP20 `VD-AH2E7`) credited $1.50 and $3.00 to the owner's own account, which is **not** a test customer (F6-3): $4.50 under "للعملاء الحقيقيين". Two walk-in admin orders (2026-10-13 and 14, owner drawings, $0.99 each at a cost of $0.884) also posted to the books.
 
-| System account | Code | Expected balance from TC1's entries | Why |
+The books (S03 M2, S04 M1, S02 M1, S16; every journal balances per currency), as recorded before 6.5:
+
+| System account | Code | Expected balance | Why |
 |---|---|---|---|
 | مقبوضات شام كاش | `sham_cash_receipts:SYP` | −2,100 ل.س | The three 700 ل.س received |
 | صرف العملات | `currency_exchange:SYP` | +2,100 ل.س | The pounds converted |
 | صرف العملات | `currency_exchange:USD` | −$15.00 | The dollars they became |
-| مقبوضات USDT | `usdt_receipts:usdt_trc20` | −(A's exact amount) | 5.00xx |
-| مقبوضات USDT | `usdt_receipts:usdt_bep20` | −(B's exact amount + 3.0056) | 5.00yy and 3.0056 |
-| كسور الإيداع | `deposit_rounding:USD` | +(A's tail + B's tail + 0.0056) | The sub-cent parts kept by the store |
-| التعديلات | `adjustments:manual_deposit` | −$1.37 | The manual deposit of 5.8: it posts against its category, so its USDT is not in `usdt_receipts` |
+| مقبوضات USDT | `usdt_receipts:usdt_trc20` | −$3.5060 | 1.5024 (live check) + 2.0036 |
+| مقبوضات USDT | `usdt_receipts:usdt_bep20` | −$12.0140 | 3.0075 (live check) + 3.0005 + 3.0004 + 3.0056 |
+| كسور الإيداع | `deposit_rounding:USD` | +$0.0200 | 0.0024 + 0.0075 + 0.0036 + 0.0005 + 0.0004 + 0.0056 |
+| التعديلات | `adjustments:manual_deposit` | −$2.98 | The manual deposit of 5.8: it posts against its category, so its USDT is not in `usdt_receipts` |
+| — | `owner_drawings:USD` | −$1.98 | The two walk-in orders |
+| — | `sales_revenue:USD` | +$1.98 | The same orders |
+| — | `cost_of_goods:USD` | −$1.768 | Their supplier cost |
+| — | `supplier_prepaid:wdgzone` | +$1.768 | The same cost |
 
-The live check of 2026-10-14 (two USDT transfers, 1.5024 and 3.0075, "مُضاف" in "تحويلات USDT") credited a test customer before this test began: its amounts add to the USDT and rounding lines and to "لعملاء الاختبار". Note them in "Before you start".
+The USD rows add up to −$33.48 and the customer wallets to +$33.48 ($28.98 + $4.50).
 
 **Before you start**
 
 - The panel open on the PC (signed in), the store as TC1 in a second browser, the store as TC2 in a private window (TC3 in case 6.2 only), TC2's inbox, and your phone.
 - About 1 hour. Re-authentication lasts 5 minutes: cases 6.5 to 6.8 and 6.12 each do their saves in one sitting.
-- "سعر الصرف" (`/rates`): 140; write down the display step.
-- From each USDT deposit page of feature 5 in the panel (`/deposits/<id>`), write down A's and B's exact amounts (`5.00xx`) and their tails. From "تحويلات USDT" ("الكل"), write down the live check's two transfers: amount, network, and the customer and amount they were credited with.
+- "سعر الصرف" (`/rates`): 140, display step 1 ل.س.
+- The exact USDT amounts, the live check's transfers and the account states were read from production for the owner (read-only, 2026-10-17) and are in the tables above.
 - TC1: no deposit waiting, no order (purchases are feature 11). TC2: has never had a deposit or an adjustment (note its balance if it has). TC2's email preferences (`/account` → "الإشعارات") are all on.
 - Nothing is paused in the store switches (feature 21).
 
-**Not tested on production (by design):** 20 debits at once on one wallet, two first credits creating one account, two reversals or one idempotency key at the same instant, a debit racing a purchase (S02 money and concurrency tests); `UPDATE` or `DELETE` on ledger, adjustment and audit rows (database guard tests, for the app role and the owner); `test_funds` on a real customer (none exists before the pilot; the category is not offered for one, and an API test refuses it); a timeline longer than one page of 30 entries (TC1 has 7; paging is covered by the db and E2E tests); a reversal refused because the credit was spent (R4, needs a purchase). Purchases and refunds on the timeline are feature 11; the books against the real Sham Cash and USDT balances are feature 22.
+**Not tested on production (by design):** 20 debits at once on one wallet, two first credits creating one account, two reversals or one idempotency key at the same instant, a debit racing a purchase (S02 money and concurrency tests); `UPDATE` or `DELETE` on ledger, adjustment and audit rows (database guard tests, for the app role and the owner); `test_funds` on a real customer (none exists before the pilot; the category is not offered for one, and an API test refuses it); a timeline longer than one page of 30 entries (TC1 has 8; paging is covered by the db and E2E tests); a reversal refused because the credit was spent (R4, needs a purchase). Purchases and refunds on the timeline are feature 11; the books against the real Sham Cash and USDT balances are feature 22.
 
 ### 6.1 TC1's balance is the sum of its movements
 
 **What this checks:** the customer sees one number they can trust, and every dollar of it is explained by a movement they recognise.
 
-1. In the store as TC1, the header. Expected: the balance chip with the wallet icon and `$29.37`; it opens "المحفظة".
-2. "المحفظة". Expected: "رصيدك" `$29.37`; under it "≈ … ل.س" and "حسب سعر اليوم 140"; the buttons "إيداع" and "إيداعاتي".
-3. Check the SYP value: $29.37 × 140 = 4,111.80 ل.س, rounded **down** to the step you noted (4,111 with a step of 1, 4,110 with 5 or 10, 4,100 with 50 or 100). Expected: that value, never more than 4,111.
-4. "الحركات", newest first. Expected: exactly the seven rows of the worked table, in reverse order: the label, the reference code (left to right), for the Sham Cash rows "700 ل.س بسعر 140" (B too: what was received, not the 1,000 declared), the date and time, the amount in the success colour with `+`, and "الرصيد بعدها" as in the table ($29.37 on the newest, $5.00 on the oldest). No row for the rejected, cancelled or expired deposits: only credits move money.
-5. Add up the seven amounts yourself. Expected: $29.37, the balance of steps 1 and 2.
-6. The manual deposit row (newest). Expected: "تعديل الرصيد" with "إيداع مسجَّل يدوياً"; **no** TXID, internal reason or admin name (W6).
+1. In the store as TC1, the header. Expected: the balance chip with the wallet icon and `$28.98`; it opens "المحفظة".
+2. "المحفظة". Expected: "رصيدك" `$28.98`; under it "≈ … ل.س" and "حسب سعر اليوم 140"; the buttons "إيداع" and "إيداعاتي".
+3. Check the SYP value: $28.98 × 140 = 4,057.20 ل.س, rounded **down** to the step of 1. Expected: 4,057, never 4,058.
+4. "الحركات", newest first. Expected: exactly the eight rows of the worked table, in reverse order: the label, the reference code (left to right), for the Sham Cash rows "700 ل.س بسعر 140" (B too: what was received, not the 1,000 declared), the date and time, the amount in the success colour with `+`, and "الرصيد بعدها" as in the table ($28.98 on the newest, $5.00 on the oldest). No row for the rejected, cancelled or expired deposits: only credits move money.
+5. Add up the eight amounts yourself. Expected: $28.98, the balance of steps 1 and 2.
+6. The manual deposit row (newest). Expected: "تعديل الرصيد" with "إيداع مسجَّل يدوياً", `+$2.98`; **no** TXID, internal reason or admin name (W6).
 7. Reload the page, and open it on the phone. Expected: the same balance, order and running balances.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.2 A customer with no wallet yet (TC3)
 
@@ -1185,34 +1204,30 @@ Result:
 1. As TC3 (private window; TC3 has never been credited). Expected: the header chip `$0.00`.
 2. "المحفظة". Expected: "رصيدك" `$0.00`; "لا توجد حركات بعد" with the deposit button; no error.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.3 The ledger summary and the system accounts
 
 **What this checks:** the admin sees at a glance what the store owes its customers, and where the money behind each credit sits in the books.
 
 1. In the panel open "المحافظ". Expected: "ما يدين به المتجر للعملاء" with "للعملاء الحقيقيين", "لعملاء الاختبار" and "محافظ برصيد".
-2. Expected: "لعملاء الاختبار" = $29.37 (TC1) + what the live check credited; "للعملاء الحقيقيين" $0.00 unless a real customer exists (note it); "محافظ برصيد" the number of wallets above zero (TC1 and the live check's customer: 2, or 1 if that was TC1).
-3. Open "الحسابات النظامية". Expected: one row per account of the books table, with its Arabic kind, its code (left to right) and its balance, plus the live check's amounts on the USDT and rounding rows. Check each balance against your notes:
-   - `sham_cash_receipts:SYP` **−2,100 ل.س** and `currency_exchange:SYP` **2,100 ل.س**: amounts in pounds, not dollars (see F6-1).
-   - `currency_exchange:USD` −$15.00; `adjustments:manual_deposit` −$1.37 (and any live-check adjustment).
-   - `usdt_receipts:usdt_trc20` and `usdt_receipts:usdt_bep20`: minus the exact amounts received, with their four decimals.
-   - `deposit_rounding:USD`: the sum of the tails and 0.0056, with their four decimals.
-4. Check that the books balance: the USD rows (both `usdt_receipts`, `deposit_rounding`, `currency_exchange:USD`, every `adjustments:*`) plus step 2's two customer totals add up to exactly $0; the two SYP rows add up to 0 ل.س.
+2. Expected: "لعملاء الاختبار" $28.98 (TC1); "للعملاء الحقيقيين" $4.50 (the live check's customer, F6-3); "محافظ برصيد" 2.
+3. Open "الحسابات النظامية". Expected: the eleven rows of the books table, each with its Arabic kind, its code (left to right) and its balance as in the table: `sham_cash_receipts:SYP` **−2,100 ل.س** and `currency_exchange:SYP` **2,100 ل.س** in pounds, not dollars (F6-1); the USDT and rounding rows with their four decimals.
+4. Check that the books balance: the nine USD rows add up to −$33.48, and with step 2's two customer totals ($28.98 + $4.50) to exactly $0; the two SYP rows add up to 0 ل.س.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.4 TC1's wallet in the panel
 
 **What this checks:** the admin can explain every movement of a customer's wallet: which deposit, which transfer, who decided and why.
 
-1. In "المحافظ" search the first 3 letters of TC1's name, then the start of TC1's email, then the start of TC1's phone. Expected: TC1 found each time, with "تجريبي" and $29.37. Search `ab`: "اكتب 3 أحرف على الأقل."; search `zzzq`: "لا نتائج".
-2. Open TC1. Expected: name, email, phone, "تجريبي", the balance $29.37 and "≈ … ل.س بسعر 140" (the same SYP value as the store).
-3. "الحركات": the seven rows of 6.1, each with the time, the label, the signed amount and "الرصيد بعدها" as in the store. Each deposit row links its reference code to the deposit's page: open A2 and USDT C from here (each opens the right deposit), then come back.
-4. The manual deposit row. Expected: "إيداع مسجَّل يدوياً", "USDT (BEP20)" with 5.8's TXID (left to right, in full on hover), your internal reason of 5.8 under "السبب الداخلي" with "بواسطة <your name>", and the action "عكس". **Do not press it.**
+1. In "المحافظ" search the first 3 letters of TC1's name, then the start of TC1's email, then the start of TC1's phone. Expected: TC1 found each time, with "تجريبي" and $28.98. Search `ab`: "اكتب 3 أحرف على الأقل."; search `zzzq`: "لا نتائج".
+2. Open TC1. Expected: name, email, phone, "تجريبي", the balance $28.98 and "≈ … ل.س بسعر 140" (the same SYP value as the store).
+3. "الحركات": the eight rows of 6.1, each with the time, the label, the signed amount and "الرصيد بعدها" as in the store. Each deposit row links its reference code to the deposit's page: open A2 (`VD-9SM7P`) and USDT C (`VD-PQSVH`) from here (each opens the right deposit), then come back.
+4. The manual deposit row. Expected: "إيداع مسجَّل يدوياً", "USDT (BEP20)" with 5.8's TXID (left to right, in full on hover; copy it for 6.8), your internal reason of 5.8 under "السبب الداخلي" with "بواسطة <your name>", and the action "عكس". **Do not press it.**
 5. Expected: no "عكس" on the deposit rows (a deposit is never reversed from the wallet; a correction is an adjustment).
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.5 An adjustment, its email and the customer's view (TC2)
 
@@ -1226,7 +1241,7 @@ Result:
 6. TC2's window, without reloading. Expected: the chip and "رصيدك" turn to `$10.00`; "الحركات": "تعديل الرصيد" with "رصيد تجريبي", the note on a second line, `+$10.00`, "الرصيد بعدها" $10.00; **no** internal reason or admin name. The bell: "أضافت الإدارة $10.00 إلى رصيدك: رصيد تجريبي."
 7. TC2's inbox: **one** email "أُضيف $10.00 إلى رصيدك" with "نوع الحركة: رصيد تجريبي." and "عرض المحفظة" (it opens `/wallet`). Expected: no reason, no note, no admin name.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.6 A debit cannot go below zero
 
@@ -1236,7 +1251,7 @@ Result:
 2. Expected: refused with "الرصيد الحالي $10.00 لا يكفي لهذا الخصم. خفّض المبلغ أو راجع الحركات."; TC2 still $10.00, no new row, no email.
 3. Change to `4`, "رصيد تجريبي", reason `System test 6.6: test funds debit`, no note; save. Expected: a row `−$4.00`, balance after $6.00; in TC2's window, live, a neutral `−$4.00` row, the bell "خصمت الإدارة $4.00 من رصيدك: رصيد تجريبي.", and the email "خُصم $4.00 من رصيدك".
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.7 Above $100: the amount typed twice, then reversed
 
@@ -1251,7 +1266,7 @@ Do steps 1–6 in one sitting.
 5. Reason `System test 6.7: reversal`, confirmation `150`, "اعكس التعديل". Expected: a row "عكس: تعويض" `−$150.00`, balance after $6.00; the original shows "معكوس" and the reversal "يعكس تعديلًا سابقًا", each leading to the other ("انتقل إلى التعديل المرتبط"); "عكس" is gone from both. TC2 sees "عكس: تعويض" `−$150.00`, the bell, and the email "خُصم $150.00 من رصيدك" with "نوع الحركة: عكس: تعويض.".
 6. In the second tab (still showing "عكس" on the $150.00 row) reverse it again. Expected: "عُكس هذا التعديل من قبل."; TC2 still $6.00.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.8 A transaction number or TXID already credited cannot be recorded again
 
@@ -1262,35 +1277,35 @@ No money: **every save in this case must be refused.** If one is accepted, stop:
 1. TC2's wallet → "تعديل الرصيد": "إضافة", `1`, "إيداع مسجَّل يدوياً". Expected: "طريقة الدفع" and "رقم العملية أو TXID" appear.
 2. "شام كاش", A2's Sham Cash transaction number (4.5b), reason `System test 6.8: claimed reference`; save (re-authentication). Expected: "هذا الرقم المرجعي مسجَّل من قبل لهذه الطريقة."; TC2 still $6.00.
 3. The same number with Arabic-Indic digits (٠–٩) for its digits, then with a space in the middle. Expected: the same refusal each time.
-4. "USDT (BEP20)", B's TXID from 5.4. Expected: the same refusal.
+4. "USDT (BEP20)", B's TXID from 5.4 (deposit `VD-7Q86J`). Expected: the same refusal.
 5. "USDT (TRC20)", the TXID of 5.8 (a BEP20 transfer, recorded as a BEP20 manual deposit). Expected: the same refusal (a TXID is one claim across both networks, F5-7).
 6. "USDT (BEP20)", the same TXID in capitals with its `0x` removed. Expected: the same refusal.
 7. TC2: no new row, no email, balance $6.00.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.9 Only the customer reads their wallet, and only the admin changes it
 
 **What this checks:** a wallet is readable by its customer and the admin only, and only the admin can change it.
 
-1. In TC1's browser open `https://digital.vertexmedia.pro/api/wallet`. Expected: TC1's balance only (`balanceUnits` 29370000). Open `https://digital.vertexmedia.pro/api/wallet/entries`: TC1's seven entries, with no reason, admin or journal field.
+1. In TC1's browser open `https://digital.vertexmedia.pro/api/wallet`. Expected: TC1's balance only (`balanceUnits` 28980000). Open `https://digital.vertexmedia.pro/api/wallet/entries`: TC1's eight entries, with no reason, admin or journal field.
 2. In TC2's window open the same two addresses. Expected: TC2's own balance and entries, nothing of TC1's.
 3. Signed out (a new private window), open `https://digital.vertexmedia.pro/api/wallet`. Expected: 401. Open `https://digital.vertexmedia.pro/wallet`: the sign-in page; after signing in as TC2, back on the wallet.
 4. In TC1's browser open `https://digital-admin.vertexmedia.pro/api/admin/wallets/<TC1's id>` (the id from the panel's address bar) and `https://digital-admin.vertexmedia.pro/api/admin/ledger/summary`. Expected: 401, no data. Open `https://digital.vertexmedia.pro/api/admin/ledger/summary`: 404.
 5. Optional, in the browser's developer tools (Network): the answer of `/api/wallet` carries `Cache-Control: no-store`.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.10 The audit log has every adjustment
 
 **What this checks:** every dollar moved by hand can be traced to who moved it, when, why and with what result.
 
 1. In "سجل التدقيق" filter the entity type "تعديل رصيد".
-2. Expected, newest first: the reversal of 6.7 ("عكس تعديل رصيد"), the $150.00 compensation, the $4.00 debit of 6.6, the $10.00 credit of 6.5 (each "تعديل رصيد عميل"), and the manual deposit of 5.8; actor you, channel admin. **Nothing** for the second press of 6.5, the refusals of 6.5 to 6.8, or the second reversal of 6.7.
+2. Expected, newest first: the reversal of 6.7 ("عكس تعديل رصيد"), the $150.00 compensation, the $4.00 debit of 6.6, the $10.00 credit of 6.5 (each "تعديل رصيد عميل"), and the $2.98 manual deposit of 5.8; actor you, channel admin. **Nothing** for the second press of 6.5, the refusals of 6.5 to 6.8, or the second reversal of 6.7.
 3. Open the reversal. Expected: labelled customer, direction, amount $150.00, category, "التعديل المعكوس" (the $150.00 adjustment), the journal, the balance after $6.00, and your reason.
 4. Open the $10.00 credit. Expected: the customer note and the reason; balance after $10.00.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.11 Screens and emails quality on desktop and phone
 
@@ -1300,7 +1315,7 @@ Result:
 2. On the PC, the panel in the light and dark themes: "المحافظ" with the summary and the system accounts, the search results, TC1's and TC2's wallets, the adjust dialog (with the confirmation field) and the reverse dialog. On the phone: the wallets search and a wallet usable, the timeline table scrolling within its frame.
 3. The adjustment emails of 6.5–6.7: the brand header, Arabic RTL, the right amount and category, "عرض المحفظة" working, nothing internal.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 6.12 Clean-up: TC2 back to $0.00
 
@@ -1308,16 +1323,16 @@ Result:
 
 1. TC2's wallet: reverse the $4.00 debit of 6.6 (reason `System test 6.12: clean-up`). Expected: "عكس: رصيد تجريبي" `+$4.00`, balance $10.00.
 2. Reverse the $10.00 credit of 6.5 (same reason). Expected: "عكس: رصيد تجريبي" `−$10.00`, balance **$0.00**; "عكس" offered on no TC2 row.
-3. "المحافظ": "لعملاء الاختبار" back to its value in 6.3; `adjustments:test_funds` and `adjustments:compensation` at $0.00 in "الحسابات النظامية".
-4. TC1: still $29.37 with its seven rows.
+3. "المحافظ": "لعملاء الاختبار" back to $28.98 as in 6.3; `adjustments:test_funds` and `adjustments:compensation` at $0.00 in "الحسابات النظامية".
+4. TC1: still $28.98 with its eight rows.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### Feature 6 sign-off
 
 | Item | Value |
 |---|---|
-| Cases passed | — of 12 |
-| Findings | F6-1 (found while writing the steps, fixed in #120 and deployed to production on 2026-10-17, `d5cad4d`, before 6.3 is run) |
-| Accepted by the owner on | — |
-| PR | the steps (#119); the results and fixes in the next PR, not opened yet |
+| Cases passed | 12 of 12 |
+| Findings | F6-1 (found while writing the steps, fixed in #120 and deployed to production on 2026-10-17, `d5cad4d`, before 6.3 was run); F6-2 (the worked numbers rewritten from the production records before 6.1); F6-3 open (the live check's customer is not a test customer; decide in feature 16); F6-4 to F6-13 from an external audit by another model (GPT 6.1 sol, review only), each confirmed in the code and fixed: one blocker (F6-4, a lost answer then an edited retry adjusting twice), five major, four minor; F6-14 (the store's keys, found while checking A1) fixed in #122 |
+| Accepted by the owner on | 2026-10-17; the audit fixes accepted by Claude on 2026-10-17 (every check green, the reviewer's findings closed) |
+| PR | the steps (#119); the F6-1 fix (#120); the results, the corrected numbers and the external audit's fixes, F6-4 to F6-13, in this file's PR (not opened yet, owner's request) |

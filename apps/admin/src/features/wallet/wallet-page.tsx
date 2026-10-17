@@ -24,7 +24,7 @@ import {
   TableRow,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, RotateCcwIcon, SlidersHorizontalIcon, WalletIcon } from 'lucide-react';
-import { useState } from 'react';
+import { type MouseEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
@@ -157,6 +157,33 @@ function Timeline({
   const { t } = useTranslation();
   const list = useInfiniteQuery(walletEntriesQuery(customerId));
   const entries = list.data?.pages.flatMap((page) => page.items) ?? [];
+  const [shown, setShown] = useState<string | null>(null);
+
+  // The row a link asked for, once it is on the page: its anchor scrolls to it and marks it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new page of entries is the trigger.
+  useEffect(() => {
+    if (!shown || !document.getElementById(adjustmentRowId(shown))) return;
+    setShown(null);
+    window.location.hash = adjustmentRowId(shown);
+  }, [shown, entries.length]);
+
+  /**
+   * Shows a linked adjustment: an original can sit on a page not loaded yet (a reversal is newer
+   * than its original), so pages are read until it is there (audit A8).
+   */
+  async function showAdjustment(id: string) {
+    setShown(id);
+    let pages = list.data?.pages ?? [];
+    let more = list.hasNextPage;
+    const holds = () =>
+      pages.some((page) => page.items.some((entry) => entry.adjustment?.id === id));
+    while (!holds() && more) {
+      const next = await list.fetchNextPage();
+      if (next.isError) return;
+      pages = next.data?.pages ?? [];
+      more = next.hasNextPage;
+    }
+  }
 
   return (
     <section className="flex flex-col gap-3" aria-labelledby="wallet-timeline">
@@ -201,7 +228,12 @@ function Timeline({
           </TableHeader>
           <TableBody>
             {entries.map((entry) => (
-              <EntryRow key={entry.journalId} entry={entry} onReverse={onReverse} />
+              <EntryRow
+                key={entry.journalId}
+                entry={entry}
+                onReverse={onReverse}
+                onShowAdjustment={showAdjustment}
+              />
             ))}
           </TableBody>
         </Table>
@@ -223,12 +255,20 @@ function Timeline({
 function EntryRow({
   entry,
   onReverse,
+  onShowAdjustment,
 }: {
   entry: AdminWalletEntry;
   onReverse: (entry: AdminWalletEntry) => void;
+  onShowAdjustment: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const adjustment = entry.adjustment;
+  /** Follows the anchor when its row is on the page, else loads pages until it is. */
+  const linkTo = (id: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+    if (document.getElementById(adjustmentRowId(id))) return;
+    event.preventDefault();
+    onShowAdjustment(id);
+  };
   const reversible = adjustment && !adjustment.reversal && !adjustment.reversedByAdjustmentId;
   return (
     <TableRow
@@ -273,6 +313,7 @@ function EntryRow({
           {adjustment?.reversedByAdjustmentId && (
             <a
               href={`#${adjustmentRowId(adjustment.reversedByAdjustmentId)}`}
+              onClick={linkTo(adjustment.reversedByAdjustmentId)}
               className="w-fit rounded-sm"
               aria-label={`${t('wallets.detail.reversed')}: ${t('wallets.detail.showRow')}`}
             >
@@ -282,6 +323,7 @@ function EntryRow({
           {adjustment?.reversesAdjustmentId && (
             <a
               href={`#${adjustmentRowId(adjustment.reversesAdjustmentId)}`}
+              onClick={linkTo(adjustment.reversesAdjustmentId)}
               className="w-fit rounded-sm text-sm text-muted-foreground underline"
             >
               {t('wallets.detail.reversalOf')}

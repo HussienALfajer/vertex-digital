@@ -28,7 +28,7 @@ import { type FormEvent, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { useShamCashCount } from './reconciliation.queries';
 import { money, RESULT_TONES, resultStatusLabel } from './reconciliation-labels';
 
@@ -45,7 +45,7 @@ export function CountDialog({
 }) {
   const { t } = useTranslation();
   const count = useShamCashCount();
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const [currency, setCurrency] = useState<Currency>(initial);
   const [amountText, setAmountText] = useState('');
   const [invalid, setInvalid] = useState(false);
@@ -62,7 +62,7 @@ export function CountDialog({
     if (!parsed.success) return focusInvalid();
     const body: ShamCashCount = parsed.data;
     try {
-      setSaved(await count.mutateAsync({ body, key: keyFor(body) }));
+      setSaved(await send(body, (key) => count.mutateAsync({ body, key })));
     } catch (error) {
       setFailure(errorMessage(t, error));
     }

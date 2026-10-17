@@ -28,7 +28,7 @@ NestJS 12 HTTP API, a modular monolith (ADR 0001, 0002). Code shape: ADR 0011. A
 
 ## Errors
 - Every error answers `{ statusCode, code, message, details? }` (`ErrorFilter`). Throw `new CodedException(status, 'CODE', message, details?)` when the UI must tell the error apart; the code is added to `ERROR_CODES` in contracts with its first use. Server faults answer `500 INTERNAL_ERROR` without internals and go to the logs and Sentry.
-- Messages are English, for logs. Logs go through the Nest logger (pino), never `console.log`; cookies, authorization and ALTCHA headers are redacted.
+- Messages are English, for logs. Logs go through the Nest logger (pino), never `console.log`; cookies, authorization and ALTCHA headers are redacted, and the values of private query parameters (`q`, the panel's searches) in the URL, the query and the `Referer`, in the logs and in Sentry (`core/http/secret-headers.ts`, audit A5).
 
 ## Rules to apply yourself
 - ESM: relative imports end in `.js`. No speculative helpers: they arrive with their first use.

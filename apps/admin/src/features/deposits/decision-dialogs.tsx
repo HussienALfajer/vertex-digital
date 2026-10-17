@@ -30,7 +30,7 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { useRejectDeposit, useRequestReceipt } from './deposits.queries';
 
 type NoteField = 'reason' | 'customerNote' | 'internalNote';
@@ -72,7 +72,7 @@ function fieldErrors(
 export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDone: () => void }) {
   const { t } = useTranslation();
   const reject = useRejectDeposit(deposit.id);
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const [reason, setReason] = useState<DepositRejectReason | null>(null);
   // F4-10: the receipt on screen when the dialog opened, even if the page reads a newer one.
   const [shownSubmission] = useState(deposit.submittedAt);
@@ -96,7 +96,7 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
     setErrors(fieldErrors(t, parsed.error?.issues ?? []));
     if (!parsed.success) return focusInvalid();
     try {
-      await reject.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
+      await send(parsed.data, (key) => reject.mutateAsync({ body: parsed.data, key }));
       onDone();
     } catch (error) {
       setFailure(errorMessage(t, error));

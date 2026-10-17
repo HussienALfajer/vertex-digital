@@ -40,7 +40,7 @@ import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { useApproveDeposit } from './deposits.queries';
 
 type ApproveField = 'transaction' | 'amount' | 'reference' | 'flags';
@@ -59,7 +59,7 @@ export function parseAmount(currency: Currency, text: string): number | null {
 export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone: () => void }) {
   const { t } = useTranslation();
   const approve = useApproveDeposit(deposit.id);
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const [transaction, setTransaction] = useState('');
   const [currency, setCurrency] = useState<Currency>(deposit.currency);
   const [amount, setAmount] = useState(
@@ -152,7 +152,7 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
     setErrors(found);
     if (!parsed.success || Object.keys(found).length > 0) return focusInvalid();
     try {
-      await approve.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
+      await send(parsed.data, (key) => approve.mutateAsync({ body: parsed.data, key }));
       onDone();
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined;

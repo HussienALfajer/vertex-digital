@@ -29,7 +29,7 @@ import { FormAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, ltr } from '../../lib/format';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { STATUS_TONES } from './deposit-labels';
 import { useApproveUsdtDeposit } from './deposits.queries';
 import { Fact } from './fact';
@@ -241,7 +241,7 @@ export function UsdtApproveForm({
 }) {
   const { t } = useTranslation();
   const approve = useApproveUsdtDeposit(deposit.id);
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const [ticked, setTicked] = useState<DepositFlagCode[]>([]);
   const [note, setNote] = useState('');
   const [flagsError, setFlagsError] = useState<string | null>(null);
@@ -265,7 +265,7 @@ export function UsdtApproveForm({
     };
     const parsed = approveUsdtDepositSchema.parse(body);
     try {
-      await approve.mutateAsync({ body: parsed, key: keyFor(parsed) });
+      await send(parsed, (key) => approve.mutateAsync({ body: parsed, key }));
     } catch (error) {
       if (error instanceof ApiError && error.code === 'FLAGS_NOT_ACKNOWLEDGED') {
         setFlagsError(errorMessage(t, error));

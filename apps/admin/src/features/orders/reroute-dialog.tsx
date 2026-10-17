@@ -29,7 +29,7 @@ import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatSince } from '../../lib/format';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { rerouteOptionsQuery, useRerouteOrder } from './orders.queries';
 
 const HEALTH_TONES = { healthy: 'success', degraded: 'warning', down: 'danger' } as const;
@@ -44,7 +44,7 @@ export function RerouteDialog({ order, onDone }: { order: AdminOrder; onDone: ()
   const { t } = useTranslation();
   const options = useQuery(rerouteOptionsQuery(order.id));
   const reroute = useRerouteOrder(order.id);
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const [routeId, setRouteId] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ route?: boolean; reason?: boolean }>({});
   const [failure, setFailure] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export function RerouteDialog({ order, onDone }: { order: AdminOrder; onDone: ()
     setErrors({ route: paths.has('routeId'), reason: paths.has('reason') });
     if (!parsed.success) return focusInvalid();
     try {
-      await reroute.mutateAsync({ body: parsed.data, key: keyFor(parsed.data) });
+      await send(parsed.data, (key) => reroute.mutateAsync({ body: parsed.data, key }));
       onDone();
     } catch (error) {
       setFailure(errorMessage(t, error));

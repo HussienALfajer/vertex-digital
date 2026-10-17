@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { useNotificationEvents } from '@/features/notifications/live';
 import type { Failure } from '@/lib/api';
@@ -67,9 +67,15 @@ export function WalletPage() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailure, setMoreFailure] = useState<Failure | null>(null);
+  // Each full read starts a new generation: an answer of an older read, or a next page asked for
+  // the list a newer read replaced, is dropped, so a slow answer never brings back an old balance
+  // or splices a page into a list it does not follow (audit A7).
+  const generation = useRef(0);
 
   const load = useCallback(async () => {
+    const current = ++generation.current;
     const [wallet, page] = await Promise.all([getWallet(), listWalletEntries()]);
+    if (current !== generation.current) return;
     if (!wallet.ok && wallet.reason === 'UNAUTHORIZED') {
       router.replace('/sign-in?next=%2Fwallet');
       return;
@@ -95,8 +101,10 @@ export function WalletPage() {
   const loadMore = async (cursor: string) => {
     setMoreFailure(null);
     setLoadingMore(true);
+    const current = generation.current;
     const page = await listWalletEntries(cursor);
     setLoadingMore(false);
+    if (current !== generation.current) return;
     if (!page.ok) return setMoreFailure(page.reason);
     setState((previous) =>
       previous.status === 'ready'

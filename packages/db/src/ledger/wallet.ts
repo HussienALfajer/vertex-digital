@@ -30,8 +30,12 @@ import {
 
 type Executor = Database | Transaction;
 
-/** The code of a customer's wallet account. */
-export const customerWalletCode = (customerId: string) => `customer_wallet:${customerId}`;
+/**
+ * The code of a customer's wallet account, with the id in PostgreSQL's lower-case form: the
+ * database matches a UUID in any case, the code is text (audit A2).
+ */
+export const customerWalletCode = (customerId: string) =>
+  `customer_wallet:${customerId.toLowerCase()}`;
 
 /** The id of the customer's wallet account, or null before its first posting (rule W1). */
 export async function findCustomerWallet(db: Executor, customerId: string): Promise<string | null> {
@@ -373,6 +377,8 @@ export interface LedgerSummaryRows {
 /**
  * What the store owes its customers and every system account's balance (rule L1), from the
  * postings at read time: real and test customers apart (S01: test customers stay out of reports).
+ * One statement, so the wallets and the system accounts come from one snapshot and the summary
+ * always balances (audit A9): wallets grouped by real or test, each system account on its own.
  */
 export async function ledgerSummary(db: Executor): Promise<LedgerSummaryRows> {
   const balances = db
@@ -388,34 +394,32 @@ export async function ledgerSummary(db: Executor): Promise<LedgerSummaryRows> {
     .leftJoin(ledgerPostings, eq(ledgerPostings.accountId, ledgerAccounts.id))
     .groupBy(ledgerAccounts.id)
     .as('balances');
-  const [wallets, systemAccounts] = await readAll(db, [
-    () =>
-      db
-        .select({
-          real: sql<string>`coalesce(sum(${balances.balance}) filter (where not ${customers.isTest}), 0)::text`,
-          test: sql<string>`coalesce(sum(${balances.balance}) filter (where ${customers.isTest}), 0)::text`,
-          withBalance: sql<number>`(count(*) filter (where ${balances.balance} > 0))::int`,
-        })
-        .from(balances)
-        .innerJoin(customers, eq(customers.id, balances.customerId))
-        .where(eq(balances.kind, 'customer_wallet')),
-    () =>
-      db
-        .select({
-          kind: balances.kind,
-          code: balances.code,
-          currency: balances.currency,
-          balance: sql<string>`${balances.balance}::text`,
-        })
-        .from(balances)
-        .where(sql`${balances.kind} <> 'customer_wallet'`)
-        .orderBy(balances.kind, balances.code),
-  ]);
-  const totals = wallets[0];
+  const systemCode = sql<
+    string | null
+  >`case when ${balances.kind} = 'customer_wallet' then null else ${balances.code} end`;
+  const rows = await db
+    .select({
+      kind: balances.kind,
+      code: systemCode,
+      currency: balances.currency,
+      isTest: customers.isTest,
+      balance: sql<string>`sum(${balances.balance})::text`,
+      withBalance: sql<number>`(count(*) filter (where ${balances.balance} > 0))::int`,
+    })
+    .from(balances)
+    .leftJoin(customers, eq(customers.id, balances.customerId))
+    .groupBy(balances.kind, systemCode, balances.currency, customers.isTest)
+    .orderBy(balances.kind, systemCode);
+  const wallets = rows.filter((row) => row.kind === 'customer_wallet');
+  const owed = (isTest: boolean) =>
+    toUnits(wallets.find((row) => row.isTest === isTest)?.balance ?? '0');
+  const systemAccounts = rows.flatMap(({ kind, code, currency, balance }) =>
+    kind === 'customer_wallet' || code === null ? [] : [{ kind, code, currency, balance }],
+  );
   return {
-    owedToCustomersUnits: toUnits(totals?.real ?? '0'),
-    owedToTestCustomersUnits: toUnits(totals?.test ?? '0'),
-    walletsWithBalance: totals?.withBalance ?? 0,
+    owedToCustomersUnits: owed(false),
+    owedToTestCustomersUnits: owed(true),
+    walletsWithBalance: wallets.reduce((count, row) => count + row.withBalance, 0),
     systemAccounts: systemAccounts.map(({ balance, ...account }) => ({
       ...account,
       balanceUnits: toUnits(balance),

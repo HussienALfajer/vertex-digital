@@ -24,7 +24,7 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { formatDateTime } from '../../lib/format';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import {
   type AdjustmentFieldErrors,
   BalanceLines,
@@ -51,7 +51,7 @@ export function ReverseDialog({
 }) {
   const { t } = useTranslation();
   const reverse = useReverseAdjustment();
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const [confirmText, setConfirmText] = useState('');
   const [errors, setErrors] = useState<AdjustmentFieldErrors>({});
   const { ref, focusInvalid } = useFocusInvalid();
@@ -83,7 +83,7 @@ export function ReverseDialog({
 
     const body: ReverseAdjustment = parsed.data;
     try {
-      await reverse.mutateAsync({ id: adjustment.id, body, key: keyFor(body) });
+      await send(body, (key) => reverse.mutateAsync({ id: adjustment.id, body, key }));
       onDone();
     } catch (error) {
       const shown = failureOf(t, error);

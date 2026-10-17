@@ -1,7 +1,11 @@
 import { Writable } from 'node:stream';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { LOG_REDACT_PATHS } from '../src/core/http/secret-headers.js';
+import {
+  LOG_REDACT_PATHS,
+  LOG_SERIALIZERS,
+  withoutPrivateQuery,
+} from '../src/core/http/secret-headers.js';
 import { api, body, clientIp } from './helpers.js';
 import { ProbeController } from './probe.controller.js';
 import { startApp, type TestApp } from './start-app.js';
@@ -202,5 +206,39 @@ describe('logs', () => {
       expect(written).not.toContain(value);
     }
     expect(written).toContain('TelegramBot');
+  });
+
+  it("never write a search's terms: not in the URL, the query or the referer (audit A5)", () => {
+    let written = '';
+    const sink = new Writable({
+      write(chunk, _encoding, done) {
+        written += chunk.toString();
+        done();
+      },
+    });
+    const logger = pino({ redact: LOG_REDACT_PATHS, serializers: LOG_SERIALIZERS }, sink);
+    logger.info({
+      req: {
+        method: 'GET',
+        url: '/api/admin/wallets?q=0933123456&limit=30',
+        query: { q: '0933123456', limit: '30' },
+        headers: {
+          cookie: 'session=cookie-value',
+          referer: 'https://digital-admin.vertexmedia.pro/wallets?q=0933123456',
+        },
+      },
+    });
+    expect(written).not.toContain('0933123456');
+    expect(written).not.toContain('cookie-value');
+    expect(written).toContain('/api/admin/wallets?q=REDACTED&limit=30');
+    expect(written).toContain('"limit":"30"');
+  });
+
+  it('leaves a URL without private parameters as it is', () => {
+    expect(withoutPrivateQuery('/api/admin/wallets/abc')).toBe('/api/admin/wallets/abc');
+    expect(withoutPrivateQuery('/api/orders?cursor=x')).toBe('/api/orders?cursor=x');
+    expect(withoutPrivateQuery('https://a.test/x?q=a%40b.c&q=d')).toBe(
+      'https://a.test/x?q=REDACTED',
+    );
   });
 });

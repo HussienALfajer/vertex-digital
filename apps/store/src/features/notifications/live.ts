@@ -93,13 +93,24 @@ export function useNotificationEvents(onEvent: Listener) {
   useEffect(() => subscribe((event) => latest.current(event)), []);
 }
 
+/**
+ * The notifications that follow a change of the wallet's balance: a credit, an adjustment, a
+ * refund, a reservation paid, an admin purchase charged to the customer (audit A6).
+ */
+const MONEY_EVENTS: ReadonlySet<CustomerNotification['event']> = new Set([
+  'deposit_credited',
+  'wallet_adjusted',
+  'order_refunded',
+  'order_partially_refunded',
+  'order_paid',
+  'order_placed_for_you',
+]);
+
 /** Whether a live event changes the wallet's balance or a deposit (rule NT7). */
 export function isMoneyEvent(event: LiveEvent): boolean {
   return (
     event.type === 'resync' ||
-    (event.type === 'notification' &&
-      (event.notification.event === 'deposit_credited' ||
-        event.notification.event === 'wallet_adjusted'))
+    (event.type === 'notification' && MONEY_EVENTS.has(event.notification.event))
   );
 }
 

@@ -31,7 +31,7 @@ import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatDate, ltr } from '../../lib/format';
-import { useIdempotencyKey } from '../../lib/idempotency';
+import { useIdempotentRequest } from '../../lib/idempotency';
 import { customerQuery } from '../customers/customers.queries';
 import { ImagePicker } from './image-picker';
 import { linkDepositsQuery, linkOrdersQuery, useOpenTicket } from './support.queries';
@@ -69,7 +69,7 @@ function NewTicketForm({ customerId }: { customerId: string }) {
   const navigate = useNavigate();
   const customer = useQuery(customerQuery(customerId));
   const open = useOpenTicket();
-  const keyFor = useIdempotencyKey();
+  const send = useIdempotentRequest();
   const [category, setCategory] = useState<TicketCategory>('order');
   const [linkId, setLinkId] = useState<string | null>(null);
   const [subject, setSubject] = useState('');
@@ -140,12 +140,12 @@ function NewTicketForm({ customerId }: { customerId: string }) {
     const linkMissing = (category === 'order' || category === 'deposit') && !linkId;
     setErrors({ link: linkMissing, subject: paths.has('subject'), body: paths.has('body') });
     if (!parsed.success || linkMissing) return focusInvalid();
-    const key = keyFor({
+    const signature = {
       ...input,
       files: files.map((file) => [file.name, file.size, file.lastModified]),
-    });
+    };
     try {
-      const ticket = await open.mutateAsync({ body: input, files, key });
+      const ticket = await send(signature, (key) => open.mutateAsync({ body: input, files, key }));
       await navigate({ to: '/support/$id', params: { id: ticket.id } });
     } catch (error) {
       setFailure(error);
