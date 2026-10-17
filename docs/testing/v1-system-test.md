@@ -131,7 +131,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F5-12 | 5 | External audit A6 | A `wrong_network` review's Telegram card named the deposit's network and linked the TXID to the wrong explorer | minor | The card names the network the transfer is on ("وصل على … والإيداع على …") and links that network's explorer (`messages.ts`, `deposit-card.job.ts`); worker test both ways | Fixed |
 | F5-13 | 5 | External audit A7 | The new QR had no quiet zone of its own (`marginSize` 0): the label and frame edge sat closer than the four modules the standard asks | minor | Four modules of white inside the QR itself, the mark 18% of the whole (about 5% of the code's area) (`usdt-qr.tsx`); screenshots. A real wallet camera scan on both networks is still to be done on production | Fixed |
 | F5-14 | 5 | External audit A8 | The admin E2E listed the reviewed deposit as its own candidate, which the API never returns (F5-1) | minor | The fixture lists another customer's deposit; the test checks the deposit is not its own candidate and the empty text "لا إيداعات أخرى مرشحة." | Fixed |
-| F6-1 | 6 | Writing the steps (6.3) | The ledger summary's "الحسابات النظامية" formats every balance with `formatUsd` (`wallets-page.tsx`), whatever the account's currency: `sham_cash_receipts:SYP` at −2,100 ل.س (−210,000 units) would read "-$0.21", and `currency_exchange:SYP` "$0.21" | minor | To fix on this branch: SYP accounts formatted in pounds (`formatSyp`) by the summary's `currency`; E2E | Open |
+| F6-1 | 6 | Writing the steps (6.3) | The ledger summary's "الحسابات النظامية" formats every balance with `formatUsd` (`wallets-page.tsx`), whatever the account's currency: `sham_cash_receipts:SYP` at −2,100 ل.س (−210,000 units) would read "-$0.21", and `currency_exchange:SYP` "$0.21" | minor | Each balance is shown in its account's currency with the reconciliation page's `money()` (`−2,100 ل.س`, USD keeping its sub-cent digits); E2E with the deposit accounts in the summary and the screenshots | Fixed |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -1317,6 +1317,6 @@ Result:
 | Item | Value |
 |---|---|
 | Cases passed | — of 12 |
-| Findings | F6-1 (found while writing the steps) |
+| Findings | F6-1 (found while writing the steps, fixed; to be deployed before 6.3 is run) |
 | Accepted by the owner on | — |
 | PR | the steps (#119); the results and fixes in the next PR, not opened yet |
