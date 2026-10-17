@@ -1161,3 +1161,41 @@ describe('the supplier policy', () => {
     ).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
   });
 });
+
+describe('catalog changes that move a price (audit A2)', () => {
+  it('a move to a category with its own margin rule reprices the game at once', async () => {
+    await reauthenticate();
+    const target = await json<{ id: string }>(
+      await post('/api/admin/catalog/categories', { slug: `move-${run}`, nameAr: `نقل ${run}` }),
+      201,
+    );
+    categories.push(target.id);
+    const wide = { percentBp: 0, fixedUsdUnits: usd(0.5), minMarginUsdUnits: usd(0.5) };
+    await json(
+      await put('/api/admin/pricing/rules', { scope: 'category', targetId: target.id, ...wide }),
+      200,
+    );
+    const game = await json<{ id: string }>(
+      await post('/api/admin/catalog/games', {
+        categoryId: ids.categoryId,
+        slug: `moving-${run}`,
+        nameAr: `لعبة تنتقل ${run}`,
+        nameEn: 'Moving',
+      }),
+      201,
+    );
+    const productId = await product('باقة تنتقل', game.id, 'code');
+    await json(
+      await post(`/api/admin/catalog/products/${productId}/routes/manual`, {
+        costUsdUnits: usd(1),
+      }),
+      201,
+    );
+    expect((await routing(productId)).currentPrice?.priceUsdUnits).toBe(price(1));
+
+    await json(await patch(`/api/admin/catalog/games/${game.id}`, { categoryId: target.id }), 200);
+    const moved = await routing(productId);
+    expect(moved.currentPrice?.priceUsdUnits).toBe(priceFromCost(usd(1), wide));
+    expect(moved.targetPriceUsdUnits).toBe(moved.currentPrice?.priceUsdUnits);
+  });
+});

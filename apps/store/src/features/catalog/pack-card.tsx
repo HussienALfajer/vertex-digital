@@ -4,6 +4,7 @@ import { ClockIcon } from 'lucide-react';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { deliveryChipText } from './delivery';
+import { packAmountText } from './pack-amount';
 
 /** Whether a pack can be bought: available, with a price (S06 CT9). */
 export const packAvailable = (product: StoreProduct) =>
@@ -18,6 +19,7 @@ export const packAvailable = (product: StoreProduct) =>
 export function PackContent({ product }: { product: StoreProduct }) {
   const available = packAvailable(product);
   const delivery = available ? deliveryChipText(product.deliveryStats) : null;
+  const amount = packAmountText(product.nameAr, product.gameAmount);
   return (
     <>
       <span className="flex items-start justify-between gap-2">
@@ -28,6 +30,11 @@ export function PackContent({ product }: { product: StoreProduct }) {
           </Badge>
         )}
       </span>
+      {amount && (
+        <span className="text-sm text-muted-foreground">
+          {t('catalog.amount', { amount: ltr(amount) })}
+        </span>
+      )}
       {available && product.priceUsdUnits !== null ? (
         <span className="flex flex-col">
           <bdi dir="ltr" className="text-xl font-bold tabular-nums">

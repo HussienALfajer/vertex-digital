@@ -1,16 +1,17 @@
 import { randomBytes } from 'node:crypto';
-import { CATALOG_IMAGE_MAX_BYTES } from '@vertex-digital/contracts';
+import { CATALOG_IMAGE_MAX_BYTES, CATALOG_IMAGE_WIDTHS } from '@vertex-digital/contracts';
 import {
   catalogCategories,
   catalogGames,
   catalogInputFields,
   catalogProducts,
   newId,
-  storedFiles,
+  STORED_FILE_KINDS,
 } from '@vertex-digital/db';
 import { asc, eq, inArray } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { FilesService } from '../src/modules/files/index.js';
 import { api, auditOf, body, removeAccounts, seedCustomer } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
 
@@ -240,18 +241,25 @@ describe('images (rule CT10)', () => {
   });
 
   it('serves catalog images only: other files and unknown ids are NOT_FOUND', async () => {
-    const [receipt] = await test.db
-      .select({ id: storedFiles.id })
-      .from(storedFiles)
-      .where(eq(storedFiles.kind, 'sham_cash_qr'))
-      .limit(1);
-    for (const id of [receipt?.id, '0199a000-0000-7000-8000-000000000001', 'not-a-uuid']) {
-      if (!id) continue;
-      expect(await body(await fetch(`${test.url}/api/catalog/images/${id}`))).toMatchObject({
-        status: 404,
-        code: 'NOT_FOUND',
-      });
+    // Audit A11: one stored file of every other kind, made here, so the test never passes empty.
+    const files = test.app.get(FilesService);
+    const others = await Promise.all(
+      STORED_FILE_KINDS.filter((kind) => kind !== 'catalog_image').map(async (kind) =>
+        files.store(kind, await image()),
+      ),
+    );
+    expect(others).toHaveLength(STORED_FILE_KINDS.length - 1);
+    for (const id of [...others, '0199a000-0000-7000-8000-000000000001']) {
+      for (const query of ['', `?w=${CATALOG_IMAGE_WIDTHS[0]}`]) {
+        expect(
+          await body(await fetch(`${test.url}/api/catalog/images/${id}${query}`)),
+        ).toMatchObject({ status: 404, code: 'NOT_FOUND' });
+      }
     }
+    expect(await body(await fetch(`${test.url}/api/catalog/images/not-a-uuid`))).toMatchObject({
+      status: 404,
+      code: 'NOT_FOUND',
+    });
   });
 });
 
@@ -929,6 +937,55 @@ describe('products (rules CT3, CT8, CT9)', () => {
 });
 
 describe('concurrency', () => {
+  const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it('a pack edit and an order on that pack never deadlock (audit A1)', async () => {
+    const game = await newGame((await newCategory()).id);
+    const product = await json<{ id: string }>(
+      await post(`/games/${game.id}/products`, { kind: 'code', nameAr: 'باقة' }),
+      201,
+    );
+    let edit: Promise<Response> | undefined;
+    // What a purchase holds: its product `FOR SHARE`, then the order insert's foreign key check
+    // takes `FOR KEY SHARE` on the game while the edit holds the game and waits for the product.
+    await test.db.transaction(async (tx) => {
+      await tx
+        .select({ id: catalogProducts.id })
+        .from(catalogProducts)
+        .where(eq(catalogProducts.id, product.id))
+        .for('share');
+      edit = patch(`/products/${product.id}`, { nameAr: 'باقة معدلة' });
+      await pause(300);
+      await tx
+        .select({ id: catalogGames.id })
+        .from(catalogGames)
+        .where(eq(catalogGames.id, game.id))
+        .for('key share');
+    });
+    expect((await edit)?.status).toBe(200);
+  });
+
+  it('a move waits for its source category, as a reorder of it does (audit A3)', async () => {
+    const from = await newCategory();
+    const to = await newCategory();
+    const game = await newGame(from.id);
+    let settled = false;
+    let move: Promise<Response> | undefined;
+    await test.db.transaction(async (tx) => {
+      await tx
+        .select({ id: catalogCategories.id })
+        .from(catalogCategories)
+        .where(eq(catalogCategories.id, from.id))
+        .for('no key update');
+      move = patch(`/games/${game.id}`, { categoryId: to.id }).finally(() => {
+        settled = true;
+      });
+      await pause(300);
+      expect(settled).toBe(false);
+    });
+    expect((await json<GameBody>(await (move as Promise<Response>), 200)).categoryId).toBe(to.id);
+  });
+
   it('two creations with one name leave one', async () => {
     const category = await newCategory();
     const nameAr = unique('توأم');
@@ -1011,6 +1068,47 @@ describe('concurrency', () => {
 });
 
 describe('store routes (S09 rules SF1, SF5, SS1–SS3, SR2, AD1)', () => {
+  it('still serve a game whose stored option label holds an invisible character (audit A6)', async () => {
+    const game = await activeGame((await newCategory()).id);
+    const field = await json<{ id: string }>(
+      await post(`/games/${game.id}/fields`, {
+        key: 'server',
+        labelAr: 'السيرفر',
+        type: 'select',
+        required: false,
+        options: [
+          { value: 'eu', labelAr: 'أوروبا' },
+          { value: 'asia', labelAr: 'آسيا' },
+        ],
+      }),
+      201,
+    );
+    // New labels refuse it; a row stored before the rule (or by hand) must still be served.
+    expect(
+      await body(
+        await patch(`/fields/${field.id}`, {
+          options: [
+            { value: 'eu', labelAr: 'أوروبا‏' },
+            { value: 'asia', labelAr: 'آسيا' },
+          ],
+        }),
+      ),
+    ).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
+    await test.db
+      .update(catalogInputFields)
+      .set({
+        options: [
+          { value: 'eu', labelAr: 'أوروبا‏' },
+          { value: 'asia', labelAr: 'آسيا' },
+        ],
+      })
+      .where(eq(catalogInputFields.id, field.id));
+    const detail = await json<{ slug: string }>(await get(`/games/${game.id}`), 200);
+    expect((await client.get(`/api/catalog/games/${detail.slug}`)).status).toBe(200);
+    // The field can still be repaired from the panel: another change saves.
+    await json(await patch(`/fields/${field.id}`, { labelAr: 'المنطقة' }), 200);
+  });
+
   it('serve the storefront, a game page and the search index publicly, cacheable, without cookies', async () => {
     const category = await newCategory();
     const shown = await activeGame(category.id);

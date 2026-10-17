@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
 import { formatDuration } from '../../lib/format';
 import { StockChip } from '../suppliers/offer-cells';
@@ -37,7 +38,8 @@ import { ProductDialog } from './product-dialog';
 /**
  * "الباقات" (S06 screens): the game's products in order (name, kind, in-game amount, official
  * price, max quantity, status, availability), add and edit by kind, pause and resume (rule CT4),
- * order (rule CT5), archive and restore with an archived filter (rule CT1). S07: the stored price
+ * order (rule CT5), archive after a confirmation (audit A7) and restore with an archived filter
+ * (rule CT1). S07: the stored price
  * in USD and SYP, the supplier it follows, a held review, and each product's routes drawer.
  */
 export function ProductsTab({ game }: { game: GameDetail }) {
@@ -45,6 +47,7 @@ export function ProductsTab({ game }: { game: GameDetail }) {
   const [archived, setArchived] = useState(false);
   const [editing, setEditing] = useState<Product | 'new' | null>(null);
   const [routing, setRouting] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState<Product | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const reorder = useReorderProducts(game.id);
   const archive = useArchiveProduct();
@@ -240,9 +243,7 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                           variant="ghost"
                           size="sm"
                           disabled={busy}
-                          onClick={() =>
-                            run(() => archive.mutateAsync({ id: product.id, archive: true }))
-                          }
+                          onClick={() => setArchiving(product)}
                         >
                           {t('catalog.actions.archive')}
                         </Button>
@@ -269,6 +270,19 @@ export function ProductsTab({ game }: { game: GameDetail }) {
           />
         )}
       </Dialog>
+      <ConfirmDialog
+        open={archiving !== null}
+        onClose={() => setArchiving(null)}
+        title={t('catalog.products.archiveTitle')}
+        body={t('catalog.products.archiveBody', { name: archiving?.nameAr ?? '' })}
+        action={t('catalog.actions.archive')}
+        destructive
+        pending={archive.isPending}
+        describeFailure={(error) => catalogFailure(t, error)}
+        onConfirm={async () => {
+          if (archiving) await archive.mutateAsync({ id: archiving.id, archive: true });
+        }}
+      />
     </div>
   );
 }

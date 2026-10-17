@@ -206,6 +206,11 @@ test.describe('catalog', () => {
     await productRow(page, '660 UC')
       .getByRole('button', { name: ar.catalog.actions.archive })
       .click();
+    // Audit A7: an archive asks first, naming the pack.
+    const confirm = page.getByRole('alertdialog');
+    await expect(confirm).toContainText(fill(ar.catalog.products.archiveBody, { name: '660 UC' }));
+    await confirm.getByRole('button', { name: ar.catalog.actions.archive }).click();
+    await expect(confirm).toBeHidden();
     await expect(rows).toHaveCount(3);
     await page.getByRole('tab', { name: ar.catalog.filters.archived, exact: true }).click();
     await expect(productRow(page, '660 UC')).toBeVisible();
@@ -223,8 +228,9 @@ test.describe('catalog', () => {
       .filter({ hasText: 'player_id' })
       .getByRole('button', { name: ar.catalog.actions.archive })
       .click();
+    await confirm.getByRole('button', { name: ar.catalog.actions.archive }).click();
     await expect(
-      page.getByText(
+      confirm.getByText(
         fill(ar.catalog.game.missing, { items: ar.catalog.game.missingItems.input_fields }),
       ),
     ).toBeVisible();
@@ -315,6 +321,30 @@ test.describe('catalog', () => {
     await expect(dialog.getByRole('listitem').filter({ hasText: 'اشتراكات' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('tab', { name: 'اشتراكات' })).toBeVisible();
+  });
+
+  test('lists and orders a category of more than one page of games (audit A4)', async ({
+    page,
+    admin,
+  }) => {
+    for (let index = 1; index <= 101; index += 1) {
+      admin.catalog.addGame({
+        categorySlug: 'games',
+        slug: `game-${index}`,
+        nameAr: `لعبة ${index}`,
+        nameEn: `Game ${index}`,
+      });
+    }
+    await open(page, admin, '/catalog');
+    const cards = page.getByRole('listitem');
+    await expect(cards).toHaveCount(101);
+    await expect(cards.last()).toContainText('لعبة 101');
+    // The reorder sends all 101 ids: a partial list would be refused.
+    await page
+      .getByRole('button', { name: fill(ar.catalog.order.up, { name: 'لعبة 101' }) })
+      .click();
+    await expect(cards.nth(99)).toContainText('لعبة 101');
+    await expect(cards.last()).toContainText('لعبة 100');
   });
 });
 

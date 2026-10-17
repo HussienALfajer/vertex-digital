@@ -6341,7 +6341,7 @@ export interface components {
              * @enum {string|null}
              */
             maxLength: null;
-            options: components["schemas"]["SelectOption"][];
+            options: components["schemas"]["SelectOptionInput"][];
         } | {
             key: string;
             labelAr: string;
@@ -6364,6 +6364,10 @@ export interface components {
              * @enum {string|null}
              */
             options: null;
+        };
+        SelectOptionInput: {
+            value: string;
+            labelAr: string;
         };
         ActivateAllResult: {
             /** Format: uuid */
@@ -6388,7 +6392,7 @@ export interface components {
             required?: boolean;
             minLength?: number | null;
             maxLength?: number | null;
-            options?: components["schemas"]["SelectOption"][] | null;
+            options?: components["schemas"]["SelectOptionInput"][] | null;
         };
         CreateProduct: {
             /** @enum {string} */

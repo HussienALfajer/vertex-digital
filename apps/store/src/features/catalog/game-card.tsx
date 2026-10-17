@@ -1,4 +1,9 @@
-import type { Storefront } from '@vertex-digital/contracts';
+import {
+  ACCENT_LIGHT_SURFACE,
+  ACCENT_MIN_CONTRAST,
+  contrastRatio,
+  type Storefront,
+} from '@vertex-digital/contracts';
 import { Gamepad2Icon } from 'lucide-react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
@@ -9,10 +14,18 @@ export type StoreGameCard = Storefront['categories'][number]['games'][number];
 
 /**
  * A game's accent (brand/identity.md §6) as the `--game-accent` variable, for the border on
- * hover, its chips and the selected pack's outline; the sand accent when the game has none.
+ * hover, its chips and the selected pack's outline; the sand accent when the game has none. Rule
+ * CT6 checks an accent against the dark surface only, so `--game-accent-light` is the accent the
+ * light theme may outline with: the game's own when it reaches 3:1 against white, else the
+ * primary color, so a selected pack never loses its outline there (audit A8).
  */
 export function accentStyle(accentColor: string | null): CSSProperties {
-  return { '--game-accent': accentColor ?? 'var(--color-accent)' } as CSSProperties;
+  const readableOnLight =
+    accentColor !== null && contrastRatio(accentColor, ACCENT_LIGHT_SURFACE) >= ACCENT_MIN_CONTRAST;
+  return {
+    '--game-accent': accentColor ?? 'var(--color-accent)',
+    '--game-accent-light': readableOnLight ? accentColor : 'var(--color-primary)',
+  } as CSSProperties;
 }
 
 /**
@@ -26,7 +39,7 @@ export function GameCard({ game }: { game: StoreGameCard }) {
     <Link
       href={`/games/${game.slug}`}
       style={accentStyle(game.accentColor)}
-      className={`group flex h-full flex-col gap-3 rounded-lg border border-border bg-surface p-2 transition-colors duration-150 hover:border-(--game-accent) focus-visible:border-(--game-accent) ${unavailable ? 'opacity-60' : ''}`}
+      className={`group flex h-full flex-col gap-3 rounded-lg border border-border bg-surface p-2 transition-colors duration-150 hover:border-(--game-accent-light) focus-visible:border-(--game-accent-light) dark:hover:border-(--game-accent) dark:focus-visible:border-(--game-accent) ${unavailable ? 'opacity-60' : ''}`}
     >
       {game.cover ? (
         <CatalogPicture

@@ -495,7 +495,18 @@ export class CatalogMock {
         )
         .sort((a, b) => a.sortOrder - b.sortOrder)
         .map((item) => this.game(item));
-      return { status: 200, json: { items, total: items.length, page: 1, pageSize: 100 } };
+      // Paged as the API pages it (audit A4): the panel must read every page of a category.
+      const page = Number(url.searchParams.get('page') ?? 1);
+      const pageSize = Number(url.searchParams.get('pageSize') ?? 50);
+      return {
+        status: 200,
+        json: {
+          items: items.slice((page - 1) * pageSize, page * pageSize),
+          total: items.length,
+          page,
+          pageSize,
+        },
+      };
     }
     if (key === 'POST /api/admin/catalog/games') {
       if (this.games.some((item) => item.slug === body?.slug)) return error(409, 'SLUG_TAKEN');

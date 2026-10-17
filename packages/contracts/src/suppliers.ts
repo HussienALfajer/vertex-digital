@@ -10,6 +10,7 @@ import {
   type StockLevel,
   selectOptionSchema,
   stockLevelSchema,
+  withoutHiddenText,
 } from './catalog.js';
 import { pagedListSchema, pageQuerySchema } from './lists.js';
 import { CURRENCY_SCALE, currencySchema, USD_CENT, usdCentsSchema } from './money.js';
@@ -704,7 +705,7 @@ const sanitizedName = (value: string) =>
 
 /** A supplier text cut to an S06 label, else the fallback. */
 const labelOf = (text: string, fallback: string) =>
-  text.trim().slice(0, LABEL_MAX).trim() || fallback;
+  withoutHiddenText(text).trim().slice(0, LABEL_MAX).trim() || fallback;
 
 /**
  * Rule SC12, per supplier field (each key once): our key is the supplier key lower-cased with
@@ -809,8 +810,8 @@ export function suggestProductName(
   leafName: string,
   spansLeaves: boolean,
 ): string {
-  const name = offerName.trim();
-  const leaf = leafName.trim();
+  const name = withoutHiddenText(offerName).trim();
+  const leaf = withoutHiddenText(leafName).trim();
   const named = spansLeaves && leaf !== '' && !name.includes(leaf) ? `${name} · ${leaf}` : name;
   return named.slice(0, PRODUCT_NAME_MAX).trim();
 }

@@ -23,7 +23,6 @@ import {
   newId,
   type ProductRoutingState,
   productRoutingStates,
-  repriceProducts,
   type Transaction,
 } from '@vertex-digital/db';
 import { and, asc, count, eq, isNull } from 'drizzle-orm';
@@ -46,6 +45,7 @@ import {
   nextSortOrder,
   type ProductRow,
   refusals,
+  repriceGameProducts,
   rewriteOrder,
   toInputField,
 } from './catalog-records.js';
@@ -203,7 +203,8 @@ export class CatalogItemsService {
 
   /**
    * Everything but the key and the type (rule CT7), checked again against the stored type. Making
-   * the last required field optional is refused while the game is active (rule CT3).
+   * the last required field optional is refused while the game is active (rule CT3). New select
+   * options reprice the game: a route's option map may no longer cover them (S07 RT3, audit A2).
    */
   updateField(actor: Actor, id: string, input: UpdateInputField): Promise<InputField> {
     return this.db.transaction(async (tx) => {
@@ -233,6 +234,9 @@ export class CatalogItemsService {
         .returning();
       if (!before.archivedAt) await assertComplete(tx, game);
       await auditCatalog(tx, actor, 'catalog_input_field.updated', fieldEntity(id), changed);
+      if (changed.after.options !== undefined && !before.archivedAt) {
+        await repriceGameProducts(tx, game.id, 'route_change', routingContext(this.env));
+      }
       return toInputField(row as FieldRow);
     });
   }
@@ -269,7 +273,7 @@ export class CatalogItemsService {
         gameId: game.id,
         identifier: row.key,
       });
-      await this.repriceGame(tx, game.id);
+      await repriceGameProducts(tx, game.id, 'route_change', routingContext(this.env));
       return toInputField(archived as FieldRow);
     });
   }
@@ -296,7 +300,7 @@ export class CatalogItemsService {
         gameId: game.id,
         identifier: row.key,
       });
-      await this.repriceGame(tx, game.id);
+      await repriceGameProducts(tx, game.id, 'route_change', routingContext(this.env));
       return toInputField(restored as FieldRow);
     });
   }
@@ -525,22 +529,6 @@ export class CatalogItemsService {
   }
 
   // Helpers ---------------------------------------------------------------------------------------
-
-  /**
-   * S07 rule RT3: a route mapping an archived field is unusable, so a field's archive or restore
-   * reprices the game's products in its transaction (P2, under the game lock already held).
-   */
-  private async repriceGame(tx: Transaction, gameId: string): Promise<void> {
-    const products = await tx
-      .select({ id: catalogProducts.id })
-      .from(catalogProducts)
-      .where(and(eq(catalogProducts.gameId, gameId), isNull(catalogProducts.archivedAt)));
-    await repriceProducts(tx, {
-      productIds: products.map((product) => product.id),
-      cause: 'route_change',
-      context: routingContext(this.env),
-    });
-  }
 
   private async product(tx: Transaction, row: ProductRow): Promise<Product> {
     const [product] = await this.catalog.products(tx, [row]);

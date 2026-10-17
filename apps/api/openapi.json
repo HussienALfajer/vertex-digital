@@ -20199,7 +20199,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 40,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
           }
         },
         "required": [
@@ -20212,7 +20212,7 @@
         "properties": {
           "ids": {
             "minItems": 1,
-            "maxItems": 100,
+            "maxItems": 1000,
             "type": "array",
             "items": {
               "type": "string",
@@ -20232,7 +20232,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 40,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
           }
         },
         "required": [
@@ -20433,7 +20433,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 60,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
           },
           "nameEn": {
             "type": "string",
@@ -20442,7 +20442,7 @@
             "allOf": [
               {
                 "type": "string",
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               {
                 "type": "string",
@@ -20472,7 +20472,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 500,
-            "pattern": "^(?:[^\\p{Cc}]|\\n)+$"
+            "pattern": "^(?:[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]|\\n)+$"
           }
         },
         "required": [
@@ -20872,7 +20872,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 60,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
           },
           "nameEn": {
             "type": "string",
@@ -20881,7 +20881,7 @@
             "allOf": [
               {
                 "type": "string",
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               {
                 "type": "string",
@@ -20911,7 +20911,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 500,
-            "pattern": "^(?:[^\\p{Cc}]|\\n)+$"
+            "pattern": "^(?:[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]|\\n)+$"
           },
           "status": {
             "allOf": [
@@ -20943,14 +20943,14 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 40,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "helpAr": {
                 "nullable": true,
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 200,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "required": {
                 "type": "boolean"
@@ -21002,14 +21002,14 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 40,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "helpAr": {
                 "nullable": true,
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 200,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "required": {
                 "type": "boolean"
@@ -21061,14 +21061,14 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 40,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "helpAr": {
                 "nullable": true,
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 200,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "required": {
                 "type": "boolean"
@@ -21100,7 +21100,7 @@
                 "maxItems": 50,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/SelectOption"
+                  "$ref": "#/components/schemas/SelectOptionInput"
                 }
               }
             },
@@ -21123,14 +21123,14 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 40,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "helpAr": {
                 "nullable": true,
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 200,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "required": {
                 "type": "boolean"
@@ -21173,6 +21173,25 @@
               "type"
             ]
           }
+        ]
+      },
+      "SelectOptionInput": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "pattern": "^[a-z0-9_-]{1,32}$"
+          },
+          "labelAr": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+          }
+        },
+        "required": [
+          "value",
+          "labelAr"
         ]
       },
       "ActivateAllResult": {
@@ -21253,14 +21272,14 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 40,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
           },
           "helpAr": {
             "nullable": true,
             "type": "string",
             "minLength": 1,
             "maxLength": 200,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
           },
           "required": {
             "type": "boolean"
@@ -21281,7 +21300,7 @@
             "nullable": true,
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SelectOption"
+              "$ref": "#/components/schemas/SelectOptionInput"
             }
           }
         }
@@ -21301,7 +21320,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 60,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "gameAmount": {
                 "nullable": true,
@@ -21340,7 +21359,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 60,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "gameAmount": {
                 "nullable": true,
@@ -21365,14 +21384,14 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 64,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "redemptionAr": {
                 "nullable": true,
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 2000,
-                "pattern": "^(?:[^\\p{Cc}]|\\n)+$"
+                "pattern": "^(?:[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]|\\n)+$"
               }
             },
             "required": [
@@ -21389,7 +21408,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 60,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
           },
           "gameAmount": {
             "nullable": true,
@@ -21413,14 +21432,14 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "pattern": "^[^\\p{Cc}]+$"
+            "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
           },
           "redemptionAr": {
             "nullable": true,
             "type": "string",
             "minLength": 1,
             "maxLength": 2000,
-            "pattern": "^(?:[^\\p{Cc}]|\\n)+$"
+            "pattern": "^(?:[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]|\\n)+$"
           },
           "status": {
             "allOf": [
@@ -25579,7 +25598,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 60,
-                "pattern": "^[^\\p{Cc}]+$"
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
               },
               "nameEn": {
                 "type": "string",
@@ -25588,7 +25607,7 @@
                 "allOf": [
                   {
                     "type": "string",
-                    "pattern": "^[^\\p{Cc}]+$"
+                    "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
                   },
                   {
                     "type": "string",
@@ -25606,7 +25625,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 500,
-                "pattern": "^(?:[^\\p{Cc}]|\\n)+$"
+                "pattern": "^(?:[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]|\\n)+$"
               }
             },
             "required": [
