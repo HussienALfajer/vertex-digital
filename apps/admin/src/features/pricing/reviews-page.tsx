@@ -32,7 +32,7 @@ import {
   TableRow,
 } from '@vertex-digital/ui';
 import { ScaleIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
@@ -53,8 +53,11 @@ import { RuleDialog } from './rule-dialog';
 
 const ALL = 'all';
 
-/** What happened to a review the admin decided, shown on its row after the list reads again. */
-type Outcome = DecideReviewsResult['results'][number];
+/**
+ * What happened to a review the admin decided, shown on its row after the list reads again; a
+ * refusal whose row left the list (decided elsewhere) is shown above the table by name (F8-6).
+ */
+type Outcome = DecideReviewsResult['results'][number] & { productNameAr: string };
 
 /**
  * "/pricing/reviews" (S07 screens): cost changes above the threshold that hold a price (rules
@@ -80,7 +83,19 @@ export function ReviewsPage({
   const open = (search.status ?? 'open') === 'open';
   const items = reviews.data?.items ?? [];
   const page = search.page ?? 1;
-  const pageCount = Math.max(1, Math.ceil((reviews.data?.total ?? 0) / REVIEWS_PAGE_SIZE));
+  const total = reviews.data?.total;
+  const pageCount = Math.max(1, Math.ceil((total ?? 0) / REVIEWS_PAGE_SIZE));
+  const shown = new Set(items.map((review) => review.id));
+  const gone = [...outcomes].filter(
+    ([id, outcome]) => outcome.result === 'refused' && !shown.has(id),
+  );
+
+  // Deciding the last rows of the last page leaves it empty: go to the last page left (F8-5).
+  useEffect(() => {
+    if (total !== undefined && total > 0 && page > pageCount) {
+      onSearch({ ...search, page: pageCount > 1 ? pageCount : undefined });
+    }
+  }, [total, page, pageCount, search, onSearch]);
 
   /** A page or filter change: the selection and the results are the shown page's only. */
   function go(next: ReviewSearch) {
@@ -89,11 +104,19 @@ export function ReviewsPage({
     onSearch(next);
   }
 
-  async function run(decisions: DecideReviews['decisions']) {
+  async function run(decisions: DecideReviews['decisions'], rows: PriceReview[]) {
     setFailure(null);
+    const names = new Map(rows.map((review) => [review.id, review.productNameAr]));
     try {
       const { results } = await decide.mutateAsync({ decisions });
-      setOutcomes(new Map(results.map((result) => [result.reviewId, result])));
+      setOutcomes(
+        new Map(
+          results.map((result) => [
+            result.reviewId,
+            { ...result, productNameAr: names.get(result.reviewId) ?? '' },
+          ]),
+        ),
+      );
       setSelected((previous) => {
         const next = new Set(previous);
         for (const result of results) if (result.result !== 'refused') next.delete(result.reviewId);
@@ -111,6 +134,7 @@ export function ReviewsPage({
         action: 'accept' as const,
         expectedPriceUsdUnits: review.proposedPriceUsdUnits,
       })),
+      rows,
     );
 
   const statusItems = PRICE_REVIEW_STATUSES.map((value) => ({
@@ -191,6 +215,16 @@ export function ReviewsPage({
         </div>
       )}
       {failure && <FormAlert>{failure}</FormAlert>}
+      {gone.length > 0 && (
+        <ul className="flex flex-col gap-1 text-sm">
+          {gone.map(([id, outcome]) => (
+            <li key={id} className="flex flex-wrap items-baseline gap-2">
+              <span className="font-medium">{outcome.productNameAr}</span>
+              <OutcomeNote outcome={outcome} />
+            </li>
+          ))}
+        </ul>
+      )}
       {reviews.isPending && <Skeleton className="h-96 w-full" aria-hidden="true" />}
       {reviews.isError && (
         <div className="flex flex-col items-start gap-3">
@@ -202,10 +236,12 @@ export function ReviewsPage({
       )}
       {reviews.isSuccess &&
         (items.length === 0 ? (
-          <EmptyState
-            icon={<ScaleIcon />}
-            title={open ? t('pricing.reviews.empty') : t('pricing.reviews.emptyClosed')}
-          />
+          total === 0 && (
+            <EmptyState
+              icon={<ScaleIcon />}
+              title={open ? t('pricing.reviews.empty') : t('pricing.reviews.emptyClosed')}
+            />
+          )
         ) : (
           <>
             <Table>
@@ -361,7 +397,7 @@ export function ReviewsPage({
         destructive
         pending={decide.isPending}
         onConfirm={async () => {
-          if (pausing) await run([{ reviewId: pausing.id, action: 'pause' }]);
+          if (pausing) await run([{ reviewId: pausing.id, action: 'pause' }], [pausing]);
         }}
       />
       <Dialog open={adjusting !== null} onOpenChange={(value) => !value && setAdjusting(null)}>

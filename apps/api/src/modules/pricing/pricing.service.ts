@@ -162,7 +162,10 @@ export class PricingService {
           isNull(marginRules.archivedAt),
         ),
       )
-      .for('update');
+      // Not `FOR UPDATE`: a repricing holding a product inserts its price row naming this rule,
+      // whose foreign key check takes `FOR KEY SHARE` here, while this change waits for that
+      // product (audit F8-3). Parallel changes of the target queue on `ruleLock`.
+      .for('no key update');
     if (current && sameValues(valuesOf(current), after)) return current.id;
     const ruleId = current?.id ?? newId();
     if (current) {
@@ -180,14 +183,19 @@ export class PricingService {
     return ruleId;
   }
 
-  /** Its target falls back to the parent rule; the global rule stays (rule PR2). */
+  /**
+   * Its target falls back to the parent rule; the global rule stays (rule PR2). The target's
+   * `ruleLock` first, as `setRule` and a review's margin take it before the catalog rows (F8-3).
+   */
   async archiveRule(adminId: string, id: string, meta: RequestMeta): Promise<void> {
     await this.db.transaction(async (tx) => {
+      const [found] = await tx.select().from(marginRules).where(eq(marginRules.id, id));
+      if (found) await tx.execute(ruleLock(found.scope, found.targetId));
       const [row] = await tx
         .select()
         .from(marginRules)
         .where(and(eq(marginRules.id, id), isNull(marginRules.archivedAt)))
-        .for('update');
+        .for('no key update');
       if (!row) throw notFound('margin rule');
       if (row.scope === 'global') {
         throw new CodedException(409, 'GLOBAL_RULE_REQUIRED', 'The global rule cannot be archived');
@@ -461,18 +469,16 @@ export class PricingService {
     }));
   }
 
-  /** Rule P5: the products a rule's target covers, repriced with cause `rule_change`. */
+  /**
+   * Rule P5: the products a rule's target covers, repriced with cause `rule_change`; listed after
+   * the target's catalog rows are locked, so a product added in parallel is not missed (F8-4).
+   */
   private async repriceCovered(
     tx: Transaction,
     scope: MarginScope,
     targetId: string | null,
   ): Promise<void> {
-    const key = { global: null, category: 'categoryId', game: 'gameId', product: 'productId' }[
-      scope
-    ] as 'categoryId' | 'gameId' | 'productId' | null;
-    const productIds = (await this.catalog.livePricingPaths(tx))
-      .filter((path) => key === null || path[key] === targetId)
-      .map((path) => path.productId);
+    const productIds = await this.catalog.lockPricingScope(tx, scope, targetId);
     await repriceProducts(tx, {
       productIds,
       cause: 'rule_change',

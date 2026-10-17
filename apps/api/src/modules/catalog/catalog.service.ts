@@ -533,7 +533,10 @@ export class CatalogService {
     });
   }
 
-  /** Rule CT1: refused under an archived category; back last in its category. */
+  /**
+   * Rule CT1: refused under an archived category; back last in its category, its products
+   * repriced: rule changes skip archived paths (S07 P5, audit F8-1).
+   */
   restoreGame(actor: Actor, id: string): Promise<GameDetail> {
     return mapTaken(() =>
       whileGameStays(() =>
@@ -558,6 +561,7 @@ export class CatalogService {
             await auditCatalog(tx, actor, 'catalog_game.restored', gameEntity(id), {
               nameAr: row.nameAr,
             });
+            await repriceGameProducts(tx, id, 'rule_change', routingContext(this.env));
           }
           return this.game(id, tx);
         }),
@@ -773,6 +777,58 @@ export class CatalogService {
       .from(catalogInputFields)
       .where(and(eq(catalogInputFields.gameId, gameId), isNull(catalogInputFields.archivedAt)));
     return rows.map((row) => row.key);
+  }
+
+  /**
+   * The products a margin rule's target covers (S07 rule P5), its catalog rows locked first: the
+   * categories `FOR SHARE`, then the games, each in id order (the catalog's order, S06). A game
+   * created or a product imported in parallel holds its category or game `FOR NO KEY UPDATE`, so
+   * the rule change waits for it and reprices it too (audit F8-4).
+   */
+  async lockPricingScope(
+    tx: Transaction,
+    scope: MarginScope,
+    targetId: string | null,
+  ): Promise<string[]> {
+    if (scope === 'global') {
+      await tx
+        .select({ id: catalogCategories.id })
+        .from(catalogCategories)
+        .orderBy(asc(catalogCategories.id))
+        .for('share');
+    } else if (scope === 'category') {
+      await tx
+        .select({ id: catalogCategories.id })
+        .from(catalogCategories)
+        .where(eq(catalogCategories.id, targetId as string))
+        .for('share');
+    }
+    const games =
+      scope === 'global'
+        ? undefined
+        : scope === 'category'
+          ? eq(catalogGames.categoryId, targetId as string)
+          : eq(
+              catalogGames.id,
+              scope === 'game'
+                ? (targetId as string)
+                : tx
+                    .select({ gameId: catalogProducts.gameId })
+                    .from(catalogProducts)
+                    .where(eq(catalogProducts.id, targetId as string)),
+            );
+    await tx
+      .select({ id: catalogGames.id })
+      .from(catalogGames)
+      .where(games)
+      .orderBy(asc(catalogGames.id))
+      .for('share');
+    const key = { global: null, category: 'categoryId', game: 'gameId', product: 'productId' }[
+      scope
+    ] as 'categoryId' | 'gameId' | 'productId' | null;
+    return (await this.livePricingPaths(tx))
+      .filter((path) => key === null || path[key] === targetId)
+      .map((path) => path.productId);
   }
 
   /** The path of every product a customer can see (product, game and category unarchived). */

@@ -41,10 +41,10 @@ import { PricingService } from './pricing.service.js';
 
 /**
  * Margin rules and the price preview (S06, F10), and the price reviews (S07 rule P4). Rule
- * changes and margin adjustments re-authenticate.
+ * changes and margin adjustments re-authenticate. Only the changes refresh the store (SF4): the
+ * preview is a `POST` that writes nothing (PR10, audit F8-7).
  */
 @ApiTags('pricing')
-@UseInterceptors(StoreRevalidateInterceptor)
 @Controller('admin/pricing')
 export class PricingAdminController {
   constructor(private readonly pricing: PricingService) {}
@@ -61,6 +61,7 @@ export class PricingAdminController {
   /** Rule PR9. */
   @Put('rules')
   @AdminRoute()
+  @UseInterceptors(StoreRevalidateInterceptor)
   @Sensitive()
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: marginRuleSchema })
@@ -75,6 +76,7 @@ export class PricingAdminController {
 
   @Post('rules/:id/archive')
   @AdminRoute()
+  @UseInterceptors(StoreRevalidateInterceptor)
   @Sensitive()
   @HttpCode(204)
   @Header('cache-control', 'no-store')
@@ -114,6 +116,7 @@ export class PricingAdminController {
   /** Rule P4: each review decided on its own; the result per review. */
   @Post('reviews/decide')
   @AdminRoute()
+  @UseInterceptors(StoreRevalidateInterceptor)
   @HttpCode(200)
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: decideReviewsResultSchema })
@@ -132,6 +135,7 @@ export class PricingAdminController {
   /** Rule P4: a product margin rule and the review accepted at its price. */
   @Post('reviews/:id/adjust-margin')
   @AdminRoute()
+  @UseInterceptors(StoreRevalidateInterceptor)
   @Sensitive()
   @HttpCode(200)
   @Header('cache-control', 'no-store')

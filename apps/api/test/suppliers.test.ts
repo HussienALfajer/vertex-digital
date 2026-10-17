@@ -1,10 +1,18 @@
 import { randomBytes } from 'node:crypto';
 import { priceFromCost, SUPPLIER_POLICY_DEFAULTS } from '@vertex-digital/contracts';
 import {
+  appendProductPrice,
   catalogCategories,
+  catalogGames,
+  catalogProducts,
   decryptCredentials,
+  lockProductsForPricing,
+  newId,
+  type ProductRoutingState,
   priceReviews,
   productPrices,
+  productRoutes,
+  productRoutingStates,
   repriceProducts,
   supplierBalanceReads,
   supplierCredentials,
@@ -1197,5 +1205,141 @@ describe('catalog changes that move a price (audit A2)', () => {
     const moved = await routing(productId);
     expect(moved.currentPrice?.priceUsdUnits).toBe(priceFromCost(usd(1), wide));
     expect(moved.targetPriceUsdUnits).toBe(moved.currentPrice?.priceUsdUnits);
+  });
+
+  /** A game of its own with one code pack on a manual route at $1. */
+  async function pricedGame(slug: string, categoryId = ids.categoryId) {
+    const game = await json<{ id: string }>(
+      await post('/api/admin/catalog/games', {
+        categoryId,
+        slug: `${slug}-${run}`,
+        nameAr: `لعبة ${slug} ${run}`,
+        nameEn: 'Game',
+      }),
+      201,
+    );
+    const productId = await product(`باقة ${slug}`, game.id, 'code');
+    await json(
+      await post(`/api/admin/catalog/products/${productId}/routes/manual`, {
+        costUsdUnits: usd(1),
+      }),
+      201,
+    );
+    return { gameId: game.id, productId };
+  }
+
+  const priceOf = async (productId: string) =>
+    (await routing(productId)).currentPrice?.priceUsdUnits;
+  const margin = (dollars: number) => ({
+    percentBp: 0,
+    fixedUsdUnits: usd(dollars),
+    minMarginUsdUnits: usd(dollars),
+  });
+  const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it('a restored pack or game is priced on the rules changed while it was archived (F8-1)', async () => {
+    await reauthenticate();
+    const category = await json<{ id: string }>(
+      await post('/api/admin/catalog/categories', { slug: `back-${run}`, nameAr: `عودة ${run}` }),
+      201,
+    );
+    categories.push(category.id);
+    const { gameId, productId } = await pricedGame('restored', category.id);
+    expect(await priceOf(productId)).toBe(price(1));
+
+    await json(await post(`/api/admin/catalog/products/${productId}/archive`), 200);
+    const rule = await json<{ id: string }>(
+      await put('/api/admin/pricing/rules', { scope: 'game', targetId: gameId, ...margin(0.5) }),
+      200,
+    );
+    await json(await post(`/api/admin/catalog/products/${productId}/restore`), 200);
+    expect(await priceOf(productId)).toBe(usd(1.5));
+
+    await json(await post(`/api/admin/catalog/games/${gameId}/archive`), 200);
+    expect((await post(`/api/admin/pricing/rules/${rule.id}/archive`)).status).toBe(204);
+    await json(
+      await put('/api/admin/pricing/rules', {
+        scope: 'category',
+        targetId: category.id,
+        ...margin(0.7),
+      }),
+      200,
+    );
+    expect(await priceOf(productId)).toBe(usd(1.5));
+    await json(await post(`/api/admin/catalog/games/${gameId}/restore`), 200);
+    expect(await priceOf(productId)).toBe(usd(1.7));
+  });
+
+  it('a rule change waiting on a repricing that holds its pack does not deadlock (F8-3)', async () => {
+    await reauthenticate();
+    const { gameId, productId } = await pricedGame('deadlock');
+    await json(
+      await put('/api/admin/pricing/rules', { scope: 'game', targetId: gameId, ...margin(0.5) }),
+      200,
+    );
+    let saved: Promise<Response> | undefined;
+    // A sync's repricing: the pack locked, then a price row naming the rule it read.
+    await test.db.transaction(async (tx) => {
+      await lockProductsForPricing(tx, [productId]);
+      saved = put('/api/admin/pricing/rules', { scope: 'game', targetId: gameId, ...margin(0.7) });
+      await pause(1000);
+      const states = await productRoutingStates(tx, [productId], {
+        now: new Date(),
+        fakeEnabled: true,
+      });
+      await appendProductPrice(tx, states.get(productId) as ProductRoutingState, 'cost_sync');
+    });
+    await json(await (saved as Promise<Response>), 200);
+    expect(await priceOf(productId)).toBe(usd(1.7));
+  });
+
+  it("a game's first rule reprices a pack imported into it at the same time (F8-4)", async () => {
+    await reauthenticate();
+    const { gameId } = await pricedGame('importing');
+    const [manual] = await test.db.select().from(suppliers).where(eq(suppliers.code, 'manual'));
+    const productId = newId();
+    let saved: Promise<Response> | undefined;
+    // An import: the game locked, a pack and its route added and priced on the rule it reads.
+    await test.db.transaction(async (tx) => {
+      await tx.select().from(catalogGames).where(eq(catalogGames.id, gameId)).for('no key update');
+      await tx.insert(catalogProducts).values({
+        id: productId,
+        gameId,
+        kind: 'code',
+        nameAr: 'باقة مستوردة',
+        maxQuantity: 1,
+        status: 'paused',
+        sortOrder: 99,
+      });
+      const offerId = newId();
+      const now = new Date();
+      await tx.insert(supplierOffers).values({
+        id: offerId,
+        supplierId: (manual as { id: string }).id,
+        offerId,
+        name: 'باقة مستوردة',
+        kind: 'code',
+        requiredFields: [],
+        costUsdUnits: usd(1),
+        inStock: true,
+        costConfirmedAt: now,
+        lastSeenAt: now,
+      });
+      await tx.insert(productRoutes).values({
+        id: newId(),
+        productId,
+        supplierId: (manual as { id: string }).id,
+        offerId,
+      });
+      await repriceProducts(tx, {
+        productIds: [productId],
+        cause: 'route_change',
+        context: { now, fakeEnabled: true },
+      });
+      saved = put('/api/admin/pricing/rules', { scope: 'game', targetId: gameId, ...margin(0.5) });
+      await pause(1000);
+    });
+    await json(await (saved as Promise<Response>), 200);
+    expect(await priceOf(productId)).toBe(usd(1.5));
   });
 });

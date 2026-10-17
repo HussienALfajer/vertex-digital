@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { sypDisplayPrice } from '@vertex-digital/contracts';
+import { QUEUES, sypDisplayPrice } from '@vertex-digital/contracts';
 import {
   catalogCategories,
   catalogGames,
@@ -8,7 +8,8 @@ import {
   marginRules,
 } from '@vertex-digital/db';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { JobsService } from '../src/core/jobs/index.js';
 import { api, auditOf, body, PASSWORD, removeAccounts, seedCustomer, totp } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
 
@@ -164,6 +165,22 @@ describe('access', () => {
     admin = await client.adminWithTotp(test.db);
     seeded.push(admin.id);
     await reauthenticate();
+  });
+
+  it('refreshes the store after a rule change, never after a preview (F8-7)', async () => {
+    const send = vi.spyOn(test.app.get(JobsService), 'send');
+    const refreshes = () =>
+      send.mock.calls.filter(([, queue]) => queue === QUEUES.storeRevalidate).length;
+    try {
+      await json(await preview({ target: { scope: 'global' }, costUsdUnits: usd(1) }), 200);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(refreshes()).toBe(0);
+      await reauthenticate();
+      await json(await setRule({ scope: 'global', ...GLOBAL }), 200);
+      await expect.poll(refreshes).toBe(1);
+    } finally {
+      send.mockRestore();
+    }
   });
 
   it('never caches its answers', async () => {

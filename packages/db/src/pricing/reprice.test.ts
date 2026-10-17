@@ -153,6 +153,26 @@ describe('repriceProducts (rule P2)', () => {
     });
   });
 
+  it('writes the new rule values when a rule change leaves the price as it was (Q21)', async () => {
+    const p = await product();
+    await route(p.id, 'fake', await offer('fake', usd(1)));
+    await reprice([p.id], 'route_change');
+    expect((await prices(p.id))[0]).toMatchObject({ priceUsdUnits: usd(1.1), ...rule });
+
+    // A lower minimum: 10% still gives $1.10, but purchases copy the stored row's minimum.
+    await pool.query('update margin_rules set min_margin_usd_units = $2 where target_id = $1', [
+      p.id,
+      usd(0.05),
+    ]);
+    expect(await reprice([p.id], 'rule_change')).toEqual({ repriced: 1, reviewsOpened: 0 });
+    expect((await prices(p.id))[0]).toMatchObject({
+      priceUsdUnits: usd(1.1),
+      minMarginUsdUnits: usd(0.05),
+      cause: 'rule_change',
+    });
+    expect(await reprice([p.id], 'rule_change')).toEqual({ repriced: 0, reviewsOpened: 0 });
+  });
+
   it('holds a synced change above 10% for review, refreshes it, and guards the margin', async () => {
     const p = await product();
     const fakeOffer = await offer('fake', usd(0.92));

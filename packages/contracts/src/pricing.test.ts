@@ -11,6 +11,7 @@ import {
   pricingPreviewRequestSchema,
   resolveMarginRule,
   savings,
+  savingsWarning,
   setMarginRuleSchema,
 } from './pricing.js';
 
@@ -138,6 +139,17 @@ describe('savings (rule PR7)', () => {
     expect(savings(usd(99), usd(100))).toEqual({ amountUsdUnits: usd(1), percent: 1 });
     expect(savings(usd(0.66), usd(1))?.percent).toBe(34);
     expect(savings(usd(0.01), usd(10_000))?.percent).toBe(99);
+  });
+
+  it('warns above 50% of the official price exactly, not by the percent shown (edge case 7)', () => {
+    // $2.50 off $4.99 is 50.10%, shown as 50%.
+    expect(savings(usd(2.49), usd(4.99))?.percent).toBe(50);
+    expect(savingsWarning(usd(2.49), usd(4.99))).toBe(true);
+    expect(savingsWarning(usd(2.5), usd(5))).toBe(false);
+    expect(savingsWarning(usd(1.25), usd(4.99))).toBe(true);
+    expect(savingsWarning(usd(4.85), usd(4.99))).toBe(false);
+    expect(savingsWarning(usd(1), null)).toBe(false);
+    expect(savingsWarning(usd(5), usd(4.99))).toBe(false);
   });
 });
 

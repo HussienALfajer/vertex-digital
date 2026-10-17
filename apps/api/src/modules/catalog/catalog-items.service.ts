@@ -23,6 +23,7 @@ import {
   newId,
   type ProductRoutingState,
   productRoutingStates,
+  repriceProducts,
   type Transaction,
 } from '@vertex-digital/db';
 import { and, asc, count, eq, isNull } from 'drizzle-orm';
@@ -412,7 +413,10 @@ export class CatalogItemsService {
     });
   }
 
-  /** Rule CT1, CT3: refused under an archived game, beyond 100, or into an incomplete active game. */
+  /**
+   * Rule CT1, CT3: refused under an archived game, beyond 100, or into an incomplete active game.
+   * Repriced: rule changes skip archived paths (S07 P5, audit F8-1).
+   */
   restoreProduct(actor: Actor, id: string): Promise<Product> {
     return mapTaken(() =>
       this.db.transaction(async (tx) => {
@@ -438,6 +442,11 @@ export class CatalogItemsService {
           await auditCatalog(tx, actor, 'catalog_product.restored', productEntity(id), {
             gameId: game.id,
             nameAr: row.nameAr,
+          });
+          await repriceProducts(tx, {
+            productIds: [id],
+            cause: 'rule_change',
+            context: routingContext(this.env),
           });
         }
         return this.product(tx, result);

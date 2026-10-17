@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { productAvailabilitySchema } from './catalog.js';
+import { productAvailabilitySchema, SAVINGS_WARNING_PERCENT } from './catalog.js';
 import { pagedListSchema, pageQuerySchema } from './lists.js';
 import {
   CURRENCY_SCALE,
@@ -215,6 +215,22 @@ export function savings(
     (BigInt(amountUsdUnits) * 100n) / positiveUnits(officialPriceUsdUnits, 'official price'),
   );
   return { amountUsdUnits, percent: percent >= 1 ? percent : null };
+}
+
+/**
+ * Edge case 7: the saving is more than `SAVINGS_WARNING_PERCENT` of the official price, compared
+ * exactly, not through the percent shown (rounded down: 50.1% shows 50; audit F8-8).
+ */
+export function savingsWarning(
+  priceUsdUnits: number,
+  officialPriceUsdUnits: number | null,
+): boolean {
+  const found = savings(priceUsdUnits, officialPriceUsdUnits);
+  if (!found || officialPriceUsdUnits === null) return false;
+  return (
+    BigInt(found.amountUsdUnits) * 100n >
+    BigInt(officialPriceUsdUnits) * BigInt(SAVINGS_WARNING_PERCENT)
+  );
 }
 
 // Stored prices and reviews (S07, with F09; ADR 0021) -------------------------------------------
