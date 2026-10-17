@@ -55,7 +55,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] Production deploys of 2026-10-14 and 2026-10-15: the launch hardening (PR #94, commit `0ce64f0`, 2026-10-14; `provision.sh` re-run for the store's `/favicon.ico` nginx location), then the catalog counts and covers fix (PR #97, commit `b0794fa`, 2026-10-15); no migration (62 applied), no new secret; checked on 2026-10-15: `current/REVISION` is `b0794fa`, the installed nginx site matches the repository, `/favicon.ico` and `/api/health` answer 200, the three PM2 processes online with no unstable restart
 
 ## Pilot — open quiet launch
-- [ ] Full system test of every V1 feature on production, end to end, before any second supplier is added (owner, 2026-10-15); features 1–5 of 22 accepted (features 4 and 5 on 2026-10-16, case 4.12 step 2 due 2026-10-17), progress and findings in `docs/testing/v1-system-test.md`
+- [ ] Full system test of every V1 feature on production, end to end, before any second supplier is added (owner, 2026-10-15); features 1–5 of 22 accepted (features 4 and 5 on 2026-10-16, case 4.12 step 2 due 2026-10-17; feature 6's steps written 2026-10-17), progress and findings in `docs/testing/v1-system-test.md`
 - [ ] Second automatic supplier, chosen by the owner after the full system test (`/supplier-adapter`; Q17 answered first; FazerCards evaluated in `docs/suppliers/fazercards.md`)
 - [ ] Launch checklist done (below)
 - [ ] Registration opened with the F26 switch, without promotion; low deposit and purchase limits
