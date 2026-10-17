@@ -176,6 +176,7 @@ The owner's decision (2026-10-17): once all 22 features are accepted, and before
 | F7-14 | 7 | External audit A11 | The test that the public image route refuses receipts and other private files used whatever QR image another test file had left, and skipped the check when there was none | minor | The test stores one file of every other kind itself and checks each, with and without a width (`catalog.test.ts`); the route itself was already right | Fixed |
 | F7-15 | 7 | Review of the audit fixes | A game's move reprices its packs under the destination's rule as it reads it; a margin rule change on that destination at the same instant lists its products before the move commits, so the moved packs can keep the previous rule's price until the next repricing. The price stays above cost (the database check), and before F7-5 a move never repriced at all | minor | None: one admin, two of their own changes in the same second; the next sync, route change or rule change reprices | Accepted |
 | F7-2 | 7 | Writing the steps (production read) | None of the 57 games has an ID guide image or an accent color, and no pack has an official price: the buy box shows no "where is my ID" guide for the 36 games that ask for an ID, every game uses the brand's sand, and no savings badge appears anywhere | minor (content) | None yet: the owner decides which games get an ID guide (first those whose ID customers most often get wrong) and whether to enter official prices, before the pilot | Deferred to the catalog build-out (owner, 2026-10-17) |
+| F8-1 | 8 | Writing the steps (production read, 2026-10-17) | The ground rules send failures, refunds and manual fulfilment through PUBG Mobile "60 شدة"'s manual route (cost $0.95), but the pack sells at $0.99 on WDGZone's $0.887: the manual route leaves $0.04, under the $0.10 minimum margin, so the router never fails over to it for an order paid at $0.99 (PR5, PR6: the undelivered units are refunded instead). It becomes the price basis, at $1.05, only while WDGZone is unusable for that pack (paused or down) | minor (steps) | None yet: before feature 11 the owner chooses how its manual case runs: with WDGZone paused for the pack (the price moves to $1.05 at once), the manual cost lowered to what the owner really pays if that is $0.89 or less, or the admin's manual fulfil of an order in review (S11), which needs no route | Open (feature 11) |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -1605,4 +1606,249 @@ Result: ✅ (2026-10-17)
 | Findings | F7-1 and F7-2 (found while writing the steps from the production records: catalog content) deferred to "After the last feature: the professional catalog" (owner, 2026-10-17); F7-3 (nginx's 413 read as an unexpected error in the panel) fixed with the results; F7-4 to F7-14 from an external audit by another model (GPT 6.1 sol, review only, 11 findings: five major, six minor, no blocker), each confirmed in the code (and, for A1, A2 and A3, with a test that fails without the fix) and fixed; F7-15 (a rare race noted by the reviewer) accepted |
 | Checked by Claude (read-only, production, 2026-10-17, after 7.14) | Real catalog unchanged: 6 categories, 57 active games, 587 unarchived packs (172 active), 41 fields, PUBG Mobile 29 live and 18 archived packs, no real game or pack updated or audited that day; `system-test`, `system-test-7` and `system-test-7-app` archived. The day's catalog audit entries match 7.12 (category: 1 created, 2 updated, 2 reordered, 1 archived; game: 2 created, 6 updated, 3 archived, 1 restored; field: 2 created, 1 updated, 1 archived, 1 restored; pack: 5 created, 3 updated, 2 archived, 1 restored; 4 pack reorders), with one game reorder and two field reorders more than the steps name, from the keyboard check of 7.13 |
 | Accepted by the owner on | 2026-10-17; the audit fixes accepted by Claude on 2026-10-17 (every check green, the reviewer's two findings closed) |
-| PR | the steps (#125); the results and the F7-3 fix (#126); the external audit's fixes, F7-4 to F7-15 (this file's PR) |
+| PR | the steps (#125); the results and the F7-3 fix (#126); the external audit's fixes, F7-4 to F7-15 (#127) |
+
+---
+
+## Feature 8 — Pricing engine (F10)
+
+**What it covers:** how every price is made and kept safe (S06 PR1–PR10, S07 P1–P6, ADR 0020 and 0021): the global rule and the calculator on real costs (PR3, PR4, PR8); prices stored per pack and explained by one cost and one rule (P1); the review queue holding a large cost change and the margin guard keeping the held pack off sale (P3, P4, P6), with the one real review decided; then, on the test game of feature 7, rules per category, game and pack that replace their parent entirely (PR2), their bounds (PR1), re-authentication (PR9), repricing in the same change (P5), the savings against an official price (PR7), a manual cost repricing at once with no review (RT7), and archiving a rule back to its parent; who can read and change pricing; the audit entries.
+
+**How to read a case:** as in features 2 to 7: **What this checks** first, then the numbered steps; a line starting with "Expected" is what you must see.
+
+**Real money in this feature:** none. No purchase, no deposit, no supplier order. **One real price changes**, by the owner's decision in case 8.5: "بلايستيشن 5 دولار (أمريكي)", held at $5.23 and off sale by the margin guard since 2026-10-16. Every rule is set on the test category and test game of feature 7, restored for this feature (case 8.6) and archived again at the end (case 8.15): never press "تعديل" on the global rule's form to save, "تخصيص" on a real category, game or pack, or "قبول المحدد", "إيقاف" or "تعديل الهامش" on anything but the review of 8.5.
+
+**Worked numbers used below:** production as recorded (read-only query, 2026-10-17 20:35, deployed `bfae339`):
+
+- **Rules:** one, the **global rule**: 10%, $0.00 fixed, $0.10 minimum margin (the seed of 2026-10-12, never changed: no `margin_rule` audit entry). No category, game or pack rule.
+- **Supplier policy** (the seed): a sync change of **more than 10%** opens a review; a cost not confirmed for 120 minutes is stale. WDGZone: healthy, last sync 20:30 succeeded, balance $6.124; 411 syncs since 2026-10-12 (14 failed), 19,976 cost changes seen, **58 repricings** (`cost_sync`) and **one review**.
+- **Prices:** 178 packs have a stored price, all on the global rule: the **172 active packs** of active games (every one priced, none active without a price; the paused ones have none) and 6 of the 18 archived PUBG Mobile packs. The minimum margin sets the price of 42 (costs $0.175–$1.031), the 10% of 130 (costs $1.067–$5.963). No pack has an official price (F7-2) except the test pack `325 UC` ($4.99, feature 7). Rate 140 ل.س, display step 1 ل.س.
+- **The review queue:** **one open review**, opened 2026-10-16 18:32: "بلايستيشن 5 دولار (أمريكي)" (بطاقات بلايستيشن, `playstation`, its only active pack): WDGZone's cost **$4.75 → $5.407** (+13.83%), price **$5.23** held, proposed **$5.95**. At $5.23 it would sell $0.177 below cost, so the guard keeps it off sale ("موقوفة بحارس الهامش"). No review was ever decided.
+- **PUBG Mobile** (14 active packs, all WDGZone): "60 شدة" cost $0.887 → **$0.99** (the minimum governs); "325 شدة" $4.435 → **$4.88** (the 10% governs). "60 شدة" also has the **manual route at $0.95** (the last resort of the ground rules), the only pack with two routes; at $0.99 that route leaves $0.04, under the $0.10 minimum, so it is not profitable for the current price (F8-1).
+- The cheapest active pack: هونر أوف كينغز "16 توكن", cost $0.175 → **$0.28**; the dearest: موبايل ليجندز "429 ماسة", $5.963 → **$6.56**.
+
+The price math (PR3): `price = ⌈max(cost + ⌈cost × percent⌉ + fixed, cost + minimum)⌉` to the whole cent; the margin percent the panel shows is margin ÷ price, rounded down to 0.01%; SYP = price × 140 rounded up to the pound. With the global rule:
+
+| Cost | cost + 10% | cost + $0.10 | Price | Margin | Margin % | SYP |
+|---|---|---|---|---|---|---|
+| $0.89 | $0.979 | $0.99 | **$0.99** | $0.10 | 10.1% | 139 |
+| $0.8875 | $0.97625 | $0.9875 | **$0.99** | $0.1025 | 10.35% | 139 |
+| $8.50 | $9.35 | $8.60 | **$9.35** | $0.85 | 9.09% | 1,309 |
+| $0.000001 | $0.000002 | $0.100001 | **$0.11** | $0.109999 | 99.99% | 16 |
+| $10,000 | $11,000 | $10,000.10 | **$11,000.00** | $1,000.00 | 9.09% | 1,540,000 |
+
+The test records (feature 7, archived; restored in 8.6, archived again in 8.15): category "اختبار النظام" (`system-test`), game A "لعبة اختبار 7" (`system-test-7`, paused, packs `60 UC` and `660 UC` active and `325 UC` paused with the official price $4.99). Game A stays **paused** throughout: none of its prices ever reaches the store. Its two manual routes (8.6) give it costs: `60 UC` **$0.89**, `660 UC` **$8.50**. The rules set on it:
+
+| Rule | Values | `60 UC` (cost $0.89) | `660 UC` ($8.50) |
+|---|---|---|---|
+| Global (start) | 10%, $0, min $0.10 | $0.99 | $9.35 |
+| Category "اختبار النظام" (8.7) | 12%, $0, min $0.15 | **$1.04** (min) | **$9.52** (12%) |
+| Game A (8.8) | 20%, $0.05, min $0.10 | **$1.12** | **$10.25** |
+| Pack `60 UC` (8.9) | 5%, $0, min $0.05 | **$0.94** | $10.25 (game) |
+| `60 UC` cost to $1.00 (8.10) | pack rule | **$1.05** | — |
+| Pack rule archived (8.11) | game | **$1.25** | $10.25 |
+| Game rule archived | category | **$1.15** | $9.52 |
+| Category rule archived | global | **$1.10** | $9.35 |
+
+**Before you start**
+
+- The panel open on the PC (signed in), TC1 signed in to the store in a second browser, a private window signed out, and your phone.
+- About 1 hour 15 minutes. Re-authentication lasts 5 minutes: 8.7 to 8.11 save several rules; confirm your identity again whenever the panel asks.
+- "سعر الصرف" (`/rates`): 140. Nothing is paused in the store switches (feature 21), and the manual supplier is not paused (`/suppliers`).
+- WDGZone's costs move with every sync (every 15 minutes): if a real figure in 8.2 to 8.5 differs from the worked numbers, the cost moved since 2026-10-17; note it and use what the panel shows (the math of the table still holds). The test game's figures never move: its costs are manual.
+
+**Not tested on production (by design):** a sync change above and below 10% and the review's hold, refresh and "superseded" (S07 acceptance 4, local with the fake supplier, and `reprice.test.ts`); `REVIEW_STALE` (needs the cost to move between reading and accepting); a margin exactly at the minimum, which the guard counts as profitable (contracts tests); "تعديل الهامش" and "إيقاف" from a review (API and E2E tests: the one real review is decided once, in 8.5); the global rule's archive answering `GLOBAL_RULE_REQUIRED` (the panel offers no archive button for it; API test); two rule saves for one target, or a sync and a rule change, at the same instant (concurrency tests); the price charged at purchase and the guard checked again per attempt (feature 11). The supplier policy page, the routes drawer's choices, sync and health are feature 9; the price and savings shown on the store's game pages are feature 10.
+
+### 8.1 Pricing in the panel as it stands
+
+**What this checks:** the admin sees in one page which rule prices everything, and nothing unexpected overrides it.
+
+Read only: **save nothing** in this case.
+
+1. In the panel open "التسعير" (`/pricing`). Expected: "التسعير" with "قواعد الهامش: عامة، ثم لكل فئة ولعبة وباقة. القاعدة الأدق تحلّ محل ما فوقها كاملة.".
+2. "القاعدة العامة" with "تنطبق على كل باقة ليس لها قاعدة أدق. تُعدّل ولا تُؤرشف.": "النسبة %" **10%**, "مبلغ ثابت $" **$0.00**, "الحد الأدنى للهامش $" **$0.10**; a "تعديل" button and **no** "أرشفة".
+3. "قواعد الفئات": the six categories in the catalog's order, each "10% + $0.00، حد أدنى $0.10" with "القاعدة العامة", "الباقات المحكومة" "—", and "تخصيص" (**do not press it**).
+4. "قواعد الألعاب والباقات": "لا توجد قواعد خاصة بلعبة أو باقة" with "خصّص هامش لعبة أو باقة من تبويب «التسعير» في صفحتها.".
+5. Press "تعديل" on the global rule. Expected: "القاعدة العامة" with "السعر = التكلفة + النسبة + المبلغ الثابت، ولا يقل الهامش عن الحد الأدنى، مقرّبًا للأعلى إلى سنت كامل."; the fields 10, 0.00, 0.10; the preview at "تكلفة تجريبية $" 1.00: "التكلفة" $1.00, "السعر" **$1.10**, "الهامش" $0.10 (9.09%), "بالليرة السورية" 154 ل.س, "المطبّقة: القاعدة العامة". **Close the dialog without saving.**
+
+Result:
+
+### 8.2 The calculator on real costs
+
+**What this checks:** any price the store shows can be explained from a cost and a rule, rounded only upward, and the panel's math matches the stored prices.
+
+1. "جرّب تكلفة": "تطبيق على" "عامة", "التكلفة $" each cost of the worked table in turn: `0.89`, `0.8875`, `8.50`, `0.000001`, `10000`. Expected: each row of the table: the price, the margin with its percent and the SYP price, with "المطبّقة: القاعدة العامة".
+2. `10000.01`. Expected: no price, "بعض البيانات غير صحيحة. راجع الحقول وأعد المحاولة." (costs are bounded at $10,000). `100000` or `abc`: the field marked wrong and "اكتب قيمًا صحيحة لترى السعر.".
+3. "تطبيق على" "باقة", game ببجي موبايل, pack "60 شدة", cost `0.887` (its WDGZone cost). Expected: **$0.99**, margin $0.103 (10.4%), 139 ل.س, "المطبّقة: القاعدة العامة": the price the pack has today (feature 7, case 7.2).
+4. Pack "325 شدة", cost `4.435`. Expected: **$4.88**, margin $0.445 (9.11%), 684 ل.س.
+5. Game هونر أوف كينغز, pack "16 توكن", cost `0.175`. Expected: **$0.28**, margin $0.105 (37.5%): on small costs the minimum margin sets the price.
+6. "تطبيق على" "فئة", "ألعاب الموبايل", cost `1.00`. Expected: $1.10, "المطبّقة: القاعدة العامة" (the category has no rule of its own).
+
+Result:
+
+### 8.3 PUBG Mobile's prices, read only
+
+**What this checks:** a real game shows which rule prices each of its packs and what each price follows.
+
+Read only: **change nothing** in this case.
+
+1. ببجي موبايل → "التسعير". Expected: "قاعدة هذه اللعبة" with "المطبّقة: القاعدة العامة"; 10%, $0.00, $0.10; "تخصيص هامش لهذه اللعبة" (**do not press it**), no "أرشفة".
+2. "الباقات" below it. Expected: the 29 live packs, each "10% + $0.00، حد أدنى $0.10" with "القاعدة العامة" and "تخصيص".
+3. "الباقات" tab. Expected: "60 شدة" $0.99 "متوفرة", "325 شدة" $4.88, the paused packs "لا سعر بعد".
+4. "المسارات" on "60 شدة" (read only). Expected: "مسارات 60 شدة" with "السعر يتبع أرخص مسار صالح: الموردون السليمون، ثم المتراجعون، ثم اليدوي ملجأً أخيرًا."; "السعر الحالي" $0.99 (139 ل.س), "يتبع" WDGZone; two routes: WDGZone "تلقائي" marked "الأساس" (cost about $0.887) and the manual one "ملجأ أخير" at $0.95 (below the minimum margin at $0.99: F8-1). Close it without changing anything.
+
+Result:
+
+### 8.4 The review queue and the margin guard as they stand
+
+**What this checks:** a large supplier price rise never changes a price silently, and while the held price would sell below cost the pack is off sale.
+
+Read only until 8.5.
+
+1. The navigation's "مراجعة الأسعار" carries a badge **1**. Open it (`/pricing/reviews`). Expected: "مراجعة الأسعار" with "تغيّرات تكلفة فوق الحد تحجز السعر حتى تقرر: اقبل السعر المقترح، أو عدّل الهامش، أو أوقف الباقة."; "الحالة" "بانتظار القرار", "المورد" "كل الموردين"; "المراجعات: 1".
+2. The row. Expected: "بلايستيشن 5 دولار (أمريكي)" (a link to the game's packs) with "بطاقات بلايستيشن" and its age (since 2026-10-16); "المورد" WDGZone; "التكلفة" **$4.75 → $5.407** with "+13.83%"; "السعر" **$5.23 → $5.95**; "الهامش" "الحالي −$0.177" in red and "المقترح $0.543"; "التوفر" **"موقوفة بحارس الهامش"**; "قبول", "تعديل الهامش", "إيقاف" (**press nothing yet**).
+3. "الحالة" → "مقبولة". Expected: "لا مراجعات بهذه الحالة" (none was ever decided). Back to "بانتظار القرار". "المورد" → "يدوي": "لا تغييرات بانتظار المراجعة". Back to "كل الموردين".
+4. In the private window open `https://digital.vertexmedia.pro/games/playstation`. Expected: "بلايستيشن 5 دولار (أمريكي)" greyed "غير متوفرة حاليًا", no price and no buy action, like the paused packs: the held $5.23 is never offered.
+
+Result:
+
+### 8.5 Deciding the real review (owner's decision)
+
+**What this checks:** a held price changes only by the admin's decision, once, and the pack returns to sale at a profitable price.
+
+**The owner decides before step 1.** Accept (recommended): the pack sells at **$5.95** (≈ 833 ل.س) for a $5 card, a $0.543 margin on today's $5.407 cost. The alternative "تعديل الهامش" sets a rule on this real pack (for example 5%, $0, min $0.10 gives $5.68) and is then kept as a real pack rule; "إيقاف" leaves the pack paused. The steps below are for "قبول"; for another choice, note it here and check the same audit entry and store page.
+
+1. Open `/pricing/reviews` in a **second tab** as well, and leave it untouched.
+2. In the first tab press "قبول" on the row. Expected: the row leaves the list, "لا تغييرات بانتظار المراجعة"; the badge disappears. (If the panel answers "تغيّر السعر المقترح إلى …: راجعه ثم اقبل.", WDGZone's cost moved since the page was read: note the new figure and accept again.)
+3. In the second tab press "قبول" on the old row. Expected: refused in the row, "قُرِّر في هذه المراجعة من قبل."; nothing changes. Reload: the list is empty.
+4. "الحالة" → "مقبولة". Expected: the review with "مقبولة".
+5. بطاقات بلايستيشن → "الباقات". Expected: "بلايستيشن 5 دولار (أمريكي)" **$5.95**, "متوفرة". Its "المسارات": "السعر الحالي" $5.95 (833 ل.س), "يتبع" WDGZone.
+6. The private window: reload `/games/playstation` (allow up to a minute). Expected: the pack at **$5.95**, ≈ 833 ل.س, buyable (**do not buy**: feature 11).
+
+Result:
+
+### 8.6 Setup: the test game back, with manual costs
+
+**What this checks:** a pack's first price comes from its first usable route, at once, and a paused game keeps its prices off the store.
+
+1. "الكتالوج" → "إدارة الفئات" → archived tab: "استعادة" on "اختبار النظام". Expected: back, 7th, "الألعاب: 0". The store's home page: no "اختبار النظام" section (no active game).
+2. The catalog's archived filter in "اختبار النظام": "استعادة" on "لعبة اختبار 7" (A). Expected: A back, **"متوقفة"**, with `60 UC`, `325 UC` (متوقفة, official price $4.99) and `660 UC`, each "لا سعر بعد". Leave "تطبيق اختبار 7" (B) archived.
+3. A → "الباقات" → "المسارات" on `60 UC` → "إضافة مسار يدوي". Expected: "المسار اليدوي تنفّذه بنفسك، ويُستعمل فقط حين لا يصلح أي مسار تلقائي. تغيير التكلفة يعيد التسعير فورًا ويطلب إعادة التحقق."; "التكلفة بالدولار" with "بسنتات كاملة، من 0.01 إلى 10000.". Cost `0.895`: "تكلفة من 0.01 إلى 10000 بسنتات كاملة.". Cost `0.89`; add (confirm your identity if asked). Expected: the manual route "ملجأ أخير" marked "الأساس"; "السعر الحالي" **$0.99** (139 ل.س).
+4. The same on `660 UC` with cost `8.50`. Expected: **$9.35** (1,309 ل.س).
+5. A → "الباقات". Expected: `60 UC` $0.99 and `660 UC` $9.35, both "غير متوفرة: متوقفة" (the game is paused); `325 UC` "لا سعر بعد". `https://digital.vertexmedia.pro/games/system-test-7` in the private window: the not-found page.
+
+Result:
+
+### 8.7 A category rule, its bounds and re-authentication
+
+**What this checks:** a section of the store can carry its own margin, every rule stays within safe bounds, a stolen session cannot change prices, and the packs it governs are repriced in the same change.
+
+1. `/pricing` → "قواعد الفئات": "اختبار النظام" is 7th with the global rule. "تخصيص". Expected: "قاعدة فئة: اختبار النظام", the fields prefilled from the global rule (10, 0.00, 0.10).
+2. "النسبة %" `12.555`. Expected: "نسبة من 0 إلى 100، بمنزلتين عشريتين على الأكثر.". `101`: the same. "مبلغ ثابت $" `0.005`: "مبلغ من 0 إلى 50 بسنتات كاملة.". "الحد الأدنى للهامش $" `0`: "حد أدنى من 0.01 إلى 50 بسنتات كاملة."; `50.01`: the same. Nothing saved.
+3. `12`, `0`, `0.15`. Expected, the preview at 1.00: "السعر" **$1.15**, "الهامش" $0.15 (13.04%), 161 ل.س (the minimum governs: 1.12 < 1.15).
+4. Wait until more than 5 minutes have passed since you last confirmed your identity (or sign in again first), then "حفظ القاعدة". Expected: the re-authentication dialog (password and TOTP) before anything is saved; confirm. Then: the row reads "12% + $0.00، حد أدنى $0.15", no "القاعدة العامة" badge, "الباقات المحكومة" **3** (A's three live packs), "تعديل" and "أرشفة". The six real categories unchanged.
+5. A → "الباقات". Expected: `60 UC` **$1.04**, `660 UC` **$9.52**. A → "التسعير": "المطبّقة: قاعدة الفئة", each pack "12% + $0.00، حد أدنى $0.15" with "قاعدة الفئة".
+6. ببجي موبايل → "الباقات": "60 شدة" still $0.99 (other categories are not touched).
+
+Result:
+
+### 8.8 A game rule replaces the category rule entirely
+
+**What this checks:** the most specific rule wins as a whole, never mixed field by field with its parent's.
+
+1. A → "التسعير" → "تخصيص هامش لهذه اللعبة". Expected: "قاعدة لعبة: لعبة اختبار 7", prefilled 12, 0.00, 0.15.
+2. `20`, `0.05`, `0.10`; save (confirm your identity if asked). Expected: "المطبّقة: قاعدة اللعبة", 20%, $0.05, $0.10, with "تعديل" and "أرشفة"; each pack "قاعدة اللعبة".
+3. "الباقات". Expected: `60 UC` **$1.12**, `660 UC` **$10.25**.
+4. `/pricing` → "جرّب تكلفة": "لعبة", "لعبة اختبار 7", cost `0.10`. Expected: **$0.20** with "المطبّقة: قاعدة اللعبة" (the game's own $0.10 minimum governs; the category's $0.15 would have given $0.25). "فئة", "اختبار النظام", the same cost: **$0.25**, "المطبّقة: قاعدة الفئة".
+5. "قواعد الألعاب والباقات". Expected: one row: "لعبة" "لعبة اختبار 7", "20% + $0.05، حد أدنى $0.10", "الباقات المحكومة" 3; the category row now governs **0** packs.
+
+Result:
+
+### 8.9 A pack rule and the savings against an official price
+
+**What this checks:** one pack can be priced on its own, and a savings badge is shown only when it is true.
+
+1. A → "التسعير" → `60 UC` → "تخصيص". Expected: "قاعدة باقة: 60 UC", prefilled 20, 0.05, 0.10. `5`, `0`, `0.05`; save. Expected: `60 UC` "5% + $0.00، حد أدنى $0.05" with "قاعدة الباقة"; `660 UC` and `325 UC` keep "قاعدة اللعبة".
+2. "الباقات". Expected: `60 UC` **$0.94**; `660 UC` $10.25.
+3. `/pricing` → "جرّب تكلفة": "باقة", "لعبة اختبار 7", `325 UC` (official price $4.99, the game rule). Each cost in turn. Expected:
+   - `4.00`: $4.85, "توفير $0.14 (2%) عن السعر الرسمي $4.99".
+   - `4.08`: $4.95, "توفير $0.04 عن السعر الرسمي $4.99" (under 1%: no percent).
+   - `4.116`: $4.99, "لا توفير: السعر الرسمي $4.99" (equal is no saving).
+   - `4.20`: $5.09, "لا توفير: السعر الرسمي $4.99".
+   - `1.00`: $1.25, "توفير $3.74 (74%) عن السعر الرسمي $4.99" and "التوفير أكثر من 50%: راجع السعر الرسمي، فالمتجر سيعرضه كما هو.".
+4. "قواعد الألعاب والباقات". Expected: two rows, "لعبة" "لعبة اختبار 7" (governs 2) and "باقة" "60 UC" (governs 1).
+
+Result:
+
+### 8.10 A manual cost change reprices at once, with no review
+
+**What this checks:** a cost the admin types moves the price immediately (only a supplier's own change waits for review), and only after re-authentication.
+
+1. A → `60 UC` → "المسارات" → "تعديل التكلفة" on the manual route. Expected: "تكلفة المسار اليدوي". Cost `1.00` (+12.4%, above the review threshold); save, confirming your identity if asked.
+2. Expected: "السعر الحالي" **$1.05** at once (5% gives $1.05, the $0.05 minimum gives $1.05); no review: `/pricing/reviews` still "لا تغييرات بانتظار المراجعة".
+
+Result:
+
+### 8.11 Archiving rules returns to the parent
+
+**What this checks:** removing a special margin restores the general one at once, and nothing is ever deleted.
+
+1. A → "التسعير" → "أرشفة" on `60 UC`. Expected: "أرشفة القاعدة" with "ستعود «60 UC» إلى قاعدة لعبتها أو فئتها أو القاعدة العامة."; confirm (identity if asked). `60 UC` back to "قاعدة اللعبة"; "الباقات": `60 UC` **$1.25**.
+2. "أرشفة" on the game rule ("ستعود «لعبة اختبار 7» إلى قاعدة فئتها أو القاعدة العامة."). Expected: "المطبّقة: قاعدة الفئة"; `60 UC` **$1.15**, `660 UC` **$9.52**.
+3. `/pricing`: "أرشفة" on "اختبار النظام" ("ستعود «اختبار النظام» إلى القاعدة العامة."). Expected: the row back to "10% + $0.00، حد أدنى $0.10" with "القاعدة العامة"; "قواعد الألعاب والباقات" empty again. A: `60 UC` **$1.10**, `660 UC` **$9.35**.
+4. The global rule still has no "أرشفة" (it can only be edited).
+
+Result:
+
+### 8.12 Only the admin reads and changes pricing
+
+**What this checks:** costs, margins and reviews are never visible to customers, and only the signed-in panel changes them.
+
+1. In TC1's browser open `https://digital-admin.vertexmedia.pro/api/admin/pricing/rules` and `https://digital-admin.vertexmedia.pro/api/admin/pricing/reviews`. Expected: 401, no data.
+2. Open `https://digital.vertexmedia.pro/api/admin/pricing/rules`. Expected: 404.
+3. In the private window open `https://digital.vertexmedia.pro/api/catalog/storefront`. Expected: prices only (no cost, margin, rule, route or supplier field); no "اختبار النظام".
+4. Optional (developer tools, Network, in the panel): `/api/admin/pricing/rules` carries `Cache-Control: no-store`; a rule save answered 403 `REAUTHENTICATION_REQUIRED` before the dialog of 8.7 step 4.
+
+Result:
+
+### 8.13 The audit log has every pricing decision
+
+**What this checks:** every change to how the store prices can be traced to who made it, when, and from what to what.
+
+1. "سجل التدقيق", entity type "قاعدة هامش". Expected, newest first: "أرشفة قاعدة هامش" three times (pack, game, category: each with its values) and "تعيين قاعدة هامش" three times; open the category's: `scope` category, `before` empty (a new rule), `after` `percentBp` 1200, `fixedUsdUnits` 0, `minMarginUsdUnits` 150000 ($0.15). **Nothing** before today (the global rule was never changed) and nothing for the refused values of 8.7 or the previews.
+2. Entity type "مراجعة سعر". Expected: one "قبول سعر" (8.5) with the price before $5.23 and after $5.95; actor you, channel admin.
+3. Entity type "مسار باقة": "إضافة مسار" twice (8.6). Entity type "عرض مورد": "تعيين تكلفة يدوية" for 8.10 ($0.89 → $1.00); note whether 8.6's first costs appear there too.
+4. Entity types "فئة" and "لعبة": "استعادة فئة" and "استعادة لعبة" of 8.6.
+
+Result:
+
+### 8.14 Screens quality on desktop and phone
+
+**What this checks:** the admin can run pricing from either device without misreading a figure.
+
+1. On the PC, light and dark themes: `/pricing` (the global card, both tables, the calculator with a savings line and its warning), the rule dialog with its errors and preview, A's "التسعير" tab, `/pricing/reviews` with the row of 8.4 (or the empty and "مقبولة" states after 8.5), the archive dialog. Expected: readable, RTL, Latin digits; amounts and percents kept whole left to right (`$4.75 → $5.407`, `+13.83%`, `−$0.177`); the negative margin in red.
+2. On the phone: `/pricing` and `/pricing/reviews` (tables scrolling within their frame, the three decision buttons reachable), the rule dialog; no horizontal page scroll.
+3. With the keyboard only (PC): open "تخصيص", type the values, save, and use a review's buttons.
+
+Result:
+
+### 8.15 Clean-up: the test records archived again
+
+**What this checks:** the test leaves no rule and no visible price behind, and nothing real changed but the decided review.
+
+1. `/pricing`: only the global rule; "قواعد الألعاب والباقات" empty. (If a rule was left, archive it first.)
+2. Archive game A (its two manual routes stay with its archived packs and are never used). Then "إدارة الفئات": archive "اختبار النظام". Expected: six categories left, in their order.
+3. The store (reload): the six real categories; `/games/system-test-7` the not-found page.
+4. ببجي موبايل: "60 شدة" $0.99 and "325 شدة" $4.88 (or what WDGZone's cost gives today, on the global rule); بلايستيشن 5 دولار (أمريكي) at the price decided in 8.5.
+
+Result:
+
+### Feature 8 sign-off
+
+| Item | Value |
+|---|---|
+| Cases passed | — of 15 |
+| Findings | — |
+| Checked by Claude (read-only, production, after 8.15) | — |
+| Accepted by the owner on | — |
+| PR | the steps (this file's PR) |
