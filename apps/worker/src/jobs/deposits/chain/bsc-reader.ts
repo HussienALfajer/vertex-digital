@@ -177,14 +177,23 @@ export class BscReader implements ChainReader {
   }
 }
 
-/** A `Transfer` event log, or null for any other event or a log a reorganization removed. */
+/**
+ * A `Transfer` event log, or null for any other event or a log a reorganization removed. An
+ * official USDT `Transfer` must be whole (three topics, a 32-byte amount): a reply missing a part
+ * of one concludes nothing (rule U6, audit A4). Another contract's `Transfer` that is not ERC-20
+ * shaped (an ERC-721 has four topics and no data) is not ours: null.
+ */
 function transferOf(log: z.infer<typeof logSchema>): TokenTransfer | null {
   const [topic, from, to] = log.topics.map((value) => value.slice(2).toLowerCase());
-  if (log.removed || topic !== TRANSFER_TOPIC || !from || !to || log.data.length <= 2) return null;
+  if (log.removed || topic !== TRANSFER_TOPIC) return null;
+  if (!from || !to || log.topics.length !== 3 || !/^0x[0-9a-fA-F]{64}$/.test(log.data)) {
+    if (log.address.toLowerCase() !== NETWORK.contract.toLowerCase()) return null;
+    throw new ChainReaderError('bad_response', 'BSC answered a malformed USDT transfer log');
+  }
   return {
     contract: log.address.toLowerCase(),
     from: `0x${from.slice(-40)}`,
     to: `0x${to.slice(-40)}`,
-    raw: BigInt(log.data.slice(0, 66)),
+    raw: BigInt(log.data),
   };
 }

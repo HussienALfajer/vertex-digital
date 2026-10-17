@@ -2,6 +2,7 @@ import {
   isUsdtMethod,
   normalizePaymentReference,
   type PaymentMethod,
+  USDT_METHODS,
 } from '@vertex-digital/contracts';
 import { and, eq, inArray, or, type SQLWrapper, sql } from 'drizzle-orm';
 import type { Database, Transaction } from '../client.js';
@@ -33,10 +34,20 @@ const normalized = (reference: string) =>
  * with `0x`, so both forms are looked up. No such row exists in production (Phase 1 was not
  * deployed before S04).
  */
-const storedForms = (method: PaymentMethod, reference: string) =>
-  isUsdtMethod(method)
-    ? [normalized(reference), sql<string>`'0X' || ${normalized(reference)}`]
-    : [normalized(reference)];
+const storedForms = (method: PaymentMethod, reference: string) => {
+  if (!isUsdtMethod(method)) return [normalized(reference)];
+  const bare = sql<string>`regexp_replace(${normalized(reference)}, '^0X', '')`;
+  return [bare, sql<string>`'0X' || ${bare}`];
+};
+
+/**
+ * The methods a claim is unique across: a TXID is one transfer whichever USDT network it is
+ * claimed under (audit A1; `payment_references_usdt_txid_idx` is the database's backstop), so a
+ * manual deposit recorded under the wrong network, or a `wrong_network` approval, cannot claim it
+ * a second time. Other methods are their own space.
+ */
+const claimMethods = (method: PaymentMethod): readonly PaymentMethod[] =>
+  isUsdtMethod(method) ? USDT_METHODS : [method];
 
 /** The record that holds the claim on `reference`, or null when it is free. */
 export async function paymentReferenceOwner(
@@ -52,7 +63,7 @@ export async function paymentReferenceOwner(
     .from(paymentReferences)
     .where(
       and(
-        eq(paymentReferences.method, method),
+        inArray(paymentReferences.method, claimMethods(method)),
         or(...storedForms(method, reference).map((form) => eq(paymentReferences.reference, form))),
       ),
     )
@@ -66,8 +77,9 @@ export async function paymentReferenceOwner(
 /**
  * Claims `reference` for its owner inside the owner's transaction, or refuses with
  * `EXTERNAL_REFERENCE_TAKEN` and the record that holds it. A parallel claim of the same
- * reference waits for the first transaction: if it commits, this one is refused; if it rolls
- * back, this one claims. A refusal leaves the caller's transaction usable.
+ * reference (a TXID under either USDT network) waits for the first transaction: if it commits,
+ * this one is refused; if it rolls back, this one claims. A refusal leaves the caller's
+ * transaction usable.
  */
 export async function claimPaymentReference(
   tx: Transaction,
@@ -88,24 +100,28 @@ export async function claimPaymentReference(
       reference: normalized(reference),
       ...owner,
     })
-    .onConflictDoNothing({ target: [paymentReferences.method, paymentReferences.reference] })
+    // Any unique conflict: the method's reference, or the TXID under the other network.
+    .onConflictDoNothing()
     .returning({ id: paymentReferences.id });
   if (claimed.length > 0) return;
+  const holder = await paymentReferenceOwner(tx, method, reference);
+  // The only other unique columns are the owner's: one record never claims twice.
+  if (!holder) throw new Error('The claim conflicted with no holder of its reference');
   throw new LedgerError(
     'EXTERNAL_REFERENCE_TAKEN',
     'The payment reference is already claimed',
-    await paymentReferenceOwner(tx, method, reference),
+    holder,
   );
 }
 
 /**
- * True when the TXID `txid` (64 lower-case hex characters) is claimed under `method`, in either
- * stored form: a filter for the USDT transfer lists (S04 rule U13), without their module reading
- * the claims table itself. Pass fully qualified expressions: the claims table also has `method`.
+ * True when the TXID `txid` (64 lower-case hex characters) is claimed under either USDT network,
+ * in either stored form (audit A1): a filter for the USDT transfer lists (S04 rule U13), without
+ * their module reading the claims table itself. Pass a fully qualified expression.
  */
-export const txidClaimed = (method: SQLWrapper, txid: SQLWrapper) =>
+export const txidClaimed = (txid: SQLWrapper) =>
   sql<boolean>`exists (select 1 from payment_references as claim
-    where claim.method = ${method}
+    where claim.method in ('usdt_trc20', 'usdt_bep20')
       and claim.reference in (upper(${txid}), '0X' || upper(${txid})))`;
 
 /** The record that claimed a TXID, and its customer. */
@@ -114,12 +130,12 @@ export interface TxidHolder extends PaymentReferenceOwner {
 }
 
 /**
- * The holders of claimed TXIDs (64 lower-case hex characters) of one network, by TXID: the
- * deposit or adjustment that claimed each, and its customer (S04 rule U13).
+ * The holders of claimed TXIDs (64 lower-case hex characters), by TXID, whichever USDT network
+ * the claim names (audit A1): the deposit or adjustment that claimed each, and its customer (S04
+ * rule U13).
  */
 export async function txidHolders(
   db: Database | Transaction,
-  method: PaymentMethod,
   txids: readonly string[],
 ): Promise<Map<string, TxidHolder>> {
   if (txids.length === 0) return new Map();
@@ -135,7 +151,12 @@ export async function txidHolders(
     .from(paymentReferences)
     .leftJoin(deposits, eq(deposits.id, paymentReferences.depositId))
     .leftJoin(walletAdjustments, eq(walletAdjustments.id, paymentReferences.walletAdjustmentId))
-    .where(and(eq(paymentReferences.method, method), inArray(paymentReferences.reference, forms)));
+    .where(
+      and(
+        inArray(paymentReferences.method, USDT_METHODS),
+        inArray(paymentReferences.reference, forms),
+      ),
+    );
   const holders = new Map<string, TxidHolder>();
   for (const row of rows) {
     const txid = row.reference.replace(/^0X/, '').toLowerCase();

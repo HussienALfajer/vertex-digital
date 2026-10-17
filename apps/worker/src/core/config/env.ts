@@ -12,6 +12,16 @@ const isPlaceholder = (value: string) =>
   value.startsWith('replace-') || value.includes('replace-me');
 
 /** Empty, or a value `.env.example` ships (never a real secret), counts as unset. */
+/**
+ * A chain provider's HTTPS endpoint. User info (`https://user:password@host`) is refused: fetch
+ * refuses such a URL with an error that quotes it, password included (audit A2); a provider's key
+ * goes in the path or a header.
+ */
+const chainUrl = z.url({ protocol: /^https$/ }).refine((value) => {
+  const url = new URL(value);
+  return url.username === '' && url.password === '';
+}, 'Put no user name or password in the URL');
+
 const optional = () =>
   z
     .string()
@@ -119,10 +129,10 @@ export const envSchema = z
       )
       .default('fake'),
     FAKE_CHAIN_FILE: z.string().min(1).default('./.data/fake-chain.json'),
-    TRONGRID_API_URL: z.url({ protocol: /^https$/ }).default('https://api.trongrid.io'),
+    TRONGRID_API_URL: chainUrl.default('https://api.trongrid.io'),
     TRONGRID_API_KEY: optional(),
     /** A BSC JSON-RPC endpoint; a provider's key goes in the URL, so it is a secret. */
-    BSC_RPC_URL: optional().pipe(z.url({ protocol: /^https$/ }).optional()),
+    BSC_RPC_URL: optional().pipe(chainUrl.optional()),
     /**
      * The AES-256-GCM key of supplier credentials (S07 rule SP2): 32 bytes in base64, the API's
      * value. Required in production; derived locally exactly as the API derives it.

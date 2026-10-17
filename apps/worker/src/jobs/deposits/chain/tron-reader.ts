@@ -15,6 +15,15 @@ const NETWORK = USDT_NETWORKS.usdt_trc20;
 
 /** Rule U12: each read starts 2 minutes before the cursor (a block timestamp in ms). */
 export const TRON_OVERLAP_MS = 2 * 60 * 1000;
+/**
+ * Marks a cursor left by a run that stopped at its page limit: the next run carries on from the
+ * last timestamp read, with no overlap. With the overlap, a burst of more than a run's events
+ * within 2 minutes would be read from its start again on every run, for ever (audit A3). The
+ * events up to a timestamp read are solidified, so nothing older can still arrive there. It
+ * resumes 1 ms early: events sharing the last timestamp are read again (duplicates are absorbed)
+ * whether or not TronGrid's `min_timestamp` includes its own value.
+ */
+const CONTINUE = ':continue';
 /** The first read, with no cursor, looks back one hour. */
 export const TRON_FIRST_LOOKBACK_MS = 60 * 60 * 1000;
 /** TronGrid's page size limit, and the pages read per run before handing over to the next. */
@@ -133,11 +142,13 @@ export class TronReader implements ChainReader {
   }
 
   async listIncoming(address: string, cursor: string | null): Promise<IncomingPage> {
+    const resume = cursor?.endsWith(CONTINUE) ?? false;
+    const at = cursor === null ? null : Number(cursor.replace(CONTINUE, ''));
     const from =
-      cursor === null ? this.now() - TRON_FIRST_LOOKBACK_MS : Number(cursor) - TRON_OVERLAP_MS;
+      at === null ? this.now() - TRON_FIRST_LOOKBACK_MS : resume ? at - 1 : at - TRON_OVERLAP_MS;
     const contract = NETWORK.contract;
     const sums = new Map<string, bigint>();
-    let latest = cursor === null ? from : Number(cursor);
+    let latest = at ?? from;
     let fingerprint: string | undefined;
     for (let page = 0; page < PAGES_PER_RUN; page += 1) {
       const query = new URLSearchParams({
@@ -167,7 +178,7 @@ export class TronReader implements ChainReader {
         return { transfers: incoming(sums), cursor: String(latest), caughtUp: true };
       }
     }
-    return { transfers: incoming(sums), cursor: String(latest), caughtUp: false };
+    return { transfers: incoming(sums), cursor: `${latest}${CONTINUE}`, caughtUp: false };
   }
 
   async getUsdtBalance(address: string): Promise<bigint> {
@@ -210,24 +221,32 @@ export class TronReader implements ChainReader {
   }
 }
 
-/** A `Transfer` event log, or null for any other event. */
+/** A uint256 event word: 64 hex digits, `0x` or not. */
+const WORD = /^(?:0x)?[0-9a-fA-F]{64}$/;
+
+/**
+ * A `Transfer` event log, or null for any other event. An official USDT `Transfer` must be whole
+ * (three topics, a 32-byte amount): a reply missing a part of one concludes nothing (rule U6,
+ * audit A4), so it throws rather than read as "no USDT to the store". Another contract's
+ * `Transfer` that is not ERC-20 shaped (a TRC-721 has four topics and no data) is not ours: null.
+ */
 function transferOf(log: { address?: string; topics?: string[]; data?: string }) {
-  const [topic, from, to] = (log.topics ?? []).map((value) =>
-    value.replace(/^0x/, '').toLowerCase(),
-  );
-  if (topic !== TRANSFER_TOPIC || !from || !to || !log.address || !log.data) return null;
-  const contract = tronAddressFromHex(log.address);
-  const fromAddress = tronAddressFromHex(from.slice(-40));
-  const toAddress = tronAddressFromHex(to.slice(-40));
-  const data = log.data.replace(/^0x/, '');
-  if (!contract || !fromAddress || !toAddress || data.length === 0) {
+  const topics = (log.topics ?? []).map((value) => value.replace(/^0x/, '').toLowerCase());
+  if (topics[0] !== TRANSFER_TOPIC) return null;
+  const contract = log.address ? tronAddressFromHex(log.address) : null;
+  const [, from, to] = topics;
+  const fromAddress = from ? tronAddressFromHex(from.slice(-40)) : null;
+  const toAddress = to ? tronAddressFromHex(to.slice(-40)) : null;
+  const data = log.data ?? '';
+  if (!contract || !fromAddress || !toAddress || topics.length !== 3 || !WORD.test(data)) {
+    if (contract && contract !== NETWORK.contract) return null;
     throw new ChainReaderError('bad_response', 'TronGrid answered a malformed transfer log');
   }
   return {
     contract,
     from: fromAddress,
     to: toAddress,
-    raw: BigInt(`0x${data}`),
+    raw: BigInt(`0x${data.replace(/^0x/, '')}`),
   } satisfies TokenTransfer;
 }
 

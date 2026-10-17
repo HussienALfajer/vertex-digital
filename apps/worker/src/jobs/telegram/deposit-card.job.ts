@@ -7,6 +7,7 @@ import {
   type TelegramDepositCardPayload,
   telegramApprovalRefusal,
   telegramDepositCardPayloadSchema,
+  type UsdtMethod,
 } from '@vertex-digital/contracts';
 import {
   customers,
@@ -314,6 +315,7 @@ export class DepositCardJob implements OnApplicationBootstrap {
             receivedUnits: usdt.transfer.amountUnits,
             expectedUnits: usdt.payAmountUnits,
             txid: usdt.transfer.txid,
+            transferMethod: usdt.transfer.method as UsdtMethod,
           }
         : null,
       outcome,

@@ -807,16 +807,57 @@ describe('the messages of PR 4', () => {
         flags: ['amount_mismatch'],
         submittedAt: new Date('2030-01-01T07:00:00Z'),
         approval: { refusal: 'panel_only' },
-        usdt: { receivedUnits: 24_003_700, expectedUnits: 25_003_700, txid: 'ab'.repeat(32) },
+        usdt: {
+          receivedUnits: 24_003_700,
+          expectedUnits: 25_003_700,
+          txid: 'ab'.repeat(32),
+          transferMethod: 'usdt_bep20',
+        },
         outcome: null,
       },
       LINKS,
     );
     expect(card.text).toContain('المستلم 24.0037 USDT، المطلوب 25.0037');
     expect(card.text).toContain('https://bscscan.com/tx/0x');
+    expect(card.text).not.toContain('وصل على');
     expect(card.text).toContain('2 إيداعات سابقة');
     expect(card.text).toContain('مبلغ مختلف');
     expect(card.buttons?.flat().map((button) => button.text)).toEqual(['رفض']);
+  });
+
+  it('name the network a wrong-network transfer is on, and link its explorer (audit A6)', () => {
+    const view = (method: 'usdt_trc20' | 'usdt_bep20', transferMethod: typeof method) =>
+      renderDepositCard(
+        {
+          id: newId(),
+          referenceCode: 'VD-7KQ2M',
+          method,
+          currency: 'USD',
+          declaredAmountUnits: 25 * USD,
+          declaredUsdUnits: 25 * USD,
+          rate: null,
+          customerName: 'سامر',
+          creditedCount: 2,
+          flags: ['wrong_network'],
+          submittedAt: new Date('2030-01-01T07:00:00Z'),
+          approval: { refusal: 'panel_only' },
+          usdt: {
+            receivedUnits: 25_003_700,
+            expectedUnits: 25_003_700,
+            txid: 'ab'.repeat(32),
+            transferMethod,
+          },
+          outcome: null,
+        },
+        LINKS,
+      ).text;
+    const onBsc = view('usdt_trc20', 'usdt_bep20');
+    expect(onBsc).toContain('وصل على USDT BEP20، والإيداع على USDT TRC20');
+    expect(onBsc).toContain('https://bscscan.com/tx/0x');
+    expect(onBsc).not.toContain('tronscan');
+    const onTron = view('usdt_bep20', 'usdt_trc20');
+    expect(onTron).toContain('وصل على USDT TRC20، والإيداع على USDT BEP20');
+    expect(onTron).toContain('https://tronscan.org/#/transaction/');
   });
 });
 

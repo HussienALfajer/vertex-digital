@@ -1003,7 +1003,11 @@ describe('TXID claims (S04)', () => {
       kind: 'deposit',
       id: depositId,
     });
-    expect(await paymentReferenceOwner(db, 'usdt_bep20', hash)).toBeNull();
+    // One TXID is one transfer whichever network names it (audit A1).
+    expect(await paymentReferenceOwner(db, 'usdt_bep20', hash)).toEqual({
+      kind: 'deposit',
+      id: depositId,
+    });
     const other = await deposit({ customerId: await customer() });
     const refused = await db
       .transaction((tx) => claimPaymentReference(tx, 'usdt_trc20', hash, { depositId: other }))

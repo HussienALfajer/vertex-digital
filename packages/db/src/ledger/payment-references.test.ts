@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { CURRENCY_SCALE } from '@vertex-digital/contracts';
+import { CURRENCY_SCALE, type PaymentMethod } from '@vertex-digital/contracts';
 import { eq } from 'drizzle-orm';
 import type pg from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -65,10 +65,14 @@ async function manualDeposit(tx: Transaction, externalReference: string): Promis
 }
 
 /** A manual deposit with its claim on `claimed` (its own reference by default), committed. */
-function claimedDeposit(externalReference: string, claimed = externalReference): Promise<string> {
+function claimedDeposit(
+  externalReference: string,
+  claimed = externalReference,
+  method: PaymentMethod = 'sham_cash',
+): Promise<string> {
   return db.transaction(async (tx) => {
     const id = await manualDeposit(tx, externalReference);
-    await claimPaymentReference(tx, 'sham_cash', claimed, { walletAdjustmentId: id });
+    await claimPaymentReference(tx, method, claimed, { walletAdjustmentId: id });
     return id;
   });
 }
@@ -145,6 +149,59 @@ describe('claimPaymentReference (rule SC14)', () => {
       .from(paymentReferences)
       .where(eq(paymentReferences.reference, value));
     expect(rows).toHaveLength(1);
+  });
+});
+
+describe('a TXID is claimed once across both USDT networks (audit A1)', () => {
+  const txid = () => newId().replaceAll('-', '').padEnd(64, 'a').slice(0, 64);
+
+  it('refuses the TXID under the other network, in either stored form, naming the first', async () => {
+    const value = txid();
+    const first = await claimedDeposit(reference(), value, 'usdt_bep20');
+    for (const [method, spelling] of [
+      ['usdt_trc20', value],
+      ['usdt_trc20', `0x${value.toUpperCase()}`],
+      ['usdt_bep20', `0x${value}`],
+    ] as const) {
+      const refusal = await refusalOf(claimedDeposit(reference(), spelling, method));
+      expect(refusal.code).toBe('EXTERNAL_REFERENCE_TAKEN');
+      expect(refusal.details).toEqual({ kind: 'adjustment', id: first });
+    }
+    expect(await paymentReferenceOwner(db, 'usdt_trc20', value)).toEqual({
+      kind: 'adjustment',
+      id: first,
+    });
+    // Sham Cash references are their own space.
+    await claimedDeposit(reference(), value, 'sham_cash');
+  });
+
+  it('lets one of two parallel claims under opposite networks win', async () => {
+    const value = txid();
+    const results = await Promise.allSettled([
+      claimedDeposit(reference(), value, 'usdt_trc20'),
+      claimedDeposit(reference(), value, 'usdt_bep20'),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const [failed] = results.filter((result) => result.status === 'rejected');
+    expect((failed as PromiseRejectedResult).reason).toBeInstanceOf(LedgerError);
+  });
+
+  it('is enforced by the database too, the legacy 0X form included', async () => {
+    const value = txid().toUpperCase();
+    const id = await claimedDeposit(reference(), value, 'usdt_trc20');
+    const second = await db.transaction((tx) => manualDeposit(tx, reference()));
+    for (const stored of [value, `0X${value}`]) {
+      await rolledBack(owner.pool, async (client) => {
+        await expect(
+          client.query(
+            `insert into payment_references (id, method, reference, wallet_adjustment_id)
+             values ($1, 'usdt_bep20', $2, $3)`,
+            [newId(), stored, second],
+          ),
+        ).rejects.toThrow(/payment_references_usdt_txid_idx/);
+      });
+    }
+    expect(id).toBeTruthy();
   });
 });
 

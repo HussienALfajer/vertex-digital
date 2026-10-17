@@ -148,6 +148,7 @@ Scale (size / line height, px):
 - **Per-game accent:** every game has one accent color (from its artwork) stored with the game. It may tint: a flat band in the game page hero, the game's card border on hover, its chips and the selected pack's outline. It never colors primary buttons, prices, status or text below AA contrast; it is checked against green-900 and white when saved.
 - **Game artwork** sits inside cards with the brand frame (1 px border, lg radius); never full-bleed behind text.
 - **Prices:** USD first, large, tabular; the SYP equivalent next to it, muted, with "≈" only where the rate is not locked. Savings vs the official price as a small success-tinted badge.
+- **Payment networks:** a USDT address shows its network's own color (TRON `#EB0029`, BNB Chain `#F0B90B`; tokens `network-tron`, `network-bnb`) only as the top edge of its QR frame and a dot beside the network's name, as the per-game accent does; never on buttons or text. The QR itself is green-950 on white in both themes, with the Vertex mark in its middle (error correction H); network and token logos are not redrawn (§7).
 - **Truth signals** (measured delivery time, service status, review ETA, live activity) use quiet, consistent chips with an icon and a time; never blinking or alarmist.
 - **Success moments** (delivered, deposit credited): one short Motion sequence with the mark's three strokes; respects `prefers-reduced-motion`.
 - **Phone first:** design every store screen at 360 px wide first; tables become cards; the buy box becomes a bottom sheet.

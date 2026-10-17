@@ -38,7 +38,6 @@ import {
   TimerIcon,
   TriangleAlertIcon,
 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 import { type FormEvent, type ReactNode, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { errorText } from '@/lib/errors';
@@ -48,6 +47,7 @@ import { addressGroups, splitPayAmount } from './amounts';
 import { CopyButton } from './copy-button';
 import { Line, Panel } from './panel';
 import { cancelDeposit, submitTxid } from './requests';
+import { UsdtQr } from './usdt-qr';
 import { formatClock, useTimeLeft } from './use-time-left';
 
 /**
@@ -108,14 +108,7 @@ export function UsdtAwaiting({
       </Card>
       <Card className="gap-4">
         <h2 className="text-lg font-bold">{t('deposits.usdt.address')}</h2>
-        <div className="flex w-fit self-center rounded-lg border border-border bg-white p-3">
-          <QRCodeSVG
-            value={usdt.address}
-            size={176}
-            role="img"
-            aria-label={t('deposits.usdt.qrLabel')}
-          />
-        </div>
+        <UsdtQr address={usdt.address} method={usdt.method} />
         <div className="flex items-center justify-between gap-3">
           <p
             dir="ltr"

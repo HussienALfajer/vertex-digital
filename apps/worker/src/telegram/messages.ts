@@ -18,6 +18,7 @@ import {
   type TicketCategory,
   telegramCallbackData,
   USDT_NETWORKS,
+  type UsdtMethod,
 } from '@vertex-digital/contracts';
 
 export interface TelegramButton {
@@ -549,8 +550,16 @@ export interface DepositCardView {
   submittedAt: Date;
   /** Sham Cash: the approval offered, or why not. */
   approval: { creditUsdUnits: number } | { refusal: TelegramApprovalRefusal };
-  /** USDT reviews (rule TC3). */
-  usdt: { receivedUnits: number; expectedUnits: number; txid: string } | null;
+  /**
+   * USDT reviews (rule TC3). `transferMethod` is the network the transfer is on: another than the
+   * deposit's for a `wrong_network` review, and the explorer is that network's (audit A6).
+   */
+  usdt: {
+    receivedUnits: number;
+    expectedUnits: number;
+    txid: string;
+    transferMethod: UsdtMethod;
+  } | null;
   /** Null while it waits; else what the card is edited to (rule TC6). */
   outcome:
     | { kind: 'credited'; creditedUsdUnits: number; channel: 'admin' | 'telegram' | 'worker' }
@@ -596,9 +605,12 @@ export function renderDepositCard(
       : `المبلغ: ${amount}`,
     `العميل: ${card.customerName.slice(0, 60)} · ${card.creditedCount === 0 ? 'حساب جديد' : `${card.creditedCount} إيداعات سابقة`}`,
     ...(card.flags.length > 0 ? [`⚠️ ${card.flags.map((flag) => FLAGS[flag]).join('، ')}`] : []),
+    ...(card.usdt && card.usdt.transferMethod !== card.method
+      ? [`وصل على ${METHODS[card.usdt.transferMethod]}، والإيداع على ${METHODS[card.method]}`]
+      : []),
     ...(card.usdt
       ? [
-          `TXID: ${shorten(card.usdt.txid)} ${USDT_NETWORKS[card.method === 'sham_cash' ? 'usdt_trc20' : card.method].explorerTxUrl(card.usdt.txid)}`,
+          `TXID: ${shorten(card.usdt.txid)} ${USDT_NETWORKS[card.usdt.transferMethod].explorerTxUrl(card.usdt.txid)}`,
         ]
       : []),
     `أُرسل: ${atDamascus(card.submittedAt)}`,

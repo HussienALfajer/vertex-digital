@@ -120,4 +120,32 @@ describe('Telegram alerts', () => {
     });
     expect(scrubBreadcrumb({ category: 'console' })).toEqual({ category: 'console' });
   });
+
+  it('never reach Sentry with a chain provider key, in a path, a query or user info (audit A2)', () => {
+    const secrets = ['k3y-in-path', 'k3y-in-query', 'us3r', 'pa55'];
+    const breadcrumb = scrubBreadcrumb({
+      category: 'http',
+      message: 'POST https://bsc-mainnet.example-rpc.io/v1/k3y-in-path',
+      data: {
+        url: 'https://us3r:pa55@bsc.example-rpc.io/rpc?apikey=k3y-in-query',
+        'http.query': 'apikey=k3y-in-query',
+        'http.method': 'POST',
+        status_code: 200,
+      },
+    });
+    expect(breadcrumb).toEqual({
+      category: 'http',
+      message: 'POST https://bsc-mainnet.example-rpc.io/[redacted]',
+      data: {
+        url: 'https://bsc.example-rpc.io/[redacted]',
+        'http.method': 'POST',
+        status_code: 200,
+      },
+    });
+    for (const secret of secrets) expect(JSON.stringify(breadcrumb)).not.toContain(secret);
+    // An origin alone stays as it is.
+    expect(scrubBreadcrumb({ message: 'GET https://api.trongrid.io' }).message).toBe(
+      'GET https://api.trongrid.io',
+    );
+  });
 });

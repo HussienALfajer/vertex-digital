@@ -116,7 +116,7 @@ Every confirmed, official-USDT transfer to a store address that the scanner or t
 - Append-only trigger and grants (`APPEND_ONLY_TABLES`). Its status in the panel is derived: credited (claimed in `payment_references` by a deposit or an adjustment), bound (a deposit's `transfer_id`), or unmatched.
 
 ### `usdt_scan_cursors` (new; owner: `deposits`)
-- `method` primary key (natural key); `cursor` text (TRON: the last block timestamp in ms; BSC: the last scanned block number); `last_success_at` timestamptz; `updated_at`.
+- `method` primary key (natural key); `cursor` text (TRON: the last block timestamp in ms, followed by `:continue` when the run stopped at its page limit (audit A3, rule U12); BSC: the last scanned block number); `last_success_at` timestamptz; `updated_at`.
 - Not a business record (`NOT_BUSINESS_RECORDS`): the scanner's position, safe to move back (rule U12).
 
 ### `deposit_settings` (exists; append-only versions)
@@ -124,7 +124,7 @@ Every confirmed, official-USDT transfer to a store address that the scanner or t
 - The S03 account fields stay required. The first save of the settings form needs them even to enable USDT only (the form says so).
 
 ### `payment_references` (exists)
-- USDT claims use the method and the normalized TXID, upper-cased by the table's rule.
+- USDT claims use the method and the normalized TXID, upper-cased by the table's rule. One TXID is one claim across `usdt_trc20` and `usdt_bep20` (audit A1, 2026-10-17): `claimPaymentReference` and the lookups check both networks, and `payment_references_usdt_txid_idx` (the TXID with any legacy `0X` stripped, unique over the two networks) is the database's backstop, so a manual deposit under the wrong network or a `wrong_network` approval can never credit a transfer twice.
 - The S02 `manual_deposit` service normalizes a USDT reference with `txidSchema` before claiming it, and refuses a reference that is not a TXID (`VALIDATION_FAILED`). So a TXID typed with `0x` or as a link is the same claim as the one the worker makes.
 - `paymentReferenceOwner` also looks up the `0X`-prefixed form, for development data entered before S04. No production USDT adjustment exists: Phase 1 is not deployed.
 
@@ -221,7 +221,7 @@ Every transition locks the deposit row (`SELECT … FOR UPDATE`), checks the tra
 
   The admin page lists **candidate deposits**: reserved USDT deposits of any customer on the transfer's network whose `pay_amount_units` equals the received amount, or whose tail equals the received amount's sub-cent part. So a transfer that belongs to someone else is visible.
 - U12. **Scanner** (`deposits.usdt-scan`, automatic detection, owner 2026-10-08):
-  - Per network, it reads confirmed official-USDT transfers to the configured address since its cursor, with an overlap of 2 minutes (TRON) or 100 blocks (BSC). Duplicates are absorbed by `unique (method, txid)`.
+  - Per network, it reads confirmed official-USDT transfers to the configured address since its cursor, with an overlap of 2 minutes (TRON) or 100 blocks (BSC). Duplicates are absorbed by `unique (method, txid)`. On TRON, a run that stops at its page limit (5 pages of 200 events) leaves a `:continue` cursor: the next run resumes 1 ms before the last timestamp read, with no overlap, so a burst larger than a run within 2 minutes is read to its end instead of from its start on every run (audit A3); the overlap applies again once caught up.
   - On TRON, it reads only confirmed TRC20 transfers to the address, filtered by contract. On BSC, `eth_getLogs` for `Transfer` to the address on the USDT contract, up to the `finalized` block, in ranges within the provider's limit.
   - For each new transfer of at least $1 (U14), it inserts `usdt_transfers` (`source = 'scan'`). Then:
     - **one** reserved deposit on that network that is `pending` with `pay_amount_units` equal to the amount and `created_at` before the block time: bind it (`txid_source = 'scan'`, `pending → submitted`, `check_status = 'confirming'`) and credit it at once (the scanner only sees final transfers);

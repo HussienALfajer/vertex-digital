@@ -203,8 +203,11 @@ test.describe('USDT deposits', () => {
     // The exact amount with its tail, the network, the QR and the address in groups.
     await expect(page.getByText(ar.deposits.usdt.sendExactly)).toBeVisible();
     await expect(page.locator('mark')).toHaveText('37');
-    await expect(page.getByText(ar.deposits.usdt.networks.usdt_trc20)).toBeVisible();
-    await expect(page.getByRole('img', { name: ar.deposits.usdt.qrLabel })).toBeVisible();
+    await expect(page.getByText(ar.deposits.usdt.networks.usdt_trc20).first()).toBeVisible();
+    // The QR's frame names the token and the network too.
+    await expect(page.getByTestId('usdt-qr')).toContainText(
+      `USDT${ar.deposits.usdt.networks.usdt_trc20}`,
+    );
     await expect(page.getByTestId('usdt-address')).toHaveText(/TD5g\s*sCwx/);
     await expect(page.getByText(ar.deposits.usdt.copyFromHere)).toBeVisible();
     await expect(page.getByText(ar.deposits.usdt.feeWarning)).toBeVisible();
@@ -212,6 +215,15 @@ test.describe('USDT deposits', () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('25.0037');
     await page.getByRole('button', { name: ar.deposits.usdt.copyAddress }).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(TRON_ADDRESS);
+
+    // A tap opens the QR larger, with the network and the address in groups for a last check.
+    await page.getByRole('button', { name: ar.deposits.usdt.qrEnlarge }).click();
+    const dialog = page.getByRole('dialog', { name: ar.deposits.usdt.qrTitle });
+    await expect(dialog.getByText(ar.deposits.usdt.networkNote.usdt_trc20)).toBeVisible();
+    await expect(dialog.getByRole('img', { name: ar.deposits.usdt.qrLabel })).toBeVisible();
+    await expect(dialog.getByText('TD5g', { exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
   });
 
   test('a TXID: checked first, then searching on the network', async ({ page, api }) => {
@@ -277,6 +289,24 @@ test.describe('USDT deposits', () => {
     await expect(page.getByText(ar.deposits.usdt.lateTransfer)).toBeVisible();
   });
 
+  test('past its expiry, before the job marks it, a waiting deposit stops inviting a transfer (audit A5)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on(`GET ${DEPOSIT_PATH}`, 200, deposit({ expiresAt: minutesFromNow(-1) }));
+    await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);
+    await expect(page.getByText(ar.deposits.usdt.lateTransfer)).toBeVisible();
+    await expect(page.getByText(ar.deposits.usdt.sendExactly)).toBeHidden();
+    await expect(page.getByTestId('usdt-qr')).toBeHidden();
+    await expect(page.getByLabel(ar.deposits.usdt.txidLabel)).toBeHidden();
+    // A transfer sent before the deadline still shows once credited.
+    api.on(`GET ${DEPOSIT_PATH}`, 200, CREDITED);
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: ar.deposits.detail.creditedTitle }),
+    ).toBeVisible();
+  });
+
   test('the list names the method', async ({ page, api }) => {
     signedIn(api).on('GET /api/deposits', 200, { items: [CREDITED, SEARCHING], nextCursor: null });
     await page.goto('/wallet/deposits');
@@ -302,6 +332,10 @@ for (const theme of ['dark', 'light'] as const) {
     await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);
     await expect(page.getByText(ar.deposits.usdt.sendExactly)).toBeVisible();
     await screenshot(page, testInfo, `usdt-awaiting-${theme}`);
+    await page.getByRole('button', { name: ar.deposits.usdt.qrEnlarge }).click();
+    await expect(page.getByRole('dialog', { name: ar.deposits.usdt.qrTitle })).toBeVisible();
+    await screenshot(page, testInfo, `usdt-qr-${theme}`);
+    await page.keyboard.press('Escape');
 
     for (const [name, state, text] of [
       ['bounced', BOUNCED, ar.deposits.usdt.checkErrors.tx_failed],

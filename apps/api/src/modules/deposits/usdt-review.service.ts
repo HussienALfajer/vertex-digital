@@ -244,14 +244,13 @@ export class UsdtReviewService {
       { kind: 'deposit' | 'adjustment'; id: string; customerId: string }
     >();
     const credited = items.filter((item) => item.state === 'credited');
-    for (const method of new Set(credited.map((item) => item.transfer.method as UsdtMethod))) {
-      const ofMethod = credited.filter((item) => item.transfer.method === method);
+    if (credited.length > 0) {
+      // A TXID's claim may name either network (audit A1).
       const claims = await txidHolders(
         this.db,
-        method,
-        ofMethod.map((item) => item.transfer.txid),
+        credited.map((item) => item.transfer.txid),
       );
-      for (const item of ofMethod) {
+      for (const item of credited) {
         const claim = claims.get(item.transfer.txid);
         if (claim) holders.set(item.transfer.id, claim);
       }
