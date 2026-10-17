@@ -935,6 +935,52 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
   });
 });
 
+describe('suppliers.sync: audit F9 regressions', () => {
+  it('tests credentials replaced while a run read with the earlier ones (audit F9-6)', () =>
+    isolated(async (tx) => {
+      const syncs = () => sent.filter((job) => job.queue === QUEUES.suppliersSync);
+      current = listing(offer('a', 1));
+      await sync.sync(payload(), tx);
+      expect(syncs()).toEqual([]);
+      current = {
+        listOffers: async () => {
+          // The admin saves new keys while the run reads the catalog.
+          await tx.insert(supplierCredentials).values({
+            id: newId(),
+            supplierId: ids.fake,
+            ciphertext: encryptCredentials(supplierKey(env.SUPPLIER_KEYS_SECRET), ids.fake, {
+              webhookSecret: `${SECRET}-new`,
+            }),
+            hints: {},
+            adminId: newId(),
+          });
+          return [offer('a', 1)];
+        },
+      };
+      await sync.sync(payload(), tx);
+      expect(syncs().map((job) => job.data)).toEqual([
+        { supplierId: ids.fake, supplierCode: 'fake', trigger: 'admin' },
+      ]);
+    }));
+
+  it('stops a route whose offer the supplier turned into another kind (audit F9-5)', () =>
+    isolated(async (tx) => {
+      const p = await product(tx);
+      current = listing(offer('a', 1));
+      await sync.sync(payload(), tx);
+      await route(tx, p, (await offerRow(tx, 'a')).id);
+      expect((await routing(tx, p))?.availability).toBe('available');
+      current = listing(offer('a', 1, { kind: 'code' }));
+      await sync.sync(payload(), tx);
+      const state = await routing(tx, p);
+      expect(state?.routes[0]?.unusableReason).toBe('kind_mismatch');
+      expect(state?.availability).toBe('out_of_stock');
+      current = listing(offer('a', 1));
+      await sync.sync(payload(), tx);
+      expect((await routing(tx, p))?.availability).toBe('available');
+    }));
+});
+
 describe('suppliers.sync-schedule (rule SY1)', () => {
   it('queues a sync for each configured, available supplier with a catalog', () =>
     isolated(async (tx) => {
@@ -1117,6 +1163,39 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
     }));
 });
 
+describe('suppliers.health: stale costs of a supplier down (audit F9-10)', () => {
+  it('reports the stale costs even when the supplier is down after the same failures', () =>
+    isolated(async (tx) => {
+      const p = await product(tx);
+      current = listing(offer('a', 0.88));
+      await sync.sync(payload(), tx);
+      await route(tx, p, (await offerRow(tx, 'a')).id);
+      await tx
+        .update(supplierOffers)
+        .set({ costConfirmedAt: new Date(Date.now() - 3 * 3_600_000) })
+        .where(
+          and(eq(supplierOffers.supplierId, ids.fake), like(supplierOffers.offerId, `w-${run}-%`)),
+        );
+      await tx.insert(supplierHealthChanges).values({
+        id: newId(),
+        supplierId: ids.fake,
+        state: 'down',
+        reason: '3 consecutive errors',
+        createdAt: new Date(Date.now() - 60_000),
+      });
+      const first = await failedRun(tx, new Date(Date.now() + 1_000));
+      await failedRun(tx, new Date(Date.now() + 2_000));
+      await failedRun(tx, new Date(Date.now() + 3_000));
+
+      await health.check(new Date(), tx);
+      expect((await routing(tx, p))?.routes[0]?.unusableReason).toBe('supplier_down');
+      expect((await message(tx, `sync-stale:fake:${first.id}`))?.params).toMatchObject({
+        reason: 'costs_stale',
+        unavailableProducts: 1,
+      });
+    }));
+});
+
 describe('suppliers.balances (rule H5)', () => {
   const balance = (dollars: number): Partial<SupplierAdapter> => ({
     getBalance: async (): Promise<SupplierMoney> => ({
@@ -1191,6 +1270,35 @@ describe('suppliers.balances (rule H5)', () => {
         `${first?.dedupeKey}:1`,
         `${first?.dedupeKey}:2`,
       ]);
+    }));
+
+  it('follows a threshold change under a steady balance (audit F9-9)', () =>
+    isolated(async (tx) => {
+      const threshold = (dollars: number) =>
+        tx
+          .update(suppliers)
+          .set({ lowBalanceUsdUnits: usd(dollars) })
+          .where(eq(suppliers.id, ids.fake));
+      current = balance(6);
+      await balances.readAll(tx);
+      const [low] = await messages(tx, 'supplier_balance_low');
+      // Lowered under the balance: the next read is back above it.
+      await threshold(5);
+      await balances.readAll(tx);
+      await balances.readAll(tx);
+      // Raised above it again: a new streak, with a key of its own, sent at once.
+      await threshold(50);
+      await balances.readAll(tx);
+      await balances.readAll(tx);
+      const sentNow = await messages(tx, 'supplier_balance_low');
+      expect(sentNow.map((row) => (row.params as { recovered: boolean }).recovered)).toEqual([
+        false,
+        true,
+        false,
+      ]);
+      expect(sentNow[1]?.dedupeKey).toBe(`${low?.dedupeKey}:recovered`);
+      expect(sentNow[2]?.dedupeKey).not.toBe(low?.dedupeKey);
+      expect(sentNow[2]?.dedupeKey).toMatch(/^balance:fake:/);
     }));
 });
 

@@ -37,6 +37,10 @@ export interface SupplierReply<T> {
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+
+/** Statuses whose `location` names where to read instead; at most a few, on the same origin. */
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 3;
 /** Timeout, conflict (a request with the same key in progress), too early, too many requests. */
 const ALWAYS_RETRYABLE_STATUSES = new Set([408, 409, 425, 429]);
 
@@ -54,30 +58,51 @@ export class SupplierHttp {
 
   /** As `request`, with the reply's status and headers (polling by status, rate-limit headers). */
   async send<T>(request: SupplierRequest<T>): Promise<SupplierReply<T>> {
+    const signal = AbortSignal.timeout(
+      request.timeoutMs ?? this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    );
+    let target = new URL(request.path, this.options.baseUrl);
     let response: Response;
-    try {
-      response = await this.fetchFn(new URL(request.path, this.options.baseUrl), {
-        method: request.method,
-        headers: {
-          accept: 'application/json',
-          ...(request.body !== undefined && { 'content-type': 'application/json' }),
-          ...this.options.headers,
-          ...request.headers,
-        },
-        body: request.body === undefined ? undefined : JSON.stringify(request.body),
-        signal: AbortSignal.timeout(
-          request.timeoutMs ?? this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        ),
-      });
-    } catch (cause) {
-      const timedOut = cause instanceof DOMException && cause.name === 'TimeoutError';
-      throw new SupplierError(
-        'retryable',
-        timedOut ? 'Supplier timed out' : 'Supplier unreachable',
-        {
-          cause,
-        },
-      );
+    // Redirects are followed by hand: `fetch` would carry the credential headers (`x-api-key` is
+    // no `authorization`) to whatever host a redirect names. Only a read, only on the same origin.
+    for (let hops = 0; ; hops += 1) {
+      try {
+        response = await this.fetchFn(target, {
+          method: request.method,
+          headers: {
+            accept: 'application/json',
+            ...(request.body !== undefined && { 'content-type': 'application/json' }),
+            ...this.options.headers,
+            ...request.headers,
+          },
+          body: request.body === undefined ? undefined : JSON.stringify(request.body),
+          redirect: 'manual',
+          signal,
+        });
+      } catch (cause) {
+        const timedOut = cause instanceof DOMException && cause.name === 'TimeoutError';
+        throw new SupplierError(
+          'retryable',
+          timedOut ? 'Supplier timed out' : 'Supplier unreachable',
+          {
+            cause,
+          },
+        );
+      }
+      const location = REDIRECT_STATUSES.has(response.status)
+        ? response.headers.get('location')
+        : null;
+      if (location === null) break;
+      const next = new URL(location, target);
+      if (request.method !== 'GET' || next.origin !== target.origin || hops >= MAX_REDIRECTS) {
+        await response.body?.cancel().catch(() => undefined);
+        // An order sent and redirected may have been placed: retryable, so its outcome is unknown.
+        throw new SupplierError('retryable', `Supplier redirected (HTTP ${response.status})`, {
+          status: response.status,
+        });
+      }
+      await response.body?.cancel().catch(() => undefined);
+      target = next;
     }
 
     const text = await response.text().catch(() => '');

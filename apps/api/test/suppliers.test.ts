@@ -681,6 +681,84 @@ describe('import (rule RT8)', () => {
       details: { rows: [{ index: 0, code: 'CATALOG_LIMIT_REACHED' }] },
     });
   });
+
+  it("keeps on each route only its own offer's fields (audit F9-4)", async () => {
+    const game = await json<{ id: string }>(
+      await post('/api/admin/catalog/games', {
+        categoryId: ids.categoryId,
+        slug: `mixed-${run}`,
+        nameAr: `لعبة مختلطة ${run}`,
+        nameEn: 'Mixed',
+      }),
+      201,
+    );
+    for (const key of ['player_id', 'zone_id']) {
+      await json(
+        await post(`/api/admin/catalog/games/${game.id}/fields`, {
+          key,
+          labelAr: key,
+          type: 'digits',
+          required: true,
+        }),
+        201,
+      );
+    }
+    const byPlayer = await fakeOffer('mixed-player', { cost: 1, required: ['player_id'] });
+    const byUser = await fakeOffer('mixed-user', { cost: 2, required: ['user_id'] });
+    const result = await json<{ products: { id: string }[] }>(
+      await importOffers({
+        gameId: game.id,
+        fieldMap: { player_id: 'player_id', user_id: 'zone_id' },
+        rows: [
+          { offerId: byPlayer, nameAr: `حساب أ ${run}` },
+          { offerId: byUser, nameAr: `حساب ب ${run}` },
+        ],
+      }),
+      201,
+    );
+    const routes = await test.db
+      .select({ offerId: productRoutes.offerId, fieldMap: productRoutes.fieldMap })
+      .from(productRoutes)
+      .where(
+        inArray(
+          productRoutes.productId,
+          result.products.map((item) => item.id),
+        ),
+      );
+    expect(Object.fromEntries(routes.map((route) => [route.offerId, route.fieldMap]))).toEqual({
+      [byPlayer]: { player_id: 'player_id' },
+      [byUser]: { user_id: 'zone_id' },
+    });
+  });
+
+  it('refuses an offer ignored while the import waited on it (audit F9-8)', async () => {
+    const offerId = await fakeOffer('ignored-meanwhile', { cost: 1 });
+    let imported: Promise<Response> | undefined;
+    // An ignore holding the offer: the import checked it before and waits on it to write.
+    await test.db.transaction(async (tx) => {
+      await tx.select().from(supplierOffers).where(eq(supplierOffers.id, offerId)).for('update');
+      await tx
+        .update(supplierOffers)
+        .set({ ignoredAt: new Date(), ignoredAdminId: admin.id })
+        .where(eq(supplierOffers.id, offerId));
+      imported = importOffers({
+        gameId: ids.gameId,
+        fieldMap: { playerId: 'player_id' },
+        rows: [{ offerId, nameAr: `متجاهل ${run}` }],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+    expect(await body(await (imported as Promise<Response>))).toMatchObject({
+      status: 409,
+      code: 'OFFER_IGNORED',
+      details: { rows: [{ index: 0, code: 'OFFER_IGNORED' }] },
+    });
+    const left = await test.db
+      .select({ id: productRoutes.id })
+      .from(productRoutes)
+      .where(eq(productRoutes.offerId, offerId));
+    expect(left).toEqual([]);
+  });
 });
 
 describe('routes and prices (rules RT1–RT7, P1, P2)', () => {

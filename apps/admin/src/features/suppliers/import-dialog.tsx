@@ -3,10 +3,12 @@ import { Link } from '@tanstack/react-router';
 import {
   type ImportResult,
   importOffersSchema,
+  type OptionMap,
   PRODUCT_KINDS,
   type ProductKind,
   type SupplierDetail,
   type SupplierOffer,
+  unmappedOptions,
 } from '@vertex-digital/contracts';
 import {
   Button,
@@ -39,6 +41,7 @@ import { errorMessage } from '../../lib/errors';
 import { allGamesQuery, gameQuery } from '../catalog/catalog.queries';
 import { type FieldMapEntry, fieldMapEntries, requiredFieldsOf, toFieldMap } from './field-map';
 import { FieldMapEditor } from './field-map-editor';
+import { gameSelects, OptionMapEditor, supplierSelects } from './option-map-editor';
 import { useImportOffers } from './suppliers.queries';
 
 /** A refused row as the API names it (`details.rows`, rule RT8). */
@@ -53,7 +56,8 @@ const NAME_MAX = 60;
 
 /**
  * "استيراد إلى لعبة" (rule RT8): the game, the kind of the offers whose kind is unknown, one
- * field map for the batch, and a name per offer. All or nothing: a refusal shows its rows'
+ * field map and one option map for the batch (S16 MF2: each route keeps the part its offer
+ * asks for), and a name per offer. All or nothing: a refusal shows its rows'
  * errors in place; the products are created paused for the admin to review and resume.
  */
 export function ImportDialog({
@@ -73,6 +77,7 @@ export function ImportDialog({
   const [names, setNames] = useState(() => offers.map((offer) => offer.name.slice(0, NAME_MAX)));
   const required = requiredFieldsOf(offers);
   const [entries, setEntries] = useState<FieldMapEntry[]>(() => fieldMapEntries(required));
+  const [optionMap, setOptionMap] = useState<OptionMap>({});
   const [errors, setErrors] = useState<{ game?: boolean; kind?: boolean; names: number[] }>({
     names: [],
   });
@@ -85,6 +90,15 @@ export function ImportDialog({
   const unknownFields = offers.filter((offer) => offer.requiredFields === null).length;
   const liveFields = game.data?.fields.filter((field) => field.archivedAt === null) ?? [];
   const missingFields = [...new Set(refusals.flatMap((refusal) => refusal.fields ?? []))];
+  const fieldMap = toFieldMap(entries);
+  const specs = offers.flatMap((offer) => offer.fieldSpecs ?? []);
+  const missingOptions = [
+    ...new Set(
+      offers.flatMap((offer) =>
+        unmappedOptions(offer.fieldSpecs, fieldMap, optionMap, gameSelects(liveFields)),
+      ),
+    ),
+  ];
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,7 +107,8 @@ export function ImportDialog({
     const parsed = importOffersSchema.safeParse({
       gameId,
       kind: kindUnknown ? kind : undefined,
-      fieldMap: toFieldMap(entries),
+      fieldMap,
+      optionMap,
       rows: offers.map((offer, index) => ({ offerId: offer.id, nameAr: names[index] ?? '' })),
     });
     const issues = parsed.error?.issues ?? [];
@@ -184,6 +199,7 @@ export function ImportDialog({
                 onValueChange={(value) => {
                   setGameId(value);
                   setEntries(fieldMapEntries(required));
+                  setOptionMap({});
                 }}
               >
                 <SelectTrigger>
@@ -227,12 +243,22 @@ export function ImportDialog({
           (game.isPending ? (
             <Skeleton className="h-24 w-full" />
           ) : (
-            <FieldMapEditor
-              entries={entries}
-              fields={liveFields}
-              missing={missingFields}
-              onChange={setEntries}
-            />
+            <>
+              <FieldMapEditor
+                entries={entries}
+                fields={liveFields}
+                missing={missingFields}
+                onChange={setEntries}
+              />
+              <OptionMapEditor
+                fieldMap={fieldMap}
+                fields={liveFields}
+                supplierOptions={supplierSelects(specs)}
+                optionMap={optionMap}
+                missing={missingOptions}
+                onChange={setOptionMap}
+              />
+            </>
           ))}
         {unknownFields > 0 && (
           <Callout

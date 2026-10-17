@@ -337,6 +337,7 @@ export class SuppliersMock {
         health: this.health(route.supplierCode),
         offerMissing: offer.missingSince !== null,
         offerUnsupported: false,
+        kindMismatch: offer.kind !== null && offer.kind !== product?.kind,
         inStock: offer.inStock,
         costUsdUnits: offer.costUsdUnits,
         costConfirmedAt: offer.costConfirmedAt ? new Date(offer.costConfirmedAt) : null,

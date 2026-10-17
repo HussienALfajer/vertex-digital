@@ -3,10 +3,12 @@ import { Link } from '@tanstack/react-router';
 import {
   type CatalogImage,
   type CategoryImportResult,
+  CURRENCY_SCALE,
   formatUsd,
   type ImportDraft,
   importCategorySchema,
   MAX_IMPORT_ROWS,
+  priceFromCost,
   type SupplierDetail,
 } from '@vertex-digital/contracts';
 import {
@@ -38,6 +40,7 @@ import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { categoriesQuery } from '../catalog/catalog.queries';
 import { ImageUpload } from '../catalog/image-upload';
+import { previewQuery } from '../pricing/pricing.queries';
 import { ActivateAllButton } from './activate-all';
 import {
   alignedRows,
@@ -130,6 +133,7 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
   const [edited, setRows] = useState<PackRow[]>(() => initialPackRows(draft));
   // The draft is read again after a refusal: what it refuses now is no longer selected.
   const rows = alignedRows(draft, edited);
+  const priced = usePricesIn(draft, game.categoryId, read.game.categoryId);
   const [gameErrors, setGameErrors] = useState<Partial<Record<GameKey | 'cover', boolean>>>({});
   const [fieldErrors, setFieldErrors] = useState<number[]>([]);
   const [rowErrors, setRowErrors] = useState<Set<string>>(new Set());
@@ -529,7 +533,7 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
         })}
       >
         <PackGroups
-          draft={draft}
+          draft={priced}
           rows={rows}
           rowErrors={rowErrors}
           refusals={refusals}
@@ -674,6 +678,39 @@ export function Section({
 }
 
 /** The packs grouped by subcategory, with "select all" per group (SC7). */
+/**
+ * The draft's prices are the suggested store category's (SF1): once the admin picks another one,
+ * each pack is priced by the rule that category applies, read from the preview (PR10), so the
+ * sheet shows what the import will charge. Unknown while that rule loads.
+ */
+function usePricesIn(
+  draft: ImportDraft,
+  categoryId: string,
+  suggestedCategoryId: string | null,
+): ImportDraft {
+  const other = categoryId !== '' && categoryId !== (suggestedCategoryId ?? '');
+  const preview = useQuery(
+    previewQuery(
+      other
+        ? {
+            target: { scope: 'category', targetId: categoryId },
+            costUsdUnits: CURRENCY_SCALE.USD,
+          }
+        : null,
+    ),
+  );
+  if (!other) return draft;
+  const rule = preview.isPlaceholderData ? undefined : preview.data?.rule;
+  return {
+    ...draft,
+    packs: draft.packs.map((pack) => ({
+      ...pack,
+      pricePreviewUsdUnits:
+        rule && pack.costUsdUnits !== null ? priceFromCost(pack.costUsdUnits, rule) : null,
+    })),
+  };
+}
+
 function PackGroups({
   draft,
   rows,

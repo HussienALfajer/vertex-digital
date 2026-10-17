@@ -310,6 +310,8 @@ export const ROUTE_UNUSABLE_REASONS = [
   'offer_missing',
   /** S16 SC3: the offer has fields its adapter cannot send (MF1, MF2). */
   'offer_unsupported',
+  /** RT2: the offer's kind, as the supplier gives it now, is not its product's. */
+  'kind_mismatch',
   'out_of_stock',
   'cost_unknown',
   'cost_stale',
@@ -342,6 +344,8 @@ export interface RouteFacts {
   offerMissing: boolean;
   /** S16 SC3: the offer has an `unsupported_reason`. */
   offerUnsupported: boolean;
+  /** RT2: the offer's known kind differs from its product's (the supplier changed it). */
+  kindMismatch: boolean;
   inStock: boolean;
   costUsdUnits: number | null;
   costConfirmedAt: Date | null;
@@ -422,6 +426,7 @@ export function routeUnusableReason(
   if (route.health === 'down') return 'supplier_down';
   if (route.offerMissing) return 'offer_missing';
   if (route.offerUnsupported) return 'offer_unsupported';
+  if (route.kindMismatch) return 'kind_mismatch';
   if (!route.inStock) return 'out_of_stock';
   if (route.costUsdUnits === null) return 'cost_unknown';
   if (isCostStale(route.supplierCode, route.costConfirmedAt, now, policy)) return 'cost_stale';

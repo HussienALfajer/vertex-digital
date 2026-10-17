@@ -298,6 +298,7 @@ export async function productRoutingStates(
             health: supplier.health,
             offerMissing: offer.missingSince !== null,
             offerUnsupported: offer.unsupportedReason !== null,
+            kindMismatch: offer.kind !== null && offer.kind !== product.kind,
             inStock: offer.inStock,
             costUsdUnits: offer.costUsdUnits,
             costConfirmedAt: offer.costConfirmedAt,

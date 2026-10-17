@@ -14,6 +14,7 @@ import {
   supplierOffers,
   supplierStates,
   type Transaction,
+  telegramMessages,
 } from '@vertex-digital/db';
 import { and, asc, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -127,7 +128,7 @@ export class SupplierBalancesJob implements OnApplicationBootstrap {
         // S09 rule SF4: routes the balance no longer pays (or pays again) change the store's prices.
         await queueStoreRevalidate(tx, bossJobSender(this.pgBoss.boss));
       }
-      await this.notify(tx, supplier, read, previous, now);
+      await this.notify(tx, supplier, read, now);
     });
     return { ok: true, balance };
   }
@@ -163,42 +164,25 @@ export class SupplierBalancesJob implements OnApplicationBootstrap {
     return row !== undefined;
   }
 
-  /** Rule H5's messages, each once by its dedupe key. */
+  /**
+   * Rule H5's messages, each once by its dedupe key. Whether a low streak is open is read from the
+   * messages sent, not from the reads: a threshold changed between two reads would otherwise judge
+   * both by the new one, so lowering it under a steady balance would send no recovery, and raising
+   * it back would reopen an old streak whose keys were used and send nothing (audit F9-9).
+   */
   private async notify(
     tx: Transaction,
     supplier: SupplierState,
     read: typeof supplierBalanceReads.$inferSelect,
-    previous: BalanceRead | undefined,
     now: Date,
   ): Promise<void> {
     const threshold = supplier.lowBalanceUsdUnits;
-    const isLow = (balance: BalanceRead | undefined) =>
-      balance?.currency === 'USD' && balance.amountUnits < threshold;
-    const nowLow = isLow(read);
-    if (!nowLow && !isLow(previous)) return;
-    // The low streak's first read: the oldest after the newest read that was not low, before this
-    // one (this one included when it is low). Compared in the database: a timestamp read back into
-    // JavaScript loses its microseconds.
-    const readAt = sql`(select created_at from ${supplierBalanceReads} where id = ${read.id})`;
-    const lastOk = sql`(select max(created_at) from ${supplierBalanceReads}
-      where supplier_id = ${supplier.id} and created_at < ${readAt}
-        and (currency <> 'USD' or amount_units >= ${threshold}))`;
-    const [first] = await tx
-      .select({ at: supplierBalanceReads.createdAt })
-      .from(supplierBalanceReads)
-      .where(
-        and(
-          eq(supplierBalanceReads.supplierId, supplier.id),
-          sql`${supplierBalanceReads.createdAt} > coalesce(${lastOk}, '-infinity')`,
-          nowLow
-            ? sql`${supplierBalanceReads.createdAt} <= ${readAt}`
-            : sql`${supplierBalanceReads.createdAt} < ${readAt}`,
-        ),
-      )
-      .orderBy(asc(supplierBalanceReads.createdAt), asc(supplierBalanceReads.id))
-      .limit(1);
-    const since = first?.at ?? read.createdAt;
-    const key = `balance:${supplier.code}:${since.toISOString()}`;
+    const nowLow = read.currency === 'USD' && read.amountUnits < threshold;
+    const streak = await this.openLowStreak(tx, supplier.code);
+    if (!nowLow && !streak) return;
+    // A new streak is named by its first low read (`balance:<supplier>:<since>`).
+    const key = streak?.key ?? `balance:${supplier.code}:${read.createdAt.toISOString()}`;
+    const since = streak?.at ?? read.createdAt;
     // `now` was taken before the read: never a negative count.
     const repeat = Math.max(
       0,
@@ -216,5 +200,35 @@ export class SupplierBalancesJob implements OnApplicationBootstrap {
       },
       dedupeKey: !nowLow ? `${key}:recovered` : repeat === 0 ? key : `${key}:${repeat}`,
     });
+  }
+
+  /**
+   * The open low-balance streak: its first message after the supplier's last recovery message (by
+   * time, then id: UUIDv7 keeps the write order within one transaction too), with that message's
+   * key, the streak's, and time; null when none is open.
+   */
+  private async openLowStreak(
+    tx: Transaction,
+    code: SupplierState['code'],
+  ): Promise<{ key: string; at: Date } | null> {
+    const [first] = await tx
+      .select({ key: telegramMessages.dedupeKey, at: telegramMessages.createdAt })
+      .from(telegramMessages)
+      .where(
+        and(
+          eq(telegramMessages.kind, 'supplier_balance_low'),
+          sql`${telegramMessages.params}->>'supplier' = ${code}`,
+          sql`${telegramMessages.params}->>'recovered' = 'false'`,
+          sql`not exists (select 1 from ${telegramMessages} as recovery
+            where recovery.kind = 'supplier_balance_low'
+              and recovery.params->>'supplier' = ${code}
+              and recovery.params->>'recovered' = 'true'
+              and (recovery.created_at, recovery.id)
+                > (${telegramMessages.createdAt}, ${telegramMessages.id}))`,
+        ),
+      )
+      .orderBy(asc(telegramMessages.createdAt), asc(telegramMessages.id))
+      .limit(1);
+    return first?.key ? { key: first.key, at: first.at } : null;
   }
 }

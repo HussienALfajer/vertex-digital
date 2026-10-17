@@ -5,6 +5,7 @@ import {
   type HealthStanding,
   type HealthVerdict,
   healthWindowStart,
+  isCostStale,
   PANEL_READ_OPERATIONS,
   probeOutcome,
   QUEUES,
@@ -91,7 +92,7 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
     await this.repriceStale(db, policy, now);
     for (const supplier of states) {
       if (supplier.available && supplierHasCatalog(supplier.code)) {
-        await this.reportStale(db, supplier, now);
+        await this.reportStale(db, supplier, policy, now);
       }
     }
   }
@@ -279,7 +280,12 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
    * After three failed syncs in a row, once per run of failures: how many of the supplier's
    * products its stale costs left unavailable ("أسعار WDGZone قديمة: 14 باقة غير متوفرة").
    */
-  private async reportStale(db: Executor, supplier: SupplierState, now: Date): Promise<void> {
+  private async reportStale(
+    db: Executor,
+    supplier: SupplierState,
+    policy: SupplierPolicy,
+    now: Date,
+  ): Promise<void> {
     const streak = await failedRunStreak(db, supplier.id);
     if (streak.count < FAILING_SYNC_RUNS || !streak.firstRunId) return;
     const dedupeKey = `sync-stale:${supplier.code}:${streak.firstRunId}`;
@@ -292,11 +298,17 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
       now,
       fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED,
     });
+    // A stale cost is read on its own: a route also unusable for an earlier reason (the supplier
+    // down after the same failures) still has it, and keeps the product off once that reason ends.
     const unavailable = [...states.values()].filter(
       (state) =>
         state.availability === 'out_of_stock' &&
         state.routes.some(
-          (route) => route.supplierCode === supplier.code && route.unusableReason === 'cost_stale',
+          (route) =>
+            route.supplierCode === supplier.code &&
+            route.archivedAt === null &&
+            route.enabled &&
+            isCostStale(route.supplierCode, route.offer.costConfirmedAt, now, policy),
         ),
     ).length;
     if (unavailable === 0) return;
