@@ -95,11 +95,13 @@ export function DepositPage() {
     return () => clearInterval(timer);
   }, [open, usdt, load]);
 
-  // F4-5: past its expiry a pending Sham Cash deposit is closed (the API refuses its receipt), even
+  // F4-5: past its expiry a pending deposit is closed (the API refuses its receipt or TXID), even
   // before the expiry job, which runs every few minutes, marks it: show it expired, not a form
-  // whose button no longer works.
+  // whose button no longer works, nor (USDT, audit A5) an address and an amount still inviting a
+  // transfer that would arrive too late to match. The page keeps reading the deposit, so a
+  // transfer sent before the deadline still shows as credited when it is.
   const loaded = state.status === 'ready' ? state.deposit : null;
-  const expiresAt = loaded?.status === 'pending' && !loaded.usdt ? loaded.expiresAt : null;
+  const expiresAt = loaded?.status === 'pending' ? loaded.expiresAt : null;
   const overdue = useTimeLeft(expiresAt) === 0 && expiresAt !== null;
 
   if (state.status === 'missing') notFound();

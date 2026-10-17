@@ -99,6 +99,15 @@ describe('worker environment', () => {
     expect(() => parseEnv({ ...live, BSC_RPC_URL: 'http://bsc.example.com' })).toThrow(
       'BSC_RPC_URL',
     );
+    // User info would be quoted by fetch's own error (audit A2).
+    for (const name of ['BSC_RPC_URL', 'TRONGRID_API_URL']) {
+      expect(() => parseEnv({ ...live, [name]: 'https://user:secret@rpc.example.com' })).toThrow(
+        name,
+      );
+    }
+    expect(parseEnv({ ...live, BSC_RPC_URL: 'https://rpc.example.com/v1/key' }).BSC_RPC_URL).toBe(
+      'https://rpc.example.com/v1/key',
+    );
   });
 
   it('reads the supplier key as the API does, and never the fake supplier in production', () => {

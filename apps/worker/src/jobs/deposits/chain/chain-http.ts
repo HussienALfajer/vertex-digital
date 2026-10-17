@@ -45,9 +45,12 @@ export class ChainHttp {
       if (name === 'TimeoutError' || name === 'AbortError') {
         throw new ChainReaderError('timeout', `${init.label} timed out`);
       }
+      // Only the error's name and code: fetch's message can quote the URL, and with it a
+      // provider's key or user info (audit A2).
+      const code = (error as { cause?: { code?: unknown } }).cause?.code;
       throw new ChainReaderError(
         'unavailable',
-        `${init.label} failed: ${(error as Error).message}`,
+        `${init.label} failed (${typeof code === 'string' ? code : name})`,
       );
     }
     if (response.status === 429) {

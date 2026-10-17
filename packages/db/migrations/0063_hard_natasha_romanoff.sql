@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "payment_references_usdt_txid_idx" ON "payment_references" USING btree (regexp_replace("reference", '^0X', '')) WHERE "payment_references"."method" in ('usdt_trc20', 'usdt_bep20');

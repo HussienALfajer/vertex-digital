@@ -974,6 +974,47 @@ describe('the review of a USDT deposit (rules U11, U15)', () => {
     }
   });
 
+  it('never credits one transfer twice under the two networks, in either order (audit A1)', async () => {
+    await reauthenticate();
+    const manual = (customerId: string, amountUnits: number, txid: string) =>
+      client.post(`/api/admin/wallets/${customerId}/adjustments`, {
+        cookie: admin.cookie,
+        body: {
+          direction: 'credit',
+          amountUnits,
+          amountConfirmationUnits: amountUnits,
+          category: 'manual_deposit',
+          reason: 'The same transfer under the other network',
+          depositMethod: 'usdt_bep20',
+          externalReference: txid,
+        },
+        headers: { 'idempotency-key': randomUUID() },
+      });
+    // Approved under TRC20, then recorded by hand under BEP20: refused.
+    const first = await customer();
+    const approved = await inReview(first);
+    const cents = Math.floor(approved.received / 10_000) * 10_000;
+    expect(
+      (await approveUsdt(approved.deposit.id, { acknowledgedFlags: ['amount_mismatch'] })).status,
+    ).toBe(200);
+    expect(await body(await manual(first.id, cents, approved.transfer.txid))).toMatchObject({
+      status: 409,
+      code: 'EXTERNAL_REFERENCE_TAKEN',
+    });
+    // Recorded by hand under BEP20 first, then approved under TRC20: refused, nothing posted.
+    const second = await customer();
+    const recorded = await inReview(second);
+    const centsSecond = Math.floor(recorded.received / 10_000) * 10_000;
+    expect((await manual(second.id, centsSecond, recorded.transfer.txid)).status).toBe(201);
+    expect(
+      await body(
+        await approveUsdt(recorded.deposit.id, { acknowledgedFlags: ['amount_mismatch'] }),
+      ),
+    ).toMatchObject({ status: 409, code: 'EXTERNAL_REFERENCE_TAKEN' });
+    expect(await postingsOf(recorded.deposit.id)).toEqual([]);
+    expect((await adminDeposit(recorded.deposit.id)).status).toBe('submitted');
+  });
+
   it('refuses a deposit not in review, a Sham Cash deposit and an unknown one', async () => {
     await reauthenticate();
     const someone = await customer();

@@ -23,6 +23,7 @@ const REVIEW_DEPOSIT = '0199a000-0000-7000-8000-0000000000d5';
 const SHAM_DEPOSIT = '0199a000-0000-7000-8000-0000000000d6';
 const AUTO_DEPOSIT = '0199a000-0000-7000-8000-0000000000d7';
 const CANDIDATE_DEPOSIT = '0199a000-0000-7000-8000-0000000000d8';
+const OTHER_DEPOSIT = '0199a000-0000-7000-8000-0000000000d9';
 const TRANSFER_ID = '0199a000-0000-7000-8000-0000000000c5';
 const UNMATCHED_ID = '0199a000-0000-7000-8000-0000000000c6';
 const TRON_ADDRESS = 'TD5gsCwxykWsLN9aPrq2TAfNjByuZKYp4E';
@@ -142,7 +143,16 @@ function reviewDeposit(changes: Partial<MockDeposit> = {}): MockDeposit {
         source: 'txid',
         createdAt: minutesAgo(15),
       },
-      candidates: [{ ...CANDIDATE, depositId: REVIEW_DEPOSIT, referenceCode: 'VD-8BSC2' }],
+      // Another customer's deposit with the same tail: the API never lists the deposit itself.
+      candidates: [
+        {
+          ...CANDIDATE,
+          depositId: OTHER_DEPOSIT,
+          referenceCode: 'VD-3QT7R',
+          status: 'pending',
+          payAmountUnits: 9_004_200,
+        },
+      ],
     },
     ...changes,
   };
@@ -274,10 +284,12 @@ test.describe('USDT deposits', () => {
       page.getByText(fill(ar.deposits.usdt.less, { amount: usd('1.0000 USDT') })),
     ).toBeVisible();
     await expect(page.getByText(ar.deposits.usdt.txidSources.customer)).toBeVisible();
-    await expect(page.getByRole('link', { name: 'VD-8BSC2' })).toHaveAttribute(
+    // The candidates are other deposits only (U11, audit A8).
+    await expect(page.getByRole('link', { name: 'VD-3QT7R' })).toHaveAttribute(
       'href',
-      `/deposits/${REVIEW_DEPOSIT}`,
+      `/deposits/${OTHER_DEPOSIT}`,
     );
+    await expect(page.getByRole('link', { name: 'VD-8BSC2' })).toBeHidden();
     // No clearer-receipt request for USDT.
     await expect(page.getByRole('button', { name: ar.deposits.requestReceipt.open })).toBeHidden();
 
@@ -325,6 +337,7 @@ test.describe('USDT deposits', () => {
     await page.goto(`/deposits/${AUTO_DEPOSIT}`);
     await expect(page.getByText(ar.deposits.detail.decidedBySystem, { exact: true })).toBeVisible();
     await expect(page.getByText(ar.deposits.usdt.txidSources.scan)).toBeVisible();
+    await expect(page.getByText(ar.deposits.usdt.noCandidates)).toBeVisible();
     await expect(page.getByRole('button', { name: ar.deposits.reject.open })).toBeHidden();
   });
 

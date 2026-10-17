@@ -172,6 +172,17 @@ describe('TRON reader (TronGrid)', () => {
     expect((error as ChainReaderError).kind).toBe(kind);
   });
 
+  it('never quotes a URL from a failed fetch: it may hold a key or a password (audit A2)', async () => {
+    const { reader: tron } = reader(() => {
+      throw new TypeError(
+        'Request cannot be constructed from a URL that includes credentials: https://user:s3cret@trongrid.test/k3y',
+      );
+    });
+    const error = (await tron.getTransfer(TXID).catch((caught: unknown) => caught)) as Error;
+    expect(error).toBeInstanceOf(ChainReaderError);
+    expect(error.message).not.toMatch(/s3cret|k3y|https?:/);
+  });
+
   it('throws a malformed Transfer log as a bad response', async () => {
     const info = fixture('tron-transaction-info.json') as { log: { data: string }[] };
     const { reader: tron } = reader(() => ({
@@ -179,6 +190,30 @@ describe('TRON reader (TronGrid)', () => {
       log: [{ ...info.log[0], address: 'not-hex-at-all-but-matching'.replace(/./g, 'a') }],
     }));
     await expect(tron.getTransfer(TXID)).rejects.toBeInstanceOf(ChainReaderError);
+  });
+
+  it('throws an official USDT Transfer missing a part, and skips another token that is not ERC-20 shaped (audit A4)', async () => {
+    const info = fixture('tron-transaction-info.json') as {
+      log: { address: string; topics: string[]; data?: string }[];
+    };
+    const [official] = info.log as [{ address: string; topics: string[]; data?: string }];
+    for (const broken of [
+      { address: official.address, topics: official.topics },
+      { ...official, data: '' },
+      { ...official, data: '17d86b4' },
+      { ...official, topics: official.topics.slice(0, 2) },
+    ]) {
+      const { reader: tron } = reader(() => ({ ...info, log: [broken] }));
+      await expect(tron.getTransfer(TXID)).rejects.toMatchObject({ kind: 'bad_response' });
+    }
+    // A TRC-721 Transfer (four topics, no data) of another contract is not a token amount.
+    const nft = {
+      address: '3333333333333333333333333333333333333333',
+      topics: [...official.topics, `${'0'.repeat(63)}7`],
+      data: '',
+    };
+    const { reader: tron } = reader(() => ({ ...info, log: [nft] }));
+    expect(await tron.getTransfer(TXID)).toMatchObject({ status: 'succeeded', transfers: [] });
   });
 
   it('lists confirmed USDT to the address since the cursor less the overlap, summed per transaction', async () => {
@@ -224,7 +259,8 @@ describe('TRON reader (TronGrid)', () => {
     const { reader: tron, calls } = reader(() => full, now);
     const page = await tron.listIncoming(STORE_TRON, null);
     expect(page.caughtUp).toBe(false);
-    expect(page.cursor).toBe(String(now - 1000 + 199));
+    // Stopped at the page limit: the next run carries on, with no overlap (audit A3).
+    expect(page.cursor).toBe(`${now - 1000 + 199}:continue`);
     expect(calls).toHaveLength(5);
     expect(new URL(calls[0]?.url as string).searchParams.get('min_timestamp')).toBe(
       String(now - TRON_FIRST_LOOKBACK_MS),
@@ -237,6 +273,49 @@ describe('TRON reader (TronGrid)', () => {
       cursor: String(now - TRON_FIRST_LOOKBACK_MS),
       caughtUp: true,
     });
+  });
+});
+
+describe('TRON scan progress (audit A3)', () => {
+  it('reaches every event of a burst larger than a run within the overlap, run after run', async () => {
+    const start = 1_759_900_000_000;
+    // 1,100 events within 1.1 seconds: more than a run's five pages of 200.
+    const events = Array.from({ length: 1_100 }, (_, index) => ({
+      transaction_id: index.toString(16).padStart(64, '0'),
+      token_info: { address: USDT_NETWORKS.usdt_trc20.contract },
+      block_timestamp: start + index,
+      from: SENDER_TRON,
+      to: STORE_TRON,
+      type: 'Transfer',
+      value: '2000000',
+    }));
+    // TronGrid: events from min_timestamp, 200 a page, the fingerprint naming the next page.
+    const { fetchFn } = scripted((call) => {
+      const query = new URL(call.url).searchParams;
+      const from = Number(query.get('min_timestamp'));
+      const offset = Number(query.get('fingerprint') ?? 0);
+      const matching = events.filter((event) => event.block_timestamp >= from);
+      const data = matching.slice(offset, offset + 200);
+      return {
+        success: true,
+        data,
+        meta: offset + 200 < matching.length ? { fingerprint: String(offset + 200) } : {},
+      };
+    });
+    const tron = new TronReader({ apiUrl: 'https://trongrid.test', fetch: fetchFn });
+    const seen = new Set<string>();
+    let cursor: string | null = String(start);
+    let caughtUp = false;
+    for (let run = 0; run < 3 && !caughtUp; run += 1) {
+      const page = await tron.listIncoming(STORE_TRON, cursor);
+      for (const transfer of page.transfers) seen.add(transfer.txid);
+      cursor = page.cursor;
+      caughtUp = page.caughtUp;
+    }
+    expect(caughtUp).toBe(true);
+    expect(seen.size).toBe(events.length);
+    // Caught up, the next run reads the overlap again.
+    expect(cursor).toBe(String(start + 1_099));
   });
 });
 
@@ -360,6 +439,35 @@ describe('BSC reader (JSON-RPC)', () => {
         TXID,
       ),
     ).toEqual({ status: 'failed', final: true });
+  });
+
+  it('throws an official USDT Transfer missing a part, and skips another token that is not ERC-20 shaped (audit A4)', async () => {
+    const receipt = fixture('bsc-receipt.json') as {
+      result: { logs: { address: string; topics: string[]; data: string }[] };
+    };
+    const [official] = receipt.result.logs as [{ address: string; topics: string[]; data: string }];
+    const withLogs = (logs: unknown[]) =>
+      provider(BLOCK + 14, BLOCK, (call) =>
+        (call.body as { method: string }).method === 'eth_getTransactionReceipt'
+          ? { ...receipt, result: { ...receipt.result, logs } }
+          : undefined,
+      ).fetchFn;
+    for (const broken of [
+      { ...official, data: '0x' },
+      { ...official, data: '0x017d86b4' },
+      { ...official, topics: official.topics.slice(0, 2) },
+    ]) {
+      const bsc = new BscReader({ rpcUrl: 'https://bsc.test', fetch: withLogs([broken]) });
+      await expect(bsc.getTransfer(TXID)).rejects.toMatchObject({ kind: 'bad_response' });
+    }
+    const nft = {
+      ...official,
+      address: '0x3333333333333333333333333333333333333333',
+      topics: [...official.topics, `0x${'0'.repeat(63)}7`],
+      data: '0x',
+    };
+    const bsc = new BscReader({ rpcUrl: 'https://bsc.test', fetch: withLogs([nft]) });
+    expect(await bsc.getTransfer(TXID)).toMatchObject({ status: 'succeeded', transfers: [] });
   });
 
   it.each([

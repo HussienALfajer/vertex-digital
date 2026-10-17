@@ -228,6 +228,12 @@ export const paymentReferences = pgTable(
   },
   (table) => [
     unique('payment_references_method_reference_unique').on(table.method, table.reference),
+    // One TXID is one transfer whichever network it is claimed under (S04 rule U13, audit A1): a
+    // manual deposit recorded under the other network, or a `wrong_network` approval, can never
+    // claim it twice. The legacy `0X` form (development data before S04) compares the same.
+    uniqueIndex('payment_references_usdt_txid_idx')
+      .on(sql`regexp_replace(${table.reference}, '^0X', '')`)
+      .where(sql`${table.method} in ('usdt_trc20', 'usdt_bep20')`),
     check(
       'payment_references_reference_check',
       sql`char_length(${table.reference}) between 1 and 100 and ${table.reference} = upper(btrim(${table.reference}))`,

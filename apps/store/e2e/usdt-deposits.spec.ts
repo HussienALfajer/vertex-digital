@@ -289,6 +289,24 @@ test.describe('USDT deposits', () => {
     await expect(page.getByText(ar.deposits.usdt.lateTransfer)).toBeVisible();
   });
 
+  test('past its expiry, before the job marks it, a waiting deposit stops inviting a transfer (audit A5)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on(`GET ${DEPOSIT_PATH}`, 200, deposit({ expiresAt: minutesFromNow(-1) }));
+    await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);
+    await expect(page.getByText(ar.deposits.usdt.lateTransfer)).toBeVisible();
+    await expect(page.getByText(ar.deposits.usdt.sendExactly)).toBeHidden();
+    await expect(page.getByTestId('usdt-qr')).toBeHidden();
+    await expect(page.getByLabel(ar.deposits.usdt.txidLabel)).toBeHidden();
+    // A transfer sent before the deadline still shows once credited.
+    api.on(`GET ${DEPOSIT_PATH}`, 200, CREDITED);
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: ar.deposits.detail.creditedTitle }),
+    ).toBeVisible();
+  });
+
   test('the list names the method', async ({ page, api }) => {
     signedIn(api).on('GET /api/deposits', 200, { items: [CREDITED, SEARCHING], nextCursor: null });
     await page.goto('/wallet/deposits');

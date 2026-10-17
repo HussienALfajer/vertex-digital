@@ -53,7 +53,7 @@ export function usdtCandidateMatch(method: UsdtMethod, amountUnits: number): SQL
  * Written with qualified names: it is used in select lists, where Drizzle drops table names.
  */
 export const usdtTransferState = sql<UsdtTransferState>`case
-  when ${txidClaimed(sql`usdt_transfers.method`, sql`usdt_transfers.txid`)} then 'credited'
+  when ${txidClaimed(sql`usdt_transfers.txid`)} then 'credited'
   when exists (select 1 from usdt_deposits as bound
     where bound.transfer_id = usdt_transfers.id and bound.deposit_open) then 'bound'
   else 'unmatched' end`;
