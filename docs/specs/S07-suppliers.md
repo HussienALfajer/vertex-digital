@@ -121,7 +121,7 @@ New tables are owned by the api `suppliers` module (stored prices and reviews by
 
 ### Prices (with F10)
 - P1. **Basis:** a product's basis route is the first usable route by RT5–RT6; its price is `priceFromCost(basis cost, resolved rule)` (PR3).
-- P2. **Repricing** runs for given products in one transaction, locking them in id order (`FOR UPDATE` on `catalog_products`). For each product, it computes the target price from P1. If the target equals the current price, nothing is written. Otherwise:
+- P2. **Repricing** runs for given products in one transaction, locking them in id order (`FOR UPDATE` on `catalog_products`). For each product, it computes the target price from P1. If the target equals the current price on the same basis route, under the same governing rule and rule values, nothing is written; a rule change that leaves the price as it was appends a `rule_change` row with the new values, since a purchase copies the stored row's minimum margin (Q21, owner, 2026-10-17). Otherwise:
   - with an open review, the price is not changed: the review's `cost_after` and proposed price are refreshed to the target;
   - else, if the cause is a sync and P3 says review, a review is opened and the price is kept;
   - else a `product_prices` row is appended with the cause.

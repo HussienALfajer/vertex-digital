@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Locator, Page } from '@playwright/test';
 import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
 import { type AdminApi, expect, PASSWORD, screenshot, TOTP_CODE, test, USD } from './test';
@@ -228,6 +229,48 @@ test.describe('suppliers', () => {
     const product = page.getByRole('row').filter({ hasText: '60 UC' });
     await expect(product).toContainText('$1.32');
     await expect(product).toContainText(ar.catalog.availability.available);
+  });
+
+  test('a review decided in another tab keeps its refusal on screen by name (F8-6)', async ({
+    page,
+    admin,
+  }) => {
+    mapped(admin);
+    admin.suppliers.script('fake-uc-60', { costUsdUnits: 1_100_000 });
+    admin.suppliers.runSync('fake');
+    await page.goto('/pricing/reviews');
+    const row = page.getByRole('row').filter({ hasText: '60 UC' });
+    await expect(row).toBeVisible();
+    // Accepted in another tab meanwhile.
+    (admin.suppliers.reviews[0] as { status: string }).status = 'accepted';
+    await row.getByRole('button', { name: ar.pricing.reviews.accept, exact: true }).click();
+    await expect(row).toBeHidden();
+    await expect(page.getByRole('listitem').filter({ hasText: '60 UC' })).toContainText(
+      ar.errors.api.REVIEW_CLOSED,
+    );
+  });
+
+  test('deciding the only row of the last page shows the page before it (F8-5)', async ({
+    page,
+    admin,
+  }) => {
+    mapped(admin);
+    admin.suppliers.script('fake-uc-60', { costUsdUnits: 1_100_000 });
+    admin.suppliers.runSync('fake');
+    const [first] = admin.suppliers.reviews;
+    for (let index = 0; index < 50; index += 1) {
+      admin.suppliers.reviews.push({
+        ...(first as (typeof admin.suppliers.reviews)[number]),
+        id: randomUUID(),
+      });
+    }
+    await page.goto('/pricing/reviews?page=2');
+    const rows = page.getByRole('row').filter({ hasText: '60 UC' });
+    await expect(rows).toHaveCount(1);
+    await rows.getByRole('button', { name: ar.pricing.reviews.accept, exact: true }).click();
+    await expect(page).not.toHaveURL(/page=2/);
+    await expect(rows).toHaveCount(50);
+    await expect(page.getByText(ar.pricing.reviews.empty)).toBeHidden();
   });
 
   test('adjusts the margin from a review after re-authentication, and pauses another', async ({

@@ -4,7 +4,7 @@ import {
   formatUsd,
   type MarginScope,
   type PricingPreviewRequest,
-  SAVINGS_WARNING_PERCENT,
+  savingsWarning,
 } from '@vertex-digital/contracts';
 import { Skeleton } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
@@ -30,7 +30,7 @@ export function PricePreview({ request }: { request: PricingPreviewRequest | nul
   if (preview.isPending) return <Skeleton className="h-28 w-full" aria-hidden="true" />;
   if (preview.isError) return <FormAlert>{errorMessage(t, preview.error)}</FormAlert>;
   const data = preview.data;
-  const savingsWarning = (data.savings?.percent ?? 0) > SAVINGS_WARNING_PERCENT;
+  const warning = savingsWarning(data.priceUsdUnits, data.officialPriceUsdUnits);
   return (
     <div className="flex flex-col gap-3" aria-live="polite" data-testid="price-preview">
       <dl className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3 text-sm sm:grid-cols-4">
@@ -76,7 +76,7 @@ export function PricePreview({ request }: { request: PricingPreviewRequest | nul
                 })}
           </p>
         )}
-        {savingsWarning && (
+        {warning && (
           <p className="text-status-warning-foreground">{t('pricing.preview.savingsWarning')}</p>
         )}
       </div>

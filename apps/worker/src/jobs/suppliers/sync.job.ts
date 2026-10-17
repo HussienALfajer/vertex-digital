@@ -186,6 +186,17 @@ export function listedOffers(offers: readonly SupplierOffer[]): ListedOffer[] {
 const sameFields = (a: readonly string[] | null, b: readonly string[] | null) =>
   a === b || (a !== null && b !== null && a.join('\n') === b.join('\n'));
 
+/**
+ * What of a field spec decides whether a route can send it (S16 MF2, rule RT3): its key, type and
+ * option values, in order; labels do not. Compared as text, since `jsonb` reorders object keys.
+ */
+const specFacts = (specs: readonly FieldSpec[] | null) =>
+  specs === null
+    ? null
+    : JSON.stringify(
+        specs.map((spec) => [spec.key, spec.type, (spec.options ?? []).map((o) => o.value)]),
+      );
+
 class SuspiciousCatalog extends Error {}
 
 /** Rows per statement when the sync writes offers and cost changes. */
@@ -573,6 +584,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
           row.kind !== offer.kind ||
           row.unsupportedReason !== offer.unsupportedReason ||
           !sameFields(row.requiredFields, offer.requiredFields) ||
+          specFacts(row.fieldSpecs) !== specFacts(offer.fieldSpecs) ||
           isCostStale(supplier.code, row.costConfirmedAt, now, policy);
         if (moved) changed.push(row.id);
       }

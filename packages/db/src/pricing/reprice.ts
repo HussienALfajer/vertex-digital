@@ -110,7 +110,7 @@ export async function appendProductPrice(
  * from fresh facts, then
  * - no usable route: nothing (the last price stays; the product is unavailable, P6);
  * - an open review: the price stays, the review's figures follow the target (P2, P5);
- * - the target is the current price on the same basis route: nothing;
+ * - the target is the current price on the same basis route under the same rule values: nothing;
  * - the basis route's own cost moved beyond the threshold since the price (P3, edge case 7), not
  *   by the admin's manual cost (RT7): a review opens, the price stays;
  * - otherwise a price row is appended. A cost change seen through another basis route is a
@@ -152,7 +152,15 @@ export async function repriceProducts(
       continue;
     }
     const sameRoute = current?.routeId === basis.id;
-    if (current && sameRoute && current.priceUsdUnits === target) continue;
+    // Q21: the stored row names the governing rule and its values, which a purchase copies (its
+    // minimum margin decides the profitable fallback routes), so a rule change writes a row even
+    // when the price stays.
+    const sameRule =
+      current?.ruleId === state.rule.id &&
+      current.percentBp === state.rule.values.percentBp &&
+      current.fixedUsdUnits === state.rule.values.fixedUsdUnits &&
+      current.minMarginUsdUnits === state.rule.values.minMarginUsdUnits;
+    if (current && sameRoute && sameRule && current.priceUsdUnits === target) continue;
     if (
       current &&
       sameRoute &&

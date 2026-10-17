@@ -11,6 +11,7 @@ import {
   type TelegramMessageParams,
 } from '@vertex-digital/contracts';
 import {
+  catalogProducts,
   createDatabase,
   encryptCredentials,
   newId,
@@ -706,6 +707,61 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
         costUsdUnits: usd(0.92),
         priceUsdUnits: priceFromCost(usd(0.92), RULE),
       });
+    }));
+
+  it('reprices when a select option the route sends leaves the offer, and when it comes back (F8-2)', () =>
+    isolated(async (tx) => {
+      const p = await product(tx);
+      const [game] = await tx
+        .select({ gameId: catalogProducts.gameId })
+        .from(catalogProducts)
+        .where(eq(catalogProducts.id, p));
+      await tx.execute(sql`insert into catalog_input_fields (id, game_id, key, label_ar, type,
+        required, options, sort_order) values (${newId()}, ${game?.gameId}, 'region', 'المنطقة',
+        'select', true, ${JSON.stringify([
+          { value: 'asia', labelAr: 'آسيا' },
+          { value: 'eu', labelAr: 'أوروبا' },
+        ])}::jsonb, 2)`);
+      const listed = (values: string[]) =>
+        offer('select', 1, {
+          requiredFields: ['playerId', 'region'],
+          fieldSpecs: [
+            { key: 'playerId', label: 'Player ID', type: 'text' },
+            {
+              key: 'region',
+              label: 'Region',
+              type: 'select',
+              options: values.map((value) => ({ label: value, value })),
+            },
+          ],
+        });
+      current = listing(listed(['os_asia', 'os_euro', 'os_usa']));
+      await sync.sync(payload(), tx);
+      const a = await offerRow(tx, 'select');
+      const fake = await route(tx, p, a.id);
+      await tx
+        .update(productRoutes)
+        .set({
+          fieldMap: { playerId: 'player_id', region: 'region' },
+          optionMap: { region: { asia: 'os_asia', eu: 'os_euro' } },
+        })
+        .where(eq(productRoutes.id, fake));
+      await manualRoute(tx, p, 2);
+      expect(await latestPrice(tx, p)).toMatchObject({ routeId: fake, priceUsdUnits: usd(1.1) });
+
+      // The supplier drops "os_euro" only: the route cannot send "eu", the manual one serves.
+      current = listing(listed(['os_asia', 'os_usa']));
+      await sync.sync(payload(), tx);
+      expect((await routing(tx, p))?.basis?.supplierCode).toBe('manual');
+      expect(await latestPrice(tx, p)).toMatchObject({
+        priceUsdUnits: usd(2.2),
+        cause: 'route_change',
+      });
+
+      // The option comes back: so does the route.
+      current = listing(listed(['os_asia', 'os_euro', 'os_usa']));
+      await sync.sync(payload(), tx);
+      expect(await latestPrice(tx, p)).toMatchObject({ routeId: fake, priceUsdUnits: usd(1.1) });
     }));
 
   it("never stores or throws a failed query's parameters", () =>
