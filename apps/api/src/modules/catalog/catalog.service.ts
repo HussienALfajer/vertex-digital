@@ -67,6 +67,7 @@ import {
   nextSortOrder,
   type ProductRow,
   refusals,
+  repriceGameProducts,
   rewriteOrder,
   toCategory,
   toImage,
@@ -428,52 +429,61 @@ export class CatalogService {
 
   /**
    * Everything but the slug (rule CT1). A move goes to the end of another live category (rule
-   * CT2); `active`, or removing the cover of an active game, needs a complete game (rule CT3).
+   * CT2) and reprices the game's products, whose margin rule may change with it (audit A2);
+   * `active`, or removing the cover of an active game, needs a complete game (rule CT3).
    */
   updateGame(actor: Actor, id: string, input: UpdateGame): Promise<GameDetail> {
     return mapTaken(() =>
-      this.db.transaction(async (tx) => {
-        const current = await this.findGame(tx, id);
-        const moving = input.categoryId !== undefined && input.categoryId !== current.categoryId;
-        if (moving) await this.lockLiveCategory(tx, input.categoryId as string);
-        const before = await this.lockGame(tx, id);
-        // S09 rule AD1: the search terms change with the game, audited in the same entry.
-        const beforeValues = { ...gameValues(before), searchTerms: before.searchTerms };
-        const after: GameValues & { searchTerms: string[] } = {
-          ...beforeValues,
-          ...definedOnly({
-            categoryId: input.categoryId,
-            nameAr: input.nameAr,
-            nameEn: input.nameEn,
-            status: input.status,
-            coverFileId: input.coverFileId,
-            idGuideFileId: input.idGuideFileId,
-            accentColor: input.accentColor,
-            regionNotesAr: input.regionNotesAr,
-            searchTerms: input.searchTerms,
-          }),
-        };
-        const changed = changes(beforeValues, after);
-        if (!changed) return this.game(id, tx);
-        await this.checkImages(changed.after, tx);
-        if (changed.after.accentColor !== undefined) checkAccent(after.accentColor);
-        await tx
-          .update(catalogGames)
-          .set({
-            ...changed.after,
-            ...(moving && {
-              sortOrder: await nextSortOrder(
-                tx,
-                catalogGames,
-                eq(catalogGames.categoryId, after.categoryId),
-              ),
+      whileGameStays(() =>
+        this.db.transaction(async (tx) => {
+          const current = await this.findGame(tx, id);
+          const moving = input.categoryId !== undefined && input.categoryId !== current.categoryId;
+          // Both categories of a move, in id order: a reorder or an archive of either waits.
+          if (moving) {
+            await this.lockCategories(tx, [current.categoryId, input.categoryId as string]);
+            await this.lockLiveCategory(tx, input.categoryId as string);
+          }
+          const before = await this.lockGame(tx, id);
+          if (before.categoryId !== current.categoryId) throw new GameMoved();
+          // S09 rule AD1: the search terms change with the game, audited in the same entry.
+          const beforeValues = { ...gameValues(before), searchTerms: before.searchTerms };
+          const after: GameValues & { searchTerms: string[] } = {
+            ...beforeValues,
+            ...definedOnly({
+              categoryId: input.categoryId,
+              nameAr: input.nameAr,
+              nameEn: input.nameEn,
+              status: input.status,
+              coverFileId: input.coverFileId,
+              idGuideFileId: input.idGuideFileId,
+              accentColor: input.accentColor,
+              regionNotesAr: input.regionNotesAr,
+              searchTerms: input.searchTerms,
             }),
-          })
-          .where(eq(catalogGames.id, id));
-        await assertComplete(tx, { id, status: after.status, coverFileId: after.coverFileId });
-        await auditCatalog(tx, actor, 'catalog_game.updated', gameEntity(id), changed);
-        return this.game(id, tx);
-      }),
+          };
+          const changed = changes(beforeValues, after);
+          if (!changed) return this.game(id, tx);
+          await this.checkImages(changed.after, tx);
+          if (changed.after.accentColor !== undefined) checkAccent(after.accentColor);
+          await tx
+            .update(catalogGames)
+            .set({
+              ...changed.after,
+              ...(moving && {
+                sortOrder: await nextSortOrder(
+                  tx,
+                  catalogGames,
+                  eq(catalogGames.categoryId, after.categoryId),
+                ),
+              }),
+            })
+            .where(eq(catalogGames.id, id));
+          await assertComplete(tx, { id, status: after.status, coverFileId: after.coverFileId });
+          await auditCatalog(tx, actor, 'catalog_game.updated', gameEntity(id), changed);
+          if (moving) await repriceGameProducts(tx, id, 'rule_change', routingContext(this.env));
+          return this.game(id, tx);
+        }),
+      ),
     );
   }
 
@@ -526,38 +536,46 @@ export class CatalogService {
   /** Rule CT1: refused under an archived category; back last in its category. */
   restoreGame(actor: Actor, id: string): Promise<GameDetail> {
     return mapTaken(() =>
-      this.db.transaction(async (tx) => {
-        const current = await this.findGame(tx, id);
-        const category = await this.lockCategory(tx, current.categoryId);
-        if (category.archivedAt) throw refusals.parentArchived();
-        const row = await this.lockGame(tx, id);
-        if (row.archivedAt) {
-          await tx
-            .update(catalogGames)
-            .set({
-              archivedAt: null,
-              sortOrder: await nextSortOrder(
-                tx,
-                catalogGames,
-                eq(catalogGames.categoryId, row.categoryId),
-              ),
-            })
-            .where(eq(catalogGames.id, id));
-          await auditCatalog(tx, actor, 'catalog_game.restored', gameEntity(id), {
-            nameAr: row.nameAr,
-          });
-        }
-        return this.game(id, tx);
-      }),
+      whileGameStays(() =>
+        this.db.transaction(async (tx) => {
+          const current = await this.findGame(tx, id);
+          const category = await this.lockCategory(tx, current.categoryId);
+          if (category.archivedAt) throw refusals.parentArchived();
+          const row = await this.lockGame(tx, id);
+          if (row.categoryId !== current.categoryId) throw new GameMoved();
+          if (row.archivedAt) {
+            await tx
+              .update(catalogGames)
+              .set({
+                archivedAt: null,
+                sortOrder: await nextSortOrder(
+                  tx,
+                  catalogGames,
+                  eq(catalogGames.categoryId, row.categoryId),
+                ),
+              })
+              .where(eq(catalogGames.id, id));
+            await auditCatalog(tx, actor, 'catalog_game.restored', gameEntity(id), {
+              nameAr: row.nameAr,
+            });
+          }
+          return this.game(id, tx);
+        }),
+      ),
     );
   }
 
   // For the game's fields and products (`CatalogItemsService`) --------------------------------------
 
-  /** Locks a game for a change to its fields or products; `NOT_FOUND` when there is none. */
+  /**
+   * Locks a game for a change to it or to its fields or products; `NOT_FOUND` when there is none.
+   * `FOR NO KEY UPDATE`, not `FOR UPDATE`: a purchase inserting an order takes `FOR KEY SHARE` on
+   * the game (the foreign key) while it holds its product `FOR SHARE`, so `FOR UPDATE` here, then
+   * a write to that product, would deadlock with it (audit A1). Catalog changes still queue on it.
+   */
   async lockGame(tx: Transaction, id: string): Promise<GameRow> {
     const [row] = isUuid(id)
-      ? await tx.select().from(catalogGames).where(eq(catalogGames.id, id)).for('update')
+      ? await tx.select().from(catalogGames).where(eq(catalogGames.id, id)).for('no key update')
       : [];
     if (!row) throw refusals.notFound('game');
     return row;
@@ -790,12 +808,22 @@ export class CatalogService {
     return toCategory(found.row, found.gameCount);
   }
 
+  /** `FOR NO KEY UPDATE`, as `lockGame`: a game's insert takes `FOR KEY SHARE` on its category. */
   private async lockCategory(tx: Transaction, id: string): Promise<CategoryRow> {
     const [row] = isUuid(id)
-      ? await tx.select().from(catalogCategories).where(eq(catalogCategories.id, id)).for('update')
+      ? await tx
+          .select()
+          .from(catalogCategories)
+          .where(eq(catalogCategories.id, id))
+          .for('no key update')
       : [];
     if (!row) throw refusals.notFound('category');
     return row;
+  }
+
+  /** Categories locked in id order (a move holds two), each `NOT_FOUND` when missing. */
+  private async lockCategories(tx: Transaction, ids: readonly string[]): Promise<void> {
+    for (const id of [...new Set(ids)].sort()) await this.lockCategory(tx, id);
   }
 
   /** A category a game can join: it exists and is not archived (rule CT2, edge case 4). */
@@ -830,6 +858,23 @@ export class CatalogService {
       [row.coverFileId, row.idGuideFileId].filter((id): id is string => id !== null),
     );
     return this.files.dimensions(ids, 'catalog_image', db);
+  }
+}
+
+/**
+ * A game moved to another category between its first read and its lock: the change locked the
+ * wrong category, so it rolls back and starts again (audit A3).
+ */
+class GameMoved extends Error {}
+
+/** Runs a game change again while the game moved under it; a few tries are always enough. */
+async function whileGameStays<Result>(work: () => Promise<Result>): Promise<Result> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await work();
+    } catch (error) {
+      if (!(error instanceof GameMoved) || attempt === 5) throw error;
+    }
   }
 }
 

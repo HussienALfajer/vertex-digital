@@ -72,23 +72,29 @@ export const DEFAULT_MAX_QUANTITY: Record<ProductKind, number> = { direct: 1, co
 /** An official price is at most $10,000 (whole cents). */
 const OFFICIAL_PRICE_MAX_USD_UNITS = 10_000 * CURRENCY_SCALE.USD;
 
-/** One line of plain text: trimmed, no control characters. */
-const line = (max: number) =>
-  z
-    .string()
-    .trim()
-    .min(1)
-    .max(max)
-    .regex(/^[^\p{Cc}]+$/u);
+/**
+ * Invisible characters refused in catalog text, as in names (F2-11, F2-15): direction marks and
+ * overrides (U+061C, U+200E–U+200F, U+202A–U+202E, U+2066–U+2069), which can make a pack's digits
+ * read in another order; line and paragraph separators (U+2028, U+2029), which can fake a line;
+ * and zero-width characters (U+200B–U+200D, U+2060, U+FEFF), which make two names that look the
+ * same distinct (audit A6).
+ */
+const HIDDEN = /[\u061C\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu;
+const LINE = /^[^\p{Cc}\u061C\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060\u2066-\u2069\uFEFF]+$/u;
+const PARAGRAPH =
+  /^(?:[^\p{Cc}\u061C\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060\u2066-\u2069\uFEFF]|\n)+$/u;
 
-/** Plain text that may hold line breaks (`\n`), and no other control character. */
-const paragraph = (max: number) =>
-  z
-    .string()
-    .trim()
-    .min(1)
-    .max(max)
-    .regex(/^(?:[^\p{Cc}]|\n)+$/u);
+/**
+ * A supplier's text with those characters removed, before it becomes one of our names or labels
+ * (S16 imports), so what the admin then sends passes `line`.
+ */
+export const withoutHiddenText = (text: string) => text.replace(HIDDEN, '');
+
+/** One line of plain text: trimmed, no control or invisible characters. */
+const line = (max: number) => z.string().trim().min(1).max(max).regex(LINE);
+
+/** Plain text that may hold line breaks (`\n`), and no other control or invisible character. */
+const paragraph = (max: number) => z.string().trim().min(1).max(max).regex(PARAGRAPH);
 
 /** A URL segment: lower-case Latin letters and digits in dash-separated words, 2–48 characters. */
 export const slugSchema = z
@@ -151,13 +157,20 @@ export type CatalogImage = z.infer<typeof catalogImageSchema>;
 /** The admin's archive filter: unarchived rows by default, archived ones with `true` (rule CT1). */
 const archivedFilter = z.enum(['true', 'false']).optional();
 
+/**
+ * The most ids a reorder takes. Fields and products have their own limits, but categories and the
+ * games of a category have none (rule CT5), so the bound is the request's size, not a catalog
+ * limit (audit A4).
+ */
+export const MAX_REORDER_IDS = 1000;
+
 /** Reorder the unarchived children of one parent (rule CT5): every id, once, in the new order. */
 export const reorderSchema = z
   .object({
     ids: z
       .array(z.uuid())
       .min(1)
-      .max(MAX_PRODUCTS_PER_GAME)
+      .max(MAX_REORDER_IDS)
       .refine((ids) => new Set(ids).size === ids.length, 'Expected each id once'),
   })
   .meta({ id: 'Reorder' });
@@ -206,9 +219,30 @@ export type UpdateCategory = z.input<typeof updateCategorySchema>;
 
 // Input fields ----------------------------------------------------------------------------------
 
+const optionValueSchema = z.string().regex(/^[a-z0-9_-]{1,32}$/);
+
+/**
+ * A select option as stored, answered and audited. Its label keeps the rule older rows were saved
+ * under (no control characters), so a stored label never fails a response or an audit entry,
+ * which would block the store's game page or the field's repair; new labels come through
+ * `selectOptionInputSchema`.
+ */
 export const selectOptionSchema = z
-  .object({ value: z.string().regex(/^[a-z0-9_-]{1,32}$/), labelAr: line(40) })
+  .object({
+    value: optionValueSchema,
+    labelAr: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .regex(/^[^\p{Cc}]+$/u),
+  })
   .meta({ id: 'SelectOption' });
+
+/** A select option as the admin or an import sends it: no invisible characters (audit A6). */
+export const selectOptionInputSchema = z
+  .object({ value: optionValueSchema, labelAr: line(40) })
+  .meta({ id: 'SelectOptionInput' });
 
 export type SelectOption = z.infer<typeof selectOptionSchema>;
 
@@ -216,47 +250,52 @@ const lengthBound = (max: number) => z.int().min(1).max(max).nullable().default(
 
 /**
  * A field's type with what that type allows (rule CT7): length bounds for `digits` (1–32) and
- * `text` (1–64), 2–50 options with unique values for `select`, nothing more for `phone`.
+ * `text` (1–64), 2–50 options with unique values for `select`, nothing more for `phone`; options
+ * as given (`selectOptionInputSchema`) or as stored (`selectOptionSchema`).
  */
-export const inputFieldShapeSchema = z
-  .discriminatedUnion('type', [
-    z.object({
-      type: z.literal('digits'),
-      minLength: lengthBound(32),
-      maxLength: lengthBound(32),
-      options: z.null().default(null),
-    }),
-    z.object({
-      type: z.literal('text'),
-      minLength: lengthBound(64),
-      maxLength: lengthBound(64),
-      options: z.null().default(null),
-    }),
-    z.object({
-      type: z.literal('select'),
-      minLength: z.null().default(null),
-      maxLength: z.null().default(null),
-      options: z
-        .array(selectOptionSchema)
-        .min(2)
-        .max(50)
-        .refine(
-          (options) => new Set(options.map((option) => option.value)).size === options.length,
-          'Expected unique option values',
-        ),
-    }),
-    z.object({
-      type: z.literal('phone'),
-      minLength: z.null().default(null),
-      maxLength: z.null().default(null),
-      options: z.null().default(null),
-    }),
-  ])
-  .refine(
-    (shape) =>
-      shape.minLength === null || shape.maxLength === null || shape.minLength <= shape.maxLength,
-    { message: 'Expected minLength ≤ maxLength', path: ['minLength'] },
-  );
+const inputFieldShape = (option: typeof selectOptionSchema | typeof selectOptionInputSchema) =>
+  z
+    .discriminatedUnion('type', [
+      z.object({
+        type: z.literal('digits'),
+        minLength: lengthBound(32),
+        maxLength: lengthBound(32),
+        options: z.null().default(null),
+      }),
+      z.object({
+        type: z.literal('text'),
+        minLength: lengthBound(64),
+        maxLength: lengthBound(64),
+        options: z.null().default(null),
+      }),
+      z.object({
+        type: z.literal('select'),
+        minLength: z.null().default(null),
+        maxLength: z.null().default(null),
+        options: z
+          .array(option)
+          .min(2)
+          .max(50)
+          .refine(
+            (options) => new Set(options.map((item) => item.value)).size === options.length,
+            'Expected unique option values',
+          ),
+      }),
+      z.object({
+        type: z.literal('phone'),
+        minLength: z.null().default(null),
+        maxLength: z.null().default(null),
+        options: z.null().default(null),
+      }),
+    ])
+    .refine(
+      (shape) =>
+        shape.minLength === null || shape.maxLength === null || shape.minLength <= shape.maxLength,
+      { message: 'Expected minLength ≤ maxLength', path: ['minLength'] },
+    );
+
+/** The shape against the stored options: `updateField` checks a change with it. */
+export const inputFieldShapeSchema = inputFieldShape(selectOptionSchema);
 
 export type InputFieldShape = z.infer<typeof inputFieldShapeSchema>;
 
@@ -284,7 +323,7 @@ const inputFieldText = {
 };
 
 /** The key is fixed at creation (rule CT7): orders and supplier mappings refer to it. */
-export const createInputFieldSchema = inputFieldShapeSchema
+export const createInputFieldSchema = inputFieldShape(selectOptionInputSchema)
   .and(z.object({ key: z.string().regex(/^[a-z][a-z0-9_]{1,31}$/), ...inputFieldText }))
   .meta({ id: 'CreateInputField' });
 
@@ -299,7 +338,7 @@ export const updateInputFieldSchema = z
     ...inputFieldText,
     minLength: z.int().nullable(),
     maxLength: z.int().nullable(),
-    options: z.array(selectOptionSchema).nullable(),
+    options: z.array(selectOptionInputSchema).nullable(),
   })
   .partial()
   .meta({ id: 'UpdateInputField' });

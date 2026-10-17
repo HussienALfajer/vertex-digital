@@ -9,12 +9,14 @@ import {
   catalogImageQuerySchema,
   cheapestPackCombination,
   contrastRatio,
+  createCategorySchema,
   createGameSchema,
   createInputFieldSchema,
   createProductSchema,
   gameListQuerySchema,
   gameServiceStatus,
   inputFieldShapeSchema,
+  MAX_REORDER_IDS,
   missingForActivation,
   normalizeSearchText,
   productAvailability,
@@ -22,10 +24,13 @@ import {
   type SearchIndex,
   searchCatalog,
   searchTermsSchema,
+  selectOptionInputSchema,
+  selectOptionSchema,
   slugSchema,
   storeServiceState,
   updateGameSchema,
   updateProductSchema,
+  withoutHiddenText,
 } from './catalog.js';
 
 const id = (n: number) => `0199a000-0000-7000-8000-${n.toString().padStart(12, '0')}`;
@@ -71,6 +76,10 @@ describe('catalog values', () => {
     expect(reorderSchema.safeParse({ ids: [id(1), id(2)] }).success).toBe(true);
     expect(reorderSchema.safeParse({ ids: [id(1), id(1)] }).success).toBe(false);
     expect(reorderSchema.safeParse({ ids: [] }).success).toBe(false);
+    // Audit A4: a category may hold more than 100 games; only the request's size is bounded.
+    const many = (n: number) => Array.from({ length: n }, (_, index) => id(index + 1));
+    expect(reorderSchema.safeParse({ ids: many(101) }).success).toBe(true);
+    expect(reorderSchema.safeParse({ ids: many(MAX_REORDER_IDS + 1) }).success).toBe(false);
   });
 
   it('serves images by their id', () => {
@@ -95,6 +104,22 @@ describe('games', () => {
     expect(createGameSchema.parse({ ...game, regionNotesAr: notes }).regionNotesAr).toBe(notes);
     expect(createGameSchema.safeParse({ ...game, regionNotesAr: 'a\tb' }).success).toBe(false);
   });
+
+  it.each(['؜', '​', '‍', '‎', '‪', '‮', ' ', ' ', '⁠', '⁦', '⁩', '﻿'])(
+    'refuse invisible characters in names, labels and texts (audit A6, case %#)',
+    (hidden) => {
+      const text = `60${hidden} شدة`;
+      expect(createCategorySchema.safeParse({ slug: 'cards', nameAr: text }).success).toBe(false);
+      expect(createGameSchema.safeParse({ ...game, nameAr: text }).success).toBe(false);
+      expect(createGameSchema.safeParse({ ...game, regionNotesAr: `سطر\n${text}` }).success).toBe(
+        false,
+      );
+      expect(createProductSchema.safeParse({ kind: 'code', nameAr: text }).success).toBe(false);
+      expect(
+        createProductSchema.safeParse({ kind: 'code', nameAr: '10$', redemptionAr: text }).success,
+      ).toBe(false);
+    },
+  );
 
   it('never change their slug', () => {
     expect(updateGameSchema.parse({ slug: 'other', status: 'active' })).toEqual({
@@ -528,5 +553,18 @@ describe('service status (S09 rules SS1, SS2)', () => {
     expect(catalogImageQuerySchema.parse({ w: '640' })).toEqual({ w: 640 });
     expect(catalogImageQuerySchema.parse({})).toEqual({});
     expect(catalogImageQuerySchema.safeParse({ w: '500' }).success).toBe(false);
+  });
+});
+
+describe('withoutHiddenText (audit A6)', () => {
+  it('drops the characters catalog text refuses, and keeps the rest', () => {
+    expect(withoutHiddenText('‏بطاقة​ 10$‮')).toBe('بطاقة 10$');
+    expect(withoutHiddenText('60 شدة')).toBe('60 شدة');
+  });
+
+  it('keeps a stored option label answerable, while a new one refuses it', () => {
+    const option = { value: 'eu', labelAr: 'أوروبا‏' };
+    expect(selectOptionSchema.safeParse(option).success).toBe(true);
+    expect(selectOptionInputSchema.safeParse(option).success).toBe(false);
   });
 });

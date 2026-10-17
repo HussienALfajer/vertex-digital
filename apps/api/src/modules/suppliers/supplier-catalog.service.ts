@@ -22,6 +22,7 @@ import {
   suggestProductName,
   unmappedFields,
   unmappedOptions,
+  withoutHiddenText,
 } from '@vertex-digital/contracts';
 import {
   currentSupplierPolicy,
@@ -271,7 +272,7 @@ export class SupplierCatalogService {
       category: node as SupplierCategoryNode,
       kind,
       game: {
-        nameAr: baseName.slice(0, 60).trim(),
+        nameAr: withoutHiddenText(baseName).slice(0, 60).trim(),
         nameEn,
         slug: await this.freeSlug(nameEn),
         categoryId: storeCategoryId,

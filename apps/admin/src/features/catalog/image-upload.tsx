@@ -1,7 +1,7 @@
 import type { CatalogImage } from '@vertex-digital/contracts';
 import { Button } from '@vertex-digital/ui';
 import { ImageIcon, UploadIcon, XIcon } from 'lucide-react';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { errorMessage } from '../../lib/errors';
 import { useUploadImage } from './catalog.queries';
@@ -9,22 +9,32 @@ import { useUploadImage } from './catalog.queries';
 /**
  * A catalog image field (rule CT10): uploaded at once, re-encoded by the API, previewed here; the
  * form saves the returned id. Removing it only clears the field: stored files are never deleted.
+ * While an upload runs the form is told (`onPendingChange`), so it never saves the image the
+ * upload is replacing, and the image cannot be removed until it lands (audit A5).
  */
 export function ImageUpload({
   label,
   hint,
   image,
   onChange,
+  onPendingChange,
   error,
 }: {
   label: string;
   hint: string;
   image: CatalogImage | null;
   onChange: (image: CatalogImage | null) => void;
+  onPendingChange: (pending: boolean) => void;
   error?: string;
 }) {
   const { t } = useTranslation();
   const upload = useUploadImage();
+  const pending = upload.isPending;
+  useEffect(() => {
+    onPendingChange(pending);
+    // Unmounted mid-upload (the import sheet switched to the supplier's image): nothing pending.
+    return () => onPendingChange(false);
+  }, [pending, onPendingChange]);
   const input = useRef<HTMLInputElement>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const errorId = useId();
@@ -69,20 +79,26 @@ export function ImageUpload({
           type="button"
           variant="outline"
           size="sm"
-          disabled={upload.isPending}
+          disabled={pending}
           aria-invalid={error ? true : undefined}
           aria-describedby={failure || error ? errorId : undefined}
           onClick={() => input.current?.click()}
         >
           <UploadIcon />
-          {upload.isPending
+          {pending
             ? t('catalog.image.uploading')
             : image
               ? t('catalog.image.replace')
               : t('catalog.image.upload')}
         </Button>
         {image && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={pending}
+            onClick={() => onChange(null)}
+          >
             <XIcon />
             {t('catalog.image.remove')}
           </Button>

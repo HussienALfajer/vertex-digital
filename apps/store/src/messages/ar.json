@@ -772,6 +772,7 @@
       "p90": "9 من كل 10 طلبات خلال {duration}",
       "noData": "لا بيانات كافية بعد عن وقت التسليم"
     },
+    "amount": "الكمية: {amount}",
     "price": {
       "syp": "≈ {amount} ل.س",
       "savings": "وفّر {percent}%"

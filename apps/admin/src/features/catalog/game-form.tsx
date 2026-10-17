@@ -81,7 +81,10 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
   const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const pending = create.isPending || update.isPending;
+  // Audit A5: saving while an image uploads would save the image it is replacing.
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [idGuideUploading, setIdGuideUploading] = useState(false);
+  const pending = create.isPending || update.isPending || coverUploading || idGuideUploading;
 
   const items = (categories.data ?? []).map((item) => ({ value: item.id, label: item.nameAr }));
   // A game in an archived category still shows it, though it cannot be picked again.
@@ -208,6 +211,7 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
                 hint={t('catalog.fields.coverHint')}
                 image={cover}
                 onChange={setCover}
+                onPendingChange={setCoverUploading}
               />
               {game && <SupplierCoverButton gameId={game.id} onCover={setCover} />}
             </div>
@@ -216,6 +220,7 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
               hint={t('catalog.fields.idGuideHint')}
               image={idGuide}
               onChange={setIdGuide}
+              onPendingChange={setIdGuideUploading}
             />
           </div>
           <AccentField value={accent} onChange={setAccent} error={errors.accentColor} />

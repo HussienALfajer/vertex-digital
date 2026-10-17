@@ -973,6 +973,57 @@ describe('two fields and select fields (rules MF1–MF3)', () => {
       after: { optionMap: { region: { us: 'os_asia', eu: 'os_euro' } } },
     });
   });
+
+  it('a new select option the route cannot map moves the price off it at once (audit A2)', async () => {
+    await reauthenticate();
+    const product = await json<{ id: string }>(
+      await post(`/api/admin/catalog/games/${selectGame}/products`, {
+        kind: 'direct',
+        nameAr: `خيارات ${run}`,
+      }),
+      201,
+    );
+    const mapped = await offer('gi-options', 'gi', { cost: 0.9, fields: [player, region(ALL)] });
+    const created = await json<ProductRouting>(
+      await post(`/api/admin/catalog/products/${product.id}/routes`, {
+        offerId: mapped,
+        fieldMap: { playerId: 'player_id', region: 'region' },
+        optionMap: { region: { us: 'os_usa', eu: 'os_euro' } },
+      }),
+      201,
+    );
+    const routeId = created.routes.find((item) => item.offer.id === mapped)?.id as string;
+    const manual = await json<ProductRouting>(
+      await post(`/api/admin/catalog/products/${product.id}/routes/manual`, { costUsdUnits: 5e6 }),
+      201,
+    );
+    expect(manual.currentPrice?.routeId).toBe(routeId);
+    const game = await json<{
+      fields: { id: string; key: string; options: { value: string; labelAr: string }[] | null }[];
+    }>(await get(`/api/admin/catalog/games/${selectGame}`), 200);
+    const field = game.fields.find((item) => item.key === 'region');
+    const options = field?.options ?? [];
+    const editOptions = (next: unknown) =>
+      client.request('PATCH', `/api/admin/catalog/fields/${field?.id}`, {
+        cookie: admin.cookie,
+        body: { options: next },
+      });
+    try {
+      await json(
+        await editOptions([...options, { value: `new-${run}`, labelAr: 'منطقة جديدة' }]),
+        200,
+      );
+      const after = await json<ProductRouting>(
+        await get(`/api/admin/catalog/products/${product.id}/routes`),
+        200,
+      );
+      expect(after.routes.find((item) => item.id === routeId)?.unusableReason).not.toBeNull();
+      expect(after.basisRouteId).not.toBe(routeId);
+      expect(after.currentPrice?.routeId).toBe(after.basisRouteId);
+    } finally {
+      await json(await editOptions(options), 200);
+    }
+  });
 });
 
 describe('the game page reads (rules SC9, IM3, SF2)', () => {

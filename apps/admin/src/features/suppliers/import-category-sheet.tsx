@@ -120,6 +120,8 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
     slug: read.game.slug,
   });
   const [upload, setUpload] = useState<CatalogImage | null>(null);
+  // Audit A5: importing while the cover uploads would import without it.
+  const [uploading, setUploading] = useState(false);
   const [useSupplierImage, setUseSupplierImage] = useState(read.category.hasImage);
   const [imageFailed, setImageFailed] = useState(false);
   const [fields, setFields] = useState<FieldRow[]>(() => initialFieldRows(read));
@@ -345,6 +347,7 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
                   hint={t('catalog.fields.coverHint')}
                   image={upload}
                   onChange={setUpload}
+                  onPendingChange={setUploading}
                   error={gameErrors.cover ? t('suppliers.importCategory.errors.cover') : undefined}
                 />
                 {draft.category.hasImage && (
@@ -543,7 +546,7 @@ function ImportForm({ supplier, draft: read }: { supplier: SupplierDetail; draft
         }
       />
       <div className="sticky bottom-0 -mx-6 flex justify-end border-t border-border bg-surface px-6 py-3">
-        <Button type="submit" disabled={importCategory.isPending || selected === 0}>
+        <Button type="submit" disabled={importCategory.isPending || uploading || selected === 0}>
           {importCategory.isPending
             ? t('suppliers.importCategory.submitting')
             : t('suppliers.importCategory.submit', { count: selected })}

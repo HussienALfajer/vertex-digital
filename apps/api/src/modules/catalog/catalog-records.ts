@@ -9,6 +9,7 @@ import {
   type DeliveryStats,
   type InputField,
   missingForActivation,
+  type PriceChangeCause,
   type Product,
   type ProductAvailability,
   type StockLevel,
@@ -18,7 +19,9 @@ import {
   catalogGames,
   catalogInputFields,
   catalogProducts,
+  type RoutingContext,
   recordAudit,
+  repriceProducts,
   type Transaction,
 } from '@vertex-digital/db';
 import { and, asc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
@@ -220,6 +223,25 @@ export async function assertComplete(
   if (missing.length > 0) throw refusals.incomplete(missing);
 }
 
+/**
+ * Reprices a game's unarchived products in the change's transaction (S07 rule P2), under the game
+ * lock it already holds: a change that moves the margin rule in force (a move to another category,
+ * audit A2) or a route's usability (a field archived or restored, its select options edited, S07
+ * rule RT3) must not leave the old price standing.
+ */
+export async function repriceGameProducts(
+  tx: Transaction,
+  gameId: string,
+  cause: PriceChangeCause,
+  context: RoutingContext,
+): Promise<void> {
+  const products = await tx
+    .select({ id: catalogProducts.id })
+    .from(catalogProducts)
+    .where(and(eq(catalogProducts.gameId, gameId), isNull(catalogProducts.archivedAt)));
+  await repriceProducts(tx, { productIds: products.map((product) => product.id), cause, context });
+}
+
 /** The next `sort_order` among a parent's unarchived children: new rows go last (rule CT5). */
 export function nextSortOrder(
   tx: Transaction,
@@ -243,7 +265,8 @@ export const containing = (text: string) => `%${text.replace(/[\\%_]/g, '\\$&')}
 /**
  * Rewrites `sort_order` as 1…n in the order of `ids` (rule CT5). The rows are locked in id order
  * first, the order the repricing path (S07) locks games and products in, so the two never wait
- * on each other in opposite orders.
+ * on each other in opposite orders; `FOR NO KEY UPDATE`, so an order's foreign key check on a
+ * game or product never waits for a reorder (audit A1).
  */
 export async function rewriteOrder(
   tx: Transaction,
@@ -259,7 +282,7 @@ export async function rewriteOrder(
     .from(table)
     .where(inArray(table.id, [...ids]))
     .orderBy(asc(table.id))
-    .for('update');
+    .for('no key update');
   await tx
     .update(table)
     .set({

@@ -17,6 +17,7 @@ import {
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, TextCursorInputIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
 import { useArchiveField, useReorderFields } from './catalog.queries';
 import { catalogFailure, MoveButton } from './catalog-parts';
@@ -25,12 +26,13 @@ import { FieldDialog } from './field-dialog';
 
 /**
  * "حقول الإدخال" (S06 screens): the game's fields in order (label, key, type, required), add and
- * edit, order (rule CT5), archive and restore (rules CT1, CT3).
+ * edit, order (rule CT5), archive after a confirmation (audit A7) and restore (rules CT1, CT3).
  */
 export function FieldsTab({ game }: { game: GameDetail }) {
   const { t } = useTranslation();
   const [archived, setArchived] = useState(false);
   const [editing, setEditing] = useState<InputField | 'new' | null>(null);
+  const [archiving, setArchiving] = useState<InputField | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const reorder = useReorderFields(game.id);
   const archive = useArchiveField();
@@ -163,9 +165,7 @@ export function FieldsTab({ game }: { game: GameDetail }) {
                           variant="ghost"
                           size="sm"
                           disabled={archive.isPending}
-                          onClick={() =>
-                            run(() => archive.mutateAsync({ id: field.id, archive: true }))
-                          }
+                          onClick={() => setArchiving(field)}
                         >
                           {t('catalog.actions.archive')}
                         </Button>
@@ -187,6 +187,19 @@ export function FieldsTab({ game }: { game: GameDetail }) {
           />
         )}
       </Dialog>
+      <ConfirmDialog
+        open={archiving !== null}
+        onClose={() => setArchiving(null)}
+        title={t('catalog.inputFields.archiveTitle')}
+        body={t('catalog.inputFields.archiveBody', { name: archiving?.labelAr ?? '' })}
+        action={t('catalog.actions.archive')}
+        destructive
+        pending={archive.isPending}
+        describeFailure={(error) => catalogFailure(t, error)}
+        onConfirm={async () => {
+          if (archiving) await archive.mutateAsync({ id: archiving.id, archive: true });
+        }}
+      />
     </div>
   );
 }

@@ -11,6 +11,8 @@ import type {
   CreateGame,
   CreateInputField,
   CreateProduct,
+  GameListQuery,
+  GamePage,
   UpdateGame,
   UpdateInputField,
   UpdateProduct,
@@ -25,8 +27,29 @@ import type { CatalogSearch } from './catalog-search';
  * catalog, and the pricing page names its targets, so every mutation reads both again.
  */
 
-/** Every game of a category in one page: reorder takes the full list (rule CT5). */
+/** The largest page the games list answers (`pageQuerySchema`). */
 const GAMES_PAGE_SIZE = 100;
+
+/**
+ * Every game matching the filters, page after page: a category's reorder sends its full list
+ * (rule CT5), and a category may hold more than one page (audit A4).
+ */
+async function everyGame(query: Omit<GameListQuery, 'page' | 'pageSize'>): Promise<GamePage> {
+  const read = (page: number) =>
+    call(
+      api.GET('/api/admin/catalog/games', {
+        params: { query: { ...query, page, pageSize: GAMES_PAGE_SIZE } },
+      }),
+    );
+  const first = await read(1);
+  const items = [...first.items];
+  for (let page = 2; items.length < first.total; page += 1) {
+    const next = await read(page);
+    if (next.items.length === 0) break;
+    items.push(...next.items);
+  }
+  return { ...first, items, pageSize: items.length };
+}
 
 export const categoriesQuery = (archived = false) =>
   queryOptions({
@@ -44,27 +67,19 @@ export const gamesQuery = (categoryId: string, search: CatalogSearch) =>
   queryOptions({
     queryKey: ['catalog', 'games', categoryId, search],
     queryFn: () =>
-      call(
-        api.GET('/api/admin/catalog/games', {
-          params: {
-            query: {
-              categoryId,
-              status: search.status,
-              archived: search.archived ? 'true' : undefined,
-              q: search.q,
-              pageSize: GAMES_PAGE_SIZE,
-            },
-          },
-        }),
-      ),
+      everyGame({
+        categoryId,
+        status: search.status,
+        archived: search.archived ? 'true' : undefined,
+        q: search.q,
+      }),
     placeholderData: keepPreviousData,
   });
 
 /** Every unarchived game, for the pricing calculator's target picker. */
 export const allGamesQuery = queryOptions({
   queryKey: ['catalog', 'games', 'all'],
-  queryFn: () =>
-    call(api.GET('/api/admin/catalog/games', { params: { query: { pageSize: GAMES_PAGE_SIZE } } })),
+  queryFn: () => everyGame({}),
 });
 
 export const gameQuery = (id: string) =>
