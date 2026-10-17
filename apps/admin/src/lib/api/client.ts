@@ -36,16 +36,22 @@ export class ApiError extends Error {
   }
 }
 
-/** Resolves to the response body, or throws `ApiError`. */
+/**
+ * Resolves to the response body, or throws `ApiError`. A 413 without an API code is nginx's own
+ * page for a body over its limit (an image above 6 MB, F7-3): it reads as the API's
+ * `PAYLOAD_TOO_LARGE`, so the admin sees the size limit instead of an unexpected error.
+ */
 export async function call<Data>(
   request: Promise<{ data?: Data; error?: unknown; response: Response }>,
 ): Promise<Data> {
   const { data, error, response } = await request;
   if (!response.ok) {
-    const body = (error ?? {}) as Partial<ErrorResponse>;
+    const body = (
+      typeof error === 'object' && error !== null ? error : {}
+    ) as Partial<ErrorResponse>;
     throw new ApiError(
       response.status,
-      body.code,
+      body.code ?? (response.status === 413 ? 'PAYLOAD_TOO_LARGE' : undefined),
       body.details,
       body.message ?? `HTTP ${response.status}`,
     );

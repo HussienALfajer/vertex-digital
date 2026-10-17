@@ -40,7 +40,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | 4 | Sham Cash deposits | F05 (+ F07, F27 deposit parts) | First money in; the manual review path with its Telegram card and emails | Accepted 2026-10-16 (4.12 step 2 on 2026-10-17) |
 | 5 | USDT deposits | F06 | The automatic money-in path | Accepted 2026-10-16 |
 | 6 | Wallet and ledger | F03 | Checked once real deposits exist: balances as sums, history, journals | Accepted 2026-10-17 |
-| 7 | Catalog | F08 | What is sold: games, packs, fields, images, states | — |
+| 7 | Catalog | F08 | What is sold: games, packs, fields, images, states | Accepted 2026-10-17 |
 | 8 | Pricing engine | F10 | Prices, margins, review queue, loss guard | — |
 | 9 | Suppliers | F09 | Sync, health, balance, routes, supplier catalog browser, stock | — |
 | 10 | Store home, game pages and search | F12, F15 | The customer's way to a product | — |
@@ -146,6 +146,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | F6-13 | 6 | External audit A10 | The wrong-session test did not cover a customer session on `/entries` and `/reverse` | minor | Both added, the reversal on a real adjustment | Fixed |
 | F6-14 | 6 | Checking A1 | The store's purchase, cart, deposit and ticket keys follow the same rule (a new key once the body changed, `features/purchase/attempt.ts`, `deposits/deposit-form.tsx`, `deposits/usdt-form.tsx`, `support/new-ticket-page.tsx`, `support/ticket-page.tsx`): a lost answer then an edited retry can buy or open twice | major | One rule in `apps/store/src/lib/idempotency.ts`: after no answer, a server fault or `IDEMPOTENCY_KEY_REUSED` the key stays whatever the body until a success (the buy box and the cart keep that state in session storage across reloads; after a lost answer they free the key only on a refusal decided after the API looked the key up, `IDEMPOTENCY_KEY_REUSED` included, never on one answered before it such as the body's schema or the email check); a new key only for a changed body after a clear refusal. `errors.IDEMPOTENCY_KEY_REUSED` now says the first attempt was recorded and to check orders, deposits or tickets before retrying. Unit tests per helper, E2E for the edited purchase | Fixed (#122) |
 | F7-1 | 7 | Writing the steps (production read, 2026-10-17) | None of the 223 code packs has a region or redemption instructions (CT8), while the region notes of several code games tell the customer the code arrives "مع خطوات الاستخدام": the buy box and the order page show instructions only when the pack has them, so a code buyer today gets the code with no steps | minor (content) | None yet: the owner decides, before feature 11's code purchase, whether to write the region and instructions per code pack (the pack dialog) or reword those region notes | Open |
+| F7-3 | 7 | 7.6 step 2 | An image above 6 MB showed "حدث خطأ غير متوقع. أعد المحاولة بعد قليل." instead of the size limit: nginx refuses the body before the API (413 with its own HTML page, no API code), and the panel's `call()` read no code from it | minor | A 413 without an API code reads as `PAYLOAD_TOO_LARGE` ("الملف أكبر من 5 ميغابايت.") for every panel upload (`apps/admin/src/lib/api/client.ts`); unit test `client.test.ts`. The store's uploads check each file's size before sending, so nginx's limit is not reached there | Fixed |
 | F7-2 | 7 | Writing the steps (production read) | None of the 57 games has an ID guide image or an accent color, and no pack has an official price: the buy box shows no "where is my ID" guide for the 36 games that ask for an ID, every game uses the brand's sand, and no savings badge appears anywhere | minor (content) | None yet: the owner decides which games get an ID guide (first those whose ID customers most often get wrong) and whether to enter official prices, before the pilot | Open |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
@@ -1396,7 +1397,7 @@ The test records (all archived at the end; their slugs can never be used again):
 5. Clear the search. "الحالة" → "متوقفة": no game (all 21 are active). "الأرشيف" → "المؤرشفة": no game. Back to "كل الحالات" and "غير المؤرشفة".
 6. "إدارة الفئات". Expected: the six categories in order, each with "الألعاب: <n>" as in the worked table; its archived tab "لا توجد فئات مؤرشفة.". Close it.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.2 PUBG Mobile in the panel, read only
 
@@ -1410,7 +1411,7 @@ Read only: **change nothing** in this case.
 4. "الباقات". Expected: the 29 packs in the order of the worked numbers, each "شحن مباشر" with its amount, no official price, max quantity 1, and its status (14 "نشطة", 15 "متوقفة"): "60 شدة" "متوفرة" with $0.99; "660 شدة" "غير متوفرة: متوقفة" with "لا سعر بعد".
 5. The packs' archived filter. Expected: the 18 "Fast ·", "Manual ·" and "Reserve ·" packs, each with "استعادة" (**do not press it**).
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.3 What customers see of the real catalog
 
@@ -1421,7 +1422,7 @@ Result:
 3. Open فورتنايت (every pack paused). Expected: the page opens, every pack greyed "غير متوفرة حاليًا"; on the home page its card reads "غير متوفرة حاليًا".
 4. Open `https://digital.vertexmedia.pro/games/system-test-7`. Expected: the not-found page (the game does not exist yet; 7.5 opens the same address once it exists, paused).
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.4 Categories: add, refuse, rename, reorder
 
@@ -1434,7 +1435,7 @@ Result:
 5. "تحريك اختبار النظام للأعلى". Expected: it is 6th, الاشتراكات والخدمات الرقمية 7th. "تحريك اختبار النظام للأسفل": back to 7th, the six real categories in their order.
 6. The store's home page (reload). Expected: no "اختبار النظام" section (a category with no active game is not shown).
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.5 A new game starts paused and cannot go live incomplete
 
@@ -1448,14 +1449,14 @@ Result:
 6. Open `https://digital.vertexmedia.pro/games/system-test-7` (private window). Expected: the not-found page (a paused game is shown nowhere on the store, SF1).
 7. Back in the catalog, "اختبار النظام": A's card with "متوقفة" and "الباقات: 0". Create game **B** the same way: `تطبيق اختبار 7`, `System Test 7 App`, `system-test-7-app`. Expected: B after A, "متوقفة".
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.6 Images and the accent color
 
 **What this checks:** the store's images are always safe, light WebP files, and a game's color stays readable on the store's dark surface.
 
 1. A → "البيانات" → "صورة الغلاف" → "رفع صورة": `fake.png` (choose "All files" in the file dialog if needed). Expected: "الملف ليس صورة صالحة. ارفع صورة PNG أو JPEG أو WebP حتى 5 ميغابايت و25 ميغابكسل."; no preview.
-2. The image above 5 MB. Expected: "الملف أكبر من 5 ميغابايت." (a file above 6 MB is stopped by nginx before the API: note the text you see).
+2. The image above 5 MB. Expected: "الملف أكبر من 5 ميغابايت." (a file above 6 MB is stopped by nginx before the API: note the text you see; until F7-3 it read "حدث خطأ غير متوقع. أعد المحاولة بعد قليل.").
 3. The wide screenshot. Expected: "جارٍ الرفع…", then its preview and its size fitted within 1600 px ("1600 × 900 بكسل" for 1920 × 1080), with "استبدال الصورة" and "إزالة". "صورة دليل المعرّف": the other image, its preview and size.
 4. "لون التمييز" `#2E7D6A`. Expected, as you type: "التباين مع الخلفية الداكنة 2.99:1، أقل من 3:1 ولن يُقبل.". "حفظ التغييرات": refused with "تباين اللون مع الخلفية الداكنة 2.99:1، والحد الأدنى 3:1. اختر لونًا أفتح."; both images still in the form.
 5. `#2e7d6b` (lower case). Expected: "التباين مع الخلفية الداكنة 3:1، مقبول." and "التباين مع الأبيض 4.92:1."; save: "حُفظت التغييرات."; reload: the color reads `#2E7D6B` (stored upper case), both images kept.
@@ -1463,7 +1464,7 @@ Result:
 7. Open the cover preview in a new tab (right-click → open image). Expected: `https://digital-admin.vertexmedia.pro/api/catalog/images/<id>` shows the image. The same path on `https://digital.vertexmedia.pro`: the same image. Optional (developer tools, Network): `Content-Type: image/webp`, `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`.
 8. Change the last character of the id in that address (still 36 characters). Expected: 404.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.7 Input fields
 
@@ -1478,7 +1479,7 @@ Result:
 7. Edit "السيرفر". Expected: "تعديل حقل الإدخال" with "المفتاح والنوع ثابتان بعد الإنشاء."; the key and type cannot be changed. Change its label to `المنطقة`, save: the row reads "المنطقة".
 8. Move "المنطقة" up, then down. Expected: first, then back after "معرّف اللاعب".
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.8 Going live, and back
 
@@ -1493,7 +1494,7 @@ Do steps 1–5 in one sitting: game A is visible to every store visitor between 
 5. The store (reload; allow up to a minute). Expected: no "اختبار النظام" section; `/games/system-test-7` the not-found page.
 6. A → "حقول الإدخال": archive "معرّف اللاعب" now that A is paused. Expected: accepted; the list shows only "المنطقة", the archived tab "معرّف اللاعب". Restore it: back in the list.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.9 Packs of both kinds
 
@@ -1508,7 +1509,7 @@ Result:
 7. Edit it. Expected: the region and both lines of the instructions as typed (plain text, the line break kept). Close it.
 8. B → "البيانات": turn "نشطة في المتجر" on. Expected: refused, "ينقصها: صورة الغلاف" only (a game with code packs only needs no input field). Leave B paused.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.10 Archive and restore
 
@@ -1520,7 +1521,7 @@ Result:
 4. In "اختبار النظام" move B up. Expected: B, A; move it down: A, B.
 5. On B's page "أرشفة". Expected: "أرشفة اللعبة" with "ستختفي «تطبيق اختبار 7» وباقاتها من المتجر. قواعد تسعيرها تبقى وتعود عند الاستعادة."; after it, "هذه اللعبة مؤرشفة" with "لا تظهر في المتجر. استعدها لتعود كما كانت."; the catalog's archived filter (in "اختبار النظام") lists B. "استعادة": B back in "اختبار النظام", "متوقفة", with its code pack, region and instructions unchanged.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.11 Only the admin changes the catalog
 
@@ -1531,7 +1532,7 @@ Result:
 3. In the private window (signed out) open `https://digital.vertexmedia.pro/api/catalog/storefront`. Expected: the six real categories with their active games only; no "اختبار النظام", no paused game, no supplier, cost or margin field.
 4. Optional (developer tools, Network, in the panel): the answer of `/api/admin/catalog/games` carries `Cache-Control: no-store`.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.12 The audit log has every catalog change
 
@@ -1544,7 +1545,7 @@ Reorders are filed under their parent: games under the category, fields and pack
 3. Entity type "حقل إدخال". Expected: "إضافة حقل إدخال" (2), "تعديل حقل إدخال" (the label), "أرشفة حقل إدخال" and "استعادة حقل إدخال"; the key shown as `identifier`. Nothing for the refused archive of 7.8.
 4. Entity type "باقة". Expected: the five creations of 7.7, 7.9 and 7.10; "تعديل باقة" with `status` before and after for the pause, resume and pause of 7.9; the archives and restores of 7.10 step 1. Before today's entries, the latest are those of 2026-10-15.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.13 Screens quality on desktop and phone
 
@@ -1554,7 +1555,7 @@ Result:
 2. On the phone: `/catalog` (the tabs scroll, the cards in one column), A's tabs, the packs table scrolling within its frame, the move buttons reachable; no horizontal page scroll.
 3. With the keyboard only (PC): reach "إضافة لعبة", a card's move buttons and the status switch, and use them.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### 7.14 Clean-up: the test records archived
 
@@ -1566,13 +1567,14 @@ Result:
 4. The store (reload). Expected: the six real categories as in 7.3; `/games/system-test-7` and `/games/system-test-7-app` the not-found page.
 5. The panel: the counts of 7.1 (57 games, ببجي موبايل "الباقات: 29") and PUBG Mobile's packs as in 7.2: nothing real changed.
 
-Result:
+Result: ✅ (2026-10-17)
 
 ### Feature 7 sign-off
 
 | Item | Value |
 |---|---|
-| Cases passed | — of 14 |
-| Findings | F7-1 and F7-2 open (found while writing the steps from the production records: content for the owner to decide) |
-| Accepted by the owner on | — |
-| PR | the steps (this file's PR) |
+| Cases passed | 14 of 14 |
+| Findings | F7-1 and F7-2 open (found while writing the steps from the production records: content for the owner to decide); F7-3 (nginx's 413 read as an unexpected error in the panel) fixed with the results |
+| Checked by Claude (read-only, production, 2026-10-17, after 7.14) | Real catalog unchanged: 6 categories, 57 active games, 587 unarchived packs (172 active), 41 fields, PUBG Mobile 29 live and 18 archived packs, no real game or pack updated or audited that day; `system-test`, `system-test-7` and `system-test-7-app` archived. The day's catalog audit entries match 7.12 (category: 1 created, 2 updated, 2 reordered, 1 archived; game: 2 created, 6 updated, 3 archived, 1 restored; field: 2 created, 1 updated, 1 archived, 1 restored; pack: 5 created, 3 updated, 2 archived, 1 restored; 4 pack reorders), with one game reorder and two field reorders more than the steps name, from the keyboard check of 7.13 |
+| Accepted by the owner on | 2026-10-17 |
+| PR | the steps (#125); the results and the F7-3 fix (this file's PR) |
