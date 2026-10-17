@@ -1319,4 +1319,4 @@ Result:
 | Cases passed | — of 12 |
 | Findings | F6-1 (found while writing the steps) |
 | Accepted by the owner on | — |
-| PR | the steps (#…); the results and fixes in the next PR, not opened yet |
+| PR | the steps (#119); the results and fixes in the next PR, not opened yet |
