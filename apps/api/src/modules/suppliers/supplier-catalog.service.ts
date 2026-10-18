@@ -425,7 +425,6 @@ export class SupplierCatalogService {
     const productOf = new Map(
       game.products.filter((product) => product.archivedAt === null).map((p) => [p.id, p]),
     );
-    const routedHere = await this.productsRoutedTo(supplier.id, [...productOf.keys()]);
     const selects = selectOptionsOf(game.fields.filter((field) => field.archivedAt === null));
     refuseRows(
       input.rows.flatMap((item, index) => {
@@ -438,7 +437,6 @@ export class SupplierCatalogService {
         if (offer?.kind && offer.kind !== product.kind) {
           return [{ index, code: 'ROUTE_KIND_MISMATCH' }];
         }
-        if (routedHere.has(product.id)) return [{ index, code: 'ROUTE_EXISTS' }];
         return [];
       }),
     );
@@ -473,7 +471,12 @@ export class SupplierCatalogService {
         const createdOf = new Map(fresh.map(({ index }, at) => [index, created[at]]));
         const targets = input.rows.map((item, index) => {
           const productId = 'productId' in item ? item.productId : createdOf.get(index)?.id;
-          return { productId: productId as string, offer: offers.get(item.offerId) as OfferRow };
+          return {
+            productId: productId as string,
+            offer: offers.get(item.offerId) as OfferRow,
+            // S17 WR7: a new product's only route counts for its price.
+            priceBasis: 'productId' in item ? item.priceBasis : true,
+          };
         });
         const routes = await this.insertRoutes(tx, actor, supplier, targets, input);
         if (locked.gameId !== game.id) await this.link(tx, actor, locked, game.id);
@@ -743,22 +746,6 @@ export class SupplierCatalogService {
     return new Set(rows.map((row) => row.offerId));
   }
 
-  /** Products of these ids with an unarchived route to the supplier (rule RT1). */
-  private async productsRoutedTo(supplierId: string, productIds: readonly string[]) {
-    if (productIds.length === 0) return new Set<string>();
-    const rows = await this.db
-      .select({ productId: productRoutes.productId })
-      .from(productRoutes)
-      .where(
-        and(
-          eq(productRoutes.supplierId, supplierId),
-          inArray(productRoutes.productId, [...productIds]),
-          isNull(productRoutes.archivedAt),
-        ),
-      );
-    return new Set(rows.map((row) => row.productId));
-  }
-
   /**
    * The node for an import (`gameId` null) or a link: it exists, is listed, and neither it, an
    * ancestor nor a descendant is linked to another game (`CATEGORY_LINKED`, `details.gameId`).
@@ -821,7 +808,8 @@ export class SupplierCatalogService {
 
   /**
    * One enabled route per target (rules RT1–RT3), its field and option maps limited to the
-   * offer's own fields (`offerMaps`); each audited. The offers are read again under the lock an
+   * offer's own fields (`offerMaps`), counting for the price unless the target says not (S17
+   * WR7); each audited. The offers are read again under the lock an
    * ignore waits on, so an offer ignored, gone or unsupported since the request's checks refuses
    * its row (S16 SC6–SC8): targets are in the request's row order.
    */
@@ -829,7 +817,7 @@ export class SupplierCatalogService {
     tx: Transaction,
     actor: Actor,
     supplier: { id: string; code: SupplierCategoryNode['supplierCode'] },
-    targets: readonly { productId: string; offer: OfferRow }[],
+    targets: readonly { productId: string; offer: OfferRow; priceBasis?: boolean }[],
     maps: { fieldMap: Record<string, string>; optionMap: OptionMap },
   ): Promise<string[]> {
     const fresh = await lockOffersToRoute(
@@ -850,6 +838,7 @@ export class SupplierCatalogService {
       supplierId: supplier.id,
       offerId: target.offer.id,
       ...offerMaps(target.offer, maps),
+      priceBasis: target.priceBasis ?? true,
     }));
     if (routes.length === 0) return [];
     await tx.insert(productRoutes).values(routes);
@@ -862,6 +851,9 @@ export class SupplierCatalogService {
         enabled: true,
         fieldMap: route.fieldMap,
         optionMap: route.optionMap,
+        priceBasis: route.priceBasis,
+        expectedDeliveryMinutes: null,
+        hardLimitMinutes: null,
       });
     }
     return routes.map((route) => route.id);

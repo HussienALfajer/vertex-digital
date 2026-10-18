@@ -195,7 +195,12 @@ const balance = async (who: Buyer) =>
   ).balanceUnits;
 
 /** Sends the order to its route as `orders.fulfil` will (PR 2): an attempt `sending`. */
-async function send(orderId: string, item: Item, supplier = ids.fake) {
+async function send(
+  orderId: string,
+  item: Item,
+  supplier = ids.fake,
+  timing: { expectedDeliveryMinutes?: number; hardLimitMinutes?: number } = {},
+) {
   return test.db.transaction(async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (!order) throw new Error('No order');
@@ -212,6 +217,7 @@ async function send(orderId: string, item: Item, supplier = ids.fake) {
       status: 'sending',
       candidates: [],
       sentAt: new Date(),
+      ...timing,
     });
     await transitionOrder(tx, order, 'sent_to_supplier', { actor: 'system', attemptId: id });
     return id;
@@ -508,6 +514,31 @@ describe("the customer's orders and codes (rules O13, C2)", () => {
     const audit = await auditOf(test.db, order.id);
     expect(audit.map((entry) => entry.action)).toContain('order.code_revealed');
     expect(JSON.stringify(audit)).not.toContain('GIFT-AAAA');
+  });
+});
+
+describe('the expected delivery hint (S17 WR10)', () => {
+  it("carries the open attempt's expected time to its own customer, not once held", async () => {
+    const item = await product(ids.gameId, 'direct', 0.88);
+    const customer = await buyer();
+    const order = await json<{ id: string; expectedWithinMinutes: number | null }>(
+      await purchase(customer, item),
+      201,
+    );
+    expect(order.expectedWithinMinutes).toBeNull();
+    await send(order.id, item, ids.fake, { expectedDeliveryMinutes: 30, hardLimitMinutes: 45 });
+    const view = async () =>
+      json<{ stage: string; expectedWithinMinutes: number | null }>(
+        await client.get(`/api/orders/${order.id}`, { cookie: customer.cookie }),
+        200,
+      );
+    expect(await view()).toMatchObject({ stage: 'processing', expectedWithinMinutes: 30 });
+    const stranger = await buyer();
+    expect((await client.get(`/api/orders/${order.id}`, { cookie: stranger.cookie })).status).toBe(
+      404,
+    );
+    await hold(order.id);
+    expect(await view()).toMatchObject({ stage: 'delayed', expectedWithinMinutes: null });
   });
 });
 

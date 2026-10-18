@@ -602,6 +602,9 @@ export class SuppliersService {
             enabled: true,
             fieldMap: route.fieldMap,
             optionMap: route.optionMap,
+            priceBasis: true,
+            expectedDeliveryMinutes: null,
+            hardLimitMinutes: null,
           });
         }
         await auditSuppliers(tx, actor, 'supplier.import', supplierEntity(state.id), {

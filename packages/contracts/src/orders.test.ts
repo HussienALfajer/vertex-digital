@@ -16,6 +16,7 @@ import {
   deliveredCodeSchema,
   deliveryStats,
   displaySypTotal,
+  expectedWithinMinutes,
   firstPollAt,
   isOpenAttempt,
   isResendRefusal,
@@ -372,8 +373,26 @@ describe('polling times (rule F7, MN2)', () => {
   });
 
   it('holds an attempt at the hard limit, not before', () => {
-    expect(pastHardLimit(sent, plus(30 * minute - 1), policy)).toBe(false);
-    expect(pastHardLimit(sent, plus(30 * minute), policy)).toBe(true);
+    const attempt = { sentAt: sent, hardLimitMinutes: null };
+    expect(pastHardLimit(attempt, plus(30 * minute - 1), policy)).toBe(false);
+    expect(pastHardLimit(attempt, plus(30 * minute), policy)).toBe(true);
+  });
+
+  it("holds an attempt at its own limit before the policy's (S17 WR9)", () => {
+    const attempt = { sentAt: sent, hardLimitMinutes: 45 };
+    expect(pastHardLimit(attempt, plus(45 * minute - 1), policy)).toBe(false);
+    expect(pastHardLimit(attempt, plus(45 * minute), policy)).toBe(true);
+    expect(pastHardLimit({ sentAt: sent, hardLimitMinutes: 10 }, plus(10 * minute), policy)).toBe(
+      true,
+    );
+  });
+
+  it('hints the expected time only while processing with an open attempt (S17 WR10)', () => {
+    expect(expectedWithinMinutes('processing', { expectedDeliveryMinutes: 30 })).toBe(30);
+    expect(expectedWithinMinutes('processing', { expectedDeliveryMinutes: null })).toBeNull();
+    expect(expectedWithinMinutes('processing', null)).toBeNull();
+    expect(expectedWithinMinutes('delayed', { expectedDeliveryMinutes: 30 })).toBeNull();
+    expect(expectedWithinMinutes('delivered', { expectedDeliveryMinutes: 30 })).toBeNull();
   });
 
   it('reminds of a manual attempt once, after manualReminderMinutes', () => {

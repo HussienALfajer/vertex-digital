@@ -437,8 +437,8 @@ export const supplierCategories = pgTable(
 );
 
 /**
- * A product's route to one supplier offer (rules RT1–RT3). One unarchived route per supplier per
- * product, and an offer serves one product.
+ * A product's route to one supplier offer (rules RT1–RT3). An offer serves one product; a product
+ * may have several routes of one supplier, each to its own offer (S17 WR1).
  */
 export const productRoutes = pgTable(
   'product_routes',
@@ -465,21 +465,32 @@ export const productRoutes = pgTable(
       .$type<Record<string, Record<string, string>>>()
       .notNull()
       .default({}),
+    /** S17 WR3: the route counts for the price. */
+    priceBasis: boolean('price_basis').notNull().default(true),
+    /** S17 WR10: the customer's "up to {n} minutes" hint; null: the measured time. */
+    expectedDeliveryMinutes: integer('expected_delivery_minutes'),
+    /** S17 WR9: the route's own hard limit; null: the order policy's. */
+    hardLimitMinutes: integer('hard_limit_minutes'),
     ...timestamps(),
     archivedAt: archivedAt(),
   },
   (table) => [
-    uniqueIndex('product_routes_product_id_supplier_id_live_idx')
-      .on(table.productId, table.supplierId)
-      .where(isNull(table.archivedAt)),
     uniqueIndex('product_routes_offer_id_live_idx')
       .on(table.offerId)
       .where(isNull(table.archivedAt)),
+    index('product_routes_product_id_idx').on(table.productId),
     index('product_routes_offer_id_idx').on(table.offerId),
     index('product_routes_supplier_id_idx').on(table.supplierId),
     check('product_routes_priority_check', sql`${table.priority} between 1 and 9`),
     check('product_routes_field_map_check', sql`jsonb_typeof(${table.fieldMap}) = 'object'`),
     check('product_routes_option_map_check', sql`jsonb_typeof(${table.optionMap}) = 'object'`),
+    check(
+      'product_routes_timing_check',
+      sql`(${table.expectedDeliveryMinutes} is null or ${table.expectedDeliveryMinutes} between 1 and 240)
+        and (${table.hardLimitMinutes} is null or ${table.hardLimitMinutes} between 5 and 240)
+        and (${table.expectedDeliveryMinutes} is null or ${table.hardLimitMinutes} is null
+          or ${table.expectedDeliveryMinutes} < ${table.hardLimitMinutes})`,
+    ),
   ],
 );
 

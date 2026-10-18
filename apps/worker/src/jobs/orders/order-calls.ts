@@ -11,15 +11,22 @@ import {
   addOrderEvent,
   bossJobSender,
   type Database,
+  markOfferOutOfStock,
   type OrderContext,
   orders,
   productRoutes,
   queueTelegramMessage,
+  type RoutingContext,
   suppliers,
   type Transaction,
 } from '@vertex-digital/db';
-import { outcomeOfOrderError, type SupplierOutcome } from '@vertex-digital/suppliers';
+import {
+  OUT_OF_STOCK_CODE,
+  outcomeOfOrderError,
+  type SupplierOutcome,
+} from '@vertex-digital/suppliers';
 import { eq } from 'drizzle-orm';
+import type { Env } from '../../core/config/env.js';
 import type { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { recordedCall, sanitizedMessage } from '../../suppliers/supplier-calls.js';
 import type { SupplierRegistry } from '../../suppliers/supplier-registry.js';
@@ -39,6 +46,28 @@ export function orderContext(
   now = new Date(),
 ): OrderContext {
   return { jobs: bossJobSender(pgBoss.boss), codesKey, now };
+}
+
+/** What repricing reads from the worker: the time and the fake supplier's switch. */
+export function routingContext(env: Pick<Env, 'SUPPLIER_FAKE_ENABLED'>, now = new Date()) {
+  return { now, fakeEnabled: env.SUPPLIER_FAKE_ENABLED } satisfies RoutingContext;
+}
+
+/**
+ * S17 rule WR8, in the transaction that failed the attempt: a send refused as out of stock marks
+ * a finite-stock offer out until the next sync and reprices what it serves. Only a first send can
+ * fail an attempt (S16 RS1: a refused re-send is `unknown`), so a re-send marks nothing.
+ */
+export async function markStockRefusal(
+  tx: Transaction,
+  applied: AppliedOutcome,
+  outcome: AttemptOutcome,
+  context: RoutingContext,
+): Promise<boolean> {
+  const { attempt } = applied;
+  if (!applied.applied || outcome.status !== 'failed' || attempt.offerId === null) return false;
+  if (outcome.supplierErrorCode !== OUT_OF_STOCK_CODE) return false;
+  return markOfferOutOfStock(tx, attempt.offerId, context);
 }
 
 /** How an order answer counts for health (S07 rule H1). */

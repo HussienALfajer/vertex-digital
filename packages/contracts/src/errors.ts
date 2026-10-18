@@ -131,8 +131,8 @@ export const ERROR_CODES = [
   'SUPPLIER_UNAVAILABLE',
   /** The offer already serves another product; `details.productId`, `details.productNameAr` (rule RT1). */
   'OFFER_ALREADY_MAPPED',
-  /** The product already has an unarchived route to this supplier (rule RT1). */
-  'ROUTE_EXISTS',
+  /** The route's expected delivery time is not below its hard limit (S17). */
+  'ROUTE_TIMING_INVALID',
   /** The offer's kind is not the product's (rule RT2). */
   'ROUTE_KIND_MISMATCH',
   /** The supplier fields left unmapped; `details.fields` (rule RT3). */

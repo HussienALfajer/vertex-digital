@@ -95,6 +95,7 @@ const ORDER = {
   cancelReason: null,
   playerName: null,
   deliveryStats: null,
+  expectedWithinMinutes: null,
   checkoutId: null,
   isGift: false,
   gift: null,

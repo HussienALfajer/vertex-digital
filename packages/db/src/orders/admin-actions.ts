@@ -270,6 +270,9 @@ export async function rerouteOrder(
       supplierOfferId: route.offer.offerId,
       fieldMap: route.fieldMap,
       optionMap: route.optionMap,
+      // S17 WR9, WR10: the chosen route's timing, as `orders.fulfil` copies it.
+      expectedDeliveryMinutes: route.expectedDeliveryMinutes,
+      hardLimitMinutes: route.hardLimitMinutes,
       quantity: remaining,
       unitCostUsdUnits: route.costUsdUnits,
       status: manual ? 'pending' : 'sending',

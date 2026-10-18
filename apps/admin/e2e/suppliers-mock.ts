@@ -11,10 +11,12 @@ import {
   type PriceReviewStatus,
   type ProductKind,
   type ProductPrice,
+  priceBasis,
   priceFromCost,
   type Route,
   type RouteUnusableReason,
   routeTier,
+  routeTimingValid,
   routeUnusableReason,
   type StockLevel,
   SUPPLIER_CODES,
@@ -146,8 +148,15 @@ interface StoredRoute {
   enabled: boolean;
   fieldMap: Record<string, string>;
   optionMap: Record<string, Record<string, string>>;
+  /** S17 WR3, WR9, WR10. */
+  priceBasis: boolean;
+  expectedDeliveryMinutes: number | null;
+  hardLimitMinutes: number | null;
   archivedAt: string | null;
 }
+
+/** The order policy's hard limit the timing check reads (S17), as seeded. */
+const POLICY_HARD_LIMIT_MINUTES = 30;
 
 type StoredPrice = ProductPrice & { productId: string };
 
@@ -365,8 +374,14 @@ export class SuppliersMock {
           health: this.health(route.supplierCode),
           costUsdUnits: this.offerOf(route).costUsdUnits as number,
           priority: route.priority,
+          priceBasis: route.priceBasis,
         })),
     );
+  }
+
+  /** Rules P1, S17 WR3, WR4: the basis among the usable routes, or none while the price is held. */
+  basisOf(productId: string) {
+    return priceBasis(this.usable(productId), this.currentPrice(productId) !== null);
   }
 
   offerOf(route: StoredRoute): StoredOffer {
@@ -387,7 +402,7 @@ export class SuppliersMock {
   private pricing(productId: string) {
     const price = this.currentPrice(productId);
     const usable = this.usable(productId);
-    const basis = usable[0]?.route;
+    const basis = this.basisOf(productId)?.route;
     return {
       price: price
         ? {
@@ -398,6 +413,8 @@ export class SuppliersMock {
       usableRouteCostsUsdUnits: usable.map((item) => item.costUsdUnits),
       basisSupplierNameAr: basis ? NAMES[basis.supplierCode] : null,
       basisStockLevel: basis ? this.stockLevelOf(this.offerOf(basis)) : null,
+      priceHeld: !basis && usable.length > 0,
+      routed: this.routes.some((route) => route.productId === productId && !route.archivedAt),
       reviewOpen: this.openReview(productId) !== null,
     };
   }
@@ -406,7 +423,7 @@ export class SuppliersMock {
   reprice(productIds: string[], cause: PriceChangeCause): number {
     let repriced = 0;
     for (const productId of productIds) {
-      const basis = this.usable(productId)[0];
+      const basis = this.basisOf(productId);
       if (!basis) continue;
       const rule = this.catalog.ruleOf(productId);
       const target = priceFromCost(basis.costUsdUnits, rule);
@@ -489,6 +506,9 @@ export class SuppliersMock {
     fieldMap: Record<string, string>,
     priority = 1,
     optionMap: Record<string, Record<string, string>> = {},
+    settings: Partial<
+      Pick<StoredRoute, 'priceBasis' | 'expectedDeliveryMinutes' | 'hardLimitMinutes'>
+    > = {},
   ): StoredRoute {
     const route: StoredRoute = {
       id: nextId(),
@@ -499,6 +519,10 @@ export class SuppliersMock {
       enabled: true,
       fieldMap,
       optionMap,
+      priceBasis: true,
+      expectedDeliveryMinutes: null,
+      hardLimitMinutes: null,
+      ...settings,
       archivedAt: null,
     };
     this.routes.push(route);
@@ -689,10 +713,14 @@ export class SuppliersMock {
     return stockLevel(row.stock, row.inStock, this.policy.lowStockUnits);
   }
 
-  /** Rule SF2: an enabled, unarchived route maps the offer to an active product of an active game. */
+  /**
+   * Rule SF2: an enabled, unarchived route that counts for the price (S17 WR11) maps the offer to
+   * an active product of an active game.
+   */
   private servesActive(offer: StoredOffer): boolean {
     return this.routes.some((route) => {
       if (route.offerId !== offer.id || route.archivedAt || !route.enabled) return false;
+      if (!route.priceBasis) return false;
       const product = this.catalog.products.find((item) => item.id === route.productId);
       const game = product && this.catalog.games.find((item) => item.id === product.gameId);
       return product?.status === 'active' && game?.status === 'active';
@@ -724,6 +752,9 @@ export class SuppliersMock {
       enabled: row.enabled,
       fieldMap: row.fieldMap,
       optionMap: row.optionMap,
+      priceBasis: row.priceBasis,
+      expectedDeliveryMinutes: row.expectedDeliveryMinutes,
+      hardLimitMinutes: row.hardLimitMinutes,
       archivedAt: row.archivedAt,
       tier: reason === null ? routeTier(row.supplierCode, this.health(row.supplierCode)) : null,
       unusableReason: reason,
@@ -735,7 +766,7 @@ export class SuppliersMock {
   /** `productRoutingSchema`: usable routes in order, then unusable, then archived. */
   routing(productId: string) {
     const usable = this.usable(productId).map((item) => item.route);
-    const basisId = usable[0]?.id ?? null;
+    const basisId = this.basisOf(productId)?.route.id ?? null;
     const others = this.routes.filter(
       (route) => route.productId === productId && !usable.includes(route),
     );
@@ -745,12 +776,13 @@ export class SuppliersMock {
       ...others.filter((route) => route.archivedAt),
     ];
     const current = this.currentPrice(productId);
-    const basis = this.usable(productId)[0];
+    const basis = this.basisOf(productId);
     const review = this.openReview(productId);
     return {
       productId,
       routes: ordered.map((route) => this.route(route, basisId)),
       basisRouteId: basisId,
+      priceHeld: !basis && usable.length > 0,
       currentPrice: current
         ? {
             priceUsdUnits: current.priceUsdUnits,
@@ -998,6 +1030,14 @@ export class SuppliersMock {
           optionMap,
         );
         if (refusal) return refusal;
+        const settings = {
+          priceBasis: (body?.priceBasis ?? true) as boolean,
+          expectedDeliveryMinutes: (body?.expectedDeliveryMinutes ?? null) as number | null,
+          hardLimitMinutes: (body?.hardLimitMinutes ?? null) as number | null,
+        };
+        if (!routeTimingValid(settings, POLICY_HARD_LIMIT_MINUTES)) {
+          return error(400, 'ROUTE_TIMING_INVALID');
+        }
         this.addRoute(
           productId,
           offer.supplierCode,
@@ -1005,6 +1045,7 @@ export class SuppliersMock {
           (body?.fieldMap ?? {}) as Record<string, string>,
           Number(body?.priority ?? 1),
           optionMap,
+          settings,
         );
         this.reprice([productId], 'route_change');
         return { status: 201, json: this.routing(productId) };
@@ -1012,14 +1053,6 @@ export class SuppliersMock {
       if (productRoutes[2] === 'routes/manual' && method === 'POST') {
         const refusal = sensitive();
         if (refusal) return refusal;
-        if (
-          this.routes.some(
-            (route) =>
-              route.productId === productId && route.supplierCode === 'manual' && !route.archivedAt,
-          )
-        ) {
-          return error(409, 'ROUTE_EXISTS');
-        }
         const now = new Date().toISOString();
         const offer: StoredOffer = {
           id: nextId(),
@@ -1062,14 +1095,10 @@ export class SuppliersMock {
       } else if (action === 'restore') {
         if (
           this.routes.some(
-            (item) =>
-              item !== route &&
-              !item.archivedAt &&
-              item.productId === route.productId &&
-              item.supplierCode === route.supplierCode,
+            (item) => item !== route && !item.archivedAt && item.offerId === route.offerId,
           )
         ) {
-          return error(409, 'ROUTE_EXISTS');
+          return error(409, 'OFFER_ALREADY_MAPPED');
         }
         route.archivedAt = null;
       } else {
@@ -1089,6 +1118,9 @@ export class SuppliersMock {
         );
         if (next.enabled && gaps.length > 0) {
           return error(409, 'FIELD_OPTIONS_DIFFER', { fields: gaps });
+        }
+        if (!routeTimingValid(next, POLICY_HARD_LIMIT_MINUTES)) {
+          return error(400, 'ROUTE_TIMING_INVALID');
         }
         Object.assign(route, body);
       }
@@ -1158,16 +1190,6 @@ export class SuppliersMock {
     if (offer.missingSince) return error(409, 'OFFER_MISSING');
     if (this.routes.some((route) => route.offerId === offer.id && !route.archivedAt)) {
       return error(409, 'OFFER_ALREADY_MAPPED');
-    }
-    if (
-      this.routes.some(
-        (route) =>
-          route.productId === product.id &&
-          route.supplierCode === offer.supplierCode &&
-          !route.archivedAt,
-      )
-    ) {
-      return error(409, 'ROUTE_EXISTS');
     }
     if (offer.kind && offer.kind !== product.kind) return error(409, 'ROUTE_KIND_MISMATCH');
     const missing = (offer.requiredFields ?? []).filter((field) => !fieldMap[field]);

@@ -374,6 +374,10 @@ export const productSchema = z
     basisSupplierNameAr: z.string().nullable(),
     /** S16 SF2: the stock level of the basis route's offer; null with no usable route. */
     basisStockLevel: stockLevelSchema.nullable(),
+    /** S17 WR4: no route that counts for the price is usable; the price is kept. */
+    priceHeld: z.boolean(),
+    /** S17 WR7: the product has an unarchived route (a new one is pre-set not to count). */
+    routed: z.boolean(),
     /** A price review holds the price (rule P2). */
     reviewOpen: z.boolean(),
     /** Delivery time (S08 rule T1): null with fewer than 5 delivered orders. */

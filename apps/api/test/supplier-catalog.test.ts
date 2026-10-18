@@ -483,38 +483,41 @@ describe('import and link (rules SC7–SC14, IM2)', () => {
       { key: 'player_id', labelAr: 'معرّف اللاعب', type: 'digits', options: null },
     ]);
     expect(draft.fieldMap).toEqual({ player_id: 'player_id' });
+    // S17 WR1: a pack with a fake route already takes a second one, here not counting for its
+    // price (WR7); a new pack is created beside it, its only route counting.
     const existing = imported.products[1]?.id as string;
-    const exists = await json<{ code: string; details: { rows: unknown[] } }>(
-      await post(`/api/admin/suppliers/fake/categories/${node('global')}/link`, {
-        gameId: ids.game,
-        fieldMap: { player_id: 'player_id' },
-        rows: [{ offerId: offers.uc325, productId: imported.products[0]?.id }],
-      }),
-      409,
-    );
-    expect(exists.code).toBe('ROUTE_EXISTS');
-    // A product without a fake route takes the offer; a new pack is created beside it.
-    const product = await json<{ id: string }>(
-      await post(`/api/admin/catalog/games/${ids.game}/products`, {
-        kind: 'direct',
-        nameAr: `يدوي ${run}`,
-      }),
-      201,
+    const before = await json<{ basisRouteId: string; currentPrice: { priceUsdUnits: number } }>(
+      await get(`/api/admin/catalog/products/${existing}/routes`),
+      200,
     );
     const linked = await json<CategoryImportResult>(
       await post(`/api/admin/suppliers/fake/categories/${node('ff')}/link`, {
         gameId: ids.game,
         fieldMap: { player_id: 'player_id' },
         rows: [
-          { offerId: offers.ff100, productId: product.id },
+          { offerId: offers.ff100, productId: existing, priceBasis: false },
           { offerId: offers.ff310, nameAr: `FF 310 ${run}` },
         ],
       }),
       201,
     );
     expect(linked.products.map((row) => row.existing)).toEqual([true, false]);
-    expect(linked.products[0]?.id).toBe(product.id);
-    expect(existing).not.toBe(product.id);
+    expect(linked.products[0]?.id).toBe(existing);
+    const after = await json<{
+      basisRouteId: string;
+      currentPrice: { priceUsdUnits: number };
+      routes: { id: string; priceBasis: boolean }[];
+    }>(await get(`/api/admin/catalog/products/${existing}/routes`), 200);
+    expect(after.basisRouteId).toBe(before.basisRouteId);
+    expect(after.currentPrice.priceUsdUnits).toBe(before.currentPrice.priceUsdUnits);
+    expect(after.routes.find((route) => route.id === linked.products[0]?.routeId)).toMatchObject({
+      priceBasis: false,
+    });
+    const fresh = await json<{ routes: { priceBasis: boolean }[] }>(
+      await get(`/api/admin/catalog/products/${linked.products[1]?.id}/routes`),
+      200,
+    );
+    expect(fresh.routes.map((route) => route.priceBasis)).toEqual([true]);
     expect((await nodeOf('ff')).state).toBe('linked');
   });
 

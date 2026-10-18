@@ -308,6 +308,11 @@ function ProductPrice({ product }: { product: Product }) {
           {t('catalog.products.basis', { supplier: product.basisSupplierNameAr })}
         </span>
       )}
+      {product.priceHeld && (
+        <span className="text-xs text-status-warning-foreground">
+          {t('catalog.products.priceHeld')}
+        </span>
+      )}
       {product.basisStockLevel && <StockChip level={product.basisStockLevel} quiet />}
     </span>
   );

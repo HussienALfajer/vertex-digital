@@ -158,7 +158,10 @@ export function OrderPage() {
         {(order.stage === 'processing' || order.stage === 'delayed') && (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <ClockIcon className="size-4 shrink-0" aria-hidden="true" />
-            {deliveryDetailText(order.deliveryStats)}
+            {/* S17 WR10: the open attempt's expected time replaces the measured one. */}
+            {order.expectedWithinMinutes !== null
+              ? t('orders.detail.expectedWithin', { minutes: order.expectedWithinMinutes })
+              : deliveryDetailText(order.deliveryStats)}
           </p>
         )}
         {order.playerName && (

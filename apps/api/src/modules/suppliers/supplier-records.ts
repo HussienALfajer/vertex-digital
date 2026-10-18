@@ -49,8 +49,6 @@ export function toSyncRun(row: SyncRunRow, supplierCode: SupplierCode): SyncRun 
 export const refusals = {
   notFound: (what: string) => new CodedException(404, 'NOT_FOUND', `No such ${what}`),
   invalid: (message: string) => new CodedException(400, 'VALIDATION_FAILED', message),
-  routeExists: () =>
-    new CodedException(409, 'ROUTE_EXISTS', 'The product already has a route to this supplier'),
   offerMapped: (product: { productId: string; productNameAr: string }) =>
     new CodedException(409, 'OFFER_ALREADY_MAPPED', 'The offer serves another product', product),
   kindMismatch: () =>
@@ -59,6 +57,13 @@ export const refusals = {
     new CodedException(409, 'ROUTE_FIELDS_UNMAPPED', 'Supplier fields are left unmapped', {
       fields,
     }),
+  /** S17: the expected delivery time is not below the hard limit. */
+  timingInvalid: () =>
+    new CodedException(
+      400,
+      'ROUTE_TIMING_INVALID',
+      'The expected delivery time must be below the hard limit',
+    ),
   offerMissing: () =>
     new CodedException(409, 'OFFER_MISSING', 'The supplier no longer lists the offer'),
   offerUnsupported: () =>
@@ -73,10 +78,7 @@ export const refusals = {
 
 /** The refusal a route's unique index raised (rule RT1), or null for any other error. */
 export function routeTakenRefusal(error: unknown): CodedException | null {
-  const constraint = violatedConstraint(error);
-  if (constraint === 'product_routes_product_id_supplier_id_live_idx')
-    return refusals.routeExists();
-  if (constraint === 'product_routes_offer_id_live_idx') {
+  if (violatedConstraint(error) === 'product_routes_offer_id_live_idx') {
     return new CodedException(409, 'OFFER_ALREADY_MAPPED', 'The offer serves another product');
   }
   return null;

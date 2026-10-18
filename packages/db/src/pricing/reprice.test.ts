@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../client.js';
 import { newId } from '../id.js';
 import { priceReviews, productPrices } from '../schema/index.js';
+import { mappedStockOffers, markOfferOutOfStock } from '../suppliers/index.js';
 import { repriceProducts } from './reprice.js';
 import { productRoutingStates } from './routing.js';
 
@@ -352,5 +353,113 @@ describe('repriceProducts (rule P2)', () => {
     expect((await prices(p.id))[0]?.priceUsdUnits).toBe(
       priceFromCost(usd(1.05), { ...rule, percentBp: 1500 }),
     );
+  });
+});
+
+describe('price basis routes (S17 WR3–WR5, WR8, WR11)', () => {
+  const countsFor = (productId: string, routeId: string, counts: boolean) =>
+    pool.query('update product_routes set price_basis = $3 where product_id = $1 and id = $2', [
+      productId,
+      routeId,
+      counts,
+    ]);
+
+  /** Two fake routes on one product: a cheap one that does not count, a dear one that does. */
+  async function twoRoutes() {
+    const p = await product();
+    const cheapOffer = await offer('fake', usd(0.9));
+    const dearOffer = await offer('fake', usd(1));
+    const cheap = await route(p.id, 'fake', cheapOffer);
+    const dear = await route(p.id, 'fake', dearOffer);
+    await countsFor(p.id, cheap, false);
+    return { p, cheap, dear, cheapOffer, dearOffer };
+  }
+
+  it('prices from the route that counts, though another is cheaper (WR3)', async () => {
+    const { p, cheap, dear } = await twoRoutes();
+    await reprice([p.id], 'route_change');
+    expect((await prices(p.id))[0]).toMatchObject({
+      routeId: dear,
+      priceUsdUnits: priceFromCost(usd(1), rule),
+    });
+    const routing = await state(p.id);
+    // The router still meets the cheap route first (RT5, RT6).
+    expect(routing?.routes.map((item) => item.id)).toEqual([cheap, dear]);
+    expect(routing?.basis?.id).toBe(dear);
+    expect(routing?.priceHeld).toBe(false);
+  });
+
+  it('never moves the price or opens a review on a cost change of a route that does not count (WR5)', async () => {
+    const { p, cheapOffer } = await twoRoutes();
+    await reprice([p.id], 'route_change');
+    await setCost(cheapOffer, usd(0.5));
+    expect(await reprice([p.id], 'cost_sync')).toEqual({ repriced: 0, reviewsOpened: 0 });
+    expect(await openReview(p.id)).toBeUndefined();
+    expect(await prices(p.id)).toHaveLength(1);
+  });
+
+  it('keeps the price while no route that counts is usable, and bases a new product on any (WR4)', async () => {
+    const { p, dear, dearOffer } = await twoRoutes();
+    await reprice([p.id], 'route_change');
+    await pool.query('update supplier_offers set in_stock = false where id = $1', [dearOffer]);
+    expect(await reprice([p.id], 'route_change')).toEqual({ repriced: 0, reviewsOpened: 0 });
+    await pool.query(`update catalog_products set status = 'active' where id = $1`, [p.id]);
+    // Sold at the kept price while the cheap route's cost leaves the minimum margin (PR5).
+    const held = await state(p.id);
+    expect(held).toMatchObject({ basis: null, priceHeld: true, availability: 'available' });
+    expect((await prices(p.id))[0]?.routeId).toBe(dear);
+
+    // A product that never had a price takes the first usable route.
+    const fresh = await product();
+    const only = await route(fresh.id, 'fake', await offer('fake', usd(0.7)));
+    await countsFor(fresh.id, only, false);
+    await reprice([fresh.id], 'route_change');
+    expect((await prices(fresh.id))[0]?.routeId).toBe(only);
+    // Priced now, it keeps that price until a route that counts is usable (edge case 10).
+    expect((await state(fresh.id))?.priceHeld).toBe(true);
+  });
+
+  it('reprices at once, without a review, when a route starts to count (WR6)', async () => {
+    const { p, cheap } = await twoRoutes();
+    await reprice([p.id], 'route_change');
+    await countsFor(p.id, cheap, true);
+    expect(await reprice([p.id], 'route_change')).toEqual({ repriced: 1, reviewsOpened: 0 });
+    expect((await prices(p.id))[0]).toMatchObject({
+      routeId: cheap,
+      priceUsdUnits: priceFromCost(usd(0.9), rule),
+    });
+  });
+
+  it('marks a finite-stock offer out of stock and reprices; never an unlimited one (WR8)', async () => {
+    const p = await product();
+    const finiteOffer = await offer('fake', usd(1));
+    await pool.query('update supplier_offers set stock = 500 where id = $1', [finiteOffer]);
+    const finite = await route(p.id, 'fake', finiteOffer);
+    const auto = await route(p.id, 'fake', await offer('fake', usd(1.1)));
+    await reprice([p.id], 'route_change');
+    expect((await prices(p.id))[0]?.routeId).toBe(finite);
+
+    const marked = await db.transaction((tx) => markOfferOutOfStock(tx, finiteOffer, context()));
+    expect(marked).toBe(true);
+    const { rows } = await pool.query('select in_stock, stock from supplier_offers where id = $1', [
+      finiteOffer,
+    ]);
+    expect(rows[0]).toEqual({ in_stock: false, stock: 0 });
+    expect((await prices(p.id))[0]?.routeId).toBe(auto);
+
+    const unlimited = await offer('fake', usd(1));
+    expect(await db.transaction((tx) => markOfferOutOfStock(tx, unlimited, context()))).toBe(false);
+    const after = await pool.query('select in_stock, stock from supplier_offers where id = $1', [
+      unlimited,
+    ]);
+    expect(after.rows[0]).toEqual({ in_stock: true, stock: null });
+  });
+
+  it('alerts on stock only for routes that count (WR11)', async () => {
+    const { p, cheapOffer, dearOffer } = await twoRoutes();
+    await pool.query(`update catalog_products set status = 'active' where id = $1`, [p.id]);
+    const mapped = (await mappedStockOffers(db)).map((row) => row.id);
+    expect(mapped).toContain(dearOffer);
+    expect(mapped).not.toContain(cheapOffer);
   });
 });

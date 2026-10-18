@@ -150,6 +150,12 @@ export interface PlaceOrderRequest {
  * A repeated `placeOrder` with the same key answers that order's current outcome, never a
  * duplicate error (S08).
  */
+/**
+ * The code an adapter gives a refusal for stock (S17 rule WR8: a finite-stock offer is then marked
+ * out until the next sync); WDGZone's own code, which the fake supplier uses too.
+ */
+export const OUT_OF_STOCK_CODE = 'OUT_OF_STOCK';
+
 export type SupplierOutcome =
   | { status: 'delivered'; supplierOrderId: string; quantity: number; codes?: string[] }
   | { status: 'pending'; supplierOrderId: string }

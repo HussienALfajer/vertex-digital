@@ -92,6 +92,8 @@ export interface ProductPricing {
   priceSypUnits: number | null;
   basisSupplierNameAr: string | null;
   basisStockLevel: StockLevel | null;
+  priceHeld: boolean;
+  routed: boolean;
   reviewOpen: boolean;
   deliveryStats: DeliveryStats | null;
 }

@@ -3,6 +3,7 @@ import {
   orderRoutes,
   type ProductAvailability,
   type ProductKind,
+  priceBasis,
   priceFromCost,
   productAvailability,
   type RouteTier,
@@ -81,6 +82,11 @@ export interface RouteState {
   fieldMap: Record<string, string>;
   /** S16 MF2. */
   optionMap: Record<string, Record<string, string>>;
+  /** S17 WR3. */
+  priceBasis: boolean;
+  /** S17 WR9, WR10: copied onto the attempts it gets. */
+  expectedDeliveryMinutes: number | null;
+  hardLimitMinutes: number | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -100,7 +106,10 @@ export interface ProductRoutingState {
   categoryId: string;
   /** Usable routes in order (RT5, RT6), then the others: unusable, then archived. */
   routes: RouteState[];
+  /** Rules P1, S17 WR3, WR4: null with no usable route, or while the price is held. */
   basis: RouteState | null;
+  /** S17 WR4: a priced product with usable routes but none that counts: the price stays. */
+  priceHeld: boolean;
   rule: { id: string; values: MarginRuleValues };
   /** The price the basis gives now (rule P1); null with no usable route. */
   targetPriceUsdUnits: number | null;
@@ -325,6 +334,9 @@ export async function productRoutingStates(
           enabled: route.enabled,
           fieldMap: route.fieldMap,
           optionMap: route.optionMap,
+          priceBasis: route.priceBasis,
+          expectedDeliveryMinutes: route.expectedDeliveryMinutes,
+          hardLimitMinutes: route.hardLimitMinutes,
           archivedAt: route.archivedAt,
           createdAt: route.createdAt,
           updatedAt: route.updatedAt,
@@ -337,7 +349,8 @@ export async function productRoutingStates(
       ...routes.filter((route) => route.unusableReason !== null && route.archivedAt === null),
       ...routes.filter((route) => route.archivedAt !== null),
     ];
-    const basis = usable[0] ?? null;
+    const current = priceOf.get(product.id) ?? null;
+    const basis = priceBasis(usable, current !== null);
     const ruleRow = resolveMarginRule(rules, {
       productId: product.id,
       gameId: product.gameId,
@@ -351,7 +364,6 @@ export async function productRoutingStates(
         minMarginUsdUnits: ruleRow.minMarginUsdUnits,
       },
     };
-    const current = priceOf.get(product.id) ?? null;
     states.set(product.id, {
       productId: product.id,
       nameAr: product.nameAr,
@@ -360,6 +372,7 @@ export async function productRoutingStates(
       categoryId: where.categoryId,
       routes: [...usable, ...others],
       basis,
+      priceHeld: basis === null && usable.length > 0,
       rule,
       targetPriceUsdUnits: basis ? priceFromCost(basis.costUsdUnits as number, rule.values) : null,
       current,

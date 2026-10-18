@@ -10,6 +10,7 @@ import {
   linkBody,
   packGroups,
   refusalsByOffer,
+  rowPriceBasis,
   sentOffers,
   wholeNumber,
   withOptionRefusals,
@@ -94,6 +95,7 @@ describe('initialPackRows', () => {
       nameAr: 'a name',
       gameAmount: '60',
       productId: 'p-1',
+      priceBasis: null,
     });
     expect(rows[1]).toMatchObject({ selected: false, gameAmount: '', productId: null });
     // Refused for its options only: selected, and kept out by `alignedRows` until mapped.
@@ -111,7 +113,14 @@ describe('alignedRows', () => {
     ).toEqual([
       { ...rows[0], selected: false },
       rows[1],
-      { offerId: 'c', selected: false, nameAr: 'c name', gameAmount: '60', productId: null },
+      {
+        offerId: 'c',
+        selected: false,
+        nameAr: 'c name',
+        gameAmount: '60',
+        productId: null,
+        priceBasis: null,
+      },
     ]);
   });
 });
@@ -211,9 +220,30 @@ describe('wholeNumber', () => {
 
 describe('the bodies', () => {
   const rows = [
-    { offerId: 'a', selected: true, nameAr: 'UC 60', gameAmount: '60', productId: 'p-1' },
-    { offerId: 'b', selected: false, nameAr: 'UC 325', gameAmount: '', productId: null },
-    { offerId: 'c', selected: true, nameAr: 'UC 660', gameAmount: '', productId: null },
+    {
+      offerId: 'a',
+      selected: true,
+      nameAr: 'UC 60',
+      gameAmount: '60',
+      productId: 'p-1',
+      priceBasis: null,
+    },
+    {
+      offerId: 'b',
+      selected: false,
+      nameAr: 'UC 325',
+      gameAmount: '',
+      productId: null,
+      priceBasis: null,
+    },
+    {
+      offerId: 'c',
+      selected: true,
+      nameAr: 'UC 660',
+      gameAmount: '',
+      productId: null,
+      priceBasis: null,
+    },
   ];
 
   it('imports the selected packs with the fields and their map', () => {
@@ -276,16 +306,26 @@ describe('the bodies', () => {
         fieldMap: { uid: 'player_id' },
         optionMap: { server: { eu: 'Europe' } },
         rows,
+        routedProducts: new Set(),
       }),
     ).toEqual({
       gameId: 'g',
       fieldMap: { uid: 'player_id' },
       optionMap: { server: { eu: 'Europe' } },
       rows: [
-        { offerId: 'a', productId: 'p-1' },
+        { offerId: 'a', productId: 'p-1', priceBasis: true },
         { offerId: 'c', nameAr: 'UC 660' },
       ],
     });
+  });
+
+  it('pre-sets a routed product not to count for its price, unless the admin chose (S17 WR7)', () => {
+    const [row] = rows as [(typeof rows)[0]];
+    const routed = new Set(['p-1']);
+    expect(rowPriceBasis(row, routed)).toBe(false);
+    expect(rowPriceBasis(row, new Set())).toBe(true);
+    expect(rowPriceBasis({ ...row, priceBasis: true }, routed)).toBe(true);
+    expect(rowPriceBasis({ ...row, priceBasis: false }, new Set())).toBe(false);
   });
 
   it('maps refused rows back to their offers', () => {

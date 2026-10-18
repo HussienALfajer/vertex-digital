@@ -13,6 +13,7 @@ import {
 import {
   Button,
   Callout,
+  Checkbox,
   Field,
   FieldError,
   FieldLabel,
@@ -43,6 +44,7 @@ import {
   packGroups,
   type RowRefusal,
   refusalsByOffer,
+  rowPriceBasis,
   sentOffers,
   withOptionRefusals,
 } from './category-import';
@@ -188,6 +190,8 @@ function LinkForm({
   const { ref, focusInvalid } = useFocusInvalid();
   const products = (game.data?.products ?? []).filter((item) => item.archivedAt === null);
   const productItems = products.map((item) => ({ value: item.id, label: item.nameAr }));
+  // S17 WR7: a product with a route already gets one that does not count for its price.
+  const routedProducts = new Set(products.filter((item) => item.routed).map((item) => item.id));
   const sentCount = rows.filter((row) => row.selected).length;
 
   const setRow = (offerId: string, next: Partial<PackRow>) =>
@@ -200,7 +204,9 @@ function LinkForm({
     setMissing([]);
     setOptionMissing([]);
     const sent = sentOffers(rows);
-    const parsed = linkCategorySchema.safeParse(linkBody({ gameId, fieldMap, optionMap, rows }));
+    const parsed = linkCategorySchema.safeParse(
+      linkBody({ gameId, fieldMap, optionMap, rows, routedProducts }),
+    );
     const issues = parsed.error?.issues ?? [];
     setRowErrors(
       new Set(
@@ -331,6 +337,7 @@ function LinkForm({
                                       products[0]?.id ??
                                       null)
                                     : null,
+                                priceBasis: null,
                               })
                             }
                           >
@@ -354,7 +361,9 @@ function LinkForm({
                             <Select
                               items={productItems}
                               value={row.productId}
-                              onValueChange={(value) => setRow(pack.offerId, { productId: value })}
+                              onValueChange={(value) =>
+                                setRow(pack.offerId, { productId: value, priceBasis: null })
+                              }
                             >
                               <SelectTrigger>
                                 <SelectValue
@@ -380,6 +389,22 @@ function LinkForm({
                                 : t('suppliers.importCategory.errors.pack')}
                             </FieldError>
                           </Field>
+                        )}
+                        {/* S17 WR7: outside the product's Field, which would name it. */}
+                        {mode === 'existing' && (
+                          <label
+                            htmlFor={`price-basis-${pack.offerId}`}
+                            className="flex min-h-10 cursor-pointer items-center gap-2 text-sm"
+                          >
+                            <Checkbox
+                              id={`price-basis-${pack.offerId}`}
+                              checked={rowPriceBasis(row, routedProducts)}
+                              onCheckedChange={(checked) =>
+                                setRow(pack.offerId, { priceBasis: checked })
+                              }
+                            />
+                            {t('suppliers.routes.settings.priceBasis')}
+                          </label>
                         )}
                         {mode === 'new' && (
                           <>
