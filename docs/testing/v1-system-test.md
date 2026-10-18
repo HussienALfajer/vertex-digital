@@ -2618,7 +2618,7 @@ Result: ✅ 2026-10-18 23:17–23:21 Damascus; Claude pressed the reveals, the o
 3. Reserve A `60 UC` twice the same way (**R2**, then **R3**). On `60 UC`'s shortfall view "اشحن رصيدك" prefills **$2.00** (the minimum, above the $1.10 shortfall). Try a fourth reservation. Expected: **"لديك 3 طلبات محجوزة. ألغِ أحدها أو اشحن رصيدك."** and no fourth order.
 4. On R3 press "إلغاء الطلب" → "إلغاء الطلب المحجوز؟" → "إلغاء الطلب". Expected: "ملغى", "أُلغي هذا الطلب" and the reason "ألغيته أنت"; no notification or email for a customer's own cancel. TC2's "طلباتي": R1 and R2 "بانتظار رصيدك" with their countdowns, R3 "ملغى". TC2 still $0.00 with no wallet entry. Panel: the `awaiting_balance` status filter (warning tone) lists R1 and R2; audit "حجز طلب" ×3 and "إلغاء طلب محجوز" ×1 (by the customer).
 
-Result:
+Result: ✅ 2026-10-18 23:29–23:34 Damascus, run by Claude in TC2's store tab (the owner signed TC2 in; no money). 1: A `660 UC` "رصيدك $0.00، ينقصك $9.35" with "احجز الطلب واشحن رصيدك" and "اشحن رصيدك"; the latter opened the wizard with 9.35 (not submitted). 2: "احجز الطلب واشحن رصيدك" went straight to the confirmation (no separate "متابعة"), "لن يُخصم شيء الآن. يُدفع الطلب تلقائيًا عند وصول إيداعك خلال 24 ساعة، وإلا يُلغى." and "اسحب لحجز الطلب"; `End` reserved **R1 = `VO-7ETNBC`** (23:30): "بانتظار رصيدك", "طلبك محجوز حتى يكفي رصيدك", "حُجز الطلب", "يبقى الطلب محجوزًا لمدة 23:59:57", the shortfall, the explanation, "اشحن رصيدك" (wizard at 9.35 with "العودة إلى طلبك المحجوز", not submitted) and "إلغاء الطلب". 3: `60 UC`'s "اشحن رصيدك" prefilled 2 ($2.00 minimum); **R2 = `VO-TA5E4M`** (23:31), **R3 = `VO-H2V7VM`** (23:32); a fourth → "لديك 3 طلبات محجوزة. ألغِ أحدها أو اشحن رصيدك." and no order. 4: R3 "إلغاء الطلب" → "إلغاء الطلب المحجوز؟" → "ملغى", "ألغيته أنت" (the page shows no separate "أُلغي هذا الطلب" line); no notification; "طلباتي": R3 "ملغى", R2 and R1 "بانتظار رصيدك" with "يبقى …"; TC2 $0.00 with no new wallet entry; the panel's `awaiting_balance` filter lists R1 and R2 "بانتظار الرصيد"; audit "حجز طلب" ×3 and "إلغاء طلب محجوز" ×1 by "عميل: TC2".
 
 ### 11.11 A credit pays a reservation, at the lower price, oldest first
 
@@ -2629,7 +2629,7 @@ Result:
 3. On R2 press "تأكّدت: فشل" (a reason, re-authentication). Expected: refunded **$0.90** (not $1.10), "مُسترد"; TC2 back to **$1.00**. R1 still reserved ($1.00 < $9.35).
 4. Set A `60 UC`'s cost back to **$1.00** ($1.10). Reverse TC2's $1.00 credit (as in 6.12). Expected: TC2 **$0.00**; R1 still "بانتظار رصيدك".
 
-Result:
+Result: ✅ 2026-10-18 23:36–23:43 Damascus; Claude drove the panel and read TC2's API (owner's approval for the cost changes and the test credit), the owner re-authenticated twice. 1: cost $0.80 → $0.90 ≈ 126 ل.س (23:36). 2: TC2 +$1.00 "رصيد تجريبي" at 23:37 (same re-authentication); the sweep paid **R2 at $0.90** at 23:40 ("شراء طلب" by "النظام", "المعالج الخلفي"), R1 ($9.35) skipped and still `awaiting_balance`; TC2 $0.10; notifications `wallet_adjusted` then `order_paid` for VO-TA5E4M; R2's events "بانتظار الرصيد · العميل" → "مدفوع · النظام" → "عند المورد · النظام", purchase journal $0.90. 3: "تأكّدت: فشل" at 23:42 → R2 `refunded` $0.90 (`routes_exhausted`), TC2 back to $1.00. 4: cost $1.00 → $1.10 (23:42), the credit reversed "عكس: رصيد تجريبي" −$1.00 (23:43) → TC2 **$0.00**; R1 still `awaiting_balance`. Not watched by Claude: the live timeline on TC2's page, R2's manual Telegram card and the absence of an email for `order_paid` (owner).
 
 ### 11.12 A reservation cancelled when the price rose
 
