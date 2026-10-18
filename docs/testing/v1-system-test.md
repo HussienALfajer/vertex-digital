@@ -2699,7 +2699,7 @@ Note (2026-10-19 00:00–00:12 Damascus): the store, the panel and SSH stopped a
 2. The panel's order list and an order page with the fulfil dialog, attempts and codes, light and dark: readable, nothing cut off.
 3. Record screenshots of the confirmation step, a delivered order, the partly refunded code order (codes masked) and a reserved order, at phone and desktop widths. No real player ID, code, credential or receipt in a screenshot committed to the repository (the test ID and test codes are fine).
 
-Result:
+Result: partial, 2026-10-19 ~00:25–00:35 Damascus (Claude, TC1's tab; screenshots shown to the owner, none committed). During 11.2–11.10 at desktop width: the buy box as the sticky side panel, its field errors, the shortfall view, the confirmation with both sliders ("اسحب للدفع", "اسحب لحجز الطلب") and their handles at the right edge, each order state's page (delivered, refunded, partly refunded with masked codes, reserved with its countdown, cancelled) and the panel's order list, order pages and fulfil dialog: RTL, no overlap, IDs and codes left to right. Now at 375 px: "طلباتي" (light) and O3 (light) have no horizontal scroll, codes `••••••0001`/`••••••0002` left to right; at desktop width O3 in light and dark is clean. At 375 px the list's meta line wraps badly (F11-10). The rest of the phone pass (dark at 375 px, the buy box as a bottom sheet, reserved and cancelled pages, the panel at phone width) could not finish: the owner's network kept dropping requests (`ERR_CONNECTION_TIMED_OUT`), so pages stayed on their skeletons for 8+ seconds; to be finished by the owner on a real phone.
 
 ### 11.18 Cleanup
 
