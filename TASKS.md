@@ -8,8 +8,7 @@ Branch `docs/feature-10-production-results`. The owner performs all production a
 - [x] Owner confirmed two percent signs (F10-2); fixed the Arabic template and tightened the E2E assertion.
 - [x] Post-run SQL (20:03:45 Damascus): counts equal the baseline; no admin change since 16:19 — 10.13–10.15 not confirmed, 10.18 cleanup outstanding (recorded).
 - [x] Store checks for the F10-2 fix: lint, typecheck, test, build and the changed store E2E specs passed; results/fix PR opened.
-
-Deferred to the next sitting (its own PR): after the fix is deployed, re-check the savings badge on production and complete the production fixture cleanup of 10.18 (archive C's two WDGZone routes, unlink its supplier category, archive C, A and the test category; 10.13, 10.15 and 10.18 themselves were reported passed outside production), then a read-only SQL check and the owner's feature acceptance.
+- [x] After deploying `d1f70f3`: savings badge re-checked on production (one sign), production fixtures archived by the owner and verified by read-only SQL and public reads; owner accepted feature 10 on 2026-10-18.
 
 ## Previous task — Feature 10 SQL verification
 
