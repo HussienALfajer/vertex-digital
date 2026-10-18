@@ -42,7 +42,7 @@ function order(changes: Partial<Order> & { id: string }): Order {
     customerNote: null,
     product: { id: id(70), nameAr: '60 UC', kind: 'direct', regionAr: null, redemptionAr: null },
     game,
-    fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب', value: '5123456789' }],
+    fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب', value: '5123456789', valueLabelAr: null }],
     quantity: 1,
     deliveredQuantity: 1,
     refundedQuantity: 0,
@@ -379,6 +379,23 @@ test.describe('orders', () => {
     const card = page.getByRole('link', { name: /VO-WAIT23/ });
     await expect(card).toContainText(o.stages.awaiting_balance);
     await expect(card).toContainText(o.reservation.leftShort);
+  });
+
+  test('at a phone width the number and the time each stay on one line (F11-10)', async ({
+    page,
+    api,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    withOrders(api);
+    await page.goto('/orders');
+    const card = page.getByRole('link', { name: /VO-7KQ2MX/ }).first();
+    const number = card.locator('bdi', { hasText: 'VO-7KQ2MX' });
+    const time = number.locator('xpath=following-sibling::span[1]');
+    for (const part of [number, time]) {
+      const box = await part.boundingBox();
+      // text-xs: one line is 16 px high.
+      expect(box?.height).toBeLessThan(24);
+    }
   });
 
   test('without a session the list sends to sign-in and back', async ({ page, api }) => {

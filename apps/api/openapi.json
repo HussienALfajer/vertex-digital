@@ -26432,12 +26432,17 @@
                 },
                 "value": {
                   "type": "string"
+                },
+                "valueLabelAr": {
+                  "nullable": true,
+                  "type": "string"
                 }
               },
               "required": [
                 "key",
                 "labelAr",
-                "value"
+                "value",
+                "valueLabelAr"
               ],
               "additionalProperties": false
             }
@@ -27319,12 +27324,17 @@
                 },
                 "value": {
                   "type": "string"
+                },
+                "valueLabelAr": {
+                  "nullable": true,
+                  "type": "string"
                 }
               },
               "required": [
                 "key",
                 "labelAr",
-                "value"
+                "value",
+                "valueLabelAr"
               ],
               "additionalProperties": false
             }
@@ -27750,12 +27760,17 @@
                 },
                 "value": {
                   "type": "string"
+                },
+                "valueLabelAr": {
+                  "nullable": true,
+                  "type": "string"
                 }
               },
               "required": [
                 "key",
                 "labelAr",
-                "value"
+                "value",
+                "valueLabelAr"
               ],
               "additionalProperties": false
             }

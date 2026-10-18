@@ -975,6 +975,56 @@ describe('WdgzoneAdapter catalog tree, statement and status (S16)', () => {
     expect((await adapter().listOrders(1)).hasMore).toBe(true);
   });
 
+  it("reads the live statement's shape: zoneless UTC+4 times, total_price, reference_id (F11-9)", async () => {
+    server.reply({ body: fixture('orders-page-live') });
+    expect(await adapter().listOrders(1)).toEqual({
+      items: [
+        {
+          supplierOrderId: '3940',
+          offerId: '235203',
+          offerName: '60 UC',
+          quantity: 1,
+          status: 'completed',
+          total: { currency: 'USD', amountUnits: 880_000 },
+          // "2026-10-19 00:53:16" in WDG's UTC+4: the purchase paid at 23:53 Damascus.
+          createdAt: new Date('2026-10-18T20:53:16Z'),
+        },
+      ],
+      hasMore: false,
+    });
+    server.reply({ body: fixture('transactions-page-live') });
+    expect((await adapter().listTransactions(1)).items).toEqual([
+      {
+        id: '5268',
+        type: 'purchase',
+        amount: { currency: 'USD', amountUnits: -880_000 },
+        reference: 'Order purchase',
+        supplierOrderId: '3940',
+        createdAt: new Date('2026-10-18T20:53:16Z'),
+      },
+      // A deposit's reference names a deposit, never an order.
+      {
+        id: '4531',
+        type: 'deposit',
+        amount: { currency: 'USD', amountUnits: 2_850_000 },
+        reference: 'Wallet deposit',
+        createdAt: new Date('2026-10-12T20:05:48Z'),
+      },
+    ]);
+    // A time with its own zone is read as written, whatever the server's zone.
+    server.reply({
+      body: {
+        success: true,
+        data: [
+          { id: 1, created_at: '2026-10-18T20:53:16+00:00' },
+          { id: 2, created_at: '2026-10-18 20:53' },
+        ],
+      },
+    });
+    const times = (await adapter().listOrders(1)).items.map((item) => item.createdAt);
+    expect(times).toEqual([new Date('2026-10-18T20:53:16Z'), new Date('2026-10-18T16:53:00Z')]);
+  });
+
   it('reads the platform status at the top or in data', async () => {
     server.reply({ body: fixture('health') });
     expect(await adapter().getPlatformStatus()).toEqual({

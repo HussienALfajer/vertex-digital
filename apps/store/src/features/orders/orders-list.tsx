@@ -250,13 +250,20 @@ function OrderCard({ order }: { order: OrderSummary }) {
             {order.quantity > 1 && (
               <span className="text-muted-foreground">
                 {' '}
-                {t('orders.times', { count: order.quantity })}
+                {/* F11-10: "× 3" never splits at a phone's width. */}
+                <span className="whitespace-nowrap">
+                  {t('orders.times', { count: order.quantity })}
+                </span>
               </span>
             )}
           </p>
           <p className="text-sm text-muted-foreground">{order.game.nameAr}</p>
           <p className="text-xs text-muted-foreground">
-            <bdi dir="ltr">{order.number}</bdi> · {formatDateTime(order.createdAt)}
+            {/* F11-10: the number and the time each stay whole; the line breaks between them. */}
+            <bdi dir="ltr" className="whitespace-nowrap">
+              {order.number}
+            </bdi>{' '}
+            · <span className="whitespace-nowrap">{formatDateTime(order.createdAt)}</span>
           </p>
           {order.isGift && (
             <Badge tone="info" className="self-start">

@@ -134,15 +134,23 @@ test('manual fulfil of a manual order: codes, proof, and a loss to confirm (rule
   // Prefilled with the manual route's cost: 80% of $10.60.
   await expect(dialog.getByLabel(o.fulfil.cost)).toHaveValue('8.48');
   await expect(dialog.getByTestId('fulfil-profit')).toContainText('$4.24');
+  // A refused field's error goes as soon as the field is edited (F11-7).
+  await dialog.getByRole('button', { name: o.fulfil.submit }).click();
+  await expect(dialog.getByText(o.decisions.delivered.codesError)).toBeVisible();
+  await expect(dialog.getByText(o.decisions.reasonError)).toBeVisible();
   await dialog.getByLabel(o.decisions.delivered.codes).fill('CODE-AAAA-1111\nCODE-BBBB-2222');
+  await expect(dialog.getByText(o.decisions.delivered.codesError)).toBeHidden();
+  await expect(dialog.getByText(o.decisions.reasonError)).toBeVisible();
   await dialog.getByLabel(o.fulfil.cost).fill('11.00');
   await expect(dialog.getByTestId('fulfil-profit')).toContainText('$0.80');
   await uploadProof(page);
   await dialog.getByLabel(o.fulfil.reference).fill('SC-778812');
   await dialog.getByLabel(o.decisions.reason).fill('Bought at the other shop');
+  await expect(dialog.getByText(o.decisions.reasonError)).toBeHidden();
   await dialog.getByRole('button', { name: o.fulfil.submit }).click();
   await expect(dialog.getByText(o.fulfil.acceptLossError)).toBeVisible();
   await dialog.getByText(o.fulfil.acceptLoss).click();
+  await expect(dialog.getByText(o.fulfil.acceptLossError)).toBeHidden();
   admin.reauthenticationRequired = true;
   await dialog.getByRole('button', { name: o.fulfil.submit }).click();
   await reauthenticate(page);

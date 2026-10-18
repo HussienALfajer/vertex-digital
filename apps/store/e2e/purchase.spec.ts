@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { formatUsd, type Order, type StoreProduct } from '@vertex-digital/contracts';
+import { formatSyp, formatUsd, type Order, type StoreProduct } from '@vertex-digital/contracts';
 import ar from '../src/messages/ar.json' with { type: 'json' };
 import { PUBG, pack } from './catalog';
 import { expect, type MockApi, screenshot, test } from './test';
@@ -46,7 +46,9 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
       redemptionAr: null,
     },
     game: { id: PUBG.game.id, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', cover: null },
-    fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب (ID)', value: '51234567' }],
+    fields: [
+      { key: 'player_id', labelAr: 'معرّف اللاعب (ID)', value: '51234567', valueLabelAr: null },
+    ],
     quantity: 1,
     deliveredQuantity: 0,
     refundedQuantity: 0,
@@ -246,6 +248,33 @@ test.describe('buy box', () => {
     const second = api.last('POST /api/orders');
     expect(second?.body).toMatchObject({ expectedUnitPriceUsdUnits: newPrice });
     expect(second?.headers['idempotency-key']).not.toBe(first?.headers['idempotency-key']);
+  });
+
+  test('the SYP comes back once the refreshed pack carries the new price (F11-5)', async ({
+    page,
+    api,
+  }) => {
+    // The refused slide names the price the refreshed page now shows: the box drops its override.
+    const price = p60.priceUsdUnits as number;
+    signedIn(api)
+      .on('POST /api/player-checks', 200, { result: 'not_supported' })
+      .on('POST /api/orders', 409, {
+        code: 'PRICE_CHANGED',
+        details: { unitPriceUsdUnits: price },
+      });
+    await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
+    await idField(page).fill('51234567');
+    await buyBox(page).getByRole('button', { name: p.continue }).click();
+    await buyBox(page).getByRole('slider').focus();
+    await page.keyboard.press('End');
+    await expect(
+      buyBox(page).getByText(fill(p.priceChanged, { price: `\u2066${formatUsd(price)}\u2069` })),
+    ).toBeVisible();
+    await expect(
+      buyBox(page)
+        .getByText(fill(ar.catalog.price.syp, { amount: formatSyp(p60.priceSypUnits ?? 0) }))
+        .first(),
+    ).toBeVisible();
   });
 
   test('PLAYER_NOT_CONFIRMED brings back the fields with the confirmation (rule BB6)', async ({

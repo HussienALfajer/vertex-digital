@@ -223,6 +223,7 @@ export class WdgzoneAdapter implements SupplierAdapter {
       const balanceAfter = signedUsd(data.balance_after);
       const createdAt = dateOf(data.created_at);
       const reference = (data.reference ?? data.description)?.trim().slice(0, 200);
+      const orderId = data.order_id ?? (data.reference_type === 'order' ? data.reference_id : null);
       return [
         {
           id: data.id.slice(0, 64),
@@ -230,7 +231,7 @@ export class WdgzoneAdapter implements SupplierAdapter {
           ...(amount && { amount }),
           ...(balanceAfter && { balanceAfter }),
           ...(reference && { reference }),
-          ...(data.order_id && { supplierOrderId: data.order_id.slice(0, 64) }),
+          ...(orderId && { supplierOrderId: orderId.slice(0, 64) }),
           ...(createdAt && { createdAt }),
         },
       ];
@@ -250,7 +251,10 @@ export class WdgzoneAdapter implements SupplierAdapter {
       const row = orderRowSchema.safeParse(item);
       if (!row.success) return [];
       const { data } = row;
-      const total = data.currency == null || data.currency === 'USD' ? signedUsd(data.total) : null;
+      const total =
+        data.currency == null || data.currency === 'USD'
+          ? signedUsd(data.total ?? data.total_price)
+          : null;
       const createdAt = dateOf(data.created_at);
       const offerName = (data.product_name ?? data.product)?.trim().slice(0, 200);
       return [
@@ -641,10 +645,20 @@ function signedUsd(value: number | string | null | undefined): SupplierMoney | n
   return units === null ? null : { currency: 'USD', amountUnits: negative ? -units : units };
 }
 
-/** A WDG time, or null when it does not parse. */
+/**
+ * WDG writes its statement times without a zone, in UTC+4 (F11-9, seen live on 2026-10-19: order
+ * 3940's `created_at` "2026-10-19 00:53:16" and `completed_at` "00:53:23", its signed webhook
+ * "2026-10-18T20:53:23+00:00"; the same four hours on orders 3507 and 3457). Read as the server's
+ * local time (Europe/Berlin), they came out two hours late.
+ */
+const WDG_ZONE_OFFSET = '+04:00';
+const ZONELESS_TIME = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/;
+
+/** A WDG time, with its own zone or else WDG's (never the server's), or null when it does not parse. */
 function dateOf(value: string | null | undefined): Date | null {
   if (!value) return null;
-  const time = Date.parse(value);
+  const zoneless = ZONELESS_TIME.exec(value.trim());
+  const time = Date.parse(zoneless ? `${zoneless[1]}T${zoneless[2]}${WDG_ZONE_OFFSET}` : value);
   return Number.isFinite(time) ? new Date(time) : null;
 }
 

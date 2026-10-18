@@ -83,7 +83,10 @@ export function receiptPreview(
       .filter((field) => field.value)
       .map((field) => ({
         label: field.labelAr,
-        value: playerDisplay === 'full' ? field.value : maskFieldValue(field.value),
+        // F11-4: a select's option label is shown whole, as the share page does.
+        value:
+          field.valueLabelAr ??
+          (playerDisplay === 'full' ? field.value : maskFieldValue(field.value)),
       })),
     gift: null,
   };

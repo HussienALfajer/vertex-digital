@@ -227,7 +227,12 @@ export function BuyBox({
     setQuantity(Math.min(Math.max(1, draft.quantity), product.maxQuantity));
   }, [editing, game.slug, product.id, product.maxQuantity]);
 
-  const unitPrice = priceOverride ?? product.priceUsdUnits;
+  // A refused slide's new price stands until the page's refresh brings the product at that price,
+  // with its SYP (F11-5).
+  const newerPrice =
+    priceOverride !== null && priceOverride !== product.priceUsdUnits ? priceOverride : null;
+  const staleProduct = newerPrice !== null;
+  const unitPrice = newerPrice ?? product.priceUsdUnits;
   const total = bundle
     ? checkoutTotal(
         bundle.map((line) => ({
@@ -242,7 +247,7 @@ export function BuyBox({
           bundle.map((line) => ({ sypUnits: line.product.priceSypUnits ?? 0, count: line.count })),
         )
       : null
-    : priceOverride === null && product.priceSypUnits !== null
+    : !staleProduct && product.priceSypUnits !== null
       ? displaySypTotal([{ sypUnits: product.priceSypUnits, count: quantity }])
       : null;
   const fieldsCheck = checkFields(fields, typed);
@@ -603,7 +608,7 @@ export function BuyBox({
             <bdi dir="ltr" className="text-2xl font-bold tabular-nums">
               {formatUsd(unitPrice)}
             </bdi>
-            {priceOverride === null && product.priceSypUnits !== null && (
+            {!staleProduct && product.priceSypUnits !== null && (
               <span className="text-sm text-muted-foreground tabular-nums">
                 {t('catalog.price.syp', { amount: formatSyp(product.priceSypUnits) })}
               </span>

@@ -97,7 +97,9 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
       redemptionAr: null,
     },
     game: { id: PUBG.game.id, slug: 'pubg-mobile', nameAr: 'ببجي موبايل', cover: null },
-    fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب (ID)', value: '51234567' }],
+    fields: [
+      { key: 'player_id', labelAr: 'معرّف اللاعب (ID)', value: '51234567', valueLabelAr: null },
+    ],
     quantity: 1,
     deliveredQuantity: 1,
     refundedQuantity: 0,
@@ -163,7 +165,9 @@ function line(product: StoreProduct, changes: Record<string, unknown> = {}) {
       gameNameAr: PUBG.game.nameAr,
       productNameAr: product.nameAr,
       cover: PUBG.game.cover,
-      fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب (ID)', value: '51234567' }],
+      fields: [
+        { key: 'player_id', labelAr: 'معرّف اللاعب (ID)', value: '51234567', valueLabelAr: null },
+      ],
     },
     ...changes,
   };
@@ -544,7 +548,9 @@ test.describe('gift and receipt links (GF4, GF5, RC1–RC3, SH5, SH6)', () => {
       checkoutId: CHECKOUT_ID,
       gift: { senderName: 'أحمد', message: 'كل عام وأنت بخير' },
       shareLinks: [GIFT_LINK],
-      fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب (ID)', value: '51234568' }],
+      fields: [
+        { key: 'player_id', labelAr: 'معرّف اللاعب (ID)', value: '51234568', valueLabelAr: null },
+      ],
       ...changes,
     });
 
@@ -792,7 +798,14 @@ for (const theme of ['dark', 'light'] as const) {
           fields: { player_id: '51234568' },
           display: {
             ...line(p325).display,
-            fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب (ID)', value: '51234568' }],
+            fields: [
+              {
+                key: 'player_id',
+                labelAr: 'معرّف اللاعب (ID)',
+                value: '51234568',
+                valueLabelAr: null,
+              },
+            ],
           },
           playerCheck: null,
           confirmPlayer: true,

@@ -1,4 +1,14 @@
-# TASKS — V1 system test, feature 11 cases
+# TASKS — V1 system test, feature 11 run and fixes
+
+Branch `docs/v1-system-test-feature-11-run`. Record the owner's run of feature 11 and fix its findings; the owner asked (2026-10-19) to open the PR only after the whole feature is tested.
+
+- [x] Record 11.1–11.17 (11.17 finished by the owner on a real phone) and correct the feature table (9 and 10 accepted).
+- [x] Fix F11-4 to F11-10 (order select labels, buy box SYP, panel order page live, fulfil dialog errors, email isolates, "طلباتي" on a phone, WDG statement times and totals) with tests.
+- [x] Checks green (lint, typecheck, test, build, changed E2E); reviewer's finding (the F11-9 test) fixed.
+- [ ] Day 2 after 23:48 on 2026-10-19: 11.13 steps 2–3, 11.18 steps 2–4, the sign-off.
+- [ ] PR with merge-commit auto-merge, deploy, re-check the fixes on production, owner's acceptance of feature 11.
+
+## Previous task — V1 system test, feature 11 cases
 
 Documentation only, branch `docs/v1-system-test-feature-11`. Write the owner's production test cases for F13 and F11 without running them or accepting the feature.
 

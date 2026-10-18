@@ -184,6 +184,9 @@ export const transactionRowSchema = z.object({
   reference: z.string().nullish(),
   description: z.string().nullish(),
   order_id: text.nullish(),
+  // Seen live on 2026-10-19 (F11-9): a purchase names its order as `reference_type: "order"`.
+  reference_type: z.string().nullish(),
+  reference_id: text.nullish(),
   currency: z.string().nullish(),
   created_at: z.string().nullish(),
 });
@@ -196,6 +199,8 @@ export const orderRowSchema = z.object({
   quantity: z.number().int().positive().nullish(),
   status: z.string().nullish(),
   total: decimalSchema.nullish(),
+  // Seen live on 2026-10-19 (F11-9): the amount is `total_price`, a decimal string.
+  total_price: decimalSchema.nullish(),
   currency: z.string().nullish(),
   created_at: z.string().nullish(),
 });

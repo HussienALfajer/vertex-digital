@@ -192,6 +192,28 @@ test.describe('orders', () => {
     await expect(page.getByText(o.statuses.refunded, { exact: true }).first()).toBeVisible();
   });
 
+  test('follows the order live: a stream event shows its new state without a reload (F11-6)', async ({
+    page,
+    admin,
+  }) => {
+    // One stream answer, a few seconds in, and no reconnect: only the event can trigger the read.
+    admin.stream = {
+      events: [{ event: 'order', data: { orderId: ORDER_IDS.manual, status: 'delivered' } }],
+      delayMs: 4_000,
+      retryMs: 600_000,
+    };
+    await open(page, admin, `/orders/${ORDER_IDS.manual}`);
+    await expect(page.getByText(o.decisions.manualHelp)).toBeVisible();
+    admin.orders.deliver(ORDER_IDS.manual);
+    await expect(page.getByText(o.statuses.delivered, { exact: true }).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    const reads = admin.requests.filter(
+      (request) => request.key === `GET /api/admin/orders/${ORDER_IDS.manual}`,
+    );
+    expect(reads.at(-1)?.headers['x-background-request']).toBe('1');
+  });
+
   test('reveals a code with re-authentication, logs it and hides it again (rule C3)', async ({
     page,
     admin,
