@@ -1,4 +1,14 @@
-# TASKS — V1 system test, feature 10
+# TASKS — V1 system test, feature 10 SQL verification
+
+Documentation only, branch `docs/feature-10-production-sql`. Follow up the successful SSH retry with read-only production SQL evidence and correct the fixture prerequisites; manual cases remain unrun.
+
+- [x] Retry SSH and read the server conventions and deployed revision.
+- [x] Verify catalog counts, worked prices, rate, switches, fixture records and eligible delivery samples in read-only production transactions.
+- [x] Update the production evidence and fixture setup/cleanup in `docs/testing/v1-system-test.md`; record F10-3 without mutating production.
+- [x] Review the documentation and pass the docs-only checker gate; all 18 manual results and owner acceptance remain blank.
+- [x] Prepare the follow-up documentation commit and PR with merge-commit auto-merge; report publication with the task result.
+
+## Previous task — Feature 10 cases
 
 Documentation only, branch `docs/v1-system-test-feature-10`. Write the owner's production test cases for F12 and F15 without running them or accepting the feature.
 
