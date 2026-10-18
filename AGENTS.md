@@ -74,7 +74,7 @@ Keep this table true: the PR that adds or changes a command updates it.
 ## How to work
 
 - Continue without asking when the next step needs no input from the owner. Put brief status notes in the same message as the next action.
-- Stop and ask only when a decision belongs to the owner (scope, business rules, prices, anything in `open-questions.md`), when a spec is ambiguous in a way that changes the result, or before a destructive or outward-facing action (deleting data, dropping tables, force-push, touching the production server, calling a live supplier or blockchain API with real money, publishing).
+- Stop and ask only when a decision belongs to the owner (scope, business rules, prices, anything in `open-questions.md`), when a spec is ambiguous in a way that changes the result, or before a destructive or outward-facing action (deleting data, dropping tables, restoring a database snapshot, force-push, calling a live supplier or blockchain API with real money, moving real customer money, publishing). Deploying `main` to production and changing production through the server or the admin panel (catalog, settings, test fixtures) need no approval (owner, 2026-10-18): do them when the task calls for them and report what changed.
 - A task is done only when its checks pass: typecheck, lint, and the relevant tests; for UI changes, a Playwright screenshot in RTL. Show the evidence (commands run and their results) instead of asserting success.
 - Fix root causes. Never silence a failing test, type error, or lint rule to make a check pass.
 - For multi-step work keep a checklist in `TASKS.md`: mark items done and add work you discover.
@@ -123,7 +123,7 @@ Talk to the owner in Arabic, including the report and its headings. Write everyt
 
 ## Production server
 
-Deploys go to the owner's existing Ubuntu VPS, shared with other sites: PM2 + nginx, one isolated system user per site, apps listen on `127.0.0.1` only, nginx is the only public gateway (ADR 0009). Never run commands on the server without explicit approval in the current conversation. Read `/root/SERVER.md` on the server before any server work.
+Deploys go to the owner's existing Ubuntu VPS, shared with other sites: PM2 + nginx, one isolated system user per site, apps listen on `127.0.0.1` only, nginx is the only public gateway (ADR 0009). Server commands, deploys and rollbacks need no approval in the conversation (owner, 2026-10-18); the destructive and real-money actions listed under "How to work" still do. Read `/root/SERVER.md` on the server before any server work.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

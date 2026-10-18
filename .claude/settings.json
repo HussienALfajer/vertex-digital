@@ -66,10 +66,7 @@
       "Bash(pnpm db:migrate*)",
       "Bash(pnpm db:setup-local*)",
       "Bash(*supplier:smoke*)",
-      "Bash(gh repo create*)",
-      "Bash(ssh *)",
-      "Bash(scp *)",
-      "Bash(rsync *)"
+      "Bash(gh repo create*)"
     ],
     "deny": [
       "Read(**/.env)",

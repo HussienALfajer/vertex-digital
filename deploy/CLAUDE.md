@@ -9,7 +9,7 @@ Everything installed on the production server comes from this folder (ADR 0009, 
 - `fail2ban/`: the `vertexdigital-auth` filter and jail (failed sign-ins on both hosts). `systemd/`: PM2 service, health timer, backup timer. `logrotate/`: app logs. `bin/`: deploy entry point, health check, backup.
 
 ## Rules
-- Never run commands on the server (`ssh vertex ...`) without the owner's explicit approval in the current conversation. Reading and editing this folder locally needs no approval.
+- Server commands (`ssh vertex ...`), deploys and rollbacks need no approval in the conversation (owner, 2026-10-18). `vertexdigital-deploy restore`, deleting data and dropping tables still need the owner's explicit approval. Run long jobs with `systemd-run` and never run git as root in the server's repository mirror (`/root/SERVER.md` rules 5 and 16).
 - The server is never edited by hand. A change lands here, merges to `main`, and is installed by `deploy.sh` or `provision.sh`.
 - `provision.sh` stays idempotent: running it twice changes nothing the second time.
 - Apps listen on `127.0.0.1` only; nginx is the only public listener. One system user (`vertexdigital`), no sudo. Ports (API 3060, store 3061) are set in `provision.sh`, `deploy.sh`, `ecosystem.config.cjs`, `bin/vertexdigital-healthcheck` and the nginx sites: change them together, after reading the server's port map.
