@@ -776,7 +776,7 @@
     "amount": "الكمية: {amount}",
     "price": {
       "syp": "≈ {amount} ل.س",
-      "savings": "وفّر {percent}%"
+      "savings": "وفّر {percent}"
     }
   },
   "search": {
