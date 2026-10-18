@@ -2674,7 +2674,7 @@ Result: ✅ 2026-10-18 23:53 Damascus. The owner signed in to their own account 
 2. Signed out, open `/orders`. Expected: the sign-in, then TC1's own list after signing in as TC1. As TC1 open `https://digital-admin.vertexmedia.pro/orders`. Expected: the panel's own sign-in: a customer session is not an admin session.
 3. TC1's "طلباتي": O3 "سُلّم جزئياً واسترد الباقي", O2 "مُسترد", O1 "تم التسليم", newest first, each with its cover, quantity, total and "≈ … ل.س عند الشراء"; none of TC2's reservations and nothing of the owner's O4.
 
-Result:
+Result: step 1 ✅ 2026-10-19 ~00:20 Damascus (Claude, TC3's tab): O3's URL showed the skeleton, then "الصفحة غير موجودة" with no code, field or amount (the delay came from the owner's network dropping connections, `ERR_CONNECTION_TIMED_OUT` in the console); `GET /api/orders/<O3 id>` as TC3 answered `404 NOT_FOUND` "No such order".
 
 ### 11.16 The audit log and the books
 
@@ -2684,7 +2684,9 @@ Result:
 2. Wallets: TC1 **$25.68**, TC2 **$0.00**, your account **$3.52**, each the sum of its timeline. TC3 untouched.
 3. Claude confirms with a read-only query **after the owner runs the cases**: orders **2 + 8 = 10** (O1–O4, R1–R4); journals **20 + 11 = 31** (TC1: 3 purchases and 2 refunds; TC2: the credit, R2's purchase and refund, the reversal; O4: the purchase and its cost of goods), postings **52 + 22 = 74**; still 0 player checks, 0 checkouts and 0 `validate_player` calls, and exactly **one** new `place_order` call (O4; none if 11.14 is skipped, with 29 journals and 70 postings). These counts are expectations, not results.
 
-Result:
+Result: step 3 ✅ read-only production SQL at 2026-10-19 00:16:28 Damascus (`REPEATABLE READ READ ONLY`, `transaction_read_only = on`, snapshot `1446892:1446892:`, `ROLLBACK`): **10 orders** (O1 `VO-6QBGE3` delivered; O2 `VO-EM9HFM` refunded $1.32; O3 `VO-ZVZP5W` partially_refunded 2/1, $1.10; R1 `VO-7ETNBC` cancelled `price_rose`; R2 `VO-TA5E4M` refunded $0.90; R3 `VO-H2V7VM` cancelled `customer`; R4 `VO-JXYQFH` awaiting_balance; O4 `VO-2Z298D` delivered, non-test), **31 journals** (since the run: 5 purchase, 3 refund, 1 cost_of_goods, 2 adjustment), **74 postings**, 0 player checks, 0 checkouts, 2 codes and 2 reveals, `place_order` **3** and no `validate_player`; wallets TC1 **$25.68**, TC2 $0.00, TC3 $0.00, the owner's account **$3.52**; A and B paused and unarchived. Steps 1–2 pending.
+
+Note (2026-10-19 00:00–00:12 Damascus): the store, the panel and SSH stopped answering from the owner's network, and an outside fetch was refused on 443 for a few minutes. The server read afterwards (read-only) shows it never went down: up since 2026-10-18 17:18 Damascus (no reboot), nginx active since then, every two-minute health check passed, and nginx kept serving requests in that window, including the owner's own address. A network path problem, as recorded before (memory of 2026-10-12); nothing in the run depends on it.
 
 ### 11.17 Screens quality on desktop and phone
 
