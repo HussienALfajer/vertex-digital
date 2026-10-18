@@ -195,7 +195,7 @@ The owner's decision (2026-10-17): once all 22 features are accepted, and before
 | F9-15 | 9 | External audit by another model (GPT 6.1 sol, review only, 2026-10-18) | An ignored subcategory under a linked game still counts its offers as "باقات جديدة" (the badge and the parent's state): SC5 excludes ignored offers but says nothing of ignored categories | minor | None: the owner decides whether ignoring a category also removes its offers from the new-packs count (Q22) | Open (owner) |
 | F9-16 | 9 | External audit by another model (GPT 6.1 sol, review only, 2026-10-18) | The price the supplier charges is not compared with the cost the order was priced on: WDG's purchase reply carries its `total`, which the adapter drops; a cost raised between two syncs (15 minutes; 2 hours before stale) would be sold at the older margin, and only the reconciliation's supplier balance would show it | minor | None yet: a follow-up reads `total` into the attempt and alerts on a charge above the snapshot (S08 snapshot accounting stays) | Open (follow-up) |
 | F10-1 | 10 | Writing the steps (public production reads, 2026-10-18 15:52–15:53 Damascus) | PUBG Mobile's calculator receives UC, WOW coins, Prime durations and weekly-offer counts as interchangeable `gameAmount` values: for example, `60 شدة` and `60 عملة WOW` both have 60, while `برايم شهر واحد` and `عرض الأسبوع 1` have 1. `calculatorPacks` filters by direct kind, availability and a positive amount, without a unit. A numerical total need not mean that many UC | minor (content) | Use Free Fire's diamond packs for 10.5–10.6; review the PUBG amounts during the professional catalog build-out, without changing the real catalog in this feature | Deferred to the catalog build-out |
-| F10-2 | 10 | Writing the steps (source inspection; not yet reproduced on production) | The savings badge passes a percent already ending in `%` to `catalog.price.savings`, whose Arabic text adds another `%` (`pack-card.tsx`, `messages/ar.json`): the positive savings case may show two signs. The public production read has no savings badge, so it cannot confirm the rendered result | minor | None in this documentation PR. Check the intended single sign in 10.14 and record the rendered result before a fix | Open (10.14) |
+| F10-2 | 10 | Writing the steps (source inspection; not yet reproduced on production) | The savings badge passes a percent already ending in `%` to `catalog.price.savings`, whose Arabic text adds another `%` (`pack-card.tsx`, `messages/ar.json`): the positive savings case may show two signs. The public production read has no savings badge, so it cannot confirm the rendered result | minor | Reproduced by the owner on 2026-10-18 (two signs). Fixed: `catalog.price.savings` is "وفّر {percent}" and the badge passes the percent with its sign inside the LTR isolate; the E2E spec rejects `%⁩%` | Fixed, awaiting deploy and re-check |
 | F10-3 | 10 | SQL follow-up, 2026-10-18 16:07–16:09 Damascus | The first draft expected all test records archived after feature 9. The database instead has the test category and A/C unarchived, both games paused; B archived. C still has two live WDGZone routes and a link to "PUBG: BATTLEGROUNDS". A also has an extra archived `660 UC` record. None of these paused games is public. A/category need no restore; archiving the category before C would fail | minor (steps) | Setup reuses the existing category/A, names the correct live pack, and cleanup explicitly finishes C's route/link/game cleanup before archiving the category. Documentation only; no production state changed | Fixed (steps); cleanup pending |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
@@ -2231,6 +2231,8 @@ The SYP figures above are returned by production. SQL confirmed **140 ل.س per 
 
 **Not tested on production (by design):** an empty entire catalog, a missing exchange rate, deliberately degrading or stopping WDGZone, a failed internal revalidation call and its retries, or manufacturing five real deliveries for an estimate (contracts, API, worker and store E2E tests). The measured median/p90 positive state remains **unconfirmed on production** while every public `deliveryStats` is null; it is not inferred from the few live orders of earlier features. Calculator tie-breaking and exhaustive optimality are covered by contracts tests; 10.5 checks worked real examples. Blocked browser storage is optional in 10.11 and stays unconfirmed if not exercised. Buying, player validation, slide-to-pay, reservations and tracking are feature 11; saved IDs feature 12; cart, gifts, receipts and the calculator's "أضف الكل إلى السلة" feature 13; banners, announcements and live activity feature 18; PWA/offline feature 19; emergency stop feature 21. S17's per-route expected time on an open order is feature 11, separate from the measured pack chip here.
 
+**Owner-run baseline (2026-10-18, before any case result):** the owner requested a guided run with read-only observation. Deployed revision remains `bcf2d42686ef59630454786ff7af7cd39290785a`. Public GETs at 16:17–16:19 Damascus reconfirmed the worked Free Fire/PUBG/PlayStation prices, six category counts (21/5/11/10/3/7), 57 indexed games and 587 indexed packs. At **16:19:23 Damascus**, a completed `REPEATABLE READ READ ONLY` transaction as `vertex_digital` (`transaction_read_only = on`, snapshot `1412776:1412776:`, 10-second statement timeout, 2-second lock timeout, ended with `ROLLBACK`) counted **2 orders, 19 deposits, 20 ledger journals, 52 postings, 0 player checks and 0 checkouts**. The rate is 140, display step 100 units (1 SYP); recorded registration/manual/WDG switches are false. A has two live enabled manual routes and two archived WDGZone routes; B has no route; C still has two live enabled WDGZone routes. A separate read at 16:18:54 confirmed the category/A/C unarchived, A/C paused, B archived/paused, and the original fixture data described above. No customer identifiers or secrets were recorded. These are setup observations, **not passed cases**. No user browser tab was connected at setup; the owner's visual/keyboard results must be reported or observed in a connected tab. Final cleanup and the post-run count comparison remain pending.
+
 ### 10.1 The home page and category jumps as they stand
 
 **What this checks:** a visitor reaches the real catalog without signing in, in the same order the admin set.
@@ -2240,7 +2242,7 @@ The SYP figures above are returned by production. SQL confirmed **140 ل.س per 
 3. Open "فورتنايت" from its greyed card. Expected: its game page opens; an unavailable game remains discoverable. Back, then use two other category chips; the headings are visible below the header.
 4. Open home as TC1. Expected: the same catalog and public availability; TC1's wallet/bell are its own. A test customer's restricted purchase routes do not change these public cards.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.2 Game pages, pack amounts and real prices
 
@@ -2251,7 +2253,7 @@ Result: —
 3. Open `/games/call-of-duty-mobile`. Expected: "80 + 8 نقطة CP" at $1.08, ≈ 152 ل.س, with **"الكمية: 88"**: the total is clear even though the name splits the base and bonus.
 4. Open `/games/free-fire`; compare its three available prices and five-card order with the worked table and the panel. Record any sync-time difference rather than changing the catalog.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.3 Unavailable packs, code pages and service status
 
@@ -2262,7 +2264,7 @@ Result: —
 3. `/games/playstation`: the note "تعمل البطاقة على حساب PSN من نفس دولة البطاقة." and the one available $5.83 pack; the other 21 greyed. There is no pack-level region or redemption text in the current public data (F7-1); do not mark that missing content as a new rendering failure.
 4. Home and Free Fire. Expected: home **"كل الخدمات تعمل بشكل طبيعي"**, Free Fire **"تعمل بشكل طبيعي"** while those seven games are unavailable. No supplier name, success percentage or supplier balance in a status chip. The positive slow state is checked with the manual-only test game in 10.14.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.4 Delivery estimates with insufficient data
 
@@ -2272,7 +2274,7 @@ Result: —
 2. Select "110 جوهرة" without filling any field. Expected: the correct pack at $1.01 and "لا بيانات كافية بعد عن وقت التسليم". No median or "9 من كل 10" promise. Close the form without proceeding.
 3. The SQL follow-up confirmed only two eligible samples on PUBG Mobile `60 شدة` and zero elsewhere, so no positive measured chip is expected yet. If one appears later, record its pack/time and verify the updated S08 T1 sample (last 50 delivered non-test orders per pack in 30 days, at least 5; owner-paid non-test orders count too); then compare the median on the card and p90 in the form, rounded up to seconds/minutes/hours. Otherwise leave this positive rendering state unconfirmed; do not place orders to create it.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported). No measured chip was reported, so the positive median/p90 state remains **unconfirmed on production**.
 
 ### 10.5 The calculator on real diamond packs
 
@@ -2283,7 +2285,7 @@ Result: —
 3. At 600 expect **693**, "ستحصل على 693 (أكثر بـ 93)", **$6.02**, **≈ 844 ل.س**. No 1,188 or 2,420 pack in any result while those packs are unavailable. The SYP is 142 + 702; do not expect 843 from converting the USD total again.
 4. Each line has "اشترِ" and the note "تُشترى كل باقة في طلب مستقل.". The S10 "أضف الكل إلى السلة" control may also be present; leave it for feature 13. Nothing has been bought or reserved by calculating.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.6 Calculator bounds and the handoff to a pack
 
@@ -2294,7 +2296,7 @@ Result: —
 3. Press "اشترِ" on the **110 × 1** line only. Expected: that pack's empty buy form, same $1.01 price, with its id in `?pack=…`; bottom sheet on the phone, side panel on desktop. Close it. A recommendation with repeated packs does not authorize a purchase above a pack's maximum; checkout/splitting is feature 13.
 4. `/games/playstation` and `/games/fortnite`: no calculator, even where code packs have a numerical amount. Do not use PUBG's mixed units as an expected UC recommendation (F10-1).
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.7 Opening search and using the keyboard
 
@@ -2305,7 +2307,7 @@ Result: —
 3. With no input focused, use `Ctrl+K` (or `⌘K` on macOS), close, then `/`. Expected: each opens search. With the search input focused, typing `/` edits the query; it does not reopen or reset the dialog.
 4. Enter `pubg`, move with the arrow keys, and press `Enter` on the PUBG Mobile game. Expected: the highlighted result opens `/games/pubg-mobile`; keyboard focus remains visible and stays inside the dialog while it is open.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.8 Arabic, English, aliases and tolerant matching
 
@@ -2316,7 +2318,7 @@ Result: —
 3. Compare `ببجي 60`, `ببجي ٦٠` and `ببجي ۶۰`. Expected: identical **two pack results**, "60 شدة" then "60 عملة WOW", both on PUBG Mobile, with no game row. Arabic-Indic and Persian digits behave like Latin digits.
 4. Search the two-character prefix `pu`. Expected: the PUBG games are found. Single-character prefixes and numeric typos do not get the same tolerance; do not treat an unrelated exact one-character token elsewhere in the catalog as a failure.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.9 Search ranking, caps and all-token matching
 
@@ -2327,7 +2329,7 @@ Result: —
 3. Search `660`. Expected: the two unavailable PUBG packs "660 شدة" and "660 عملة WOW", greyed, without prices. There are no fabricated 60-pack matches through digit fuzziness.
 4. Search `ببجي zzzzz`. Expected: no results although one word matches PUBG. Every query token must match. Search `ببجي 60` again: a pack can match its game's name and its own numerical token together.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.10 Search destinations and unavailable links
 
@@ -2338,7 +2340,7 @@ Result: —
 3. Search `660`, choose "660 شدة". Expected: its game page may retain `?pack=…`, but **no buy form**, price or payment action opens for that unavailable pack. A greyed search result may still be a navigable link.
 4. Replace `pack` in that page's URL with an unknown UUID (for example `00000000-0000-4000-8000-000000000000`). Expected: the game page works with no selected form. Browser back/forward never turns an unavailable pack into a buyable one.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.11 Recent searches, no results and device privacy
 
@@ -2350,7 +2352,7 @@ Result: —
 4. Search `zzzzzzzzzz`. Expected: "لم نجد نتائج لـ «zzzzzzzzzz». جرّب كلمة أخرى أو تصفّح الألعاب." and "تصفّح كل الألعاب", which opens home. No raw error or blank sheet.
 5. Optional, with browser storage blocked: open search and choose a result. Expected: search and navigation still work; lack of recent history does not break them. If not exercised, record that limitation rather than marking the storage-blocked path passed. No history query, player ID or customer detail is sent to a search endpoint: matching is in the browser over the public index.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported). The optional storage-blocked step 5 was not reported separately and remains **unconfirmed**.
 
 ### 10.12 Public reads and missing game links
 
@@ -2361,7 +2363,7 @@ Result: —
 3. Open `/games/system-test-7`, `/games/system-test-7-app` and `/games/system-test-9` **before restoring or activating any fixture**; then `/games/no-such-system-test-10`. Expected: "الصفحة غير موجودة" and "العودة إلى الصفحة الرئيسية". A/C are paused and B archived; all three are absent from home and search.
 4. If inspecting the HTML, expect `noindex` on the not-found game. **Do not require HTTP 404 from the streamed Next.js page**: S09's implementation records a 200 shell with `noindex`; the public **API** for an unknown/paused/archived game answers `NOT_FOUND`/404. The return-home link works.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.13 Setup and the admin's search terms on test game A
 
@@ -2372,7 +2374,7 @@ Result: —
 3. Try a term of 41 Latin `a` characters, then punctuation only `!!!`. Expected: respectively "الكلمة أطول من 40 حرفًا. اختصرها." and "اكتب كلمة فيها حرف أو رقم."; neither becomes a chip. Add distinct `vdten01`, `vdten02`, … only until the total reaches 20: no 21st term. Remove those extra chips and leave the original terms plus `vdsystemten`.
 4. Save, reload. Expected: those terms persist; the store still cannot open or find A while it is paused. Audit log: "تعديل لعبة" (`catalog_game.updated`) on A with the changed terms. Search-term limits apply to normalized text, not to an extra copy of its spelling.
 
-Result: —
+Result: **reported passed by the owner, not confirmed on production.** Post-run production SQL (20:03:45 and 20:05 Damascus, `vertex_digital`, `REPEATABLE READ READ ONLY`, `transaction_read_only = on`, `ROLLBACK`) found **no admin change since the 16:19:23 baseline**: the only audit entry after it is an admin sign-in at 19:16:35, and the fixtures were last updated at 00:44–00:46 (feature 9). A still has no search terms; there is no `catalog_game.updated` for this case.
 
 ### 10.14 Positive guide, accent, savings and code instructions on test games
 
@@ -2386,7 +2388,7 @@ Do this and 10.15, then 10.18 in one sitting. The test games are public only dur
 4. B, still paused: check its cover first. Feature 7 left it without one; if still missing, upload a non-personal test cover and save it, recording that its old cover was empty. Give its code pack one **manual** route at cost $1.00 (if one already exists, record and use its current cost rather than adding a duplicate); record whether the route is new for cleanup. Confirm a price and active pack, then activate B. Open `/games/system-test-7-app`: the code card's region "الولايات المتحدة"; no calculator. Select its pack without proceeding: the same two-line redemption instructions as the panel, no player-ID field. Close it. No code has been issued because nothing was bought.
 5. A and B on the phone and in light theme: the guide is legible, accent does not make text unreadable, no duplicate percent sign, the code's region and instructions wrap. Use intended content as the expectation and log any discrepancy.
 
-Result: —
+Result: **failed — F10-2 reproduced.** The owner saw **two percent signs** in the savings badge ("وفّر 50%%"), as the source predicted (`pack-card.tsx:29` passed `50%` into "وفّر {percent}%"). Fixed in this PR (the Arabic template no longer adds a second sign; the E2E spec now rejects `%⁩%`); re-check after the next production deploy. Post-run production SQL (20:03:45 and 20:05 Damascus, `vertex_digital`, `REPEATABLE READ READ ONLY`, `transaction_read_only = on`, `ROLLBACK`) found **no admin change since the 16:19:23 baseline**: the only audit entry after it is an admin sign-in at 19:16:35, and the fixtures were last updated at 00:44–00:46 (feature 9). B is still archived with no manual route and A was never activated, so the case's production setup steps are **not confirmed**; the badge observation is the owner's report.
 
 ### 10.15 Fresh pages and search after a catalog change
 
@@ -2397,7 +2399,7 @@ Result: —
 3. Resume A's `60 UC`. Expected after refresh: its price and the calculator return. Pause **A itself**. Expected: its page is not found and its aliases no longer return it after the index refresh; B keeps the test category present while still active. No need to wait for a five-minute cache expiry for ordinary successful invalidation; if it takes that long, record the delay and request a read-only job/log check.
 4. Pause B. Expected: the whole test category disappears from home; neither fixture appears in the sitemap after refresh; both game pages are not found. With the original real statuses unchanged, home returns to "كل الخدمات تعمل بشكل طبيعي". Leave both paused for cleanup.
 
-Result: —
+Result: **reported passed by the owner, not confirmed on production.** Post-run production SQL (20:03:45 and 20:05 Damascus, `vertex_digital`, `REPEATABLE READ READ ONLY`, `transaction_read_only = on`, `ROLLBACK`) found **no admin change since the 16:19:23 baseline**: the only audit entry after it is an admin sign-in at 19:16:35, and the fixtures were last updated at 00:44–00:46 (feature 9). No pause/resume or alias change of A or B was recorded.
 
 ### 10.16 Images, page metadata and discovery
 
@@ -2408,7 +2410,7 @@ Result: —
 3. From the public game's cover URL, open the variants `?w=160`, `?w=320`, `?w=640`, `?w=1280`. Expected: WebP, same image and aspect ratio, no upscale above the source (the recorded real covers are 384 × 384). Optional Network check: immutable public caching and a responsive `srcset` using these widths.
 4. Change only the width to `161`. Expected: `VALIDATION_FAILED`, no arbitrary image size. A URL for a private receipt is never obtained or tested in this feature; its access is feature 4. `/_internal/revalidate` on the public host is not a public cache control (nginx denies it, 404); send no revalidation request or secret.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.17 Screens quality on desktop and phone
 
@@ -2419,7 +2421,7 @@ Result: —
 3. Keyboard only: category jump, pack selection, guide toggle when testing A, calculator field, search input/results and close. Expected: visible focus, understandable labels, no trap outside the open dialog and focus returned on close. With reduced motion enabled, navigation and controls still work.
 4. Record screenshots of home, a priced/unavailable pack page, the 600-diamond calculator result and search at phone and desktop widths, RTL. Capture A's positive content during 10.14 before cleanup. No account data, player ID, credential or payment receipt in a screenshot committed to the repository.
 
-Result: —
+Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).
 
 ### 10.18 Clean-up and the audit trail
 
@@ -2430,14 +2432,14 @@ Result: —
 3. Store after refresh and a search reopen after 30 seconds: exactly the six real categories and 57 games (or the independently recorded real-catalog change), no `system-test` game/alias, not-found pages for all three test games, no fixture URLs in the sitemap. Recheck the current Free Fire prices; sync changes are recorded, not undone.
 4. Audit log filtered to this sitting: A/B's game updates, terms and activations/pauses, product updates, any new manual route/cost and its archive, C's remaining route/link cleanup, and the restores/archives. Expected: correct targets and before/after values. Browsing, searching and calculating create no purchase, reservation or wallet journal; no new order, deposit or customer charge from this feature. Confirm these counts and final fixture states with a read-only query **after the owner runs the cases**; the setup SQL does not prove future cleanup.
 
-Result: —
+Result: **not passed — cleanup outstanding.** Reported passed by the owner. Public read-only check at **19:58 Damascus**: the storefront has exactly the six real categories (21/5/11/10/3/7 = 57 games), service `normal`; `/api/catalog/games/system-test-7`, `system-test-7-app` and `system-test-9` answer 404; the sitemap (63 URLs) and the search index contain no `system-test` or `vdsystemten`; Free Fire is unchanged at $1.01/$2.01/$5.01 with 1,188 and 2,420 unavailable. Post-run SQL at **20:03:45 Damascus** (snapshot `1427849:1427849:`): **2 orders, 19 deposits, 20 journals, 52 postings, 0 player checks, 0 checkouts** — identical to the baseline, so the run created no order, deposit or wallet journal. But the cleanup was **not** performed: the audit log has no catalog change since the baseline; the category "اختبار النظام" and A/C are still unarchived (paused), B archived; C keeps its two live enabled WDGZone routes and one supplier-category link. The public store hides them (paused), so customers see nothing, but 10.18 steps 2 and 4 remain **open** and the case is **not passed**.
 
 ### Feature 10 sign-off
 
 | Item | Value |
 |---|---|
-| Cases passed | — of 18 |
-| Findings | F10-1 (calculator content, deferred); F10-2 (potential duplicate savings sign, source inspection, awaiting 10.14); F10-3 (fixture assumptions corrected from SQL, cleanup still pending); add the owner's failures and surprises here |
+| Cases passed | **14 of 18** (10.1–10.12, 10.16, 10.17, as reported by the owner, 2026-10-18). 10.14 failed (F10-2, fixed here); 10.13 and 10.15 reported passed but not confirmed (no admin change in the audit log); 10.18 not passed (cleanup outstanding) |
+| Findings | F10-1 (calculator content, deferred); F10-2 reproduced by the owner and fixed in the store (template), awaiting a deploy and a re-check; F10-3 cleanup still open: category, A and C unarchived, C's two live WDGZone routes and its supplier-category link remain. No order, deposit or wallet journal was created (post-run SQL equals the baseline). Unconfirmed: the positive measured delivery estimate (10.4) and the storage-blocked path (10.11 step 5) |
 | Checked read-only while writing (2026-10-18) | Public API reads, 15:52–15:53 Damascus: 6 categories, 57 games (50 normal, 7 unavailable), 587 packs (172 available, 415 unavailable); prices/terms above and no positive guide/accent/savings/delivery-stat/code-text state on shown games. Search/calculator examples checked with the existing pure contracts. SSH retry succeeded: deployed `bcf2d42`; completed SQL snapshots at 16:07:45 and 16:09:00 Damascus under `vertex_digital`, `REPEATABLE READ READ ONLY`, `transaction_read_only = on`, ending with `ROLLBACK`. Counts and stored prices match; rate 140, step 1 ل.س, only the global 10%/$0/$0.10 rule, registration closed and purchase/manual/WDG switches unpaused. Private fixture states and C's remaining cleanup recorded above. Two eligible non-test owner-paid deliveries, both PUBG 60 UC; none reaches five samples. No production mutation, supplier call or customer/order identifier read out; manual execution and post-case cleanup remain unconfirmed |
 | Accepted by the owner on | — |
 | PR | the steps (this documentation PR); manual results and any fixes remain pending |

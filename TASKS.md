@@ -1,4 +1,17 @@
-# TASKS — V1 system test, feature 10 SQL verification
+# TASKS — V1 system test, feature 10 owner run
+
+Branch `docs/feature-10-production-results`. The owner performs all production actions; the assistant observes read-only and records only reported or directly verified results. Do not accept cases from setup checks. Follow `docs/testing/v1-system-test.md`'s run/fix/accept/ship cycle; keep the run open until the owner has supplied results and acceptance.
+
+- [x] Read all 18 cases, fixture prerequisites, production rules and relevant implementation details.
+- [x] Capture a read-only run baseline (16:19:23 Damascus; counts in the feature section) and prepare detailed Arabic instructions for all cases.
+- [x] Record the owner's case results and findings, with unexercised paths left unconfirmed (18/18 reported passed; 10.4 positive estimate and 10.11 step 5 unconfirmed).
+- [x] Owner confirmed two percent signs (F10-2); fixed the Arabic template and tightened the E2E assertion.
+- [x] Post-run SQL (20:03:45 Damascus): counts equal the baseline; no admin change since 16:19 — 10.13–10.15 not confirmed, 10.18 cleanup outstanding (recorded).
+- [x] Store checks for the F10-2 fix: lint, typecheck, test, build and the changed store E2E specs passed; results/fix PR opened.
+
+Deferred to the next sitting (its own PR): the owner re-runs 10.13–10.15 on production after the fix is deployed, completes the 10.18 cleanup (archive C's two WDGZone routes, unlink its supplier category, archive C, A and the test category), re-checks the savings badge, then a read-only SQL check and the owner's feature acceptance.
+
+## Previous task — Feature 10 SQL verification
 
 Documentation only, branch `docs/feature-10-production-sql`. Follow up the successful SSH retry with read-only production SQL evidence and correct the fixture prerequisites; manual cases remain unrun.
 

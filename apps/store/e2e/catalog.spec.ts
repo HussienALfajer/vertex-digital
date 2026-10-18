@@ -70,6 +70,8 @@ test.describe('game page (rules SF1–SF3, SF6, CL1–CL3)', () => {
     await expect(small).toContainText(formatUsd(p660.priceUsdUnits as number));
     await expect(small).toContainText(syp(p660.priceSypUnits as number));
     await expect(small).toContainText(fill(c.price.savings, { percent: '⁦12%⁩' }));
+    // One percent sign: the badge passes it inside the isolate (F10-2).
+    await expect(small).not.toContainText('%⁩%');
     await expect(small).toContainText(fill(c.delivery.median, { duration: '40 ثانية' }));
     const unavailable = page.getByRole('button', { name: /^1800 UC/ });
     await expect(unavailable).toBeDisabled();
