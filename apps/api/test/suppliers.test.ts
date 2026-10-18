@@ -92,8 +92,13 @@ interface Routing {
     enabled: boolean;
     archivedAt: string | null;
     requirementsUnknown: boolean;
+    offer: { id: string };
+    priceBasis: boolean;
+    expectedDeliveryMinutes: number | null;
+    hardLimitMinutes: number | null;
   }[];
   basisRouteId: string | null;
+  priceHeld: boolean;
   currentPrice: { priceUsdUnits: number; costUsdUnits: number; routeId: string } | null;
   targetPriceUsdUnits: number | null;
   openReview: { id: string; proposedPriceUsdUnits: number; costAfterUsdUnits: number } | null;
@@ -818,13 +823,16 @@ describe('routes and prices (rules RT1–RT7, P1, P2)', () => {
       currentPrice: { priceUsdUnits: price(0.88), costUsdUnits: usd(0.88), routeId: fakeRouteId },
       availability: 'available',
     });
+    // S17: an expected time at the policy's 30-minute limit, with no limit of its own.
     expect(
       await body(
         await post(`/api/admin/catalog/products/${productId}/routes`, {
           offerId: offers.nokind,
+          expectedDeliveryMinutes: 30,
         }),
       ),
-    ).toMatchObject({ status: 409, code: 'ROUTE_EXISTS' });
+    ).toMatchObject({ status: 400, code: 'ROUTE_TIMING_INVALID' });
+    expect((await routing(productId)).routes).toHaveLength(1);
   });
 
   it('adds a manual route as the last resort, whatever its cost (rule RT5)', async () => {
@@ -840,13 +848,6 @@ describe('routes and prices (rules RT1–RT7, P1, P2)', () => {
       ['fake', 'healthy'],
       ['manual', 'manual'],
     ]);
-    expect(
-      await body(
-        await post(`/api/admin/catalog/products/${productId}/routes/manual`, {
-          costUsdUnits: usd(1),
-        }),
-      ),
-    ).toMatchObject({ status: 409, code: 'ROUTE_EXISTS' });
     expect(
       await body(
         await post(`/api/admin/catalog/products/${productId}/routes/manual`, {
@@ -925,7 +926,7 @@ describe('routes and prices (rules RT1–RT7, P1, P2)', () => {
     ]);
   });
 
-  it('archives and restores a route, refusing a restore over another route', async () => {
+  it('archives and restores a route, beside another route of its supplier (S17 WR1)', async () => {
     const archived = await json<Routing>(
       await post(`/api/admin/routes/${manualRouteId}/archive`),
       200,
@@ -937,19 +938,15 @@ describe('routes and prices (rules RT1–RT7, P1, P2)', () => {
       }),
       201,
     );
-    expect(await body(await post(`/api/admin/routes/${manualRouteId}/restore`))).toMatchObject({
-      status: 409,
-      code: 'ROUTE_EXISTS',
-    });
     const newManual = second.routes.find(
       (route) => route.supplierCode === 'manual' && !route.archivedAt,
     )?.id as string;
-    await json(await post(`/api/admin/routes/${newManual}/archive`), 200);
     const restored = await json<Routing>(
       await post(`/api/admin/routes/${manualRouteId}/restore`),
       200,
     );
     expect(restored.routes.find((route) => route.id === manualRouteId)?.archivedAt).toBeNull();
+    await json(await post(`/api/admin/routes/${newManual}/archive`), 200);
   });
 
   it('shows the price, SYP price, basis supplier and availability on the game', async () => {
@@ -967,6 +964,82 @@ describe('routes and prices (rules RT1–RT7, P1, P2)', () => {
       basisSupplierNameAr: 'مورد تجريبي',
       availability: 'available',
       reviewOpen: false,
+    });
+  });
+
+  it('adds a second route of one supplier that does not count for the price (S17 WR1–WR6)', async () => {
+    const id = await product(`ويب ${run}`);
+    const autoOffer = await fakeOffer('s17-auto', { cost: 1 });
+    const webOffer = await fakeOffer('s17-web', { cost: 0.9 });
+    const fieldMap = { playerId: 'player_id' };
+    const auto = await json<Routing>(
+      await post(`/api/admin/catalog/products/${id}/routes`, { offerId: autoOffer, fieldMap }),
+      201,
+    );
+    const autoRoute = auto.basisRouteId as string;
+    const both = await json<Routing>(
+      await post(`/api/admin/catalog/products/${id}/routes`, {
+        offerId: webOffer,
+        fieldMap,
+        priceBasis: false,
+        expectedDeliveryMinutes: 30,
+        hardLimitMinutes: 45,
+      }),
+      201,
+    );
+    const web = both.routes.find((route) => route.offer.id === webOffer) as Routing['routes'][0];
+    expect(web).toMatchObject({
+      priceBasis: false,
+      expectedDeliveryMinutes: 30,
+      hardLimitMinutes: 45,
+      basis: false,
+    });
+    // The router meets the cheaper route first; the price stays on the one that counts (WR3).
+    expect(both.routes[0]?.id).toBe(web.id);
+    expect(both).toMatchObject({
+      basisRouteId: autoRoute,
+      priceHeld: false,
+      currentPrice: { priceUsdUnits: price(1), routeId: autoRoute },
+    });
+    expect(
+      await body(await patch(`/api/admin/routes/${web.id}`, { hardLimitMinutes: 20 })),
+    ).toMatchObject({ status: 400, code: 'ROUTE_TIMING_INVALID' });
+    // WR4: no route that counts is usable: the price stays as it is.
+    const held = await json<Routing>(
+      await patch(`/api/admin/routes/${autoRoute}`, { enabled: false }),
+      200,
+    );
+    expect(held).toMatchObject({
+      basisRouteId: null,
+      priceHeld: true,
+      availability: 'available',
+      currentPrice: { routeId: autoRoute },
+    });
+    await json(await patch(`/api/admin/routes/${autoRoute}`, { enabled: true }), 200);
+    // WR6: counting it reprices at once, with no review.
+    const counted = await json<Routing>(
+      await patch(`/api/admin/routes/${web.id}`, { priceBasis: true }),
+      200,
+    );
+    expect(counted).toMatchObject({
+      basisRouteId: web.id,
+      openReview: null,
+      currentPrice: { priceUsdUnits: price(0.9), routeId: web.id },
+    });
+    const entries = await auditOf(test.db, web.id);
+    expect(entries.map((entry) => entry.action)).toEqual([
+      'product_route.created',
+      'product_route.updated',
+    ]);
+    expect(entries.at(-1)?.details).toEqual({
+      productId: id,
+      before: { priceBasis: false },
+      after: { priceBasis: true },
+    });
+    expect(entries[0]?.details).toMatchObject({
+      priceBasis: false,
+      expectedDeliveryMinutes: 30,
+      hardLimitMinutes: 45,
     });
   });
 

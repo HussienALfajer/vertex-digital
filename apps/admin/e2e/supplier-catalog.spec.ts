@@ -173,9 +173,11 @@ test.describe('supplier catalog', () => {
   test('links Free Fire to an existing game: one existing pack, one new, the rest left out (SC8)', async ({
     page,
     admin,
-  }) => {
+  }, testInfo) => {
     synced(admin);
     const { game, product } = freeFire(admin);
+    // S17 WR1, WR7: the pack has a fake route already, so its new one is pre-set not to count.
+    const before = admin.suppliers.map(product.id, 'fake', 'fake-uc-60');
     await page.goto('/suppliers/fake?tab=catalog');
     await nodeAction(page, 'Free Fire', c.link);
     const sheet = page.getByRole('dialog');
@@ -183,6 +185,13 @@ test.describe('supplier catalog', () => {
     await page.getByRole('option', { name: 'فري فاير', exact: true }).click();
     // The proposed match: the pack with the same game amount.
     await expect(sheet.getByText(s.linkCategory.proposed)).toBeVisible();
+    const counts = sheet.getByRole('checkbox', { name: s.routes.settings.priceBasis });
+    await expect(counts).toHaveCount(1);
+    await expect(counts).not.toBeChecked();
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await screenshot(page, testInfo, `supplier-link-price-basis-${colorScheme}`);
+    }
     for (const name of ['Fake Free Fire 520', 'Fake Free Fire 1060']) {
       await sheet.getByRole('combobox', { name: fill(s.linkCategory.mode, { name }) }).click();
       await page.getByRole('option', { name: s.linkCategory.modes.skip, exact: true }).click();
@@ -198,7 +207,11 @@ test.describe('supplier catalog', () => {
     await expect(
       sheet.getByText(fill(s.linkCategory.doneHint, { routed: 1, created: 1 })),
     ).toBeVisible();
-    expect(admin.suppliers.routes.some((route) => route.productId === product.id)).toBe(true);
+    const routes = admin.suppliers.routes.filter((route) => route.productId === product.id);
+    expect(routes.map((route) => [route.id === before.id, route.priceBasis])).toEqual([
+      [true, true],
+      [false, false],
+    ]);
     expect(
       admin.catalog.products.find((item) => item.gameId === game.id && item.nameAr === '310 ماسة')
         ?.status,

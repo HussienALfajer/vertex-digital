@@ -611,6 +611,8 @@ export class CatalogService {
         basisStockLevel: state.basis
           ? stockLevel(state.basis.offer.stock, state.basis.offer.inStock, policy.lowStockUnits)
           : null,
+        priceHeld: state.priceHeld,
+        routed: state.routes.some((route) => route.archivedAt === null),
         reviewOpen: state.openReview !== null,
         deliveryStats: delivery.get(row.id) ?? null,
       });

@@ -11,6 +11,7 @@ import {
   DELIVERY_STATS_SAMPLE_SIZE,
   type DeliveryStats,
   deliveryStats,
+  expectedWithinMinutes,
   type FulfilmentAttempt,
   isOpenAttempt,
   maskCode,
@@ -308,7 +309,7 @@ export async function customerOrder(
   if (!row) return null;
   const { order, product, game } = row;
   const store = placedByStore(order);
-  const [fields, statusEvents, codes, images, stats, shareLinks] = await readAll(db, [
+  const [fields, statusEvents, codes, images, stats, shareLinks, open] = await readAll(db, [
     () => fieldsWithLabels(db, order),
     () =>
       db
@@ -320,11 +321,13 @@ export async function customerOrder(
     () => covers(db, [game.coverFileId]),
     () => productDeliveryStats(db, [product.id]),
     () => liveShareLinks(db, order.id, storeUrl),
+    () => openAttempt(db, order.id),
   ]);
+  const stage = orderCustomerStage(order.status);
   return {
     id: order.id,
     number: order.number,
-    stage: orderCustomerStage(order.status),
+    stage,
     product: {
       id: product.id,
       nameAr: product.nameAr,
@@ -364,6 +367,7 @@ export async function customerOrder(
     cancelReason: order.cancelReason,
     playerName: order.playerName,
     deliveryStats: stats.get(product.id) ?? null,
+    expectedWithinMinutes: expectedWithinMinutes(stage, open?.attempt ?? null),
     checkoutId: order.checkoutId,
     isGift: order.isGift,
     gift: giftOf(order),

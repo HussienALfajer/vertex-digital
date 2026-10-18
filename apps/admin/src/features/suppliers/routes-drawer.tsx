@@ -60,6 +60,13 @@ import { type FieldMapEntry, fieldMapEntries, toFieldMap, unmappedOf } from './f
 import { FieldMapEditor } from './field-map-editor';
 import { StockChip } from './offer-cells';
 import { gameSelects, OptionMapEditor, supplierSelects } from './option-map-editor';
+import {
+  parseSettings,
+  type RouteSettingsField,
+  RouteSettingsFields,
+  settingsDraft,
+  usePolicyLimit,
+} from './route-settings';
 import { UnusableReason } from './supplier-parts';
 import {
   priceHistoryQuery,
@@ -205,6 +212,10 @@ function PriceSummary({ routing, product }: { routing: ProductRouting; product: 
           <dd className="font-medium">
             {basis ? (
               <bdi>{basis.supplierNameAr}</bdi>
+            ) : routing.priceHeld ? (
+              <span className="text-status-warning-foreground">
+                {t('suppliers.routes.priceHeld')}
+              </span>
             ) : (
               <span className="text-muted-foreground">{t('suppliers.routes.noBasis')}</span>
             )}
@@ -238,7 +249,7 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
   const update = useUpdateRoute();
   const archive = useArchiveRoute();
   const [failure, setFailure] = useState<string | null>(null);
-  const [editing, setEditing] = useState<'fields' | 'cost' | null>(null);
+  const [editing, setEditing] = useState<'fields' | 'cost' | 'settings' | null>(null);
   const archived = route.archivedAt !== null;
   const manual = route.supplierCode === 'manual';
   const busy = update.isPending || archive.isPending;
@@ -280,6 +291,9 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
             {route.requirementsUnknown && (
               <Badge tone="outline">{t('suppliers.routes.requirementsUnknown')}</Badge>
             )}
+            {!route.priceBasis && (
+              <Badge tone="outline">{t('suppliers.routes.notPriceBasis')}</Badge>
+            )}
             {!manual && (
               <StockChip level={route.offer.stockLevel} stock={route.offer.stock} quiet />
             )}
@@ -305,6 +319,15 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
           )}
         </span>
       </div>
+      {(route.expectedDeliveryMinutes !== null || route.hardLimitMinutes !== null) && (
+        <p className="text-sm text-muted-foreground">
+          {route.expectedDeliveryMinutes !== null &&
+            t('suppliers.routes.expectedMark', { minutes: route.expectedDeliveryMinutes })}
+          {route.expectedDeliveryMinutes !== null && route.hardLimitMinutes !== null && ' · '}
+          {route.hardLimitMinutes !== null &&
+            t('suppliers.routes.limitMark', { minutes: route.hardLimitMinutes })}
+        </p>
+      )}
       {Object.keys(route.fieldMap).length > 0 && (
         <p className="text-sm text-muted-foreground">
           {t('suppliers.routes.fields')}{' '}
@@ -385,6 +408,9 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
                 {t('suppliers.routes.editFields')}
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={() => setEditing('settings')}>
+              {t('suppliers.routes.settings.edit')}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -400,6 +426,7 @@ function RouteItem({ route, game }: { route: Route; game: GameDetail }) {
         {editing === 'fields' && (
           <FieldsDialog route={route} game={game} onDone={() => setEditing(null)} />
         )}
+        {editing === 'settings' && <SettingsDialog route={route} onDone={() => setEditing(null)} />}
         {editing === 'cost' && (
           <ManualCostDialog
             title={t('suppliers.routes.manual.editTitle')}
@@ -482,6 +509,64 @@ function FieldsDialog({
           optionMap={optionMap}
           missing={[...new Set([...gaps, ...optionMissing])]}
           onChange={setOptionMap}
+        />
+        {failure && <FormAlert>{failure}</FormAlert>}
+        <DialogFooter>
+          <Button type="submit" disabled={update.isPending}>
+            {t('catalog.actions.save')}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  );
+}
+
+/**
+ * S17: whether the route counts for the price (a change reprices at once, WR6) and its timing,
+ * the expected time below the limit (`ROUTE_TIMING_INVALID`).
+ */
+function SettingsDialog({ route, onDone }: { route: Route; onDone: () => void }) {
+  const { t } = useTranslation();
+  const update = useUpdateRoute();
+  const policyLimit = usePolicyLimit();
+  const [draft, setDraft] = useState(() => settingsDraft(route));
+  const [invalid, setInvalid] = useState<RouteSettingsField[]>([]);
+  const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFailure(null);
+    const parsed = parseSettings(draft, policyLimit);
+    setInvalid('invalid' in parsed ? parsed.invalid : []);
+    if ('invalid' in parsed) return focusInvalid();
+    try {
+      await update.mutateAsync({ id: route.id, body: parsed.settings });
+      onDone();
+    } catch (error) {
+      setFailure(errorMessage(t, error));
+      if (error instanceof ApiError && error.code === 'ROUTE_TIMING_INVALID') {
+        setInvalid(['expected']);
+        focusInvalid();
+      }
+    }
+  }
+
+  return (
+    <DialogContent closeLabel={t('common.close')} className="max-w-lg">
+      <DialogHeader>
+        <DialogTitle>{t('suppliers.routes.settings.title')}</DialogTitle>
+        <DialogDescription>
+          <bdi>{route.offer.name}</bdi>
+        </DialogDescription>
+      </DialogHeader>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
+        <RouteSettingsFields
+          id={route.id}
+          draft={draft}
+          invalid={invalid}
+          policyLimitMinutes={policyLimit}
+          onChange={setDraft}
         />
         {failure && <FormAlert>{failure}</FormAlert>}
         <DialogFooter>

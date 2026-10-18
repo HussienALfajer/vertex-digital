@@ -20785,6 +20785,12 @@
               }
             ]
           },
+          "priceHeld": {
+            "type": "boolean"
+          },
+          "routed": {
+            "type": "boolean"
+          },
           "reviewOpen": {
             "type": "boolean"
           },
@@ -20836,6 +20842,8 @@
           "priceSypUnits",
           "basisSupplierNameAr",
           "basisStockLevel",
+          "priceHeld",
+          "routed",
           "reviewOpen",
           "deliveryStats"
         ],
@@ -24601,6 +24609,9 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
+          "priceHeld": {
+            "type": "boolean"
+          },
           "currentPrice": {
             "nullable": true,
             "type": "object",
@@ -24687,6 +24698,7 @@
           "productId",
           "routes",
           "basisRouteId",
+          "priceHeld",
           "currentPrice",
           "targetPriceUsdUnits",
           "openReview",
@@ -24814,6 +24826,21 @@
               }
             }
           },
+          "priceBasis": {
+            "type": "boolean"
+          },
+          "expectedDeliveryMinutes": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "hardLimitMinutes": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
           "archivedAt": {
             "nullable": true,
             "type": "string",
@@ -24852,6 +24879,9 @@
           "enabled",
           "fieldMap",
           "optionMap",
+          "priceBasis",
+          "expectedDeliveryMinutes",
+          "hardLimitMinutes",
           "archivedAt",
           "tier",
           "unusableReason",
@@ -24916,6 +24946,24 @@
                 "$ref": "#/components/schemas/OptionMap"
               }
             ]
+          },
+          "priceBasis": {
+            "default": true,
+            "type": "boolean"
+          },
+          "expectedDeliveryMinutes": {
+            "default": null,
+            "nullable": true,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 240
+          },
+          "hardLimitMinutes": {
+            "default": null,
+            "nullable": true,
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 240
           }
         },
         "required": [
@@ -24959,6 +25007,21 @@
                 "$ref": "#/components/schemas/OptionMap"
               }
             ]
+          },
+          "priceBasis": {
+            "type": "boolean"
+          },
+          "expectedDeliveryMinutes": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 240
+          },
+          "hardLimitMinutes": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 240
           }
         }
       },
@@ -25823,6 +25886,10 @@
                       "type": "string",
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "priceBasis": {
+                      "default": true,
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -26491,6 +26558,13 @@
               }
             ]
           },
+          "expectedWithinMinutes": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
           "checkoutId": {
             "nullable": true,
             "type": "string",
@@ -26565,6 +26639,7 @@
           "cancelReason",
           "playerName",
           "deliveryStats",
+          "expectedWithinMinutes",
           "checkoutId",
           "isGift",
           "gift",
@@ -27370,6 +27445,13 @@
               }
             ]
           },
+          "expectedWithinMinutes": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
           "checkoutId": {
             "nullable": true,
             "type": "string",
@@ -27436,6 +27518,7 @@
           "cancelReason",
           "playerName",
           "deliveryStats",
+          "expectedWithinMinutes",
           "checkoutId",
           "isGift",
           "gift",

@@ -103,9 +103,10 @@ export interface MappedStockOffer {
 }
 
 /**
- * Rule SF2: the offers an unarchived, enabled route maps to an `active`, unarchived product of an
- * `active`, unarchived game, still listed by the supplier, with their level at the policy's
- * threshold. Locked `FOR UPDATE` when `lock` is set (the sync's alert step).
+ * Rule SF2: the offers an unarchived, enabled route that counts for the price (S17 WR11) maps to
+ * an `active`, unarchived product of an `active`, unarchived game, still listed by the supplier,
+ * with their level at the policy's threshold. Locked `FOR UPDATE` when `lock` is set (the sync's
+ * alert step).
  */
 export async function mappedStockOffers(
   db: Executor,
@@ -133,6 +134,7 @@ export async function mappedStockOffers(
       and(
         isNull(productRoutes.archivedAt),
         eq(productRoutes.enabled, true),
+        eq(productRoutes.priceBasis, true),
         eq(catalogProducts.status, 'active'),
         isNull(catalogProducts.archivedAt),
         eq(catalogGames.status, 'active'),

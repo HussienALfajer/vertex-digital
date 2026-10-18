@@ -825,13 +825,29 @@ export function firstPollAt(sentAt: Date, policy: Pick<OrderPolicy, 'firstPollSe
   return new Date(sentAt.getTime() + policy.firstPollSeconds * SECOND);
 }
 
-/** Rule F7: an automatic attempt still open `hardLimitMinutes` after sending is held. */
+/**
+ * Rule F7, S17 WR9: an automatic attempt still open its own hard limit (copied from its route), or
+ * else the policy's `hardLimitMinutes`, after sending is held.
+ */
 export function pastHardLimit(
-  sentAt: Date,
+  attempt: { sentAt: Date; hardLimitMinutes: number | null },
   now: Date,
   policy: Pick<OrderPolicy, 'hardLimitMinutes'>,
 ): boolean {
-  return now.getTime() - sentAt.getTime() >= policy.hardLimitMinutes * MINUTE;
+  const limit = attempt.hardLimitMinutes ?? policy.hardLimitMinutes;
+  return now.getTime() - attempt.sentAt.getTime() >= limit * MINUTE;
+}
+
+/**
+ * S17 WR10: the "up to {n} minutes" hint while the order is processing and its open attempt
+ * carries an expected time; null otherwise (the measured time, or F7's delayed copy when held).
+ */
+export function expectedWithinMinutes(
+  stage: OrderStage,
+  openAttempt: { expectedDeliveryMinutes: number | null } | null,
+): number | null {
+  if (stage !== 'processing') return null;
+  return openAttempt?.expectedDeliveryMinutes ?? null;
 }
 
 /**
@@ -1203,6 +1219,8 @@ export const orderSchema = z
     playerName: z.string().nullable(),
     /** The product's delivery time (S08 rule T1), shown while the order is open (rule LT3). */
     deliveryStats: deliveryStatsSchema.nullable(),
+    /** S17 WR10: shown in place of the delivery time while set. */
+    expectedWithinMinutes: z.int().positive().nullable(),
     /** S10: the checkout, the gift's texts, the live share links and rule OT3. */
     checkoutId: z.uuid().nullable(),
     isGift: z.boolean(),

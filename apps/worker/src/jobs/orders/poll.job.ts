@@ -21,7 +21,13 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
-import { askSupplier, orderContext, reportLateResult } from './order-calls.js';
+import {
+  askSupplier,
+  markStockRefusal,
+  orderContext,
+  reportLateResult,
+  routingContext,
+} from './order-calls.js';
 
 type Executor = Database | Transaction;
 
@@ -42,7 +48,7 @@ export class OrdersPollJob implements OnApplicationBootstrap {
     private readonly pgBoss: PgBossService,
     private readonly registry: SupplierRegistry,
     @Inject(DATABASE) private readonly db: Database,
-    @Inject(ENV) env: Env,
+    @Inject(ENV) private readonly env: Env,
   ) {
     this.codesKey = orderCodesKey(env.ORDER_CODES_SECRET);
   }
@@ -62,7 +68,8 @@ export class OrdersPollJob implements OnApplicationBootstrap {
       .where(eq(fulfilmentAttempts.id, attemptId));
     if (!row || row.supplierCode === 'manual' || !isOpenAttempt(row.attempt.status)) return null;
     const { attempt } = row;
-    const outcome = await askSupplier(db, this.registry, attempt, await this.call(db, attempt));
+    const call = await this.call(db, attempt);
+    const outcome = await askSupplier(db, this.registry, attempt, call);
     return db.transaction(async (tx) => {
       // The order lock first, as `applyOutcome` takes it: then the count, on an open attempt.
       await lockOrder(tx, attempt.orderId);
@@ -79,6 +86,9 @@ export class OrdersPollJob implements OnApplicationBootstrap {
       const applied = await applyOutcome(tx, context, attemptId, outcome, { by: 'poll' });
       // Closed meanwhile (a webhook, the admin): a different answer is a conflict (rule F5).
       if (!applied.applied) await reportLateResult(tx, context, applied, outcome, { kind: 'poll' });
+      // S17 WR8: only a rerouted attempt's first send (S16 RS1) is a refusal for stock; a status
+      // read or a re-send never marks the offer.
+      if (call === 'place') await markStockRefusal(tx, applied, outcome, routingContext(this.env));
       return applied;
     });
   }

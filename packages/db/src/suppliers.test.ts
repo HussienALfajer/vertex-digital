@@ -140,7 +140,7 @@ describe('the SHOP2TOPUP drop (ADR 0031, migrations 0060 and 0061)', () => {
 });
 
 describe('routes', () => {
-  it('allow one unarchived route per supplier per product, and one product per offer', () =>
+  it('allow several live routes of one supplier per product, and one product per offer (S17 WR1)', () =>
     rolledBack(async (client) => {
       const a = await routedProduct(client);
       const b = await routedProduct(client);
@@ -152,18 +152,48 @@ describe('routes', () => {
       );
       const insert = `insert into product_routes (id, product_id, supplier_id, offer_id)
         values ($1, $2, $3, $4)`;
+      // A second live route of the same supplier, to another offer.
+      expect(await violation(client, insert, [newId(), a.product, a.manual, offer])).toBeNull();
+      // One live route per offer still: neither a nor b may take it again.
       expect(await violation(client, insert, [newId(), a.product, a.manual, offer])).toBe(
-        'product_routes_product_id_supplier_id_live_idx',
+        'product_routes_offer_id_live_idx',
       );
-      // b's own manual route archived: b may take a manual route, but not a's offer.
-      await client.query('update product_routes set archived_at = now() where id = $1', [b.route]);
       expect(await violation(client, insert, [newId(), b.product, a.manual, a.offer])).toBe(
         'product_routes_offer_id_live_idx',
       );
       // An archived route frees its offer.
       await client.query('update product_routes set archived_at = now() where id = $1', [a.route]);
       expect(await violation(client, insert, [newId(), b.product, a.manual, a.offer])).toBeNull();
-      expect(await violation(client, insert, [newId(), a.product, a.manual, offer])).toBeNull();
+    }));
+
+  it('default a route to the price basis and bound its timing (S17)', () =>
+    rolledBack(async (client) => {
+      const { route } = await routedProduct(client);
+      const { rows } = await client.query(
+        `select price_basis, expected_delivery_minutes, hard_limit_minutes
+         from product_routes where id = $1`,
+        [route],
+      );
+      expect(rows[0]).toEqual({
+        price_basis: true,
+        expected_delivery_minutes: null,
+        hard_limit_minutes: null,
+      });
+      const timing = (expected: number | null, limit: number | null) =>
+        violation(
+          client,
+          `update product_routes set expected_delivery_minutes = $2, hard_limit_minutes = $3
+           where id = $1`,
+          [route, expected, limit],
+        );
+      expect(await timing(30, 45)).toBeNull();
+      expect(await timing(30, null)).toBeNull();
+      expect(await timing(null, 5)).toBeNull();
+      expect(await timing(45, 45)).toBe('product_routes_timing_check');
+      expect(await timing(0, null)).toBe('product_routes_timing_check');
+      expect(await timing(241, null)).toBe('product_routes_timing_check');
+      expect(await timing(null, 4)).toBe('product_routes_timing_check');
+      expect(await timing(null, 241)).toBe('product_routes_timing_check');
     }));
 
   it('bound the priority and keep the field map an object', () =>

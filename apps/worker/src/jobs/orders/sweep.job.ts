@@ -19,7 +19,7 @@ import {
   type Transaction,
   transitionOrder,
 } from '@vertex-digital/db';
-import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, ne, notExists } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, ne, notExists, sql } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 
@@ -139,9 +139,13 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
     return rows.map((row) => row.id);
   }
 
-  /** Rule F7: an automatic attempt open past the hard limit holds its order for the admin. */
+  /**
+   * Rule F7, S17 WR9: an automatic attempt open past its hard limit (its own, copied from its
+   * route, else the policy's) holds its order for the admin.
+   */
   private async hold(db: Executor, now: Date, policy: OrderPolicy): Promise<string[]> {
-    const cutoff = new Date(now.getTime() - policy.hardLimitMinutes * 60_000);
+    const limit = sql`coalesce(${fulfilmentAttempts.hardLimitMinutes}, ${policy.hardLimitMinutes})`;
+    const cutoff = sql`${now.toISOString()}::timestamptz - make_interval(mins => ${limit})`;
     const rows = await db
       .select({ orderId: fulfilmentAttempts.orderId, attemptId: fulfilmentAttempts.id })
       .from(fulfilmentAttempts)
@@ -165,6 +169,7 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
           .select({
             status: fulfilmentAttempts.status,
             sentAt: fulfilmentAttempts.sentAt,
+            hardLimitMinutes: fulfilmentAttempts.hardLimitMinutes,
             supplierNameAr: suppliers.nameAr,
           })
           .from(fulfilmentAttempts)
@@ -174,7 +179,11 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
           order?.status !== 'sent_to_supplier' ||
           !attempt?.sentAt ||
           !isOpenAttempt(attempt.status) ||
-          !pastHardLimit(attempt.sentAt, now, policy)
+          !pastHardLimit(
+            { sentAt: attempt.sentAt, hardLimitMinutes: attempt.hardLimitMinutes },
+            now,
+            policy,
+          )
         ) {
           return false;
         }

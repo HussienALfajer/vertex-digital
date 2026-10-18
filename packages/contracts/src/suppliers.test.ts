@@ -12,6 +12,7 @@ import {
   probeOutcome,
   type RouteFacts,
   routeTier,
+  routeTimingValid,
   routeUnusableReason,
   SUPPLIER_CODES,
   SUPPLIER_CREDENTIAL_FIELDS,
@@ -164,12 +165,13 @@ describe('route order and basis (rules RT5, RT6, P1)', () => {
   const route = (
     supplierCode: (typeof SUPPLIER_CODES)[number],
     costUsdUnits: number | null,
-    extra: { health?: 'healthy' | 'degraded'; priority?: number } = {},
+    extra: { health?: 'healthy' | 'degraded'; priority?: number; priceBasis?: boolean } = {},
   ) => ({
     supplierCode,
     costUsdUnits,
     health: extra.health ?? 'healthy',
     priority: extra.priority ?? 1,
+    priceBasis: extra.priceBasis ?? true,
   });
 
   it('puts healthy, then degraded, then manual routes first, whatever the cost', () => {
@@ -201,8 +203,36 @@ describe('route order and basis (rules RT5, RT6, P1)', () => {
   });
 
   it('bases the price on the first route, or none', () => {
-    expect(priceBasis([route('manual', 100), route('fake', 900)])?.supplierCode).toBe('fake');
-    expect(priceBasis([])).toBeNull();
+    expect(priceBasis([route('manual', 100), route('fake', 900)], true)?.supplierCode).toBe('fake');
+    expect(priceBasis([], true)).toBeNull();
+    expect(priceBasis([], false)).toBeNull();
+  });
+
+  it('bases the price on the first route that counts, not a cheaper one (S17 WR3)', () => {
+    const web = route('wdgzone', 900, { priceBasis: false });
+    const auto = route('wdgzone', 1_000);
+    expect(priceBasis([web, auto], true)).toBe(auto);
+    expect(priceBasis([web, auto], false)).toBe(auto);
+  });
+
+  it('keeps a price with no counting route usable, else takes the first (S17 WR4)', () => {
+    const web = route('wdgzone', 900, { priceBasis: false });
+    const dear = route('fake', 950, { priceBasis: false });
+    expect(priceBasis([dear, web], true)).toBeNull();
+    expect(priceBasis([dear, web], false)).toBe(web);
+  });
+
+  it('accepts an expected time only below the hard limit (S17)', () => {
+    const timing = (expected: number | null, limit: number | null) => ({
+      expectedDeliveryMinutes: expected,
+      hardLimitMinutes: limit,
+    });
+    expect(routeTimingValid(timing(null, null), 30)).toBe(true);
+    expect(routeTimingValid(timing(null, 10), 30)).toBe(true);
+    expect(routeTimingValid(timing(30, 45), 30)).toBe(true);
+    expect(routeTimingValid(timing(45, 45), 30)).toBe(false);
+    expect(routeTimingValid(timing(29, null), 30)).toBe(true);
+    expect(routeTimingValid(timing(30, null), 30)).toBe(false);
   });
 });
 
@@ -222,8 +252,15 @@ describe('route inputs', () => {
       priority: 1,
       fieldMap: {},
       optionMap: {},
+      priceBasis: true,
+      expectedDeliveryMinutes: null,
+      hardLimitMinutes: null,
     });
     expect(createRouteSchema.safeParse({ offerId: id, priority: 10 }).success).toBe(false);
+    expect(createRouteSchema.safeParse({ offerId: id, hardLimitMinutes: 4 }).success).toBe(false);
+    expect(createRouteSchema.safeParse({ offerId: id, expectedDeliveryMinutes: 241 }).success).toBe(
+      false,
+    );
   });
 
   it('import 1–100 offers, each once', () => {

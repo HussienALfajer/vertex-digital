@@ -23,7 +23,16 @@ export interface PackRow {
   gameAmount: string;
   /** Link only: an existing product to route, or null for a new pack. */
   productId: string | null;
+  /** Link only (S17 WR7): the admin's choice, or null for the pre-set of `rowPriceBasis`. */
+  priceBasis: boolean | null;
 }
+
+/**
+ * S17 WR7: whether an existing product's new route counts for its price: the admin's choice, else
+ * on only when the product has no unarchived route yet.
+ */
+export const rowPriceBasis = (row: PackRow, routedProducts: ReadonlySet<string>): boolean =>
+  row.priceBasis ?? !(row.productId !== null && routedProducts.has(row.productId));
 
 /** An option of a select field, with the supplier's value it is sent as (S16 MF2). */
 export interface OptionRow {
@@ -84,6 +93,7 @@ export function initialPackRows(draft: Pick<ImportDraft, 'packs'>): PackRow[] {
       nameAr: pack.suggestedNameAr,
       gameAmount: pack.suggestedGameAmount === null ? '' : String(pack.suggestedGameAmount),
       productId: pack.match?.productId ?? null,
+      priceBasis: null,
     };
   });
 }
@@ -104,6 +114,7 @@ export function alignedRows(
       nameAr: pack.suggestedNameAr,
       gameAmount: pack.suggestedGameAmount === null ? '' : String(pack.suggestedGameAmount),
       productId: pack.match?.productId ?? null,
+      priceBasis: null,
     };
     return pack.refusal === null ? row : { ...row, selected: false };
   });
@@ -236,12 +247,16 @@ export function importBody(input: {
   };
 }
 
-/** `POST …/link` (SC8): a row with a product routes it; the others create new packs. */
+/**
+ * `POST …/link` (SC8): a row with a product routes it, counting for its price or not (S17 WR7);
+ * the others create new packs.
+ */
 export function linkBody(input: {
   gameId: string;
   fieldMap: Record<string, string>;
   optionMap: OptionMap;
   rows: readonly PackRow[];
+  routedProducts: ReadonlySet<string>;
 }): LinkCategory {
   return {
     gameId: input.gameId,
@@ -250,7 +265,13 @@ export function linkBody(input: {
     rows: input.rows
       .filter((row) => row.selected)
       .map((row) =>
-        row.productId ? { offerId: row.offerId, productId: row.productId } : newPack(row),
+        row.productId
+          ? {
+              offerId: row.offerId,
+              productId: row.productId,
+              priceBasis: rowPriceBasis(row, input.routedProducts),
+            }
+          : newPack(row),
       ),
   };
 }

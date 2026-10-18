@@ -675,6 +675,7 @@ export class SupplierCatalogMock implements CategoryReader {
     const rows = (body?.rows ?? []) as {
       offerId: string;
       productId?: string;
+      priceBasis?: boolean;
       nameAr?: string;
       gameAmount?: number;
     }[];
@@ -699,6 +700,7 @@ export class SupplierCatalogMock implements CategoryReader {
         fieldMap,
         1,
         optionMap,
+        { priceBasis: item.priceBasis ?? true },
       );
       this.suppliers.reprice([product.id], 'route_change');
       return [

@@ -7,6 +7,7 @@ import {
   STORE_SWITCH_DEFAULTS,
 } from '@vertex-digital/contracts';
 import {
+  type AppliedOutcome,
   accountBalance,
   applyOutcome,
   auditEntries,
@@ -65,7 +66,7 @@ import { parseEnv } from '../src/core/config/env.js';
 import { LOG_REDACT_PATHS } from '../src/core/config/log-redact.js';
 import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { OrdersFulfilJob } from '../src/jobs/orders/fulfil.job.js';
-import { attemptOutcome } from '../src/jobs/orders/order-calls.js';
+import { attemptOutcome, markStockRefusal } from '../src/jobs/orders/order-calls.js';
 import { OrdersPayWaitingJob } from '../src/jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from '../src/jobs/orders/poll.job.js';
 import { OrdersSweepJob } from '../src/jobs/orders/sweep.job.js';
@@ -887,6 +888,138 @@ describe('polling, the hard limit and the sweep (rules F3, F6, F7)', () => {
       expect(reminder).toMatchObject({ kind: 'manual_order_reminder' });
       expect(reminder?.params).toMatchObject({ orderNumber: order.number, waitMinutes: 16 });
       expect((await sweep.sweep(now, tx)).reminded).not.toContain(manual?.id);
+    });
+  });
+});
+
+describe('two routes of one supplier (S17 WR8, WR9)', () => {
+  /**
+   * A product with a cheap route on `fake-uc-325` that does not count for the price, with WDG's
+   * Web Purchase timing and a finite stock, and an Auto-like route on `fake-uc-60` that does.
+   */
+  async function webAndAuto(tx: Transaction, stock: number | null = 1_000) {
+    const item = await product(tx, { offerId: 'fake-uc-325', fake: usd(0.8) });
+    const web = item.fakeRoute as string;
+    const [route] = await tx
+      .update(productRoutes)
+      .set({ priceBasis: false, expectedDeliveryMinutes: 30, hardLimitMinutes: 45 })
+      .where(eq(productRoutes.id, web))
+      .returning({ offerId: productRoutes.offerId });
+    const webOffer = route?.offerId as string;
+    await tx.update(supplierOffers).set({ stock }).where(eq(supplierOffers.id, webOffer));
+    const autoOffer = await fakeOffer(tx, 'fake-uc-60', usd(0.88));
+    const auto = newId();
+    await tx.insert(productRoutes).values({
+      id: auto,
+      productId: item.id,
+      supplierId: ids.fake,
+      offerId: autoOffer,
+      fieldMap: { playerId: 'player_id' },
+    });
+    await repriceProducts(tx, {
+      productIds: [item.id],
+      cause: 'route_change',
+      context: { now: new Date(), fakeEnabled: true },
+    });
+    const [price] = await tx
+      .select({ units: productPrices.priceUsdUnits, routeId: productPrices.routeId })
+      .from(productPrices)
+      .where(eq(productPrices.productId, item.id))
+      .orderBy(desc(productPrices.createdAt), desc(productPrices.id))
+      .limit(1);
+    expect(price?.routeId).toBe(auto);
+    return { item: { ...item, price: price?.units as number }, web, webOffer, auto };
+  }
+
+  const offerStock = async (tx: Transaction, id: string) =>
+    (
+      await tx
+        .select({ inStock: supplierOffers.inStock, stock: supplierOffers.stock })
+        .from(supplierOffers)
+        .where(eq(supplierOffers.id, id))
+    )[0];
+
+  it('sends to the cheap route first with its timing, and on an out-of-stock refusal marks it and moves on', async () => {
+    await isolated(async (tx) => {
+      const { item, web, webOffer, auto } = await webAndAuto(tx);
+      fakeState = fakeSupplierStateSchema.parse({ stockCounts: { 'fake-uc-325': 0 } });
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [first] = await attemptsOf(tx, order.id);
+      expect(first).toMatchObject({
+        routeId: web,
+        status: 'failed',
+        supplierErrorCode: 'OUT_OF_STOCK',
+        expectedDeliveryMinutes: 30,
+        hardLimitMinutes: 45,
+      });
+      expect(await offerStock(tx, webOffer)).toEqual({ inStock: false, stock: 0 });
+      expect(await orderOf(tx, order.id)).toMatchObject({ status: 'failed' });
+      await fulfil.fulfil(order.id, tx);
+      const attempts = await attemptsOf(tx, order.id);
+      expect(attempts.map((attempt) => [attempt.routeId, attempt.status])).toEqual([
+        [web, 'failed'],
+        [auto, 'delivered'],
+      ]);
+      expect(attempts[1]).toMatchObject({ expectedDeliveryMinutes: null, hardLimitMinutes: null });
+      expect(await orderOf(tx, order.id)).toMatchObject({ status: 'delivered' });
+      // Edge case 1: the next order skips the marked route until a sync.
+      const next = await buy(tx, item);
+      await fulfil.fulfil(next.id, tx);
+      expect((await attemptsOf(tx, next.id)).map((attempt) => attempt.routeId)).toEqual([auto]);
+    });
+  });
+
+  it('never marks an offer with unlimited stock, or on a refused re-send', async () => {
+    await isolated(async (tx) => {
+      const { item, webOffer } = await webAndAuto(tx, null);
+      fakeState = fakeSupplierStateSchema.parse({ outOfStock: ['fake-uc-325'] });
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      expect((await attemptsOf(tx, order.id))[0]).toMatchObject({
+        status: 'failed',
+        supplierErrorCode: 'OUT_OF_STOCK',
+      });
+      expect(await offerStock(tx, webOffer)).toEqual({ inStock: true, stock: null });
+
+      // S16 RS1: a refused re-send is `unknown`, so it never fails the attempt or marks stock.
+      const resent = attemptOutcome(
+        { status: 'failed_definitive', supplierCode: 'OUT_OF_STOCK', reason: 'Out of stock' },
+        [],
+        true,
+      );
+      expect(resent).toMatchObject({ status: 'unknown', supplierErrorCode: 'OUT_OF_STOCK' });
+      const [attempt] = await attemptsOf(tx, order.id);
+      const applied = { applied: true, order, attempt } as unknown as AppliedOutcome;
+      const context = { now: new Date(), fakeEnabled: true };
+      expect(await markStockRefusal(tx, applied, resent, context)).toBe(false);
+    });
+  });
+
+  it("holds an attempt at its own hard limit, not the policy's (WR9)", async () => {
+    await isolated(async (tx) => {
+      const { item, web } = await webAndAuto(tx);
+      script('fake-uc-325', 'pending');
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [attempt] = await attemptsOf(tx, order.id);
+      expect(attempt).toMatchObject({ routeId: web, status: 'pending', hardLimitMinutes: 45 });
+      // A later change of the route leaves the open attempt's limit (edge case 9).
+      await tx
+        .update(productRoutes)
+        .set({ expectedDeliveryMinutes: null, hardLimitMinutes: null })
+        .where(eq(productRoutes.id, web));
+      const now = new Date();
+      const sentAgo = (minutes: number) =>
+        tx
+          .update(fulfilmentAttempts)
+          .set({ sentAt: new Date(now.getTime() - minutes * 60_000) })
+          .where(eq(fulfilmentAttempts.id, attempt?.id as string));
+      await sentAgo(31);
+      expect((await sweep.sweep(now, tx)).held).not.toContain(order.id);
+      await sentAgo(45);
+      expect((await sweep.sweep(now, tx)).held).toContain(order.id);
+      expect(await orderOf(tx, order.id)).toMatchObject({ status: 'needs_review' });
     });
   });
 });

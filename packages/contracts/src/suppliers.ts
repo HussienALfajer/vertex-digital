@@ -476,11 +476,40 @@ export function orderRoutes<Route extends OrderedRoute>(routes: readonly Route[]
   );
 }
 
-/** Rule P1: the basis route among the usable routes, or null when there is none. */
-export function priceBasis<Route extends OrderedRoute>(
+/** What the price basis reads about a route: whether it counts for the price (S17 WR3). */
+export interface BasisRoute extends OrderedRoute {
+  priceBasis: boolean;
+}
+
+/**
+ * Rules P1, S17 WR3 and WR4: the basis route is the first usable route (RT5, RT6) among those that
+ * count for the price. With none of them usable, a product that has a price keeps it (null: no
+ * basis, no new price row), and one that never had a price takes the first usable route.
+ */
+export function priceBasis<Route extends BasisRoute>(
   usableRoutes: readonly Route[],
+  hasPrice: boolean,
 ): Route | null {
-  return orderRoutes(usableRoutes)[0] ?? null;
+  const ordered = orderRoutes(usableRoutes);
+  return ordered.find((route) => route.priceBasis) ?? (hasPrice ? null : (ordered[0] ?? null));
+}
+
+/** S17: a route's expected delivery time, the customer's hint (WR10). */
+export const expectedDeliveryMinutesSchema = z.int().min(1).max(240);
+
+/** S17: a route's own hard limit (WR9), within the order policy's bounds. */
+export const routeHardLimitMinutesSchema = z.int().min(5).max(240);
+
+/**
+ * S17 data rule (`ROUTE_TIMING_INVALID`): the expected time is below the route's hard limit, or
+ * below the policy's when the route has none.
+ */
+export function routeTimingValid(
+  timing: { expectedDeliveryMinutes: number | null; hardLimitMinutes: number | null },
+  policyHardLimitMinutes: number,
+): boolean {
+  if (timing.expectedDeliveryMinutes === null) return true;
+  return timing.expectedDeliveryMinutes < (timing.hardLimitMinutes ?? policyHardLimitMinutes);
 }
 
 // Supplier catalog (S16 SC1–SC14, SF1–SF6) -----------------------------------------------------
@@ -1205,6 +1234,10 @@ export const createRouteSchema = z
     priority: priority.default(1),
     fieldMap: fieldMapSchema.default({}),
     optionMap: optionMapSchema.default({}),
+    /** S17 WR7: the panel pre-sets it; a request that omits it counts. */
+    priceBasis: z.boolean().default(true),
+    expectedDeliveryMinutes: expectedDeliveryMinutesSchema.nullable().default(null),
+    hardLimitMinutes: routeHardLimitMinutesSchema.nullable().default(null),
   })
   .meta({ id: 'CreateRoute' });
 
@@ -1222,6 +1255,9 @@ export const updateRouteSchema = z
     enabled: z.boolean(),
     fieldMap: fieldMapSchema,
     optionMap: optionMapSchema,
+    priceBasis: z.boolean(),
+    expectedDeliveryMinutes: expectedDeliveryMinutesSchema.nullable(),
+    hardLimitMinutes: routeHardLimitMinutesSchema.nullable(),
   })
   .partial()
   .meta({ id: 'UpdateRoute' });
@@ -1254,6 +1290,12 @@ export const routeSchema = z
     fieldMap: z.record(z.string(), z.string()),
     /** S16 MF2. */
     optionMap: z.record(z.string(), z.record(z.string(), z.string())),
+    /** S17 WR3: the route counts for the price. */
+    priceBasis: z.boolean(),
+    /** S17 WR10: the customer's hint; null: the measured time. */
+    expectedDeliveryMinutes: z.int().nullable(),
+    /** S17 WR9: null: the policy's. */
+    hardLimitMinutes: z.int().nullable(),
     archivedAt: z.iso.datetime().nullable(),
     /** Null for an unusable route. */
     tier: routeTierSchema.nullable(),
@@ -1274,6 +1316,8 @@ export const productRoutingSchema = z
     /** Usable routes in tier order (RT5, RT6), then unusable, then archived ones. */
     routes: z.array(routeSchema),
     basisRouteId: z.uuid().nullable(),
+    /** S17 WR4: no route that counts for the price is usable, so the price stays as it is. */
+    priceHeld: z.boolean(),
     currentPrice: z
       .object({
         priceUsdUnits: z.int(),
@@ -1519,7 +1563,17 @@ export const linkCategorySchema = z
     fieldMap: fieldMapSchema.default({}),
     optionMap: optionMapSchema.default({}),
     rows: z
-      .array(z.union([z.object({ offerId: z.uuid(), productId: z.uuid() }), newPackRowSchema]))
+      .array(
+        z.union([
+          z.object({
+            offerId: z.uuid(),
+            productId: z.uuid(),
+            /** S17 WR7: the panel pre-sets it off when the product already has a route. */
+            priceBasis: z.boolean().default(true),
+          }),
+          newPackRowSchema,
+        ]),
+      )
       .max(MAX_IMPORT_ROWS)
       .refine(eachOfferOnce, { message: 'Expected each offer once' }),
   })

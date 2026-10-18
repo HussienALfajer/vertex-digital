@@ -508,6 +508,12 @@ export const fulfilmentAttempts = pgTable(
      * re-send sends the same supplier values. Null on attempts written before it (read as `{}`).
      */
     optionMap: jsonb('option_map').$type<Record<string, Record<string, string>>>(),
+    /**
+     * S17: the route's expected delivery time (WR10) and hard limit (WR9) when the attempt was
+     * written, so a later route change does not move an open attempt's limit.
+     */
+    expectedDeliveryMinutes: integer('expected_delivery_minutes'),
+    hardLimitMinutes: integer('hard_limit_minutes'),
     quantity: integer('quantity').notNull(),
     unitCostUsdUnits: amountUnits('unit_cost_usd_units').notNull(),
     status: attemptStatusEnum('status').notNull(),

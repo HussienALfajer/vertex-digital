@@ -210,6 +210,10 @@ const routeValues = {
   fieldMap: z.record(z.string(), z.string()),
   /** S16 MF2: supplier key → our option value → the supplier's option value. */
   optionMap: z.record(z.string(), z.record(z.string(), z.string())),
+  /** S17 WR3, WR9, WR10. */
+  priceBasis: z.boolean(),
+  expectedDeliveryMinutes: z.int().nullable(),
+  hardLimitMinutes: z.int().nullable(),
 };
 const reviewDecision = z.strictObject({
   productId: z.uuid(),

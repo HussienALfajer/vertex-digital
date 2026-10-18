@@ -58,6 +58,31 @@ function mapped(admin: AdminApi) {
   return scene;
 }
 
+/**
+ * S17: a second fake route on "Fake UC 325", pre-set not to count for the price (WR7), expecting
+ * delivery within 30 minutes and held at 45; an expected time at the policy's limit is refused.
+ */
+async function addWebRoute(page: Page, drawer: Locator) {
+  await drawer.getByRole('button', { name: s.routes.add, exact: true }).click();
+  const add = page.getByRole('dialog', { name: s.routes.addTitle });
+  await choose(page, add, s.routes.supplier, 'مورد تجريبي');
+  await add
+    .getByRole('button', { name: /Fake UC 325/ })
+    .first()
+    .click();
+  await expect(add.getByRole('switch', { name: s.routes.settings.priceBasis })).not.toBeChecked();
+  await choose(page, add, fill(s.fieldMap.target, { field: 'playerId' }), 'معرّف اللاعب');
+  await add.getByLabel(s.routes.settings.expected).fill('30');
+  await add.getByRole('button', { name: s.routes.addSubmit }).click();
+  await expect(add.getByText(s.routes.settings.expectedError)).toBeVisible();
+  await add.getByLabel(fill(s.routes.settings.limit, { policy: 30 })).fill('45');
+  await add.getByRole('button', { name: s.routes.addSubmit }).click();
+  await expect(add).toBeHidden();
+  await expect(drawer.getByText(s.routes.notPriceBasis)).toBeVisible();
+  await expect(drawer.getByText(fill(s.routes.expectedMark, { minutes: 30 }))).toBeVisible();
+  await expect(drawer.getByText(fill(s.routes.limitMark, { minutes: 45 }))).toBeVisible();
+}
+
 async function openRoutes(page: Page, gameId: string, product: string) {
   await page.goto(`/catalog/games/${gameId}?tab=products`);
   await page
@@ -193,6 +218,42 @@ test.describe('suppliers', () => {
     const again = await openRoutes(page, game.id, '60 UC');
     await expect(again.getByText(s.routes.unusable.supplier_paused)).toBeVisible();
     await expect(again.getByText('$1.32').first()).toBeVisible();
+  });
+
+  test('adds a second route of the supplier that does not count for the price, with its timing (S17)', async ({
+    page,
+    admin,
+  }) => {
+    const { game } = mapped(admin);
+    const drawer = await openRoutes(page, game.id, '60 UC');
+    await addWebRoute(page, drawer);
+    // The price stays on the route that counts (WR3).
+    await expect(drawer.getByText('$0.98').first()).toBeVisible();
+    await expect(drawer.getByRole('listitem').first()).toContainText(s.routes.basisMark);
+
+    // WR4: the counting route disabled, the price is kept.
+    await drawer
+      .getByRole('listitem')
+      .first()
+      .getByRole('switch', { name: s.routes.enabled })
+      .click();
+    await expect(drawer.getByText(s.routes.priceHeld)).toBeVisible();
+    await expect(drawer.getByText('$0.98').first()).toBeVisible();
+
+    // WR6: counting the second route reprices at once; a limit below the expected time is refused.
+    const web = drawer.getByRole('listitem').filter({ hasText: 'Fake UC 325' });
+    await web.getByRole('button', { name: s.routes.settings.edit }).click();
+    const settings = page.getByRole('dialog', { name: s.routes.settings.title });
+    await settings.getByLabel(fill(s.routes.settings.limit, { policy: 30 })).fill('20');
+    await settings.getByRole('button', { name: ar.catalog.actions.save }).click();
+    await expect(settings.getByText(s.routes.settings.expectedError)).toBeVisible();
+    await settings.getByLabel(fill(s.routes.settings.limit, { policy: 30 })).fill('45');
+    await settings.getByRole('switch', { name: s.routes.settings.priceBasis }).click();
+    await settings.getByRole('button', { name: ar.catalog.actions.save }).click();
+    await expect(settings).toBeHidden();
+    await expect(drawer.getByText(s.routes.notPriceBasis)).toBeHidden();
+    await expect(drawer.getByText(s.routes.priceHeld)).toBeHidden();
+    await expect(web).toContainText(s.routes.basisMark);
   });
 
   test('a large cost change waits for review behind the margin guard, a stale accept reloads (step 4)', async ({
@@ -435,6 +496,17 @@ for (const colorScheme of ['light', 'dark'] as const) {
       const drawer = await openRoutes(page, game.id, '60 UC');
       await expect(drawer.getByText(s.routes.basisMark)).toBeVisible();
       await screenshot(page, testInfo, `routes-drawer-${colorScheme}`);
+      // S17: a second route of the supplier, its settings and the settings dialog.
+      await addWebRoute(page, drawer);
+      await screenshot(page, testInfo, `routes-drawer-s17-${colorScheme}`);
+      await drawer
+        .getByRole('listitem')
+        .filter({ hasText: 'Fake UC 325' })
+        .getByRole('button', { name: s.routes.settings.edit })
+        .click();
+      await expect(page.getByRole('dialog', { name: s.routes.settings.title })).toBeVisible();
+      await screenshot(page, testInfo, `route-settings-${colorScheme}`);
+      await page.keyboard.press('Escape');
       await page.keyboard.press('Escape');
 
       await page.goto('/pricing/reviews');

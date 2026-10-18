@@ -5,12 +5,14 @@ import {
   type OptionMap,
   type ProductRouting,
   type Route,
+  routeTimingValid,
   stockLevel,
   type UpdateRoute,
   unmappedFields,
   unmappedOptions,
 } from '@vertex-digital/contracts';
 import {
+  currentOrderPolicy,
   currentSupplierPolicy,
   type Database,
   newId,
@@ -38,11 +40,26 @@ type ProductRow = Awaited<ReturnType<CatalogItemsService['lockProduct']>>['row']
 
 const routeEntity = (id: string) => ({ type: 'product_route' as const, id });
 
-const routeValues = (row: Pick<RouteRow, 'priority' | 'enabled' | 'fieldMap' | 'optionMap'>) => ({
+type RouteValues = Pick<
+  RouteRow,
+  | 'priority'
+  | 'enabled'
+  | 'fieldMap'
+  | 'optionMap'
+  | 'priceBasis'
+  | 'expectedDeliveryMinutes'
+  | 'hardLimitMinutes'
+>;
+
+/** A route's settings as its audit entries record them (S07, S17). */
+export const routeValues = (row: RouteValues): RouteValues => ({
   priority: row.priority,
   enabled: row.enabled,
   fieldMap: row.fieldMap,
   optionMap: row.optionMap,
+  priceBasis: row.priceBasis,
+  expectedDeliveryMinutes: row.expectedDeliveryMinutes,
+  hardLimitMinutes: row.hardLimitMinutes,
 });
 
 function toRoute(route: RouteState, basisId: string | null, lowStockUnits: number): Route {
@@ -69,6 +86,9 @@ function toRoute(route: RouteState, basisId: string | null, lowStockUnits: numbe
     enabled: route.enabled,
     fieldMap: route.fieldMap,
     optionMap: route.optionMap,
+    priceBasis: route.priceBasis,
+    expectedDeliveryMinutes: route.expectedDeliveryMinutes,
+    hardLimitMinutes: route.hardLimitMinutes,
     archivedAt: route.archivedAt?.toISOString() ?? null,
     tier: route.tier,
     unusableReason: route.unusableReason,
@@ -84,6 +104,7 @@ function toRouting(state: ProductRoutingState, lowStockUnits: number): ProductRo
     productId: state.productId,
     routes: state.routes.map((route) => toRoute(route, basisId, lowStockUnits)),
     basisRouteId: basisId,
+    priceHeld: state.priceHeld,
     currentPrice: current
       ? {
           priceUsdUnits: current.priceUsdUnits,
@@ -107,8 +128,9 @@ function toRouting(state: ProductRoutingState, lowStockUnits: number): ProductRo
 }
 
 /**
- * A product's routes (S07 rules RT1–RT7): one per supplier, an offer serving one product, the
- * kind and the fields checked, manual offers with the admin's cost. Every change locks the
+ * A product's routes (S07 rules RT1–RT7, S17 WR1): an offer serving one product, several routes
+ * of one supplier allowed, the kind, the fields and the timing checked, manual offers with the
+ * admin's cost. Every change locks the
  * product's game, then the product, and reprices it in the same transaction (rule P2, cause
  * `route_change`).
  */
@@ -159,7 +181,8 @@ export class RoutesService {
       if (offer.ignoredAt) throw refusals.offerIgnored();
       if (offer.kind && offer.kind !== product.kind) throw refusals.kindMismatch();
       await this.checkFields(tx, product.gameId, offer, input, true);
-      await this.checkFree(tx, product.id, offer.supplierId, offer.id);
+      await this.checkTiming(tx, input);
+      await this.checkFree(tx, product.id, offer.id);
       const [row] = await tx
         .insert(productRoutes)
         .values({
@@ -170,6 +193,9 @@ export class RoutesService {
           priority: input.priority,
           fieldMap: input.fieldMap,
           optionMap: input.optionMap,
+          priceBasis: input.priceBasis,
+          expectedDeliveryMinutes: input.expectedDeliveryMinutes,
+          hardLimitMinutes: input.hardLimitMinutes,
         })
         .returning();
       const route = row as RouteRow;
@@ -190,7 +216,6 @@ export class RoutesService {
     return this.change(productId, async (tx, product) => {
       const [manual] = await tx.select().from(suppliers).where(eq(suppliers.code, 'manual'));
       const supplierId = (manual as { id: string }).id;
-      await this.checkFree(tx, product.id, supplierId, null);
       const offerId = newId();
       const now = new Date();
       await tx.insert(supplierOffers).values({
@@ -237,8 +262,9 @@ export class RoutesService {
   }
 
   /**
-   * Priority, enable, field map and (S16 MF2) option map; an enabled route needs its known fields
-   * mapped and its selects' options given supplier values (RT3).
+   * Priority, enable, field map, (S16 MF2) option map and (S17) price basis and timing; an enabled
+   * route needs its known fields mapped and its selects' options given supplier values (RT3), and
+   * an expected time below its hard limit. A change of the price basis reprices at once (WR6).
    */
   async update(actor: Actor, routeId: string, input: UpdateRoute): Promise<ProductRouting> {
     return this.changeRoute(routeId, async (tx, product, before) => {
@@ -247,6 +273,13 @@ export class RoutesService {
         enabled: input.enabled ?? before.enabled,
         fieldMap: input.fieldMap ?? before.fieldMap,
         optionMap: input.optionMap ?? before.optionMap,
+        priceBasis: input.priceBasis ?? before.priceBasis,
+        expectedDeliveryMinutes:
+          input.expectedDeliveryMinutes === undefined
+            ? before.expectedDeliveryMinutes
+            : input.expectedDeliveryMinutes,
+        hardLimitMinutes:
+          input.hardLimitMinutes === undefined ? before.hardLimitMinutes : input.hardLimitMinutes,
       };
       const changed = (Object.keys(after) as (keyof typeof after)[]).filter(
         (key) => JSON.stringify(after[key]) !== JSON.stringify(before[key]),
@@ -266,6 +299,9 @@ export class RoutesService {
         after,
         after.enabled,
       );
+      if (changed.includes('expectedDeliveryMinutes') || changed.includes('hardLimitMinutes')) {
+        await this.checkTiming(tx, after);
+      }
       await tx.update(productRoutes).set(after).where(eq(productRoutes.id, routeId));
       const pick = (values: typeof after) =>
         Object.fromEntries(changed.map((key) => [key, values[key]]));
@@ -291,11 +327,11 @@ export class RoutesService {
     });
   }
 
-  /** Rule RT1 again: refused while another route holds the supplier or the offer. */
+  /** Rule RT1 again: refused while another route holds the offer. */
   async restore(actor: Actor, routeId: string): Promise<ProductRouting> {
     return this.changeRoute(routeId, async (tx, product, route, supplierCode) => {
       if (!route.archivedAt) return;
-      await this.checkFree(tx, product.id, route.supplierId, route.offerId);
+      await this.checkFree(tx, product.id, route.offerId);
       await tx.update(productRoutes).set({ archivedAt: null }).where(eq(productRoutes.id, routeId));
       await auditSuppliers(tx, actor, 'product_route.restored', routeEntity(routeId), {
         supplier: supplierCode,
@@ -416,25 +452,21 @@ export class RoutesService {
     if (gaps.length > 0) throw refusals.fieldOptionsDiffer(gaps);
   }
 
-  /** Rule RT1: no other unarchived route of the product to the supplier, or to the offer. */
-  private async checkFree(
+  /**
+   * S17: the expected time is below the route's hard limit, or the policy's when it has none, at
+   * the time of saving (`ROUTE_TIMING_INVALID`).
+   */
+  private async checkTiming(
     tx: Transaction,
-    productId: string,
-    supplierId: string,
-    offerId: string | null,
+    timing: { expectedDeliveryMinutes: number | null; hardLimitMinutes: number | null },
   ): Promise<void> {
-    const [sameSupplier] = await tx
-      .select({ id: productRoutes.id })
-      .from(productRoutes)
-      .where(
-        and(
-          eq(productRoutes.productId, productId),
-          eq(productRoutes.supplierId, supplierId),
-          isNull(productRoutes.archivedAt),
-        ),
-      );
-    if (sameSupplier) throw refusals.routeExists();
-    if (offerId === null) return;
+    if (timing.expectedDeliveryMinutes === null) return;
+    const policy = await currentOrderPolicy(tx);
+    if (!routeTimingValid(timing, policy.hardLimitMinutes)) throw refusals.timingInvalid();
+  }
+
+  /** Rule RT1, S17 WR1: no other unarchived route to the offer. */
+  private async checkFree(tx: Transaction, productId: string, offerId: string): Promise<void> {
     const [holder] = await tx
       .select({ productId: productRoutes.productId })
       .from(productRoutes)

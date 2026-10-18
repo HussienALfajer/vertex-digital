@@ -27,7 +27,13 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
-import { askSupplier, orderContext, reportLateResult } from './order-calls.js';
+import {
+  askSupplier,
+  markStockRefusal,
+  orderContext,
+  reportLateResult,
+  routingContext,
+} from './order-calls.js';
 
 type Executor = Database | Transaction;
 
@@ -83,6 +89,7 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
       if (!result.applied) {
         await reportLateResult(tx, context, result, outcome, { kind: 'supplier' });
       }
+      await markStockRefusal(tx, result, outcome, routingContext(this.env));
       return result;
     });
     return { kind: 'sent', attempt: applied.attempt, manual: false };
@@ -99,10 +106,7 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
     if (remainingUnits <= 0) return { kind: 'skipped' };
 
     const context = orderContext(this.pgBoss, this.codesKey, now);
-    const states = await productRoutingStates(tx, [order.productId], {
-      now,
-      fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED,
-    });
+    const states = await productRoutingStates(tx, [order.productId], routingContext(this.env, now));
     const routes = states.get(order.productId)?.routes ?? [];
     const tried = await tx
       .select({ routeId: fulfilmentAttempts.routeId })
@@ -157,6 +161,9 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
         supplierOfferId: route.offer.offerId,
         fieldMap: route.fieldMap,
         optionMap: route.optionMap,
+        // S17 WR9, WR10: the route's timing as it is now; a later change leaves this attempt's.
+        expectedDeliveryMinutes: route.expectedDeliveryMinutes,
+        hardLimitMinutes: route.hardLimitMinutes,
         quantity: remainingUnits,
         unitCostUsdUnits: route.costUsdUnits as number,
         // A manual attempt waits for the admin at once; it is never polled (rule MN2).

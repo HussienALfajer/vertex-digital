@@ -640,7 +640,8 @@
       "refundReason": "سبب الاسترداد",
       "totalSypValue": "{amount} ل.س",
       "playerName": "الاسم في اللعبة:",
-      "storeNote": "رسالة المتجر"
+      "storeNote": "رسالة المتجر",
+      "expectedWithin": "قيد التسليم، قد يستغرق حتى {minutes} دقيقة"
     },
     "codes": {
       "title": "الأكواد",

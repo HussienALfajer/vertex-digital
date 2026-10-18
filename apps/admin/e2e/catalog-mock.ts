@@ -47,6 +47,8 @@ type Row<T> = Omit<
   | 'priceSypUnits'
   | 'basisSupplierNameAr'
   | 'basisStockLevel'
+  | 'priceHeld'
+  | 'routed'
   | 'reviewOpen'
   | 'deliveryStats'
 >;
@@ -64,6 +66,8 @@ export interface ProductPricing {
   usableRouteCostsUsdUnits: number[];
   basisSupplierNameAr: string | null;
   basisStockLevel: Product['basisStockLevel'];
+  priceHeld: boolean;
+  routed: boolean;
   reviewOpen: boolean;
 }
 
@@ -284,6 +288,8 @@ export class CatalogMock {
           : null,
       basisSupplierNameAr: pricing?.basisSupplierNameAr ?? null,
       basisStockLevel: pricing?.basisStockLevel ?? null,
+      priceHeld: pricing?.priceHeld ?? false,
+      routed: pricing?.routed ?? false,
       reviewOpen: pricing?.reviewOpen ?? false,
       // S08: no delivered orders in the mock.
       deliveryStats: null,

@@ -30,16 +30,25 @@ import {
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
+import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { type FieldMapEntry, fieldMapEntries, toFieldMap, unmappedOf } from './field-map';
 import { FieldMapEditor } from './field-map-editor';
 import { gameSelects, OptionMapEditor, supplierSelects } from './option-map-editor';
+import {
+  parseSettings,
+  type RouteSettingsDraft,
+  type RouteSettingsField,
+  RouteSettingsFields,
+  usePolicyLimit,
+} from './route-settings';
 import { offersQuery, suppliersQuery, useCreateRoute } from './suppliers.queries';
 
 /**
  * "إضافة مسار" (rules RT1–RT3): a supplier, then one of its unmapped offers found by name or id,
- * then the field map from its required fields to the game's fields. The API refuses a second
- * route to the same supplier, a mapped offer and a kind mismatch.
+ * then the field map from its required fields to the game's fields, and (S17) whether it counts
+ * for the price, pre-set on only for a product with no route yet (WR7), and its timing. The API
+ * refuses a mapped offer, a kind mismatch and an expected time not below the limit.
  */
 export function AddRouteDialog({
   game,
@@ -61,6 +70,13 @@ export function AddRouteDialog({
   const [optionMap, setOptionMap] = useState<OptionMap>({});
   const [missing, setMissing] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
+  const [settings, setSettings] = useState<RouteSettingsDraft>(() => ({
+    priceBasis: !product.routed,
+    expected: '',
+    limit: '',
+  }));
+  const [invalidSettings, setInvalidSettings] = useState<RouteSettingsField[]>([]);
+  const policyLimit = usePolicyLimit();
   const { ref, focusInvalid } = useFocusInvalid<HTMLDivElement>();
   const offers = useQuery({
     ...offersQuery(code ?? 'fake', { q: query, mapped: 'false', missing: 'false' }),
@@ -86,13 +102,25 @@ export function AddRouteDialog({
   async function submit() {
     if (!offer) return;
     setFailure(null);
+    const parsed = parseSettings(settings, policyLimit);
+    setInvalidSettings('invalid' in parsed ? parsed.invalid : []);
+    if ('invalid' in parsed) return focusInvalid();
     try {
-      await create.mutateAsync({ offerId: offer.id, fieldMap: toFieldMap(entries), optionMap });
+      await create.mutateAsync({
+        offerId: offer.id,
+        fieldMap: toFieldMap(entries),
+        optionMap,
+        ...parsed.settings,
+      });
       onDone();
     } catch (error) {
       const unmapped = unmappedOf(error);
       setMissing(unmapped);
       setFailure(errorMessage(t, error));
+      if (error instanceof ApiError && error.code === 'ROUTE_TIMING_INVALID') {
+        setInvalidSettings(['expected']);
+        focusInvalid();
+      }
       if (unmapped.length > 0) focusInvalid();
     }
   }
@@ -207,6 +235,13 @@ export function AddRouteDialog({
                 gameSelects(game.fields.filter((field) => field.archivedAt === null)),
               )}
               onChange={setOptionMap}
+            />
+            <RouteSettingsFields
+              id="new"
+              draft={settings}
+              invalid={invalidSettings}
+              policyLimitMinutes={policyLimit}
+              onChange={setSettings}
             />
           </>
         )}

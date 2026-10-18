@@ -449,6 +449,13 @@
       "when": 1792225775033,
       "tag": "0063_hard_natasha_romanoff",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792320437202,
+      "tag": "0064_cold_natasha_romanoff",
+      "breakpoints": true
     }
   ]
 }

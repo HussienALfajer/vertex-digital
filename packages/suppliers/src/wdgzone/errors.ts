@@ -1,3 +1,4 @@
+import { OUT_OF_STOCK_CODE } from '../core/adapter.js';
 import { errorReplySchema } from './schemas.js';
 
 /** WDGZone's error code from a refused reply's body (`error.code`). */
@@ -22,4 +23,4 @@ export const WDG_DEFINITIVE_PURCHASE_CODES = [
   'INVALID_JSON',
 ];
 
-export const WDG_OUT_OF_STOCK = 'OUT_OF_STOCK';
+export const WDG_OUT_OF_STOCK = OUT_OF_STOCK_CODE;

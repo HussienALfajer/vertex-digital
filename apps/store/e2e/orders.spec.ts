@@ -61,6 +61,7 @@ function order(changes: Partial<Order> & { id: string }): Order {
     cancelReason: null,
     playerName: null,
     deliveryStats: null,
+    expectedWithinMinutes: null,
     checkoutId: null,
     isGift: false,
     gift: null,
@@ -172,6 +173,16 @@ const ORDERS: Record<Exclude<keyof typeof IDS, 'other'>, Order> = {
     ],
   }),
 };
+
+/** S17 WR10: a paid top-up whose open attempt expects delivery within 30 minutes. */
+const EXPECTED = order({
+  id: IDS.topUp,
+  stage: 'processing',
+  deliveredQuantity: 0,
+  timeline: [{ step: 'paid', at: '2026-10-09T10:00:00.000Z' }],
+  deliveryStats: { medianMs: 40_000, p90Ms: 95_000, count: 20 },
+  expectedWithinMinutes: 30,
+});
 
 const summary = (item: Order): OrderSummary => ({
   id: item.id,
@@ -347,6 +358,21 @@ test.describe('orders', () => {
     await expect(page.locator('[data-slot="success-mark"]')).toBeVisible();
   });
 
+  test("a processing order shows its attempt's expected time instead of the measured one (S17 WR10)", async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on(`GET /api/orders/${IDS.topUp}`, 200, EXPECTED);
+    await page.goto(`/orders/${IDS.topUp}`);
+    await expect(page.getByText(o.sentences.processing)).toBeVisible();
+    await expect(page.getByText(o.detail.expectedWithin.replace('{minutes}', '30'))).toBeVisible();
+    await expect(
+      page.getByText(ar.catalog.delivery.p90.replace('{duration}', 'دقيقتين')),
+    ).toHaveCount(0);
+    // The route, the supplier and "Web" never show.
+    await expect(page.getByRole('main').getByText(/wdg|web purchase/i)).toHaveCount(0);
+  });
+
   test('"طلباتي" shows the time a reservation has left', async ({ page, api }) => {
     withOrders(api);
     await page.goto('/orders');
@@ -417,5 +443,10 @@ for (const theme of ['dark', 'light'] as const) {
     await page.getByRole('button', { name: o.codes.reveal }).click();
     await expect(page.getByText('ITUNES-7K2M-9Q4X')).toBeVisible();
     await screenshot(page, testInfo, `order-codes-${theme}`);
+    // S17 WR10: the expected delivery hint.
+    api.on(`GET /api/orders/${IDS.topUp}`, 200, EXPECTED);
+    await page.goto(`/orders/${IDS.topUp}`);
+    await expect(page.getByText(o.detail.expectedWithin.replace('{minutes}', '30'))).toBeVisible();
+    await screenshot(page, testInfo, `order-expected-${theme}`);
   });
 }

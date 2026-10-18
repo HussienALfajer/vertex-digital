@@ -20,6 +20,7 @@ import type {
   SupplierWebhookEvent,
   WebhookRequest,
 } from '../core/adapter.js';
+import { OUT_OF_STOCK_CODE } from '../core/adapter.js';
 import { SupplierError } from '../core/errors.js';
 import { hmacSha256, verifyHmacSignature } from '../core/hmac.js';
 import { imageUrlAllowed } from '../core/image.js';
@@ -559,7 +560,7 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     if (!offer.inStock) {
       return this.record(request, {
         status: 'failed_definitive',
-        supplierCode: 'OUT_OF_STOCK',
+        supplierCode: OUT_OF_STOCK_CODE,
         reason: 'Out of stock at the fake supplier',
       });
     }

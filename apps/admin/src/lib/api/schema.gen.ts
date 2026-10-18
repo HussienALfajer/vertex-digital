@@ -6267,6 +6267,8 @@ export interface components {
             priceSypUnits: number | null;
             basisSupplierNameAr: string | null;
             basisStockLevel: components["schemas"]["StockLevel"] | null;
+            priceHeld: boolean;
+            routed: boolean;
             reviewOpen: boolean;
             deliveryStats: {
                 medianMs: number;
@@ -7143,6 +7145,7 @@ export interface components {
             routes: components["schemas"]["Route"][];
             /** Format: uuid */
             basisRouteId: string | null;
+            priceHeld: boolean;
             currentPrice: {
                 priceUsdUnits: number;
                 costUsdUnits: number;
@@ -7194,6 +7197,9 @@ export interface components {
                     [key: string]: string;
                 };
             };
+            priceBasis: boolean;
+            expectedDeliveryMinutes: number | null;
+            hardLimitMinutes: number | null;
             /** Format: date-time */
             archivedAt: string | null;
             tier: components["schemas"]["RouteTier"] | null;
@@ -7214,6 +7220,12 @@ export interface components {
             fieldMap: components["schemas"]["FieldMap"];
             /** @default {} */
             optionMap: components["schemas"]["OptionMap"];
+            /** @default true */
+            priceBasis: boolean;
+            /** @default null */
+            expectedDeliveryMinutes: number | null;
+            /** @default null */
+            hardLimitMinutes: number | null;
         };
         CreateManualRoute: {
             costUsdUnits: number;
@@ -7223,6 +7235,9 @@ export interface components {
             enabled?: boolean;
             fieldMap?: components["schemas"]["FieldMap"];
             optionMap?: components["schemas"]["OptionMap"];
+            priceBasis?: boolean;
+            expectedDeliveryMinutes?: number | null;
+            hardLimitMinutes?: number | null;
         };
         SetManualCost: components["schemas"]["CreateManualRoute"];
         SupplierCategoryListQuery: {
@@ -7409,6 +7424,8 @@ export interface components {
                 offerId: string;
                 /** Format: uuid */
                 productId: string;
+                /** @default true */
+                priceBasis: boolean;
             } | {
                 /** Format: uuid */
                 offerId: string;
@@ -7563,6 +7580,7 @@ export interface components {
             cancelReason: components["schemas"]["CancelReason"] | null;
             playerName: string | null;
             deliveryStats: components["schemas"]["DeliveryStats"] | null;
+            expectedWithinMinutes: number | null;
             /** Format: uuid */
             checkoutId: string | null;
             isGift: boolean;
@@ -7762,6 +7780,7 @@ export interface components {
             cancelReason: components["schemas"]["CancelReason"] | null;
             playerName: string | null;
             deliveryStats: components["schemas"]["DeliveryStats"] | null;
+            expectedWithinMinutes: number | null;
             /** Format: uuid */
             checkoutId: string | null;
             isGift: boolean;
