@@ -1,4 +1,14 @@
-# TASKS — S17 WDGZone Web Purchase route
+# TASKS — V1 system test, feature 10
+
+Documentation only, branch `docs/v1-system-test-feature-10`. Write the owner's production test cases for F12 and F15 without running them or accepting the feature.
+
+- [x] Read the feature 8 and 9 case pattern, F12/F15 scope and relevant spec sections.
+- [x] Record current worked numbers from read-only public production API queries; explicitly record the SSH/SQL access limitation.
+- [x] Write 18 feature 10 cases, production precautions, deferred checks and the blank sign-off in `docs/testing/v1-system-test.md`.
+- [x] Review coverage and figures; confirm the diff contains documentation only and no secrets. Reviewer and specification review found no remaining actionable issue.
+- [x] Prepare the intended documentation commit and docs PR with merge-commit auto-merge; the published PR link is reported with the task result.
+
+## Previous task — S17 WDGZone Web Purchase route
 
 Spec: `docs/specs/S17-wdg-web-route.md` (Approved). One PR, branch `feat/s17-wdg-web-route`.
 
