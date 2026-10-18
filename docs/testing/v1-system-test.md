@@ -2443,3 +2443,267 @@ Result: **passed (owner-reported, run outside production); production cleanup co
 | Checked read-only while writing (2026-10-18) | Public API reads, 15:52–15:53 Damascus: 6 categories, 57 games (50 normal, 7 unavailable), 587 packs (172 available, 415 unavailable); prices/terms above and no positive guide/accent/savings/delivery-stat/code-text state on shown games. Search/calculator examples checked with the existing pure contracts. SSH retry succeeded: deployed `bcf2d42`; completed SQL snapshots at 16:07:45 and 16:09:00 Damascus under `vertex_digital`, `REPEATABLE READ READ ONLY`, `transaction_read_only = on`, ending with `ROLLBACK`. Counts and stored prices match; rate 140, step 1 ل.س, only the global 10%/$0/$0.10 rule, registration closed and purchase/manual/WDG switches unpaused. Private fixture states and C's remaining cleanup recorded above. Two eligible non-test owner-paid deliveries, both PUBG 60 UC; none reaches five samples. No production mutation, supplier call or customer/order identifier read out; manual execution and post-case cleanup remain unconfirmed |
 | Accepted by the owner on | 2026-10-18 |
 | PR | the steps (#137, #138); the results and the F10-2 fix (#139), deployed to production on 2026-10-18 (`d1f70f3`, #140); the re-check, cleanup and acceptance (this record) |
+
+## Feature 11 — Purchase, fulfilment and live tracking (F13, F11)
+
+**What it covers:** the core sale (S08 O1–O6, R1–R6, F1, MN1–MN2, D1–D3, C1–C3, O13, M1–M3, AU1; S09 BB1–BB8, PV1–PV8, RS1–RS9, LT1–LT3; S11 MF1–MF5; S17 WR10): the orders as they stand; player validation as production stands (no supplier can validate yet); the signed-out buy box and the test-customer refusal on real packs; on test games A and B, the buy box, its field checks and slide-to-pay, the manual route with its Telegram card, reminder and manual fulfil, the live timeline, a price change at the slide, a failure with a full refund, a code order partly delivered with its reveal log; reservations with the shortfall, the deposit prefill, the limit of three, the customer's cancel, payment at the lower price by a credit, cancellation when the price rose, and expiry the next day; one real automatic delivery through WDGZone on the owner's own account; access to another customer's order; the audit entries and the books; phone and desktop quality; cleanup.
+
+**How to read a case:** as in features 8 to 10: **What this checks** first, then the numbered steps; a line starting with "Expected" is what you must see. Every result below is blank until the owner runs it. Writing these steps does not accept feature 11.
+
+**Real money in this feature:** **one real purchase**, the first of the three the ground rules allow: in case 11.14, PUBG Mobile "60 شدة" at **$0.98** from the owner's **own non-test account** ($4.50 → $3.52), delivered by WDGZone (Auto offer `235203`, cost $0.88) to the owner's **own** PUBG player ID, never written here. WDGZone's balance falls from $6.124 to about $5.24, still above its $5.00 threshold. The case is the owner's decision: skipping it leaves automatic delivery through the store unconfirmed on production. Everything else uses test customers on the test games. TC1 spends **$3.30** of the real deposits it holds for features 11–14 ($28.98 → **$25.68**: one $1.10 top-up and two $1.10 codes delivered, everything else refunded). TC2 gets a $1.00 "رصيد تجريبي" credit that is reversed, ending at **$0.00**. Test customers' orders use only the `manual` route (S08 R4), so nothing reaches WDGZone from them, and every "delivery" on the test games is recorded at **cost $0.00**, because nothing was bought. Never press "تنفيذ يدوي", "تأكّدت: فشل" or the reroute action on an order that is not this feature's, never pause **WDGZone**, never change a real pack, its route or its price, and do not run S17's live acceptance in the same sitting (it disables the Auto route of 60 UC).
+
+**Worked numbers used below:** read-only **production SQL** at **20:53:37 and 20:55:06 Damascus, 2026-10-18** (`vertex_digital`, `REPEATABLE READ READ ONLY`, `transaction_read_only = on`, 10-second statement timeout, 2-second lock timeout, ending with `ROLLBACK`; snapshots `1431525:1431525:` and `1431654:1431654:`), deployed `current/REVISION` **`d1f70f3`**, then public `GET /api/catalog/games/pubg-mobile` and `/free-fire` at **20:56:58 Damascus**. No production data changed and no supplier was called. No customer identifier, player ID or secret was read out.
+
+- **Orders:** **2**, the walk-in admin orders `VO-QG75EJ` (2026-10-13) and `VO-5QXTCT` (2026-10-14), both delivered, $0.99, non-test, `player_check = none`. No reservation, **0 player checks**, **0 checkouts**, 0 saved IDs. Supplier calls: 2 `place_order` (those two), **0 `validate_player`**. Ledger: **20 journals, 52 postings**. Deposits: 19 Sham Cash and 12 USDT.
+- **Customers:** TC1 **$28.98** (test, verified, not frozen, no customer limit); TC2 and TC3 **$0.00**; the owner's own account (non-test, verified) **$4.50**. No other live non-test account. Registration closed (since 2026-10-15 21:13); `purchases_stopped` has never been set (off); `manual` and `wdgzone` not paused.
+- **Rate and pricing:** 140 ل.س per USD, display step 100 units (1 ل.س); the only live margin rule is global **10%, $0, $0.10 minimum**, so a price is max(cost × 1.1, cost + $0.10) rounded up to the cent (`priceFromCost`).
+- **Order policy** (the seed of 2026-10-12, never changed): first poll after 60 s, then every 60 s for 10 minutes, then every 300 s; hard limit **30 minutes**; review polls every 30 minutes for 24 hours; **manual reminder after 15 minutes**; owner daily cap $100.
+- **Suppliers:** WDGZone healthy, balance **$6.124** (read 20:50), threshold $5.00, quota 1,000. **Player validation:** `supplierChecksPlayers` is true only for the `fake` supplier, which is off in production, so every public product has `playerCheck: false` (PUBG Mobile 29 of 29, Free Fire 5 of 5) and the store never calls `POST /api/player-checks`. WDGZone's connection tab shows no "حصة التحقق اليومية" card (it appears only for a supplier that can validate).
+- **S17:** no live route has an expected delivery time, a hard limit of its own, or `price_basis` off; the six `WEB` offers are not linked (`Web Purchase · WEB 60 UC` $0.87, stock 1,000). So no order can show "قيد التسليم، قد يستغرق حتى {n} دقيقة" yet.
+- **PUBG Mobile "60 شدة":** **$0.98**, ≈ 138 ل.س; routes WDGZone `235203` "Auto · 60 UC" **$0.88** and manual **$0.95**; maximum quantity 1; field `player_id` "معرّف اللاعب", digits 1–32, required. For a **test customer** only the manual route counts, and $0.98 − $0.95 = $0.03 is below the $0.10 minimum, so for TC1 the pack is held by the margin guard and refused with `PRODUCT_UNAVAILABLE` (11.3). **Free Fire "110 جوهرة"**: $1.01, WDGZone only, so also refused for a test customer. Delivered non-test orders in 30 days: 2 (both "60 شدة"), so every `deliveryStats` is still null.
+- **Test fixtures (all archived by 10.18):** category "اختبار النظام" (`system-test`) archived; A "لعبة اختبار 7" (`system-test-7`) archived with status **active**; B "تطبيق اختبار 7" (`system-test-7-app`) archived, paused; C archived, paused (it is not restored again). Restoring A makes it **public at once**, because a restore keeps the game's status (`restoreGame`; 11.4).
+
+| Fixture pack | Kind, maximum quantity | Live route | Price | SYP |
+|---|---|---|---|---|
+| A `60 UC` | direct, 1 | manual $1.00, enabled | **$1.10** (margin exactly $0.10: profitable) | ≈ 154 ل.س |
+| A `325 UC` | direct, paused | none | — | — |
+| A `660 UC` (the unarchived one) | direct, 1 | manual $8.50, enabled | **$9.35** | ≈ 1,309 ل.س |
+| B `بطاقة 10$` | code, **10** | none yet (11.4 adds manual $1.00) | **$1.10** once routed | ≈ 154 ل.س |
+
+A's fields: `player_id` "معرّف اللاعب", digits **5–15**, required; `server` "المنطقة", an optional select (أوروبا `eu`, آسيا `asia`). A's two WDGZone routes are archived, and an older archived duplicate `660 UC` exists: never restore it. B's pack keeps its region "الولايات المتحدة" and the two-line instructions of 7.9.
+
+Prices the cases create (the global rule above):
+
+| Manual cost set | Price | SYP | Used in |
+|---|---|---|---|
+| A `60 UC` $1.20 | **$1.32** | ≈ 185 ل.س | 11.7 (`PRICE_CHANGED`) |
+| A `60 UC` $0.80 | **$0.90** | ≈ 126 ل.س | 11.11 (the lower price is charged) |
+| A `660 UC` $9.30 | **$10.23** | ≈ 1,433 ل.س | 11.12 (saved $9.35 − $9.30 = $0.05 < $0.10: `price_rose`) |
+
+Balances through the feature (if a case ends on another figure, stop and record it):
+
+| After | TC1 | TC2 | Owner |
+|---|---|---|---|
+| Start | $28.98 | $0.00 | $4.50 |
+| 11.6: A `60 UC` delivered | $27.88 | | |
+| 11.7: paid $1.32, then refunded | $26.56 → $27.88 | | |
+| 11.8: three codes $3.30, one refunded | $24.58 → **$25.68** | | |
+| 11.11: credit $1.00, reservation paid $0.90, refunded, credit reversed | | $1.00 → $0.10 → $1.00 → **$0.00** | |
+| 11.14: the real purchase | | | **$3.52** |
+
+**Before you start**
+
+- The panel signed in on the PC, the Telegram chat linked to the panel, TC1 in a second browser, TC2 and TC3 in private windows when their cases come, a signed-out private window, your own store account (11.14 only), the test customers' inboxes and your phone. Two sittings: day 1 (11.1–11.17 except 11.13 step 3, about 2 hours 30 minutes, including a 15-minute wait in 11.7 that 11.8 can fill), and day 2, at least 24 hours after 11.13's reservation (11.13 step 3 and 11.18).
+- Re-authentication lasts 5 minutes: each manual fulfil, failure decision, code reveal, cost change and adjustment needs it; do each case's sensitive steps in one go.
+- A and B are public while a sitting runs: registration is closed, so only existing accounts can buy, but any visitor can see them. At the end of day 1 pause both (11.18 step 1).
+- In the panel confirm the switches above, `/rates` at 140 with a 1 ل.س step, and the manual supplier "متاح". If the panel shows other figures (a sync, a cost, a balance), note them and recompute the expected prices with the rule above; never reset a real figure for this feature.
+- On the test games use test player IDs only (for example `5123456789`), never a real person's. The codes typed in 11.8 are invented test strings, not real gift card codes. The delivery proof is any non-personal image (a screenshot of a note reading "اختبار"), never a receipt or a real account.
+
+**Not tested on production (by design):** a supplier that validates players: the `valid` chip with the in-game name, the `invalid` warning and its "أنا متأكد من المعرّف" checkbox, the unavailable path, `PLAYER_NOT_CONFIRMED`, the PV3 cache, the PV4 limits, and the PV5 daily quota with its Telegram alert (no production supplier can validate until Q12's adapters; S09 API, store and E2E tests with the fake supplier); an automatic attempt that is pending, unknown or past the hard limit, with its polls, webhooks, "اسأل المورد مجدداً", "تأكّدت: تمّ التسليم" on a held attempt and "استرداد" from review (the fake supplier is off, and a real one cannot be provoked without risking a double purchase; S08 worker and API tests), a webhook conflict, `input_rejected`, and S16's nearby supplier orders of an attempt refused on re-send (feature 9 deferred it here; it needs a real refusal); the purchase rate limits (10 per 10 minutes per customer, 30 per address), a double tap or a lost answer replaying the same `Idempotency-Key`, and two purchases on one wallet at once (concurrency tests); the purchase stop on the buy box and on reservations (feature 21); a reservation paid within seconds by a **deposit** credit (the credit here is an adjustment, paid by the 5-minute sweep; a real deposit would add money for no other gain); the `product_changed` and `frozen` cancellations and the daily purchase cap (feature 16); S17's "قيد التسليم، قد يستغرق حتى {n} دقيقة" (no route has an expected time; S17's own live acceptance comes first); the measured delivery chip (fewer than 5 samples, 10.4). Saved IDs and "اشترِ مجدداً" are feature 12; the cart, gifts and receipts feature 13; admin purchases feature 14; the live orders room and the reroute feature 15; the notification center and push feature 19; the Telegram daily summary feature 20; the books against the suppliers feature 22.
+
+### 11.1 Orders as they stand
+
+**What this checks:** the admin and a customer each see exactly the orders that exist, with nothing invented.
+
+Read only: **press nothing** in this case but links and tabs.
+
+1. In the panel open "الطلبات" (`/orders`). Expected: "الكل" lists **2** orders, `VO-QG75EJ` and `VO-5QXTCT`, "تم التسليم", $0.99, PUBG Mobile "60 شدة", with no customer (walk-in) and no "تجريبي" chip; "بحاجة لمراجعة" shows "لا طلبات بحاجة لمراجعة", "يدوي بانتظارك" "لا طلبات يدوية بانتظارك", "مستردة" "لا طلبات مستردة"; the navigation badge is empty.
+2. Open `VO-5QXTCT`. Expected: one WDGZone attempt with its supplier reference, resolved by "المورد", its unit cost and the cost-of-goods journal; the events paid → sent → delivered. Open the order policy page (`/orders/policy`): the worked values (60 s, 60 s, 10 minutes, 300 s, 30 minutes, 30 minutes, 24 hours, 15 minutes). Change nothing.
+3. "الموردون" → WDGZone → its connection tab. Expected: no "حصة التحقق اليومية" card, because WDGZone cannot validate players in this build.
+4. As TC1 open "طلباتي" (`/orders`). Expected: "لا طلبات بعد", "اختر لعبة واشحن رصيدك منها، وستظهر طلباتك هنا" and "تصفّح الألعاب". TC1's wallet shows **$28.98**.
+
+Result:
+
+### 11.2 Player validation as production stands
+
+**What this checks:** with no supplier able to validate, the customer is never shown a false check result and no player ID is sent to a supplier; the confirmation step makes the ID easy to review instead.
+
+1. As TC1 open `/games/pubg-mobile` and select "60 شدة". Expected: the buy box with "معرّف اللاعب" (an LTR numeric input), $0.98 ≈ 138 ل.س, no quantity stepper (maximum 1), and "رصيدك بعد الشراء: $28.00".
+2. Leave the field empty and press "متابعة"; then try `abc`. Expected: "هذا الحقل مطلوب"; letters are refused ("أرقام فقط، من 1 إلى 32 خانة" if they reach the field); the action stays blocked while the field is wrong.
+3. Type `5123456789` and leave the field. Expected: **no** "نتحقق من المعرّف…", no "الاسم في اللعبة:", no warning and no "أنا متأكد من المعرّف" checkbox: the pack is not checkable, which shows nothing. Optional Network check: no request to `/api/player-checks`.
+4. Press "متابعة". Expected: the confirmation step with the pack, "معرّف اللاعب" and `5123456789` in large LTR digits, the total and "رصيدك بعد الشراء". **Do not slide.** Press "رجوع" and close the buy box. Nothing has been bought (11.3 tries the slide).
+
+Result:
+
+### 11.3 Signed out, and a test customer on a real pack
+
+**What this checks:** a visitor is sent to sign in without losing what they typed, and a test customer can never buy a real pack, because the only route a test order may use (manual) is unprofitable or missing.
+
+1. In the signed-out private window open Free Fire "110 جوهرة" and type `5123456789`. Expected: the action reads **"سجّل الدخول للشراء"**; the URL keeps `?pack=…` and never contains the ID.
+2. Press it and sign in as TC1. Expected: back on the same pack with `5123456789` still in the field (kept in session storage).
+3. Press "متابعة" and **slide to the end** ($1.01). Expected: **"هذه الباقة لم تعد متوفرة. اختر باقة أخرى."** and the page data refreshes; no order page opens. The public card stays available: real customers can still buy it.
+4. Repeat on PUBG Mobile "60 شدة" ($0.98). Expected: the same refusal (for TC1 the manual route at $0.95 leaves $0.03, below the $0.10 minimum). TC1's "طلباتي" is still empty and the wallet still **$28.98**: refused before payment, nothing written, no supplier called.
+
+Result:
+
+### 11.4 Setup: test games A and B back, B routed
+
+**What this checks:** the fixtures come back as recorded, with prices the cases can rely on, and nothing real is touched.
+
+1. In the panel restore the category "اختبار النظام", then A "لعبة اختبار 7". Expected: A comes back **active** (its status before 10.18's archive), so it is public at once in a seventh store section; that is expected for this sitting. Do not restore the archived duplicate `660 UC`. Confirm A's packs: `60 UC` active at **$1.10** (manual $1.00, enabled), `325 UC` paused with no price, `660 UC` active at **$9.35** (manual $8.50); the two WDGZone routes archived. Fields: "معرّف اللاعب" digits 5–15, required; "المنطقة" optional with أوروبا and آسيا.
+2. Restore B "تطبيق اختبار 7" (it stays paused). On `بطاقة 10$` add one **manual** route at cost **$1.00** (re-authentication). Expected: price **$1.10**, maximum quantity 10, region "الولايات المتحدة", the two-line instructions unchanged. Note that this route is new, for 11.18. Activate B.
+3. In the store (allow up to a minute): home shows "اختبار النظام" with A and B and **"بعض الألعاب أبطأ من المعتاد"**; A and B "أبطأ من المعتاد" (manual only). Audit log: the category and game restores, the new route and B's activation, each on the right target.
+
+Result:
+
+### 11.5 The buy box and slide-to-pay
+
+**What this checks:** a purchase cannot happen by accident: the fields are checked as the server checks them, the confirmation shows exactly what will be bought, and only a full slide pays.
+
+1. As TC1 open A and select `60 UC`. Expected: the fields in order, "معرّف اللاعب" (LTR, numeric) and "المنطقة (اختياري)" with "اختر"; no quantity stepper; "الإجمالي" $1.10 ≈ 154 ل.س; "رصيدك بعد الشراء: $27.88"; "أين أجد المعرّف؟" opens A's guide.
+2. Type `1234`. Expected: "أرقام فقط، من 5 إلى 15 خانة". Type `5123456789` and choose "آسيا". Expected: the error clears; no check line (11.2).
+3. "متابعة". Expected: the pack, `5123456789` and "آسيا" in large text, $1.10, the balance after, and the slider **"اسحب للدفع"** with its handle at the right edge (RTL). Drag it about half way and release. Expected: it springs back; nothing is sent.
+4. Slide to the end. Expected: "ندفع طلبك…", then `/orders/<id>` with the new order number (`VO-…`); note it as order **O1**. On a later purchase (11.8), confirm with the keyboard instead: focus the handle and press `End`.
+
+Result:
+
+### 11.6 The manual route, its card, manual fulfil and the live timeline
+
+**What this checks:** a paid order reaches the admin at once, the admin records what was delivered with its proof and true cost, and the customer watches it happen live.
+
+1. Keep TC1's page of O1 open. Expected at once: "قيد التنفيذ", "نشحن طلبك الآن", and "مراحل الطلب" with "تم الدفع" and "قيد الشحن" and their times, "تم التسليم" greyed; the product, the game, "معرّف اللاعب" `5123456789`, "المنطقة" آسيا, quantity 1, unit price and total $1.10, "≈ 154 ل.س عند الشراء". No supplier name, no cost, no "قد يستغرق حتى" hint.
+2. Telegram. Expected: "🖐 طلب يدوي O1 بانتظارك", "لعبة اختبار 7 · 60 UC × 1", "منذ …" and the panel link ending in `?decide=fulfil`; **no player ID** in the card. The panel's "الطلبات" badge and the "يدوي بانتظارك" tab show O1 with the "تجريبي" chip and the supplier "يدوي".
+3. Open O1 in the panel. Expected: the account fields, one manual attempt (pending, cost $1.00), its candidates (manual only), the manual help text and the actions "تنفيذ يدوي", "تأكّدت: فشل" and the reroute. Press **"تنفيذ يدوي"**. Expected: "الوحدات المُسلّمة" 1 and "تكلفة الوحدة الفعلية (دولار)" prefilled **1.00** with "الربح: $0.10".
+4. Type `1.20`. Expected: "خسارة: $0.10" and "أقبل بيع هذه الوحدات بخسارة"; submitting without ticking it shows "التكلفة أعلى من سعر البيع: أكّد قبول الخسارة للمتابعة". Then type **`0.00`**: "الربح: $1.10" (nothing was bought for a test game). Upload the non-personal proof, leave the reference empty, write a reason ("اختبار الميزة 11: تسليم تجريبي"), re-authenticate and press "تسجيل التسليم".
+5. TC1's page, **without reloading**. Expected: "تم التسليم" with its time, the three-stroke success sequence once (not again on reload), the notification "سُلّم طلبك 60 UC (O1)." and its email (no ID in either). Wallet: a purchase entry of −$1.10 naming O1, balance **$27.88**. Panel: O1 "تم التسليم", the attempt resolved by "الإدارة" with "صورة إثبات التسليم", and **no** cost-of-goods journal (cost $0.00, S11 MF5).
+
+Result:
+
+### 11.7 A price change at the slide, then a failure and a full refund
+
+**What this checks:** a customer never pays a price they did not see, and an order no route can fulfil returns every cent to the wallet.
+
+1. As TC1 open A `60 UC`, fill `5123456789`, press "متابعة" and stop at the slider (the step shows $1.10).
+2. In the panel set A `60 UC`'s manual cost to **$1.20** (as in 8.10, re-authentication). Expected: price **$1.32** at once, no review.
+3. Slide on TC1's open step. Expected: **"تغيّر سعر الباقة إلى $1.32. راجع الإجمالي ثم اسحب مرة أخرى."**, the total now $1.32 ≈ 185 ل.س; no order was created (the panel lists only O1 for TC1). Slide again. Expected: paid at **$1.32**, balance $26.56; note this order as **O2**.
+4. Leave O2 open for **15 minutes** (do 11.8 meanwhile). Expected: **one** reminder "⏰ الطلب اليدوي O2 ما زال بانتظارك منذ …" with the same pack line and link, and no second one.
+5. On O2 press **"تأكّدت: فشل"**, write a reason, re-authenticate, "تأكيد الفشل". Expected: there is no other route, so O2 is refunded in full: the panel shows "مُسترد", "فشلت كل المسارات" and $1.32 refunded; TC1 sees live "مُسترد", "أعدنا ثمن طلبك إلى محفظتك: لا يتوفّر مورد لهذه الباقة الآن", "المبلغ المُسترد" $1.32 and the step "مُسترد"; the notification and email "أُعيد $1.32 إلى رصيدك عن طلبك 60 UC (O2): لا يتوفّر مورد لهذه الباقة الآن.". Wallet: the purchase −$1.32 and the refund +$1.32, both naming O2, balance **$27.88**.
+6. Set A `60 UC`'s manual cost back to **$1.00**. Expected: $1.10 again.
+
+Result:
+
+### 11.8 A code order, partly delivered
+
+**What this checks:** with several units, the customer pays only for what arrived, and the codes are stored for the buyer alone.
+
+1. As TC1 open B and select `بطاقة 10$`. Expected: no player field, "المنطقة: الولايات المتحدة", a quantity stepper up to 10, no calculator. Set **3**: "الإجمالي" **$3.30** ≈ 462 ل.س and "رصيدك بعد الشراء: $24.58" (if O2 is not refunded yet, $23.26). Confirm the slider with the keyboard (`End`). Note the order as **O3**.
+2. Telegram: the manual card "تطبيق اختبار 7 · بطاقة 10$ × 3", with **no code**. In the panel open O3 → "تنفيذ يدوي": "الوحدات المُسلّمة" **2**, then type only one line in "الأكواد". Expected: "أدخل كوداً واحداً لكل وحدة مُسلّمة، من 1 إلى 200 حرف". Type two lines, `VDTEST-F11-0001` and `VDTEST-F11-0002`; cost **0.00**; the proof; a reason; re-authentication; "تسجيل التسليم".
+3. Expected: 2 units delivered; the third has no other route and is refunded. Panel: O3 **"سُلّم جزئياً واسترد الباقي"**, the units line "3 مطلوبة · 2 سُلّمت · 1 استُردت", $1.10 refunded. TC1: that stage and "سلّمنا جزءاً من طلبك وأعدنا ثمن الباقي إلى محفظتك"; the notification and email "سُلّم جزء من طلبك بطاقة 10$ (O3)، وأُعيد $1.10 إلى رصيدك.", with no code in either. Wallet: −$3.30 and +$1.10 naming O3, balance **$25.68**.
+
+Result:
+
+### 11.9 Code reveal, its log and the admin's masked view
+
+**What this checks:** a code is shown only to its buyer, each reveal is logged, and the admin sees one only after re-authentication, without the audit log ever holding it.
+
+1. TC1's O3 page. Expected: "الأكواد" with two masked rows and "إظهار"; then "المنطقة:" الولايات المتحدة and "طريقة الاستخدام" with the two lines of 7.9. Press "إظهار" on the first. Expected: `VDTEST-F11-0001`, "نسخ الكود" and "كُشف أول مرة في …". Reload: masked again until "إظهار", with the first-reveal time unchanged.
+2. The panel's O3: both codes masked. Press "كشف" on the second and re-authenticate. Expected: `VDTEST-F11-0002`, hidden again after about 30 seconds. The reveal log shows "كشفه العميل في …" (first code) and "كشفته الإدارة في …" (second).
+3. Audit log: "كشف كود" on O3 with the code's row id, **never** the code. Neither code appears in the emails, Telegram cards or notifications of 11.8.
+
+Result:
+
+### 11.10 Reservations: shortfall, deposit prefill, limit and cancel
+
+**What this checks:** a customer short of balance can hold an order without paying anything, is sent to deposit the right amount, and cannot pile up reservations.
+
+1. As TC2 ($0.00) open A `660 UC`. Expected: "رصيدك $0.00، ينقصك $9.35" with "احجز الطلب واشحن رصيدك" and "اشحن رصيدك". Press "اشحن رصيدك": the deposit wizard opens with **$9.35** prefilled (above the $2.00 minimum). **Do not submit**; go back.
+2. Fill `5123456789`, press "احجز الطلب واشحن رصيدك", then "متابعة". Expected: "لن يُخصم شيء الآن. يُدفع الطلب تلقائيًا عند وصول إيداعك خلال 24 ساعة، وإلا يُلغى." and the slider **"اسحب لحجز الطلب"**. Slide: "نحجز طلبك…", then the order page (**R1**): "بانتظار رصيدك", "طلبك محجوز حتى يكفي رصيدك", "حُجز الطلب" with its time, a countdown of about 24 hours, "رصيدك $0.00، ينقصك $9.35", the "لم يُخصم شيء بعد…" explanation, "اشحن رصيدك" and "إلغاء الطلب". "اشحن رصيدك" here opens the wizard with "العودة إلى طلبك المحجوز" (do not submit).
+3. Reserve A `60 UC` twice the same way (**R2**, then **R3**). On `60 UC`'s shortfall view "اشحن رصيدك" prefills **$2.00** (the minimum, above the $1.10 shortfall). Try a fourth reservation. Expected: **"لديك 3 طلبات محجوزة. ألغِ أحدها أو اشحن رصيدك."** and no fourth order.
+4. On R3 press "إلغاء الطلب" → "إلغاء الطلب المحجوز؟" → "إلغاء الطلب". Expected: "ملغى", "أُلغي هذا الطلب" and the reason "ألغيته أنت"; no notification or email for a customer's own cancel. TC2's "طلباتي": R1 and R2 "بانتظار رصيدك" with their countdowns, R3 "ملغى". TC2 still $0.00 with no wallet entry. Panel: the `awaiting_balance` status filter (warning tone) lists R1 and R2; audit "حجز طلب" ×3 and "إلغاء طلب محجوز" ×1 (by the customer).
+
+Result:
+
+### 11.11 A credit pays a reservation, at the lower price, oldest first
+
+**What this checks:** when money arrives, waiting orders are paid automatically, never above the reserved price, and an older order the balance cannot cover does not block a newer one it can.
+
+1. In the panel set A `60 UC`'s manual cost to **$0.80**. Expected: price **$0.90** (≈ 126 ل.س) at once.
+2. Credit TC2 **+$1.00**, category "رصيد تجريبي", with a reason and re-authentication (as in 6.5). Within **5 minutes** (the reservation sweep: an adjustment is not a deposit credit, so it is not paid at once). Expected: R1 ($9.35, older) is skipped and stays reserved; **R2 is paid at $0.90**, not $1.10: its timeline "حُجز الطلب" → "تم الدفع" → "قيد الشحن", live on TC2's page; the center notification "تم دفع طلبك المحجوز 60 UC (R2)." and **no email**; TC2's balance **$0.10**; audit "شراء طلب" by the system for R2; a manual Telegram card for R2.
+3. On R2 press "تأكّدت: فشل" (a reason, re-authentication). Expected: refunded **$0.90** (not $1.10), "مُسترد"; TC2 back to **$1.00**. R1 still reserved ($1.00 < $9.35).
+4. Set A `60 UC`'s cost back to **$1.00** ($1.10). Reverse TC2's $1.00 credit (as in 6.12). Expected: TC2 **$0.00**; R1 still "بانتظار رصيدك".
+
+Result:
+
+### 11.12 A reservation cancelled when the price rose
+
+**What this checks:** a reservation is never paid below cost: when its saved price is no longer profitable, it is cancelled and the customer told why.
+
+1. In the panel set A `660 UC`'s manual cost to **$9.30**. Expected: price **$10.23** (≈ 1,433 ل.س). R1's saved $9.35 now leaves $0.05, below the $0.10 minimum.
+2. Within **5 minutes** (the sweep checks the price before the balance, so TC2's $0.00 does not matter). Expected: R1 "ملغى" with "تغيّر سعر الباقة"; the notification and email "أُلغي طلبك المحجوز 660 UC (R1): تغيّر سعر الباقة."; no wallet entry; audit "إلغاء طلب محجوز" by the system.
+3. Set A `660 UC`'s cost back to **$8.50**. Expected: $9.35 again.
+
+Result:
+
+### 11.13 A reservation expires after 24 hours
+
+**What this checks:** a reservation that is never funded ends by itself, with no money moved, and the customer is told.
+
+1. Day 1, after 11.12: as TC2 reserve A `60 UC` once more (**R4**). Note its time and countdown. TC2 stays at $0.00, so nothing can pay it.
+2. End of day 1: A and B are paused (11.18 step 1); R4 stays reserved (a paused pack is skipped, not cancelled).
+3. Day 2, at least 24 hours after R4. Expected: R4 "ملغى" with **"انتهت مدة الحجز (24 ساعة)"**; the notification and email "أُلغي طلبك المحجوز 60 UC (R4): انتهت مدة الحجز (24 ساعة)."; no wallet entry; audit "إلغاء طلب محجوز" by the system, a minute or two after the 24 hours.
+
+Result:
+
+### 11.14 One real automatic delivery (owner's decision)
+
+**What this checks:** the store's main path end to end with real money: a real customer pays, WDGZone delivers in seconds without any admin action, and the books record the real cost.
+
+Skip this case if you prefer not to spend the first real purchase here: record "skipped (owner)"; automatic delivery through the store then stays **unconfirmed on production** (the walk-in orders of 2026-10-13/14 proved only the admin purchase path).
+
+1. In a separate browser sign in to the store with **your own account** (non-test, $4.50). Open PUBG Mobile "60 شدة": **$0.98** ≈ 138 ل.س, "رصيدك بعد الشراء: $3.52". Type **your own** PUBG player ID and check it twice (no name check exists, 11.2). "متابعة", check the ID in large digits, slide. Note the order as **O4** and the time.
+2. Expected within seconds: "تم الدفع" → "قيد الشحن" → **"تم التسليم"** live, the success sequence, the notification and email "سُلّم طلبك 60 شدة (O4).". Your wallet: −$0.98 naming O4, **$3.52**. In the game, **60 UC** arrive on your account.
+3. Panel O4: no "تجريبي" chip, one **WDGZone** attempt (offer `235203` "Auto · 60 UC", unit cost about **$0.88**), its supplier reference, resolved by "المورد", and the cost journal ("تسجيل تكلفة طلب" in the audit log). "الموردون" → WDGZone: the balance about **$5.24** at the next 5-minute read and no "تحت الحد" ($5.00 threshold); the statement (9.8) shows the purchase linked to O4.
+4. If the answer is not "delivered": a pending or unknown attempt is polled every minute; **do not buy again or touch another route**. If it is still open after 30 minutes it turns "بحاجة لمراجعة" with a Telegram alert: settle it from the supplier's statement (9.8) before any decision, and log a finding. A refusal with "بيانات الحساب مرفوضة" refunds $0.98 at once: check the ID.
+
+Result:
+
+### 11.15 Only the buyer sees an order
+
+**What this checks:** order pages, codes and their API are scoped to the buyer, and admin routes refuse customers.
+
+1. As TC3 paste TC1's O3 URL (`/orders/<id>`). Expected: the store's not-found page, with no code, field or amount. Optional: `GET /api/orders/<O3 id>` as TC3 answers `404 NOT_FOUND`.
+2. Signed out, open `/orders`. Expected: the sign-in, then TC1's own list after signing in as TC1. As TC1 open `https://digital-admin.vertexmedia.pro/orders`. Expected: the panel's own sign-in: a customer session is not an admin session.
+3. TC1's "طلباتي": O3 "سُلّم جزئياً واسترد الباقي", O2 "مُسترد", O1 "تم التسليم", newest first, each with its cover, quantity, total and "≈ … ل.س عند الشراء"; none of TC2's reservations and nothing of the owner's O4.
+
+Result:
+
+### 11.16 The audit log and the books
+
+**What this checks:** every money step and admin decision of this feature is recorded once, by the right actor, and every wallet equals the sum of its entries.
+
+1. Audit log filtered to this feature's sittings. Expected order entries: "شراء طلب" for O1, O2, O3 (TC1), R2 (the system) and O4 (your account); "حجز طلب" ×4 (R1–R4); "إلغاء طلب محجوز" ×3 (R3 by the customer, R1 and R4 by the system); "رفع إثبات تسليم" ×2 and "تنفيذ طلب يدوياً" ×2 (O1, O3); "حسم محاولة تنفيذ" ×2 (failed: O2, R2); "استرداد طلب" ×3 (O2 $1.32, O3 $1.10, R2 $0.90); "كشف كود" ×1; "تسجيل تكلفة طلب" ×1 (O4 only: the test deliveries cost $0.00). Besides them, only the catalog changes (restores, B's route and activation, A's six cost changes, pauses and archives) and TC2's adjustment and its reversal.
+2. Wallets: TC1 **$25.68**, TC2 **$0.00**, your account **$3.52**, each the sum of its timeline. TC3 untouched.
+3. Claude confirms with a read-only query **after the owner runs the cases**: orders **2 + 8 = 10** (O1–O4, R1–R4); journals **20 + 11 = 31** (TC1: 3 purchases and 2 refunds; TC2: the credit, R2's purchase and refund, the reversal; O4: the purchase and its cost of goods), postings **52 + 22 = 74**; still 0 player checks, 0 checkouts and 0 `validate_player` calls, and exactly **one** new `place_order` call (O4; none if 11.14 is skipped, with 29 journals and 70 postings). These counts are expectations, not results.
+
+Result:
+
+### 11.17 Screens quality on desktop and phone
+
+**What this checks:** the purchase and tracking screens stay clear in Arabic RTL on a phone and a PC.
+
+1. At about 360 px and a desktop width, in dark and light themes: the buy box (bottom sheet on the phone, sticky side panel on desktop), its errors, the shortfall view, the confirmation and both sliders, "طلباتي" and an order page in each state met (delivered, refunded, partly refunded with codes, reserved with its countdown, cancelled). Expected: RTL, Latin tabular digits, player IDs and codes LTR, no horizontal scroll or overlap; the slider handle starts at the right edge.
+2. The panel's order list and an order page with the fulfil dialog, attempts and codes, light and dark: readable, nothing cut off.
+3. Record screenshots of the confirmation step, a delivered order, the partly refunded code order (codes masked) and a reserved order, at phone and desktop widths. No real player ID, code, credential or receipt in a screenshot committed to the repository (the test ID and test codes are fine).
+
+Result:
+
+### 11.18 Cleanup
+
+**What this checks:** the test leaves the real catalog unchanged and the fixtures archived, with every temporary change traceable.
+
+1. End of day 1: A's costs are back at $1.00 and $8.50 (11.7, 11.11, 11.12); pause A and B. TC2 is at $0.00 with only R4 reserved.
+2. Day 2, after 11.13: archive B's manual route added in 11.4 (its offer, price and audit rows stay), then archive B, A and "اختبار النظام". Never touch the archived duplicate `660 UC` or C.
+3. Store after a refresh: exactly the six real categories and 57 games (or the independently recorded real change), no `system-test` game on home, in search or in the sitemap, and the three fixture games not found. PUBG Mobile and Free Fire prices as before, apart from sync changes (recorded, not undone).
+4. Claude confirms the final fixture states, balances and counts with a read-only query after the run; the setup reads do not prove the cleanup.
+
+Result:
+
+### Feature 11 sign-off
+
+| Item | Value |
+|---|---|
+| Cases passed | — |
+| Findings | — |
+| Checked read-only while writing (2026-10-18) | Production SQL at 20:53:37 and 20:55:06 Damascus (`vertex_digital`, `REPEATABLE READ READ ONLY`, `transaction_read_only = on`, `ROLLBACK`; snapshots `1431525:1431525:` and `1431654:1431654:`), deployed `d1f70f3`; public game reads at 20:56:58. 2 orders, 31 deposits (19 + 12), 20 journals, 52 postings, 0 player checks, 0 checkouts, 0 `validate_player` calls; TC1 $28.98, TC2 and TC3 $0.00, the owner's account $4.50; rate 140 (step 1 ل.س); only the global 10%/$0/$0.10 rule; the policy seed (hard limit 30 minutes, manual reminder 15 minutes); WDGZone healthy at $6.124; no product can be player-checked; no S17 timing on any route; fixtures archived with A's status active, B without a route. Expected prices computed with `priceFromCost`. No production change, supplier call or customer identifier read out; the manual run, its results and the post-run counts remain unconfirmed |
+| Accepted by the owner on | — |
+| PR | the steps (this record) |

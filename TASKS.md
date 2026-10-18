@@ -1,4 +1,13 @@
-# TASKS — V1 system test, feature 10 owner run
+# TASKS — V1 system test, feature 11 cases
+
+Documentation only, branch `docs/v1-system-test-feature-11`. Write the owner's production test cases for F13 and F11 without running them or accepting the feature.
+
+- [x] Read the feature 8–10 case pattern, F11/F13 scope and S08, S09, S11 (manual fulfil) and S17 rules.
+- [x] Record worked numbers from read-only production SQL (20:53:37 and 20:55:06 Damascus) and public game reads (20:56:58); no production change.
+- [x] Write 18 feature 11 cases, the real-money note, deferred checks and the blank sign-off in `docs/testing/v1-system-test.md`.
+- [x] Open the docs PR with merge-commit auto-merge.
+
+## Previous task — Feature 10 owner run
 
 Branch `docs/feature-10-production-results`. The owner performs all production actions; the assistant observes read-only and records only reported or directly verified results. Do not accept cases from setup checks. Follow `docs/testing/v1-system-test.md`'s run/fix/accept/ship cycle; keep the run open until the owner has supplied results and acceptance.
 
