@@ -56,6 +56,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 
 ## Pilot — open quiet launch
 - [ ] Full system test of every V1 feature on production, end to end, before any second supplier is added (owner, 2026-10-15); features 1–9 of 22 accepted (features 4 and 5 on 2026-10-16, case 4.12 step 2 on 2026-10-17; features 6, 7 and 8 on 2026-10-17; feature 9 on 2026-10-18), progress and findings in `docs/testing/v1-system-test.md`
+- [~] S17 WDGZone Web Purchase route (owner, 2026-10-18; extends S07, S16): several routes of one supplier per product, Web Purchase used first and Auto as fallback, the price kept on the Auto cost (ADR 0032); spec `docs/specs/S17-wdg-web-route.md` (one PR); starts once the WEB packs show as `topup` in the supplier catalog
 - [ ] Professional catalog build-out, once all 22 features are accepted (owner, 2026-10-17): a complete, correct and polished catalog on production, closing the content findings of the test (F7-1, F7-2 and any later ones); checklist in `docs/testing/v1-system-test.md`, "After the last feature: the professional catalog"
 - [ ] Second automatic supplier, chosen by the owner after the full system test (`/supplier-adapter`; Q17 answered first; FazerCards evaluated in `docs/suppliers/fazercards.md`)
 - [ ] Launch checklist done (below)

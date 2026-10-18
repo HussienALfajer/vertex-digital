@@ -221,9 +221,31 @@ No code was changed. A change would be: relax the index to `(product_id, offer_i
 
 ### Open questions (to add to the list above)
 
-12. **Web Purchase:** is it automatic and what does it mean (a web top-up by script, a reserved pool, a different source)? Typical delivery time, success rate, and are failures refunded to the wallet like Auto's `410`? Why is the stock limited to about 1,000 and is it replenished? Is the price stable or a promotion?
-13. **Owner:** approve read-only calls with the supplier key to identify the `WEB` products (item 1 above), and decide the pricing question under "Routing".
+12. **Web Purchase:** answered by WDG support on 2026-10-18 (below, "WDG's answer and the catalog check"); delivery and refunds still to be seen in a live order. Originally: is it automatic and what does it mean (a web top-up by script, a reserved pool, a different source)? Typical delivery time, success rate, and are failures refunded to the wallet like Auto's `410`? Why is the stock limited to about 1,000 and is it replenished? Is the price stable or a promotion?
+13. ~~**Owner:** approve read-only calls with the supplier key to identify the `WEB` products (item 1 above), and decide the pricing question under "Routing".~~ done 2026-10-18: the catalog check below and the S17 interview (price on the Auto cost).
 
 Draft question for WDG support (English, for the owner to send):
 
 > Hello, on your PUBG Mobile (ID) catalog page there is a "Web Purchase" route (products named "WEB 60 UC" … "WEB 8100 UC") priced 1–7% below the Auto route, with about 1,000 in stock per pack. Through the reseller API: (1) are these returned by `GET /products?type=topup` as automatic top-ups, and what are their product ids? (2) How does Web Purchase deliver (typical time, success rate), and are failed orders refunded to the wallet automatically as with Auto (`410`, `order.refunded`)? (3) Why is the stock limited and how often is it replenished? (4) Do they need only `player_id`? Thank you.
+
+### WDG's answer and the catalog check (2026-10-18)
+
+WDG support wrote to the owner on 2026-10-18 (question 12): the six Web Purchase packs were converted to `type=topup` with `player_id` required; stock 1,000 per pack, refreshed daily at 00:00 UTC; failures refunded automatically (status `refunded`); delivery 5–30 minutes. The account was raised to Tier-2 VIP: `discount_percent` 2.00 on eligible items, threshold $5,000 a month, 30-day grace.
+
+Read-only check the same day, in the admin supplier catalog (offers tab, after the 15:22 sync; no call was made by hand, nothing was bought or linked):
+
+| Pack | Id | Cost (Web) | Stock | Auto id | Cost (Auto) | Auto original |
+|---|---|---|---|---|---|---|
+| 60 UC | 286552 | 0.87 | 1000 | 235203 | 0.88 | — |
+| 325 UC | 286553 | 4.35 | 1000 | 235204 | 4.38 | 4.435 |
+| 660 UC | 286554 | 8.55 | 999 | 235205 | 8.76 | 8.87 |
+| 1800 UC | 286555 | 21.15 | 1000 | 235206 | 21.90 | 22.176 |
+| 3850 UC | 286556 | 41.00 | 1000 | 235207 | 43.944 | — |
+| 8100 UC | 286557 | 82.00 | 1000 | 235208 | 87.50 | — |
+
+- **Confirmed:** the six `WEB` packs are listed (the adapter lists `topup` and `voucher` only), kind "شحن مباشر" (`direct`), category path `PUBG Mobile › Web Purchase`, one field `player_id` (Player ID, text), supported, not mapped. Answer 1 and question 3 of "Not confirmed" are settled: automatic top-ups, `player_id` only.
+- **Not as stated:** the discount seen is about **1.2%**, not 2.00%: three Auto packs show an original price with costs 1.24% lower (the panel rounds it down to "خصم 1%"); 60, 3850 and 8100 UC show no original price; the Web packs show none either. The panel shows the discount derived from `original_price`, not WDG's `discount_percent` field, so whether 2.00% applies to other items, or the tier is not yet applied, is unconfirmed: ask WDG or read `discount_percent` in a later read-only call.
+- **Not verifiable read-only:** delivery time, the refund behaviour and the daily refresh. The first live order (S17 Acceptance) and the next days' syncs show them.
+- Web vs Auto now: −1.1% (60), −0.7% (325), −2.4% (660), −3.4% (1800), −6.7% (3850), −6.3% (8100).
+
+S17 (`docs/specs/S17-wdg-web-route.md`, ADR 0032) maps both offers to one product: Web Purchase first, Auto as fallback, the price on the Auto cost.

@@ -1,6 +1,6 @@
 # 0022 — Order fulfilment: timing, held orders, test orders and code reveal
 
-Status: Accepted · Date: 2026-10-09 · Amends [0004](0004-orders-and-fulfilment-state-machine.md) (the hard limit, admin decisions, refunds after delivery, input rejections), [0005](0005-supplier-adapters-and-routing.md) (test customers' routes, the adapter outcome)
+Status: Accepted · Date: 2026-10-09 · Amends [0004](0004-orders-and-fulfilment-state-machine.md) (the hard limit, admin decisions, refunds after delivery, input rejections), [0005](0005-supplier-adapters-and-routing.md) (test customers' routes, the adapter outcome) · Amended by [0032](0032-several-routes-per-supplier-and-route-price-basis.md) (routes outside the price basis, per-route timing)
 
 ## Context
 ADR 0004 says an unknown supplier outcome is polled and, past "the product's hard limit", held for a human, but it sets no timing and does not say what the human may do. The manual supplier's orders need a way to reach the owner and be delivered. Test customers hold test funds that would spend real supplier balance if their orders were routed like any other. Codes are revealed to the buyer "each reveal logged", without saying how. A supplier that refuses the player's account would be retried on every backup route for nothing. The owner settled these in the S08 interview (2026-10-09).
