@@ -137,7 +137,7 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - **Admin purchases** (S16): walk-in (no customer), on behalf of a customer from their wallet, and gifts or compensation from the owner's funds (owner drawings, daily cap).
 
 #### F12 — Store home and game pages
-- Home: games grid, featured banners (F21), live service status, real anonymized live activity (F25 data).
+- Home: games grid, featured banners (F21), live service status. Live activity (F25) is not shown in the store (owner, 2026-10-19: the store no longer shows live activity; the API route, the panel switch and its preview stay).
 - Game page: packs with USD and SYP prices, savings vs official price, real measured delivery time, live service status, "how many do I need" calculator (cheapest combination of packs for a target amount), ID guide image.
 - Server-rendered and cached for speed and SEO (Cache Components); fresh prices on price change.
 
@@ -189,6 +189,7 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - Installable PWA with offline shell; web push (VAPID, self-hosted) for order delivered, deposit credited or rejected, ticket replies.
 
 #### F25 — Live activity
+- Not shown in the store (owner, 2026-10-19: the store no longer shows live activity; the API route, the panel switch and its preview stay).
 - Real, anonymized activity feed on the store ("PUBG 660 UC delivered in 14 s"), built from actual delivered orders with a delay and no personal data (no names, IDs or locations); can be turned off.
 
 ## 5. Automations (fixed rules in V1)

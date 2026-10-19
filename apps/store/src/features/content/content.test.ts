@@ -7,37 +7,7 @@ import {
   readDismissed,
   writeDismissed,
 } from './dismissal';
-import { ageText, durationText, pageDescription, productText, updatedText } from './texts';
-
-describe('durationText (S14 LA5)', () => {
-  it.each([
-    [0, 'خلال ثانية واحدة'],
-    [2, 'خلال ثانيتين'],
-    [3, 'خلال 3 ثوانٍ'],
-    [14, 'خلال 14 ثانية'],
-    [60, 'خلال دقيقة'],
-    [180, 'خلال 3 دقائق'],
-    [11 * 60, 'خلال 11 دقيقة'],
-    [7200, 'خلال ساعتين'],
-    [3 * 3600, 'خلال 3 ساعات'],
-  ])('%s seconds read "%s"', (seconds, text) => {
-    expect(durationText(seconds)).toBe(text);
-  });
-});
-
-describe('ageText (S14 LA4)', () => {
-  const delivered = '2026-10-11T12:00:00.000Z';
-  it.each([
-    ['12:03', 'منذ نحو 5 دقائق'],
-    ['12:10', 'منذ نحو 10 دقائق'],
-    ['12:25', 'منذ نحو 25 دقيقة'],
-    ['13:10', 'منذ نحو ساعة'],
-    ['14:00', 'منذ نحو ساعتين'],
-    ['17:00', 'منذ نحو 5 ساعات'],
-  ])('read at %s: "%s"', (time, text) => {
-    expect(ageText(delivered, new Date(`2026-10-11T${time}:00.000Z`))).toBe(text);
-  });
-});
+import { pageDescription, updatedText } from './texts';
 
 describe('updatedText (S14 PG2)', () => {
   it('names the day in Damascus with Latin digits', () => {
@@ -56,13 +26,6 @@ describe('pageDescription', () => {
     const long = 'ا'.repeat(200);
     expect(pageDescription(parseRichText(long).blocks)).toHaveLength(160);
     expect(pageDescription(parseRichText('## عنوان').blocks)).toBeUndefined();
-  });
-});
-
-describe('productText (S14 LA2)', () => {
-  it('adds the quantity above 1', () => {
-    expect(productText({ productNameAr: '60 UC', quantity: 1 })).toBe('60 UC');
-    expect(productText({ productNameAr: '60 UC', quantity: 2 })).toBe('60 UC × 2');
   });
 });
 

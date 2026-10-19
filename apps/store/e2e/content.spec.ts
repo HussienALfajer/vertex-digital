@@ -12,9 +12,11 @@ const c = ar.content;
 const at = (path: string) => `${CONTENT_STORE_URL}${path}`;
 const lightTheme = () => localStorage.setItem('vertex-theme', 'light');
 const { announcement } = fixtures.site;
+/** Removed from the store (owner, 2026-10-19): the API still answers the feed, the store never shows it. */
+const ACTIVITY_TITLE = 'آخر التسليمات';
 
-test.describe('home with content (SL1, SL2, LA7, AN3)', () => {
-  test('the announcement, the banners, the activity card and the footer links', async ({
+test.describe('home with content (SL1, SL2, AN3)', () => {
+  test('the announcement, the banners, no activity card and the footer links', async ({
     page,
     api: _api,
   }, testInfo) => {
@@ -39,21 +41,10 @@ test.describe('home with content (SL1, SL2, LA7, AN3)', () => {
     await expect(
       carousel.getByRole('img', { name: fixtures.site.banners[1]?.altText }),
     ).toHaveAttribute('loading', 'lazy');
-    await expect(carousel.getByRole('button')).toHaveCount(2);
+    // Two dots; the arrows show from sm (the desktop project).
+    await expect(carousel.getByRole('button', { name: /عرض البانر/ })).toHaveCount(2);
 
-    const feed = page.getByRole('heading', { name: c.activity.title }).locator('..');
-    const rows = feed.locator('> ul > li');
-    await expect(rows).toHaveCount(3);
-    await expect(rows.first()).toContainText('ببجي موبايل');
-    await expect(rows.first()).toContainText('660 UC');
-    await expect(rows.first()).toContainText('خلال 14 ثانية');
-    await expect(rows.first()).toContainText('منذ نحو 5 دقائق');
-    await expect(rows.nth(1)).toContainText('520 جوهرة × 2');
-    await expect(rows.first().getByRole('link')).toHaveAttribute('href', '/games/pubg-mobile');
-    await feed.getByText(c.activity.more).click();
-    await expect(feed.locator('details li')).toHaveCount(4);
-    await expect(feed.locator('details')).toContainText('خلال ساعتين');
-    await expect(feed.locator('details')).toContainText('منذ نحو 3 ساعات');
+    await expect(page.getByRole('heading', { name: ACTIVITY_TITLE })).toHaveCount(0);
 
     const footer = page.locator('footer');
     await expect(footer.getByRole('link', { name: ar.footer.faq })).toHaveAttribute('href', '/faq');
@@ -80,7 +71,7 @@ test.describe('home with content (SL1, SL2, LA7, AN3)', () => {
     await expect(page.getByRole('heading', { level: 1, name: ar.home.title })).toBeVisible();
     await expect(page.getByRole('region', { name: c.announcement.label })).toHaveCount(0);
     await expect(page.getByTestId('banner-carousel')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: c.activity.title })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: ACTIVITY_TITLE })).toHaveCount(0);
     const footer = page.locator('footer');
     for (const name of [ar.footer.faq, ar.footer.terms, ar.footer.privacy]) {
       await expect(footer.getByRole('link', { name })).toHaveCount(0);
@@ -93,28 +84,48 @@ test.describe('home with content (SL1, SL2, LA7, AN3)', () => {
     }
   });
 
-  test('the carousel advances every 6 seconds, never under reduced motion', async ({
+  test('the carousel advances every 3 seconds in a loop, never under reduced motion', async ({
     page,
     api: _api,
   }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'one width is enough for the timing');
     test.setTimeout(40_000);
     await page.goto(at('/'));
-    const dots = page.getByTestId('banner-carousel').getByRole('button');
+    const carousel = page.getByTestId('banner-carousel');
+    const dots = carousel.getByRole('button', { name: /عرض البانر/ });
     await expect(dots.first()).toHaveAttribute('aria-current', 'true');
-    await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true', { timeout: 9_000 });
+    await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true', { timeout: 5_000 });
+    // From the last banner it goes on to the first, and the arrows step both ways.
+    await expect(dots.first()).toHaveAttribute('aria-current', 'true', { timeout: 5_000 });
+    await carousel.getByRole('button', { name: c.banners.previous }).click();
+    await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true');
+    await carousel.getByRole('button', { name: c.banners.next }).click();
+    await expect(dots.first()).toHaveAttribute('aria-current', 'true');
+    await page.mouse.move(0, 0);
 
     // Advancing moves the banners only: a visitor who scrolled past them stays where they are.
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     const scrolled = await page.evaluate(() => window.scrollY);
     expect(scrolled).toBeGreaterThan(0);
-    await expect(dots.first()).toHaveAttribute('aria-current', 'true', { timeout: 9_000 });
+    await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true', { timeout: 5_000 });
     expect(await page.evaluate(() => window.scrollY)).toBe(scrolled);
+
+    // A tab hidden past the 3 seconds does not stall the loop: back in front, it moves on.
+    const setVisibility = (state: 'hidden' | 'visible') =>
+      page.evaluate((value) => {
+        Object.defineProperty(document, 'visibilityState', { value, configurable: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+      }, state);
+    await setVisibility('hidden');
+    await page.waitForTimeout(4_000);
+    await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true');
+    await setVisibility('visible');
+    await expect(dots.first()).toHaveAttribute('aria-current', 'true', { timeout: 5_000 });
 
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.reload();
     await expect(dots.first()).toHaveAttribute('aria-current', 'true');
-    await page.waitForTimeout(7_000);
+    await page.waitForTimeout(4_000);
     await expect(dots.first()).toHaveAttribute('aria-current', 'true');
     // A dot still moves to its banner.
     await dots.nth(1).click();
@@ -161,22 +172,11 @@ test.describe('announcement dismissal (AN4)', () => {
   });
 });
 
-test.describe('game page activity (LA3, LA7)', () => {
-  test("a game's card shows its own deliveries, under the minimum none", async ({
-    page,
-    api: _api,
-  }, testInfo) => {
+test.describe('game page', () => {
+  test('shows no delivery feed, though the API answers one', async ({ page, api: _api }) => {
     await page.goto(at('/games/pubg-mobile'));
-    const feed = page.getByRole('heading', { name: c.activity.title }).locator('..');
-    await expect(feed).toBeVisible();
-    await expect(feed).not.toContainText('فري فاير');
-    await expect(feed.locator('li')).toHaveCount(5);
-    await screenshot(page, testInfo, 'game-activity-dark');
-
-    // Free Fire has one delivery: below the minimum, the section is not rendered at all.
-    await page.goto(at('/games/free-fire'));
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('heading', { name: c.activity.title })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: ACTIVITY_TITLE })).toHaveCount(0);
   });
 });
 

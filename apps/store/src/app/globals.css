@@ -3,3 +3,13 @@
 
 /* The store's own sources, for the utilities they use. */
 @source "../";
+
+/* The banner carousel's current dot fills over the 3 seconds before the next banner (S14 SL2). */
+@keyframes vd-banner-progress {
+  from {
+    inline-size: 0;
+  }
+  to {
+    inline-size: 100%;
+  }
+}

@@ -608,6 +608,7 @@ export class CatalogService {
             ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
             : null,
         basisSupplierNameAr: state.basis?.supplier.nameAr ?? null,
+        basisCostUsdUnits: state.basis?.costUsdUnits ?? null,
         basisStockLevel: state.basis
           ? stockLevel(state.basis.offer.stock, state.basis.offer.inStock, policy.lowStockUnits)
           : null,

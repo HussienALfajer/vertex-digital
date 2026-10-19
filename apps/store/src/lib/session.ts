@@ -15,12 +15,40 @@ export type SessionUser = {
 
 export type Session = { user: SessionUser; session?: { token?: string } } | null;
 
+/** Must match SESSION_HINT_SCRIPT. Holds no personal data: only that a session was seen here. */
+const HINT_KEY = 'vd-signed-in';
+
+/**
+ * Runs in <head> before the page paints: a browser that was signed in at its last read gets
+ * `data-signed-in-hint` on <html>, so the header shows the signed-in placeholder instead of
+ * flashing "sign in" while the session is read (pages stay static: the server never knows).
+ */
+export const SESSION_HINT_SCRIPT = `try{if(localStorage.getItem('${HINT_KEY}'))document.documentElement.setAttribute('data-signed-in-hint','')}catch(e){}`;
+
+function rememberSession(signedIn: boolean) {
+  try {
+    if (signedIn) localStorage.setItem(HINT_KEY, '1');
+    else localStorage.removeItem(HINT_KEY);
+  } catch {
+    // Storage can be unavailable (private mode): the header then waits for the read as before.
+  }
+}
+
+/** Sign-out: the next page starts signed out at once. */
+export const forgetSession = () => rememberSession(false);
+
 let inFlight: Promise<Session> | null = null;
 
 export function readSession(): Promise<Session> {
   if (!inFlight) {
     inFlight = fetch('/api/auth/get-session', { credentials: 'same-origin', cache: 'no-store' })
-      .then((response) => (response.ok ? (response.json() as Promise<Session>) : null))
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const session = (await response.json()) as Session;
+        // Only a clear answer changes the hint; a failed read leaves it as it was.
+        rememberSession(session !== null);
+        return session;
+      })
       .catch(() => null)
       .finally(() => {
         inFlight = null;

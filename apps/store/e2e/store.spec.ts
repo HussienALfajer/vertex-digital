@@ -161,9 +161,11 @@ test('the game page stays within its performance budget', async ({ page, api: _a
  * S10, measured in PR 2 (apps/store/CLAUDE.md): the cart loads its rules, the checkout's shapes
  * and slide-to-pay with the page (373 KB, beside the wallet's 307 and the account's 415); a share
  * page renders its card on the server and ships only the time and its two actions (210 KB).
+ * Raised to 217 on 2026-10-19: the header's signed-in placeholder (no "sign in" flash on reload)
+ * took it from 215 to 216 KB in a full run.
  */
 const CART_BUDGET_KB = { script: 385, stylesheet: 20 };
-const SHARE_BUDGET_KB = { script: 215, stylesheet: 20 };
+const SHARE_BUDGET_KB = { script: 217, stylesheet: 20 };
 
 test('the cart stays within its performance budget', async ({ page, api }) => {
   test.skip(test.info().project.name !== 'desktop', 'measured once');
@@ -181,8 +183,8 @@ test('a share page stays within its performance budget', async ({ page, api: _ap
 });
 
 /**
- * S14 SL5: the home page with the announcement, two banners and the activity card keeps the home
- * budget (the carousel is the only client part added); the four pages and `/faq` render on the
+ * S14 SL5: the home page with the announcement and two banners keeps the home budget (the
+ * carousel is the only client part added; the activity card left the store on 2026-10-19); the four pages and `/faq` render on the
  * server with no client part of their own: 215 KB.
  */
 const CONTENT_BUDGET_KB = { script: 215, stylesheet: 20 };

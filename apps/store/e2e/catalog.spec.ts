@@ -73,10 +73,20 @@ test.describe('game page (rules SF1–SF3, SF6, CL1–CL3)', () => {
     // One percent sign: the badge passes it inside the isolate (F10-2).
     await expect(small).not.toContainText('%⁩%');
     await expect(small).toContainText(fill(c.delivery.median, { duration: '40 ثانية' }));
+    // The unavailable packs wait folded after the others (2026-10-19).
     const unavailable = page.getByRole('button', { name: /^1800 UC/ });
+    await expect(unavailable).toBeHidden();
+    const folded = page.locator('summary', {
+      hasText: ar.game.unavailable.split(' (')[0] as string,
+    });
+    await folded.click();
     await expect(unavailable).toBeDisabled();
     await expect(unavailable).toContainText(c.status.unavailable);
     await expect(unavailable).not.toContainText('$');
+    // A link to an unavailable pack (an old search result) opens the folded list on it.
+    await page.goto(`/games/pubg-mobile?pack=${pack(PUBG, '1800 UC').id}`);
+    await expect(unavailable).toBeVisible();
+    await expect(unavailable).toBeDisabled();
     // The ID guide folds open.
     await page.getByRole('button', { name: ar.purchase.whereIsId }).first().click();
     await expect(

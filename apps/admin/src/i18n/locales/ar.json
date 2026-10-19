@@ -2,7 +2,6 @@
   "app": {
     "name": "Vertex Digital",
     "brand": "Vertex Digital",
-    "panel": "لوحة الإدارة",
     "tagline": "لوحة إدارة متجر الشحن: الطلبات والإيداعات والموردون في مكان واحد."
   },
   "common": {
@@ -65,7 +64,12 @@
     "reconciliationBadge": "حالات عدم تطابق مفتوحة: {{open}}",
     "reports": "التقارير",
     "content": "المحتوى",
-    "suppliersBadge": "باقات جديدة في فئات مستوردة: {{packs}}"
+    "suppliersBadge": "باقات جديدة في فئات مستوردة: {{packs}}",
+    "allOrders": "كل الطلبات",
+    "depositRequests": "طلبات الإيداع",
+    "tickets": "التذاكر",
+    "pricingRules": "قواعد التسعير",
+    "settings": "الإعدادات"
   },
   "user": {
     "menu": "قائمة الحساب",
@@ -87,7 +91,7 @@
     "delivered": "الطلبات المسلّمة",
     "refunds": "المستردات",
     "refundedAmount": "أُعيد {{amount}} إلى المحافظ",
-    "yesterday": "أمس حتى الساعة نفسها: {{value}}",
+    "yesterday": "أمس حتى الساعة {{time}}: {{value}}",
     "deltaNone": "لا قيمة أمس للمقارنة",
     "attention": {
       "title": "يحتاج انتباهك",
@@ -145,7 +149,8 @@
       "balance": "الرصيد",
       "lastSync": "آخر مزامنة",
       "low": "منخفض"
-    }
+    },
+    "salesLineCaption": "آخر 7 أيام"
   },
   "login": {
     "title": "تسجيل الدخول",
@@ -1895,7 +1900,8 @@
         "status": "الحالة",
         "availability": "التوفر",
         "price": "السعر",
-        "deliveryTime": "وقت التسليم"
+        "deliveryTime": "وقت التسليم",
+        "cost": "التكلفة"
       },
       "kind": "النوع",
       "kinds": {
@@ -1935,7 +1941,8 @@
       "deliveryTime": "الوسيط {{median}} · 90% خلال {{p90}}",
       "noDeliveryData": "لا بيانات بعد",
       "orders": "طلبات الباقة",
-      "buy": "شراء"
+      "buy": "شراء",
+      "profit": "ربح {{amount}} ({{percent}})"
     }
   },
   "pricing": {

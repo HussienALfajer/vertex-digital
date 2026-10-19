@@ -7,7 +7,8 @@
 // last one, since tests in other workers read shares at the same time). S12: the support channels, with a
 // Telegram link except under `/empty`. S14: the content routes answer nothing published except
 // under `/content`, the store with an announcement, banners, two pages, the FAQ and live activity
-// (content-fixtures.json; delivery times relative to now, floored to 5 minutes: the newest is in
+// (the store no longer shows activity since 2026-10-19: the specs check it stays hidden while the
+// route answers; content-fixtures.json; delivery times relative to now, floored to 5 minutes: the newest is in
 // the current 5 minutes, so it reads "منذ نحو 5 دقائق" for 5 minutes at least, while the store's
 // 60-second content cache serves it; one floored from 5 minutes ago turned into "10" whenever the
 // next 5-minute mark passed in between). Started by playwright.config.ts; the port is the first
