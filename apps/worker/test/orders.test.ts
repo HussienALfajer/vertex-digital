@@ -940,6 +940,29 @@ describe('the cost read before buying and the charge (S18 PQ1–PQ3, CH1–CH3)'
     });
   });
 
+  it('never quotes a re-send', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      script('fake-uc-60', 'unknown');
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [attempt] = await attemptsOf(tx, order.id);
+      expect(attempt?.status).toBe('unknown');
+      const quotes = async () =>
+        (
+          await tx
+            .select({ id: supplierCalls.id })
+            .from(supplierCalls)
+            .where(
+              and(eq(supplierCalls.supplierId, ids.fake), eq(supplierCalls.operation, 'get_offer')),
+            )
+        ).length;
+      const before = await quotes();
+      await poll.poll(attempt?.id as string, tx);
+      expect(await quotes()).toBe(before);
+    });
+  });
+
   it('sends as before when the quote cannot be read', async () => {
     await isolated(async (tx) => {
       const item = await product(tx);
@@ -1030,6 +1053,19 @@ describe('the cost read before buying and the charge (S18 PQ1–PQ3, CH1–CH3)'
       expect(await checkCharge(tx, close as AppliedOutcome, context)).toBe('ok');
       const unknown = { ...applied, attempt: { ...attempt, chargedUsdUnits: null } };
       expect(await checkCharge(tx, unknown as AppliedOutcome, context)).toBeNull();
+      // Not delivered yet: checked once it is, for the units delivered.
+      const open = { ...applied, attempt: { ...attempt, status: 'pending' } };
+      expect(await checkCharge(tx, open as unknown as AppliedOutcome, context)).toBeNull();
+      const partial = {
+        ...applied,
+        attempt: {
+          ...attempt,
+          quantity: 5,
+          deliveredQuantity: 2,
+          chargedUsdUnits: (attempt?.unitCostUsdUnits ?? 0) * 2,
+        },
+      };
+      expect(await checkCharge(tx, partial as AppliedOutcome, context)).toBe('ok');
     });
   });
 });

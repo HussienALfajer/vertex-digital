@@ -24,6 +24,9 @@ import {
   importCategorySchema,
   importDraftQuerySchema,
   importDraftSchema,
+  type LinkCandidateQuery,
+  linkCandidateQuerySchema,
+  linkCandidateSchema,
   linkCategorySchema,
   platformStatusSchema,
   type StatementQuery,
@@ -90,6 +93,16 @@ export class SupplierCatalogAdminController {
     @Query({ schema: supplierCategoryListQuerySchema }) query: SupplierCategoryListQuery,
   ) {
     return this.catalog.categories(code, query);
+  }
+
+  /** S18: one node with its path, for the category page's header. */
+  @Get('suppliers/:code/categories/:categoryId')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: supplierCategoryNodeSchema })
+  @ApiOkResponse({ description: 'The node', standardSchema: supplierCategoryNodeSchema })
+  category(@Param('code') code: string, @Param('categoryId') categoryId: string) {
+    return this.catalog.node(code, categoryIdOf(categoryId));
   }
 
   /** IM1: through the API only; the panel never loads a supplier's host. */
@@ -204,6 +217,20 @@ export class SupplierCatalogAdminController {
     @Req() request: Request,
   ) {
     return this.catalog.setIgnored(actor(admin, request), code, categoryIdOf(categoryId), false);
+  }
+
+  /** S18: the store packs an offer may be linked to, suggested first. */
+  @Get('suppliers/offers/:id/link-candidates')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @ApiQueryOf(linkCandidateQuerySchema)
+  @SerializeOptions({ schema: linkCandidateSchema })
+  @ApiOkResponse({ description: 'At most 20', standardSchema: linkCandidateSchema.array() })
+  linkCandidates(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Query({ schema: linkCandidateQuerySchema }) query: LinkCandidateQuery,
+  ) {
+    return this.catalog.linkCandidates(id, query);
   }
 
   @Post('suppliers/offers/:id/ignore')

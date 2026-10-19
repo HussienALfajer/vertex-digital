@@ -43,9 +43,8 @@ export function GameSupplierLinks({ game }: { game: GameDetail }) {
                 <Thumbnail node={node} supplierCode={node.supplierCode} size="size-10" />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <Link
-                    to="/suppliers/$code"
-                    params={{ code: node.supplierCode }}
-                    search={{ tab: 'catalog', node: node.categoryId }}
+                    to="/suppliers/$code/categories/$categoryId"
+                    params={{ code: node.supplierCode, categoryId: node.categoryId }}
                     className="font-medium underline-offset-4 hover:underline"
                   >
                     <bdi>{node.name}</bdi>

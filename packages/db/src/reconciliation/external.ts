@@ -1,6 +1,6 @@
 import {
-  CHARGE_MISMATCH_BP,
   type Currency,
+  chargeCheck,
   heldUnits,
   RECONCILIATION_MAX_OFFENDING_IDS,
   type ReconciliationDetails,
@@ -178,10 +178,11 @@ export async function supplierChargesCheck(
           id: string;
           supplier_order_id: string;
           status: string;
-          cost: string;
+          unit_cost: string;
+          delivered: number;
         }>(sql`
     select distinct on (f.supplier_order_id) f.id, f.supplier_order_id, f.status::text as status,
-      (f.unit_cost_usd_units * f.delivered_quantity)::text as cost
+      f.unit_cost_usd_units::text as unit_cost, f.delivered_quantity as delivered
     from fulfilment_attempts f join suppliers s on s.id = f.supplier_id
     where s.code = ${input.supplier}
       and f.supplier_order_id in (${sql.join(
@@ -203,7 +204,9 @@ export async function supplierChargesCheck(
       if (status === 'completed') unmatched.push(order.supplierOrderId.slice(0, 64));
       continue;
     }
-    const cost = units(attempt.cost);
+    const unitCost = units(attempt.unit_cost);
+    const delivered = Number(attempt.delivered);
+    const cost = unitCost * delivered;
     booksUnits += cost;
     if (status === 'completed' && attempt.status === 'failed') {
       lines.push({ kind: 'delivered_but_failed', id: attempt.id, amountUnits: charged });
@@ -212,7 +215,12 @@ export async function supplierChargesCheck(
     } else if (
       status === 'completed' &&
       order.totalUnits !== null &&
-      Math.abs(order.totalUnits - cost) * 10_000 > cost * CHARGE_MISMATCH_BP
+      delivered > 0 &&
+      chargeCheck({
+        unitCostUsdUnits: unitCost,
+        units: delivered,
+        chargedUsdUnits: order.totalUnits,
+      }).mismatch
     ) {
       lines.push({ kind: 'charge_differs', id: attempt.id, amountUnits: order.totalUnits - cost });
     }

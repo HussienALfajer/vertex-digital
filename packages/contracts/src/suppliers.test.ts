@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chargeCheck,
   createRouteSchema,
   fieldMapSchema,
   HEALTH_PROBE_REASON,
@@ -564,5 +565,39 @@ describe('supplierChecksPlayers (S09 rule PV1)', () => {
     expect(supplierChecksPlayers('fake', { fakeEnabled: true })).toBe(true);
     expect(supplierChecksPlayers('fake', { fakeEnabled: false })).toBe(false);
     expect(supplierChecksPlayers('wdgzone', { fakeEnabled: true })).toBe(false);
+  });
+});
+
+describe('chargeCheck (S18 CH2, RC2)', () => {
+  it('compares a charge with the cost of the units delivered, within 2%', () => {
+    expect(chargeCheck({ unitCostUsdUnits: 880_000, units: 1, chargedUsdUnits: 880_000 })).toEqual({
+      expectedUsdUnits: 880_000,
+      mismatch: false,
+      unitChargedUsdUnits: 880_000,
+    });
+    // 2% exactly is no mismatch; above it is, either way.
+    expect(
+      chargeCheck({ unitCostUsdUnits: 1_000_000, units: 2, chargedUsdUnits: 2_040_000 }).mismatch,
+    ).toBe(false);
+    expect(
+      chargeCheck({ unitCostUsdUnits: 1_000_000, units: 2, chargedUsdUnits: 2_040_001 }).mismatch,
+    ).toBe(true);
+    expect(
+      chargeCheck({ unitCostUsdUnits: 1_000_000, units: 2, chargedUsdUnits: 1_959_999 }).mismatch,
+    ).toBe(true);
+    // A partial delivery charged for its units is no mismatch.
+    expect(
+      chargeCheck({ unitCostUsdUnits: 1_000_000, units: 2, chargedUsdUnits: 2_000_000 }),
+    ).toEqual({ expectedUsdUnits: 2_000_000, mismatch: false, unitChargedUsdUnits: 1_000_000 });
+  });
+
+  it('rounds the charged unit cost up, and counts no units as one', () => {
+    expect(
+      chargeCheck({ unitCostUsdUnits: 1, units: 3, chargedUsdUnits: 10 }).unitChargedUsdUnits,
+    ).toBe(4);
+    expect(chargeCheck({ unitCostUsdUnits: 5, units: 0, chargedUsdUnits: 5 })).toMatchObject({
+      expectedUsdUnits: 5,
+      mismatch: false,
+    });
   });
 });

@@ -12,12 +12,12 @@ Spec `docs/specs/S18-wdg-hardening.md`, ADR 0033. Branch `feat/wdg-hardening`, o
 - [x] Admin (contract fallout): policy recovery fields, reconciliation charge findings, labels, mocks
 
 ## Panel
-- [ ] API: test connection, errored calls list, category node, offer link + suggestions, route-offer search, offer fields (discount, last seen) and `discounted` filter
-- [ ] Category page route, catalog navigation, remove `node`
-- [ ] Link-to-pack dialog with suggestions; add-route dialog improvements
-- [ ] Offers tab fields, filter, select-all, tooltips; cost chart
-- [ ] Statement (amount, times, delivery time, Arabic labels, wait on 429), runs (message, skipped read), health (errors table, paging), connection test
-- [ ] Narrow-screen tables; i18n; E2E mocks and RTL screenshots
-- [ ] Docs: wdgzone.md, architecture, folder CLAUDE.md files
-- [ ] Checks, reviewer, PR with auto-merge
+- [x] API: test connection, errored calls list, category node, offer link + suggestions, route-offer search, offer fields (discount, last seen) and `discounted` filter
+- [x] Category page route, catalog navigation, remove `node`
+- [x] Link-to-pack dialog with suggestions; add-route dialog improvements
+- [x] Offers tab fields, filter, select-all, tooltips; cost chart
+- [x] Statement (amount, times, delivery time, Arabic labels, wait on 429), runs (message, skipped read), health (errors table, paging), connection test
+- [x] Narrow-screen tables; i18n; E2E mocks and RTL screenshots
+- [x] Docs: wdgzone.md, architecture, folder CLAUDE.md files
+- [x] Checks, reviewer (5 blocking findings fixed: charge by delivered units in one contracts rule, a day's charge mismatch always alerts, a truncated statement is skipped, an out-of-bounds quote sends as before, access tests), PR with auto-merge
 - [ ] Deploy and verify in production

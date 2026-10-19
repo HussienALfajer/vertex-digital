@@ -38,7 +38,7 @@ import {
 } from './reconciliation.js';
 import { reportBreakdownSchema, reportKindSchema } from './reports.js';
 import { storeSwitchSchema } from './settings.js';
-import { supplierCodeSchema, supplierPolicySchema } from './suppliers.js';
+import { failureKindSchema, supplierCodeSchema, supplierPolicySchema } from './suppliers.js';
 import { ticketCategorySchema, ticketStatusSchema } from './support.js';
 import {
   adjustmentCategorySchema,
@@ -511,6 +511,12 @@ export const AUDIT_DETAILS = {
     ...changed({ lowBalanceUsdUnits: z.int() }).shape,
   }),
   'supplier.sync_requested': z.strictObject({ ...supplier, runId: z.uuid() }),
+  /** S18 CS1: a live balance read from the panel; never the balance. */
+  'supplier.connection_tested': z.strictObject({
+    ...supplier,
+    ok: z.boolean(),
+    failureKind: failureKindSchema.nullable(),
+  }),
   /** S09 rule AD2. */
   'supplier.validation_quota_set': z.strictObject({
     ...supplier,

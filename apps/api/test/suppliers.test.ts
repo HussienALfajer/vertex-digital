@@ -15,6 +15,8 @@ import {
   productRoutingStates,
   repriceProducts,
   supplierBalanceReads,
+  supplierCalls,
+  supplierCategories,
   supplierCredentials,
   supplierKey,
   supplierOffers,
@@ -1492,5 +1494,174 @@ describe('catalog changes that move a price (audit A2)', () => {
     });
     await json(await (saved as Promise<Response>), 200);
     expect(await priceOf(productId)).toBe(usd(1.5));
+  });
+});
+
+describe('S18 panel reads: the connection test, calls, a category, link candidates, discounts', () => {
+  it('tests the connection once per 10 seconds, recorded outside health and audited', async () => {
+    const tested = await json<{ ok: boolean; balance: { currency: string } | null }>(
+      await post('/api/admin/suppliers/fake/test'),
+      200,
+    );
+    expect(tested).toMatchObject({ ok: true, failureKind: null, balance: { currency: 'USD' } });
+    expect(await body(await post('/api/admin/suppliers/fake/test'))).toMatchObject({
+      code: 'RATE_LIMITED',
+    });
+    const calls = await json<{ items: { operation: string; result: string }[] }>(
+      await get('/api/admin/suppliers/fake/calls?pageSize=5'),
+      200,
+    );
+    expect(calls.items[0]).toMatchObject({ operation: 'test_connection', result: 'ok' });
+    const audit = await auditOf(test.db, ids.fake);
+    expect(audit.at(-1)).toMatchObject({
+      action: 'supplier.connection_tested',
+      details: { supplier: 'fake', ok: true, failureKind: null },
+    });
+    expect((await client.post('/api/admin/suppliers/fake/test', {})).status).toBe(401);
+    expect(
+      (await client.post('/api/admin/suppliers/fake/test', { cookie: customerCookie })).status,
+    ).toBe(401);
+  });
+
+  it('lists the calls that failed, with why', async () => {
+    const id = newId();
+    await test.db.insert(supplierCalls).values({
+      id,
+      supplierId: ids.fake,
+      operation: 'get_balance',
+      result: 'error',
+      latencyMs: 15_000,
+      failureKind: 'timeout',
+    });
+    const page = await json<{ items: { id: string }[] }>(
+      await get('/api/admin/suppliers/fake/calls?result=error&pageSize=100'),
+      200,
+    );
+    expect(page.items.find((call) => call.id === id)).toMatchObject({
+      result: 'error',
+      failureKind: 'timeout',
+      httpStatus: null,
+    });
+    expect((await client.get('/api/admin/suppliers/fake/calls', {})).status).toBe(401);
+  });
+
+  it('reads one category with its path, and 404 for one never listed', async () => {
+    const now = new Date();
+    await test.db.insert(supplierCategories).values([
+      { supplierId: ids.fake, categoryId: `root-${run}`, name: 'PUBG Mobile', lastSeenAt: now },
+      {
+        supplierId: ids.fake,
+        categoryId: `leaf-${run}`,
+        parentCategoryId: `root-${run}`,
+        name: 'Global',
+        kind: 'direct',
+        lastSeenAt: now,
+        gameId: ids.gameId,
+        linkedAt: now,
+      },
+    ]);
+    expect(
+      await json(await get(`/api/admin/suppliers/fake/categories/leaf-${run}`), 200),
+    ).toMatchObject({
+      categoryId: `leaf-${run}`,
+      name: 'Global',
+      path: ['PUBG Mobile'],
+      game: { id: ids.gameId },
+      linkedHere: true,
+    });
+    expect((await get(`/api/admin/suppliers/fake/categories/none-${run}`)).status).toBe(404);
+    const path = `/api/admin/suppliers/fake/categories/leaf-${run}`;
+    expect((await client.get(path, {})).status).toBe(401);
+    expect((await client.get(path, { cookie: customerCookie })).status).toBe(401);
+    expect((await get('/api/admin/suppliers/fake/categories/bad%20id')).status).toBe(404);
+  });
+
+  it('proposes the packs of the category game, its amount first, then a search', async () => {
+    const sixty = await json<{ id: string }>(
+      await post(`/api/admin/catalog/games/${ids.gameId}/products`, {
+        kind: 'direct',
+        nameAr: `60 شدة ${run}`,
+        gameAmount: 60,
+      }),
+      201,
+    );
+    const searchGame = await json<{ id: string }>(
+      await post('/api/admin/catalog/games', {
+        categoryId: ids.categoryId,
+        slug: `search-${run}`,
+        nameAr: `لعبة بحث ${run}`,
+        nameEn: 'Game',
+      }),
+      201,
+    );
+    const other = await json<{ id: string }>(
+      await post(`/api/admin/catalog/games/${searchGame.id}/products`, {
+        kind: 'direct',
+        nameAr: `بحث ${run}`,
+      }),
+      201,
+    );
+    const [offer] = await test.db
+      .insert(supplierOffers)
+      .values({
+        supplierId: ids.fake,
+        offerId: `link-${run}`,
+        name: 'Global · 60 UC',
+        kind: 'direct',
+        costUsdUnits: usd(0.88),
+        inStock: true,
+        costConfirmedAt: new Date(),
+        lastSeenAt: new Date(),
+        categoryId: `leaf-${run}`,
+      })
+      .returning({ id: supplierOffers.id });
+    const candidates = await json<{ productId: string; reason: string }[]>(
+      await get(
+        `/api/admin/suppliers/offers/${offer?.id}/link-candidates?q=${encodeURIComponent(`بحث ${run}`)}`,
+      ),
+      200,
+    );
+    expect(candidates[0]).toMatchObject({
+      productId: sixty.id,
+      reason: 'amount',
+      routedBySupplier: false,
+    });
+    expect(candidates.find((item) => item.productId === other.id)?.reason).toBe('search');
+    expect((await get(`/api/admin/suppliers/offers/${newId()}/link-candidates`)).status).toBe(404);
+    const path = `/api/admin/suppliers/offers/${offer?.id}/link-candidates`;
+    expect((await client.get(path, {})).status).toBe(401);
+    expect((await client.get(path, { cookie: customerCookie })).status).toBe(401);
+  });
+
+  it('filters and shows the supplier discount (DC1)', async () => {
+    const [offer] = await test.db
+      .insert(supplierOffers)
+      .values({
+        supplierId: ids.fake,
+        offerId: `vip-${run}`,
+        name: `VIP ${run}`,
+        kind: 'direct',
+        costUsdUnits: usd(0.875),
+        originalCostUsdUnits: usd(0.887),
+        discountBp: 200,
+        inStock: true,
+        costConfirmedAt: new Date(),
+        lastSeenAt: new Date(),
+      })
+      .returning({ id: supplierOffers.id });
+    const page = await json<{ items: { id: string; discountBp: number | null }[] }>(
+      await get(
+        `/api/admin/suppliers/fake/offers?discounted=true&q=${encodeURIComponent(`VIP ${run}`)}`,
+      ),
+      200,
+    );
+    expect(page.items).toMatchObject([{ id: offer?.id, discountBp: 200, discountPercent: 1 }]);
+    const none = await json<{ items: unknown[] }>(
+      await get(
+        `/api/admin/suppliers/fake/offers?discounted=false&q=${encodeURIComponent(`VIP ${run}`)}`,
+      ),
+      200,
+    );
+    expect(none.items).toEqual([]);
   });
 });

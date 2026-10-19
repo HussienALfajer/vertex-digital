@@ -1,7 +1,17 @@
 import { formatUsd, type StockLevel, type SupplierOffer } from '@vertex-digital/contracts';
-import { Badge } from '@vertex-digital/ui';
+import { Badge, Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@vertex-digital/ui';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime, formatSince, ltr } from '../../lib/format';
+
+/** S18 DC1: basis points as a percent with up to 2 decimals (`200` → `2%`, `125` → `1.25%`). */
+export const percentOfBp = (bp: number) =>
+  `${Math.trunc(bp / 100)}${
+    bp % 100 === 0
+      ? ''
+      : `.${String(bp % 100)
+          .padStart(2, '0')
+          .replace(/0$/, '')}`
+  }%`;
 
 /*
  * An offer's supplier fields as the offers table, a category's packs and the import dialogs show
@@ -55,7 +65,8 @@ export function OfferCost({
     | 'costConfirmedAt'
     | 'originalCostUsdUnits'
     | 'discountPercent'
-  >;
+  > &
+    Partial<Pick<SupplierOffer, 'discountBp'>>;
 }) {
   const { t } = useTranslation();
   if (offer.costUsdUnits === null) {
@@ -78,6 +89,7 @@ export function OfferCost({
       <OriginalPrice
         originalCostUsdUnits={offer.originalCostUsdUnits}
         discountPercent={offer.discountPercent}
+        discountBp={offer.discountBp ?? null}
       />
       {offer.costStale ? (
         <Badge tone="warning">{t('suppliers.offers.costStale')}</Badge>
@@ -95,24 +107,45 @@ export function OfferCost({
   );
 }
 
-/** Rule SF1: the supplier's price before its discount, shown only with a discount. */
+/**
+ * Rule SF1: the supplier's price before its discount, shown only with a discount; S18 DC1: the
+ * supplier's own figure (WDG's VIP discount) as "خصم VIP" when it gives one.
+ */
 export function OriginalPrice({
   originalCostUsdUnits,
   discountPercent,
+  discountBp = null,
 }: {
   originalCostUsdUnits: number | null;
   discountPercent: number | null;
+  discountBp?: number | null;
 }) {
   const { t } = useTranslation();
-  if (originalCostUsdUnits === null || discountPercent === null) return null;
+  if (discountBp === null && (originalCostUsdUnits === null || discountPercent === null)) {
+    return null;
+  }
   return (
     <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-      <bdi dir="ltr" className="tabular-nums line-through">
-        {formatUsd(originalCostUsdUnits)}
-      </bdi>
+      {originalCostUsdUnits !== null && discountPercent !== null && (
+        <bdi dir="ltr" className="tabular-nums line-through">
+          {formatUsd(originalCostUsdUnits)}
+        </bdi>
+      )}
       <Badge tone="gold">
-        {t('suppliers.offers.discount', { percent: ltr(`${discountPercent}%`) })}
+        {discountBp !== null
+          ? t('suppliers.offers.vipDiscount', { percent: ltr(percentOfBp(discountBp)) })
+          : t('suppliers.offers.discount', { percent: ltr(`${discountPercent}%`) })}
       </Badge>
+    </span>
+  );
+}
+
+/** S18: when the supplier last listed the offer. */
+export function LastSeen({ at }: { at: string }) {
+  const { t } = useTranslation();
+  return (
+    <span className="text-xs text-muted-foreground" title={formatDateTime(at)}>
+      {t('suppliers.offers.lastSeen', { since: formatSince(at) })}
     </span>
   );
 }
@@ -147,9 +180,25 @@ export function OfferFields({
           </bdi>
           <Badge tone="outline">{t(`suppliers.offers.fieldTypes.${spec.type}`)}</Badge>
           {spec.options && spec.options.length > 0 && (
-            <span className="text-muted-foreground">
-              {t('suppliers.offers.options', { count: spec.options.length })}
-            </span>
+            // S18: the select's choices, as the supplier labels and sends them.
+            <Popover>
+              <PopoverTrigger className="text-muted-foreground underline underline-offset-4">
+                {t('suppliers.offers.options', { count: spec.options.length })}
+              </PopoverTrigger>
+              <PopoverContent className="max-h-72 w-72 overflow-y-auto">
+                <PopoverTitle>{spec.label || spec.key}</PopoverTitle>
+                <ul className="flex flex-col gap-1 text-sm">
+                  {spec.options.map((option) => (
+                    <li key={option.value} className="flex items-center justify-between gap-3">
+                      <bdi>{option.label}</bdi>
+                      <bdi dir="ltr" className="text-xs text-muted-foreground">
+                        {option.value}
+                      </bdi>
+                    </li>
+                  ))}
+                </ul>
+              </PopoverContent>
+            </Popover>
           )}
         </li>
       ))}

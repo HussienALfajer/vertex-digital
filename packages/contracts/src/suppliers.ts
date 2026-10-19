@@ -58,12 +58,12 @@ export const SUPPLIER_CALL_OPERATIONS = [
 
 /**
  * S16 SF6: calls made on request or for information; health counts the operations orders depend
- * on. S18 SY4: the sync reads the platform status too, still outside health.
+ * on. S18 SY4: the platform status counts now: the sync reads it every run, so a supplier whose
+ * catalog has not changed still has enough calls in its window to be judged.
  */
 export const PANEL_READ_OPERATIONS: readonly SupplierCallOperation[] = [
   'list_transactions',
   'list_orders',
-  'platform_status',
   'fetch_image',
   'test_connection',
 ];
@@ -220,6 +220,27 @@ export const HEALTH_ALERT_HOLD_MINUTES = 5;
 
 /** S18 CH2: a charge this far from the expected cost is noted and alerted (2%). */
 export const CHARGE_MISMATCH_BP = 200;
+
+/**
+ * S18 CH2, RC2: what a supplier charged for `units` delivered against `unit cost × units`: the
+ * expected amount, whether the charge is more than `CHARGE_MISMATCH_BP` off it, and the charged
+ * unit cost rounded up (never below what was paid). Integer math; `units` below 1 counts as 1.
+ */
+export function chargeCheck(input: {
+  unitCostUsdUnits: number;
+  units: number;
+  chargedUsdUnits: number;
+}): { expectedUsdUnits: number; mismatch: boolean; unitChargedUsdUnits: number } {
+  const units = BigInt(Math.max(1, input.units));
+  const expected = BigInt(input.unitCostUsdUnits) * units;
+  const charged = BigInt(input.chargedUsdUnits);
+  const difference = charged > expected ? charged - expected : expected - charged;
+  return {
+    expectedUsdUnits: Number(expected),
+    mismatch: difference * 10_000n > expected * BigInt(CHARGE_MISMATCH_BP),
+    unitChargedUsdUnits: Number((charged + units - 1n) / units),
+  };
+}
 
 // Health (H1–H3) -------------------------------------------------------------------------------
 
@@ -1209,6 +1230,8 @@ export const offerListQuerySchema = pageQuerySchema
     ignored: booleanFilter,
     /** Mapped offers whose stock level is `low` or `out` (rule SF2). */
     lowStock: booleanFilter,
+    /** S18 DC1: offers with the supplier's own discount. */
+    discounted: booleanFilter,
   })
   .meta({ id: 'OfferListQuery' });
 
@@ -1241,6 +1264,8 @@ export const supplierOfferSchema = z
     /** The supplier's price before its discount, and the discount (rule SF1). */
     originalCostUsdUnits: z.int().nullable(),
     discountPercent: z.int().min(1).max(100).nullable(),
+    /** S18 DC1: the supplier's own discount figure (WDG's VIP `discount_percent`), basis points. */
+    discountBp: z.int().min(1).max(10_000).nullable(),
     fieldSpecs: z.array(fieldSpecSchema).nullable(),
     /** Not usable until PR4 (rule SC3). */
     unsupportedReason: offerUnsupportedReasonSchema.nullable(),
@@ -1272,6 +1297,8 @@ export const offerCostChangeSchema = z
     syncRunId: z.uuid().nullable(),
     /** Set by the admin (a manual offer, rule RT7). */
     byAdmin: z.boolean(),
+    /** S18 PQ3: read when an order was bought (a quote or a charge). */
+    attemptId: z.uuid().nullable(),
     createdAt: z.iso.datetime(),
   })
   .meta({ id: 'OfferCostChange' });
@@ -1452,6 +1479,80 @@ export const productRoutingSchema = z
   .meta({ id: 'ProductRouting' });
 
 export type ProductRouting = z.infer<typeof productRoutingSchema>;
+
+// S18: connection test, recorded calls, offer links -------------------------------------------
+
+/** S18 CS1: one connection test per this many seconds per supplier. */
+export const CONNECTION_TEST_INTERVAL_SECONDS = 10;
+
+/** S18 CS1: the answer of one live balance read. */
+export const supplierConnectionTestSchema = z
+  .object({
+    ok: z.boolean(),
+    latencyMs: z.int().nonnegative(),
+    balance: z.object({ currency: currencySchema, amountUnits: z.int() }).nullable(),
+    failureKind: failureKindSchema.nullable(),
+    httpStatus: z.int().nullable(),
+    supplierCode: z.string().nullable(),
+    testedAt: z.iso.datetime(),
+  })
+  .meta({ id: 'SupplierConnectionTest' });
+
+export type SupplierConnectionTest = z.infer<typeof supplierConnectionTestSchema>;
+
+/** S18 FK3: the health tab's calls, newest first; `result` narrows them. */
+export const supplierCallListQuerySchema = pageQuerySchema
+  .extend({ result: z.enum(SUPPLIER_CALL_RESULTS).optional() })
+  .meta({ id: 'SupplierCallListQuery' });
+
+export type SupplierCallListQuery = z.infer<typeof supplierCallListQuerySchema>;
+
+export const supplierCallSchema = z
+  .object({
+    id: z.uuid(),
+    operation: z.enum(SUPPLIER_CALL_OPERATIONS),
+    result: z.enum(SUPPLIER_CALL_RESULTS),
+    latencyMs: z.int().nonnegative(),
+    supplierCode: z.string().nullable(),
+    failureKind: failureKindSchema.nullable(),
+    httpStatus: z.int().nullable(),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: 'SupplierCall' });
+
+export type SupplierCall = z.infer<typeof supplierCallSchema>;
+
+export const supplierCallPageSchema = pagedListSchema(supplierCallSchema, 'SupplierCallPage');
+
+export type SupplierCallPage = z.infer<typeof supplierCallPageSchema>;
+
+/** S18: why a pack is proposed for an offer: its amount, its game, or the admin's search. */
+export const LINK_CANDIDATE_REASONS = ['amount', 'game', 'search'] as const;
+
+export const linkCandidateQuerySchema = z
+  .object({ q: z.string().trim().min(1).max(100).optional() })
+  .meta({ id: 'LinkCandidateQuery' });
+
+export type LinkCandidateQuery = z.infer<typeof linkCandidateQuerySchema>;
+
+/** S18: a store pack an offer may be linked to (a route added to it). */
+export const linkCandidateSchema = z
+  .object({
+    productId: z.uuid(),
+    productNameAr: z.string(),
+    gameId: z.uuid(),
+    gameNameAr: z.string(),
+    kind: productKindSchema,
+    /** The pack already has a live route of this offer's supplier. */
+    routedBySupplier: z.boolean(),
+    reason: z.enum(LINK_CANDIDATE_REASONS),
+  })
+  .meta({ id: 'LinkCandidate' });
+
+export type LinkCandidate = z.infer<typeof linkCandidateSchema>;
+
+/** At most this many candidates; suggested ones first. */
+export const MAX_LINK_CANDIDATES = 20;
 
 // Supplier catalog schemas (S16) ---------------------------------------------------------------
 

@@ -4,6 +4,7 @@ import {
   type GameDetail,
   type OptionMap,
   type Product,
+  parseGameAmount,
   type SupplierCode,
   type SupplierOffer,
   unmappedOptions,
@@ -19,6 +20,7 @@ import {
   Field,
   FieldLabel,
   Input,
+  Pagination,
   Select,
   SelectContent,
   SelectItem,
@@ -32,8 +34,15 @@ import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
-import { type FieldMapEntry, fieldMapEntries, toFieldMap, unmappedOf } from './field-map';
+import {
+  type FieldMapEntry,
+  fieldMapEntries,
+  proposedFieldMap,
+  toFieldMap,
+  unmappedOf,
+} from './field-map';
 import { FieldMapEditor } from './field-map-editor';
+import { StockChip } from './offer-cells';
 import { gameSelects, OptionMapEditor, supplierSelects } from './option-map-editor';
 import {
   parseSettings,
@@ -42,31 +51,49 @@ import {
   RouteSettingsFields,
   usePolicyLimit,
 } from './route-settings';
-import { offersQuery, suppliersQuery, useCreateRoute } from './suppliers.queries';
+import { LIST_PAGE_SIZE, offersQuery, suppliersQuery, useCreateRoute } from './suppliers.queries';
 
 /**
  * "إضافة مسار" (rules RT1–RT3): a supplier, then one of its unmapped offers found by name or id,
  * then the field map from its required fields to the game's fields, and (S17) whether it counts
  * for the price, pre-set on only for a product with no route yet (WR7), and its timing. The API
- * refuses a mapped offer, a kind mismatch and an expected time not below the limit.
+ * refuses a mapped offer, a kind mismatch and an expected time not below the limit. S18: the
+ * search starts with the pack's amount, lists only offers the store can send, page by page, with
+ * their stock and path; with `presetOffer` (an offer's "ربط بباقة") the offer is chosen already.
  */
 export function AddRouteDialog({
   game,
   product,
+  presetOffer,
   onDone,
 }: {
   game: GameDetail;
   product: Product;
+  presetOffer?: SupplierOffer;
   onDone: () => void;
 }) {
   const { t } = useTranslation();
   const suppliers = useQuery(suppliersQuery);
   const create = useCreateRoute(product.id);
-  const [code, setCode] = useState<SupplierCode | null>(null);
-  const [q, setQ] = useState('');
-  const [query, setQuery] = useState<string | undefined>(undefined);
-  const [offer, setOffer] = useState<SupplierOffer | null>(null);
-  const [entries, setEntries] = useState<FieldMapEntry[]>([]);
+  const amount = product.gameAmount ?? parseGameAmount(product.nameAr);
+  const [code, setCode] = useState<SupplierCode | null>(presetOffer?.supplierCode ?? null);
+  const [q, setQ] = useState(amount === null ? '' : String(amount));
+  const [query, setQuery] = useState<string | undefined>(
+    amount === null ? undefined : String(amount),
+  );
+  const [page, setPage] = useState(1);
+  const [offer, setOffer] = useState<SupplierOffer | null>(presetOffer ?? null);
+  const gameKeys = game.fields
+    .filter((field) => field.archivedAt === null)
+    .map((field) => field.key);
+  /** S18: the offer's fields proposed onto the game's (same key, or one onto one). */
+  const proposed = (chosen: SupplierOffer) => {
+    const required = chosen.requiredFields ?? [];
+    return fieldMapEntries(required, proposedFieldMap(required, gameKeys));
+  };
+  const [entries, setEntries] = useState<FieldMapEntry[]>(() =>
+    presetOffer ? proposed(presetOffer) : [],
+  );
   const [optionMap, setOptionMap] = useState<OptionMap>({});
   const [missing, setMissing] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
@@ -79,8 +106,15 @@ export function AddRouteDialog({
   const policyLimit = usePolicyLimit();
   const { ref, focusInvalid } = useFocusInvalid<HTMLDivElement>();
   const offers = useQuery({
-    ...offersQuery(code ?? 'fake', { q: query, mapped: 'false', missing: 'false' }),
-    enabled: code !== null,
+    ...offersQuery(code ?? 'fake', {
+      q: query,
+      mapped: 'false',
+      missing: 'false',
+      supported: 'true',
+      ignored: 'false',
+      ...(page > 1 && { page }),
+    }),
+    enabled: code !== null && !presetOffer,
   });
   const supplierItems = (suppliers.data ?? [])
     .filter((supplier) => supplier.code !== 'manual')
@@ -88,7 +122,7 @@ export function AddRouteDialog({
 
   function choose(next: SupplierOffer) {
     setOffer(next);
-    setEntries(fieldMapEntries(next.requiredFields ?? []));
+    setEntries(proposed(next));
     setOptionMap({});
     setMissing([]);
   }
@@ -97,6 +131,7 @@ export function AddRouteDialog({
     event.preventDefault();
     const value = q.trim();
     setQuery(value.length >= 1 && value.length <= 100 ? value : undefined);
+    setPage(1);
   }
 
   async function submit() {
@@ -134,33 +169,45 @@ export function AddRouteDialog({
         </DialogDescription>
       </DialogHeader>
       <div ref={ref} className="flex flex-col gap-5">
-        <Field>
-          <FieldLabel>{t('suppliers.routes.supplier')}</FieldLabel>
-          {suppliers.isPending ? (
-            <Skeleton className="h-10 w-full" />
-          ) : (
-            <Select
-              items={supplierItems}
-              value={code}
-              onValueChange={(value) => {
-                setCode(value as SupplierCode);
-                setOffer(null);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t('suppliers.routes.chooseSupplier')} />
-              </SelectTrigger>
-              <SelectContent>
-                {supplierItems.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </Field>
-        {code !== null && (
+        {presetOffer && (
+          <p className="flex flex-col gap-0.5 rounded-md border border-border p-3 text-sm">
+            <span className="text-muted-foreground">{t('suppliers.link.offer')}</span>
+            <bdi className="font-medium">{presetOffer.name}</bdi>
+            <bdi dir="ltr" className="text-xs text-muted-foreground">
+              {presetOffer.offerId}
+            </bdi>
+          </p>
+        )}
+        {!presetOffer && (
+          <Field>
+            <FieldLabel>{t('suppliers.routes.supplier')}</FieldLabel>
+            {suppliers.isPending ? (
+              <Skeleton className="h-10 w-full" />
+            ) : (
+              <Select
+                items={supplierItems}
+                value={code}
+                onValueChange={(value) => {
+                  setCode(value as SupplierCode);
+                  setOffer(null);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('suppliers.routes.chooseSupplier')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {supplierItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </Field>
+        )}
+        {code !== null && !presetOffer && (
           <section className="flex flex-col gap-3" aria-labelledby="offer-search">
             <form className="flex items-end gap-2" onSubmit={search}>
               <Field className="flex-1">
@@ -199,15 +246,33 @@ export function AddRouteDialog({
                           <bdi dir="ltr" className="text-xs text-muted-foreground">
                             {item.offerId}
                           </bdi>
+                          {item.categoryPath.length > 0 && (
+                            <bdi className="text-xs text-muted-foreground">
+                              {item.categoryPath.join(' › ')}
+                            </bdi>
+                          )}
                         </span>
-                        <bdi dir="ltr" className="tabular-nums">
-                          {item.costUsdUnits === null ? '—' : formatUsd(item.costUsdUnits)}
-                        </bdi>
+                        <span className="flex shrink-0 flex-col items-end gap-1">
+                          <bdi dir="ltr" className="tabular-nums">
+                            {item.costUsdUnits === null ? '—' : formatUsd(item.costUsdUnits)}
+                          </bdi>
+                          <StockChip level={item.stockLevel} stock={item.stock} quiet />
+                        </span>
                       </button>
                     </li>
                   ))}
                 </ul>
               ))}
+            {offers.isSuccess && offers.data.total > LIST_PAGE_SIZE && (
+              <Pagination
+                page={page}
+                pageCount={Math.ceil(offers.data.total / LIST_PAGE_SIZE)}
+                onPageChange={setPage}
+                summary={t('suppliers.offers.total', { total: offers.data.total })}
+                previousLabel={t('common.previous')}
+                nextLabel={t('common.next')}
+              />
+            )}
           </section>
         )}
         {offer && (

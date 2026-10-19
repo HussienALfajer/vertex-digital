@@ -1,8 +1,9 @@
 import {
-  CHARGE_MISMATCH_BP,
+  chargeCheck,
   isResendRefusal,
   OPTION_UNMAPPED_REASON,
   RESEND_REFUSED_REASON,
+  SUPPLIER_COST_MAX_USD_UNITS,
 } from '@vertex-digital/contracts';
 import {
   type AppliedOutcome,
@@ -282,6 +283,14 @@ export async function quoteBeforeSend(
   );
   if (!read.ok || read.value.cost.currency !== 'USD') return {};
   const unitCostUsdUnits = read.value.cost.amountUnits;
+  // A price the store could never use (zero, negative, above $10,000) is no quote: send as before.
+  if (
+    !Number.isSafeInteger(unitCostUsdUnits) ||
+    unitCostUsdUnits < 1 ||
+    unitCostUsdUnits > SUPPLIER_COST_MAX_USD_UNITS
+  ) {
+    return {};
+  }
   await db
     .update(fulfilmentAttempts)
     .set({ costCheckedUsdUnits: unitCostUsdUnits })
@@ -336,8 +345,9 @@ export async function applyQuotedCost(
 }
 
 /**
- * S18 CH2, CH3, in the transaction that applied an answer: once an automatic attempt knows what
- * the supplier charged, a charge more than 2% off `unit cost × units` writes a `charge_mismatch`
+ * S18 CH2, CH3, in the transaction that applied an answer: once an automatic attempt is delivered
+ * and knows what the supplier charged, a charge more than 2% off `unit cost × units delivered`
+ * (`chargeCheck`) writes a `charge_mismatch`
  * note on the order and a `supplier_charge_mismatch` message (once per attempt), and the charged
  * unit cost becomes the offer's cost (PQ3): when it is above the order's unit price (`loss`), the
  * margin guard pauses what can no longer be sold. The delivered order is not touched.
@@ -349,10 +359,17 @@ export async function checkCharge(
 ): Promise<'ok' | 'mismatch' | 'loss' | null> {
   const { attempt, order } = applied;
   const charged = attempt.chargedUsdUnits;
+  // A partial delivery is charged for what was delivered: only a delivered attempt is checked.
   if (charged === null || attempt.offerId === null || attempt.routeId === null) return null;
-  const expected = attempt.unitCostUsdUnits * attempt.quantity;
-  if (Math.abs(charged - expected) * 10_000 <= expected * CHARGE_MISMATCH_BP) return 'ok';
-  const unitCharged = Math.ceil(charged / attempt.quantity);
+  if (attempt.status !== 'delivered' || attempt.deliveredQuantity < 1) return null;
+  const check = chargeCheck({
+    unitCostUsdUnits: attempt.unitCostUsdUnits,
+    units: attempt.deliveredQuantity,
+    chargedUsdUnits: charged,
+  });
+  if (!check.mismatch) return 'ok';
+  const expected = check.expectedUsdUnits;
+  const unitCharged = check.unitChargedUsdUnits;
   const loss = unitCharged > order.unitPriceUsdUnits;
   const [supplier] = await tx
     .select({ nameAr: suppliers.nameAr })

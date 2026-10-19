@@ -20,7 +20,7 @@ An audit of the WDGZone integration before launch (2026-10-19, production data a
 |---|---|---|
 | Test a supplier's connection | Admin, `POST /api/admin/suppliers/:code/test` | The admin |
 | Read a supplier category, its errors | Admin, `GET` | The admin |
-| Link an offer to an existing pack | Admin, `POST /api/admin/suppliers/offers/:id/link` | The admin |
+| Link an offer to an existing pack | Admin, the existing `POST /api/admin/catalog/products/:id/routes` (S07 RT1–RT8) | The admin |
 | Everything else | as S07, S16 | The admin |
 
 ## Data
@@ -56,7 +56,7 @@ An audit of the WDGZone integration before launch (2026-10-19, production data a
 - SY1. **Page retries:** a catalog page that times out, cannot connect, answers 5xx or 429 is read again up to 2 more times: after 2 s and 5 s, or, for 429, when the rate-limit window resets (at most 61 s). Retries keep the 20-request reserve for orders. A page refused definitively (401, 403) fails the read at once.
 - SY2. Each retried page is logged (rule FK2) with its kind.
 - SY3. A run that fails still keeps the previous costs (S07).
-- SY4. **Unchanged catalog:** before reading offers, the sync reads the platform status. When `catalog_updated_at` equals the one of the newest successful run that read offers, and that run started less than 60 minutes ago, the run succeeds without reading offers or categories (`offers_read = false`, no cost confirmed). Costs therefore never go unconfirmed for more than about 75 minutes (stale at 120). A missing or unreadable status reads as usual.
+- SY4. **Unchanged catalog:** before reading offers, the sync reads the platform status (a call health counts, so an idle supplier keeps enough calls in its window). When `catalog_updated_at` equals the one of the newest successful run that read offers, and that run started less than 60 minutes ago, the run succeeds without reading offers or categories (`offers_read = false`, no cost confirmed). Costs therefore never go unconfirmed for more than about 75 minutes (stale at 120). A missing or unreadable status reads as usual.
 
 ### Statement (S16 SF3, from the live replies of 2026-10-19)
 - ST1. `GET /orders` rows: `id`, `product_id`, `product_name`, `quantity`, `total_price` (decimal string, USD), `status`, `created_at`, `completed_at`. The adapter reads `total_price` (else `total`), and `completed_at`.
@@ -104,9 +104,8 @@ None: S18 moves no money. Charges and quotes change offer costs (and so prices) 
 | `POST /api/admin/suppliers/:code/test` | Admin | — | `supplierConnectionTestSchema` | `SUPPLIER_NOT_CONFIGURED`, `RATE_LIMITED` |
 | `GET /api/admin/suppliers/:code/calls?result=error&page=` | Admin | `supplierCallListQuerySchema` | paged `supplierCallSchema` | — |
 | `GET /api/admin/suppliers/:code/categories/:categoryId` | Admin | — | `supplierCategoryNodeSchema` (with its path) | `NOT_FOUND` |
-| `POST /api/admin/suppliers/offers/:id/link` | Admin | `{ productId, fieldMap?, optionMap? }` | the route | as `POST routes` (S07 RT3–RT8) |
-| `GET /api/admin/suppliers/offers/:id/link-suggestions` | Admin | — | up to 5 products with their match reason | — |
-| `GET /api/admin/products/:id/route-offers?q=&page=` | Admin | search, paging | offers with stock, path, support | — |
+| `GET /api/admin/suppliers/offers/:id/link-candidates?q=` | Admin | `linkCandidateQuerySchema` | up to 20 `linkCandidateSchema`: the category game's packs (its amount first, `amount`, else `game`), then the search's (`search`), each with `routedBySupplier` | `NOT_FOUND` |
+| The link itself | Admin | the existing `POST /api/admin/catalog/products/:id/routes` | the routing | as S07 RT1–RT8 |
 | `GET /api/admin/suppliers/:code/offers` | Admin | adds `discounted=true` | adds `discountBp`, `lastSeenAt` | — |
 | `GET …/statement/orders`, `…/transactions` | Admin | — | adds `completedAt`, `deliverySeconds` | — |
 | `GET/PUT /api/admin/suppliers/policy` | Admin | adds `recoverSuccessBp`, `recoverMinutes` | — | — |
@@ -124,16 +123,16 @@ None: S18 moves no money. Charges and quotes change offer costs (and so prices) 
 - **Catalog tab:** a category's name and "عرض الباقات" open the **category page** `/suppliers/:code/categories/:categoryId`: breadcrumb (supplier › path › name), back to the catalog, header with counts, state, linked game and actions (import, link, ignore), and the offers of that category with the offers tab's filters, selection, import and link (page and filters in the URL).
 - **Offers tab:** last seen, a select's options (in a popover), the VIP badge and struck original price (DC1), the filter "عليها خصم", the category chip by name, "select all on this page", tooltips on icon-only buttons, a "ربط بباقة" action per row.
 - **Link to an existing pack:** a dialog from an offer row or the category page: up to 5 suggested packs (same amount in the name, same game linked to the category), a product search, the field map, save: 2–3 clicks for a suggested pack.
-- **Add-route dialog (product side):** search prefilled with the pack's name, paging, unsupported and ignored offers hidden, stock and path shown.
+- **Add-route dialog (product side):** search prefilled with the pack's amount (its `gameAmount`, else the number in its name), paging, unsupported and ignored offers hidden, stock and path shown, and the offer's fields proposed onto the game's (the same key, case and underscores aside, or one field onto one).
 - **Cost history dialog:** a small line chart of the cost over time above the table.
 - **Statement tab:** amounts, correct times, delivery time, Arabic status and type, transactions matched to orders.
 - **Runs tab:** the error message under its code; "لم تُقرأ العروض (الكتالوج لم يتغير)" for SY4 runs.
-- **Health tab:** the recent errors table (FK3), paging of the change history.
+- **Health tab:** the failed calls table (FK3), 50 a page; the change history and balance reads stay the newest 20.
 - **Policy dialog:** the two recovery fields.
 - **Narrow screens:** the wide tables (offers, runs, statement, errors) scroll inside their card with the first column kept in view.
 
 ## Audit and notifications
-- Audit: `supplier.connection_tested` (result, no balance), `supplier.offer_linked` (as route creation). Policy changes as before.
+- Audit: `supplier.connection_tested` (result and failure kind, never the balance). A link is a route creation and is audited as one (S07). Policy changes as before.
 - Telegram: `supplier_health` (AL1–AL3), `supplier_charge_mismatch` (CH2), reconciliation mismatches (RC2, through S13).
 
 ## Abuse and fraud

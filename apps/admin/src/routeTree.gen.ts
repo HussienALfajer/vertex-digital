@@ -56,6 +56,7 @@ import { Route as AppCatalogGamesNewRouteImport } from './routes/_app/catalog.ga
 import { Route as AppContentPagesIndexRouteImport } from './routes/_app/content.pages.index'
 import { Route as AppContentPagesPageRouteImport } from './routes/_app/content.pages.$page'
 import { Route as AppReconciliationRunsIdRouteImport } from './routes/_app/reconciliation.runs.$id'
+import { Route as AppSuppliersCodeCategoriesCategoryIdRouteImport } from './routes/_app/suppliers.$code_.categories.$categoryId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -291,6 +292,12 @@ const AppReconciliationRunsIdRoute = AppReconciliationRunsIdRouteImport.update({
   path: '/reconciliation/runs/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSuppliersCodeCategoriesCategoryIdRoute =
+  AppSuppliersCodeCategoriesCategoryIdRouteImport.update({
+    id: '/suppliers/$code_/categories/$categoryId',
+    path: '/suppliers/$code/categories/$categoryId',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -339,6 +346,7 @@ export interface FileRoutesByFullPath {
   '/content/pages/$page': typeof AppContentPagesPageRoute
   '/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/content/pages/': typeof AppContentPagesIndexRoute
+  '/suppliers/$code/categories/$categoryId': typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
 export interface FileRoutesByTo {
   '/change-password': typeof ChangePasswordRoute
@@ -386,6 +394,7 @@ export interface FileRoutesByTo {
   '/content/pages/$page': typeof AppContentPagesPageRoute
   '/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/content/pages': typeof AppContentPagesIndexRoute
+  '/suppliers/$code/categories/$categoryId': typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -436,6 +445,7 @@ export interface FileRoutesById {
   '/_app/content/pages/$page': typeof AppContentPagesPageRoute
   '/_app/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/_app/content/pages/': typeof AppContentPagesIndexRoute
+  '/_app/suppliers/$code_/categories/$categoryId': typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -486,6 +496,7 @@ export interface FileRouteTypes {
     | '/content/pages/$page'
     | '/reconciliation/runs/$id'
     | '/content/pages/'
+    | '/suppliers/$code/categories/$categoryId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/change-password'
@@ -533,6 +544,7 @@ export interface FileRouteTypes {
     | '/content/pages/$page'
     | '/reconciliation/runs/$id'
     | '/content/pages'
+    | '/suppliers/$code/categories/$categoryId'
   id:
     | '__root__'
     | '/_app'
@@ -582,6 +594,7 @@ export interface FileRouteTypes {
     | '/_app/content/pages/$page'
     | '/_app/reconciliation/runs/$id'
     | '/_app/content/pages/'
+    | '/_app/suppliers/$code_/categories/$categoryId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -922,6 +935,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReconciliationRunsIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/suppliers/$code_/categories/$categoryId': {
+      id: '/_app/suppliers/$code_/categories/$categoryId'
+      path: '/suppliers/$code/categories/$categoryId'
+      fullPath: '/suppliers/$code/categories/$categoryId'
+      preLoaderRoute: typeof AppSuppliersCodeCategoriesCategoryIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -986,6 +1006,7 @@ interface AppRouteChildren {
   AppCatalogGamesIdRoute: typeof AppCatalogGamesIdRoute
   AppCatalogGamesNewRoute: typeof AppCatalogGamesNewRoute
   AppReconciliationRunsIdRoute: typeof AppReconciliationRunsIdRoute
+  AppSuppliersCodeCategoriesCategoryIdRoute: typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -1025,6 +1046,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppCatalogGamesIdRoute: AppCatalogGamesIdRoute,
   AppCatalogGamesNewRoute: AppCatalogGamesNewRoute,
   AppReconciliationRunsIdRoute: AppReconciliationRunsIdRoute,
+  AppSuppliersCodeCategoriesCategoryIdRoute:
+    AppSuppliersCodeCategoriesCategoryIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

@@ -102,7 +102,8 @@ export async function queueReconciliationAlert(
     if (row.status === 'mismatch') {
       const previous = await previousResult(tx, row);
       const open = previous?.status === 'mismatch' && !previous.explained;
-      if (!open) {
+      // S18 RC2: the supplier's charges are a day's own facts, never the night before's again.
+      if (!open || row.check === 'supplier_charges') {
         alerting.push(row);
         continue;
       }

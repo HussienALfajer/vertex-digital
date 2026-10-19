@@ -21,7 +21,7 @@ import type {
   UpdateSupplier,
   ValidationQuota,
 } from '@vertex-digital/contracts';
-import { api, BACKGROUND_REQUEST, call } from '../../lib/api/client';
+import { ApiError, api, BACKGROUND_REQUEST, call } from '../../lib/api/client';
 import { useReauthentication } from '../account/reauthentication';
 import type { OfferSearch } from './supplier-search';
 
@@ -113,10 +113,49 @@ export const offersQuery = (code: SupplierCode, search: OfferSearch) =>
               supported: search.supported,
               ignored: search.ignored,
               lowStock: search.lowStock,
+              discounted: search.discounted,
               page: search.page ?? 1,
               pageSize: LIST_PAGE_SIZE,
             },
           },
+        }),
+      ),
+    placeholderData: keepPreviousData,
+  });
+
+/** S18: one supplier category with its path, counts, state and game (the category page). */
+export const categoryQuery = (code: SupplierCode, categoryId: string) =>
+  queryOptions({
+    queryKey: ['suppliers', 'category', code, categoryId],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/suppliers/{code}/categories/{categoryId}', {
+          params: { path: { code, categoryId } },
+        }),
+      ),
+  });
+
+/** S18 FK3: the supplier's recorded calls, newest first; `error` for the failures. */
+export const callsQuery = (code: SupplierCode, page: number, result?: 'ok' | 'refused' | 'error') =>
+  queryOptions({
+    queryKey: ['suppliers', 'calls', code, result ?? 'all', page],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/suppliers/{code}/calls', {
+          params: { path: { code }, query: { page, pageSize: LIST_PAGE_SIZE, result } },
+        }),
+      ),
+    placeholderData: keepPreviousData,
+  });
+
+/** S18: the store packs an offer may be linked to, suggested first, or found by `q`. */
+export const linkCandidatesQuery = (offerId: string, q?: string) =>
+  queryOptions({
+    queryKey: ['suppliers', 'link-candidates', offerId, q ?? null],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/suppliers/offers/{id}/link-candidates', {
+          params: { path: { id: offerId }, query: q ? { q } : {} },
         }),
       ),
     placeholderData: keepPreviousData,
@@ -202,7 +241,17 @@ export const platformStatusQuery = (code: SupplierCode) =>
     retry: false,
   });
 
-/** Rule SF3: one page of the supplier's orders, read live; never retried (5 s limit). */
+/**
+ * S18 ST3: a statement read refused by the API's 5-second limit waits it out and reads again
+ * (twice at most); any other failure is shown at once.
+ */
+const statementRetry = {
+  retry: (count: number, error: Error) =>
+    count < 2 && error instanceof ApiError && error.code === 'RATE_LIMITED',
+  retryDelay: 5_000,
+};
+
+/** Rule SF3: one page of the supplier's orders, read live (5 s limit, S18 ST3). */
 export const statementOrdersQuery = (code: SupplierCode, page: number) =>
   queryOptions({
     queryKey: ['suppliers', 'statement', code, 'orders', page],
@@ -214,10 +263,10 @@ export const statementOrdersQuery = (code: SupplierCode, page: number) =>
       ),
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 0,
-    retry: false,
+    ...statementRetry,
   });
 
-/** Rule SF3: one page of the supplier's wallet movements, read live; never retried. */
+/** Rule SF3: one page of the supplier's wallet movements, read live (S18 ST3). */
 export const statementTransactionsQuery = (code: SupplierCode, page: number) =>
   queryOptions({
     queryKey: ['suppliers', 'statement', code, 'transactions', page],
@@ -229,7 +278,7 @@ export const statementTransactionsQuery = (code: SupplierCode, page: number) =>
       ),
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 0,
-    retry: false,
+    ...statementRetry,
   });
 
 /** The supplier categories linked to a game (its page: SC9, IM3). */
@@ -319,6 +368,23 @@ export const useSetValidationQuota = (code: SupplierCode) =>
       api.PUT('/api/admin/suppliers/{code}/validation-quota', { params: { path: { code } }, body }),
     ),
   );
+
+/**
+ * S18 CS1: one live balance read (10 s apart); its answer is the result. The supplier and its
+ * calls are read again.
+ */
+export function useTestConnection(code: SupplierCode) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      call(api.POST('/api/admin/suppliers/{code}/test', { params: { path: { code } } })),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['suppliers', 'detail', code] }),
+        queryClient.invalidateQueries({ queryKey: ['suppliers', 'calls', code] }),
+      ]),
+  });
+}
 
 /** Rule SY1: a sync now (1 a minute per supplier); answers the running run when there is one. */
 export const useRequestSync = () =>

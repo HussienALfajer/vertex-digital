@@ -270,7 +270,8 @@ export class ReconciliationRunner {
       const oldest = read.value.items.at(-1)?.createdAt;
       if (!read.value.hasMore || (oldest !== undefined && oldest < day.from)) return orders;
     }
-    return orders;
+    // The pages ran out before the day's start: a partial day would read as a false `ok`.
+    return null;
   }
 
   private async load(runId: string): Promise<RunRow | undefined> {

@@ -35,6 +35,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   HistoryIcon,
+  Link2Icon,
   PackageSearchIcon,
   SearchIcon,
   XIcon,
@@ -46,11 +47,20 @@ import { errorMessage } from '../../lib/errors';
 import { formatSince } from '../../lib/format';
 import { CostHistoryDialog } from './cost-history-dialog';
 import { ImportDialog } from './import-dialog';
-import { OfferCost, OfferFields, OfferMarks, StockChip } from './offer-cells';
+import { LinkOfferDialog } from './link-offer-dialog';
+import { LastSeen, OfferCost, OfferFields, OfferMarks, StockChip } from './offer-cells';
 import type { OfferSearch } from './supplier-search';
-import { LIST_PAGE_SIZE, offersQuery, useOfferIgnored } from './suppliers.queries';
+import { categoryQuery, LIST_PAGE_SIZE, offersQuery, useOfferIgnored } from './suppliers.queries';
+import { TipButton } from './tip-button';
 
-type FlagName = 'mapped' | 'inStock' | 'missing' | 'supported' | 'ignored' | 'lowStock';
+type FlagName =
+  | 'mapped'
+  | 'inStock'
+  | 'missing'
+  | 'supported'
+  | 'ignored'
+  | 'lowStock'
+  | 'discounted';
 
 const ALL = 'all';
 
@@ -60,30 +70,53 @@ const ALL = 'all';
  * URL; offers selected across pages and imported into a game (rule RT8); an offer's cost history;
  * ignore and unignore (SC6). `manual` lists the manual offers with their products.
  */
-export function OffersTab({
-  supplier,
-  search,
-  onSearch,
-}: {
+export function OffersTab(props: {
   supplier: SupplierDetail;
   search: OfferSearch;
   onSearch: (next: OfferSearch) => void;
 }) {
+  return <OffersBrowser {...props} />;
+}
+
+/**
+ * The offers table shared by the offers tab and a category page (S18): filters, selection across
+ * pages (a page at once too), the import, the cost history, ignore, and the link to an existing
+ * pack. With `categoryId` the list stays inside that category: its filter is no chip to clear.
+ */
+export function OffersBrowser({
+  supplier,
+  search,
+  onSearch,
+  categoryId,
+}: {
+  supplier: SupplierDetail;
+  search: OfferSearch;
+  onSearch: (next: OfferSearch) => void;
+  categoryId?: string;
+}) {
   const { t } = useTranslation();
-  const offers = useQuery(offersQuery(supplier.code, search));
+  const scoped = categoryId ? { ...search, categoryId } : search;
+  const offers = useQuery(offersQuery(supplier.code, scoped));
   const [selected, setSelected] = useState<Map<string, SupplierOffer>>(new Map());
   const [importing, setImporting] = useState(false);
   const [history, setHistory] = useState<SupplierOffer | null>(null);
+  const [linking, setLinking] = useState<SupplierOffer | null>(null);
   const ignore = useOfferIgnored();
   const [failure, setFailure] = useState<string | null>(null);
   const manual = supplier.code === 'manual';
-  const filtered = Object.keys(search).some((name) => name !== 'page');
+  const filtered = Object.keys(scoped).some(
+    (name) => name !== 'page' && !(categoryId && name === 'categoryId'),
+  );
   const page = search.page ?? 1;
   const pageCount = Math.max(1, Math.ceil((offers.data?.total ?? 0) / LIST_PAGE_SIZE));
 
   const set = (next: OfferSearch) => onSearch({ ...search, ...next, page: undefined });
   const selectable = (offer: SupplierOffer) =>
     !manual && !offer.mapped && !offer.missingSince && !offer.unsupportedReason && !offer.ignoredAt;
+  const linkable = (offer: SupplierOffer) =>
+    !manual && !offer.missingSince && !offer.unsupportedReason;
+  const pageRows = (offers.data?.items ?? []).filter(selectable);
+  const pageSelected = pageRows.length > 0 && pageRows.every((offer) => selected.has(offer.id));
 
   async function setIgnored(offer: SupplierOffer, ignored: boolean) {
     setFailure(null);
@@ -101,10 +134,27 @@ export function OffersTab({
       else next.delete(offer.id);
       return next;
     });
+  /** S18: the page's selectable offers at once, as far as the import's limit allows. */
+  const togglePage = (on: boolean) =>
+    setSelected((previous) => {
+      const next = new Map(previous);
+      for (const offer of pageRows) {
+        if (!on) next.delete(offer.id);
+        else if (next.size < MAX_IMPORT_ROWS) next.set(offer.id, offer);
+      }
+      return next;
+    });
 
   return (
     <div className="flex flex-col gap-4">
-      <Filters search={search} manual={manual} onSearch={set} onClear={() => onSearch({})} />
+      <Filters
+        supplier={supplier}
+        search={search}
+        manual={manual}
+        categoryLocked={categoryId !== undefined}
+        onSearch={set}
+        onClear={() => onSearch({})}
+      />
       {!manual && selected.size > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-3">
           <span className="text-sm font-medium tabular-nums">
@@ -135,9 +185,11 @@ export function OffersTab({
             title={
               filtered
                 ? t('suppliers.offers.noMatch')
-                : manual
-                  ? t('suppliers.offers.emptyManual')
-                  : t('suppliers.offers.empty')
+                : categoryId
+                  ? t('suppliers.catalog.packs.empty')
+                  : manual
+                    ? t('suppliers.offers.emptyManual')
+                    : t('suppliers.offers.empty')
             }
           />
         ) : (
@@ -145,12 +197,19 @@ export function OffersTab({
             <Table>
               <TableHeader>
                 <TableRow>
-                  {!manual && (
-                    <TableHead>
-                      <span className="sr-only">{t('suppliers.offers.columns.select')}</span>
-                    </TableHead>
-                  )}
-                  <TableHead>{t('suppliers.offers.columns.name')}</TableHead>
+                  {/* S18: the offer stays in view while a narrow screen scrolls the table. */}
+                  <TableHead className="sticky start-0 z-10 bg-muted">
+                    <span className="flex items-center gap-3">
+                      {!manual && pageRows.length > 0 && (
+                        <Checkbox
+                          aria-label={t('suppliers.offers.selectPage')}
+                          checked={pageSelected}
+                          onCheckedChange={togglePage}
+                        />
+                      )}
+                      {t('suppliers.offers.columns.name')}
+                    </span>
+                  </TableHead>
                   <TableHead>{t('suppliers.offers.columns.group')}</TableHead>
                   <TableHead>{t('suppliers.offers.columns.kind')}</TableHead>
                   <TableHead>{t('suppliers.offers.columns.cost')}</TableHead>
@@ -165,34 +224,36 @@ export function OffersTab({
               <TableBody>
                 {offers.data.items.map((offer) => (
                   <TableRow key={offer.id}>
-                    {!manual && (
-                      <TableCell>
-                        {selectable(offer) && (
-                          <Checkbox
-                            aria-label={t('suppliers.offers.selectOffer', { name: offer.name })}
-                            checked={selected.has(offer.id)}
-                            disabled={!selected.has(offer.id) && selected.size >= MAX_IMPORT_ROWS}
-                            onCheckedChange={(on) => toggle(offer, on)}
-                          />
-                        )}
-                      </TableCell>
-                    )}
-                    <TableCell>
-                      <span className="flex flex-col gap-0.5">
-                        <bdi className="font-medium">{offer.name}</bdi>
-                        <bdi dir="ltr" className="text-xs text-muted-foreground">
-                          {offer.offerId}
-                        </bdi>
-                        {offer.categoryPath.length > 0 && (
-                          <button
-                            type="button"
-                            className="text-start text-xs text-muted-foreground underline-offset-4 hover:underline"
-                            onClick={() => set({ categoryId: offer.categoryId ?? undefined })}
-                          >
-                            <bdi>{offer.categoryPath.join(' › ')}</bdi>
-                          </button>
-                        )}
-                        <OfferMarks offer={{ ...offer, missingSince: null }} />
+                    <TableCell className="sticky start-0 z-10 min-w-56 bg-surface">
+                      <span className="flex items-start gap-3">
+                        {!manual &&
+                          (selectable(offer) ? (
+                            <Checkbox
+                              aria-label={t('suppliers.offers.selectOffer', { name: offer.name })}
+                              checked={selected.has(offer.id)}
+                              disabled={!selected.has(offer.id) && selected.size >= MAX_IMPORT_ROWS}
+                              onCheckedChange={(on) => toggle(offer, on)}
+                            />
+                          ) : (
+                            <span className="size-4 shrink-0" aria-hidden="true" />
+                          ))}
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          <bdi className="font-medium">{offer.name}</bdi>
+                          <bdi dir="ltr" className="text-xs text-muted-foreground">
+                            {offer.offerId}
+                          </bdi>
+                          {offer.categoryPath.length > 0 && !categoryId && (
+                            <button
+                              type="button"
+                              className="text-start text-xs text-muted-foreground underline-offset-4 hover:underline"
+                              onClick={() => set({ categoryId: offer.categoryId ?? undefined })}
+                            >
+                              <bdi>{offer.categoryPath.join(' › ')}</bdi>
+                            </button>
+                          )}
+                          {!manual && <LastSeen at={offer.lastSeenAt} />}
+                          <OfferMarks offer={{ ...offer, missingSince: null }} />
+                        </span>
                       </span>
                     </TableCell>
                     <TableCell>
@@ -266,23 +327,20 @@ export function OffersTab({
                     </TableCell>
                     <TableCell>
                       <span className="flex items-center gap-1">
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={t('suppliers.offers.history', { name: offer.name })}
-                                onClick={() => setHistory(offer)}
-                              />
-                            }
+                        {linkable(offer) && (
+                          <TipButton
+                            label={t('suppliers.offers.link', { name: offer.name })}
+                            onClick={() => setLinking(offer)}
                           >
-                            <HistoryIcon />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {t('suppliers.offers.history', { name: offer.name })}
-                          </TooltipContent>
-                        </Tooltip>
+                            <Link2Icon />
+                          </TipButton>
+                        )}
+                        <TipButton
+                          label={t('suppliers.offers.history', { name: offer.name })}
+                          onClick={() => setHistory(offer)}
+                        >
+                          <HistoryIcon />
+                        </TipButton>
                         {!manual && !offer.mapped && (
                           <IgnoreButton
                             offer={offer}
@@ -318,6 +376,9 @@ export function OffersTab({
       <Dialog open={history !== null} onOpenChange={(open) => !open && setHistory(null)}>
         {history && <CostHistoryDialog offer={history} />}
       </Dialog>
+      <Dialog open={linking !== null} onOpenChange={(open) => !open && setLinking(null)}>
+        {linking && <LinkOfferDialog offer={linking} onDone={() => setLinking(null)} />}
+      </Dialog>
     </div>
   );
 }
@@ -337,33 +398,53 @@ export function IgnoreButton({
     ? t('suppliers.offers.unignore', { name: offer.name })
     : t('suppliers.offers.ignore', { name: offer.name });
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={label}
-            disabled={disabled}
-            onClick={() => onChange(!offer.ignoredAt)}
-          />
-        }
+    <TipButton label={label} disabled={disabled} onClick={() => onChange(!offer.ignoredAt)}>
+      {offer.ignoredAt ? <EyeIcon /> : <EyeOffIcon />}
+    </TipButton>
+  );
+}
+
+/** S18: the category filter's chip by the category's name (its id until the name is read). */
+function CategoryChip({
+  supplier,
+  categoryId,
+  onClear,
+}: {
+  supplier: SupplierDetail;
+  categoryId: string;
+  onClear: () => void;
+}) {
+  const { t } = useTranslation();
+  const category = useQuery(categoryQuery(supplier.code, categoryId));
+  const name = category.data ? [...category.data.path, category.data.name].join(' › ') : categoryId;
+  return (
+    <Badge tone="outline" className="h-8 gap-2 ps-3 pe-1">
+      {t('suppliers.offers.categoryFilter')} <bdi>{name}</bdi>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="size-6"
+        aria-label={t('suppliers.offers.clearCategory')}
+        onClick={onClear}
       >
-        {offer.ignoredAt ? <EyeIcon /> : <EyeOffIcon />}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+        <XIcon />
+      </Button>
+    </Badge>
   );
 }
 
 function Filters({
+  supplier,
   search,
   manual,
+  categoryLocked,
   onSearch,
   onClear,
 }: {
+  supplier: SupplierDetail;
   search: OfferSearch;
   manual: boolean;
+  categoryLocked: boolean;
   onSearch: (next: OfferSearch) => void;
   onClear: () => void;
 }) {
@@ -407,6 +488,9 @@ function Filters({
     );
   };
 
+  const shown = Object.keys(search).some(
+    (name) => name !== 'page' && !(categoryLocked && name === 'categoryId'),
+  );
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
@@ -420,9 +504,14 @@ function Filters({
               onChange={(event) => setQ(event.target.value)}
             />
           </Field>
-          <Button type="submit" variant="outline" aria-label={t('suppliers.offers.searchSubmit')}>
+          <TipButton
+            type="submit"
+            variant="outline"
+            size="icon"
+            label={t('suppliers.offers.searchSubmit')}
+          >
             <SearchIcon />
-          </Button>
+          </TipButton>
         </form>
         {!manual && flag('mapped')}
         {flag('inStock')}
@@ -430,22 +519,16 @@ function Filters({
         {!manual && flag('supported')}
         {!manual && flag('ignored')}
         {!manual && flag('lowStock')}
+        {!manual && flag('discounted')}
       </div>
-      {Object.keys(search).some((name) => name !== 'page') && (
+      {shown && (
         <div className="flex flex-wrap items-center gap-2">
-          {search.categoryId && (
-            <Badge tone="outline" className="h-8 gap-2 ps-3 pe-1">
-              {t('suppliers.offers.categoryFilter')} <bdi dir="ltr">{search.categoryId}</bdi>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="size-6"
-                aria-label={t('suppliers.offers.clearCategory')}
-                onClick={() => onSearch({ categoryId: undefined })}
-              >
-                <XIcon />
-              </Button>
-            </Badge>
+          {search.categoryId && !categoryLocked && (
+            <CategoryChip
+              supplier={supplier}
+              categoryId={search.categoryId}
+              onClear={() => onSearch({ categoryId: undefined })}
+            />
           )}
           {search.group && (
             <Badge tone="outline" className="h-8 gap-2 ps-3 pe-1">

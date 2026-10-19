@@ -317,6 +317,23 @@ describe('reconciliation.run (RN1–RN5)', () => {
     });
   });
 
+  it('skips the supplier charges when the pages run out before the day starts (RC1)', async () => {
+    await inRollback(async ({ tx, runner }) => {
+      await script(tx);
+      const runId = await manualRun(tx);
+      const today = new Date(Date.now() - 60_000);
+      supplierOrders = Array.from({ length: 21 }, (_, index) => [
+        { supplierOrderId: `busy-${index}`, status: 'completed', createdAt: today },
+      ]);
+      await runner.execute(runId);
+      expect(statementPages).toHaveLength(20);
+      expect(await resultOf(tx, runId, 'supplier_charges', 'supplier:fake')).toMatchObject({
+        status: 'skipped',
+        details: { reason: 'reader_failed' },
+      });
+    });
+  });
+
   it('skips the supplier charges when the statement cannot be read', async () => {
     await inRollback(async ({ tx, runner }) => {
       await script(tx);
