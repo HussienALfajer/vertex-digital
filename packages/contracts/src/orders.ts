@@ -1413,6 +1413,8 @@ export const WEBHOOK_EVENT_RESULTS = [
   'unknown_key',
   'conflict',
   'malformed',
+  /** S19 FC7: an event that names no order result (a test, a creation, a chat message). */
+  'ignored',
 ] as const;
 
 export const webhookEventResultSchema = z

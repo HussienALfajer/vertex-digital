@@ -317,6 +317,19 @@ function supplierText<Kind extends TelegramMessageKind>(
         `${links.admin}/suppliers/${balance.supplier}`,
       ].join('\n');
     }
+    case 'supplier_subscription': {
+      // S19 FC9: while the plan is inactive the supplier takes no order and checks no player.
+      const plan = params as TelegramMessageParams<'supplier_subscription'>;
+      const expiry = plan.expiresAt ? atDamascus(new Date(plan.expiresAt)) : null;
+      return [
+        plan.reason === 'expiring'
+          ? `⏰ اشتراك ${plan.supplierNameAr} (${plan.plan}) ينتهي ${expiry}: جدّده من لوحة المورد.`
+          : plan.reason === 'inactive'
+            ? `⛔ اشتراك ${plan.supplierNameAr} غير فعّال: أُوقفت طلباته وفحص اللاعبين حتى يُجدَّد.`
+            : `✅ عاد اشتراك ${plan.supplierNameAr} (${plan.plan}) فعّالاً${expiry ? ` حتى ${expiry}` : ''}.`,
+        `${links.admin}/suppliers/${plan.supplier}`,
+      ].join('\n');
+    }
     default: {
       const failing = params as TelegramMessageParams<'supplier_sync_failing'>;
       return [
@@ -704,6 +717,7 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
     case 'supplier_sync_summary':
     case 'supplier_health':
     case 'supplier_balance_low':
+    case 'supplier_subscription':
     case 'supplier_sync_failing':
       return { text: supplierText(kind, params, links) };
     case 'manual_order':

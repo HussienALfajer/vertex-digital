@@ -1,0 +1,3 @@
+ALTER TABLE "supplier_offers" ADD COLUMN "min_quantity" integer;--> statement-breakpoint
+ALTER TABLE "supplier_offers" ADD COLUMN "max_quantity" integer;--> statement-breakpoint
+ALTER TABLE "supplier_offers" ADD CONSTRAINT "supplier_offers_quantity_check" CHECK ("supplier_offers"."min_quantity" between 1 and 1000000 and "supplier_offers"."max_quantity" between 1 and 1000000 and "supplier_offers"."min_quantity" <= "supplier_offers"."max_quantity");

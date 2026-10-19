@@ -76,6 +76,8 @@ export class SupplierWebhookJob implements OnApplicationBootstrap {
 
     const parsed = await this.parse(db, event.event, event.supplierCode);
     if (parsed === 'malformed') return this.finish(db, eventId, 'malformed', null);
+    // S19 FC7: a test, a creation, a chat message: kept, never applied.
+    if (parsed.event.ignored) return this.finish(db, eventId, 'ignored', null);
     const { idempotencyKey, supplierOrderId } = parsed.event;
     // By the key the attempt was sent with, or by the supplier's own order id when its webhooks
     // carry only that (WDGZone). Two attempts with one supplier order id answer nothing.

@@ -13,22 +13,26 @@ import type {
   OrderFields,
   PlaceOrderRequest,
   PlayerValidation,
+  SupplierAccount,
   SupplierAdapter,
   SupplierCapabilities,
   SupplierCategory,
   SupplierMoney,
   SupplierOffer,
   SupplierOfferQuote,
+  SupplierOfferWindow,
   SupplierOrderRow,
   SupplierOutcome,
   SupplierPlatformStatus,
   SupplierStatementPage,
   SupplierTransactionRow,
+  SupplierWebhookDeliveryRow,
   SupplierWebhookEvent,
+  SupplierWebhookState,
   WebhookRequest,
 } from '../core/adapter.js';
 import { OUT_OF_STOCK_CODE } from '../core/adapter.js';
-import { SupplierError } from '../core/errors.js';
+import { notSupported, SupplierError } from '../core/errors.js';
 import { hmacSha256, verifyHmacSignature } from '../core/hmac.js';
 import { imageUrlAllowed } from '../core/image.js';
 
@@ -420,6 +424,8 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     statement: true,
     platformStatus: true,
     offerQuote: true,
+    offerWindow: false,
+    account: false,
   };
 
   readonly imageHosts: readonly string[] = [FAKE_IMAGE_HOST];
@@ -433,6 +439,27 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     this.orders = new Map(Object.entries(this.state.orders));
     this.balanceUnits =
       options.balanceUsdUnits ?? this.state.balanceUsdUnits ?? 1_000 * 100 * USD_CENT;
+  }
+
+  /** S19: the catalog is read whole (`listOffers`), with no account reads. */
+  listOffersIn(): Promise<SupplierOfferWindow> {
+    return notSupported('The fake supplier', 'read offers by category');
+  }
+
+  getAccount(): Promise<SupplierAccount> {
+    return notSupported('The fake supplier', 'report its plan');
+  }
+
+  getWebhook(): Promise<{ state: SupplierWebhookState; deliveries: SupplierWebhookDeliveryRow[] }> {
+    return notSupported('The fake supplier', 'report its webhook');
+  }
+
+  setWebhook(): Promise<SupplierWebhookState> {
+    return notSupported('The fake supplier', 'set its webhook');
+  }
+
+  testWebhook(): Promise<void> {
+    return notSupported('The fake supplier', 'test its webhook');
   }
 
   async listOffers(): Promise<SupplierOffer[]> {

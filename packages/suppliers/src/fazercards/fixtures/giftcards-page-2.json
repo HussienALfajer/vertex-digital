@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "kind": "gift_card",
+  "items": [
+    {
+      "category_id": "netease_pay_ngn",
+      "name": "NetEase Pay (NGN)",
+      "note": "Currency: NGN\nNetEase Pay codes.\nCodes can be safely stored and redeemed later."
+    },
+    {
+      "category_id": "netease_pay_rub",
+      "name": "NetEase Pay (RUB)",
+      "note": "Currency: RUB\nNetEase Pay codes.\nCodes can be safely stored and redeemed later."
+    }
+  ],
+  "meta": {
+    "total": 553,
+    "limit": 2,
+    "next_cursor": null,
+    "has_more": false
+  }
+}

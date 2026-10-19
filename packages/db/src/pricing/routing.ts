@@ -64,6 +64,16 @@ export interface SupplierState {
   available: boolean;
   configured: boolean;
   paused: boolean;
+  /** S19 FC9: the last account read found the plan inactive: no routing or checks. */
+  subscriptionInactive: boolean;
+  /** S19 FC9: the plan as the last account read said, or null before any. */
+  account: {
+    plan: string;
+    expiresAt: Date | null;
+    active: boolean;
+    autoRenew: boolean | null;
+    checkedAt: Date;
+  } | null;
   health: SupplierHealthState;
   healthSince: Date | null;
   balance: { id: string; currency: 'USD' | 'SYP'; amountUnits: number; createdAt: Date } | null;
@@ -199,6 +209,17 @@ export async function supplierStates(
       available: supplierAvailable(row.code, context),
       configured: row.code === 'manual' || configured.has(row.id),
       paused: switchValue.get(pause) ?? STORE_SWITCH_DEFAULTS[pause],
+      subscriptionInactive: row.accountActive === false,
+      account:
+        row.accountPlan !== null && row.accountActive !== null && row.accountCheckedAt !== null
+          ? {
+              plan: row.accountPlan,
+              expiresAt: row.accountPlanExpiresAt,
+              active: row.accountActive,
+              autoRenew: row.accountAutoRenew,
+              checkedAt: row.accountCheckedAt,
+            }
+          : null,
       // The manual supplier is always healthy (rule H1).
       health: row.code === 'manual' ? 'healthy' : (state?.state ?? 'healthy'),
       healthSince: state?.createdAt ?? null,
@@ -305,11 +326,14 @@ export async function productRoutingStates(
             supplierCode: supplier.code,
             supplierAvailable: supplier.available,
             supplierConfigured: supplier.configured,
-            supplierPaused: supplier.paused,
+            supplierPaused: supplier.paused || supplier.subscriptionInactive,
             health: supplier.health,
             offerMissing: offer.missingSince !== null,
             offerUnsupported: offer.unsupportedReason !== null,
             kindMismatch: offer.kind !== null && offer.kind !== product.kind,
+            offerMinQuantity: offer.minQuantity,
+            offerMaxQuantity: offer.maxQuantity,
+            productMaxQuantity: product.maxQuantity,
             inStock: offer.inStock,
             costUsdUnits: offer.costUsdUnits,
             costConfirmedAt: offer.costConfirmedAt,

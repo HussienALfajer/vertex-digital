@@ -55,7 +55,11 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from 'dri
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
-import { recordedCall, sanitizedMessage } from '../../suppliers/supplier-calls.js';
+import {
+  type RecordedCall,
+  recordedCall,
+  sanitizedMessage,
+} from '../../suppliers/supplier-calls.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
 
 type Executor = Database | Transaction;
@@ -85,6 +89,9 @@ export interface ListedOffer {
   unsupportedReason: OfferUnsupportedReason | null;
   /** S18 DC1: the supplier's discount, 1–10,000 basis points. */
   discountBp: number | null;
+  /** S19: one order's bounds, both or neither, 1–1,000,000. */
+  minQuantity: number | null;
+  maxQuantity: number | null;
 }
 
 /** A category as stored (rule SC2): ids, text and counts bounded. */
@@ -96,7 +103,24 @@ export interface ListedCategory {
   productCount: number | null;
   inStockCount: number | null;
   imageUrl: string | null;
+  /** S19: the supplier's note, 1–1,000 characters. */
+  note: string | null;
 }
+
+/**
+ * S19 FC3: what a windowed run read: the categories whose offers it listed, and those the category
+ * list no longer has. Only their offers can go missing.
+ */
+export interface OfferScope {
+  read: ReadonlySet<string>;
+  vanished: ReadonlySet<string>;
+}
+
+/** S19 FC3: unlinked categories read per run, oldest read first, besides the linked ones. */
+export const OFFER_WINDOW_ROLLING = 40;
+
+/** S19 FC3: a windowed supplier's category list is read again after this long (and on "sync now"). */
+export const CATEGORY_LIST_EVERY_HOURS = 24;
 
 /** A count the supplier reports, or null when it is not a bounded whole number. */
 const countOf = (value: number | undefined): number | null =>
@@ -118,6 +142,7 @@ export function listedCategories(categories: readonly SupplierCategory[]): Liste
     const name = category.name?.trim().slice(0, 200);
     if (!categoryId || !name || listed.has(categoryId)) continue;
     const image = category.imageUrl;
+    const note = category.note?.trim().slice(0, 1_000);
     listed.set(categoryId, {
       categoryId,
       parentCategoryId: categoryIdOf(category.parentCategoryId),
@@ -126,6 +151,7 @@ export function listedCategories(categories: readonly SupplierCategory[]): Liste
       productCount: countOf(category.productCount),
       inStockCount: countOf(category.inStockCount),
       imageUrl: image?.startsWith('https://') && image.length <= 500 ? image : null,
+      note: note ? note : null,
     });
   }
   return [...listed.values()];
@@ -189,9 +215,23 @@ export function listedOffers(offers: readonly SupplierOffer[]): ListedOffer[] {
         offer.discountBp <= 10_000
           ? offer.discountBp
           : null,
+      ...quantityBounds(offer),
     });
   }
   return [...listed.values()];
+}
+
+/** S19: an offer's order bounds when both are whole numbers in range and in order. */
+function quantityBounds(offer: SupplierOffer): {
+  minQuantity: number | null;
+  maxQuantity: number | null;
+} {
+  const { minQuantity: min, maxQuantity: max } = offer;
+  const whole = (value: number | undefined): value is number =>
+    value !== undefined && Number.isSafeInteger(value) && value >= 1 && value <= 1_000_000;
+  return whole(min) && whole(max) && min <= max
+    ? { minQuantity: min, maxQuantity: max }
+    : { minQuantity: null, maxQuantity: null };
 }
 
 const sameFields = (a: readonly string[] | null, b: readonly string[] | null) =>
@@ -252,6 +292,8 @@ async function updateOffers(
     field_specs: offer.fieldSpecs,
     unsupported_reason: offer.unsupportedReason,
     discount_bp: offer.discountBp,
+    min_quantity: offer.minQuantity,
+    max_quantity: offer.maxQuantity,
   }));
   await tx.execute(sql`
     update ${supplierOffers} as o set
@@ -268,6 +310,8 @@ async function updateOffers(
       field_specs = v.field_specs,
       unsupported_reason = v.unsupported_reason,
       discount_bp = v.discount_bp,
+      min_quantity = v.min_quantity,
+      max_quantity = v.max_quantity,
       last_seen_at = ${seenAt}::timestamptz,
       cost_confirmed_at = case when v.cost_usd_units is null then o.cost_confirmed_at
         else ${seenAt}::timestamptz end,
@@ -277,7 +321,7 @@ async function updateOffers(
       id uuid, name text, group_name text, kind product_kind, required_fields text[],
       cost_usd_units bigint, cost_raw text, in_stock boolean, category_id text, stock integer,
       original_cost_usd_units bigint, field_specs jsonb, unsupported_reason text,
-      discount_bp integer
+      discount_bp integer, min_quantity integer, max_quantity integer
     )
     where o.id = v.id`);
 }
@@ -355,18 +399,37 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       if (platform?.catalogUpdatedAt && (await this.unchanged(db, supplier.id, platform))) {
         return this.skip(db, run, platform);
       }
-      // Rule SC2: categories first; a failed or empty read keeps the previous tree.
+      // Rule SC2: categories first; a failed or empty read keeps the previous tree. S19 FC3: a
+      // windowed supplier's list once a day and on "sync now".
+      const windowed = connected.adapter.capabilities.offerWindow;
       let categories: ListedCategory[] | null = null;
-      if (connected.adapter.capabilities.categories) {
+      let categoriesTried = false;
+      if (
+        connected.adapter.capabilities.categories &&
+        (!windowed || run.trigger === 'admin' || (await this.categoriesDue(db, supplier.id)))
+      ) {
+        categoriesTried = true;
         const read = await recordedCall(db, supplier.id, 'list_categories', () =>
           connected.adapter.listCategories(),
         );
         const listed = read.ok ? listedCategories(read.value) : [];
         if (listed.length > 0) categories = listed;
       }
-      const call = await recordedCall(db, supplier.id, 'list_offers', () =>
-        connected.adapter.listOffers(),
-      );
+      let scope: OfferScope | null = null;
+      let call: RecordedCall<SupplierOffer[]>;
+      if (windowed) {
+        const window = await this.offerWindow(db, supplier.id, categories);
+        const read = await recordedCall(db, supplier.id, 'list_offers', () =>
+          connected.adapter.listOffersIn(window.ids),
+        );
+        if (read.ok)
+          scope = { read: new Set(read.value.readCategoryIds), vanished: window.vanished };
+        call = read.ok ? { ...read, value: read.value.offers } : read;
+      } else {
+        call = await recordedCall(db, supplier.id, 'list_offers', () =>
+          connected.adapter.listOffers(),
+        );
+      }
       if (!call.ok) {
         const code =
           call.error instanceof SupplierError
@@ -377,8 +440,12 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       }
       const closed = await this.apply(db, supplier, run, listedOffers(call.value), {
         categories,
-        skipped: connected.adapter.capabilities.categories === true && categories === null,
+        skipped:
+          connected.adapter.capabilities.categories === true &&
+          categories === null &&
+          (!windowed || categoriesTried),
         platform,
+        scope,
       });
       await this.alertLowStock(db, supplier, closed);
       return closed;
@@ -391,6 +458,68 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       await this.fail(db, supplier, run, 'INTERNAL', message);
       throw new Error(`Sync ${run.id} failed: ${message}`);
     }
+  }
+
+  /** S19 FC3: the category list was last seen over a day ago, or never. */
+  private async categoriesDue(db: Executor, supplierId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ seen: sql<string | null>`max(${supplierCategories.lastSeenAt})` })
+      .from(supplierCategories)
+      .where(eq(supplierCategories.supplierId, supplierId));
+    const seen = row?.seen ? new Date(row.seen) : null;
+    return seen === null || Date.now() - seen.getTime() >= CATEGORY_LIST_EVERY_HOURS * 3_600_000;
+  }
+
+  /**
+   * S19 FC3: the categories a windowed run reads: every live category linked to a game or holding
+   * an offer a live route maps, then the 40 unlinked, unignored ones read longest ago (never read
+   * first). `listed` is this run's category list, when it read one: its absent categories vanished.
+   */
+  private async offerWindow(
+    db: Executor,
+    supplierId: string,
+    listed: ListedCategory[] | null,
+  ): Promise<{ ids: string[]; vanished: ReadonlySet<string> }> {
+    const [stored, routed] = await readAll(db, [
+      () =>
+        db
+          .select({
+            categoryId: supplierCategories.categoryId,
+            gameId: supplierCategories.gameId,
+            ignoredAt: supplierCategories.ignoredAt,
+            missingSince: supplierCategories.missingSince,
+            offersReadAt: supplierCategories.offersReadAt,
+          })
+          .from(supplierCategories)
+          .where(eq(supplierCategories.supplierId, supplierId)),
+      () =>
+        db
+          .selectDistinct({ categoryId: supplierOffers.categoryId })
+          .from(productRoutes)
+          .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
+          .where(and(eq(productRoutes.supplierId, supplierId), isNull(productRoutes.archivedAt))),
+    ]);
+    const storedById = new Map(stored.map((row) => [row.categoryId, row]));
+    const live = listed
+      ? listed.map((category) => category.categoryId)
+      : stored.filter((row) => row.missingSince === null).map((row) => row.categoryId);
+    const liveSet = new Set(live);
+    const vanished = new Set(
+      listed
+        ? stored
+            .filter((row) => row.missingSince === null && !liveSet.has(row.categoryId))
+            .map((row) => row.categoryId)
+        : [],
+    );
+    const mapped = new Set(routed.map((row) => row.categoryId));
+    const first = live.filter((id) => storedById.get(id)?.gameId != null || mapped.has(id));
+    const firstSet = new Set(first);
+    const readAt = (id: string) => storedById.get(id)?.offersReadAt?.getTime() ?? 0;
+    const rolling = live
+      .filter((id) => !firstSet.has(id) && storedById.get(id)?.ignoredAt == null)
+      .sort((a, b) => readAt(a) - readAt(b) || a.localeCompare(b))
+      .slice(0, OFFER_WINDOW_ROLLING);
+    return { ids: [...first, ...rolling], vanished };
   }
 
   /**
@@ -642,6 +771,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
             productCount: sql`excluded.product_count`,
             inStockCount: sql`excluded.in_stock_count`,
             imageUrl: sql`excluded.image_url`,
+            note: sql`excluded.note`,
             lastSeenAt: sql`excluded.last_seen_at`,
             missingSince: null,
             updatedAt: new Date(),
@@ -670,8 +800,16 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       categories: ListedCategory[] | null;
       skipped: boolean;
       platform: SupplierPlatformStatus | null;
+      /** S19 FC3: a windowed run's categories; null for a whole-catalog read. */
+      scope?: OfferScope | null;
     },
   ): Promise<SyncRunRow> {
+    const scope = tree.scope ?? null;
+    // S19 FC3: an offer of a category this run did not read is not missing.
+    const inScope = (row: OfferRow) =>
+      scope === null ||
+      (row.categoryId !== null &&
+        (scope.read.has(row.categoryId) || scope.vanished.has(row.categoryId)));
     const context = () => ({ now: new Date(), fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED });
     return db.transaction(async (tx) => {
       const [existing, routed, policy] = await readAll(tx, [
@@ -696,7 +834,9 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       const mapped = new Set(routed.map((row) => row.offerId));
       const listedById = new Map(listed.map((offer) => [offer.offerId, offer]));
       if (listed.length === 0) throw new SuspiciousCatalog('The supplier listed no offers');
-      const mappedLive = existing.filter((row) => mapped.has(row.id) && row.missingSince === null);
+      const mappedLive = existing.filter(
+        (row) => mapped.has(row.id) && row.missingSince === null && inScope(row),
+      );
       const vanishing = mappedLive.filter((row) => !listedById.has(row.offerId)).length;
       if (vanishing * 2 > mappedLive.length) {
         throw new SuspiciousCatalog(
@@ -719,6 +859,8 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
           row.inStock !== offer.inStock ||
           row.missingSince !== null ||
           row.kind !== offer.kind ||
+          row.minQuantity !== offer.minQuantity ||
+          row.maxQuantity !== offer.maxQuantity ||
           row.unsupportedReason !== offer.unsupportedReason ||
           !sameFields(row.requiredFields, offer.requiredFields) ||
           specFacts(row.fieldSpecs) !== specFacts(offer.fieldSpecs) ||
@@ -726,7 +868,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
         if (moved) changed.push(row.id);
       }
       for (const row of existing) {
-        if (row.missingSince !== null || listedById.has(row.offerId)) continue;
+        if (row.missingSince !== null || listedById.has(row.offerId) || !inScope(row)) continue;
         missing.push(row);
         changed.push(row.id);
       }
@@ -814,6 +956,17 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       }
 
       if (tree.categories) await this.mirrorCategories(tx, supplier, run, tree.categories);
+      if (scope !== null && scope.read.size > 0) {
+        await tx
+          .update(supplierCategories)
+          .set({ offersReadAt: run.startedAt })
+          .where(
+            and(
+              eq(supplierCategories.supplierId, supplier.id),
+              inArray(supplierCategories.categoryId, [...scope.read]),
+            ),
+          );
+      }
 
       const repriced = await repriceProducts(tx, {
         productIds,

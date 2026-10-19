@@ -1,0 +1,76 @@
+{
+  "ok": true,
+  "kind": "topup",
+  "items": [
+    {
+      "category_id": "pubg_mobile",
+      "name": "PUBG Mobile",
+      "fields": [
+        {
+          "key": "player_id",
+          "label": "Player ID",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "category_id": "free_fire",
+      "name": "Free Fire",
+      "fields": [
+        {
+          "key": "player_id",
+          "label": "Player ID",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "category_id": "mobile_legends",
+      "name": "Mobile Legends",
+      "fields": [
+        {
+          "key": "player_id",
+          "label": "User ID",
+          "type": "text"
+        },
+        {
+          "key": "zone_id",
+          "label": "Zone ID",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "category_id": "magic_chess_gogo_global",
+      "name": "Magic Chess Go Go (Global)",
+      "fields": [
+        {
+          "key": "player_id",
+          "label": "User ID",
+          "type": "text"
+        },
+        {
+          "key": "zone_id",
+          "label": "Zone ID",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "category_id": "magic_chess_gogo_ru",
+      "name": "Magic Chess Go Go (RU)",
+      "fields": [
+        {
+          "key": "player_id",
+          "label": "User ID",
+          "type": "text"
+        },
+        {
+          "key": "zone_id",
+          "label": "Zone ID",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

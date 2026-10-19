@@ -1,5 +1,5 @@
 import { priceFromCost } from '@vertex-digital/contracts';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../client.js';
 import { newId } from '../id.js';
@@ -269,6 +269,25 @@ describe('repriceProducts (rule P2)', () => {
     await reprice([q.id], 'route_change');
     await setCost(manualOffer, usd(2));
     expect(await reprice([q.id], 'route_change')).toEqual({ repriced: 1, reviewsOpened: 0 });
+  });
+
+  it('makes the routes of a supplier whose plan is inactive unusable (S19 FC9)', async () => {
+    const p = await product();
+    await route(p.id, 'fake', await offer('fake', usd(1)));
+    const inactive = new Error('rolled back');
+    // In a rolled-back transaction: the fake supplier's row is shared by every test.
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.execute(
+          sql`update suppliers set account_plan = 'trial', account_active = false,
+            account_checked_at = now() where id = ${suppliers.fake}`,
+        );
+        const routing = (await productRoutingStates(tx, [p.id], context())).get(p.id);
+        expect(routing?.routes[0]?.unusableReason).toBe('supplier_paused');
+        throw inactive;
+      }),
+    ).rejects.toBe(inactive);
+    expect((await state(p.id))?.routes[0]?.unusableReason).toBeNull();
   });
 
   it('makes a route with a field the game no longer has unusable (rule RT3)', async () => {

@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "login": "reseller_test",
+  "email": "reseller@example.invalid",
+  "plan": "trial",
+  "planExpiresAt": "2026-10-24T21:33:21.869Z",
+  "planAutoRenew": false,
+  "subscriptionActive": true,
+  "summary": {
+    "totalSpent": "0.0000",
+    "totalOrders": 0
+  },
+  "createdAt": "2026-10-19T21:33:22.026Z",
+  "lastActiveAt": "2026-10-19T21:41:27.838Z"
+}

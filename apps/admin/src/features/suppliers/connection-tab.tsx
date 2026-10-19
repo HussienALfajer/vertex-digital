@@ -12,6 +12,7 @@ import {
   validationQuotaSchema,
 } from '@vertex-digital/contracts';
 import {
+  Badge,
   Button,
   Card,
   CardTitle,
@@ -31,21 +32,24 @@ import {
   Switch,
   useFocusInvalid,
 } from '@vertex-digital/ui';
-import { KeyRoundIcon, PlugZapIcon } from 'lucide-react';
+import { BellRingIcon, KeyRoundIcon, PlugZapIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { formatDateTime, ltr } from '../../lib/format';
+import { formatDateTime, formatSince, ltr } from '../../lib/format';
 import { switchesQuery, useChangeSwitch } from '../settings/settings.queries';
 import { credentialLabel } from './credential-fields';
-import { balanceText, LastRun } from './supplier-parts';
+import { balanceText, LastRun, SubscriptionLine } from './supplier-parts';
 import {
   useSetCredentials,
   useSetValidationQuota,
+  useSetWebhook,
   useTestConnection,
+  useTestWebhook,
   useUpdateSupplier,
+  webhookQuery,
 } from './suppliers.queries';
 
 /**
@@ -63,9 +67,178 @@ export function ConnectionTab({ supplier }: { supplier: SupplierDetail }) {
           // A new key resets the form to the saved threshold once it changes.
           <ThresholdCard key={supplier.lowBalanceUsdUnits} supplier={supplier} />
         )}
-        {supplier.canValidatePlayer && <ValidationQuotaCard supplier={supplier} />}
+        {supplier.capabilities.account && <SubscriptionCard supplier={supplier} />}
+        {supplier.capabilities.account && supplier.credentials && (
+          <WebhookCard supplier={supplier} />
+        )}
+        {(supplier.canValidatePlayer || supplier.capabilities.account) && (
+          <ValidationQuotaCard supplier={supplier} />
+        )}
       </div>
     </div>
+  );
+}
+
+/** S19 FC9: the plan as the worker reads it every 5 minutes; renewing stays in FazerCards. */
+function SubscriptionCard({ supplier }: { supplier: SupplierDetail }) {
+  const { t } = useTranslation();
+  const plan = supplier.subscription;
+  return (
+    <Card className="gap-3">
+      <CardTitle>{t('suppliers.subscription.title')}</CardTitle>
+      <SubscriptionLine supplier={supplier} />
+      {plan && !plan.active && (
+        <p className="text-sm">{t('suppliers.subscription.inactiveMeaning')}</p>
+      )}
+      <p className="text-sm text-muted-foreground">
+        {plan
+          ? t('suppliers.subscription.checkedAt', { since: formatSince(plan.checkedAt) })
+          : t('suppliers.subscription.hint')}
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * S19 FC8: where the supplier sends its order results. "ضبط الإشعارات" points it at this store
+ * (re-authentication) and sends its test event; the log is FazerCards' last 50 deliveries.
+ */
+function WebhookCard({ supplier }: { supplier: SupplierDetail }) {
+  const { t } = useTranslation();
+  const webhook = useQuery(webhookQuery(supplier.code));
+  const set = useSetWebhook(supplier.code);
+  const test = useTestWebhook(supplier.code);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [tested, setTested] = useState<boolean | null>(null);
+  const settings = webhook.data;
+  const pointed =
+    settings?.enabled === true &&
+    settings.expectedUrl !== null &&
+    settings.url === settings.expectedUrl;
+
+  async function run(action: () => Promise<unknown>) {
+    setFailure(null);
+    setTested(null);
+    try {
+      await action();
+    } catch (error) {
+      setFailure(errorMessage(t, error));
+    }
+  }
+
+  return (
+    <Card className="gap-4">
+      <div className="flex flex-col gap-1">
+        <CardTitle>{t('suppliers.webhook.title')}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t('suppliers.webhook.hint')}</p>
+      </div>
+      {webhook.isPending && <Skeleton className="h-16 w-full" />}
+      {webhook.isError && (
+        <div className="flex flex-col items-start gap-2">
+          <FormAlert>{errorMessage(t, webhook.error)}</FormAlert>
+          <Button variant="outline" onClick={() => webhook.refetch()}>
+            {t('common.retry')}
+          </Button>
+        </div>
+      )}
+      {settings && (
+        <>
+          <dl className="flex flex-col gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <dt className="font-medium">{t('suppliers.webhook.state')}</dt>
+              <dd>
+                {pointed ? (
+                  <Badge tone="success">{t('suppliers.webhook.pointed')}</Badge>
+                ) : settings.enabled ? (
+                  <Badge tone="warning">{t('suppliers.webhook.elsewhere')}</Badge>
+                ) : (
+                  <Badge tone="neutral">{t('suppliers.webhook.off')}</Badge>
+                )}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-1">
+              <dt className="font-medium">{t('suppliers.webhook.url')}</dt>
+              <dd className="break-all text-muted-foreground">
+                {settings.url ? <bdi dir="ltr">{settings.url}</bdi> : '—'}
+              </dd>
+            </div>
+            {settings.consecutiveFailures !== null && settings.consecutiveFailures > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <dt className="font-medium">{t('suppliers.webhook.failures')}</dt>
+                <dd className="tabular-nums">
+                  {settings.consecutiveFailures}
+                  {settings.lastFailureReason && (
+                    <bdi dir="ltr" className="ms-2 text-muted-foreground">
+                      {settings.lastFailureReason}
+                    </bdi>
+                  )}
+                </dd>
+              </div>
+            )}
+          </dl>
+          {settings.expectedUrl === null && (
+            <p className="text-sm text-muted-foreground">{t('suppliers.webhook.noPublicUrl')}</p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={set.isPending || settings.expectedUrl === null}
+              onClick={() => run(() => set.mutateAsync())}
+            >
+              <BellRingIcon />
+              {set.isPending ? t('suppliers.webhook.setting') : t('suppliers.webhook.set')}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={test.isPending || !settings.enabled}
+              onClick={() =>
+                run(async () => {
+                  const result = await test.mutateAsync();
+                  setTested(result.ok);
+                  await webhook.refetch();
+                })
+              }
+            >
+              {test.isPending ? t('suppliers.webhook.testing') : t('suppliers.webhook.test')}
+            </Button>
+          </div>
+          {failure && <FormAlert>{failure}</FormAlert>}
+          {tested !== null && (
+            <p role="status" className="text-sm">
+              {tested ? t('suppliers.webhook.testSent') : t('suppliers.webhook.testFailed')}
+            </p>
+          )}
+          <section className="flex flex-col gap-2">
+            <h3 className="text-base font-bold">{t('suppliers.webhook.deliveries')}</h3>
+            {settings.deliveries.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('suppliers.webhook.noDeliveries')}</p>
+            ) : (
+              <ul className="flex flex-col gap-1 text-sm">
+                {settings.deliveries.slice(0, 10).map((delivery) => (
+                  <li key={delivery.id} className="flex flex-wrap items-center gap-2">
+                    <Badge tone={delivery.status === 'delivered' ? 'success' : 'danger'}>
+                      {delivery.status === 'delivered'
+                        ? t('suppliers.webhook.delivered')
+                        : t('suppliers.webhook.failed')}
+                    </Badge>
+                    <bdi dir="ltr">{delivery.event}</bdi>
+                    {delivery.responseStatus !== null && (
+                      <bdi dir="ltr" className="text-muted-foreground tabular-nums">
+                        HTTP {delivery.responseStatus}
+                      </bdi>
+                    )}
+                    {delivery.createdAt && (
+                      <span className="text-xs text-muted-foreground">
+                        {formatDateTime(delivery.createdAt)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
+    </Card>
   );
 }
 

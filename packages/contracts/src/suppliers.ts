@@ -54,6 +54,8 @@ export const SUPPLIER_CALL_OPERATIONS = [
   'get_offer',
   /** S18 CS1: the panel's connection test (a balance read). */
   'test_connection',
+  /** S19 FC8, FC9: the plan and the webhook settings (the balance job's read, the panel's card). */
+  'account',
 ] as const;
 
 /**
@@ -66,6 +68,7 @@ export const PANEL_READ_OPERATIONS: readonly SupplierCallOperation[] = [
   'list_orders',
   'fetch_image',
   'test_connection',
+  'account',
 ];
 
 /**
@@ -114,10 +117,9 @@ export const SUPPLIER_CREDENTIAL_FIELDS: Record<SupplierCode, readonly string[]>
 
 /**
  * Suppliers whose adapter this build has (rule SP1). `manual` needs none; `fake` counts only where
- * `SUPPLIER_FAKE_ENABLED=true`. Each real adapter's PR adds its code here: `fazercards` arrives
- * with its adapter in S19 PR 2 (FC2).
+ * `SUPPLIER_FAKE_ENABLED=true`. Each real adapter's PR adds its code here (S19 FC2: `fazercards`).
  */
-const ADAPTERS_READY: readonly SupplierCode[] = ['wdgzone', 'manual', 'fake'];
+const ADAPTERS_READY: readonly SupplierCode[] = ['wdgzone', 'fazercards', 'manual', 'fake'];
 
 /** Rule SP1: the running app has this supplier's adapter. */
 export function supplierAvailable(code: SupplierCode, options: { fakeEnabled: boolean }): boolean {
@@ -127,8 +129,9 @@ export function supplierAvailable(code: SupplierCode, options: { fakeEnabled: bo
 
 /** Suppliers that list offers (rule SY1); `manual` offers are the admin's. */
 /**
- * S09 rule PV1: this build has an adapter for the supplier that checks player ids. Each real
- * adapter's PR adds its code.
+ * S09 rule PV1: this build has an adapter for the supplier that checks player ids by its route.
+ * FazerCards checks by its own check categories, not its order ones, so it answers through a game's
+ * check provider (S19 PC1, PR 3), never a route.
  */
 export function supplierChecksPlayers(
   code: SupplierCode,
@@ -462,6 +465,8 @@ export const ROUTE_UNUSABLE_REASONS = [
   'offer_unsupported',
   /** RT2: the offer's kind, as the supplier gives it now, is not its product's. */
   'kind_mismatch',
+  /** S19: the product sells a quantity the offer refuses (a gift card's order bounds). */
+  'quantity_unsupported',
   'out_of_stock',
   'cost_unknown',
   'cost_stale',
@@ -496,6 +501,13 @@ export interface RouteFacts {
   offerUnsupported: boolean;
   /** RT2: the offer's known kind differs from its product's (the supplier changed it). */
   kindMismatch: boolean;
+  /**
+   * S19 (spec Data): the units the offer takes in one order, when the supplier bounds them
+   * (FazerCards' gift cards), and the most its product sells at once (from 1).
+   */
+  offerMinQuantity?: number | null;
+  offerMaxQuantity?: number | null;
+  productMaxQuantity?: number;
   inStock: boolean;
   costUsdUnits: number | null;
   costConfirmedAt: Date | null;
@@ -563,6 +575,15 @@ export function isCostStale(
 }
 
 /** Rule RT4: why the route is unusable now, or null when it may serve its product. */
+/** S19: some quantity from 1 to the product's most is outside the offer's order bounds. */
+function quantityUnsupported(route: RouteFacts): boolean {
+  const most = route.productMaxQuantity ?? 1;
+  return (
+    (route.offerMinQuantity != null && route.offerMinQuantity > 1) ||
+    (route.offerMaxQuantity != null && route.offerMaxQuantity < most)
+  );
+}
+
 export function routeUnusableReason(
   route: RouteFacts,
   now: Date,
@@ -577,6 +598,7 @@ export function routeUnusableReason(
   if (route.offerMissing) return 'offer_missing';
   if (route.offerUnsupported) return 'offer_unsupported';
   if (route.kindMismatch) return 'kind_mismatch';
+  if (quantityUnsupported(route)) return 'quantity_unsupported';
   if (!route.inStock) return 'out_of_stock';
   if (route.costUsdUnits === null) return 'cost_unknown';
   if (isCostStale(route.supplierCode, route.costConfirmedAt, now, policy)) return 'cost_stale';
@@ -683,7 +705,11 @@ export type SupplierCategoryState = z.infer<typeof supplierCategoryStateSchema>;
  * Rule SC3, S16 MF1–MF2: why an offer cannot be imported or routed (fields its adapter cannot
  * send: for WDGZone, several fields without an account field, or a select it cannot list).
  */
-export const OFFER_UNSUPPORTED_REASONS = ['fields_unsupported'] as const;
+export const OFFER_UNSUPPORTED_REASONS = [
+  'fields_unsupported',
+  /** S19 FC4: delivered by hand at the supplier (FazerCards' `… (Manual)` categories). */
+  'manual_delivery',
+] as const;
 
 export const offerUnsupportedReasonSchema = z
   .enum(OFFER_UNSUPPORTED_REASONS)
@@ -721,18 +747,119 @@ export const platformStatusSchema = z
 
 export type PlatformStatus = z.infer<typeof platformStatusSchema>;
 
-/** What the panel may read from a supplier's adapter (S16: `categories`, `statement`, SF5). */
+/**
+ * What the panel may read from a supplier's adapter (S16: `categories`, `statement`, SF5; S19:
+ * `account`, the plan and the webhook settings of FC8, FC9).
+ */
 export const supplierPanelCapabilitiesSchema = z
-  .object({ categories: z.boolean(), statement: z.boolean(), platformStatus: z.boolean() })
+  .object({
+    categories: z.boolean(),
+    statement: z.boolean(),
+    platformStatus: z.boolean(),
+    account: z.boolean(),
+  })
   .meta({ id: 'SupplierPanelCapabilities' });
 
 export type SupplierPanelCapabilities = z.infer<typeof supplierPanelCapabilitiesSchema>;
 
-/** The adapters that declare the S16 capabilities (`wdgzone`, `fake`). */
+/**
+ * The adapters that declare the S16 capabilities (`wdgzone`, `fake`, and `fazercards` without a
+ * platform status, FC12) and S19's account (`fazercards`).
+ */
 export function supplierPanelCapabilities(code: SupplierCode): SupplierPanelCapabilities {
-  const has = code === 'wdgzone' || code === 'fake';
-  return { categories: has, statement: has, platformStatus: has };
+  const has = code === 'wdgzone' || code === 'fake' || code === 'fazercards';
+  return {
+    categories: has,
+    statement: has,
+    platformStatus: code === 'wdgzone' || code === 'fake',
+    account: code === 'fazercards',
+  };
 }
+
+// Supplier account (S19 FC8, FC9) -----------------------------------------------------------
+
+/** FC9: the plan's expiry is told this long before it comes, once per expiry. */
+export const PLAN_EXPIRY_ALERT_HOURS = 48;
+
+/** FC9: the supplier's plan as its account read last said. */
+export const supplierSubscriptionSchema = z
+  .object({
+    plan: z.string().max(32),
+    expiresAt: z.iso.datetime().nullable(),
+    active: z.boolean(),
+    autoRenew: z.boolean().nullable(),
+    checkedAt: z.iso.datetime(),
+  })
+  .meta({ id: 'SupplierSubscription' });
+
+export type SupplierSubscription = z.infer<typeof supplierSubscriptionSchema>;
+
+/**
+ * FC9: what one account read tells the admin. `inactive` when the plan turned inactive, `active`
+ * when it came back, `expiring` once per expiry within 48 hours of it (`alertedFor` is the expiry
+ * already told), else nothing.
+ */
+export function subscriptionAlert(input: {
+  previousActive: boolean | null;
+  active: boolean;
+  expiresAt: Date | null;
+  alertedFor: Date | null;
+  now: Date;
+}): 'inactive' | 'active' | 'expiring' | null {
+  if (!input.active) return input.previousActive === false ? null : 'inactive';
+  if (input.previousActive === false) return 'active';
+  const { expiresAt } = input;
+  if (
+    expiresAt !== null &&
+    expiresAt.getTime() > input.now.getTime() &&
+    expiresAt.getTime() - input.now.getTime() <= PLAN_EXPIRY_ALERT_HOURS * 3_600_000 &&
+    input.alertedFor?.getTime() !== expiresAt.getTime()
+  ) {
+    return 'expiring';
+  }
+  return null;
+}
+
+/** FC8: one delivery of the supplier's webhook, as its log says (the last 50). */
+export const supplierWebhookDeliverySchema = z
+  .object({
+    id: z.string().max(64),
+    event: z.string().max(64),
+    attempt: z.int().nonnegative().nullable(),
+    status: z.string().max(32),
+    responseStatus: z.int().nullable(),
+    durationMs: z.int().nonnegative().nullable(),
+    createdAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: 'SupplierWebhookDelivery' });
+
+export type SupplierWebhookDelivery = z.infer<typeof supplierWebhookDeliverySchema>;
+
+/**
+ * `GET`, `PUT /api/admin/suppliers/:code/webhook` (FC8): the URL the supplier calls, whether it is
+ * ours (`expectedUrl`), and its delivery log; the secret is never read back.
+ */
+export const supplierWebhookSettingsSchema = z
+  .object({
+    url: z.string().max(500).nullable(),
+    enabled: z.boolean(),
+    expectedUrl: z.string().max(500).nullable(),
+    consecutiveFailures: z.int().nonnegative().nullable(),
+    lastSuccessAt: z.iso.datetime().nullable(),
+    lastFailureAt: z.iso.datetime().nullable(),
+    lastFailureReason: z.string().max(200).nullable(),
+    deliveries: z.array(supplierWebhookDeliverySchema),
+  })
+  .meta({ id: 'SupplierWebhookSettings' });
+
+export type SupplierWebhookSettings = z.infer<typeof supplierWebhookSettingsSchema>;
+
+/** `POST /api/admin/suppliers/:code/webhook/test` (FC8). */
+export const supplierWebhookTestSchema = z
+  .object({ ok: z.boolean() })
+  .meta({ id: 'SupplierWebhookTest' });
+
+export type SupplierWebhookTest = z.infer<typeof supplierWebhookTestSchema>;
 
 /** What rule SC5 reads of a category node. */
 export interface CategoryNodeFacts {
@@ -1190,6 +1317,8 @@ export const supplierSummarySchema = z
     lowStockCount: z.int().nonnegative(),
     /** S16 SF5: the supplier's own status when the API read it in the last minute. */
     platformStatus: platformStatusSchema.nullable(),
+    /** S19 FC9: the plan as the last account read said; null without the `account` capability. */
+    subscription: supplierSubscriptionSchema.nullable(),
   })
   .meta({ id: 'SupplierSummary' });
 
@@ -1613,6 +1742,8 @@ export const supplierCategoryNodeSchema = z
     productCount: z.int().nonnegative().nullable(),
     inStockCount: z.int().nonnegative().nullable(),
     hasImage: z.boolean(),
+    /** S19: the supplier's own text on the category (FazerCards' region and delivery note). */
+    note: z.string().nullable(),
     childCount: z.int().nonnegative(),
     /** Our counts of its subtree's offers. */
     counts: z.object({

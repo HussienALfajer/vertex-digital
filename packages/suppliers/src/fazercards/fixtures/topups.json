@@ -1,0 +1,48 @@
+{
+  "ok": true,
+  "kind": "topup",
+  "items": [
+    {
+      "category_id": "8_ball_pool",
+      "name": "8 Ball Pool",
+      "note": "8 Ball Pool top-up.\nEnter your Unique ID before placing the order.\nThe selected product is delivered directly to your account after the order is placed.",
+      "imageurl": "https://reseller.fazercards.com/api/v2/media/game-key-covers/c09edeff-0c49-4d48-a120-46125f010baf.png"
+    },
+    {
+      "category_id": "free_fire_mena",
+      "name": "Free Fire (MENA)",
+      "note": "Region: MENA\nAutomatic Free Fire top-up.\nDiamonds are delivered automatically after the order is placed.",
+      "imageurl": "https://reseller.fazercards.com/api/v2/media/game-key-covers/1f2429dd-e2eb-4f3d-84e7-ba391a2244c4.png"
+    },
+    {
+      "category_id": "genshin_impact_login",
+      "name": "Genshin Impact (Auto Via Login)",
+      "note": "Automatic top-up via account login.\nEnter your HoYoverse account email and password plus your Genshin UID. Only HoYoverse account login is supported.",
+      "imageurl": "https://reseller.fazercards.com/api/v2/media/game-key-covers/0f71c0f6-2108-4e5c-913e-bf9cec15f29d.jpg"
+    },
+    {
+      "category_id": "pubg_mobile_auto",
+      "name": "PUBG Mobile (Auto)",
+      "note": "Region: Global\nAutomatic PUBG Mobile top-up.\nUC is delivered directly to your account automatically after the order is placed.",
+      "imageurl": "https://reseller.fazercards.com/api/v2/media/game-key-covers/83a9c376-0c7e-4ffa-9747-bfc844ae4060.webp"
+    },
+    {
+      "category_id": "pubg_mobile_manual",
+      "name": "PUBG Mobile (Manual)",
+      "note": "Region: Global\nManual PUBG Mobile top-up.\nAverage delivery time: 5–15 minutes.\nSuccess rate is approximately 50/50 depending on the provider status.\nIf the top-up cannot be completed, a refund can be issued.",
+      "imageurl": "https://reseller.fazercards.com/api/v2/media/game-key-covers/747165f1-b51b-4dde-ae1a-01bb3b1b6cb9.webp"
+    },
+    {
+      "category_id": "dazz_live",
+      "name": "Dazz Live",
+      "note": "Enter your Dazz Live User ID before placing the order. Coins are delivered to your account automatically after purchase.",
+      "imageurl": null
+    }
+  ],
+  "meta": {
+    "total": 6,
+    "limit": 500,
+    "next_cursor": null,
+    "has_more": false
+  }
+}

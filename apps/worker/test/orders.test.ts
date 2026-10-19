@@ -57,6 +57,7 @@ import {
 import {
   FakeSupplierAdapter,
   type FakeSupplierState,
+  FazercardsAdapter,
   fakeSupplierStateSchema,
 } from '@vertex-digital/suppliers';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -1531,6 +1532,31 @@ describe('supplier webhooks (rule F5)', () => {
       expect(await webhooks.process(broken, tx)).toBe('malformed');
       const digest = await stored(tx, 'not json', `malformed:${unique()}`);
       expect(await webhooks.process(digest, tx)).toBe('malformed');
+    });
+  });
+
+  it('keeps an event that names no order result as ignored (S19 FC7)', async () => {
+    await isolated(async (tx) => {
+      const connect = registry.connect;
+      registry.connect = async () => ({
+        adapter: new FazercardsAdapter({ apiKey: 'k', webhookSecret: WEBHOOK_SECRET }),
+        secrets: [WEBHOOK_SECRET],
+      });
+      try {
+        const test = await stored(
+          tx,
+          JSON.stringify({
+            event: 'webhook.test',
+            event_id: `evt-${unique()}`,
+            timestamp: new Date().toISOString(),
+            data: {},
+          }),
+        );
+        expect(await webhooks.process(test, tx)).toBe('ignored');
+        expect(await eventRow(tx, test)).toMatchObject({ result: 'ignored', attemptId: null });
+      } finally {
+        registry.connect = connect;
+      }
     });
   });
 

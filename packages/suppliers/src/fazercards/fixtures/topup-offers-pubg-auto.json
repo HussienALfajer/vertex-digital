@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "kind": "topup",
+  "category_id": "pubg_mobile_auto",
+  "name": "PUBG Mobile (Auto)",
+  "offers": [
+    {
+      "offer_id": "60_uc",
+      "name": "60 UC",
+      "price_usd": "0.8750"
+    },
+    {
+      "offer_id": "325_uc",
+      "name": "325 UC",
+      "price_usd": "4.3800"
+    },
+    {
+      "offer_id": "660_uc",
+      "name": "660 UC",
+      "price_usd": "8.7600"
+    },
+    {
+      "offer_id": "1800_uc",
+      "name": "1800 UC",
+      "price_usd": "22.0000"
+    },
+    {
+      "offer_id": "3850_uc",
+      "name": "3850 UC",
+      "price_usd": "43.9439"
+    },
+    {
+      "offer_id": "8100_uc",
+      "name": "8100 UC",
+      "price_usd": "87.5000"
+    }
+  ],
+  "fields": [
+    {
+      "key": "player_id",
+      "label": "Player ID",
+      "type": "text"
+    }
+  ],
+  "note": "Region: Global\nAutomatic PUBG Mobile top-up.\nUC is delivered directly to your account automatically after the order is placed."
+}

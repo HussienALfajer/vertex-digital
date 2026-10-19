@@ -1,0 +1,1 @@
+ALTER TYPE "public"."supplier_call_operation" ADD VALUE 'account';

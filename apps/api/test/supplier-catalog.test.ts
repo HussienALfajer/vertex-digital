@@ -8,6 +8,7 @@ import {
   type SupplierCategoryPage,
   type SupplierOfferPage,
   type SupplierSummary,
+  type SupplierWebhookSettings,
 } from '@vertex-digital/contracts';
 import {
   catalogCategories,
@@ -22,7 +23,12 @@ import {
   suppliers,
   transitionOrder,
 } from '@vertex-digital/db';
-import { FakeSupplierAdapter, fakeSupplierStateSchema } from '@vertex-digital/suppliers';
+import {
+  FakeSupplierAdapter,
+  FazercardsAdapter,
+  fakeSupplierStateSchema,
+} from '@vertex-digital/suppliers';
+import { type FakeHttpServer, startFakeHttpServer } from '@vertex-digital/suppliers/testing';
 import { and, eq, inArray, like } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SupplierAdaptersService, SupplierLiveService } from '../src/modules/suppliers/index.js';
@@ -1126,7 +1132,12 @@ describe('offers and supplier cards (rules SF1, SF2, SC11)', () => {
     await offer('fresh', 'global');
     const cards = await json<SupplierSummary[]>(await get('/api/admin/suppliers'), 200);
     const fake = cards.find((card) => card.code === 'fake') as SupplierSummary;
-    expect(fake.capabilities).toEqual({ categories: true, statement: true, platformStatus: true });
+    expect(fake.capabilities).toEqual({
+      categories: true,
+      statement: true,
+      platformStatus: true,
+      account: false,
+    });
     expect(fake.newOfferCount).toBeGreaterThanOrEqual(1);
     expect(fake.lowStockCount).toBeGreaterThanOrEqual(1);
     expect(fake.platformStatus).toBeNull();
@@ -1307,6 +1318,232 @@ describe('statement rows and nearby orders matched to an attempt (rules SF3, SF4
       });
     } finally {
       spied.mockRestore();
+    }
+  });
+});
+
+describe('the FazerCards webhook card (S19 FC8)', () => {
+  const STORE_HOOK = 'https://store.example/api/webhooks/suppliers/fazercards';
+  let server: FakeHttpServer;
+  let fazercardsId = '';
+  const settings = (url: string | null, failures = 0) => ({
+    body: {
+      ok: true,
+      webhook: {
+        url,
+        enabled: url !== null,
+        consecutive_failures: failures,
+        last_success_at: null,
+        last_failure_at: failures > 0 ? '2026-10-19T21:34:34.806Z' : null,
+        last_failure_reason: failures > 0 ? 'http_404' : null,
+      },
+    },
+  });
+  const deliveries = {
+    body: {
+      ok: true,
+      deliveries: [
+        { id: 7, event: 'webhook.test', attempt: 1, status: 'delivered', response_status: 204 },
+      ],
+    },
+  };
+
+  beforeAll(async () => {
+    server = await startFakeHttpServer();
+    const [row] = await test.db.select().from(suppliers).where(eq(suppliers.code, 'fazercards'));
+    fazercardsId = row?.id as string;
+  });
+
+  afterAll(() => server.close());
+
+  const scripted = () =>
+    vi.spyOn(SupplierAdaptersService.prototype, 'connect').mockResolvedValue(
+      new FazercardsAdapter({
+        apiKey: 'k',
+        webhookSecret: 's',
+        baseUrl: `${server.url}/api/v2/`,
+        timeoutMs: 5_000,
+      }),
+    );
+
+  it('reads the settings and deliveries live, only for a supplier with an account', async () => {
+    const connect = scripted();
+    try {
+      server.reply(settings('https://old.example/hook', 1), deliveries);
+      const read = await json<SupplierWebhookSettings>(
+        await get('/api/admin/suppliers/fazercards/webhook'),
+        200,
+      );
+      expect(read).toEqual({
+        url: 'https://old.example/hook',
+        enabled: true,
+        // The test store is plain HTTP: it has no URL to give the supplier.
+        expectedUrl: null,
+        consecutiveFailures: 1,
+        lastSuccessAt: null,
+        lastFailureAt: '2026-10-19T21:34:34.806Z',
+        lastFailureReason: 'http_404',
+        deliveries: [
+          {
+            id: '7',
+            event: 'webhook.test',
+            attempt: 1,
+            status: 'delivered',
+            responseStatus: 204,
+            durationMs: null,
+            createdAt: null,
+          },
+        ],
+      });
+      expect(recorded.at(-1)).toMatchObject({ operation: 'account', result: 'ok' });
+      expect(
+        (await json<{ code: string }>(await get('/api/admin/suppliers/fazercards/webhook'), 429))
+          .code,
+      ).toBe('RATE_LIMITED');
+      expect(
+        (await json<{ code: string }>(await get('/api/admin/suppliers/fake/webhook'), 409)).code,
+      ).toBe('CAPABILITY_UNSUPPORTED');
+    } finally {
+      connect.mockRestore();
+    }
+    expect((await client.get('/api/admin/suppliers/fazercards/webhook')).status).toBe(401);
+    expect(
+      (await client.get('/api/admin/suppliers/fazercards/webhook', { cookie: customerCookie }))
+        .status,
+    ).toBe(401);
+  });
+
+  it('refuses to set the URL without a public store address, or without re-authentication', async () => {
+    const connect = scripted();
+    try {
+      expect(
+        (
+          await json<{ code: string }>(
+            await client.put('/api/admin/suppliers/fazercards/webhook', { cookie: admin.cookie }),
+            409,
+          )
+        ).code,
+      ).toBe('STORE_URL_NOT_PUBLIC');
+    } finally {
+      connect.mockRestore();
+    }
+    const stale = await client.adminWithTotp(test.db);
+    seeded.push(stale.id);
+    admin = stale;
+    expect(
+      (
+        await json<{ code: string }>(
+          await client.put('/api/admin/suppliers/fazercards/webhook', { cookie: admin.cookie }),
+          403,
+        )
+      ).code,
+    ).toBe('REAUTHENTICATION_REQUIRED');
+    await reauthenticate();
+    expect(
+      (await client.put('/api/admin/suppliers/fazercards/webhook', { cookie: customerCookie }))
+        .status,
+    ).toBe(401);
+  });
+
+  it('points the webhook at the store, sends the test event, and audits both', async () => {
+    const connect = scripted();
+    const url = vi
+      .spyOn(SupplierLiveService.prototype as unknown as { webhookUrl: () => string }, 'webhookUrl')
+      .mockReturnValue(STORE_HOOK);
+    try {
+      const before = server.requests.length;
+      server.reply(settings(STORE_HOOK), { body: { ok: true } }, settings(STORE_HOOK), deliveries);
+      const set = await json<SupplierWebhookSettings>(
+        await client.put('/api/admin/suppliers/fazercards/webhook', { cookie: admin.cookie }),
+        200,
+      );
+      expect(set).toMatchObject({ url: STORE_HOOK, enabled: true, expectedUrl: STORE_HOOK });
+      const sent = server.requests.slice(before);
+      expect(sent.map((request) => `${request.method} ${request.path}`)).toEqual([
+        'PUT /api/v2/account/webhook',
+        'POST /api/v2/account/webhook/test',
+        'GET /api/v2/account/webhook',
+        'GET /api/v2/account/webhook/deliveries',
+      ]);
+      expect(JSON.parse(sent[0]?.body ?? '')).toEqual({ url: STORE_HOOK, enabled: true });
+      expect((await auditOf(test.db, fazercardsId)).at(-1)).toMatchObject({
+        action: 'supplier.webhook_set',
+        details: { supplier: 'fazercards', url: STORE_HOOK, set: true, ok: true },
+      });
+
+      server.reply({ status: 500, body: { ok: false } });
+      expect(await json(await post('/api/admin/suppliers/fazercards/webhook/test'), 200)).toEqual({
+        ok: false,
+      });
+      expect((await auditOf(test.db, fazercardsId)).at(-1)).toMatchObject({
+        action: 'supplier.webhook_tested',
+        details: { supplier: 'fazercards', ok: false },
+      });
+      expect(
+        (
+          await json<{ code: string }>(
+            await post('/api/admin/suppliers/fazercards/webhook/test'),
+            429,
+          )
+        ).code,
+      ).toBe('RATE_LIMITED');
+      // A failed set is audited before its refusal: it may have changed the supplier's settings.
+      server.reply({ status: 502, body: 'bad gateway' });
+      expect(
+        (
+          await json<{ code: string }>(
+            await client.put('/api/admin/suppliers/fazercards/webhook', { cookie: admin.cookie }),
+            409,
+          )
+        ).code,
+      ).toBe('SUPPLIER_UNAVAILABLE');
+      expect((await auditOf(test.db, fazercardsId)).at(-1)).toMatchObject({
+        action: 'supplier.webhook_set',
+        details: { supplier: 'fazercards', url: STORE_HOOK, set: false, ok: false },
+      });
+    } finally {
+      url.mockRestore();
+      connect.mockRestore();
+    }
+    expect((await client.post('/api/admin/suppliers/fazercards/webhook/test', {})).status).toBe(
+      401,
+    );
+  });
+
+  it('shows the plan on the supplier card once the worker read it (FC9)', async () => {
+    await test.db
+      .update(suppliers)
+      .set({
+        accountPlan: 'trial',
+        accountActive: true,
+        accountPlanExpiresAt: new Date('2026-10-24T21:33:21.869Z'),
+        accountCheckedAt: new Date('2026-10-20T09:00:00Z'),
+      })
+      .where(eq(suppliers.id, fazercardsId));
+    try {
+      const cards = await json<SupplierSummary[]>(await get('/api/admin/suppliers'), 200);
+      expect(cards.find((card) => card.code === 'fazercards')).toMatchObject({
+        available: true,
+        capabilities: { categories: true, statement: true, platformStatus: false, account: true },
+        subscription: {
+          plan: 'trial',
+          active: true,
+          autoRenew: null,
+          expiresAt: '2026-10-24T21:33:21.869Z',
+          checkedAt: '2026-10-20T09:00:00.000Z',
+        },
+      });
+      expect(cards.find((card) => card.code === 'fake')?.subscription).toBeNull();
+    } finally {
+      await test.db
+        .update(suppliers)
+        .set({
+          accountPlan: null,
+          accountActive: null,
+          accountPlanExpiresAt: null,
+          accountCheckedAt: null,
+        })
+        .where(eq(suppliers.id, fazercardsId));
     }
   });
 });

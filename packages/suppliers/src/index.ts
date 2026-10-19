@@ -29,6 +29,13 @@ export {
   fakeSupplierStateSchema,
 } from './fake/adapter.js';
 export {
+  FAZERCARDS_BASE_URL,
+  FAZERCARDS_SUPPLIER_CODE,
+  FazercardsAdapter,
+  type FazercardsAdapterOptions,
+  FZR_SIGNATURE_HEADER,
+} from './fazercards/adapter.js';
+export {
   WDG_SIGNATURE_HEADER,
   WDGZONE_BASE_URL,
   WDGZONE_SUPPLIER_CODE,

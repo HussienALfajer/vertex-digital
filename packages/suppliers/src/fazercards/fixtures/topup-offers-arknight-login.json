@@ -1,0 +1,120 @@
+{
+  "ok": true,
+  "kind": "topup",
+  "category_id": "arknight_endfield_login",
+  "name": "Arknight: Endfield (Auto Via Login)",
+  "offers": [
+    {
+      "offer_id": "grand_vision_arsenal_bundle",
+      "name": "Grand Vision Arsenal Bundle",
+      "price_usd": "0.7868"
+    },
+    {
+      "offer_id": "4_2_origeometry",
+      "name": "4 + 2 Origeometry",
+      "price_usd": "1.7691"
+    },
+    {
+      "offer_id": "monthly_pass",
+      "name": "Monthly Pass",
+      "price_usd": "4.0183"
+    },
+    {
+      "offer_id": "weekly_materials_bundle",
+      "name": "Weekly Materials Bundle",
+      "price_usd": "4.0183"
+    },
+    {
+      "offer_id": "21_5_origeometry",
+      "name": "21 + 5 Origeometry",
+      "price_usd": "7.6678"
+    },
+    {
+      "offer_id": "protocol_customized",
+      "name": "Protocol Customized",
+      "price_usd": "8.0357"
+    },
+    {
+      "offer_id": "34_6_origeometry",
+      "name": "34 + 6 Origeometry",
+      "price_usd": "11.5017"
+    },
+    {
+      "offer_id": "value_arsenal_ticket_pack",
+      "name": "Value Arsenal Ticket Pack",
+      "price_usd": "12.3808"
+    },
+    {
+      "offer_id": "monthly_materials_bundle",
+      "name": "Monthly Materials Bundle",
+      "price_usd": "14.4466"
+    },
+    {
+      "offer_id": "hr_support_bundle",
+      "name": "HR Support Bundle",
+      "price_usd": "14.4466"
+    },
+    {
+      "offer_id": "all_rounder_bundle",
+      "name": "All Rounder Bundle",
+      "price_usd": "17.3904"
+    },
+    {
+      "offer_id": "57_11_origeometry",
+      "name": "57 + 11 Origeometry",
+      "price_usd": "18.2805"
+    },
+    {
+      "offer_id": "protocol_flow_bundle",
+      "name": "Protocol Flow Bundle",
+      "price_usd": "26.2340"
+    },
+    {
+      "offer_id": "92_20_origeometry",
+      "name": "92 + 20 Origeometry",
+      "price_usd": "29.1788"
+    },
+    {
+      "offer_id": "194_48_origeometry",
+      "name": "194 + 48 Origeometry",
+      "price_usd": "58.9601"
+    },
+    {
+      "offer_id": "320_80_origeometry",
+      "name": "320 + 80 Origeometry",
+      "price_usd": "99.9273"
+    }
+  ],
+  "fields": [
+    {
+      "key": "email",
+      "label": "Email",
+      "type": "text"
+    },
+    {
+      "key": "password",
+      "label": "Password",
+      "type": "text"
+    },
+    {
+      "key": "server",
+      "label": "Server",
+      "type": "select",
+      "options": [
+        {
+          "label": "Asia",
+          "value": "Asia"
+        },
+        {
+          "label": "Europe",
+          "value": "Europe"
+        },
+        {
+          "label": "Americas",
+          "value": "Americas"
+        }
+      ]
+    }
+  ],
+  "note": "Automatic top-up via account login.\nEnter your account email and password, then select your server."
+}

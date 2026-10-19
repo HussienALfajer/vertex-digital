@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "kind": "gift_card",
+  "items": [
+    {
+      "category_id": "acash_my",
+      "name": "A-Cash (MY)",
+      "note": "Region: MY\nA-Cash Malaysia gift cards.\nCodes can be safely stored and redeemed later.",
+      "imageurl": "https://reseller.fazercards.com/api/v2/media/game-key-covers/a17b6665-e1f8-4d3a-8041-8a7a4977e39b.webp"
+    },
+    {
+      "category_id": "adobe_digital_code",
+      "name": "Adobe Digital Code",
+      "note": "Region: MENA\nAdobe annual digital codes.\nCodes can be safely stored and redeemed later.",
+      "imageurl": "https://reseller.fazercards.com/api/v2/media/game-key-covers/88a8526d-aa3a-4942-915b-e8001b682664.jpg"
+    },
+    {
+      "category_id": "airalo_voucher",
+      "name": "Airalo Voucher",
+      "note": "Airalo voucher codes.\nCodes can be safely stored and redeemed later.",
+      "imageurl": "https://reseller.fazercards.com/api/v2/media/game-key-covers/3fc7f073-c34f-4ccf-94c6-63c4f75dc835.jpg"
+    }
+  ],
+  "meta": {
+    "total": 553,
+    "limit": 3,
+    "next_cursor": "eyJuIjoiQWlyYWxvIFZvdWNoZXIiLCJpIjoiY2Q3MmQ0OGMtYmQ5YS00NDAzLTkzMGQtYjc2MmE0YTZmYjRmIn0",
+    "has_more": true
+  }
+}

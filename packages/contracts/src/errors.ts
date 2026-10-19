@@ -236,6 +236,8 @@ export const ERROR_CODES = [
   'IMAGE_FETCH_FAILED',
   /** The supplier's adapter cannot do this (categories, statement, platform status; S16). */
   'CAPABILITY_UNSUPPORTED',
+  /** S19 FC8: the store has no public HTTPS address for a supplier's webhook (`STORE_URL`). */
+  'STORE_URL_NOT_PUBLIC',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

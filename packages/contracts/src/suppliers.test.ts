@@ -22,6 +22,7 @@ import {
   SUPPLIER_CREDENTIAL_FIELDS,
   SUPPLIER_POLICY_DEFAULTS,
   type SupplierHealthState,
+  subscriptionAlert,
   supplierAvailable,
   supplierChecksPlayers,
   supplierHasCatalog,
@@ -60,6 +61,28 @@ const usable: RouteFacts = {
   balanceUsdUnits: 1_000_000_000,
 };
 
+describe('a route of an offer with order bounds (S19, spec Data)', () => {
+  const now = new Date('2026-10-20T12:00:00Z');
+  const reason = (extra: Partial<RouteFacts>) =>
+    routeUnusableReason(
+      { ...usable, costConfirmedAt: now, ...extra },
+      now,
+      SUPPLIER_POLICY_DEFAULTS,
+    );
+
+  it('is unusable when its product sells a quantity the offer refuses', () => {
+    expect(
+      reason({ offerMinQuantity: 1, offerMaxQuantity: 100, productMaxQuantity: 50 }),
+    ).toBeNull();
+    expect(
+      reason({ offerMinQuantity: null, offerMaxQuantity: null, productMaxQuantity: 5 }),
+    ).toBeNull();
+    expect(reason({ offerMaxQuantity: 1 })).toBeNull();
+    expect(reason({ offerMaxQuantity: 1, productMaxQuantity: 2 })).toBe('quantity_unsupported');
+    expect(reason({ offerMinQuantity: 2, productMaxQuantity: 10 })).toBe('quantity_unsupported');
+  });
+});
+
 describe('suppliers (rule SP1)', () => {
   it('are available with an adapter; fake only where enabled', () => {
     expect(supplierAvailable('manual', { fakeEnabled: false })).toBe(true);
@@ -68,9 +91,38 @@ describe('suppliers (rule SP1)', () => {
     expect(supplierAvailable('wdgzone', { fakeEnabled: false })).toBe(true);
   });
 
-  it('keep FazerCards unavailable until its adapter arrives (S19 FC2)', () => {
-    expect(supplierAvailable('fazercards', { fakeEnabled: true })).toBe(false);
+  it('make FazerCards available with its adapter, never checking players by route (S19 FC2)', () => {
+    expect(supplierAvailable('fazercards', { fakeEnabled: false })).toBe(true);
     expect(supplierChecksPlayers('fazercards', { fakeEnabled: true })).toBe(false);
+  });
+
+  describe('subscription alerts (S19 FC9)', () => {
+    const now = new Date('2026-10-20T12:00:00Z');
+    const expiresAt = new Date('2026-10-22T11:00:00Z');
+    const base = { previousActive: true, active: true, expiresAt, alertedFor: null, now };
+
+    it('tell once per expiry within 48 hours of it', () => {
+      expect(subscriptionAlert(base)).toBe('expiring');
+      expect(subscriptionAlert({ ...base, alertedFor: expiresAt })).toBeNull();
+      expect(subscriptionAlert({ ...base, alertedFor: new Date('2026-09-22T11:00:00Z') })).toBe(
+        'expiring',
+      );
+      expect(
+        subscriptionAlert({ ...base, expiresAt: new Date('2026-10-22T13:00:00Z') }),
+      ).toBeNull();
+      expect(
+        subscriptionAlert({ ...base, expiresAt: new Date('2026-10-20T11:00:00Z') }),
+      ).toBeNull();
+      expect(subscriptionAlert({ ...base, expiresAt: null })).toBeNull();
+    });
+
+    it('tell when the plan turns inactive and when it comes back, once each', () => {
+      expect(subscriptionAlert({ ...base, active: false })).toBe('inactive');
+      expect(subscriptionAlert({ ...base, previousActive: null, active: false })).toBe('inactive');
+      expect(subscriptionAlert({ ...base, previousActive: false, active: false })).toBeNull();
+      expect(subscriptionAlert({ ...base, previousActive: false })).toBe('active');
+      expect(subscriptionAlert({ ...base, previousActive: null, expiresAt: null })).toBeNull();
+    });
   });
 
   it('list offers except the manual supplier', () => {

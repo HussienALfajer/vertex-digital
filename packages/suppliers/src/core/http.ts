@@ -13,7 +13,7 @@ export interface SupplierHttpOptions {
 }
 
 export interface SupplierRequest<T> {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT';
   path: string;
   body?: unknown;
   headers?: Record<string, string>;

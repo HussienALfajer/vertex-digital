@@ -21,11 +21,14 @@ import {
 import {
   FAKE_SIGNATURE_HEADER,
   FAKE_TIMESTAMP_HEADER,
+  FazercardsAdapter,
+  FZR_SIGNATURE_HEADER,
   hmacSha256,
 } from '@vertex-digital/suppliers';
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { parseEnv } from '../src/core/config/env.js';
+import { SupplierAdaptersService } from '../src/modules/suppliers/index.js';
 import {
   api,
   auditOf,
@@ -854,6 +857,62 @@ describe('supplier webhooks (rule F4)', () => {
       .from(supplierWebhookEvents)
       .where(eq(supplierWebhookEvents.eventId, payload.eventId));
     expect(stored).toEqual([]);
+  });
+
+  it('verifies a FazerCards event by its own secret and stores it once (S19 FC7)', async () => {
+    const [fazercards] = await test.db
+      .select({ id: suppliers.id })
+      .from(suppliers)
+      .where(eq(suppliers.code, 'fazercards'));
+    const secret = `fzr-${randomUUID()}`;
+    const connect = vi
+      .spyOn(SupplierAdaptersService.prototype, 'connect')
+      .mockResolvedValue(new FazercardsAdapter({ apiKey: 'k', webhookSecret: secret }));
+    try {
+      const eventId = randomUUID();
+      const raw = JSON.stringify({
+        event: 'order.status_changed',
+        event_id: eventId,
+        timestamp: new Date().toISOString(),
+        data: { order_id: 'ord-1', type: 'topup', status: 'completed' },
+      });
+      const headers = (key: string) => ({
+        'content-type': 'application/json',
+        [FZR_SIGNATURE_HEADER]: `sha256=${hmacSha256(key, raw)}`,
+      });
+      expect((await deliver(raw, headers('not-the-secret'), 'fazercards')).status).toBe(401);
+      expect((await deliver(raw, headers(secret), 'fazercards')).status).toBe(200);
+      expect((await deliver(raw, headers(secret), 'fazercards')).status).toBe(200);
+      const stale = JSON.stringify({
+        event: 'webhook.test',
+        event_id: randomUUID(),
+        timestamp: new Date(Date.now() - 25 * 3_600_000).toISOString(),
+      });
+      expect(
+        (
+          await deliver(
+            stale,
+            {
+              'content-type': 'application/json',
+              [FZR_SIGNATURE_HEADER]: `sha256=${hmacSha256(secret, stale)}`,
+            },
+            'fazercards',
+          )
+        ).status,
+      ).toBe(401);
+      const stored = await test.db
+        .select()
+        .from(supplierWebhookEvents)
+        .where(
+          and(
+            eq(supplierWebhookEvents.supplierId, fazercards?.id as string),
+            eq(supplierWebhookEvents.eventId, eventId),
+          ),
+        );
+      expect(stored).toHaveLength(1);
+    } finally {
+      connect.mockRestore();
+    }
   });
 });
 

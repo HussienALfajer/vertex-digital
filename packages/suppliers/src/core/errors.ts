@@ -27,6 +27,11 @@ export class SupplierError extends Error {
   }
 }
 
+/** A method behind a capability the adapter does not declare: a definitive refusal. */
+export function notSupported(supplier: string, what: string): Promise<never> {
+  return Promise.reject(new SupplierError('definitive', `${supplier} does not ${what}`));
+}
+
 /**
  * The outcome of an order call that threw. Only a definitive refusal means nothing was bought;
  * anything else (a timeout, a lost connection, a reply that could not be read) may have bought

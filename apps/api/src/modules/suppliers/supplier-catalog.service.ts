@@ -745,6 +745,7 @@ export class SupplierCatalogService {
         productCount: row.productCount,
         inStockCount: row.inStockCount,
         hasImage: row.imageUrl !== null,
+        note: row.note,
         childCount: view.children.get(row.categoryId)?.length ?? 0,
         counts: {
           mapped: standing.mapped,

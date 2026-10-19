@@ -9,6 +9,7 @@ import {
 } from '@vertex-digital/db';
 import {
   FakeSupplierAdapter,
+  FazercardsAdapter,
   type SupplierAdapter,
   WdgzoneAdapter,
 } from '@vertex-digital/suppliers';
@@ -65,6 +66,14 @@ export class SupplierRegistry {
             `WDGZone ${retry.path} read again (${retry.attempt}): ${retry.failure}` +
               `${retry.status !== undefined ? `, HTTP ${retry.status}` : ''}, in ${retry.waitMs} ms`,
           ),
+      });
+    }
+    if (code === 'fazercards') {
+      // S19 FC7: its webhooks are signed with a secret of FazerCards', entered beside the key.
+      if (!credentials.apiKey || !credentials.webhookSecret) return null;
+      return new FazercardsAdapter({
+        apiKey: credentials.apiKey,
+        webhookSecret: credentials.webhookSecret,
       });
     }
     if (code !== 'fake') return null;

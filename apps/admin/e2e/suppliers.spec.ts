@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Locator, Page } from '@playwright/test';
 import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
+import { STORE_WEBHOOK_URL } from './suppliers-mock';
 import { type AdminApi, expect, PASSWORD, screenshot, TOTP_CODE, test, USD } from './test';
 
 /*
@@ -101,6 +102,20 @@ async function openRoutes(page: Page, gameId: string, product: string) {
   return drawer;
 }
 
+/** S19 FC9: the plan the worker would have read, ending in so many hours. */
+function fazercardsPlan(admin: AdminApi, plan: { active: boolean; endsInHours?: number }) {
+  admin.suppliers.supplier('fazercards').subscription = {
+    plan: plan.active ? 'bronze' : 'trial',
+    expiresAt:
+      plan.endsInHours === undefined
+        ? null
+        : new Date(Date.now() + plan.endsInHours * 3_600_000).toISOString(),
+    active: plan.active,
+    autoRenew: false,
+    checkedAt: new Date(Date.now() - 120_000).toISOString(),
+  };
+}
+
 test.describe('suppliers', () => {
   test('lists the suppliers, then sets the fake keys and the connection test finds its offers (step 1)', async ({
     page,
@@ -135,13 +150,15 @@ test.describe('suppliers', () => {
     await expect(page.getByText(fill(s.offers.total, { total: 14 }))).toBeVisible();
   });
 
-  test('FazerCards takes its key and webhook secret before its adapter, and stays not ready (S19 FC2)', async ({
+  test('FazerCards takes its keys, shows its plan, and points its webhook at the store (S19 FC8, FC9)', async ({
     page,
     admin,
   }) => {
     admin.signedIn = true;
+    fazercardsPlan(admin, { active: true, endsInHours: 30 });
     await page.goto('/suppliers');
-    await expect(card(page, 'FazerCards')).toContainText(s.chips.unavailable);
+    await expect(card(page, 'FazerCards')).toContainText(s.chips.available);
+    await expect(card(page, 'FazerCards')).toContainText(s.subscription.endsSoon);
     await card(page, 'FazerCards').getByRole('link', { name: s.open }).click();
     await expect(page).toHaveURL(/\/suppliers\/fazercards$/);
     await expect(page.getByText(s.descriptions.fazercards)).toBeVisible();
@@ -154,7 +171,24 @@ test.describe('suppliers', () => {
     await reauthenticate(page);
     await expect(page.getByText('…e5f6')).toBeVisible();
     await expect(page.getByText('…g7h8')).toBeVisible();
-    await expect(page.getByText(s.chips.unavailable).first()).toBeVisible();
+
+    const webhook = page.locator('[data-slot="card"]').filter({ hasText: s.webhook.title });
+    await expect(webhook).toContainText(s.webhook.off);
+    await expect(webhook).toContainText(s.webhook.noDeliveries);
+    admin.reauthenticationRequired = true;
+    await webhook.getByRole('button', { name: s.webhook.set }).click();
+    await reauthenticate(page);
+    await expect(webhook).toContainText(s.webhook.pointed);
+    await expect(webhook).toContainText(STORE_WEBHOOK_URL);
+    await expect(webhook).toContainText('webhook.test');
+    await webhook.getByRole('button', { name: s.webhook.test }).click();
+    await expect(webhook).toContainText(s.webhook.testSent);
+    await expect(webhook.getByText(s.webhook.delivered)).toHaveCount(2);
+
+    // FC9: an inactive plan says what it stops.
+    fazercardsPlan(admin, { active: false });
+    await page.reload();
+    await expect(page.getByText(s.subscription.inactiveMeaning)).toBeVisible();
   });
 
   test('imports three PUBG offers into paused products, refusing a taken name in place (step 2)', async ({
@@ -486,9 +520,43 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/suppliers/fake');
       await expect(page.getByText('…c3d4')).toBeVisible();
       await screenshot(page, testInfo, `supplier-connection-${colorScheme}`, { fullPage: true });
-      // S19 FC2: FazerCards before its adapter.
+      // S19 FC8, FC9: FazerCards with its keys, its plan and its webhook pointed at the store.
+      fazercardsPlan(admin, { active: true, endsInHours: 30 });
+      admin.suppliers.supplier('fazercards').credentials = {
+        hints: { apiKey: 'e5f6', webhookSecret: 'g7h8' },
+        setAt: new Date().toISOString(),
+      };
+      admin.suppliers.supplier('fazercards').webhook = {
+        url: STORE_WEBHOOK_URL,
+        enabled: true,
+        expectedUrl: STORE_WEBHOOK_URL,
+        consecutiveFailures: 0,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        lastFailureReason: null,
+        deliveries: [
+          {
+            id: 'd2',
+            event: 'order.status_changed',
+            attempt: 1,
+            status: 'delivered',
+            responseStatus: 200,
+            durationMs: 140,
+            createdAt: '2026-10-20T09:00:02.000Z',
+          },
+          {
+            id: 'd1',
+            event: 'webhook.test',
+            attempt: 1,
+            status: 'failed',
+            responseStatus: 404,
+            durationMs: 355,
+            createdAt: '2026-10-19T21:34:34.806Z',
+          },
+        ],
+      };
       await page.goto('/suppliers/fazercards');
-      await expect(page.getByText(s.descriptions.fazercards)).toBeVisible();
+      await expect(page.getByText(s.webhook.pointed)).toBeVisible();
       await screenshot(page, testInfo, `supplier-fazercards-${colorScheme}`, { fullPage: true });
       await page.goto('/suppliers/fake');
       await page.getByRole('tab', { name: s.tabs.offers }).click();

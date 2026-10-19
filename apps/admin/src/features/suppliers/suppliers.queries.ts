@@ -242,6 +242,21 @@ export const platformStatusQuery = (code: SupplierCode) =>
   });
 
 /**
+ * S19 FC8: the supplier's webhook settings and deliveries, read live on request (the API allows
+ * one read per 5 seconds; a refused one waits it out once).
+ */
+export const webhookQuery = (code: SupplierCode) =>
+  queryOptions({
+    queryKey: ['suppliers', 'webhook', code],
+    queryFn: () =>
+      call(api.GET('/api/admin/suppliers/{code}/webhook', { params: { path: { code } } })),
+    staleTime: 30_000,
+    retry: (count: number, error: Error) =>
+      count < 1 && error instanceof ApiError && error.code === 'RATE_LIMITED',
+    retryDelay: 5_000,
+  });
+
+/**
  * S18 ST3: a statement read refused by the API's 5-second limit waits it out and reads again
  * (twice at most); any other failure is shown at once.
  */
@@ -383,6 +398,30 @@ export function useTestConnection(code: SupplierCode) {
         queryClient.invalidateQueries({ queryKey: ['suppliers', 'detail', code] }),
         queryClient.invalidateQueries({ queryKey: ['suppliers', 'calls', code] }),
       ]),
+  });
+}
+
+/** S19 FC8: "ضبط الإشعارات", after re-authentication; answers the settings read again. */
+export function useSetWebhook(code: SupplierCode) {
+  const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: () =>
+      withReauthentication(() =>
+        call(api.PUT('/api/admin/suppliers/{code}/webhook', { params: { path: { code } } })),
+      ),
+    onSuccess: (settings) => queryClient.setQueryData(['suppliers', 'webhook', code], settings),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['suppliers', 'calls', code] }),
+  });
+}
+
+/** S19 FC8: the supplier's test event asked for (one per 10 seconds). */
+export function useTestWebhook(code: SupplierCode) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      call(api.POST('/api/admin/suppliers/{code}/webhook/test', { params: { path: { code } } })),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['suppliers', 'calls', code] }),
   });
 }
 

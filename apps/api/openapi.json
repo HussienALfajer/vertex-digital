@@ -1048,6 +1048,8 @@
                 "supplier.updated",
                 "supplier.sync_requested",
                 "supplier.connection_tested",
+                "supplier.webhook_set",
+                "supplier.webhook_tested",
                 "supplier.validation_quota_set",
                 "supplier.import",
                 "supplier_policy.set",
@@ -7501,6 +7503,94 @@
         ]
       }
     },
+    "/api/admin/suppliers/{code}/webhook": {
+      "get": {
+        "operationId": "SuppliersAdminController_webhook",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read live",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierWebhookSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      },
+      "put": {
+        "operationId": "SuppliersAdminController_setWebhook",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read again live",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierWebhookSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      }
+    },
+    "/api/admin/suppliers/{code}/webhook/test": {
+      "post": {
+        "operationId": "SuppliersAdminController_testWebhook",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whether it was sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierWebhookTest"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      }
+    },
     "/api/admin/suppliers/{code}/credentials": {
       "put": {
         "operationId": "SuppliersAdminController_setCredentials",
@@ -12450,6 +12540,8 @@
           "supplier.updated",
           "supplier.sync_requested",
           "supplier.connection_tested",
+          "supplier.webhook_set",
+          "supplier.webhook_tested",
           "supplier.validation_quota_set",
           "supplier.import",
           "supplier_policy.set",
@@ -23689,6 +23781,14 @@
                 "$ref": "#/components/schemas/PlatformStatus"
               }
             ]
+          },
+          "subscription": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SupplierSubscription"
+              }
+            ]
           }
         },
         "required": [
@@ -23711,7 +23811,8 @@
           "capabilities",
           "newOfferCount",
           "lowStockCount",
-          "platformStatus"
+          "platformStatus",
+          "subscription"
         ],
         "additionalProperties": false
       },
@@ -23880,12 +23981,16 @@
           },
           "platformStatus": {
             "type": "boolean"
+          },
+          "account": {
+            "type": "boolean"
           }
         },
         "required": [
           "categories",
           "statement",
-          "platformStatus"
+          "platformStatus",
+          "account"
         ],
         "additionalProperties": false
       },
@@ -23911,6 +24016,41 @@
         "required": [
           "status",
           "catalogUpdatedAt",
+          "checkedAt"
+        ],
+        "additionalProperties": false
+      },
+      "SupplierSubscription": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "autoRenew": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "plan",
+          "expiresAt",
+          "active",
+          "autoRenew",
           "checkedAt"
         ],
         "additionalProperties": false
@@ -24175,6 +24315,14 @@
               }
             ]
           },
+          "subscription": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SupplierSubscription"
+              }
+            ]
+          },
           "credentialFields": {
             "type": "array",
             "items": {
@@ -24237,6 +24385,7 @@
           "newOfferCount",
           "lowStockCount",
           "platformStatus",
+          "subscription",
           "credentialFields",
           "credentials",
           "healthHistory",
@@ -24290,6 +24439,127 @@
           "successBp",
           "p90Ms",
           "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "SupplierWebhookSettings": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "nullable": true,
+            "type": "string",
+            "maxLength": 500
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expectedUrl": {
+            "nullable": true,
+            "type": "string",
+            "maxLength": 500
+          },
+          "consecutiveFailures": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "lastSuccessAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "lastFailureAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "lastFailureReason": {
+            "nullable": true,
+            "type": "string",
+            "maxLength": 200
+          },
+          "deliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupplierWebhookDelivery"
+            }
+          }
+        },
+        "required": [
+          "url",
+          "enabled",
+          "expectedUrl",
+          "consecutiveFailures",
+          "lastSuccessAt",
+          "lastFailureAt",
+          "lastFailureReason",
+          "deliveries"
+        ],
+        "additionalProperties": false
+      },
+      "SupplierWebhookDelivery": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "event": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "attempt": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "responseStatus": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "durationMs": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "event",
+          "attempt",
+          "status",
+          "responseStatus",
+          "durationMs",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "SupplierWebhookTest": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
         ],
         "additionalProperties": false
       },
@@ -24495,7 +24765,8 @@
               "platform_status",
               "fetch_image",
               "get_offer",
-              "test_connection"
+              "test_connection",
+              "account"
             ]
           },
           "result": {
@@ -24944,7 +25215,8 @@
       "OfferUnsupportedReason": {
         "type": "string",
         "enum": [
-          "fields_unsupported"
+          "fields_unsupported",
+          "manual_delivery"
         ]
       },
       "ImportOffers": {
@@ -25391,6 +25663,7 @@
           "offer_missing",
           "offer_unsupported",
           "kind_mismatch",
+          "quantity_unsupported",
           "out_of_stock",
           "cost_unknown",
           "cost_stale",
@@ -25643,6 +25916,10 @@
           "hasImage": {
             "type": "boolean"
           },
+          "note": {
+            "nullable": true,
+            "type": "string"
+          },
           "childCount": {
             "type": "integer",
             "minimum": 0,
@@ -25739,6 +26016,7 @@
           "productCount",
           "inStockCount",
           "hasImage",
+          "note",
           "childCount",
           "counts",
           "state",
@@ -29004,6 +29282,7 @@
           "offer_missing",
           "offer_unsupported",
           "kind_mismatch",
+          "quantity_unsupported",
           "out_of_stock",
           "cost_unknown",
           "cost_stale",
@@ -29031,7 +29310,8 @@
           "same_result",
           "unknown_key",
           "conflict",
-          "malformed"
+          "malformed",
+          "ignored"
         ]
       },
       "OrderEvent": {
@@ -30619,7 +30899,8 @@
           "reconciliation_alert",
           "admin_order_placed",
           "supplier_stock_low",
-          "supplier_charge_mismatch"
+          "supplier_charge_mismatch",
+          "supplier_subscription"
         ]
       },
       "TelegramMessageStatus": {
