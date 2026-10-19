@@ -24,6 +24,10 @@ test('a quiet day: nothing needs the admin, zero sales, the suppliers and the ra
   const suppliers = page.getByRole('table');
   await expect(suppliers.getByRole('link', { name: 'WDGZone' })).toBeVisible();
   await expect(suppliers.getByRole('link', { name: 'يدوي' })).toBeVisible();
+  // S19 FC2: FazerCards listed as not ready, not healthy.
+  await expect(suppliers.getByRole('row').filter({ hasText: 'FazerCards' })).toContainText(
+    ar.suppliers.chips.unavailable,
+  );
   await expect(page.getByText(ar.rates.current.value.replace('{{rate}}', '118'))).toBeVisible();
 });
 

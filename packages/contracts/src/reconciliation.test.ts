@@ -40,6 +40,7 @@ describe('places (rule T1)', () => {
     });
     expect(TREASURY_ACCOUNTS.usdt_bep20.code).toBe('usdt_receipts:usdt_bep20');
     expect(TREASURY_ACCOUNTS['supplier:wdgzone'].code).toBe('supplier_prepaid:wdgzone');
+    expect(TREASURY_ACCOUNTS['supplier:fazercards'].code).toBe('supplier_prepaid:fazercards');
     expect(TREASURY_ACCOUNTS.outside_syp).toMatchObject({ kind: 'outside_funds', currency: 'SYP' });
     const codes = TREASURY_ENDPOINTS.map((endpoint) => TREASURY_ACCOUNTS[endpoint].code);
     expect(new Set(codes).size).toBe(codes.length);

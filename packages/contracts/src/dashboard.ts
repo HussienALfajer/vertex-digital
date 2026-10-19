@@ -156,6 +156,8 @@ export const dashboardSchema = z
       z.object({
         code: supplierCodeSchema,
         nameAr: z.string(),
+        /** S07 SP1: this build has its adapter (S19 FC2: FazerCards before its adapter). */
+        available: z.boolean(),
         health: supplierHealthStateSchema,
         healthSince: z.iso.datetime().nullable(),
         paused: z.boolean(),

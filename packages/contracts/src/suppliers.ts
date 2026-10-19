@@ -21,8 +21,8 @@ import { CURRENCY_SCALE, currencySchema, USD_CENT, usdCentsSchema } from './mone
  * `pricing.ts`. Supplier text (offer names, groups) is shown as received, as text only.
  */
 
-/** ADR 0031: WDGZone is the only automatic supplier. */
-export const SUPPLIER_CODES = ['wdgzone', 'manual', 'fake'] as const;
+/** ADR 0031, 0034: WDGZone, then FazerCards (S19), the automatic suppliers. */
+export const SUPPLIER_CODES = ['wdgzone', 'fazercards', 'manual', 'fake'] as const;
 
 export const supplierCodeSchema = z.enum(SUPPLIER_CODES).meta({ id: 'SupplierCode' });
 
@@ -103,16 +103,19 @@ export type SupplierCallResult = (typeof SUPPLIER_CALL_RESULTS)[number];
 /**
  * The secret fields the panel asks for, per supplier (rule SP2). WDGZone signs its webhooks with a
  * secret derived from the API key, so the key is its only field (docs/suppliers/wdgzone.md).
+ * FazerCards signs them with its own secret, entered beside the key (S19 FC7, FC8).
  */
 export const SUPPLIER_CREDENTIAL_FIELDS: Record<SupplierCode, readonly string[]> = {
   wdgzone: ['apiKey'],
+  fazercards: ['apiKey', 'webhookSecret'],
   manual: [],
   fake: ['webhookSecret'],
 };
 
 /**
  * Suppliers whose adapter this build has (rule SP1). `manual` needs none; `fake` counts only where
- * `SUPPLIER_FAKE_ENABLED=true`. Each real adapter's PR adds its code here.
+ * `SUPPLIER_FAKE_ENABLED=true`. Each real adapter's PR adds its code here: `fazercards` arrives
+ * with its adapter in S19 PR 2 (FC2).
  */
 const ADAPTERS_READY: readonly SupplierCode[] = ['wdgzone', 'manual', 'fake'];
 

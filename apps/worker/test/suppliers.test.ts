@@ -87,7 +87,7 @@ const offerKey = (name: string) => `w-${run}-${name}`;
 const SECRET = `sk-${run}-do-not-leak-0123456789`;
 const LINKS = { admin: 'http://127.0.0.1:5173' };
 
-const ids = { fake: '', manual: '', wdgzone: '' };
+const ids = { fake: '', manual: '', wdgzone: '', fazercards: '' };
 
 interface Sent {
   queue: string;
@@ -1115,6 +1115,17 @@ describe('S18: the catalog version, discounts and why calls fail', () => {
 describe('suppliers.sync-schedule (rule SY1)', () => {
   it('queues a sync for each configured, available supplier with a catalog', () =>
     isolated(async (tx) => {
+      // S19 FC2: FazerCards' credentials before its adapter queue nothing.
+      await tx.insert(supplierCredentials).values({
+        id: newId(),
+        supplierId: ids.fazercards,
+        ciphertext: encryptCredentials(supplierKey(env.SUPPLIER_KEYS_SECRET), ids.fazercards, {
+          apiKey: SECRET,
+          webhookSecret: SECRET,
+        }),
+        hints: {},
+        adminId: newId(),
+      });
       const queued = await schedule.enqueue(tx);
       expect(queued.map((job) => job.supplierCode)).toEqual(['fake']);
       expect(sent).toEqual([
@@ -1543,6 +1554,8 @@ describe('the supplier registry (rules SP1, SP2)', () => {
       expect(await real.get('wdgzone', {})).toBeNull();
       expect(await real.get('wdgzone', { apiKey: SECRET })).toBeInstanceOf(WdgzoneAdapter);
       expect(await real.get('manual', {})).toBeNull();
+      // S19 FC2: no FazerCards adapter before PR 2, whatever its credentials.
+      expect(await real.get('fazercards', { apiKey: SECRET, webhookSecret: SECRET })).toBeNull();
       await rm(env.FAKE_SUPPLIER_STATE_FILE, { force: true });
       expect((await (await real.get('fake', {}))?.listOffers())?.length).toBe(14);
     }));

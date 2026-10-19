@@ -88,14 +88,23 @@ async function routedProduct(client: pg.PoolClient) {
 }
 
 describe('seeds', () => {
-  it('hold the three suppliers and the default policy', async () => {
+  it('hold the four suppliers and the default policy', async () => {
     const { rows } = await connection.pool.query(
       `select code, name_ar, low_balance_usd_units from suppliers order by code::text`,
     );
     expect(rows).toEqual([
       { code: 'fake', name_ar: 'مورد تجريبي', low_balance_usd_units: '50000000' },
+      // S19 (0069): FazerCards, its low-balance alert at $5 (D8).
+      { code: 'fazercards', name_ar: 'FazerCards', low_balance_usd_units: '5000000' },
       { code: 'manual', name_ar: 'يدوي', low_balance_usd_units: '50000000' },
       { code: 'wdgzone', name_ar: 'WDGZone', low_balance_usd_units: '50000000' },
+    ]);
+    // S19: FazerCards' fixed id and its 1000 checks a day.
+    const fazercards = await connection.pool.query(
+      `select id, validation_daily_quota from suppliers where code = 'fazercards'`,
+    );
+    expect(fazercards.rows).toEqual([
+      { id: '01a11d3c-890d-7c1e-9f2a-6a3b5c7d9e10', validation_daily_quota: 1000 },
     ]);
     const policy = await connection.pool.query(
       `select price_review_threshold_bp, cost_stale_minutes, health_window_minutes,
@@ -134,7 +143,7 @@ describe('seeds', () => {
     const { rows } = await connection.pool.query<{ values: string }>(
       `select enum_range(null::store_switch)::text as values`,
     );
-    for (const value of ['wdgzone_paused', 'manual_paused', 'fake_paused']) {
+    for (const value of ['wdgzone_paused', 'fazercards_paused', 'manual_paused', 'fake_paused']) {
       expect(rows[0]?.values).toContain(value);
     }
   });

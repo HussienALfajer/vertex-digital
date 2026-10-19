@@ -51,6 +51,7 @@ type Body = Record<string, unknown> | null;
 
 const NAMES: Record<SupplierCode, string> = {
   wdgzone: 'WDGZone',
+  fazercards: 'FazerCards',
   manual: 'يدوي',
   fake: 'مورد تجريبي',
 };
@@ -204,7 +205,8 @@ export class SuppliersMock {
   readonly suppliers: StoredSupplier[] = SUPPLIER_CODES.map((code) => ({
     code,
     credentials: null,
-    lowBalanceUsdUnits: 50 * USD,
+    // S19 D8: FazerCards' alert starts at $5 (migration 0069).
+    lowBalanceUsdUnits: (code === 'fazercards' ? 5 : 50) * USD,
     healthHistory: [],
     balanceHistory: [],
     runs: [],

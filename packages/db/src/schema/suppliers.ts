@@ -34,7 +34,7 @@ import { fulfilmentAttempts } from './orders.js';
  * owned by the api `suppliers` module. Append-only tables (credentials, cost changes, calls,
  * health changes, balance reads, policy) are guarded by migration 0027 and stamped with the time
  * of the insert, so the newest row is the latest written even when its transaction began earlier.
- * Seeds (the suppliers, the policy): 0027.
+ * Seeds (the suppliers, the policy): 0027; FazerCards (S19): 0069.
  */
 
 export const supplierCodeEnum = pgEnum('supplier_code', SUPPLIER_CODES);
