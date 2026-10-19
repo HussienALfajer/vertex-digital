@@ -137,8 +137,8 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 - **Admin purchases** (S16): walk-in (no customer), on behalf of a customer from their wallet, and gifts or compensation from the owner's funds (owner drawings, daily cap).
 
 #### F12 — Store home and game pages
-- Home: games grid, featured banners (F21), live service status. Live activity (F25) is not shown in the store (owner, 2026-10-19: the store no longer shows live activity; the API route, the panel switch and its preview stay).
-- Game page: packs with USD and SYP prices, savings vs official price, real measured delivery time, live service status, "how many do I need" calculator (cheapest combination of packs for a target amount), ID guide image.
+- Home: games grid, featured banners (F21). No service status line (owner, 2026-10-19: a slow supplier is the panel's business; the store marks only a game that cannot be bought). Live activity (F25) is not shown in the store (owner, 2026-10-19: the store no longer shows live activity; the API route, the panel switch and its preview stay).
+- Game page: packs with USD and SYP prices, savings vs official price, real measured delivery time, an "unavailable" mark when no pack can be bought, "how many do I need" calculator (cheapest combination of packs for a target amount), ID guide image.
 - Server-rendered and cached for speed and SEO (Cache Components); fresh prices on price change.
 
 #### F13 — Purchase flow and live order tracking
@@ -203,7 +203,7 @@ IDs are stable; specs live in `docs/specs/<id>-<name>.md`. Phase numbers refer t
 | A05 | Supplier webhook or poll result | Move the order to delivered, partly delivered or failed; notify the customer (F27); record delivery time (F11) |
 | A06 | Price sync (schedule) | Update costs; changes beyond the threshold go to the review queue; margin guard pauses products without a profitable route (F09, F10) |
 | A07 | Supplier balance below its threshold | Telegram alert to the admin (F07, F09) |
-| A08 | Supplier error rate or latency over limits | Mark the supplier degraded or down, exclude it from routing, show service status on the store (F09, F12) |
+| A08 | Supplier error rate or latency over limits | Mark the supplier degraded or down, exclude it from routing; the store shows only games that cannot be bought (F09, F12; owner, 2026-10-19) |
 | A09 | Sham Cash deposit submitted | Telegram card with Approve / Reject to the admin; reminder when it waits past the target review time (F05, F07) |
 | A10 | Deposit fraud signal (reused transaction number or receipt, mismatch, velocity) | Flag the deposit; block approval through Telegram; require panel review (F05) |
 | A11 | Nightly | Reconciliation report; Telegram alert on any mismatch (F20) |

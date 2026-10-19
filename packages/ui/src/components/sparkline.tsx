@@ -48,19 +48,31 @@ function Sparkline({
   values,
   label,
   className,
+  scale = 'zero',
 }: {
   values: readonly number[];
   /** What the line shows, read by screen readers. */
   label: string;
   className?: string;
+  /**
+   * `zero` (counts, sales): the axis starts at zero, with its baseline. `range` (a price that moves
+   * by a cent): the axis spans the lowest to the highest value, so small moves show; the fill runs
+   * to the bottom and there is no zero line.
+   */
+  scale?: 'zero' | 'range';
 }) {
-  const max = Math.max(...values, 0);
-  const min = Math.min(...values, 0);
+  const fromZero = scale === 'zero';
+  const max = fromZero ? Math.max(...values, 0) : Math.max(...values);
+  const min = fromZero ? Math.min(...values, 0) : Math.min(...values);
   const range = max - min || 1;
   const step = values.length > 1 ? WIDTH / (values.length - 1) : 0;
-  const yOf = (value: number) => HEIGHT - PAD_Y - ((value - min) / range) * (HEIGHT - PAD_Y * 2);
+  // A flat range line sits in the middle rather than on the floor.
+  const yOf = (value: number) =>
+    max === min && !fromZero
+      ? HEIGHT / 2
+      : HEIGHT - PAD_Y - ((value - min) / range) * (HEIGHT - PAD_Y * 2);
   const points = values.map((value, index) => ({ x: index * step, y: yOf(value) }));
-  const zero = yOf(0);
+  const zero = fromZero ? yOf(0) : HEIGHT;
   const line = smoothPath(points);
   const last = points.at(-1);
   return (
@@ -77,16 +89,18 @@ function Sparkline({
         aria-hidden="true"
         className="absolute inset-0 size-full overflow-visible"
       >
-        <line
-          x1={0}
-          x2={WIDTH}
-          y1={zero}
-          y2={zero}
-          className="stroke-border"
-          strokeWidth={1}
-          strokeDasharray="3 3"
-          vectorEffect="non-scaling-stroke"
-        />
+        {fromZero && (
+          <line
+            x1={0}
+            x2={WIDTH}
+            y1={zero}
+            y2={zero}
+            className="stroke-border"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
         {last && points.length > 1 && (
           <path
             d={`${line} L${last.x},${zero} L0,${zero} Z`}

@@ -7,6 +7,7 @@ In production WDGZone's health changed between `healthy` and `degraded` every fe
 
 ## Decision
 - **Hysteresis:** `degraded` below 90% success (unchanged); back to `healthy` only at **95% or more held for 5 consecutive minutes**. The minimum sample is **10 calls**. Both values are in the supplier policy, editable in the panel (owner, 2026-10-19).
+- **Latency needs a sample:** the p90 limit (10 s, editable) decides `degraded` and blocks recovery only with **at least 20 timed calls** in the window (catalog reads aside); with fewer it is shown but ignored. The 20 is fixed in code (`P90_MIN_SAMPLES`), not a policy value: with nearest rank it means three slow calls of twenty, never one (owner, 2026-10-19, after one 11.8 s balance read among six kept WDG `degraded` for half an hour while the store was idle).
 - **What counts as an error:** a reply the supplier gave and the adapter read is never an error, even when the order is not finished yet; consecutive errors make a supplier `down` only when they span at least two operations; a catalog page that answers on retry is no error.
 - **Alerts:** a health change is applied at once, but told on Telegram only after it holds for 5 minutes (`down` at once), naming the last state the admin was told.
 - **Every errored call keeps its failure kind** (timeout, DNS, connection, TLS, rate limit, 5xx, …) so an outage at the supplier is told from a network problem.
