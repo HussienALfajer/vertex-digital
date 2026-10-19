@@ -130,3 +130,13 @@ export async function resetAdminTwoFactor(db: Database, email: string): Promise<
     });
   });
 }
+
+/** The one admin account, or null before `admin:create` (development tools). */
+export async function theAdmin(
+  db: Database,
+): Promise<{ id: string; name: string; email: string } | null> {
+  const [admin] = await db
+    .select({ id: adminUsers.id, name: adminUsers.name, email: adminUsers.email })
+    .from(adminUsers);
+  return admin ?? null;
+}

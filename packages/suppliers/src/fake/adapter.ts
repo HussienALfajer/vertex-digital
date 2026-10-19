@@ -1,6 +1,12 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
-import { type FieldSpec, type ProductKind, USD_CENT } from '@vertex-digital/contracts';
+import {
+  type FieldSpec,
+  fieldSpecSchema,
+  MAX_FIELD_SPECS,
+  type ProductKind,
+  USD_CENT,
+} from '@vertex-digital/contracts';
 import { z } from 'zod';
 import type {
   ImageLimits,
@@ -151,6 +157,24 @@ export const fakeSupplierStateSchema = z.object({
         categoryId: z.string().min(1).max(64),
         name: z.string().min(1).max(100),
         costUsdUnits: z.int().min(1).max(Number.MAX_SAFE_INTEGER),
+      }),
+    )
+    .default([]),
+  /**
+   * Offers that mirror another supplier's packs (`db:seed-local`): the same name, cost, kind and
+   * fields under the fake's id `mirror-<their id>`, so a local catalog copied from production
+   * buys through the fake instead of spending a real supplier's balance.
+   */
+  mirroredOffers: z
+    .array(
+      z.object({
+        offerId: z.string().regex(/^mirror-[A-Za-z0-9_.-]{1,64}$/),
+        categoryId: z.string().min(1).max(64),
+        group: z.string().min(1).max(100),
+        name: z.string().min(1).max(200),
+        kind: z.enum(['direct', 'code']),
+        costUsdUnits: z.int().min(1).max(Number.MAX_SAFE_INTEGER),
+        fieldSpecs: z.array(fieldSpecSchema).max(MAX_FIELD_SPECS).default([]),
       }),
     )
     .default([]),
@@ -490,7 +514,7 @@ export class FakeSupplierAdapter implements SupplierAdapter {
 
   async validatePlayer(input: { offerId: string; fields: OrderFields }): Promise<PlayerValidation> {
     this.failIfScripted();
-    const playerId = input.fields.playerId;
+    const playerId = this.playerIdOf(input.offerId, input.fields);
     if (!playerId) throw new SupplierError('definitive', 'playerId is required');
     if (playerId.startsWith('invalid')) return { valid: false };
     return { valid: true, playerName: `Player ${playerId.slice(-4)}` };
@@ -518,7 +542,7 @@ export class FakeSupplierAdapter implements SupplierAdapter {
       return existing.outcome.status === 'unknown' ? existing.settled : existing.outcome;
     }
     const offer = this.catalog().find((candidate) => candidate.offerId === request.offerId);
-    const playerId = request.fields.playerId ?? '';
+    const playerId = this.playerIdOf(request.offerId, request.fields) ?? '';
     const script: FakeOrderScript | null = offer
       ? (this.state.orderScripts[offer.offerId] ?? null)
       : null;
@@ -666,7 +690,9 @@ export class FakeSupplierAdapter implements SupplierAdapter {
       }),
     });
     const timestamp = Math.floor(now.getTime() / 1000).toString();
-    const secret = order.request.fields.playerId?.startsWith('badsig')
+    const secret = this.playerIdOf(order.request.offerId, order.request.fields)?.startsWith(
+      'badsig',
+    )
       ? 'not-the-secret'
       : this.options.webhookSecret;
     return {
@@ -718,7 +744,22 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     };
   }
 
-  /** The catalog with the scripted costs, stock, removals and added offers. */
+  /**
+   * The value the scripted prefixes read: `playerId`, or a mirrored offer's first text field
+   * (`player_id`, `uid`…), else its first field.
+   */
+  private playerIdOf(offerId: string, fields: OrderFields): string | undefined {
+    if (fields.playerId !== undefined) return fields.playerId;
+    const mirror = this.state.mirroredOffers.find((offer) => offer.offerId === offerId);
+    if (!mirror) return undefined;
+    // A pack without a text field (a select only) is scripted by its first field; one without
+    // fields at all needs no player.
+    const key = (mirror.fieldSpecs.find((spec) => spec.type === 'text') ?? mirror.fieldSpecs[0])
+      ?.key;
+    return key === undefined ? 'mirror' : fields[key];
+  }
+
+  /** The catalog with the scripted costs, stock, removals, added and mirrored offers. */
   private catalog(): FakeOffer[] {
     const { costs, outOfStock, removed, stockCounts } = this.state;
     const added = this.state.addedOffers.flatMap((added): FakeOffer[] => {
@@ -740,7 +781,21 @@ export class FakeSupplierAdapter implements SupplierAdapter {
         },
       ];
     });
-    return [...OFFERS, ...added]
+    const mirrored = this.state.mirroredOffers.map(
+      (mirror): FakeOffer => ({
+        offerId: mirror.offerId,
+        name: mirror.name,
+        cost: { currency: 'USD', amountUnits: mirror.costUsdUnits },
+        inStock: true,
+        group: mirror.group,
+        kind: mirror.kind,
+        requiredFields: mirror.kind === 'code' ? [] : mirror.fieldSpecs.map((spec) => spec.key),
+        categoryId: mirror.categoryId,
+        fieldSpecs: mirror.kind === 'code' ? [] : mirror.fieldSpecs,
+        delivers: mirror.kind === 'code' ? 'code' : 'topup',
+      }),
+    );
+    return [...OFFERS, ...added, ...mirrored]
       .filter((offer) => !removed.includes(offer.offerId))
       .map(({ stock: listed, ...offer }) => {
         const count = Object.hasOwn(stockCounts, offer.offerId)
