@@ -229,7 +229,9 @@ export function OrderPage() {
         <dl className="flex flex-col gap-2">
           {order.fields.map((field) => (
             <Line key={field.key} label={field.labelAr}>
-              <bdi dir="ltr">{field.value || t('orders.detail.emptyField')}</bdi>
+              {field.valueLabelAr ?? (
+                <bdi dir="ltr">{field.value || t('orders.detail.emptyField')}</bdi>
+              )}
             </Line>
           ))}
           <Line label={t('orders.detail.quantity')}>{order.quantity}</Line>

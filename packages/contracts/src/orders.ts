@@ -1170,7 +1170,13 @@ export const orderPageSchema = z
 
 export type OrderPage = z.infer<typeof orderPageSchema>;
 
-const orderFieldValue = z.object({ key: z.string(), labelAr: z.string(), value: z.string() });
+/** A field as typed; `valueLabelAr` is a select option's Arabic label, shown in place of its value. */
+const orderFieldValue = z.object({
+  key: z.string(),
+  labelAr: z.string(),
+  value: z.string(),
+  valueLabelAr: z.string().nullable(),
+});
 
 /** A code of a code product, masked: its value only comes from the reveal route (rule C2). */
 export const orderCodeSchema = z

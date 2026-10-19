@@ -43,6 +43,19 @@ const formatTime = (iso: string) =>
     timeStyle: 'short',
   }).format(new Date(iso));
 
+/*
+ * F11-8: a Latin value inside an Arabic sentence is a Unicode isolate, so the sentence's order
+ * holds in every client: an order number, a reference or an amount left to right (LRI … PDI,
+ * kept on one line in the HTML), a product name in its own direction (FSI … PDI), so
+ * "VO-7ETNBC (660 UC)" is never read as one left-to-right run.
+ */
+const LRI = '\u2066';
+const FSI = '\u2068';
+const PDI = '\u2069';
+const latin = (value: string) => `${LRI}${value}${PDI}`;
+const named = (value: string) => `${FSI}${value}${PDI}`;
+const usd = (units: number) => latin(formatUsd(units));
+
 const IGNORE = 'إذا لم تطلب هذا، تجاهل هذه الرسالة؛ لن يتغير شيء في حسابك.';
 const NOT_YOU = 'إذا لم تكن أنت، غيّر كلمة المرور فورًا من صفحة الحساب أو من «نسيت كلمة المرور».';
 const CODE_LIFETIME = 'الرمز صالح لمدة 10 دقائق. لا تشاركه مع أحد، فريقنا لن يطلبه منك أبدًا.';
@@ -164,7 +177,7 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     ],
   }),
   customer_wallet_adjusted: ({ at, direction, amountUnits, category, reversal }) => {
-    const amount = formatUsd(amountUnits);
+    const amount = usd(amountUnits);
     const label = reversal ? `عكس: ${CATEGORY_LABELS[category]}` : CATEGORY_LABELS[category];
     return {
       subject: direction === 'credit' ? `أُضيف ${amount} إلى رصيدك` : `خُصم ${amount} من رصيدك`,
@@ -180,26 +193,26 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
   },
   // F4-7: the same events serve Sham Cash and USDT deposits, so the words name neither.
   customer_deposit_credited: ({ at, depositId, referenceCode, creditedUsdUnits }) => ({
-    subject: `أُضيف ${formatUsd(creditedUsdUnits)} إلى رصيدك من إيداعك ${referenceCode}`,
+    subject: `أُضيف ${usd(creditedUsdUnits)} إلى رصيدك من إيداعك ${latin(referenceCode)}`,
     lines: [
-      `اعتُمد إيداعك ${referenceCode} وأُضيف ${formatUsd(creditedUsdUnits)} إلى رصيد محفظتك بتاريخ ${formatTime(at)}.`,
+      `اعتُمد إيداعك ${latin(referenceCode)} وأُضيف ${usd(creditedUsdUnits)} إلى رصيد محفظتك بتاريخ ${formatTime(at)}.`,
       'تجد تفاصيل الإيداع ورصيدك الحالي في صفحة الإيداع. إذا كان لديك سؤال، تواصل مع الدعم.',
     ],
     link: depositPage(depositId),
   }),
   customer_deposit_rejected: ({ depositId, referenceCode, reason }) => ({
-    subject: `لم يُعتمد إيداعك ${referenceCode}`,
+    subject: `لم يُعتمد إيداعك ${latin(referenceCode)}`,
     lines: [
-      `راجعنا إيداعك ${referenceCode} ولم نتمكن من اعتماده، ولم يُضف شيء إلى رصيدك.`,
+      `راجعنا إيداعك ${latin(referenceCode)} ولم نتمكن من اعتماده، ولم يُضف شيء إلى رصيدك.`,
       `السبب: ${REJECT_REASON_LABELS[reason]}.`,
       'إذا كنت حوّلت المبلغ فعلًا، تواصل مع الدعم ومعك إثبات التحويل: رقم العملية من تطبيق شام كاش، أو رمز التحويل (TXID) لإيداع USDT.',
     ],
     link: depositPage(depositId),
   }),
   customer_deposit_receipt_requested: ({ depositId, referenceCode }) => ({
-    subject: `نحتاج إيصالًا أوضح لإيداعك ${referenceCode}`,
+    subject: `نحتاج إيصالًا أوضح لإيداعك ${latin(referenceCode)}`,
     lines: [
-      `راجعنا إيداعك ${referenceCode} ونحتاج صورة أوضح لإيصال التحويل قبل اعتماده.`,
+      `راجعنا إيداعك ${latin(referenceCode)} ونحتاج صورة أوضح لإيصال التحويل قبل اعتماده.`,
       'افتح صفحة الإيداع وأرسل لقطة شاشة كاملة وواضحة للإيصال خلال 24 ساعة.',
     ],
     link: depositPage(depositId),
@@ -207,9 +220,9 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
   // S08: the order number and product, never its codes or account fields; the codes are on the
   // order page only.
   customer_order_delivered: ({ at, orderId, orderNumber, productNameAr, quantity }) => ({
-    subject: `سُلّم طلبك ${orderNumber}`,
+    subject: `سُلّم طلبك ${latin(orderNumber)}`,
     lines: [
-      `سُلّم طلبك ${orderNumber} (${productNameAr}${quantity > 1 ? ` × ${quantity}` : ''}) بتاريخ ${formatTime(at)}.`,
+      `سُلّم طلبك ${latin(orderNumber)} (${named(productNameAr)}${quantity > 1 ? ` × ${quantity}` : ''}) بتاريخ ${formatTime(at)}.`,
       'تجد تفاصيل الطلب في صفحته، والأكواد هناك فقط إن كان الطلب أكواداً.',
     ],
     link: orderPage(orderId),
@@ -223,13 +236,13 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     refundedQuantity,
     refundedUsdUnits,
   }) => ({
-    subject: `سُلّم جزء من طلبك ${orderNumber} واسترد الباقي`,
+    subject: `سُلّم جزء من طلبك ${latin(orderNumber)} واسترد الباقي`,
     lines: [
-      `سُلّم ${deliveredQuantity} من طلبك ${orderNumber} (${productNameAr}) بتاريخ ${formatTime(at)}، ولم يتوفّر الباقي (${refundedQuantity}).`,
+      `سُلّم ${deliveredQuantity} من طلبك ${latin(orderNumber)} (${named(productNameAr)}) بتاريخ ${formatTime(at)}، ولم يتوفّر الباقي (${refundedQuantity}).`,
       // S16 AP11: an order the store paid returns nothing to the wallet.
       refundedUsdUnits === null
         ? 'تعذّر تنفيذ الكمية الباقية، ولم يُخصم من رصيدك شيء.'
-        : `أُعيد ${formatUsd(refundedUsdUnits)} إلى رصيد محفظتك عن الكمية التي لم تُسلَّم.`,
+        : `أُعيد ${usd(refundedUsdUnits)} إلى رصيد محفظتك عن الكمية التي لم تُسلَّم.`,
     ],
     link: orderPage(orderId),
   }),
@@ -244,17 +257,17 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     // S16 AP11: an order the store paid returns nothing to the wallet.
     refundedUsdUnits === null
       ? {
-          subject: `تعذّر تنفيذ الطلب ${orderNumber}`,
+          subject: `تعذّر تنفيذ الطلب ${latin(orderNumber)}`,
           lines: [
-            `تعذّر تنفيذ الطلب ${orderNumber} (${productNameAr}) الذي أنشأه المتجر لك، بتاريخ ${formatTime(at)}. لم يُخصم من رصيدك شيء.`,
+            `تعذّر تنفيذ الطلب ${latin(orderNumber)} (${named(productNameAr)}) الذي أنشأه المتجر لك، بتاريخ ${formatTime(at)}. لم يُخصم من رصيدك شيء.`,
             `السبب: ${REFUND_REASON_LABELS[reason]}.`,
           ],
           link: orderPage(orderId),
         }
       : {
-          subject: `أُعيد ${formatUsd(refundedUsdUnits)} إلى رصيدك عن الطلب ${orderNumber}`,
+          subject: `أُعيد ${usd(refundedUsdUnits)} إلى رصيدك عن الطلب ${latin(orderNumber)}`,
           lines: [
-            `لم نتمكن من تنفيذ طلبك ${orderNumber} (${productNameAr})، فأُعيد ${formatUsd(refundedUsdUnits)} كاملاً إلى رصيد محفظتك بتاريخ ${formatTime(at)}.`,
+            `لم نتمكن من تنفيذ طلبك ${latin(orderNumber)} (${named(productNameAr)})، فأُعيد ${usd(refundedUsdUnits)} كاملاً إلى رصيد محفظتك بتاريخ ${formatTime(at)}.`,
             `السبب: ${REFUND_REASON_LABELS[reason]}.`,
           ],
           link: orderPage(orderId),
@@ -268,18 +281,18 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     purpose,
     message,
   }) => ({
-    subject: `${PLACED_FOR_YOU_SUBJECTS[purpose]}: ${orderNumber}`,
+    subject: `${PLACED_FOR_YOU_SUBJECTS[purpose]}: ${latin(orderNumber)}`,
     lines: [
-      `${PLACED_FOR_YOU_LINES[purpose]} ${orderNumber} (${productNameAr}) بتاريخ ${formatTime(at)}.`,
+      `${PLACED_FOR_YOU_LINES[purpose]} ${latin(orderNumber)} (${named(productNameAr)}) بتاريخ ${formatTime(at)}.`,
       ...(message ? [`رسالة المتجر: ${message}`] : []),
       'تتابع تنفيذه في صفحة الطلب، والأكواد هناك فقط إن كان الطلب أكواداً.',
     ],
     link: orderPage(orderId),
   }),
   customer_order_cancelled: ({ at, orderId, orderNumber, productNameAr, reason }) => ({
-    subject: `أُلغي طلبك المحجوز ${orderNumber}`,
+    subject: `أُلغي طلبك المحجوز ${latin(orderNumber)}`,
     lines: [
-      `أُلغي طلبك المحجوز ${orderNumber} (${productNameAr}) بتاريخ ${formatTime(at)}، ولم يُخصم من رصيدك شيء.`,
+      `أُلغي طلبك المحجوز ${latin(orderNumber)} (${named(productNameAr)}) بتاريخ ${formatTime(at)}، ولم يُخصم من رصيدك شيء.`,
       `السبب: ${CANCEL_REASON_LABELS[reason]}.`,
     ],
     link: orderPage(orderId),
@@ -304,7 +317,7 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
       lines: [
         `اكتملت طلبات سلتك (${orderCount}) بتاريخ ${formatTime(at)}: ${counts.join('، ')}.`,
         ...(refundedUsdUnits > 0
-          ? [`أُعيد ${formatUsd(refundedUsdUnits)} إلى رصيد محفظتك عن ما لم يُسلَّم.`]
+          ? [`أُعيد ${usd(refundedUsdUnits)} إلى رصيد محفظتك عن ما لم يُسلَّم.`]
           : []),
       ],
       link: { label: 'عرض طلبات السلة', path: `/orders?checkout=${checkoutId}` },
@@ -312,8 +325,8 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
   },
   // S12 TK9: the ticket number and a link, never the reply.
   customer_ticket_replied: ({ ticketId, number }) => ({
-    subject: `ردّ فريق الدعم على تذكرتك ${number}`,
-    lines: [`ردّ فريق Vertex Digital على تذكرتك ${number}. افتح التذكرة لقراءة الرد.`],
+    subject: `ردّ فريق الدعم على تذكرتك ${latin(number)}`,
+    lines: [`ردّ فريق Vertex Digital على تذكرتك ${latin(number)}. افتح التذكرة لقراءة الرد.`],
     link: { label: 'عرض التذكرة', path: `/support/${ticketId}` },
   }),
 };
@@ -354,8 +367,15 @@ const LOGO = {
   filename: 'vertex-digital.png',
 };
 
+/** Escaped text whose left-to-right isolates also stay whole on one line (F11-8). */
+const bidiHtml = (value: string) =>
+  escapeHtml(value).replace(
+    /\u2066([^\u2066-\u2069]*)\u2069/g,
+    `<span dir="ltr" style="white-space:nowrap">${LRI}$1${PDI}</span>`,
+  );
+
 const paragraph = (line: string) =>
-  `<p style="margin:0 0 16px;font-size:15px;line-height:26px;color:${COLORS.text}">${escapeHtml(line)}</p>`;
+  `<p style="margin:0 0 16px;font-size:15px;line-height:26px;color:${COLORS.text}">${bidiHtml(line)}</p>`;
 
 const codeBlock = (code: string) =>
   `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 20px"><tr><td dir="ltr" align="center" style="padding:18px 12px;background:${COLORS.background};border:1px solid ${COLORS.border};border-radius:8px;font-family:${CODE_FONT};font-size:34px;line-height:40px;font-weight:700;letter-spacing:10px;color:${COLORS.green}">${escapeHtml(code)}</td></tr></table>`;
@@ -391,7 +411,7 @@ export function renderEmail<Template extends EmailTemplate>(
     `<tr><td align="center" style="padding:28px 24px 24px;background:${COLORS.green};border-radius:12px 12px 0 0"><img src="cid:${LOGO_CID}" width="88" height="89" alt="Vertex Digital" style="display:block;border:0;width:88px;height:89px"></td></tr>`,
     `<tr><td style="height:4px;line-height:4px;font-size:0;background:${COLORS.sand}">&nbsp;</td></tr>`,
     `<tr><td dir="rtl" style="padding:32px 28px 24px;background:#ffffff;border:1px solid ${COLORS.border};border-top:0;border-radius:0 0 12px 12px;text-align:right">`,
-    `<h1 style="margin:0 0 20px;padding-right:12px;border-right:4px solid ${COLORS.sand};font-size:20px;line-height:30px;font-weight:700;color:${COLORS.green}">${escapeHtml(content.heading ?? content.subject)}</h1>`,
+    `<h1 style="margin:0 0 20px;padding-right:12px;border-right:4px solid ${COLORS.sand};font-size:20px;line-height:30px;font-weight:700;color:${COLORS.green}">${bidiHtml(content.heading ?? content.subject)}</h1>`,
     ...body,
     ...(link ? [button(link)] : []),
     '</td></tr>',

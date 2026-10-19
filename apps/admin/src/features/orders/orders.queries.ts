@@ -67,6 +67,23 @@ export const orderQuery = (id: string) =>
   });
 
 /**
+ * F11-6: the order read again when the admin stream names it (a worker's refund after a partial
+ * delivery, a webhook), as background work that never counts as the admin's activity (rule D4).
+ */
+export const orderStreamRead = (id: string) =>
+  queryOptions({
+    queryKey: orderQuery(id).queryKey,
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/orders/{id}', {
+          params: { path: { id } },
+          headers: BACKGROUND_REQUEST,
+        }),
+      ),
+    staleTime: 0,
+  });
+
+/**
  * S11 rule LR5: the live board, read when the page opens and again on stream events, on focus
  * and every minute; each of those reads is background work, never the admin's activity (rule D4).
  */

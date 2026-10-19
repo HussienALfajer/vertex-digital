@@ -7695,6 +7695,7 @@ export interface components {
                 key: string;
                 labelAr: string;
                 value: string;
+                valueLabelAr: string | null;
             }[];
             quantity: number;
             deliveredQuantity: number;
@@ -7895,6 +7896,7 @@ export interface components {
                 key: string;
                 labelAr: string;
                 value: string;
+                valueLabelAr: string | null;
             }[];
             quantity: number;
             deliveredQuantity: number;
@@ -7994,6 +7996,7 @@ export interface components {
                 key: string;
                 labelAr: string;
                 value: string;
+                valueLabelAr: string | null;
             }[];
             quantity: number;
             deliveredQuantity: number;

@@ -66,6 +66,10 @@ const rowOf = async (id: string) =>
 const filesOf = async (id: string) =>
   (await readdir(logDir).catch(() => [] as string[])).filter((name) => name.endsWith(`${id}.eml`));
 
+/** F11-8: Latin values sit in Unicode isolates inside the Arabic sentences. */
+const ltr = (value: string) => `\u2066${value}\u2069`;
+const named = (value: string) => `\u2068${value}\u2069`;
+
 describe('the wallet adjustment email (S02)', () => {
   const params = {
     at: '2026-10-07T09:30:00.000Z',
@@ -77,7 +81,7 @@ describe('the wallet adjustment email (S02)', () => {
 
   it('says how much moved, which way and why, with a link to the wallet page', () => {
     const email = renderEmail('customer_wallet_adjusted', params, 'https://digital.example');
-    expect(email.subject).toBe('أُضيف $25.00 إلى رصيدك');
+    expect(email.subject).toBe(`أُضيف ${ltr('$25.00')} إلى رصيدك`);
     expect(email.text).toContain('نوع الحركة: تعويض.');
     expect(email.text).toContain('عرض المحفظة: https://digital.example/wallet');
     expect(email.html).toContain('href="https://digital.example/wallet"');
@@ -89,7 +93,7 @@ describe('the wallet adjustment email (S02)', () => {
       { ...params, direction: 'debit', amountUnits: 1_234_500_000, reversal: true },
       'http://127.0.0.1:3001',
     );
-    expect(email.subject).toBe('خُصم $1,234.50 من رصيدك');
+    expect(email.subject).toBe(`خُصم ${ltr('$1,234.50')} من رصيدك`);
     expect(email.text).toContain('نوع الحركة: عكس: تعويض.');
   });
 });
@@ -111,7 +115,7 @@ describe('the deposit emails (S03)', () => {
       },
       store,
     );
-    expect(email.subject).toBe('أُضيف $16.10 إلى رصيدك من إيداعك VD-7KQ2M');
+    expect(email.subject).toBe(`أُضيف ${ltr('$16.10')} إلى رصيدك من إيداعك ${ltr('VD-7KQ2M')}`);
     expect(email.text).toContain('VD-7KQ2M');
     expect(email.text).toContain(`عرض الإيداع: ${link}`);
     arabicRtl(email.html);
@@ -140,7 +144,7 @@ describe('the deposit emails (S03)', () => {
       { depositId, referenceCode: 'VD-7KQ2M' },
       store,
     );
-    expect(email.subject).toBe('نحتاج إيصالًا أوضح لإيداعك VD-7KQ2M');
+    expect(email.subject).toBe(`نحتاج إيصالًا أوضح لإيداعك ${ltr('VD-7KQ2M')}`);
     expect(email.text).toContain(`عرض الإيداع: ${link}`);
     arabicRtl(email.html);
   });
@@ -159,8 +163,12 @@ describe('the order emails (S08)', () => {
 
   it('says the order was delivered, with a link to it and no codes', () => {
     const email = renderEmail('customer_order_delivered', { ...order, quantity: 2 }, store);
-    expect(email.subject).toBe('سُلّم طلبك VO-7KQ2MX');
-    expect(email.text).toContain('60 UC × 2');
+    expect(email.subject).toBe(`سُلّم طلبك ${ltr('VO-7KQ2MX')}`);
+    expect(email.text).toContain(`(${named('60 UC')} × 2)`);
+    // The number stays whole on one line in the HTML, its parts never split at the hyphen.
+    expect(email.html).toContain(
+      `<span dir="ltr" style="white-space:nowrap">${ltr('VO-7KQ2MX')}</span> (${named('60 UC')} × 2)`,
+    );
     expect(email.text).toContain(`عرض الطلب: ${link}`);
   });
 
@@ -170,20 +178,20 @@ describe('the order emails (S08)', () => {
       { ...order, deliveredQuantity: 2, refundedQuantity: 1, refundedUsdUnits: 9_600_000 },
       store,
     );
-    expect(partial.text).toContain('أُعيد $9.60 إلى رصيد محفظتك');
+    expect(partial.text).toContain(`أُعيد ${ltr('$9.60')} إلى رصيد محفظتك`);
     const full = renderEmail(
       'customer_order_refunded',
       { ...order, refundedUsdUnits: 1_230_000, reason: 'input_rejected' },
       store,
     );
-    expect(full.subject).toBe('أُعيد $1.23 إلى رصيدك عن الطلب VO-7KQ2MX');
+    expect(full.subject).toBe(`أُعيد ${ltr('$1.23')} إلى رصيدك عن الطلب ${ltr('VO-7KQ2MX')}`);
     expect(full.text).toContain('السبب: بيانات الحساب مرفوضة.');
     expect(full.html).toContain(`href="${link}"`);
   });
 
   it('says why a reservation was cancelled, with nothing taken (S09 rule RS9)', () => {
     const email = renderEmail('customer_order_cancelled', { ...order, reason: 'expired' }, store);
-    expect(email.subject).toBe('أُلغي طلبك المحجوز VO-7KQ2MX');
+    expect(email.subject).toBe(`أُلغي طلبك المحجوز ${ltr('VO-7KQ2MX')}`);
     expect(email.text).toContain('السبب: انتهت مدة الحجز (24 ساعة).');
     expect(email.text).toContain('لم يُخصم من رصيدك شيء');
     expect(email.html).toContain(`href="${link}"`);
@@ -205,7 +213,7 @@ describe('the order emails (S08)', () => {
       store,
     );
     expect(email.subject).toBe('اكتملت سلتك: سُلّم 3، سُلّم جزئياً 1، استُرد 1');
-    expect(email.text).toContain('أُعيد $2.50 إلى رصيد محفظتك');
+    expect(email.text).toContain(`أُعيد ${ltr('$2.50')} إلى رصيد محفظتك`);
     expect(email.html).toContain(`href="${store}/orders?checkout=${checkoutId}"`);
     const clean = renderEmail(
       'customer_checkout_finished',

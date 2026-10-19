@@ -156,7 +156,7 @@ function order(orderId: string, number: string): Order {
     customerNote: null,
     product: { id: id(70), nameAr: '660 UC', kind: 'direct', regionAr: null, redemptionAr: null },
     game,
-    fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب', value: '5123456789' }],
+    fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب', value: '5123456789', valueLabelAr: null }],
     quantity: 1,
     deliveredQuantity: 1,
     refundedQuantity: 0,

@@ -89,6 +89,15 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
   const profitUnits =
     costUnits !== null && countValid ? (order.unitPriceUsdUnits - costUnits) * count : null;
 
+  // A refused field's error goes as soon as it is edited, as in the store (F11-7, F2-12).
+  function edited(...names: FieldName[]) {
+    setErrors((previous) =>
+      names.some((name) => previous[name])
+        ? { ...previous, ...Object.fromEntries(names.map((name) => [name, false])) }
+        : previous,
+    );
+  }
+
   async function choose(file: File | undefined) {
     if (!file) return;
     setUploadFailure(null);
@@ -177,7 +186,10 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
             inputMode="numeric"
             autoComplete="off"
             value={quantity}
-            onChange={(event) => setQuantity(event.target.value)}
+            onChange={(event) => {
+              setQuantity(event.target.value);
+              edited('quantity', 'codes');
+            }}
           />
           <FieldDescription>{t('orders.fulfil.quantityHint', { units })}</FieldDescription>
           <FieldError match={!!errors.quantity}>
@@ -187,7 +199,14 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
         {codeProduct && (
           <Field invalid={!!errors.codes}>
             <FieldLabel>{t('orders.decisions.delivered.codes')}</FieldLabel>
-            <Textarea name="codes" dir="ltr" rows={4} spellCheck={false} autoComplete="off" />
+            <Textarea
+              name="codes"
+              dir="ltr"
+              rows={4}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={() => edited('codes')}
+            />
             <FieldDescription>{t('orders.decisions.delivered.codesHint')}</FieldDescription>
             <FieldError match={!!errors.codes}>
               {t('orders.decisions.delivered.codesError')}
@@ -206,6 +225,7 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
             onChange={(event) => {
               setCostTouched(true);
               setCost(event.target.value);
+              edited('cost', 'acceptLoss');
             }}
           />
           <FieldDescription>
@@ -237,7 +257,10 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
                 id={lossId}
                 checked={acceptLoss}
                 aria-invalid={errors.acceptLoss || undefined}
-                onCheckedChange={(value) => setAcceptLoss(value)}
+                onCheckedChange={(value) => {
+                  setAcceptLoss(value);
+                  edited('acceptLoss');
+                }}
               />
               {t('orders.fulfil.acceptLoss')}
             </label>
@@ -313,13 +336,19 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
         </fieldset>
         <Field invalid={!!errors.reference}>
           <FieldLabel>{t('orders.fulfil.reference')}</FieldLabel>
-          <Input name="reference" dir="ltr" autoComplete="off" maxLength={200} />
+          <Input
+            name="reference"
+            dir="ltr"
+            autoComplete="off"
+            maxLength={200}
+            onChange={() => edited('reference')}
+          />
           <FieldDescription>{t('orders.fulfil.referenceHint')}</FieldDescription>
           <FieldError match={!!errors.reference}>{t('orders.fulfil.referenceError')}</FieldError>
         </Field>
         <Field invalid={!!errors.reason}>
           <FieldLabel>{t('orders.decisions.reason')}</FieldLabel>
-          <Textarea name="reason" rows={3} maxLength={500} />
+          <Textarea name="reason" rows={3} maxLength={500} onChange={() => edited('reason')} />
           <FieldError match={!!errors.reason}>{t('orders.decisions.reasonError')}</FieldError>
         </Field>
         {order.status === 'needs_review' && (

@@ -105,15 +105,25 @@ async function covers(
 /** The order's field values with their labels, in the game's field order (archived kept). */
 async function fieldsWithLabels(db: Executor, order: OrderRow) {
   const rules = await db
-    .select({ key: catalogInputFields.key, labelAr: catalogInputFields.labelAr })
+    .select({
+      key: catalogInputFields.key,
+      labelAr: catalogInputFields.labelAr,
+      type: catalogInputFields.type,
+      options: catalogInputFields.options,
+    })
     .from(catalogInputFields)
     .where(eq(catalogInputFields.gameId, order.gameId))
     .orderBy(asc(catalogInputFields.sortOrder));
-  const labels = new Map(rules.map((rule) => [rule.key, rule.labelAr]));
-  const order_ = [...labels.keys()];
+  const keys = rules.map((rule) => rule.key);
   return Object.entries(order.fields)
-    .sort(([a], [b]) => order_.indexOf(a) - order_.indexOf(b))
-    .map(([key, value]) => ({ key, labelAr: labels.get(key) ?? key, value }));
+    .sort(([a], [b]) => keys.indexOf(a) - keys.indexOf(b))
+    .map(([key, value]) => {
+      const rule = rules.find((candidate) => candidate.key === key);
+      // F11-4: a select shows its option's label, as the share view does; the value stays for OT1.
+      const option =
+        rule?.type === 'select' ? rule.options?.find((o) => o.value === value) : undefined;
+      return { key, labelAr: rule?.labelAr ?? key, value, valueLabelAr: option?.labelAr ?? null };
+    });
 }
 
 // Customer ----------------------------------------------------------------------------------------

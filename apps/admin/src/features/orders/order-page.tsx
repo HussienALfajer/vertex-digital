@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
   type AdminOrder,
@@ -26,6 +26,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { CopyButton } from '../../components/copy-button';
 import { FormAlert } from '../../components/form-alert';
+import { useAdminStream, useDebounced, useVisibleAgain } from '../../lib/admin-stream';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, ltr } from '../../lib/format';
 import { CustomerMarks } from '../customers/customer-marks';
@@ -37,11 +38,13 @@ import {
   OrderActionDialog,
 } from './order-actions';
 import { ATTEMPT_TONES, PURPOSE_TONES, playerCheckText, STATUS_TONES } from './order-labels';
-import { orderQuery, proofUrl, useRevealCode } from './orders.queries';
+import { orderQuery, orderStreamRead, proofUrl, useRevealCode } from './orders.queries';
 import { CheckoutBlock, GiftBlock, ShareLinksBlock } from './share-links';
 
 /** A revealed code is hidden again after this long (rule C3). */
 const REVEAL_MS = 30_000;
+/** Stream events for this order within a second read it once. */
+const STREAM_DEBOUNCE_MS = 1_000;
 
 /**
  * One order (S08 screens): the header, the decision panel when rule D1 allows one, the account
@@ -54,6 +57,17 @@ const REVEAL_MS = 30_000;
 export function OrderPage({ id, decide }: { id: string; decide?: 'fulfil' }) {
   const { t } = useTranslation();
   const order = useQuery(orderQuery(id));
+  const queryClient = useQueryClient();
+  // F11-6: the page follows the order live, as the customer's does: a change made after the
+  // admin's own action (the worker's refund of the rest) shows without a reload.
+  const reread = useDebounced(
+    () => void queryClient.fetchQuery(orderStreamRead(id)).catch(() => undefined),
+    STREAM_DEBOUNCE_MS,
+  );
+  useAdminStream((event) => {
+    if (event.type === 'resync' || event.order.orderId === id) reread();
+  });
+  useVisibleAgain(reread);
   const [action, setAction] = useState<OrderAction | null>(null);
   const asked = useRef(false);
   const canFulfil = order.data?.decisions.fulfil ?? false;
@@ -271,10 +285,10 @@ function Fields({ order }: { order: AdminOrder }) {
         {order.fields.map((field) => (
           <Fact key={field.key} label={field.labelAr}>
             <span className="flex items-center gap-2">
-              <bdi dir="ltr">{field.value || '—'}</bdi>
+              {field.valueLabelAr ?? <bdi dir="ltr">{field.value || '—'}</bdi>}
               {field.value && (
                 <CopyButton
-                  value={field.value}
+                  value={field.valueLabelAr ?? field.value}
                   label={t('orders.detail.copyField', { field: field.labelAr })}
                 />
               )}

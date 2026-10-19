@@ -76,7 +76,7 @@ const ORDER = {
     nameAr: 'ببجي موبايل',
     cover: null,
   },
-  fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب', value: '5123456789' }],
+  fields: [{ key: 'player_id', labelAr: 'معرّف اللاعب', value: '5123456789', valueLabelAr: null }],
   quantity: 1,
   deliveredQuantity: 1,
   refundedQuantity: 0,

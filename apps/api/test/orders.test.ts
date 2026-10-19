@@ -306,6 +306,54 @@ afterAll(async () => {
 });
 
 describe('POST /api/orders (rules O1–O6)', () => {
+  it("names a select field's option by its label and keeps the value (F11-4)", async () => {
+    const gameId = await game(`ord-select-${randomBytes(3).toString('hex')}`);
+    await json(
+      await adminPost(`/api/admin/catalog/games/${gameId}/fields`, {
+        key: 'player_id',
+        labelAr: 'المعرف',
+        type: 'digits',
+        required: true,
+        minLength: 5,
+      }),
+      201,
+    );
+    await json(
+      await adminPost(`/api/admin/catalog/games/${gameId}/fields`, {
+        key: 'server',
+        labelAr: 'المنطقة',
+        type: 'select',
+        required: false,
+        options: [
+          { value: 'eu', labelAr: 'أوروبا' },
+          { value: 'asia', labelAr: 'آسيا' },
+        ],
+      }),
+      201,
+    );
+    const item = await product(gameId, 'direct', 0.88);
+    const customer = await buyer(usd(10));
+    const fields = [
+      { key: 'player_id', labelAr: 'المعرف', value: '5123456789', valueLabelAr: null },
+      { key: 'server', labelAr: 'المنطقة', value: 'asia', valueLabelAr: 'آسيا' },
+    ];
+    const order = await json<{ id: string; fields: unknown }>(
+      await purchase(customer, item, { fields: { player_id: '5123456789', server: 'asia' } }),
+      201,
+    );
+    expect(order.fields).toEqual(fields);
+    const read = await json<{ fields: unknown }>(
+      await client.get(`/api/orders/${order.id}`, { cookie: customer.cookie }),
+      200,
+    );
+    expect(read.fields).toEqual(fields);
+    const adminRead = await json<{ fields: unknown }>(
+      await client.get(`/api/admin/orders/${order.id}`, { cookie: admin.cookie }),
+      200,
+    );
+    expect(adminRead.fields).toEqual(fields);
+  });
+
   it('pays from the wallet and answers the order, never cached; a replay answers 200', async () => {
     const item = await product(ids.gameId, 'direct', 0.88);
     const customer = await buyer(usd(10));
@@ -320,7 +368,7 @@ describe('POST /api/orders (rules O1–O6)', () => {
       stage: 'processing',
       quantity: 1,
       totalUsdUnits: item.price,
-      fields: [{ key: 'player_id', labelAr: 'المعرف', value: '5123456789' }],
+      fields: [{ key: 'player_id', labelAr: 'المعرف', value: '5123456789', valueLabelAr: null }],
       codes: [],
     });
     expect(await balance(customer)).toBe(usd(10) - item.price);
