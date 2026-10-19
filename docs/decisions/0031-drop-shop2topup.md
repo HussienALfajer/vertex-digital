@@ -1,6 +1,6 @@
 # 0031 — Drop SHOP2TOPUP: WDGZone is the only automatic supplier
 
-Status: Accepted · Date: 2026-10-14 · Supersedes the SHOP2TOPUP parts of [0004](0004-orders-and-fulfilment-state-machine.md), [0005](0005-supplier-adapters-and-routing.md) and [0021](0021-supplier-sync-price-review-and-health.md)
+Status: Accepted · Date: 2026-10-14 · Supersedes the SHOP2TOPUP parts of [0004](0004-orders-and-fulfilment-state-machine.md), [0005](0005-supplier-adapters-and-routing.md) and [0021](0021-supplier-sync-price-review-and-health.md) · Amended by [0034](0034-fazercards-and-store-wide-player-check.md) (FazerCards is the second automatic supplier)
 
 ## Context
 ADR 0005 named SHOP2TOPUP the primary supplier and WDGZone the backup. Its adapter was never built (Q12): S07 seeded its supplier row, its pause switch and its supplier treasury place, and waited for the account. WDGZone's adapter shipped, passed a live order on 2026-10-14 and serves the store. On 2026-10-14 the owner decided not to use SHOP2TOPUP.

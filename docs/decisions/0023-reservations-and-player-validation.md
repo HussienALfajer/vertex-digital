@@ -1,6 +1,6 @@
 # 0023 — Reservations (`awaiting_balance`) and player validation
 
-Status: Accepted · Date: 2026-10-09 · Amends [0004](0004-orders-and-fulfilment-state-machine.md) (the price of an `awaiting_balance` order when it is paid; its expiry and limits)
+Status: Accepted · Date: 2026-10-09 · Amends [0004](0004-orders-and-fulfilment-state-machine.md) (the price of an `awaiting_balance` order when it is paid; its expiry and limits) · Amended by [0034](0034-fazercards-and-store-wide-player-check.md) (a per-game check provider; a region outside the allowed list blocks)
 
 ## Context
 F13 lets a customer whose wallet is short save an order as `awaiting_balance` and have it paid after a deposit (A02), or expire (A15). ADR 0004 says such an order "keeps the price it was created with until it expires (default 24 h, set in the F13 spec)", but not what happens when the price falls, when several reservations compete for one deposit, or when the product is unavailable at that moment. F13 also checks the player ID with the supplier before paying, under a validation guard, without saying what a "not found" answer does. The owner settled these in the S09 interview (2026-10-09).
