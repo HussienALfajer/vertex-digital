@@ -30,4 +30,15 @@ describe('healthReason', () => {
       values: { reason: 'something else' },
     });
   });
+
+  it('reads the S18 recovery reasons', () => {
+    expect(healthReason('recovering: success 94% < 95%')).toEqual({
+      key: 'recovering',
+      values: { success: '94%', threshold: '95%' },
+    });
+    expect(healthReason('recovering: held 2 of 5 minutes')).toEqual({
+      key: 'holding',
+      values: { held: '2', minutes: '5' },
+    });
+  });
 });

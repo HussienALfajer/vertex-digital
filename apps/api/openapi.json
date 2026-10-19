@@ -1046,6 +1046,7 @@
                 "supplier.credentials_set",
                 "supplier.updated",
                 "supplier.sync_requested",
+                "supplier.connection_tested",
                 "supplier.validation_quota_set",
                 "supplier.import",
                 "supplier_policy.set",
@@ -7607,6 +7608,101 @@
         ]
       }
     },
+    "/api/admin/suppliers/{code}/test": {
+      "post": {
+        "operationId": "SuppliersAdminController_testConnection",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierConnectionTest"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      }
+    },
+    "/api/admin/suppliers/{code}/calls": {
+      "get": {
+        "operationId": "SuppliersAdminController_calls",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "result",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "refused",
+                "error"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierCallPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      }
+    },
     "/api/admin/suppliers/{code}/runs": {
       "get": {
         "operationId": "SuppliersAdminController_runs",
@@ -7784,6 +7880,18 @@
           },
           {
             "name": "lowStock",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "discounted",
             "required": false,
             "in": "query",
             "schema": {
@@ -8197,6 +8305,44 @@
         ]
       }
     },
+    "/api/admin/suppliers/{code}/categories/{categoryId}": {
+      "get": {
+        "operationId": "SupplierCatalogAdminController_category",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierCategoryNode"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      }
+    },
     "/api/admin/suppliers/{code}/categories/{categoryId}/image": {
       "get": {
         "operationId": "SupplierCatalogAdminController_image",
@@ -8476,6 +8622,49 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SupplierCategoryNode"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      }
+    },
+    "/api/admin/suppliers/offers/{id}/link-candidates": {
+      "get": {
+        "operationId": "SupplierCatalogAdminController_linkCandidates",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "At most 20",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkCandidate"
+                  }
                 }
               }
             }
@@ -12254,6 +12443,7 @@
           "supplier.credentials_set",
           "supplier.updated",
           "supplier.sync_requested",
+          "supplier.connection_tested",
           "supplier.validation_quota_set",
           "supplier.import",
           "supplier_policy.set",
@@ -18159,6 +18349,7 @@
           "supplier_balance",
           "usdt_balance",
           "sham_cash_count",
+          "supplier_charges",
           "count_stale",
           "order_conflicts"
         ]
@@ -18208,7 +18399,10 @@
                   "enum": [
                     "in_flight_attempt",
                     "uncredited_transfer",
-                    "deposit_in_review"
+                    "deposit_in_review",
+                    "charge_differs",
+                    "delivered_but_failed",
+                    "failed_but_delivered"
                   ]
                 },
                 "id": {
@@ -18237,12 +18431,22 @@
                 "$ref": "#/components/schemas/ReconciliationSkipReason"
               }
             ]
+          },
+          "unmatchedSupplierOrders": {
+            "default": [],
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
           }
         },
         "required": [
           "offending",
           "lines",
-          "reason"
+          "reason",
+          "unmatchedSupplierOrders"
         ],
         "additionalProperties": false
       },
@@ -23605,6 +23809,19 @@
           "errorMessage": {
             "nullable": true,
             "type": "string"
+          },
+          "offersRead": {
+            "type": "boolean"
+          },
+          "platformStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "catalogUpdatedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           }
         },
         "required": [
@@ -23621,7 +23838,10 @@
           "reviewsOpened",
           "productsRepriced",
           "errorCode",
-          "errorMessage"
+          "errorMessage",
+          "offersRead",
+          "platformStatus",
+          "catalogUpdatedAt"
         ],
         "additionalProperties": false
       },
@@ -23738,6 +23958,16 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 1000
+          },
+          "recoverSuccessBp": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "recoverMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
           }
         },
         "required": [
@@ -23750,7 +23980,9 @@
           "downSuccessBp",
           "downConsecutiveErrors",
           "probeAfterMinutes",
-          "lowStockUnits"
+          "lowStockUnits",
+          "recoverSuccessBp",
+          "recoverMinutes"
         ],
         "additionalProperties": false
       },
@@ -23816,6 +24048,12 @@
           "byAdmin": {
             "type": "boolean"
           },
+          "attemptId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -23828,6 +24066,7 @@
           "toUsdUnits",
           "syncRunId",
           "byAdmin",
+          "attemptId",
           "createdAt"
         ],
         "additionalProperties": false
@@ -24087,6 +24326,218 @@
           "quota"
         ]
       },
+      "SupplierConnectionTest": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "latencyMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "balance": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "currency": {
+                "$ref": "#/components/schemas/Currency"
+              },
+              "amountUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "currency",
+              "amountUnits"
+            ],
+            "additionalProperties": false
+          },
+          "failureKind": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FailureKind"
+              }
+            ]
+          },
+          "httpStatus": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "supplierCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "testedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "ok",
+          "latencyMs",
+          "balance",
+          "failureKind",
+          "httpStatus",
+          "supplierCode",
+          "testedAt"
+        ],
+        "additionalProperties": false
+      },
+      "FailureKind": {
+        "type": "string",
+        "enum": [
+          "timeout",
+          "dns",
+          "connect",
+          "tls",
+          "rate_limited",
+          "http_5xx",
+          "http_4xx",
+          "unreadable",
+          "redirect",
+          "other"
+        ]
+      },
+      "SupplierCallListQuery": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "default": 1,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "pageSize": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "refused",
+              "error"
+            ]
+          }
+        }
+      },
+      "SupplierCallPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupplierCall"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "additionalProperties": false
+      },
+      "SupplierCall": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "list_offers",
+              "get_balance",
+              "validate_player",
+              "place_order",
+              "get_order",
+              "list_categories",
+              "list_transactions",
+              "list_orders",
+              "platform_status",
+              "fetch_image",
+              "get_offer",
+              "test_connection"
+            ]
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "refused",
+              "error"
+            ]
+          },
+          "latencyMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "supplierCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "failureKind": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FailureKind"
+              }
+            ]
+          },
+          "httpStatus": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "operation",
+          "result",
+          "latencyMs",
+          "supplierCode",
+          "failureKind",
+          "httpStatus",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
       "SyncRunPage": {
         "type": "object",
         "properties": {
@@ -24188,6 +24639,13 @@
             ]
           },
           "lowStock": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ]
+          },
+          "discounted": {
             "type": "string",
             "enum": [
               "true",
@@ -24333,6 +24791,12 @@
             "minimum": 1,
             "maximum": 100
           },
+          "discountBp": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
           "fieldSpecs": {
             "nullable": true,
             "type": "array",
@@ -24411,6 +24875,7 @@
           "stockLevel",
           "originalCostUsdUnits",
           "discountPercent",
+          "discountBp",
           "fieldSpecs",
           "unsupportedReason",
           "ignoredAt",
@@ -25939,6 +26404,61 @@
           "rows"
         ]
       },
+      "LinkCandidateQuery": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "LinkCandidate": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "productNameAr": {
+            "type": "string"
+          },
+          "gameId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "gameNameAr": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProductKind"
+          },
+          "routedBySupplier": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "amount",
+              "game",
+              "search"
+            ]
+          }
+        },
+        "required": [
+          "productId",
+          "productNameAr",
+          "gameId",
+          "gameNameAr",
+          "kind",
+          "routedBySupplier",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
       "CoverFromSupplier": {
         "type": "object",
         "properties": {
@@ -26151,6 +26671,12 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "completedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
           "match": {
             "nullable": true,
             "allOf": [
@@ -26168,6 +26694,7 @@
           "status",
           "totalUsdUnits",
           "createdAt",
+          "completedAt",
           "match"
         ],
         "additionalProperties": false
@@ -30067,7 +30594,8 @@
           "ticket_reply",
           "reconciliation_alert",
           "admin_order_placed",
-          "supplier_stock_low"
+          "supplier_stock_low",
+          "supplier_charge_mismatch"
         ]
       },
       "TelegramMessageStatus": {

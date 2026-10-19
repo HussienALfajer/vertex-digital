@@ -22,9 +22,13 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
 import {
+  applyQuotedCost,
   askSupplier,
+  checkCharge,
   markStockRefusal,
   orderContext,
+  type QuoteCheck,
+  quoteBeforeSend,
   reportLateResult,
   routingContext,
 } from './order-calls.js';
@@ -69,7 +73,10 @@ export class OrdersPollJob implements OnApplicationBootstrap {
     if (!row || row.supplierCode === 'manual' || !isOpenAttempt(row.attempt.status)) return null;
     const { attempt } = row;
     const call = await this.call(db, attempt);
-    const outcome = await askSupplier(db, this.registry, attempt, call);
+    // S18 PQ1: a rerouted attempt's first send is quoted too.
+    const quote: QuoteCheck =
+      call === 'place' ? await quoteBeforeSend(db, this.registry, attempt) : {};
+    const outcome = quote.refusal ?? (await askSupplier(db, this.registry, attempt, call));
     return db.transaction(async (tx) => {
       // The order lock first, as `applyOutcome` takes it: then the count, on an open attempt.
       await lockOrder(tx, attempt.orderId);
@@ -88,7 +95,10 @@ export class OrdersPollJob implements OnApplicationBootstrap {
       if (!applied.applied) await reportLateResult(tx, context, applied, outcome, { kind: 'poll' });
       // S17 WR8: only a rerouted attempt's first send (S16 RS1) is a refusal for stock; a status
       // read or a re-send never marks the offer.
-      if (call === 'place') await markStockRefusal(tx, applied, outcome, routingContext(this.env));
+      const routing = routingContext(this.env);
+      if (call === 'place') await markStockRefusal(tx, applied, outcome, routing);
+      await applyQuotedCost(tx, applied.attempt, quote, routing);
+      if (applied.applied) await checkCharge(tx, applied, { ...routing, jobs: context.jobs });
       return applied;
     });
   }

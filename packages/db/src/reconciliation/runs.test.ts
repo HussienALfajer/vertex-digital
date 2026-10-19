@@ -160,6 +160,22 @@ describe('reconciliation alert (NT1)', () => {
     });
   });
 
+  it('alerts every night a supplier charges mismatch, open or not (S18 RC2)', async () => {
+    await rolledBack(db, async (tx) => {
+      const place = subject();
+      for (let night = 0; night < 2; night += 1) {
+        const runId = await run(tx);
+        await result(tx, runId, {
+          check: 'supplier_charges',
+          subject: place,
+          status: 'mismatch',
+          differenceUnits: USD,
+        });
+        expect(await queueReconciliationAlert(tx, jobs, runId)).not.toBeNull();
+      }
+    });
+  });
+
   it('alerts a mismatch again after its explanation closed it (RN7)', async () => {
     await rolledBack(db, async (tx) => {
       const place = subject();

@@ -43,6 +43,9 @@ export function toSyncRun(row: SyncRunRow, supplierCode: SupplierCode): SyncRun 
     productsRepriced: row.productsRepriced,
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
+    offersRead: row.offersRead,
+    platformStatus: row.platformStatus,
+    catalogUpdatedAt: row.catalogUpdatedAt?.toISOString() ?? null,
   };
 }
 

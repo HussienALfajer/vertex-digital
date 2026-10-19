@@ -12,9 +12,11 @@ import {
   priceFromCost,
   proposeOptionMap,
   resolveMarginRule,
+  type SupplierCall,
   type SupplierCategoryNode,
   type SupplierCategoryState,
   type SupplierCode,
+  type SupplierConnectionTest,
   type SupplierOrder,
   type SupplierTransaction,
   suggestInputFields,
@@ -92,6 +94,17 @@ export class SupplierCatalogMock implements CategoryReader {
   /** SF3: the fake's order history and wallet movements, newest first. */
   statementOrders: SupplierOrder[] = [];
   transactions: SupplierTransaction[] = [];
+  /** S18 FK3: the recorded calls a test scripts for the health tab, newest first. */
+  calls: SupplierCall[] = [];
+  /** S18 CS1: the next connection test's answer. */
+  connectionTest: Omit<SupplierConnectionTest, 'testedAt'> = {
+    ok: true,
+    latencyMs: 84,
+    balance: { currency: 'USD', amountUnits: 125_750_000 },
+    failureKind: null,
+    httpStatus: null,
+    supplierCode: null,
+  };
   /** SF4: what the next nearby read answers. */
   nearby: NearbySupplierOrders = { items: [], complete: true };
   /** IM2: the next supplier image download fails (`IMAGE_FETCH_FAILED`). */
@@ -177,6 +190,7 @@ export class SupplierCatalogMock implements CategoryReader {
         category.kind === 'direct' ? [{ key: 'playerId', label: 'Player ID', type: 'text' }] : [],
       unsupportedReason: null,
       ignoredAt: null,
+      discountBp: null,
     };
     this.suppliers.offers.push(offer);
     return offer;
@@ -244,6 +258,72 @@ export class SupplierCatalogMock implements CategoryReader {
       }
     }
 
+    // S18: the packs an offer may be linked to: its category game's, its amount first, then `q`.
+    const candidates = match(/^\/api\/admin\/suppliers\/offers\/([^/]+)\/link-candidates$/);
+    if (candidates && method === 'GET') {
+      const offer = this.suppliers.offers.find((item) => item.id === candidates[1]);
+      if (!offer) return notFound();
+      const gameId = offer.categoryId
+        ? (this.standings(offer.supplierCode).get(offer.categoryId)?.effectiveGameId ?? null)
+        : null;
+      const amount = parseGameAmount(offer.name.split(' · ').at(-1) ?? offer.name);
+      const q = url.searchParams.get('q');
+      const live = this.catalog.products.filter(
+        (product) =>
+          product.archivedAt === null && (offer.kind === null || product.kind === offer.kind),
+      );
+      const ranked = [
+        ...live
+          .filter((product) => product.gameId === gameId)
+          .map((product) => ({
+            product,
+            reason: amount !== null && product.gameAmount === amount ? 'amount' : 'game',
+          }))
+          .sort((a, b) => (a.reason === b.reason ? 0 : a.reason === 'amount' ? -1 : 1)),
+        ...(q
+          ? live
+              .filter((product) => product.gameId !== gameId && product.nameAr.includes(q))
+              .map((product) => ({ product, reason: 'search' }))
+          : []),
+      ].slice(0, 20);
+      return {
+        status: 200,
+        json: ranked.map(({ product, reason }) => ({
+          productId: product.id,
+          productNameAr: product.nameAr,
+          gameId: product.gameId,
+          gameNameAr: this.catalog.games.find((game) => game.id === product.gameId)?.nameAr ?? '',
+          kind: product.kind,
+          routedBySupplier: this.suppliers.routes.some(
+            (route) =>
+              route.productId === product.id &&
+              !route.archivedAt &&
+              this.suppliers.offers.find((item) => item.id === route.offerId)?.supplierCode ===
+                offer.supplierCode,
+          ),
+          reason,
+        })),
+      };
+    }
+
+    const test = match(/^\/api\/admin\/suppliers\/([^/]+)\/test$/);
+    if (test && method === 'POST') {
+      return {
+        status: 200,
+        json: { ...this.connectionTest, testedAt: new Date().toISOString() },
+      };
+    }
+
+    const calls = match(/^\/api\/admin\/suppliers\/([^/]+)\/calls$/);
+    if (calls && method === 'GET') {
+      const result = url.searchParams.get('result');
+      const items = this.calls.filter((call) => !result || call.result === result);
+      return {
+        status: 200,
+        json: { items: items.slice(0, 50), total: items.length, page: 1, pageSize: 50 },
+      };
+    }
+
     const offerIgnore = match(/^\/api\/admin\/suppliers\/offers\/([^/]+)\/(ignore|unignore)$/);
     if (offerIgnore && method === 'POST') {
       const offer = this.suppliers.offers.find((item) => item.id === offerIgnore[1]);
@@ -286,6 +366,13 @@ export class SupplierCatalogMock implements CategoryReader {
       const code = tree[1] as SupplierCode;
       if (code !== 'fake') return error(409, 'CAPABILITY_UNSUPPORTED');
       return { status: 200, json: this.list(code, url) };
+    }
+
+    // S18: one node for the category page.
+    const one = match(/^\/api\/admin\/suppliers\/([^/]+)\/categories\/([^/]+)$/);
+    if (one && method === 'GET') {
+      const row = this.find(one[1] as SupplierCode, decodeURIComponent(one[2] as string));
+      return row ? { status: 200, json: this.node(row) } : notFound();
     }
 
     const node = match(

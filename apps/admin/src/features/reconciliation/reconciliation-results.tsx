@@ -49,11 +49,59 @@ function Range({ result }: { result: ReconciliationResult }) {
   );
 }
 
+/** S18 RC2: the attempts a supplier charged differently, and its orders no attempt names. */
+function ChargeFindings({ result }: { result: ReconciliationResult }) {
+  const { t } = useTranslation();
+  const lines = result.details.lines.filter((line) => CHARGE_LINE_KINDS.has(line.kind));
+  const unmatched = result.details.unmatchedSupplierOrders;
+  if (lines.length === 0 && unmatched.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      {lines.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {lines.map((line) => (
+            <li key={`${line.kind}:${line.id}`} className="flex flex-wrap items-center gap-2">
+              <span>{t(`reconciliation.lineKinds.${line.kind as ChargeLineKind}`)}</span>
+              <span className="tabular-nums">{money(t, 'USD', line.amountUnits)}</span>
+              <bdi className="text-muted-foreground">{shortId(line.id)}</bdi>
+              <CopyButton value={line.id} label={t('audit.copyId', { id: line.id })} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {unmatched.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground">
+            {t('reconciliation.unmatchedSupplierOrders', { count: unmatched.length })}
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {unmatched.map((id) => (
+              <li key={id}>
+                <bdi dir="ltr" className="tabular-nums">
+                  {id}
+                </bdi>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CHARGE_LINE_KINDS = new Set([
+  'charge_differs',
+  'delivered_but_failed',
+  'failed_but_delivered',
+]);
+
+type ChargeLineKind = 'charge_differs' | 'delivered_but_failed' | 'failed_but_delivered';
+
 /** The ids a check found, each linked to its page where it has one (S13 screens). */
 export function OffendingIds({ result }: { result: ReconciliationResult }) {
   const { t } = useTranslation();
   const { offending } = result.details;
-  if (offending.length === 0) return null;
+  if (offending.length === 0) return <ChargeFindings result={result} />;
   return (
     <div className="flex flex-col gap-1">
       <p className="text-sm text-muted-foreground">

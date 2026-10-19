@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chargeCheck,
   createRouteSchema,
   fieldMapSchema,
   HEALTH_PROBE_REASON,
   type HealthCall,
+  type HealthStanding,
+  healthReadStart,
   healthWindowStart,
   importOffersSchema,
   isCostStale,
@@ -17,6 +20,7 @@ import {
   SUPPLIER_CODES,
   SUPPLIER_CREDENTIAL_FIELDS,
   SUPPLIER_POLICY_DEFAULTS,
+  type SupplierHealthState,
   supplierAvailable,
   supplierChecksPlayers,
   supplierHasCatalog,
@@ -276,45 +280,68 @@ describe('route inputs', () => {
   });
 });
 
-describe('supplierHealth (rules H1, H2)', () => {
+describe('supplierHealth (rules H1, H2; S18 HE1–HE3)', () => {
   const P = SUPPLIER_POLICY_DEFAULTS;
+  const standing = (state: SupplierHealthState, reason = 'x'): HealthStanding => ({
+    state,
+    reason,
+    since: minutesAgo(60),
+  });
+  const healthy = standing('healthy');
+  const degraded = standing('degraded', 'success 80% < 90%');
   const call = (
     result: HealthCall['result'],
     latencyMs = 500,
     operation: HealthCall['operation'] = 'get_balance',
-  ): HealthCall => ({ operation, result, latencyMs, at: now });
+    at = now,
+  ): HealthCall => ({ operation, result, latencyMs, at });
   const calls = (ok: number, errors: number, refused = 0) => [
     ...Array.from({ length: errors }, () => call('error')),
     ...Array.from({ length: refused }, () => call('refused')),
     ...Array.from({ length: ok }, () => call('ok')),
   ];
+  /** `count` calls one a minute from `from` minutes ago. */
+  const spread = (count: number, from: number, result: HealthCall['result'] = 'ok') =>
+    Array.from({ length: count }, (_, index) =>
+      call(result, 500, 'get_balance', minutesAgo(from + index)),
+    );
 
   it('is healthy with enough answered calls; a refusal counts as answered', () => {
-    expect(supplierHealth(calls(9, 0, 1), P, 'degraded')).toEqual({
+    expect(supplierHealth(calls(9, 0, 1), P, healthy, now)).toEqual({
       state: 'healthy',
       reason: 'success 100%',
       calls: 10,
       successBp: 10_000,
       p90Ms: 500,
     });
-    expect(supplierHealth(calls(9, 1), P, 'healthy')).toMatchObject({
+    expect(supplierHealth(calls(9, 1), P, healthy, now)).toMatchObject({
       state: 'healthy',
       successBp: 9_000,
     });
   });
 
-  it('is degraded below 90% success or above the p90 limit', () => {
-    expect(supplierHealth(calls(8, 1, 0).concat(calls(0, 0, 0)), P, 'healthy')).toMatchObject({
-      state: 'degraded',
-      reason: 'success 88% < 90%',
+  it('does not flap on one error as calls enter and leave the window (2026-10-19)', () => {
+    // 8 of 9 answered was `degraded` at a minimum of 5; below 10 calls the state now stays.
+    expect(supplierHealth(calls(8, 1), P, healthy, now)).toMatchObject({
+      state: 'healthy',
+      reason: '9 calls < 10',
       successBp: 8_888,
+    });
+    expect(supplierHealth(calls(7, 1), P, healthy, now)).toMatchObject({ state: 'healthy' });
+  });
+
+  it('is degraded below 90% success or above the p90 limit', () => {
+    expect(supplierHealth(calls(8, 2), P, healthy, now)).toMatchObject({
+      state: 'degraded',
+      reason: 'success 80% < 90%',
+      successBp: 8_000,
     });
     const slow = [
       ...Array.from({ length: 8 }, () => call('ok', 400)),
       call('ok', 12_000),
       call('ok', 15_000),
     ];
-    expect(supplierHealth(slow, P, 'healthy')).toMatchObject({
+    expect(supplierHealth(slow, P, healthy, now)).toMatchObject({
       state: 'degraded',
       reason: 'p90 12000 ms > 10000 ms',
       p90Ms: 12_000,
@@ -322,49 +349,137 @@ describe('supplierHealth (rules H1, H2)', () => {
     // At the limit exactly, and a slow catalog read does not count (rule H1).
     expect(
       supplierHealth(
-        [...calls(5, 0), call('ok', 10_000), call('ok', 60_000, 'list_offers')],
+        [...calls(8, 0), call('ok', 10_000), call('ok', 10_000), call('ok', 60_000, 'list_offers')],
         P,
-        'healthy',
+        healthy,
+        now,
       ),
     ).toMatchObject({ state: 'healthy', p90Ms: 10_000 });
     expect(
-      supplierHealth([call('ok', 60_000, 'list_offers'), ...calls(4, 0)], P, 'healthy'),
-    ).toMatchObject({ state: 'healthy', calls: 5, p90Ms: 500 });
+      supplierHealth([call('ok', 60_000, 'list_offers'), ...calls(9, 0)], P, healthy, now),
+    ).toMatchObject({ state: 'healthy', calls: 10, p90Ms: 500 });
   });
 
-  it('is down below 50% success, or after the consecutive errors', () => {
+  it('is down below 50% success, or after consecutive errors of two operations or more', () => {
     const mixed = (...results: HealthCall['result'][]) => results.map((result) => call(result));
-    // 2 of 4 answered, never 3 errors in a row: exactly 50% is degraded, not down.
+    // Never 3 errors in a row: exactly 50% is degraded, not down.
     expect(
-      supplierHealth(mixed('error', 'ok', 'error', 'ok', 'error', 'ok'), P, 'healthy'),
+      supplierHealth(
+        mixed('error', 'ok', 'error', 'ok', 'error', 'ok', 'error', 'ok', 'error', 'ok'),
+        P,
+        healthy,
+        now,
+      ),
     ).toMatchObject({ state: 'degraded', reason: 'success 50% < 90%', successBp: 5_000 });
     expect(
-      supplierHealth(mixed('error', 'error', 'ok', 'error', 'error', 'ok'), P, 'healthy'),
-    ).toMatchObject({ state: 'down', reason: 'success 33% < 50%', successBp: 3_333 });
-    expect(supplierHealth([...calls(10, 0), ...calls(0, 3)], P, 'healthy')).toMatchObject({
+      supplierHealth(
+        mixed('error', 'error', 'ok', 'error', 'error', 'ok', 'error', 'error', 'ok', 'ok'),
+        P,
+        healthy,
+        now,
+      ),
+    ).toMatchObject({ state: 'down', reason: 'success 40% < 50%', successBp: 4_000 });
+    const outage = [
+      call('error', 15_000, 'get_balance'),
+      call('error', 15_000, 'list_offers'),
+      call('error', 15_000, 'get_order'),
+    ];
+    expect(supplierHealth([...calls(10, 0), ...outage], P, healthy, now)).toMatchObject({
       state: 'down',
       reason: '3 consecutive errors',
       calls: 13,
     });
   });
 
-  it('keeps its state below the minimum count unless errors run (edge case 15)', () => {
-    expect(supplierHealth([], P, 'degraded')).toEqual({
+  it('is never down from one stuck attempt polls alone (HE3)', () => {
+    const polls = Array.from({ length: 3 }, () => call('error', 15_000, 'get_order'));
+    expect(supplierHealth([...calls(10, 0), ...polls], P, healthy, now)).toMatchObject({
       state: 'degraded',
-      reason: '0 calls < 5',
+      reason: 'success 76% < 90%',
+    });
+    expect(supplierHealth(polls, P, healthy, now)).toMatchObject({ state: 'healthy' });
+  });
+
+  it('keeps its state below the minimum count unless errors run (edge case 15)', () => {
+    expect(supplierHealth([], P, degraded, now)).toEqual({
+      state: 'degraded',
+      reason: '0 calls < 10',
       calls: 0,
       successBp: null,
       p90Ms: null,
     });
-    expect(supplierHealth([call('error')], P, 'healthy')).toMatchObject({
+    expect(supplierHealth([call('error')], P, healthy, now)).toMatchObject({
       state: 'healthy',
-      reason: '1 calls < 5',
+      reason: '1 calls < 10',
       successBp: 0,
     });
-    expect(supplierHealth(calls(0, 3), P, 'healthy')).toMatchObject({ state: 'down' });
     expect(
-      supplierHealth(calls(0, 2), { ...P, downConsecutiveErrors: 2 }, 'healthy'),
+      supplierHealth(
+        [call('error'), call('error', 500, 'list_offers')],
+        { ...P, downConsecutiveErrors: 2 },
+        healthy,
+        now,
+      ),
     ).toMatchObject({ state: 'down', reason: '2 consecutive errors' });
+  });
+
+  it('recovers only at 95% held for 5 whole minutes (HE2)', () => {
+    expect(supplierHealth(spread(12, 10), P, degraded, now)).toMatchObject({
+      state: 'healthy',
+      reason: 'success 100%',
+      calls: 12,
+    });
+    // 95% exactly recovers; 94.7% does not.
+    expect(
+      supplierHealth([...spread(19, 10), ...spread(1, 6, 'error')], P, degraded, now),
+    ).toMatchObject({ state: 'healthy', successBp: 9_500 });
+    expect(
+      supplierHealth([...spread(18, 10), ...spread(1, 6, 'error')], P, degraded, now),
+    ).toMatchObject({ state: 'degraded', reason: 'recovering: success 94% < 95%' });
+    // Calls made just now: the windows a minute ago have none yet.
+    expect(supplierHealth(calls(12, 0), P, degraded, now)).toMatchObject({
+      state: 'degraded',
+      reason: 'recovering: held 1 of 5 minutes',
+    });
+    // An error that left the window 90 seconds ago is still in the window two minutes back.
+    const leftWindow = call('error', 500, 'get_balance', minutesAgo(31.5));
+    expect(supplierHealth([leftWindow, ...spread(12, 5)], P, degraded, now)).toMatchObject({
+      state: 'degraded',
+      reason: 'recovering: held 2 of 5 minutes',
+    });
+    // So is a slow p90.
+    const slowBefore = [
+      call('ok', 15_000, 'get_balance', minutesAgo(31.5)),
+      call('ok', 15_000, 'get_balance', minutesAgo(31.5)),
+    ];
+    expect(supplierHealth([...slowBefore, ...spread(12, 5)], P, degraded, now)).toMatchObject({
+      state: 'degraded',
+      reason: 'recovering: held 2 of 5 minutes',
+    });
+    // Catalog reads only: no p90, and the recovery holds.
+    const reads = Array.from({ length: 12 }, (_, index) =>
+      call('ok', 60_000, 'list_categories', minutesAgo(10 + index)),
+    );
+    expect(supplierHealth(reads, P, degraded, now)).toMatchObject({
+      state: 'healthy',
+      p90Ms: null,
+    });
+  });
+
+  it('reads the calls the recovery check needs', () => {
+    expect(healthReadStart(healthy, now, P)).toEqual(minutesAgo(34));
+    expect(
+      healthReadStart(
+        { state: 'degraded', reason: HEALTH_PROBE_REASON, since: minutesAgo(5) },
+        now,
+        P,
+      ),
+    ).toEqual(minutesAgo(5));
+  });
+
+  it('refuses a recovery threshold below the degraded one', () => {
+    expect(supplierPolicySchema.safeParse({ ...P, recoverSuccessBp: 8_999 }).success).toBe(false);
+    expect(supplierPolicySchema.safeParse({ ...P, recoverSuccessBp: 9_000 }).success).toBe(true);
   });
 });
 
@@ -450,5 +565,39 @@ describe('supplierChecksPlayers (S09 rule PV1)', () => {
     expect(supplierChecksPlayers('fake', { fakeEnabled: true })).toBe(true);
     expect(supplierChecksPlayers('fake', { fakeEnabled: false })).toBe(false);
     expect(supplierChecksPlayers('wdgzone', { fakeEnabled: true })).toBe(false);
+  });
+});
+
+describe('chargeCheck (S18 CH2, RC2)', () => {
+  it('compares a charge with the cost of the units delivered, within 2%', () => {
+    expect(chargeCheck({ unitCostUsdUnits: 880_000, units: 1, chargedUsdUnits: 880_000 })).toEqual({
+      expectedUsdUnits: 880_000,
+      mismatch: false,
+      unitChargedUsdUnits: 880_000,
+    });
+    // 2% exactly is no mismatch; above it is, either way.
+    expect(
+      chargeCheck({ unitCostUsdUnits: 1_000_000, units: 2, chargedUsdUnits: 2_040_000 }).mismatch,
+    ).toBe(false);
+    expect(
+      chargeCheck({ unitCostUsdUnits: 1_000_000, units: 2, chargedUsdUnits: 2_040_001 }).mismatch,
+    ).toBe(true);
+    expect(
+      chargeCheck({ unitCostUsdUnits: 1_000_000, units: 2, chargedUsdUnits: 1_959_999 }).mismatch,
+    ).toBe(true);
+    // A partial delivery charged for its units is no mismatch.
+    expect(
+      chargeCheck({ unitCostUsdUnits: 1_000_000, units: 2, chargedUsdUnits: 2_000_000 }),
+    ).toEqual({ expectedUsdUnits: 2_000_000, mismatch: false, unitChargedUsdUnits: 1_000_000 });
+  });
+
+  it('rounds the charged unit cost up, and counts no units as one', () => {
+    expect(
+      chargeCheck({ unitCostUsdUnits: 1, units: 3, chargedUsdUnits: 10 }).unitChargedUsdUnits,
+    ).toBe(4);
+    expect(chargeCheck({ unitCostUsdUnits: 5, units: 0, chargedUsdUnits: 5 })).toMatchObject({
+      expectedUsdUnits: 5,
+      mismatch: false,
+    });
   });
 });

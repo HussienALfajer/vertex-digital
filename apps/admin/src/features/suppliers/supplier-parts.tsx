@@ -170,19 +170,33 @@ export function PlatformStatusLine({ code }: { code: SupplierCode }) {
   if (status.isError) {
     return <span className="text-sm text-muted-foreground">{t('suppliers.platform.failed')}</span>;
   }
+  return <PlatformStatusView status={status.data} />;
+}
+
+/** S18: the supplier's words for its state in Arabic; any other shows as received. */
+const PLATFORM_STATES = ['operational', 'maintenance', 'degraded', 'down'] as const;
+
+/**
+ * The supplier's own status and when its catalog last changed; S18 PS1: the cards show the one
+ * the list carries (the sync's or the panel's last read) and never call the supplier.
+ */
+export function PlatformStatusView({
+  status,
+}: {
+  status: { status: string; catalogUpdatedAt: string | null };
+}) {
+  const { t } = useTranslation();
+  const known = PLATFORM_STATES.find((state) => state === status.status.toLowerCase());
   return (
     <span className="flex flex-wrap items-center gap-2 text-sm">
       <span className="text-muted-foreground">{t('suppliers.platform.label')}</span>
-      <Badge tone="outline">
-        <bdi>{status.data.status}</bdi>
+      <Badge tone={known === 'operational' ? 'success' : 'outline'}>
+        <bdi>{known ? t(`suppliers.platform.states.${known}`) : status.status}</bdi>
       </Badge>
-      {status.data.catalogUpdatedAt && (
-        <span
-          className="text-muted-foreground"
-          title={formatDateTime(status.data.catalogUpdatedAt)}
-        >
+      {status.catalogUpdatedAt && (
+        <span className="text-muted-foreground" title={formatDateTime(status.catalogUpdatedAt)}>
           {t('suppliers.platform.catalogUpdated', {
-            since: formatSince(status.data.catalogUpdatedAt),
+            since: formatSince(status.catalogUpdatedAt),
           })}
         </span>
       )}

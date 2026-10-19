@@ -66,6 +66,10 @@ async function addWebRoute(page: Page, drawer: Locator) {
   await drawer.getByRole('button', { name: s.routes.add, exact: true }).click();
   const add = page.getByRole('dialog', { name: s.routes.addTitle });
   await choose(page, add, s.routes.supplier, 'مورد تجريبي');
+  // S18: the search starts with the pack's amount (60); another pack is searched for.
+  await expect(add.getByRole('textbox', { name: s.routes.offerSearch })).toHaveValue('60');
+  await add.getByRole('textbox', { name: s.routes.offerSearch }).fill('325');
+  await add.getByRole('button', { name: s.offers.searchSubmit }).click();
   await add
     .getByRole('button', { name: /Fake UC 325/ })
     .first()
@@ -188,10 +192,10 @@ test.describe('suppliers', () => {
       .getByRole('button', { name: /Fake UC 60/ })
       .first()
       .click();
-    await add.getByRole('button', { name: s.routes.addSubmit }).click();
-    await expect(add.getByText(ar.errors.api.ROUTE_FIELDS_UNMAPPED)).toBeVisible();
-    await expect(add.getByText(s.fieldMap.missing)).toBeVisible();
-    await choose(page, add, fill(s.fieldMap.target, { field: 'playerId' }), 'معرّف اللاعب');
+    // S18: the offer's one field is proposed onto the game's one field.
+    await expect(
+      add.getByRole('combobox', { name: fill(s.fieldMap.target, { field: 'playerId' }) }),
+    ).toHaveText(/معرّف اللاعب/);
     await add.getByRole('button', { name: s.routes.addSubmit }).click();
     await expect(add).toBeHidden();
     await expect(drawer.getByText(s.routes.basisMark)).toBeVisible();

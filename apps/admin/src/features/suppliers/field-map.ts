@@ -28,6 +28,25 @@ export function fieldMapEntries(
   ];
 }
 
+/**
+ * S18: the proposed map of an offer's fields onto a game's (as rule SC8's link proposes it): the
+ * same key, case and underscores aside (`playerId` and `player_id`); else one supplier field onto
+ * a game of one field. A field without a match stays unmapped for the admin.
+ */
+export function proposedFieldMap(
+  required: readonly string[],
+  gameKeys: readonly string[],
+): Record<string, string> {
+  const plain = (key: string) => key.replaceAll('_', '').toLowerCase();
+  return Object.fromEntries(
+    required.flatMap((field) => {
+      const same = gameKeys.find((key) => plain(key) === plain(field));
+      if (same) return [[field, same]];
+      return required.length === 1 && gameKeys.length === 1 ? [[field, gameKeys[0] as string]] : [];
+    }),
+  );
+}
+
 /** The map the API takes: the rows with a field name and a key, the field name trimmed. */
 export function toFieldMap(entries: readonly FieldMapEntry[]): FieldMap {
   const map: FieldMap = {};

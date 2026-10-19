@@ -8,7 +8,10 @@ import {
   type ImportDraft,
   type ImportDraftPack,
   type importCategorySchema,
+  type LinkCandidate,
+  type LinkCandidateQuery,
   type linkCategorySchema,
+  MAX_LINK_CANDIDATES,
   normalizeSearchText,
   type OptionMap,
   type ProductKind,
@@ -169,6 +172,74 @@ export class SupplierCatalogService {
       nodes.push(...(await this.nodes(supplier.code, view, rows)));
     }
     return nodes;
+  }
+
+  /**
+   * S18: the store packs an offer may be linked to (a route added there): the packs of its
+   * category's game, those of its amount first, then the admin's search; with whether each has a
+   * live route of the offer's supplier already. At most 20.
+   */
+  async linkCandidates(offerId: string, query: LinkCandidateQuery): Promise<LinkCandidate[]> {
+    const [offer] = await this.db
+      .select()
+      .from(supplierOffers)
+      .where(eq(supplierOffers.id, offerId));
+    if (!offer) throw refusals.notFound('offer');
+    const view = await this.tree(offer.supplierId);
+    const gameId = offer.categoryId
+      ? (view.standings.get(offer.categoryId)?.effectiveGameId ?? null)
+      : null;
+    const amount = parseGameAmount(offer.name.split(' · ').at(-1) ?? offer.name);
+    const [fromGame, found] = await Promise.all([
+      gameId ? this.catalog.productsForLink({ gameId }) : Promise.resolve([]),
+      query.q ? this.catalog.productsForLink({ q: query.q }) : Promise.resolve([]),
+    ]);
+    const fits = (kind: ProductKind) => offer.kind === null || kind === offer.kind;
+    const ranked = [
+      ...fromGame
+        .filter((product) => fits(product.kind))
+        .map((product) => ({
+          product,
+          reason:
+            amount !== null && product.gameAmount === amount
+              ? ('amount' as const)
+              : ('game' as const),
+        })),
+      ...found
+        .filter((product) => fits(product.kind))
+        .map((product) => ({ product, reason: 'search' as const })),
+    ];
+    const order = { amount: 0, game: 1, search: 2 };
+    const seen = new Set<string>();
+    const unique = ranked
+      .sort((a, b) => order[a.reason] - order[b.reason])
+      .filter(({ product }) => !seen.has(product.id) && seen.add(product.id))
+      .slice(0, MAX_LINK_CANDIDATES);
+    const routed = unique.length
+      ? await this.db
+          .selectDistinct({ productId: productRoutes.productId })
+          .from(productRoutes)
+          .where(
+            and(
+              eq(productRoutes.supplierId, offer.supplierId),
+              isNull(productRoutes.archivedAt),
+              inArray(
+                productRoutes.productId,
+                unique.map(({ product }) => product.id),
+              ),
+            ),
+          )
+      : [];
+    const routedIds = new Set(routed.map((row) => row.productId));
+    return unique.map(({ product, reason }) => ({
+      productId: product.id,
+      productNameAr: product.nameAr,
+      gameId: product.gameId,
+      gameNameAr: product.gameNameAr,
+      kind: product.kind,
+      routedBySupplier: routedIds.has(product.id),
+      reason,
+    }));
   }
 
   // Import and link drafts (SC7, SC8, SC12–SC14) -------------------------------------------------

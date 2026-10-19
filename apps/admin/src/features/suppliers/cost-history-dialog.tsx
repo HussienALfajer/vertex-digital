@@ -8,6 +8,7 @@ import {
   DialogTitle,
   EmptyState,
   Skeleton,
+  Sparkline,
   Table,
   TableBody,
   TableCell,
@@ -22,7 +23,10 @@ import { errorMessage } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
 import { offerCostsQuery } from './suppliers.queries';
 
-/** An offer's cost changes, newest first (`supplier_cost_changes`): by sync or by the admin. */
+/**
+ * An offer's cost changes, newest first (`supplier_cost_changes`): by sync, by the admin, or (S18
+ * PQ3) by an order's quote or charge; above them, the cost over time as a small line.
+ */
 export function CostHistoryDialog({ offer }: { offer: SupplierOffer }) {
   const { t } = useTranslation();
   const costs = useQuery(offerCostsQuery(offer.id));
@@ -49,32 +53,50 @@ export function CostHistoryDialog({ offer }: { offer: SupplierOffer }) {
         (costs.data.items.length === 0 ? (
           <EmptyState icon={<HistoryIcon />} title={t('suppliers.costs.empty')} />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('suppliers.costs.time')}</TableHead>
-                <TableHead>{t('suppliers.costs.from')}</TableHead>
-                <TableHead>{t('suppliers.costs.to')}</TableHead>
-                <TableHead>{t('suppliers.costs.by')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {costs.data.items.map((change) => (
-                <TableRow key={change.id}>
-                  <TableCell className="whitespace-nowrap">
-                    {formatDateTime(change.createdAt)}
-                  </TableCell>
-                  <TableCell className="tabular-nums">{amount(change.fromUsdUnits)}</TableCell>
-                  <TableCell className="font-medium tabular-nums">
-                    {amount(change.toUsdUnits)}
-                  </TableCell>
-                  <TableCell>
-                    {change.byAdmin ? t('suppliers.costs.admin') : t('suppliers.costs.sync')}
-                  </TableCell>
+          <>
+            <figure className="flex flex-col gap-1">
+              <Sparkline
+                className="h-16 w-full"
+                label={t('suppliers.costs.chart', { name: offer.name })}
+                values={costs.data.items
+                  .toReversed()
+                  .flatMap((change) => (change.toUsdUnits === null ? [] : [change.toUsdUnits]))}
+              />
+              <figcaption className="text-xs text-muted-foreground">
+                {t('suppliers.costs.chartCaption')}
+              </figcaption>
+            </figure>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('suppliers.costs.time')}</TableHead>
+                  <TableHead>{t('suppliers.costs.from')}</TableHead>
+                  <TableHead>{t('suppliers.costs.to')}</TableHead>
+                  <TableHead>{t('suppliers.costs.by')}</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {costs.data.items.map((change) => (
+                  <TableRow key={change.id}>
+                    <TableCell className="whitespace-nowrap">
+                      {formatDateTime(change.createdAt)}
+                    </TableCell>
+                    <TableCell className="tabular-nums">{amount(change.fromUsdUnits)}</TableCell>
+                    <TableCell className="font-medium tabular-nums">
+                      {amount(change.toUsdUnits)}
+                    </TableCell>
+                    <TableCell>
+                      {change.byAdmin
+                        ? t('suppliers.costs.admin')
+                        : change.attemptId
+                          ? t('suppliers.costs.order')
+                          : t('suppliers.costs.sync')}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
         ))}
     </DialogContent>
   );

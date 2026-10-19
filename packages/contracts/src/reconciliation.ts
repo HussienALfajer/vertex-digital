@@ -425,7 +425,13 @@ export const INTERNAL_CHECKS = [
 ] as const;
 
 /** External checks against real balances (E2–E4), within a range and the tolerance (E1). */
-export const EXTERNAL_CHECKS = ['supplier_balance', 'usdt_balance', 'sham_cash_count'] as const;
+export const EXTERNAL_CHECKS = [
+  'supplier_balance',
+  'usdt_balance',
+  'sham_cash_count',
+  /** S18 RC1: what a supplier charged for the day's orders against our attempts' costs. */
+  'supplier_charges',
+] as const;
 
 /** Warning checks (E5): `ok` or `warning`, never a mismatch. */
 export const WARNING_CHECKS = ['count_stale', 'order_conflicts'] as const;
@@ -580,6 +586,12 @@ export const EXPLANATION_LINE_KINDS = [
   'in_flight_attempt',
   'uncredited_transfer',
   'deposit_in_review',
+  /** S18 RC2: an attempt the supplier charged differently from its cost (the difference). */
+  'charge_differs',
+  /** S18 RC2: the supplier completed an order our attempt counts as failed (its charge). */
+  'delivered_but_failed',
+  /** S18 RC2: the supplier failed or refunded an order our attempt counts as delivered. */
+  'failed_but_delivered',
 ] as const;
 
 /** A result's details: never personal data (S13 data). */
@@ -598,6 +610,11 @@ export const reconciliationDetailsSchema = z
       )
       .max(RECONCILIATION_MAX_OFFENDING_IDS),
     reason: reconciliationSkipReasonSchema.nullable(),
+    /** S18 RC2: the supplier's order ids no attempt of ours names (money spent we do not count). */
+    unmatchedSupplierOrders: z
+      .array(z.string().max(64))
+      .max(RECONCILIATION_MAX_OFFENDING_IDS)
+      .default([]),
   })
   .meta({ id: 'ReconciliationDetails' });
 

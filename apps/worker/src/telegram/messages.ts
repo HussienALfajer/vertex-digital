@@ -370,6 +370,17 @@ function orderText<Kind extends TelegramMessageKind>(
         `${links.admin}/orders/${order.orderId}?decide=fulfil`,
       ].join('\n');
     }
+    case 'supplier_charge_mismatch': {
+      // S18 CH2, CH3: what the supplier charged against the cost the order was routed on.
+      const charge = params as TelegramMessageParams<'supplier_charge_mismatch'>;
+      return [
+        `💸 ${charge.supplierNameAr} خصم ${formatUsd(charge.chargedUsdUnits)} للطلب ${charge.orderNumber} بدل ${formatUsd(charge.expectedUsdUnits)} المتوقعة.`,
+        charge.loss
+          ? 'التكلفة أعلى من سعر البيع: حُدّثت تكلفة العرض وأوقف حارس الهامش ما يخسر. راجع التسعير.'
+          : 'حُدّثت تكلفة العرض وأُعيد التسعير.',
+        `${links.admin}/orders/${charge.orderId}`,
+      ].join('\n');
+    }
     case 'order_needs_review': {
       const order = params as TelegramMessageParams<'order_needs_review'>;
       return [
@@ -401,6 +412,7 @@ const RECONCILIATION_CHECKS: Record<ReconciliationCheck, string> = {
   supplier_balance: 'رصيد المورد',
   usdt_balance: 'رصيد USDT',
   sham_cash_count: 'جرد شام كاش',
+  supplier_charges: 'خصومات المورد',
   count_stale: 'جرد شام كاش متأخر',
   order_conflicts: 'تعارضات الطلبات',
 };
@@ -692,6 +704,7 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
     case 'manual_order_reminder':
     case 'order_needs_review':
     case 'order_conflict':
+    case 'supplier_charge_mismatch':
       return { text: orderText(kind, params, links) };
     case 'ticket_opened':
     case 'ticket_reply': {

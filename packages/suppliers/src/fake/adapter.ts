@@ -18,6 +18,7 @@ import type {
   SupplierCategory,
   SupplierMoney,
   SupplierOffer,
+  SupplierOfferQuote,
   SupplierOrderRow,
   SupplierOutcome,
   SupplierPlatformStatus,
@@ -386,11 +387,13 @@ function deliveredOutcome(
   delivers: FakeOffer['delivers'],
   supplierOrderId: string,
   units: number,
+  chargedUsdUnits?: number,
 ): SupplierOutcome {
   return {
     status: 'delivered',
     supplierOrderId,
     quantity: units,
+    ...(chargedUsdUnits !== undefined && { chargedUsdUnits }),
     ...(delivers === 'code' && {
       codes: Array.from(
         { length: units },
@@ -416,6 +419,7 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     categories: true,
     statement: true,
     platformStatus: true,
+    offerQuote: true,
   };
 
   readonly imageHosts: readonly string[] = [FAKE_IMAGE_HOST];
@@ -440,6 +444,16 @@ export class FakeSupplierAdapter implements SupplierAdapter {
   async getBalance(): Promise<SupplierMoney> {
     this.failIfScripted();
     return { currency: 'USD', amountUnits: this.balanceUnits };
+  }
+
+  /** S18 PQ1: the offer's cost and stock as `--cost` and `--stock` scripted them. */
+  async getOfferQuote(offerId: string): Promise<SupplierOfferQuote> {
+    this.failIfScripted();
+    const offer = this.catalog().find((candidate) => candidate.offerId === offerId);
+    if (!offer) {
+      throw new SupplierError('definitive', 'Unknown offer', { supplierCode: 'PRODUCT_NOT_FOUND' });
+    }
+    return { cost: offer.cost, inStock: offer.inStock };
   }
 
   /** S16 SC1: the tree without the categories scripted missing. */
@@ -601,7 +615,8 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     }
     this.balanceUnits -= cost;
     const supplierOrderId = `fake-${randomUUID()}`;
-    const delivered = deliveredOutcome(offer.delivers, supplierOrderId, units);
+    // S18 CH1: the fake charges what it takes from its balance.
+    const delivered = deliveredOutcome(offer.delivers, supplierOrderId, units, cost);
 
     if (as('pending', 'pending') || (script === null && playerId.startsWith('badsig'))) {
       return this.record(request, { status: 'pending', supplierOrderId }, delivered);
@@ -639,7 +654,7 @@ export class FakeSupplierAdapter implements SupplierAdapter {
 
   async getOrder(idempotencyKey: string): Promise<SupplierOutcome> {
     const order = this.orders.get(idempotencyKey);
-    if (!order) return { status: 'unknown', reason: 'No order with this key' };
+    if (!order) return { status: 'unknown', reason: 'No order with this key', answered: true };
     // Polling an unknown outcome finds what really happened; a pending one waits its webhook.
     return order.outcome.status === 'unknown' ? order.settled : order.outcome;
   }
@@ -849,7 +864,9 @@ export class FakeSupplierAdapter implements SupplierAdapter {
 
   /** A supplier that is down: no answer (S07 acceptance, `--errors on`). */
   private failIfScripted(): void {
-    if (this.state.errors) throw new SupplierError('retryable', 'Fake supplier timed out');
+    if (this.state.errors) {
+      throw new SupplierError('retryable', 'Fake supplier timed out', { failure: 'timeout' });
+    }
   }
 
   private async record(

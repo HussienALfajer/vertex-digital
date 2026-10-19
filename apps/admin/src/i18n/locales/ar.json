@@ -670,6 +670,7 @@
       "supplier.credentials_set": "تعيين مفاتيح مورد",
       "supplier.updated": "تعديل مورد",
       "supplier.sync_requested": "طلب مزامنة مورد",
+      "supplier.connection_tested": "اختبار اتصال مورد",
       "supplier.validation_quota_set": "تعديل حصة التحقق اليومية",
       "supplier.import": "استيراد عروض مورد",
       "supplier.category_imported": "استيراد فئة مورد كلعبة",
@@ -1205,7 +1206,8 @@
       "ticket_reply": "ردّ عميل على تذكرة",
       "reconciliation_alert": "تنبيه المطابقة",
       "admin_order_placed": "شراء من اللوحة",
-      "supplier_stock_low": "مخزون منخفض لدى مورد"
+      "supplier_stock_low": "مخزون منخفض لدى مورد",
+      "supplier_charge_mismatch": "خصم مورد مختلف"
     }
   },
   "rates": {
@@ -2176,7 +2178,8 @@
         "ABANDONED": "توقفت المزامنة دون نهاية وأُغلقت.",
         "INTERNAL": "خطأ داخلي أثناء المزامنة. راجع سجلات العامل.",
         "supplierCode": "خطأ من المورد برمز"
-      }
+      },
+      "notRead": "لم تُقرأ (الكتالوج لم يتغير)"
     },
     "credentials": {
       "title": "المفاتيح",
@@ -2199,7 +2202,13 @@
       },
       "errors": {
         "value": "اكتب القيمة، حتى 500 حرف."
-      }
+      },
+      "testNow": "اختبار الاتصال الآن",
+      "testing": "جارٍ الاختبار…",
+      "testOk": "الاتصال سليم: أجاب خلال {{ms}} ms، والرصيد {{balance}}.",
+      "testFailed": "فشل الاتصال: {{failure}} (بعد {{ms}} ms).",
+      "testRefused": "رفض المورد الطلب",
+      "lastRun": "آخر مزامنة:"
     },
     "pause": {
       "title": "إيقاف المورد مؤقتاً",
@@ -2263,6 +2272,11 @@
           "label": "المخزون المنخفض",
           "true": "منخفض أو نافد",
           "false": "بلا تنبيه"
+        },
+        "discounted": {
+          "label": "الخصم",
+          "true": "عليها خصم",
+          "false": "بلا خصم"
         }
       },
       "groupFilter": "المجموعة:",
@@ -2310,7 +2324,11 @@
       },
       "ignored": "متجاهل",
       "ignore": "تجاهل {{name}}",
-      "unignore": "إلغاء تجاهل {{name}}"
+      "unignore": "إلغاء تجاهل {{name}}",
+      "selectPage": "تحديد عروض هذه الصفحة",
+      "link": "ربط {{name}} بباقة",
+      "lastSeen": "آخر ظهور {{since}}",
+      "vipDiscount": "خصم VIP {{percent}}"
     },
     "costs": {
       "title": "سجل التكلفة",
@@ -2320,7 +2338,10 @@
       "to": "إلى",
       "by": "المصدر",
       "admin": "المسؤول",
-      "sync": "المزامنة"
+      "sync": "المزامنة",
+      "order": "عند شراء طلب",
+      "chart": "تكلفة {{name}} عبر الزمن",
+      "chartCaption": "التكلفة عبر الزمن، الأقدم يساراً"
     },
     "fieldMap": {
       "title": "ربط الحقول",
@@ -2479,8 +2500,19 @@
         "slow": "زمن الاستجابة p90 {{p90}} ms أعلى من {{max}} ms",
         "success": "النجاح {{success}}",
         "probe": "نجح الفحص بعد التوقف",
-        "unknown": "{{reason}}"
-      }
+        "unknown": "{{reason}}",
+        "recovering": "يتعافى: النجاح {{success}} أقل من حد العودة {{threshold}}",
+        "holding": "يتعافى: ثبت النجاح {{held}} من {{minutes}} دقائق مطلوبة"
+      },
+      "failedCalls": "الطلبات الفاشلة",
+      "failedCallsHelp": "كل طلب لم يأتِ له جواب موثوق، ولماذا. انتهاء المهلة أو تعذّر الاتصال في كل الطلبات معاً يشير غالباً إلى مشكلة شبكة، أما أخطاء الخادم (5xx) أو تجاوز حد الطلبات فتشير إلى مشكلة عند المورد.",
+      "noFailures": "لا طلبات فاشلة مسجّلة",
+      "operation": "العملية",
+      "failure": "السبب",
+      "httpStatus": "رمز HTTP",
+      "code": "رمز المورد",
+      "latency": "المدة",
+      "failedTotal": "الطلبات الفاشلة: {{total}}"
     },
     "policy": {
       "link": "سياسة الموردين",
@@ -2522,6 +2554,16 @@
           "hint": "نجاح أقل منه: متراجع.",
           "error": "نسبة من 0.01 إلى 100، أعلى من نجاح التوقف."
         },
+        "recoverSuccessBp": {
+          "label": "نجاح العودة %",
+          "hint": "المتراجع يعود سليماً عند هذا النجاح أو أعلى. لا يقل عن نجاح التراجع.",
+          "error": "نسبة من 0.01 إلى 100، لا تقل عن نجاح التراجع."
+        },
+        "recoverMinutes": {
+          "label": "مدة ثبات العودة (دقائق)",
+          "hint": "يجب أن يبقى النجاح عند حد العودة طوال هذه الدقائق. من 1 إلى 60.",
+          "error": "عدد دقائق من 1 إلى 60."
+        },
         "degradedP90Ms": {
           "label": "زمن التراجع p90 (ms)",
           "hint": "زمن أعلى منه: متراجع. من 1000 إلى 120000.",
@@ -2553,7 +2595,13 @@
       "label": "حالة منصة المورد:",
       "reading": "جارٍ قراءة حالة المنصة…",
       "failed": "تعذّرت قراءة حالة المنصة",
-      "catalogUpdated": "حُدّث كتالوجه {{since}}"
+      "catalogUpdated": "حُدّث كتالوجه {{since}}",
+      "states": {
+        "operational": "تعمل",
+        "maintenance": "صيانة",
+        "degraded": "متراجعة",
+        "down": "متوقفة"
+      }
     },
     "stock": {
       "unlimited": "غير محدود",
@@ -2593,7 +2641,6 @@
       "unignore": "إلغاء التجاهل",
       "unlink": "فك الربط",
       "showPacks": "عرض الباقات",
-      "hidePacks": "إخفاء الباقات",
       "expand": "فتح {{name}}",
       "collapse": "طي {{name}}",
       "more": "المزيد ({{shown}} من {{total}})",
@@ -2709,10 +2756,27 @@
         "type": "النوع",
         "amount": "المبلغ",
         "balanceAfter": "الرصيد بعدها",
-        "reference": "المرجع"
+        "reference": "المرجع",
+        "delivery": "مدة التسليم"
       },
       "unmatched": "غير مطابق لطلب عندنا",
-      "matchedRefunded": "مطابق، والطلب مُسترد"
+      "matchedRefunded": "مطابق، والطلب مُسترد",
+      "statuses": {
+        "completed": "مكتمل",
+        "pending": "قيد الانتظار",
+        "processing": "قيد التنفيذ",
+        "refunded": "مسترد",
+        "failed": "فشل",
+        "cancelled": "ملغى"
+      },
+      "types": {
+        "purchase": "شراء",
+        "deposit": "إيداع",
+        "refund": "استرداد",
+        "adjustment": "تعديل"
+      },
+      "seconds": "{{count}} ث",
+      "minutes": "{{count}} د"
     },
     "activateAll": {
       "button": "تفعيل الكل",
@@ -2739,6 +2803,50 @@
       "unlinkBody": "تُفك «{{name}}» عن اللعبة. تبقى اللعبة وباقاتها ومساراتها كما هي.",
       "cover": "استخدام صورة المورد",
       "coverPending": "جارٍ تنزيل الصورة…"
+    },
+    "operations": {
+      "list_offers": "قراءة العروض",
+      "get_balance": "قراءة الرصيد",
+      "validate_player": "التحقق من اللاعب",
+      "place_order": "إرسال طلب",
+      "get_order": "متابعة طلب",
+      "list_categories": "قراءة الفئات",
+      "list_transactions": "حركات المحفظة",
+      "list_orders": "طلبات المورد",
+      "platform_status": "حالة المنصة",
+      "fetch_image": "صورة فئة",
+      "get_offer": "سعر قبل الشراء",
+      "test_connection": "اختبار الاتصال"
+    },
+    "failures": {
+      "timeout": "انتهت المهلة",
+      "dns": "تعذّر إيجاد الخادم (DNS)",
+      "connect": "تعذّر الاتصال",
+      "tls": "خطأ شهادة أو TLS",
+      "rate_limited": "تجاوز حد الطلبات",
+      "http_5xx": "خطأ عند المورد (5xx)",
+      "http_4xx": "رفض غير متوقع (4xx)",
+      "unreadable": "جواب غير مقروء",
+      "redirect": "تحويل غير مسموح",
+      "other": "سبب آخر"
+    },
+    "link": {
+      "title": "ربط العرض بباقة",
+      "search": "بحث عن باقة",
+      "searchPlaceholder": "اسم الباقة أو اللعبة",
+      "noSuggestion": "لا باقة مقترحة: اربط الفئة بلعبة أو ابحث عن الباقة",
+      "noMatch": "لا باقة بهذا الاسم",
+      "reasons": {
+        "amount": "نفس الكمية",
+        "game": "من لعبة الفئة",
+        "search": "من البحث"
+      },
+      "routed": "لها مسار من هذا المورد",
+      "offer": "العرض"
+    },
+    "category": {
+      "breadcrumb": "مسار الفئة",
+      "back": "العودة إلى الكتالوج"
     }
   },
   "orders": {
@@ -3699,6 +3807,7 @@
       "supplier_balance": "رصيد المورد",
       "usdt_balance": "رصيد USDT",
       "sham_cash_count": "جرد شام كاش",
+      "supplier_charges": "خصومات المورد",
       "count_stale": "جرد شام كاش متأخر",
       "order_conflicts": "تعارضات الطلبات"
     },
@@ -3891,7 +4000,13 @@
         "tolerance": "اكتب مبلغًا من 0 إلى 100 دولار بخانتين عشريتين على الأكثر.",
         "days": "اكتب عددًا من 1 إلى 60."
       }
-    }
+    },
+    "lineKinds": {
+      "charge_differs": "خصم يختلف عن التكلفة",
+      "delivered_but_failed": "سلّمه المورد وفشل عندنا",
+      "failed_but_delivered": "فشل عند المورد وسُلّم عندنا"
+    },
+    "unmatchedSupplierOrders": "طلبات عند المورد لا تقابلها محاولة عندنا: {{count}}"
   },
   "reports": {
     "title": "التقارير",

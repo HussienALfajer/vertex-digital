@@ -33,6 +33,7 @@ const PERCENT_FIELDS: readonly PolicyField[] = [
   'priceReviewThresholdBp',
   'degradedSuccessBp',
   'downSuccessBp',
+  'recoverSuccessBp',
 ];
 
 /** The form's sections, in order (ADR 0021). */
@@ -44,6 +45,8 @@ const SECTIONS: { title: 'prices' | 'health'; fields: PolicyField[] }[] = [
       'healthWindowMinutes',
       'healthMinCalls',
       'degradedSuccessBp',
+      'recoverSuccessBp',
+      'recoverMinutes',
       'degradedP90Ms',
       'downSuccessBp',
       'downConsecutiveErrors',

@@ -1,57 +1,23 @@
-# TASKS — V1 system test, feature 11 cases
+# TASKS — S18 WDGZone hardening and supplier panel overhaul
 
-Documentation only, branch `docs/v1-system-test-feature-11`. Write the owner's production test cases for F13 and F11 without running them or accepting the feature.
+Spec `docs/specs/S18-wdg-hardening.md`, ADR 0033. Branch `feat/wdg-hardening`, one PR (the back end and the panel share the contract changes; owner prefers fewer PRs), two commits.
 
-- [x] Read the feature 8–10 case pattern, F11/F13 scope and S08, S09, S11 (manual fulfil) and S17 rules.
-- [x] Record worked numbers from read-only production SQL (20:53:37 and 20:55:06 Damascus) and public game reads (20:56:58); no production change.
-- [x] Write 18 feature 11 cases, the real-money note, deferred checks and the blank sign-off in `docs/testing/v1-system-test.md`.
-- [x] Open the docs PR with merge-commit auto-merge.
+## Back end
+- [x] Spec, ADR 0033, owner decisions (2026-10-19: 95% held 5 min and min 10; VIP badge; alert + pause on loss; quote before buying)
+- [x] Contracts: failure kinds, operations `get_offer` / `test_connection`, policy recovery fields, health rules HE1–HE3, charge tolerance, `supplier_charges` check, statement and run fields
+- [x] DB: migrations 0065–0067 (columns, enum values, the S18 policy row, the attempt guard), `recordObservedCost`, `supplierChargesCheck`, the charge kept by `applyOutcome`
+- [x] Suppliers: failure kinds in SupplierHttp, page retries, statement shapes, UTC+4 times, discount, charged totals, `getOfferQuote`, `error_message`, answered unknowns, fixtures, fake parity
+- [x] Worker: call records with kinds and codes + warn logs, health hysteresis + consecutive rule + alert hold, sync skip on an unchanged catalog, quote before the first send, charge check, nightly `supplier_charges`, Telegram text
+- [x] API: failure kinds on the API's calls, run and statement fields, cards' cached status from the sync; OpenAPI and admin client
+- [x] Admin (contract fallout): policy recovery fields, reconciliation charge findings, labels, mocks
 
-## Previous task — Feature 10 owner run
-
-Branch `docs/feature-10-production-results`. The owner performs all production actions; the assistant observes read-only and records only reported or directly verified results. Do not accept cases from setup checks. Follow `docs/testing/v1-system-test.md`'s run/fix/accept/ship cycle; keep the run open until the owner has supplied results and acceptance.
-
-- [x] Read all 18 cases, fixture prerequisites, production rules and relevant implementation details.
-- [x] Capture a read-only run baseline (16:19:23 Damascus; counts in the feature section) and prepare detailed Arabic instructions for all cases.
-- [x] Record the owner's case results and findings, with unexercised paths left unconfirmed (18/18 reported passed; 10.4 positive estimate and 10.11 step 5 unconfirmed).
-- [x] Owner confirmed two percent signs (F10-2); fixed the Arabic template and tightened the E2E assertion.
-- [x] Post-run SQL (20:03:45 Damascus): counts equal the baseline; no admin change since 16:19 — 10.13–10.15 not confirmed, 10.18 cleanup outstanding (recorded).
-- [x] Store checks for the F10-2 fix: lint, typecheck, test, build and the changed store E2E specs passed; results/fix PR opened.
-- [x] After deploying `d1f70f3`: savings badge re-checked on production (one sign), production fixtures archived by the owner and verified by read-only SQL and public reads; owner accepted feature 10 on 2026-10-18.
-
-## Previous task — Feature 10 SQL verification
-
-Documentation only, branch `docs/feature-10-production-sql`. Follow up the successful SSH retry with read-only production SQL evidence and correct the fixture prerequisites; manual cases remain unrun.
-
-- [x] Retry SSH and read the server conventions and deployed revision.
-- [x] Verify catalog counts, worked prices, rate, switches, fixture records and eligible delivery samples in read-only production transactions.
-- [x] Update the production evidence and fixture setup/cleanup in `docs/testing/v1-system-test.md`; record F10-3 without mutating production.
-- [x] Review the documentation and pass the docs-only checker gate; all 18 manual results and owner acceptance remain blank.
-- [x] Prepare the follow-up documentation commit and PR with merge-commit auto-merge; report publication with the task result.
-
-## Previous task — Feature 10 cases
-
-Documentation only, branch `docs/v1-system-test-feature-10`. Write the owner's production test cases for F12 and F15 without running them or accepting the feature.
-
-- [x] Read the feature 8 and 9 case pattern, F12/F15 scope and relevant spec sections.
-- [x] Record current worked numbers from read-only public production API queries; explicitly record the SSH/SQL access limitation.
-- [x] Write 18 feature 10 cases, production precautions, deferred checks and the blank sign-off in `docs/testing/v1-system-test.md`.
-- [x] Review coverage and figures; confirm the diff contains documentation only and no secrets. Reviewer and specification review found no remaining actionable issue.
-- [x] Prepare the intended documentation commit and docs PR with merge-commit auto-merge; the published PR link is reported with the task result.
-
-## Previous task — S17 WDGZone Web Purchase route
-
-Spec: `docs/specs/S17-wdg-web-route.md` (Approved). One PR, branch `feat/s17-wdg-web-route`.
-
-## PR 1 — contracts, db, api, worker, admin, store, E2E
-
-- [x] contracts: route schemas gain `priceBasis`, `expectedDeliveryMinutes`, `hardLimitMinutes`; customer order gains `expectedWithinMinutes`; remove `ROUTE_EXISTS`, add `ROUTE_TIMING_INVALID` (Arabic text in the admin catalog); pure rules with unit tests: basis among `price_basis` routes (WR3), kept price (WR4), no review for a non-basis cost (WR5), `pastHardLimit` with an attempt's limit (WR9), stock-alert filter (WR11)
-- [x] db (`/db-migration`): drop `product_routes_product_id_supplier_id_live_idx`; `product_routes.price_basis`, `expected_delivery_minutes`, `hard_limit_minutes` with checks; `fulfilment_attempts` timing copies; reprice write path applies WR3–WR5; WR8 out-of-stock marking in the failing transaction; tests (two live routes of one supplier, one per offer, timing check); migration drift
-- [x] api: route create/update with the three fields and `ROUTE_TIMING_INVALID` (policy limit at save time), audit before/after; S16 link rows with `priceBasis`, no `ROUTE_EXISTS`; `GET /api/orders/:id` `expectedWithinMinutes` (not on share views); tests incl. 401/403 and other customers' orders
-- [x] worker: fulfil copies the route timing onto the attempt; WR8 on a first-send `OUT_OF_STOCK` refusal (finite stock only, not on a re-send), reprice after it, fallback to the next route; sweep reads the attempt's hard limit; sync low-stock step WR11; tests with the fake supplier
-- [x] bridge: `pnpm build`, OpenAPI export, admin client generation; adapt E2E mocks to the changed shapes
-- [x] admin: route drawer and route form (switch, expected time, review limit), routes list chip and expected time, S16 link sheet per-row checkbox pre-set by WR7, price line "السعر محفوظ" (WR4); i18n keys; `errors.ROUTE_TIMING_INVALID`
-- [x] store: order page hint (WR10) in place of the measured expected time; i18n key
-- [x] e2e: route drawer settings, link sheet checkbox, store order page with the hint; RTL screenshots (admin light/dark, store phone dark/light)
-- [x] wiring: error code in catalogs, OpenAPI drift, E2E mocks for changed responses, docs (`docs/suppliers/wdgzone.md` if needed, `docs/ROADMAP.md`)
-- [x] checks, reviewer, acceptance, PR with auto-merge
+## Panel
+- [x] API: test connection, errored calls list, category node, offer link + suggestions, route-offer search, offer fields (discount, last seen) and `discounted` filter
+- [x] Category page route, catalog navigation, remove `node`
+- [x] Link-to-pack dialog with suggestions; add-route dialog improvements
+- [x] Offers tab fields, filter, select-all, tooltips; cost chart
+- [x] Statement (amount, times, delivery time, Arabic labels, wait on 429), runs (message, skipped read), health (errors table, paging), connection test
+- [x] Narrow-screen tables; i18n; E2E mocks and RTL screenshots
+- [x] Docs: wdgzone.md, architecture, folder CLAUDE.md files
+- [x] Checks, reviewer (5 blocking findings fixed: charge by delivered units in one contracts rule, a day's charge mismatch always alerts, a truncated statement is skipped, an out-of-bounds quote sends as before, access tests), PR with auto-merge
+- [ ] Deploy and verify in production

@@ -4,6 +4,7 @@ import {
   formatUsd,
   parseUsd,
   type StoreSwitch,
+  type SupplierConnectionTest,
   type SupplierDetail,
   setSupplierCredentialsSchema,
   supplierHasCatalog,
@@ -30,17 +31,22 @@ import {
   Switch,
   useFocusInvalid,
 } from '@vertex-digital/ui';
-import { KeyRoundIcon } from 'lucide-react';
+import { KeyRoundIcon, PlugZapIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { formatDateTime } from '../../lib/format';
+import { formatDateTime, ltr } from '../../lib/format';
 import { switchesQuery, useChangeSwitch } from '../settings/settings.queries';
 import { credentialLabel } from './credential-fields';
-import { LastRun } from './supplier-parts';
-import { useSetCredentials, useSetValidationQuota, useUpdateSupplier } from './suppliers.queries';
+import { balanceText, LastRun } from './supplier-parts';
+import {
+  useSetCredentials,
+  useSetValidationQuota,
+  useTestConnection,
+  useUpdateSupplier,
+} from './suppliers.queries';
 
 /**
  * "الاتصال" (S07 screens): the credentials by their hints only (rule SP2) and the connection test
@@ -111,15 +117,66 @@ function CredentialsCard({ supplier }: { supplier: SupplierDetail }) {
         {t('suppliers.credentials.set')}
       </Button>
       {supplierHasCatalog(supplier.code) && supplier.credentials && (
-        <section className="flex flex-col gap-2 rounded-lg bg-muted p-4" aria-live="polite">
+        <section className="flex flex-col gap-3 rounded-lg bg-muted p-4" aria-live="polite">
           <h3 className="text-base font-bold">{t('suppliers.credentials.test')}</h3>
-          <LastRun run={supplier.lastRun} />
+          <ConnectionTest supplier={supplier} />
+          <div className="flex flex-col gap-1">
+            <p className="text-sm text-muted-foreground">{t('suppliers.credentials.lastRun')}</p>
+            <LastRun run={supplier.lastRun} />
+          </div>
         </section>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
         {open && <CredentialsDialog supplier={supplier} onDone={() => setOpen(false)} />}
       </Dialog>
     </Card>
+  );
+}
+
+/** S18 CS1: one live balance read on request, with its answer or why it failed. */
+function ConnectionTest({ supplier }: { supplier: SupplierDetail }) {
+  const { t } = useTranslation();
+  const test = useTestConnection(supplier.code);
+  const [result, setResult] = useState<SupplierConnectionTest | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function run() {
+    setFailure(null);
+    try {
+      setResult(await test.mutateAsync());
+    } catch (error) {
+      setFailure(errorMessage(t, error));
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <Button variant="outline" disabled={test.isPending} onClick={run}>
+        <PlugZapIcon />
+        {test.isPending ? t('suppliers.credentials.testing') : t('suppliers.credentials.testNow')}
+      </Button>
+      {failure && <FormAlert>{failure}</FormAlert>}
+      {result && (
+        <p className="text-sm">
+          {result.ok
+            ? t('suppliers.credentials.testOk', {
+                ms: result.latencyMs,
+                balance: result.balance ? ltr(balanceText(result.balance)) : '—',
+              })
+            : t('suppliers.credentials.testFailed', {
+                failure: result.failureKind
+                  ? t(`suppliers.failures.${result.failureKind}`)
+                  : t('suppliers.credentials.testRefused'),
+                ms: result.latencyMs,
+              })}
+          {!result.ok && (result.httpStatus || result.supplierCode) && (
+            <bdi dir="ltr" className="ms-2 text-muted-foreground">
+              {[result.httpStatus, result.supplierCode].filter(Boolean).join(' · ')}
+            </bdi>
+          )}
+        </p>
+      )}
+    </div>
   );
 }
 

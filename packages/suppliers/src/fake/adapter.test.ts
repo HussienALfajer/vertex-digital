@@ -85,9 +85,24 @@ describe('fake supplier', () => {
     await expect(failingSync.listOffers()).rejects.toMatchObject({ kind: 'retryable' });
     expect((await failingSync.getBalance()).currency).toBe('USD');
 
+    // S18 PQ1: a quote follows the scripted cost and stock.
+    expect(await scripted.getOfferQuote('fake-uc-60')).toEqual({
+      cost: { currency: 'USD', amountUnits: 920_000 },
+      inStock: true,
+    });
+    expect(await scripted.getOfferQuote('fake-uc-325')).toMatchObject({ inStock: false });
+    await expect(scripted.getOfferQuote('fake-ff-100')).rejects.toMatchObject({
+      kind: 'definitive',
+      details: { supplierCode: 'PRODUCT_NOT_FOUND' },
+    });
+
     const down = adapter({ state: { errors: true } });
     await expect(down.listOffers()).rejects.toThrow(SupplierError);
-    await expect(down.getBalance()).rejects.toMatchObject({ kind: 'retryable' });
+    await expect(down.getBalance()).rejects.toMatchObject({
+      kind: 'retryable',
+      details: { failure: 'timeout' },
+    });
+    await expect(down.getOfferQuote('fake-uc-60')).rejects.toThrow(SupplierError);
     await expect(
       down.validatePlayer({ offerId: 'fake-uc-60', fields: { playerId: '51234567' } }),
     ).rejects.toThrow(SupplierError);

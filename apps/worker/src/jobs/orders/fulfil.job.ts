@@ -28,9 +28,12 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
 import {
+  applyQuotedCost,
   askSupplier,
+  checkCharge,
   markStockRefusal,
   orderContext,
+  quoteBeforeSend,
   reportLateResult,
   routingContext,
 } from './order-calls.js';
@@ -81,15 +84,20 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
     const decided = await db.transaction((tx) => this.route(tx, orderId, now));
     if (decided.kind !== 'sent' || decided.manual) return decided;
     const attempt = decided.attempt;
-    const outcome = await askSupplier(db, this.registry, attempt, 'place');
+    // S18 PQ1, PQ2: the offer's cost now; a cost above the price paid is never bought.
+    const quote = await quoteBeforeSend(db, this.registry, attempt);
+    const outcome = quote.refusal ?? (await askSupplier(db, this.registry, attempt, 'place'));
     const applied = await db.transaction(async (tx) => {
       const context = orderContext(this.pgBoss, this.codesKey);
+      const routing = routingContext(this.env);
       const result = await applyOutcome(tx, context, attempt.id, outcome, { by: 'supplier' });
       // Closed while the call was out (a webhook): a different answer is a conflict (rule F5).
       if (!result.applied) {
         await reportLateResult(tx, context, result, outcome, { kind: 'supplier' });
       }
-      await markStockRefusal(tx, result, outcome, routingContext(this.env));
+      await markStockRefusal(tx, result, outcome, routing);
+      await applyQuotedCost(tx, result.attempt, quote, routing);
+      if (result.applied) await checkCharge(tx, result, { ...routing, jobs: context.jobs });
       return result;
     });
     return { kind: 'sent', attempt: applied.attempt, manual: false };

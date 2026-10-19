@@ -102,6 +102,8 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'admin_order_placed',
   /** S16 SF2: mapped offers whose stock fell to low or out in a sync run (one per run). */
   'supplier_stock_low',
+  /** S18 CH2: a supplier charged an attempt more than 2% off its expected cost (one per attempt). */
+  'supplier_charge_mismatch',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -400,6 +402,18 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     supplierNameAr: z.string(),
     attemptStatus: z.enum(['delivered', 'failed']),
     reported: z.enum(['delivered', 'failed']),
+  }),
+  /**
+   * S18 CH2, CH3: what the supplier charged for an attempt against its expected cost; `loss` when
+   * the charged unit cost is above the order's unit price (the offer took the charged cost).
+   */
+  supplier_charge_mismatch: z.object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    supplierNameAr: z.string(),
+    expectedUsdUnits: z.int().nonnegative(),
+    chargedUsdUnits: z.int().nonnegative(),
+    loss: z.boolean(),
   }),
   /** S09 rule PV5: the first validation refused by a supplier's daily quota, once a day. */
   validation_quota_reached: z.object({

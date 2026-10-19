@@ -40,7 +40,7 @@ function freeFire(admin: AdminApi) {
 }
 
 const node = (page: Page, name: string) =>
-  page.getByRole('listitem').filter({ has: page.getByRole('button', { name, exact: true }) });
+  page.getByRole('listitem').filter({ has: page.getByRole('link', { name, exact: true }) });
 
 async function nodeAction(page: Page, name: string, action: string) {
   await page.getByRole('button', { name: fill(c.actions, { name }) }).click();
@@ -55,15 +55,15 @@ test.describe('supplier catalog', () => {
     synced(admin);
     await page.goto('/suppliers/fake?tab=catalog');
     for (const name of ['PUBG Mobile', 'Free Fire', 'Gift cards']) {
-      await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+      await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
     }
     await expect(
       node(page, 'PUBG Mobile').first().getByText(c.states.not_imported, { exact: true }),
     ).toBeVisible();
     await expect(node(page, 'PUBG Mobile').first().locator('img')).toBeVisible();
     await page.getByRole('button', { name: fill(c.expand, { name: 'PUBG Mobile' }) }).click();
-    await expect(page.getByRole('button', { name: 'Global', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'MENA', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Global', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'MENA', exact: true })).toBeVisible();
 
     // A search lists nodes at any depth with their path.
     await page.getByLabel(c.search).fill('mena');
@@ -156,18 +156,19 @@ test.describe('supplier catalog', () => {
         .getByText(fill(c.newPacks, { count: 1 })),
     ).toBeVisible();
 
-    await page.getByRole('button', { name: 'Free Fire', exact: true }).click();
-    await expect(page).toHaveURL(/node=fake-ff/);
+    // S18: the category opens on a page of its own, with its packs.
+    await page.getByRole('link', { name: 'Free Fire', exact: true }).click();
+    await expect(page).toHaveURL(/\/suppliers\/fake\/categories\/fake-ff$/);
+    await expect(page.getByRole('heading', { name: 'Free Fire' })).toBeVisible();
     await page
       .getByRole('button', { name: fill(s.offers.ignore, { name: 'Fake Free Fire 2180' }) })
       .click();
-    await expect(
-      node(page, 'Free Fire').first().getByText(c.states.ignored, { exact: true }),
-    ).toBeHidden();
+    await expect(nav.getByText('1', { exact: true })).toBeHidden();
+    await page.getByRole('link', { name: s.category.back }).click();
+    await expect(page).toHaveURL(/tab=catalog/);
     await expect(
       node(page, 'Free Fire').first().getByText(c.states.linked, { exact: true }),
     ).toBeVisible();
-    await expect(nav.getByText('1', { exact: true })).toBeHidden();
   });
 
   test('links Free Fire to an existing game: one existing pack, one new, the rest left out (SC8)', async ({
@@ -234,6 +235,7 @@ test.describe('supplier catalog', () => {
         status: 'completed',
         totalUsdUnits: 880_000,
         createdAt: new Date().toISOString(),
+        completedAt: null,
         match: {
           orderId: delivered.id,
           orderNumber: 'VO-DONE67',
@@ -250,6 +252,7 @@ test.describe('supplier catalog', () => {
         status: 'completed',
         totalUsdUnits: 4_400_000,
         createdAt: new Date().toISOString(),
+        completedAt: null,
         match: null,
       },
     ];
@@ -291,6 +294,7 @@ test.describe('supplier catalog', () => {
           status: 'completed',
           totalUsdUnits: 880_000,
           createdAt: new Date().toISOString(),
+          completedAt: null,
           match: null,
         },
       ],
@@ -339,6 +343,52 @@ test.describe('supplier catalog', () => {
     ).toBe(null);
   });
 
+  test('S18: links an offer to a suggested pack in a few clicks', async ({ page, admin }) => {
+    synced(admin);
+    const { game, product } = freeFire(admin);
+    admin.supplierCatalog.link('fake-ff', game.id);
+    await page.goto('/suppliers/fake/categories/fake-ff');
+    await page
+      .getByRole('button', { name: fill(s.offers.link, { name: 'Fake Free Fire 100' }) })
+      .click();
+    const dialog = page.getByRole('dialog');
+    const suggested = dialog.getByRole('button', { name: /100 ماسة/ });
+    await expect(suggested.getByText(s.link.reasons.amount)).toBeVisible();
+    await suggested.click();
+    // The route form opens with the offer chosen already.
+    await expect(dialog.getByText(s.link.offer)).toBeVisible();
+    await dialog.getByRole('button', { name: s.routes.addSubmit }).click();
+    await expect(dialog).toBeHidden();
+    const offer = admin.suppliers.offers.find((item) => item.offerId === 'fake-ff-100');
+    expect(
+      admin.suppliers.routes.some(
+        (route) => route.productId === product.id && route.offerId === offer?.id,
+      ),
+    ).toBe(true);
+  });
+
+  test('S18: tests the connection and lists the failed calls with why', async ({ page, admin }) => {
+    synced(admin);
+    admin.supplierCatalog.calls = [
+      {
+        id: '01a10000-0000-7000-8000-000000000001',
+        operation: 'list_offers',
+        result: 'error',
+        latencyMs: 15_000,
+        supplierCode: null,
+        failureKind: 'timeout',
+        httpStatus: null,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    await page.goto('/suppliers/fake');
+    await page.getByRole('button', { name: s.credentials.testNow }).click();
+    await expect(page.getByText(/الاتصال سليم/)).toBeVisible();
+    await page.goto('/suppliers/fake?tab=health');
+    await expect(page.getByText(s.failures.timeout, { exact: true })).toBeVisible();
+    await expect(page.getByText(s.operations.list_offers)).toBeVisible();
+  });
+
   test('the cards show the platform status, new packs and low stock (SC11, SF2, SF5)', async ({
     page,
     admin,
@@ -350,7 +400,8 @@ test.describe('supplier catalog', () => {
     admin.suppliers.script('fake-ff-100', { stock: 0 });
     admin.suppliers.runSync('fake');
     await page.goto('/suppliers');
-    await expect(page.getByText('operational').first()).toBeVisible();
+    // S18 PS1: the newest sync's reading, in Arabic.
+    await expect(page.getByText(s.platform.states.operational).first()).toBeVisible();
     await page.getByRole('link', { name: s.counts.showLowStock }).click();
     await expect(page).toHaveURL(/lowStock=/);
     await expect(page.getByText('Fake Free Fire 100')).toBeVisible();
@@ -378,6 +429,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           status: 'completed',
           totalUsdUnits: 880_000,
           createdAt: new Date().toISOString(),
+          completedAt: null,
           match: done
             ? {
                 orderId: done.id,
@@ -396,19 +448,25 @@ for (const colorScheme of ['light', 'dark'] as const) {
           status: 'completed',
           totalUsdUnits: 4_400_000,
           createdAt: new Date().toISOString(),
+          completedAt: null,
           match: null,
         },
       ];
 
       await page.goto('/suppliers');
-      await expect(page.getByText('operational').first()).toBeVisible();
+      await expect(page.getByText(s.platform.states.operational).first()).toBeVisible();
       await screenshot(page, testInfo, `suppliers-s16-${colorScheme}`, { fullPage: true });
 
       await page.goto('/suppliers/fake?tab=catalog');
       await page.getByRole('button', { name: fill(c.expand, { name: 'PUBG Mobile' }) }).click();
-      await page.getByRole('button', { name: 'Free Fire', exact: true }).click();
-      await expect(page.getByText('Fake Free Fire 2180').first()).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Global', exact: true })).toBeVisible();
       await screenshot(page, testInfo, `supplier-catalog-${colorScheme}`, { fullPage: true });
+
+      // S18: a category on a page of its own.
+      await page.getByRole('link', { name: 'Free Fire', exact: true }).click();
+      await expect(page.getByText('Fake Free Fire 2180').first()).toBeVisible();
+      await screenshot(page, testInfo, `supplier-category-page-${colorScheme}`, { fullPage: true });
+      await page.goto('/suppliers/fake?tab=catalog');
 
       await nodeAction(page, 'PUBG Mobile', c.import);
       await expect(page.getByRole('dialog').getByText('Fake UC 8100').first()).toBeVisible();
@@ -437,6 +495,44 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/suppliers/fake?tab=statement');
       await expect(page.getByText(s.statement.unmatched)).toBeVisible();
       await screenshot(page, testInfo, `supplier-statement-${colorScheme}`, { fullPage: true });
+
+      // S18: the link dialog's suggestions, the connection test and the failed calls.
+      await page.goto('/suppliers/fake/categories/fake-ff');
+      await page
+        .getByRole('button', { name: fill(s.offers.link, { name: 'Fake Free Fire 100' }) })
+        .click();
+      await expect(page.getByRole('dialog').getByText(s.link.reasons.amount)).toBeVisible();
+      await screenshot(page, testInfo, `supplier-link-offer-${colorScheme}`);
+      await page.keyboard.press('Escape');
+      admin.supplierCatalog.calls = [
+        {
+          id: '01a10000-0000-7000-8000-000000000002',
+          operation: 'get_balance',
+          result: 'error',
+          latencyMs: 10_501,
+          supplierCode: null,
+          failureKind: 'connect',
+          httpStatus: null,
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: '01a10000-0000-7000-8000-000000000003',
+          operation: 'list_offers',
+          result: 'error',
+          latencyMs: 412,
+          supplierCode: 'RATE_LIMITED',
+          failureKind: 'rate_limited',
+          httpStatus: 429,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+      await page.goto('/suppliers/fake?tab=health');
+      await expect(page.getByText(s.failures.connect, { exact: true })).toBeVisible();
+      await screenshot(page, testInfo, `supplier-health-s18-${colorScheme}`, { fullPage: true });
+      await page.goto('/suppliers/fake');
+      await page.getByRole('button', { name: s.credentials.testNow }).click();
+      await expect(page.getByText(/الاتصال سليم/)).toBeVisible();
+      await screenshot(page, testInfo, `supplier-connection-s18-${colorScheme}`);
 
       // A paused pack that can serve, and one without a route (skipped).
       const ready = admin.catalog.addProduct(game.id, {

@@ -13,6 +13,8 @@ export type HealthReason =
   | { key: 'slow'; values: { p90: string; max: string } }
   | { key: 'success'; values: { success: string } }
   | { key: 'probe'; values: Record<string, never> }
+  | { key: 'recovering'; values: { success: string; threshold: string } }
+  | { key: 'holding'; values: { held: string; minutes: string } }
   | { key: 'unknown'; values: { reason: string } };
 
 const PATTERNS: [RegExp, (match: RegExpMatchArray) => HealthReason][] = [
@@ -30,6 +32,15 @@ const PATTERNS: [RegExp, (match: RegExpMatchArray) => HealthReason][] = [
     (m) => ({ key: 'slow', values: { p90: m[1] ?? '', max: m[2] ?? '' } }),
   ],
   [/^success (\d+%)$/, (m) => ({ key: 'success', values: { success: m[1] ?? '' } })],
+  // S18 HE2: still degraded until the recovery threshold has held its minutes.
+  [
+    /^recovering: success (\d+%) < (\d+%)$/,
+    (m) => ({ key: 'recovering', values: { success: m[1] ?? '', threshold: m[2] ?? '' } }),
+  ],
+  [
+    /^recovering: held (\d+) of (\d+) minutes$/,
+    (m) => ({ key: 'holding', values: { held: m[1] ?? '', minutes: m[2] ?? '' } }),
+  ],
 ];
 
 export function healthReason(reason: string): HealthReason {
