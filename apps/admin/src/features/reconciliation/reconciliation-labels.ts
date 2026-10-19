@@ -57,6 +57,7 @@ const PLACE_SUBJECTS: readonly string[] = [
   'usdt_trc20',
   'usdt_bep20',
   'supplier:wdgzone',
+  'supplier:fazercards',
   'supplier:manual',
   'supplier:fake',
 ];

@@ -158,6 +158,7 @@ export class DashboardService {
       suppliers: suppliers.map((supplier) => ({
         code: supplier.code,
         nameAr: supplier.nameAr,
+        available: supplier.available,
         health: supplier.health,
         healthSince: supplier.healthSince,
         paused: supplier.paused,

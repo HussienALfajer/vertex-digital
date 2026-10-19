@@ -344,6 +344,7 @@
                 "usdt_trc20_paused",
                 "usdt_bep20_paused",
                 "wdgzone_paused",
+                "fazercards_paused",
                 "manual_paused",
                 "fake_paused"
               ]
@@ -3866,6 +3867,7 @@
                 "usdt_trc20",
                 "usdt_bep20",
                 "supplier:wdgzone",
+                "supplier:fazercards",
                 "supplier:manual",
                 "supplier:fake",
                 "outside_usd",
@@ -7158,6 +7160,7 @@
               "type": "string",
               "enum": [
                 "wdgzone",
+                "fazercards",
                 "manual",
                 "fake"
               ]
@@ -9518,6 +9521,7 @@
               "type": "string",
               "enum": [
                 "wdgzone",
+                "fazercards",
                 "manual",
                 "fake"
               ]
@@ -9724,6 +9728,7 @@
               "type": "string",
               "enum": [
                 "wdgzone",
+                "fazercards",
                 "manual",
                 "fake"
               ]
@@ -11719,6 +11724,7 @@
           "usdt_trc20_paused",
           "usdt_bep20_paused",
           "wdgzone_paused",
+          "fazercards_paused",
           "manual_paused",
           "fake_paused"
         ]
@@ -17711,6 +17717,7 @@
           "usdt_trc20",
           "usdt_bep20",
           "supplier:wdgzone",
+          "supplier:fazercards",
           "supplier:manual",
           "supplier:fake",
           "outside_usd",
@@ -17910,6 +17917,7 @@
           "usdt_trc20",
           "usdt_bep20",
           "supplier:wdgzone",
+          "supplier:fazercards",
           "supplier:manual",
           "supplier:fake",
           "outside_usd",
@@ -18024,6 +18032,7 @@
         "type": "string",
         "enum": [
           "wdgzone",
+          "fazercards",
           "manual",
           "fake"
         ]
@@ -30929,6 +30938,9 @@
                 "nameAr": {
                   "type": "string"
                 },
+                "available": {
+                  "type": "boolean"
+                },
                 "health": {
                   "$ref": "#/components/schemas/SupplierHealthState"
                 },
@@ -30984,6 +30996,7 @@
               "required": [
                 "code",
                 "nameAr",
+                "available",
                 "health",
                 "healthSince",
                 "paused",

@@ -299,6 +299,11 @@ describe('access', () => {
     seeded.push(fresh.id);
     const sensitive: [string, string, unknown][] = [
       ['PUT', '/api/admin/suppliers/fake/credentials', { values: { webhookSecret: SECRET } }],
+      [
+        'PUT',
+        '/api/admin/suppliers/fazercards/credentials',
+        { values: { apiKey: 'x', webhookSecret: SECRET } },
+      ],
       ['PATCH', '/api/admin/suppliers/fake', { lowBalanceUsdUnits: usd(10) }],
       ['PUT', '/api/admin/suppliers/policy', SUPPLIER_POLICY_DEFAULTS],
       [
@@ -338,16 +343,18 @@ describe('access', () => {
 });
 
 describe('suppliers (rules SP1–SP3)', () => {
-  it('lists the three suppliers, each with its adapter', async () => {
-    const list = await json<{ code: string; available: boolean; configured: boolean }[]>(
-      await get('/api/admin/suppliers'),
-      200,
-    );
+  it('lists the four suppliers; FazerCards without its adapter yet (S19 FC2)', async () => {
+    const list = await json<
+      { code: string; available: boolean; configured: boolean; lowBalanceUsdUnits: number }[]
+    >(await get('/api/admin/suppliers'), 200);
     expect(list.map((item) => [item.code, item.available])).toEqual([
       ['wdgzone', true],
+      ['fazercards', false],
       ['manual', true],
       ['fake', true],
     ]);
+    // D8: FazerCards' low-balance alert starts at $5.
+    expect(list.find((item) => item.code === 'fazercards')?.lowBalanceUsdUnits).toBe(usd(5));
     expect(list.find((item) => item.code === 'manual')?.configured).toBe(true);
     expect(list.find((item) => item.code === 'wdgzone')?.configured).toBeTypeOf('boolean');
   });
@@ -364,6 +371,8 @@ describe('suppliers (rules SP1–SP3)', () => {
       ['fake', { apiKey: 'x' }],
       ['fake', { webhookSecret: SECRET, apiKey: 'x' }],
       ['manual', { apiKey: 'x' }],
+      ['fazercards', { apiKey: 'x' }],
+      ['fazercards', { webhookSecret: SECRET }],
     ] as const) {
       expect(
         await body(await put(`/api/admin/suppliers/${code}/credentials`, { values })),
@@ -403,6 +412,29 @@ describe('suppliers (rules SP1–SP3)', () => {
       hints: { webhookSecret: 'a1b2' },
     });
     expect(JSON.stringify(audit)).not.toContain(SECRET.slice(0, -4));
+  });
+
+  it('stores FazerCards key and webhook secret before its adapter, starting no sync (S19 FC2)', async () => {
+    const detail = await json<{
+      available: boolean;
+      configured: boolean;
+      credentialFields: string[];
+      credentials: { hints: Record<string, string> };
+      lastRun: unknown;
+    }>(
+      await put('/api/admin/suppliers/fazercards/credentials', {
+        values: { apiKey: `fzr-${run}-c3d4`, webhookSecret: SECRET },
+      }),
+      200,
+    );
+    expect(detail).toMatchObject({ available: false, configured: true, lastRun: null });
+    expect(detail.credentialFields).toEqual(['apiKey', 'webhookSecret']);
+    expect(detail.credentials.hints).toEqual({ apiKey: 'c3d4', webhookSecret: 'a1b2' });
+    // Unavailable: nothing to sync until PR 2's adapter.
+    expect(await body(await post('/api/admin/suppliers/fazercards/sync'))).toMatchObject({
+      status: 409,
+      code: 'SUPPLIER_UNAVAILABLE',
+    });
   });
 
   it('starts a sync once: the running run, then one a minute (rule SY1)', async () => {

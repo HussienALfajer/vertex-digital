@@ -68,14 +68,20 @@ describe('suppliers (rule SP1)', () => {
     expect(supplierAvailable('wdgzone', { fakeEnabled: false })).toBe(true);
   });
 
+  it('keep FazerCards unavailable until its adapter arrives (S19 FC2)', () => {
+    expect(supplierAvailable('fazercards', { fakeEnabled: true })).toBe(false);
+    expect(supplierChecksPlayers('fazercards', { fakeEnabled: true })).toBe(false);
+  });
+
   it('list offers except the manual supplier', () => {
-    expect(SUPPLIER_CODES.filter(supplierHasCatalog)).toEqual(['wdgzone', 'fake']);
+    expect(SUPPLIER_CODES.filter(supplierHasCatalog)).toEqual(['wdgzone', 'fazercards', 'fake']);
   });
 
   it('ask for credentials except the manual supplier', () => {
     expect(SUPPLIER_CREDENTIAL_FIELDS.manual).toEqual([]);
     expect(SUPPLIER_CREDENTIAL_FIELDS.fake).toEqual(['webhookSecret']);
     expect(SUPPLIER_CREDENTIAL_FIELDS.wdgzone).toEqual(['apiKey']);
+    expect(SUPPLIER_CREDENTIAL_FIELDS.fazercards).toEqual(['apiKey', 'webhookSecret']);
   });
 
   it('take a low-balance threshold of whole cents up to $100,000', () => {

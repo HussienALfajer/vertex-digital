@@ -44,6 +44,10 @@ const SWITCH_NOTICES: Record<StoreSwitch, { on: string; off: string }> = {
   usdt_trc20_paused: { on: '⏸ أُوقف إيداع USDT TRC20 مؤقتاً', off: '▶️ أُعيد فتح إيداع USDT TRC20' },
   usdt_bep20_paused: { on: '⏸ أُوقف إيداع USDT BEP20 مؤقتاً', off: '▶️ أُعيد فتح إيداع USDT BEP20' },
   wdgzone_paused: { on: '⏸ أُوقف المورد WDGZone مؤقتاً', off: '▶️ استُؤنف المورد WDGZone' },
+  fazercards_paused: {
+    on: '⏸ أُوقف المورد FazerCards مؤقتاً',
+    off: '▶️ استُؤنف المورد FazerCards',
+  },
   manual_paused: { on: '⏸ أُوقف المورد اليدوي مؤقتاً', off: '▶️ استُؤنف المورد اليدوي' },
   fake_paused: { on: '⏸ أُوقف المورد التجريبي مؤقتاً', off: '▶️ استُؤنف المورد التجريبي' },
 };
@@ -242,6 +246,7 @@ const SWITCH_NAMES: Record<StoreSwitch, string> = {
   usdt_trc20_paused: 'USDT TRC20 متوقف مؤقتاً',
   usdt_bep20_paused: 'USDT BEP20 متوقف مؤقتاً',
   wdgzone_paused: 'WDGZone متوقف مؤقتاً',
+  fazercards_paused: 'FazerCards متوقف مؤقتاً',
   manual_paused: 'المورد اليدوي متوقف مؤقتاً',
   fake_paused: 'المورد التجريبي متوقف مؤقتاً',
 };
@@ -423,6 +428,7 @@ const PLACES: Partial<Record<string, string>> = {
   usdt_trc20: 'USDT TRC20',
   usdt_bep20: 'USDT BEP20',
   'supplier:wdgzone': 'WDGZone',
+  'supplier:fazercards': 'FazerCards',
   'supplier:manual': 'المورد اليدوي',
   'supplier:fake': 'المورد التجريبي',
   'ledger:USD': 'USD',

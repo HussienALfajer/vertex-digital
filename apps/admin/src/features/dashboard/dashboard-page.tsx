@@ -508,9 +508,13 @@ function Suppliers({ suppliers }: { suppliers: Dashboard['suppliers'] }) {
               </TableCell>
               <TableCell>
                 <span className="flex flex-wrap items-center gap-1">
-                  <Badge tone={HEALTH_TONES[supplier.health]}>
-                    {t(`suppliers.health.${supplier.health}`)}
-                  </Badge>
+                  {supplier.available ? (
+                    <Badge tone={HEALTH_TONES[supplier.health]}>
+                      {t(`suppliers.health.${supplier.health}`)}
+                    </Badge>
+                  ) : (
+                    <Badge tone="warning">{t('suppliers.chips.unavailable')}</Badge>
+                  )}
                   {supplier.paused && <Badge tone="warning">{t('suppliers.chips.paused')}</Badge>}
                 </span>
                 {supplier.healthSince && (

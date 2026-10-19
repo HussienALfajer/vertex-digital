@@ -135,6 +135,28 @@ test.describe('suppliers', () => {
     await expect(page.getByText(fill(s.offers.total, { total: 14 }))).toBeVisible();
   });
 
+  test('FazerCards takes its key and webhook secret before its adapter, and stays not ready (S19 FC2)', async ({
+    page,
+    admin,
+  }) => {
+    admin.signedIn = true;
+    await page.goto('/suppliers');
+    await expect(card(page, 'FazerCards')).toContainText(s.chips.unavailable);
+    await card(page, 'FazerCards').getByRole('link', { name: s.open }).click();
+    await expect(page).toHaveURL(/\/suppliers\/fazercards$/);
+    await expect(page.getByText(s.descriptions.fazercards)).toBeVisible();
+    admin.reauthenticationRequired = true;
+    await page.getByRole('button', { name: s.credentials.set }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel(s.credentials.fields.apiKey).fill('fazercards-api-key-e5f6');
+    await dialog.getByLabel(s.credentials.fields.webhookSecret).fill('fazercards-whsec-g7h8');
+    await dialog.getByRole('button', { name: s.credentials.save }).click();
+    await reauthenticate(page);
+    await expect(page.getByText('…e5f6')).toBeVisible();
+    await expect(page.getByText('…g7h8')).toBeVisible();
+    await expect(page.getByText(s.chips.unavailable).first()).toBeVisible();
+  });
+
   test('imports three PUBG offers into paused products, refusing a taken name in place (step 2)', async ({
     page,
     admin,
@@ -464,6 +486,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/suppliers/fake');
       await expect(page.getByText('…c3d4')).toBeVisible();
       await screenshot(page, testInfo, `supplier-connection-${colorScheme}`, { fullPage: true });
+      // S19 FC2: FazerCards before its adapter.
+      await page.goto('/suppliers/fazercards');
+      await expect(page.getByText(s.descriptions.fazercards)).toBeVisible();
+      await screenshot(page, testInfo, `supplier-fazercards-${colorScheme}`, { fullPage: true });
+      await page.goto('/suppliers/fake');
       await page.getByRole('tab', { name: s.tabs.offers }).click();
       await expect(page.getByText('Fake UC 60', { exact: true })).toBeVisible();
       await screenshot(page, testInfo, `supplier-offers-${colorScheme}`, { fullPage: true });

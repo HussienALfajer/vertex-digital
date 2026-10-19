@@ -824,7 +824,7 @@ describe('the dashboard (rules DB1–DB8)', () => {
     refundedUsd: { today: number };
     salesLine: { date: string; salesUsdUnits: number }[];
     now: { review: number };
-    suppliers: { code: string }[];
+    suppliers: { code: string; available: boolean }[];
     attention: { kind: string; count: number; target: string; params: Record<string, string> }[];
   }
 
@@ -861,6 +861,10 @@ describe('the dashboard (rules DB1–DB8)', () => {
       target: '/orders/live',
     });
     expect(after.suppliers.map((supplier) => supplier.code)).toContain('fake');
+    // S19 FC2: FazerCards is listed as not ready until its adapter arrives.
+    expect(after.suppliers.find((supplier) => supplier.code === 'fazercards')).toMatchObject({
+      available: false,
+    });
   });
 
   it('lists an active stop with its link', async () => {
