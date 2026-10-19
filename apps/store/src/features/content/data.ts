@@ -1,5 +1,4 @@
 import type {
-  Activity,
   ContentPage,
   PublishedFaq,
   PublishedPage,
@@ -56,15 +55,6 @@ export async function getPublishedFaq(): Promise<PublishedFaq | null> {
   return readContent<PublishedFaq>('/api/content/faq');
 }
 
-/** `GET /api/content/activity`, store-wide or for one game (LA3, LA6). */
-export async function getActivity(game?: string): Promise<Activity> {
-  'use cache';
-  cacheTag(CONTENT_TAG);
-  cacheLife(CONTENT_LIFE);
-  const query = game ? `?game=${encodeURIComponent(game)}` : '';
-  return (await readContent<Activity>(`/api/content/activity${query}`)) ?? { items: [] };
-}
-
 /**
  * The site content at request time, never during the build; null when the read failed: a
  * missing announcement, banner set or footer link must not break the page that shows it (CP2).
@@ -75,15 +65,5 @@ export async function siteContent(): Promise<SiteContent | null> {
     return await getSiteContent();
   } catch {
     return null;
-  }
-}
-
-/** The activity feed at request time; empty when the read failed (CP2, edge case 18). */
-export async function activityFeed(game?: string): Promise<Activity['items']> {
-  await connection();
-  try {
-    return (await getActivity(game)).items;
-  } catch {
-    return [];
   }
 }

@@ -4,6 +4,7 @@ import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
 import {
   type AdminApi,
   CUSTOMER_ID,
+  chooseOption,
   expect,
   type MockDeposit,
   PASSWORD,
@@ -463,8 +464,11 @@ test.describe('deposits', () => {
     await expect(page.getByRole('button', { name: ar.deposits.requestReceipt.open })).toBeHidden();
     await page.getByRole('button', { name: ar.deposits.reject.open }).click();
     const reject = page.getByRole('dialog');
-    await reject.getByRole('combobox', { name: ar.deposits.reject.reason }).click();
-    await page.getByRole('option', { name: ar.deposits.rejectReasons.other }).click();
+    await chooseOption(
+      page,
+      reject.getByRole('combobox', { name: ar.deposits.reject.reason }),
+      ar.deposits.rejectReasons.other,
+    );
     await reject.getByLabel(ar.deposits.decision.internalNote).fill('إيصال معدّل');
     await reject.getByRole('button', { name: ar.deposits.reject.submit }).click();
     await expect(reject.getByText(ar.deposits.decision.errors.customerNote)).toBeVisible();

@@ -46,6 +46,7 @@ type Row<T> = Omit<
   | 'priceUsdUnits'
   | 'priceSypUnits'
   | 'basisSupplierNameAr'
+  | 'basisCostUsdUnits'
   | 'basisStockLevel'
   | 'priceHeld'
   | 'routed'
@@ -65,6 +66,7 @@ export interface ProductPricing {
   price: { priceUsdUnits: number; minMarginUsdUnits: number } | null;
   usableRouteCostsUsdUnits: number[];
   basisSupplierNameAr: string | null;
+  basisCostUsdUnits: number | null;
   basisStockLevel: Product['basisStockLevel'];
   priceHeld: boolean;
   routed: boolean;
@@ -287,6 +289,7 @@ export class CatalogMock {
           ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
           : null,
       basisSupplierNameAr: pricing?.basisSupplierNameAr ?? null,
+      basisCostUsdUnits: pricing?.basisCostUsdUnits ?? null,
       basisStockLevel: pricing?.basisStockLevel ?? null,
       priceHeld: pricing?.priceHeld ?? false,
       routed: pricing?.routed ?? false,

@@ -24,11 +24,12 @@ export function SiteHeader() {
           </span>
         </Link>
         {/* No gap at phone width. Signed in, the theme switch moves into the account menu there:
-            the search, the cart, the balance, the bell and the menu share 360 px (S10). */}
+            the search, the cart, the balance, the bell and the menu share 360 px (S10); also while the
+            signed-in placeholder shows. */}
         <div className="flex items-center sm:gap-1">
           <SearchButton />
           <CartButton />
-          <span className="flex max-sm:group-has-data-signed-in/header:hidden">
+          <span className="flex max-sm:group-has-data-signed-in/header:hidden max-sm:[[data-signed-in-hint]_&]:hidden">
             <ThemeToggle />
           </span>
           <AccountLink />

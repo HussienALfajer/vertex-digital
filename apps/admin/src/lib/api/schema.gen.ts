@@ -6266,6 +6266,7 @@ export interface components {
             priceUsdUnits: number | null;
             priceSypUnits: number | null;
             basisSupplierNameAr: string | null;
+            basisCostUsdUnits: number | null;
             basisStockLevel: components["schemas"]["StockLevel"] | null;
             priceHeld: boolean;
             routed: boolean;

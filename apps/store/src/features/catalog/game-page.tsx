@@ -2,8 +2,6 @@ import type { StoreGame } from '@vertex-digital/contracts';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { Gamepad2Icon } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { Suspense } from 'react';
-import { ActivityCard } from '@/features/content/activity-card';
 import { t } from '@/lib/i18n';
 import { CatalogPicture } from './catalog-picture';
 import { getGame } from './data';
@@ -62,6 +60,7 @@ export async function GamePage({ params }: { params: Promise<{ slug: string }> }
             )}
           </div>
         </header>
+        <HowItWorks direct={data.fields.length > 0} />
         {game.idGuide && (
           <IdGuidePanel>
             <CatalogPicture
@@ -81,11 +80,40 @@ export async function GamePage({ params }: { params: Promise<{ slug: string }> }
             ]),
           )}
         />
-        <Suspense fallback={null}>
-          <ActivityCard game={game.slug} />
-        </Suspense>
       </div>
     </div>
+  );
+}
+
+/**
+ * The three steps of a purchase under the hero (2026-10-19): a game with account fields is topped
+ * up on the player's account, one without them delivers a code to "طلباتي". The numbers take the
+ * game's accent, as the selected pack does. Rendered on the server, no client JavaScript.
+ */
+function HowItWorks({ direct }: { direct: boolean }) {
+  const steps = direct
+    ? [t('game.steps.choose'), t('game.steps.player'), t('game.steps.delivered')]
+    : [t('game.steps.choose'), t('game.steps.pay'), t('game.steps.code')];
+  return (
+    <ol
+      aria-label={t('game.steps.label')}
+      className="grid grid-cols-3 gap-2 rounded-xl border border-border bg-surface p-3 sm:gap-3"
+    >
+      {steps.map((step, index) => (
+        <li
+          key={step}
+          className="flex flex-col items-center gap-1.5 px-1 py-1 text-center text-xs font-medium sm:flex-row sm:gap-3 sm:text-start sm:text-sm"
+        >
+          <span
+            aria-hidden="true"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-(--game-accent-light) text-sm font-bold text-white tabular-nums dark:bg-(--game-accent) dark:text-green-950"
+          >
+            {index + 1}
+          </span>
+          {step}
+        </li>
+      ))}
+    </ol>
   );
 }
 

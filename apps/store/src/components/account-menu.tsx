@@ -24,6 +24,7 @@ import { FormAlert } from '@/components/form-alert';
 import { clearStoredCart } from '@/features/cart/cart-keys';
 import { useInstall } from '@/features/pwa/install-button';
 import { t } from '@/lib/i18n';
+import { forgetSession } from '@/lib/session';
 import { useTheme } from '@/lib/theme';
 
 /**
@@ -51,6 +52,7 @@ export function AccountMenu({ name, email }: { name: string; email: string }) {
       return;
     }
     clearStoredCart();
+    forgetSession();
     // A full load, so nothing rendered for the customer stays on screen.
     window.location.assign('/');
   };

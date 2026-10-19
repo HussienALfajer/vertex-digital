@@ -18,10 +18,8 @@ import {
 } from '@vertex-digital/ui';
 import {
   ArrowDownToLineIcon,
-  ArrowLeftRightIcon,
   ChartColumnIcon,
   ChevronDownIcon,
-  CoinsIcon,
   ContactRoundIcon,
   Gamepad2Icon,
   HouseIcon,
@@ -29,17 +27,12 @@ import {
   LogOutIcon,
   type LucideIcon,
   MenuIcon,
-  MessageCircleQuestionIcon,
   NewspaperIcon,
   PercentIcon,
-  RadioTowerIcon,
-  ScaleIcon,
   ScanSearchIcon,
   ScrollTextIcon,
-  SendIcon,
   SettingsIcon,
   ShoppingBagIcon,
-  ToggleRightIcon,
   TruckIcon,
   UserRoundCogIcon,
   UsersRoundIcon,
@@ -58,35 +51,49 @@ import { supportOpenCountQuery } from '../features/support/support.queries';
 import { type AdminSession, authClient, leaveSession, useSession } from '../lib/auth';
 import { ThemeToggle } from './theme-toggle';
 
+type NavPath = NonNullable<LinkProps['to']>;
+
 interface NavItem {
-  to: LinkProps['to'];
+  to: NavPath;
   label:
     | 'nav.home'
-    | 'nav.liveOrders'
     | 'nav.orders'
     | 'nav.deposits'
-    | 'nav.usdtTransfers'
     | 'nav.wallets'
     | 'nav.customers'
     | 'nav.support'
-    | 'nav.supportSettings'
     | 'nav.catalog'
     | 'nav.content'
     | 'nav.suppliers'
     | 'nav.pricing'
-    | 'nav.priceReviews'
-    | 'nav.rates'
-    | 'nav.depositSettings'
-    | 'nav.switches'
-    | 'nav.telegram'
     | 'nav.reconciliation'
     | 'nav.reports'
+    | 'nav.settings'
     | 'nav.audit'
     | 'nav.testCustomers'
     | 'nav.account';
   icon: LucideIcon;
   /** Active only on this exact path; otherwise also on its sub-pages. */
   exact?: boolean;
+  /** Pages of the section, listed under it. */
+  children?: NavChild[];
+}
+
+interface NavChild {
+  to: NavPath;
+  label:
+    | 'nav.allOrders'
+    | 'nav.liveOrders'
+    | 'nav.depositRequests'
+    | 'nav.usdtTransfers'
+    | 'nav.depositSettings'
+    | 'nav.tickets'
+    | 'nav.supportSettings'
+    | 'nav.pricingRules'
+    | 'nav.priceReviews'
+    | 'nav.rates'
+    | 'nav.switches'
+    | 'nav.telegram';
   /** A sub-page with its own navigation item, where this one is not active. */
   except?: string;
 }
@@ -94,34 +101,75 @@ interface NavItem {
 /** Each feature adds its section here. One admin, full access: no permission checks (ADR 0016). */
 const navItems: NavItem[] = [
   { to: '/', label: 'nav.home', icon: HouseIcon, exact: true },
-  { to: '/orders/live', label: 'nav.liveOrders', icon: RadioTowerIcon },
-  { to: '/orders', label: 'nav.orders', icon: ShoppingBagIcon, except: '/orders/live' },
+  {
+    to: '/orders',
+    label: 'nav.orders',
+    icon: ShoppingBagIcon,
+    children: [
+      { to: '/orders', label: 'nav.allOrders', except: '/orders/live' },
+      { to: '/orders/live', label: 'nav.liveOrders' },
+    ],
+  },
   {
     to: '/deposits',
     label: 'nav.deposits',
     icon: ArrowDownToLineIcon,
-    except: '/deposits/transfers',
+    children: [
+      { to: '/deposits', label: 'nav.depositRequests', except: '/deposits/transfers' },
+      { to: '/deposits/transfers', label: 'nav.usdtTransfers' },
+      { to: '/settings/deposits', label: 'nav.depositSettings' },
+    ],
   },
-  { to: '/deposits/transfers', label: 'nav.usdtTransfers', icon: CoinsIcon },
   { to: '/wallets', label: 'nav.wallets', icon: WalletIcon },
   { to: '/customers', label: 'nav.customers', icon: ContactRoundIcon },
-  { to: '/support', label: 'nav.support', icon: LifeBuoyIcon },
+  {
+    to: '/support',
+    label: 'nav.support',
+    icon: LifeBuoyIcon,
+    children: [
+      { to: '/support', label: 'nav.tickets' },
+      { to: '/settings/support', label: 'nav.supportSettings' },
+    ],
+  },
   { to: '/catalog', label: 'nav.catalog', icon: Gamepad2Icon },
   { to: '/content', label: 'nav.content', icon: NewspaperIcon },
   { to: '/suppliers', label: 'nav.suppliers', icon: TruckIcon },
-  { to: '/pricing', label: 'nav.pricing', icon: PercentIcon, except: '/pricing/reviews' },
-  { to: '/pricing/reviews', label: 'nav.priceReviews', icon: ScaleIcon },
+  {
+    to: '/pricing',
+    label: 'nav.pricing',
+    icon: PercentIcon,
+    children: [
+      { to: '/pricing', label: 'nav.pricingRules', except: '/pricing/reviews' },
+      { to: '/pricing/reviews', label: 'nav.priceReviews' },
+      { to: '/rates', label: 'nav.rates' },
+    ],
+  },
   { to: '/reconciliation', label: 'nav.reconciliation', icon: ScanSearchIcon },
   { to: '/reports', label: 'nav.reports', icon: ChartColumnIcon },
-  { to: '/rates', label: 'nav.rates', icon: ArrowLeftRightIcon },
-  { to: '/settings/deposits', label: 'nav.depositSettings', icon: SettingsIcon },
-  { to: '/settings/switches', label: 'nav.switches', icon: ToggleRightIcon },
-  { to: '/settings/telegram', label: 'nav.telegram', icon: SendIcon },
-  { to: '/settings/support', label: 'nav.supportSettings', icon: MessageCircleQuestionIcon },
+  {
+    to: '/settings/switches',
+    label: 'nav.settings',
+    icon: SettingsIcon,
+    children: [
+      { to: '/settings/switches', label: 'nav.switches' },
+      { to: '/settings/telegram', label: 'nav.telegram' },
+    ],
+  },
   { to: '/audit', label: 'nav.audit', icon: ScrollTextIcon },
   { to: '/test-customers', label: 'nav.testCustomers', icon: UsersRoundIcon },
   { to: '/account', label: 'nav.account', icon: UserRoundCogIcon },
 ];
+
+/** The badge each page carries, beside its link. */
+const navBadges: Partial<Record<string, () => ReactNode>> = {
+  '/orders': OrdersBadge,
+  '/deposits': DepositsBadge,
+  '/deposits/transfers': TransfersBadge,
+  '/pricing/reviews': ReviewsBadge,
+  '/suppliers': SuppliersBadge,
+  '/support': SupportBadge,
+  '/reconciliation': ReconciliationBadge,
+};
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
@@ -153,50 +201,76 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 const navLink = cn(
-  'relative flex h-10 items-center gap-3 rounded-md px-3 text-base text-sidebar-muted-foreground transition-colors duration-150 ease-out',
+  'relative flex items-center rounded-md text-sidebar-muted-foreground transition-colors duration-150 ease-out',
   'hover:bg-sidebar-hover hover:text-sidebar-foreground',
   'data-[status=active]:bg-sidebar-active data-[status=active]:font-medium data-[status=active]:text-sidebar-foreground',
   'before:absolute before:inset-y-2 before:start-0 before:w-0.5 before:bg-sidebar-marker before:opacity-0 data-[status=active]:before:opacity-100',
+);
+
+/** A section with pages under it: the active page is marked, the section only brightens. */
+const navSection = cn(
+  'flex items-center rounded-md text-sidebar-muted-foreground transition-colors duration-150 ease-out',
+  'hover:bg-sidebar-hover hover:text-sidebar-foreground',
+  'data-[current=true]:font-medium data-[current=true]:text-sidebar-foreground',
 );
 
 /** Vertex Green navigation with the sand mark and a sand marker on the active item (§2). */
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  // A section brightens on any of its pages, some of which live under another path (settings).
+  const within = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
   return (
     <div className="flex h-full w-full flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground [--ring:var(--sidebar-ring)]">
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border px-5">
         <VertexMark className="w-8 text-sidebar-marker" />
-        <div className="flex flex-col">
-          <span className="text-base font-bold" dir="ltr">
-            {t('app.name')}
-          </span>
-          <span className="text-xs text-sidebar-muted-foreground">{t('app.panel')}</span>
-        </div>
+        <span className="text-lg font-bold">{t('app.name')}</span>
       </div>
+      {/* The links scroll under the fixed header on short screens and phones. */}
       <nav
         aria-label={t('nav.label')}
         className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3"
       >
-        {navItems.map(({ to, label, icon: Icon, exact, except }) => (
-          <Link
-            key={to}
-            to={to}
-            onClick={onNavigate}
-            activeOptions={{ exact: exact ?? (except ? pathname.startsWith(except) : false) }}
-            className={navLink}
-          >
-            <Icon className="size-5" />
-            {t(label)}
-            {to === '/orders' && <OrdersBadge />}
-            {to === '/deposits' && <DepositsBadge />}
-            {to === '/deposits/transfers' && <TransfersBadge />}
-            {to === '/pricing/reviews' && <ReviewsBadge />}
-            {to === '/suppliers' && <SuppliersBadge />}
-            {to === '/support' && <SupportBadge />}
-            {to === '/reconciliation' && <ReconciliationBadge />}
-          </Link>
-        ))}
+        {navItems.map(({ to, label, icon: Icon, exact, children }) => {
+          const NavBadge = navBadges[to];
+          return (
+            <div key={label} className="flex flex-col gap-1">
+              <Link
+                to={to}
+                onClick={onNavigate}
+                activeOptions={{ exact: exact ?? false }}
+                data-current={children ? children.some((child) => within(child.to)) : undefined}
+                className={cn(children ? navSection : navLink, 'h-10 gap-3 px-3 text-base')}
+              >
+                <Icon className="size-5" />
+                {t(label)}
+                {!children && NavBadge && <NavBadge />}
+              </Link>
+              {children && (
+                <div className="flex flex-col gap-0.5">
+                  {children.map((child) => {
+                    const ChildBadge = navBadges[child.to];
+                    return (
+                      <Link
+                        key={child.label}
+                        to={child.to}
+                        onClick={onNavigate}
+                        activeOptions={{
+                          exact: child.except ? pathname.startsWith(child.except) : false,
+                          includeSearch: false,
+                        }}
+                        className={cn(navLink, 'h-8 gap-3 ps-11 pe-3 text-sm')}
+                      >
+                        {t(child.label)}
+                        {ChildBadge && <ChildBadge />}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
     </div>
   );

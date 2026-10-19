@@ -91,6 +91,7 @@ export interface ProductPricing {
   priceUsdUnits: number | null;
   priceSypUnits: number | null;
   basisSupplierNameAr: string | null;
+  basisCostUsdUnits: number | null;
   basisStockLevel: StockLevel | null;
   priceHeld: boolean;
   routed: boolean;

@@ -402,7 +402,8 @@ export class SuppliersMock {
   private pricing(productId: string) {
     const price = this.currentPrice(productId);
     const usable = this.usable(productId);
-    const basis = this.basisOf(productId)?.route;
+    const basisItem = this.basisOf(productId);
+    const basis = basisItem?.route;
     return {
       price: price
         ? {
@@ -412,6 +413,7 @@ export class SuppliersMock {
         : null,
       usableRouteCostsUsdUnits: usable.map((item) => item.costUsdUnits),
       basisSupplierNameAr: basis ? NAMES[basis.supplierCode] : null,
+      basisCostUsdUnits: basisItem?.costUsdUnits ?? null,
       basisStockLevel: basis ? this.stockLevelOf(this.offerOf(basis)) : null,
       priceHeld: !basis && usable.length > 0,
       routed: this.routes.some((route) => route.productId === productId && !route.archivedAt),

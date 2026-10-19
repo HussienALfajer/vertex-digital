@@ -20777,6 +20777,12 @@
             "nullable": true,
             "type": "string"
           },
+          "basisCostUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
           "basisStockLevel": {
             "nullable": true,
             "allOf": [
@@ -20841,6 +20847,7 @@
           "priceUsdUnits",
           "priceSypUnits",
           "basisSupplierNameAr",
+          "basisCostUsdUnits",
           "basisStockLevel",
           "priceHeld",
           "routed",
