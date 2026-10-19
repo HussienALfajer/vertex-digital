@@ -137,6 +137,8 @@ export async function currentSupplierPolicy(db: Executor): Promise<SupplierPolic
     downConsecutiveErrors: row.downConsecutiveErrors,
     probeAfterMinutes: row.probeAfterMinutes,
     lowStockUnits: row.lowStockUnits,
+    recoverSuccessBp: row.recoverSuccessBp,
+    recoverMinutes: row.recoverMinutes,
   };
 }
 

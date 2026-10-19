@@ -85,9 +85,24 @@ describe('fake supplier', () => {
     await expect(failingSync.listOffers()).rejects.toMatchObject({ kind: 'retryable' });
     expect((await failingSync.getBalance()).currency).toBe('USD');
 
+    // S18 PQ1: a quote follows the scripted cost and stock.
+    expect(await scripted.getOfferQuote('fake-uc-60')).toEqual({
+      cost: { currency: 'USD', amountUnits: 920_000 },
+      inStock: true,
+    });
+    expect(await scripted.getOfferQuote('fake-uc-325')).toMatchObject({ inStock: false });
+    await expect(scripted.getOfferQuote('fake-ff-100')).rejects.toMatchObject({
+      kind: 'definitive',
+      details: { supplierCode: 'PRODUCT_NOT_FOUND' },
+    });
+
     const down = adapter({ state: { errors: true } });
     await expect(down.listOffers()).rejects.toThrow(SupplierError);
-    await expect(down.getBalance()).rejects.toMatchObject({ kind: 'retryable' });
+    await expect(down.getBalance()).rejects.toMatchObject({
+      kind: 'retryable',
+      details: { failure: 'timeout' },
+    });
+    await expect(down.getOfferQuote('fake-uc-60')).rejects.toThrow(SupplierError);
     await expect(
       down.validatePlayer({ offerId: 'fake-uc-60', fields: { playerId: '51234567' } }),
     ).rejects.toThrow(SupplierError);
@@ -435,6 +450,107 @@ describe('fake supplier catalog tree, stock, statement and status (S16)', () => 
         SupplierError,
       );
     }
+  });
+
+  it('lists mirrored offers and scripts their orders by the first text field', async () => {
+    const fake = adapter({
+      state: {
+        mirroredOffers: [
+          {
+            offerId: 'mirror-267300',
+            categoryId: '16554',
+            group: 'Genshin Impact',
+            name: 'Global · 60 Genesis Crystals',
+            kind: 'direct',
+            costUsdUnits: 1_000_000,
+            fieldSpecs: [
+              { key: 'player_id', label: 'Player ID', type: 'text' },
+              {
+                key: 'server',
+                label: 'Server',
+                type: 'select',
+                options: [{ label: 'Asia', value: 'asia' }],
+              },
+            ],
+          },
+          {
+            offerId: 'mirror-9001',
+            categoryId: '20',
+            group: 'iTunes',
+            name: 'iTunes 10',
+            kind: 'code',
+            costUsdUnits: 9_500_000,
+            fieldSpecs: [],
+          },
+        ],
+      },
+    });
+    const byId = new Map((await fake.listOffers()).map((offer) => [offer.offerId, offer]));
+    expect(byId.get('mirror-267300')).toMatchObject({
+      group: 'Genshin Impact',
+      kind: 'direct',
+      requiredFields: ['player_id', 'server'],
+      cost: { currency: 'USD', amountUnits: 1_000_000 },
+      inStock: true,
+    });
+    expect(byId.get('mirror-9001')).toMatchObject({ kind: 'code', requiredFields: [] });
+
+    const order = (playerId: string, offerId = 'mirror-267300') =>
+      fake.placeOrder({
+        idempotencyKey: randomUUID(),
+        offerId,
+        quantity: 1,
+        fields: offerId === 'mirror-9001' ? {} : { player_id: playerId, server: 'asia' },
+      });
+    expect(await order('51234')).toMatchObject({ status: 'delivered', quantity: 1 });
+    expect(await order('fail-1')).toMatchObject({ status: 'failed_definitive' });
+    expect(await order('pending-1')).toMatchObject({ status: 'pending' });
+    const code = await order('', 'mirror-9001');
+    expect(code.status === 'delivered' && code.codes).toHaveLength(1);
+  });
+
+  it('scripts a mirrored offer without a text field by its first field', async () => {
+    const fake = adapter({
+      state: {
+        mirroredOffers: [
+          {
+            offerId: 'mirror-77',
+            categoryId: '7',
+            group: 'Server only',
+            name: 'Pack',
+            kind: 'direct',
+            costUsdUnits: 1_000_000,
+            fieldSpecs: [
+              {
+                key: 'server',
+                label: 'Server',
+                type: 'select',
+                options: [
+                  { label: 'Fail', value: 'fail-zone' },
+                  { label: 'Asia', value: 'asia' },
+                ],
+              },
+            ],
+          },
+          {
+            offerId: 'mirror-78',
+            categoryId: '7',
+            group: 'No fields',
+            name: 'Pack',
+            kind: 'direct',
+            costUsdUnits: 1_000_000,
+            fieldSpecs: [],
+          },
+        ],
+      },
+    });
+    const order = (offerId: string, fields: Record<string, string>) =>
+      fake.placeOrder({ idempotencyKey: randomUUID(), offerId, quantity: 1, fields });
+    expect(await order('mirror-77', { server: 'asia' })).toMatchObject({ status: 'delivered' });
+    expect(await order('mirror-77', { server: 'fail-zone' })).toMatchObject({
+      status: 'failed_definitive',
+    });
+    expect(await order('mirror-78', {})).toMatchObject({ status: 'delivered' });
   });
 
   it('follows scripted stock counts, missing categories and added offers', async () => {

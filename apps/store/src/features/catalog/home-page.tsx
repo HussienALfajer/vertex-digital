@@ -4,13 +4,10 @@ import { AscentBar } from '@vertex-digital/ui/components/page-header';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { StoreIcon } from 'lucide-react';
 import { connection } from 'next/server';
-import { Suspense } from 'react';
-import { ActivityCard } from '@/features/content/activity-card';
 import { SearchField } from '@/features/search/search-trigger';
 import { t } from '@/lib/i18n';
 import { getStorefront } from './data';
 import { GameCard } from './game-card';
-import { ServiceLine } from './service-status';
 
 /** The hero (S09 screens): the title and the large search field (rule SR6). Static. */
 export function HomeHero() {
@@ -30,8 +27,8 @@ export function HomeHero() {
 }
 
 /**
- * The catalog (rules SF1, SS2): the service line, the category jump chips and one section per
- * category with its games, 2 columns at 360 px, 3 from `sm`, 5 from `lg`. Read at request time
+ * The catalog (rule SF1): the category jump chips and one section per category with its games,
+ * 2 columns at 360 px, 3 from `sm`, 5 from `lg` (no service line since 2026-10-19, rule SS2). Read at request time
  * (never at build, when the API may be away) from the `catalog` cache (rule SF4).
  */
 export async function StorefrontSections() {
@@ -48,10 +45,6 @@ export async function StorefrontSections() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
       <div className="flex flex-col gap-4">
-        <ServiceLine service={storefront.service} />
-        <Suspense fallback={null}>
-          <ActivityCard />
-        </Suspense>
         <nav aria-label={t('catalog.categories')}>
           <ul className="flex flex-wrap gap-2">
             {categories.map((category) => (

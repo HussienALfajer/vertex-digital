@@ -14,6 +14,7 @@ import {
   type GamePage,
   type MarginScope,
   type Product,
+  type ProductKind,
   stockLevel,
   sypDisplayPrice,
   type UpdateCategory,
@@ -608,6 +609,7 @@ export class CatalogService {
             ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
             : null,
         basisSupplierNameAr: state.basis?.supplier.nameAr ?? null,
+        basisCostUsdUnits: state.basis?.costUsdUnits ?? null,
         basisStockLevel: state.basis
           ? stockLevel(state.basis.offer.stock, state.basis.offer.inStock, policy.lowStockUnits)
           : null,
@@ -741,6 +743,46 @@ export class CatalogService {
       .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
       .where(inArray(catalogProducts.id, [...ids]));
     return new Map(rows.map(({ id, ...names }) => [id, names]));
+  }
+
+  /**
+   * S18: unarchived packs of unarchived games for an offer's link: a game's, or those whose name
+   * or game name holds `q`; by game, then name; at most 50.
+   */
+  async productsForLink(where: { gameId?: string; q?: string }): Promise<
+    {
+      id: string;
+      nameAr: string;
+      kind: ProductKind;
+      gameAmount: number | null;
+      gameId: string;
+      gameNameAr: string;
+    }[]
+  > {
+    const needle = where.q ? containing(where.q) : null;
+    return this.db
+      .select({
+        id: catalogProducts.id,
+        nameAr: catalogProducts.nameAr,
+        kind: catalogProducts.kind,
+        gameAmount: catalogProducts.gameAmount,
+        gameId: catalogGames.id,
+        gameNameAr: catalogGames.nameAr,
+      })
+      .from(catalogProducts)
+      .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
+      .where(
+        and(
+          isNull(catalogProducts.archivedAt),
+          isNull(catalogGames.archivedAt),
+          where.gameId ? eq(catalogGames.id, where.gameId) : undefined,
+          needle
+            ? or(ilike(catalogProducts.nameAr, needle), ilike(catalogGames.nameAr, needle))
+            : undefined,
+        ),
+      )
+      .orderBy(asc(catalogGames.nameAr), asc(catalogProducts.sortOrder), asc(catalogProducts.id))
+      .limit(50);
   }
 
   /** Games' Arabic names by id (S16: a supplier category's linked game). */

@@ -22,7 +22,11 @@ import { formatDateTime } from '../../lib/format';
 import { RunError, RunStatusBadge } from './supplier-parts';
 import { LIST_PAGE_SIZE, runsQuery } from './suppliers.queries';
 
-/** "المزامنة" (S07 screens): the runs, newest first, with trigger, duration, counts and error. */
+/**
+ * "المزامنة" (S07 screens): the runs, newest first, with trigger, duration, counts and error; S18:
+ * the error's message under its code, and a run that read no offers because the catalog had not
+ * changed (SY4).
+ */
 export function RunsTab({ code }: { code: SupplierCode }) {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
@@ -48,7 +52,9 @@ export function RunsTab({ code }: { code: SupplierCode }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{t('suppliers.runs.columns.started')}</TableHead>
+            <TableHead className="sticky start-0 z-10 bg-muted">
+              {t('suppliers.runs.columns.started')}
+            </TableHead>
             <TableHead>{t('suppliers.runs.columns.trigger')}</TableHead>
             <TableHead>{t('suppliers.runs.columns.status')}</TableHead>
             <TableHead>{t('suppliers.runs.columns.duration')}</TableHead>
@@ -64,20 +70,41 @@ export function RunsTab({ code }: { code: SupplierCode }) {
         <TableBody>
           {runs.data.items.map((run) => (
             <TableRow key={run.id}>
-              <TableCell className="whitespace-nowrap">{formatDateTime(run.startedAt)}</TableCell>
+              <TableCell className="sticky start-0 z-10 whitespace-nowrap bg-surface">
+                {formatDateTime(run.startedAt)}
+              </TableCell>
               <TableCell>{t(`suppliers.runs.triggers.${run.trigger}`)}</TableCell>
               <TableCell>
                 <RunStatusBadge status={run.status} />
               </TableCell>
               <TableCell className="tabular-nums">{duration(t, run)}</TableCell>
-              <TableCell className="tabular-nums">{run.offersSeen}</TableCell>
+              <TableCell className="tabular-nums">
+                {run.offersRead ? (
+                  run.offersSeen
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    {t('suppliers.runs.notRead')}
+                  </span>
+                )}
+              </TableCell>
               <TableCell className="tabular-nums">{run.offersNew}</TableCell>
               <TableCell className="tabular-nums">{run.costsChanged}</TableCell>
               <TableCell className="tabular-nums">{run.offersMissing}</TableCell>
               <TableCell className="tabular-nums">{run.reviewsOpened}</TableCell>
               <TableCell className="tabular-nums">{run.productsRepriced}</TableCell>
-              <TableCell className="text-sm">
-                {run.errorCode ? <RunError code={run.errorCode} /> : '—'}
+              <TableCell className="min-w-48 text-sm">
+                {run.errorCode ? (
+                  <span className="flex flex-col gap-0.5">
+                    <RunError code={run.errorCode} />
+                    {run.errorMessage && (
+                      <bdi dir="ltr" className="text-xs text-muted-foreground">
+                        {run.errorMessage}
+                      </bdi>
+                    )}
+                  </span>
+                ) : (
+                  '—'
+                )}
               </TableCell>
             </TableRow>
           ))}

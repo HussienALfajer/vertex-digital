@@ -372,6 +372,8 @@ export const productSchema = z
     priceSypUnits: z.int().nullable(),
     /** The supplier of the route the price follows now (rule P1); null with no usable route. */
     basisSupplierNameAr: z.string().nullable(),
+    /** The unit cost of that route (the admin's view only; never in a store shape, rule SS3). */
+    basisCostUsdUnits: z.int().nullable(),
     /** S16 SF2: the stock level of the basis route's offer; null with no usable route. */
     basisStockLevel: stockLevelSchema.nullable(),
     /** S17 WR4: no route that counts for the price is usable; the price is kept. */

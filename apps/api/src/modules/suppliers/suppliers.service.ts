@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   discountPercent,
   FAILING_SYNC_RUNS,
+  failureKindSchema,
   type ImportOffers,
   type ImportResult,
   type ImportRowError,
@@ -14,6 +15,8 @@ import {
   type SetSupplierCredentials,
   SUPPLIER_CODES,
   SUPPLIER_CREDENTIAL_FIELDS,
+  type SupplierCallListQuery,
+  type SupplierCallPage,
   type SupplierCode,
   type SupplierDetail,
   type SupplierOffer,
@@ -48,6 +51,7 @@ import {
   routedProducts,
   type SupplierState,
   supplierBalanceReads,
+  supplierCalls,
   supplierCategories,
   supplierCostChanges,
   supplierCredentials,
@@ -376,6 +380,7 @@ export class SuppliersService {
       flag(query.supported, isNull(supplierOffers.unsupportedReason)),
       flag(query.ignored, isNotNull(supplierOffers.ignoredAt)),
       flag(query.lowStock, lowStock),
+      flag(query.discounted, isNotNull(supplierOffers.discountBp)),
     );
     const [rows, [total]] = await Promise.all([
       this.db
@@ -466,6 +471,7 @@ export class SuppliersService {
         stockLevel: stockLevel(row.stock, row.inStock, policy.lowStockUnits),
         originalCostUsdUnits: row.originalCostUsdUnits,
         discountPercent: discountPercent(row.costUsdUnits, row.originalCostUsdUnits),
+        discountBp: row.discountBp,
         fieldSpecs: row.fieldSpecs,
         unsupportedReason:
           row.unsupportedReason === null ? null : (row.unsupportedReason as 'fields_unsupported'),
@@ -482,6 +488,40 @@ export class SuppliersService {
             : null,
       };
     });
+  }
+
+  /** S18 FK3: `GET /api/admin/suppliers/:code/calls`, newest first, by result. */
+  async calls(code: string, query: SupplierCallListQuery): Promise<SupplierCallPage> {
+    const state = await this.state(code);
+    const where = and(
+      eq(supplierCalls.supplierId, state.id),
+      query.result ? eq(supplierCalls.result, query.result) : undefined,
+    );
+    const [rows, [total]] = await Promise.all([
+      this.db
+        .select()
+        .from(supplierCalls)
+        .where(where)
+        .orderBy(desc(supplierCalls.createdAt), desc(supplierCalls.id))
+        .limit(query.pageSize)
+        .offset((query.page - 1) * query.pageSize),
+      this.db.select({ total: count() }).from(supplierCalls).where(where),
+    ]);
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        operation: row.operation,
+        result: row.result,
+        latencyMs: row.latencyMs,
+        supplierCode: row.supplierCode,
+        failureKind: failureKindSchema.safeParse(row.failureKind).data ?? null,
+        httpStatus: row.httpStatus,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      total: total?.total ?? 0,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
   }
 
   /** `GET /api/admin/suppliers/offers/:id/costs`: newest first. */
@@ -509,6 +549,7 @@ export class SuppliersService {
         toUsdUnits: row.toUsdUnits,
         syncRunId: row.syncRunId,
         byAdmin: row.adminId !== null,
+        attemptId: row.attemptId,
         createdAt: row.createdAt.toISOString(),
       })),
       total: total?.total ?? 0,
@@ -799,7 +840,16 @@ export class SuppliersService {
         capabilities: supplierPanelCapabilities(state.code),
         newOfferCount: newOffers.get(state.id) ?? 0,
         lowStockCount: (lowStock.get(state.id)?.low ?? 0) + (lowStock.get(state.id)?.out ?? 0),
-        platformStatus: this.live.cachedStatus(state.id),
+        // S18 PS1: the cards never call the supplier: the panel's last read, else the sync's.
+        platformStatus:
+          this.live.cachedStatus(state.id) ??
+          (run?.platformStatus
+            ? {
+                status: run.platformStatus,
+                catalogUpdatedAt: run.catalogUpdatedAt?.toISOString() ?? null,
+                checkedAt: run.startedAt.toISOString(),
+              }
+            : null),
       };
     });
   }

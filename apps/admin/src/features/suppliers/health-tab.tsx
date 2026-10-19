@@ -1,8 +1,13 @@
+import { useQuery } from '@tanstack/react-query';
 import type { SupplierDetail } from '@vertex-digital/contracts';
 import {
+  Badge,
+  Button,
   Card,
   CardTitle,
   EmptyState,
+  Pagination,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -11,16 +16,21 @@ import {
   TableRow,
 } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
-import { ActivityIcon, WalletIcon } from 'lucide-react';
+import { ActivityIcon, CircleCheckIcon, WalletIcon } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FormAlert } from '../../components/form-alert';
+import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince, ltr } from '../../lib/format';
 import { formatPercentBp } from '../pricing/pricing-format';
 import { healthReason } from './health-reason';
 import { BalanceLine, balanceText, HealthBadge } from './supplier-parts';
+import { callsQuery, LIST_PAGE_SIZE } from './suppliers.queries';
 
 /**
  * "الصحة" (S07 screens): the state and why, the window figures of the change that set it, its
- * history (rules H1–H4) and the balance reads (rule H5), the newest 20 of each.
+ * history (rules H1–H4) and the balance reads (rule H5), the newest 20 of each; S18 FK3: the calls
+ * that failed and why, page by page, so an outage at the supplier is told from a network problem.
  */
 export function HealthTab({ supplier }: { supplier: SupplierDetail }) {
   const { t } = useTranslation();
@@ -68,6 +78,7 @@ export function HealthTab({ supplier }: { supplier: SupplierDetail }) {
           </Card>
         )}
       </div>
+      {supplier.code !== 'manual' && <FailedCalls supplier={supplier} />}
       <section className="flex flex-col gap-3" aria-labelledby="health-history">
         <h2 id="health-history" className="text-lg font-bold">
           {t('suppliers.healthTab.history')}
@@ -143,6 +154,87 @@ export function HealthTab({ supplier }: { supplier: SupplierDetail }) {
         </section>
       )}
     </div>
+  );
+}
+
+/** S18 FK3: the calls with no trustworthy answer, newest first, with why. */
+function FailedCalls({ supplier }: { supplier: SupplierDetail }) {
+  const { t } = useTranslation();
+  const [page, setPage] = useState(1);
+  const calls = useQuery(callsQuery(supplier.code, page, 'error'));
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="failed-calls">
+      <div className="flex flex-col gap-1">
+        <h2 id="failed-calls" className="text-lg font-bold">
+          {t('suppliers.healthTab.failedCalls')}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('suppliers.healthTab.failedCallsHelp')}</p>
+      </div>
+      {calls.isPending && <Skeleton className="h-40 w-full" aria-hidden="true" />}
+      {calls.isError && (
+        <div className="flex flex-col items-start gap-3">
+          <FormAlert>{errorMessage(t, calls.error)}</FormAlert>
+          <Button variant="outline" onClick={() => calls.refetch()}>
+            {t('common.retry')}
+          </Button>
+        </div>
+      )}
+      {calls.isSuccess &&
+        (calls.data.items.length === 0 ? (
+          <EmptyState icon={<CircleCheckIcon />} title={t('suppliers.healthTab.noFailures')} />
+        ) : (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky start-0 z-10 bg-muted">
+                    {t('suppliers.healthTab.time')}
+                  </TableHead>
+                  <TableHead>{t('suppliers.healthTab.operation')}</TableHead>
+                  <TableHead>{t('suppliers.healthTab.failure')}</TableHead>
+                  <TableHead>{t('suppliers.healthTab.httpStatus')}</TableHead>
+                  <TableHead>{t('suppliers.healthTab.code')}</TableHead>
+                  <TableHead>{t('suppliers.healthTab.latency')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {calls.data.items.map((call) => (
+                  <TableRow key={call.id}>
+                    <TableCell className="sticky start-0 z-10 whitespace-nowrap bg-surface">
+                      {formatDateTime(call.createdAt)}
+                    </TableCell>
+                    <TableCell>{t(`suppliers.operations.${call.operation}`)}</TableCell>
+                    <TableCell>
+                      {call.failureKind ? (
+                        <Badge tone="danger">{t(`suppliers.failures.${call.failureKind}`)}</Badge>
+                      ) : (
+                        '—'
+                      )}
+                    </TableCell>
+                    <TableCell className="tabular-nums">{call.httpStatus ?? '—'}</TableCell>
+                    <TableCell>
+                      {call.supplierCode ? <bdi dir="ltr">{call.supplierCode}</bdi> : '—'}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      <bdi dir="ltr">{t('suppliers.healthTab.ms', { ms: call.latencyMs })}</bdi>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {calls.data.total > LIST_PAGE_SIZE && (
+              <Pagination
+                page={page}
+                pageCount={Math.ceil(calls.data.total / LIST_PAGE_SIZE)}
+                onPageChange={setPage}
+                summary={t('suppliers.healthTab.failedTotal', { total: calls.data.total })}
+                previousLabel={t('common.previous')}
+                nextLabel={t('common.next')}
+              />
+            )}
+          </>
+        ))}
+    </section>
   );
 }
 

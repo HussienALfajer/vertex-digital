@@ -26,7 +26,12 @@ export interface Offending {
   id: string;
 }
 
-export const noDetails = (): ReconciliationDetails => ({ offending: [], lines: [], reason: null });
+export const noDetails = (): ReconciliationDetails => ({
+  offending: [],
+  lines: [],
+  reason: null,
+  unmatchedSupplierOrders: [],
+});
 
 /** A safe integer from a `bigint` or `numeric` PostgreSQL text value; null is 0. */
 export function units(value: string | number | null | undefined): number {

@@ -49,6 +49,7 @@ import {
   type SupplierCategory,
   SupplierError,
   type SupplierOffer,
+  type SupplierPlatformStatus,
 } from '@vertex-digital/suppliers';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
@@ -82,6 +83,8 @@ export interface ListedOffer {
   originalCostUsdUnits: number | null;
   fieldSpecs: FieldSpec[] | null;
   unsupportedReason: OfferUnsupportedReason | null;
+  /** S18 DC1: the supplier's discount, 1–10,000 basis points. */
+  discountBp: number | null;
 }
 
 /** A category as stored (rule SC2): ids, text and counts bounded. */
@@ -179,6 +182,13 @@ export function listedOffers(offers: readonly SupplierOffer[]): ListedOffer[] {
       fieldSpecs: specs.success && offer.fieldSpecs !== undefined ? specs.data : null,
       unsupportedReason:
         offerUnsupportedReasonSchema.safeParse(offer.unsupportedReason).data ?? null,
+      discountBp:
+        offer.discountBp !== undefined &&
+        Number.isSafeInteger(offer.discountBp) &&
+        offer.discountBp >= 1 &&
+        offer.discountBp <= 10_000
+          ? offer.discountBp
+          : null,
     });
   }
   return [...listed.values()];
@@ -199,6 +209,15 @@ const specFacts = (specs: readonly FieldSpec[] | null) =>
       );
 
 class SuspiciousCatalog extends Error {}
+
+/** S18 SY4: a catalog read in full at least this often, changed or not. */
+const FULL_READ_EVERY_MINUTES = 60;
+
+/** S18 SY4, PS1: the run's columns for the supplier's status, bounded as the table wants. */
+const platformColumns = (platform: SupplierPlatformStatus | null) => ({
+  platformStatus: platform?.status.trim().slice(0, 64) || null,
+  catalogUpdatedAt: platform?.catalogUpdatedAt ?? null,
+});
 
 /** Rows per statement when the sync writes offers and cost changes. */
 const BATCH_SIZE = 500;
@@ -232,6 +251,7 @@ async function updateOffers(
     original_cost_usd_units: offer.originalCostUsdUnits,
     field_specs: offer.fieldSpecs,
     unsupported_reason: offer.unsupportedReason,
+    discount_bp: offer.discountBp,
   }));
   await tx.execute(sql`
     update ${supplierOffers} as o set
@@ -247,6 +267,7 @@ async function updateOffers(
       original_cost_usd_units = v.original_cost_usd_units,
       field_specs = v.field_specs,
       unsupported_reason = v.unsupported_reason,
+      discount_bp = v.discount_bp,
       last_seen_at = ${seenAt}::timestamptz,
       cost_confirmed_at = case when v.cost_usd_units is null then o.cost_confirmed_at
         else ${seenAt}::timestamptz end,
@@ -255,7 +276,8 @@ async function updateOffers(
     from jsonb_to_recordset(${JSON.stringify(values)}::jsonb) as v(
       id uuid, name text, group_name text, kind product_kind, required_fields text[],
       cost_usd_units bigint, cost_raw text, in_stock boolean, category_id text, stock integer,
-      original_cost_usd_units bigint, field_specs jsonb, unsupported_reason text
+      original_cost_usd_units bigint, field_specs jsonb, unsupported_reason text,
+      discount_bp integer
     )
     where o.id = v.id`);
 }
@@ -321,6 +343,18 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
         return this.fail(db, supplier, run, 'SUPPLIER_UNAVAILABLE', 'No adapter in this build');
       }
       secrets = connected.secrets;
+      // S18 SY4, PS1: the supplier's status and catalog version first; an unchanged catalog read
+      // in full in the last hour is not read again.
+      let platform: SupplierPlatformStatus | null = null;
+      if (connected.adapter.capabilities.platformStatus) {
+        const status = await recordedCall(db, supplier.id, 'platform_status', () =>
+          connected.adapter.getPlatformStatus(),
+        );
+        if (status.ok) platform = status.value;
+      }
+      if (platform?.catalogUpdatedAt && (await this.unchanged(db, supplier.id, platform))) {
+        return this.skip(db, run, platform);
+      }
       // Rule SC2: categories first; a failed or empty read keeps the previous tree.
       let categories: ListedCategory[] | null = null;
       if (connected.adapter.capabilities.categories) {
@@ -344,6 +378,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       const closed = await this.apply(db, supplier, run, listedOffers(call.value), {
         categories,
         skipped: connected.adapter.capabilities.categories === true && categories === null,
+        platform,
       });
       await this.alertLowStock(db, supplier, closed);
       return closed;
@@ -356,6 +391,56 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       await this.fail(db, supplier, run, 'INTERNAL', message);
       throw new Error(`Sync ${run.id} failed: ${message}`);
     }
+  }
+
+  /**
+   * S18 SY4: the newest successful run that read offers saw this catalog version and started
+   * less than an hour ago.
+   */
+  private async unchanged(
+    db: Executor,
+    supplierId: string,
+    platform: SupplierPlatformStatus,
+  ): Promise<boolean> {
+    const [last] = await db
+      .select({
+        catalogUpdatedAt: supplierSyncRuns.catalogUpdatedAt,
+        startedAt: supplierSyncRuns.startedAt,
+      })
+      .from(supplierSyncRuns)
+      .where(
+        and(
+          eq(supplierSyncRuns.supplierId, supplierId),
+          eq(supplierSyncRuns.status, 'succeeded'),
+          eq(supplierSyncRuns.offersRead, true),
+        ),
+      )
+      .orderBy(desc(supplierSyncRuns.startedAt), desc(supplierSyncRuns.id))
+      .limit(1);
+    return (
+      last?.catalogUpdatedAt != null &&
+      last.catalogUpdatedAt.getTime() === platform.catalogUpdatedAt?.getTime() &&
+      Date.now() - last.startedAt.getTime() < FULL_READ_EVERY_MINUTES * 60_000
+    );
+  }
+
+  /** S18 SY4: the run succeeds without reading offers; no cost is confirmed by it. */
+  private async skip(
+    db: Executor,
+    run: SyncRunRow,
+    platform: SupplierPlatformStatus,
+  ): Promise<SyncRunRow> {
+    const [closed] = await db
+      .update(supplierSyncRuns)
+      .set({
+        status: 'succeeded',
+        finishedAt: new Date(),
+        offersRead: false,
+        ...platformColumns(platform),
+      })
+      .where(and(eq(supplierSyncRuns.id, run.id), eq(supplierSyncRuns.status, 'running')))
+      .returning();
+    return closed ?? run;
   }
 
   private async newestCredentialId(db: Executor, supplierId: string): Promise<string | null> {
@@ -581,7 +666,11 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
     supplier: SupplierState,
     run: SyncRunRow,
     listed: ListedOffer[],
-    tree: { categories: ListedCategory[] | null; skipped: boolean },
+    tree: {
+      categories: ListedCategory[] | null;
+      skipped: boolean;
+      platform: SupplierPlatformStatus | null;
+    },
   ): Promise<SyncRunRow> {
     const context = () => ({ now: new Date(), fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED });
     return db.transaction(async (tx) => {
@@ -749,6 +838,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
           reviewsOpened: repriced.reviewsOpened,
           productsRepriced: repriced.repriced,
           categoriesSkipped: tree.skipped,
+          ...platformColumns(tree.platform),
         })
         .where(and(eq(supplierSyncRuns.id, run.id), eq(supplierSyncRuns.status, 'running')))
         .returning();

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type SupplierCode, supplierAvailable } from '@vertex-digital/contracts';
 import {
   type Database,
@@ -29,6 +29,7 @@ export interface ConnectedSupplier {
  */
 @Injectable()
 export class SupplierRegistry {
+  private readonly logger = new Logger(SupplierRegistry.name);
   private readonly key: Buffer;
 
   /** Where suppliers post order results (S08 rule F4): only a public HTTPS store has one. */
@@ -58,6 +59,12 @@ export class SupplierRegistry {
       return new WdgzoneAdapter({
         apiKey: credentials.apiKey,
         ...(callbackUrl && { callbackUrl }),
+        // S18 SY2: each catalog page read again, with why; never a query string or a key.
+        onRetry: (retry) =>
+          this.logger.warn(
+            `WDGZone ${retry.path} read again (${retry.attempt}): ${retry.failure}` +
+              `${retry.status !== undefined ? `, HTTP ${retry.status}` : ''}, in ${retry.waitMs} ms`,
+          ),
       });
     }
     if (code !== 'fake') return null;

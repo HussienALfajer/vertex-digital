@@ -24,8 +24,12 @@ import {
   type PageQuery,
   pageQuerySchema,
   type SetSupplierCredentials,
+  type SupplierCallListQuery,
   type SupplierPolicy,
   setSupplierCredentialsSchema,
+  supplierCallListQuerySchema,
+  supplierCallPageSchema,
+  supplierConnectionTestSchema,
   supplierDetailSchema,
   supplierOfferPageSchema,
   supplierPolicySchema,
@@ -45,6 +49,7 @@ import { requestMeta } from '../../core/http/request-meta.js';
 import { StoreRevalidateInterceptor } from '../../core/jobs/index.js';
 import type { AdminIdentity } from '../admin/index.js';
 import type { Actor } from '../catalog/index.js';
+import { SupplierLiveService } from './supplier-live.service.js';
 import { SuppliersService } from './suppliers.service.js';
 
 const actor = (admin: AdminIdentity, request: Request): Actor => ({
@@ -60,7 +65,10 @@ const actor = (admin: AdminIdentity, request: Request): Actor => ({
 @UseInterceptors(StoreRevalidateInterceptor)
 @Controller('admin/suppliers')
 export class SuppliersAdminController {
-  constructor(private readonly suppliers: SuppliersService) {}
+  constructor(
+    private readonly suppliers: SuppliersService,
+    private readonly live: SupplierLiveService,
+  ) {}
 
   @Get()
   @AdminRoute()
@@ -172,6 +180,35 @@ export class SuppliersAdminController {
   @ApiAcceptedResponse({ description: 'The run', standardSchema: syncRunSchema })
   sync(@CurrentAdmin() admin: AdminIdentity, @Param('code') code: string, @Req() request: Request) {
     return this.suppliers.requestSync(actor(admin, request), code);
+  }
+
+  /** S18 CS1: one live balance read; once per 10 seconds per supplier. */
+  @Post(':code/test')
+  @AdminRoute()
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: supplierConnectionTestSchema })
+  @ApiOkResponse({ description: 'The read', standardSchema: supplierConnectionTestSchema })
+  testConnection(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('code') code: string,
+    @Req() request: Request,
+  ) {
+    return this.live.testConnection(actor(admin, request), code);
+  }
+
+  /** S18 FK3: the recorded calls, newest first. */
+  @Get(':code/calls')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @ApiQueryOf(supplierCallListQuerySchema)
+  @SerializeOptions({ schema: supplierCallPageSchema })
+  @ApiOkResponse({ description: 'Newest first', standardSchema: supplierCallPageSchema })
+  calls(
+    @Param('code') code: string,
+    @Query({ schema: supplierCallListQuerySchema }) query: SupplierCallListQuery,
+  ) {
+    return this.suppliers.calls(code, query);
   }
 
   @Get(':code/runs')

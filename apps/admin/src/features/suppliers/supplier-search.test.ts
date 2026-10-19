@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   categoryFilters,
+  categoryIdOf,
   offerFilters,
+  parseOfferSearch,
   parseSupplierSearch,
   supplierCodeOf,
 } from './supplier-search';
@@ -64,6 +66,7 @@ describe('the S16 filters', () => {
         cq: ' ببجي ',
         state: 'new_packs',
         kind: 'code',
+        // S18: the selected node is a page of its own now.
         node: 'pubg-1',
         cpage: '2',
         list: 'transactions',
@@ -78,15 +81,11 @@ describe('the S16 filters', () => {
       cq: 'ببجي',
       state: 'new_packs',
       kind: 'code',
-      node: 'pubg-1',
       cpage: 2,
       list: 'transactions',
       spage: 4,
     });
-    expect(categoryFilters({ tab: 'catalog', cq: 'x', node: 'a', q: 'uc' })).toEqual({
-      cq: 'x',
-      node: 'a',
-    });
+    expect(categoryFilters({ tab: 'catalog', cq: 'x', q: 'uc' })).toEqual({ cq: 'x' });
   });
 
   it('drops invalid catalog and statement values', () => {
@@ -101,6 +100,17 @@ describe('the S16 filters', () => {
         spage: 'two',
       }),
     ).toEqual({});
+  });
+});
+
+describe('the S18 filters', () => {
+  it('reads a category page: offer filters only, the discount filter too', () => {
+    expect(
+      parseOfferSearch({ discounted: 'true', tab: 'offers', cq: 'x', page: '2', q: ' 60 ' }),
+    ).toEqual({ discounted: 'true', page: 2, q: '60' });
+    expect(offerFilters({ discounted: 'false', cq: 'x' })).toEqual({ discounted: 'false' });
+    expect(categoryIdOf('14693')).toBe('14693');
+    expect(categoryIdOf('a b')).toBeNull();
   });
 });
 

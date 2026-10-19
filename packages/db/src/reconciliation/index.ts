@@ -2,9 +2,11 @@ export { openMismatchCount, queueReconciliationAlert } from './alert.js';
 export {
   openingRecorded,
   placeBooks,
+  type SupplierDayOrder,
   shamCashCountCheck,
   skippedResult,
   supplierBalanceCheck,
+  supplierChargesCheck,
   usdtBalanceCheck,
 } from './external.js';
 export { type InternalChecks, internalChecks, runInternalChecks } from './internal.js';

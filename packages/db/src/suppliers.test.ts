@@ -108,7 +108,8 @@ describe('seeds', () => {
         price_review_threshold_bp: SUPPLIER_POLICY_DEFAULTS.priceReviewThresholdBp,
         cost_stale_minutes: SUPPLIER_POLICY_DEFAULTS.costStaleMinutes,
         health_window_minutes: SUPPLIER_POLICY_DEFAULTS.healthWindowMinutes,
-        health_min_calls: SUPPLIER_POLICY_DEFAULTS.healthMinCalls,
+        // The seed of ADR 0021; S18's row (migration 0066) raised it to 10.
+        health_min_calls: 5,
         degraded_success_bp: SUPPLIER_POLICY_DEFAULTS.degradedSuccessBp,
         degraded_p90_ms: SUPPLIER_POLICY_DEFAULTS.degradedP90Ms,
         down_success_bp: SUPPLIER_POLICY_DEFAULTS.downSuccessBp,
@@ -116,6 +117,17 @@ describe('seeds', () => {
         probe_after_minutes: SUPPLIER_POLICY_DEFAULTS.probeAfterMinutes,
       },
     ]);
+    // ADR 0033: a newer row with at least 10 calls and the recovery rule.
+    const s18 = await connection.pool.query(
+      `select health_min_calls, recover_success_bp, recover_minutes
+       from supplier_policy where id = '01a11d3c-890c-77e7-af29-5a1800000033'`,
+    );
+    expect(s18.rows).toHaveLength(1);
+    expect(s18.rows[0].health_min_calls).toBeGreaterThanOrEqual(10);
+    expect(s18.rows[0]).toMatchObject({
+      recover_success_bp: SUPPLIER_POLICY_DEFAULTS.recoverSuccessBp,
+      recover_minutes: SUPPLIER_POLICY_DEFAULTS.recoverMinutes,
+    });
   });
 
   it('add the supplier pause switches', async () => {

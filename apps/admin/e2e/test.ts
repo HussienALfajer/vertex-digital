@@ -1,4 +1,4 @@
-import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
+import { test as base, expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {
   type AuditEntry,
   approvalFlags,
@@ -1241,6 +1241,21 @@ export async function screenshot(
   const path = testInfo.outputPath(`${name}.png`);
   await page.screenshot({ path, fullPage, animations: 'disabled' });
   await testInfo.attach(name, { path, contentType: 'image/png' });
+}
+
+/**
+ * Chooses an option of a Base UI select and waits until the trigger shows it. The select ignores
+ * a press on an item that lands right after the list opens (a guard against the opening click
+ * selecting by accident), so a fast runner can lose the choice (CI, 2026-10-19): a lost one is
+ * chosen again.
+ */
+export async function chooseOption(page: Page, trigger: Locator, name: string): Promise<void> {
+  await expect(async () => {
+    const option = page.getByRole('option', { name });
+    if (!(await option.isVisible())) await trigger.click();
+    await option.click({ timeout: 2_000 });
+    await expect(trigger).toContainText(name, { timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
 }
 
 export { expect };

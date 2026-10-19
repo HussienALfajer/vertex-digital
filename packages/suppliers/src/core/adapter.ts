@@ -1,5 +1,6 @@
 import type {
   Currency,
+  FailureKind,
   FieldSpec,
   OfferUnsupportedReason,
   ProductKind,
@@ -28,6 +29,8 @@ export interface SupplierCapabilities {
   statement: boolean;
   /** S16 SF5: reports its own status (`getPlatformStatus`). */
   platformStatus: boolean;
+  /** S18 PQ1: reads one offer's current cost (`getOfferQuote`), before a purchase. */
+  offerQuote: boolean;
 }
 
 /** A money amount in integer units of a currency (ADR 0003). */
@@ -58,6 +61,14 @@ export interface SupplierOffer {
   fieldSpecs?: FieldSpec[];
   /** S16 SC3: kept in the catalog but not usable by this build (two fields, a select). */
   unsupportedReason?: OfferUnsupportedReason;
+  /** S18 DC1: the supplier's own discount on this offer, in basis points (2% = 200). */
+  discountBp?: number;
+}
+
+/** S18 PQ1: one offer's cost and availability now. */
+export interface SupplierOfferQuote {
+  cost: SupplierMoney;
+  inStock: boolean;
 }
 
 /** S16 SC1: one node of the supplier's category tree. */
@@ -98,6 +109,8 @@ export interface SupplierOrderRow {
   status?: string;
   total?: SupplierMoney;
   createdAt?: Date;
+  /** S18 ST1: when the supplier completed it. */
+  completedAt?: Date;
 }
 
 /** S16 SF5. */
@@ -157,8 +170,15 @@ export interface PlaceOrderRequest {
 export const OUT_OF_STOCK_CODE = 'OUT_OF_STOCK';
 
 export type SupplierOutcome =
-  | { status: 'delivered'; supplierOrderId: string; quantity: number; codes?: string[] }
-  | { status: 'pending'; supplierOrderId: string }
+  | {
+      status: 'delivered';
+      supplierOrderId: string;
+      quantity: number;
+      codes?: string[];
+      /** S18 CH1: what the supplier says it charged for the order, in USD units. */
+      chargedUsdUnits?: number;
+    }
+  | { status: 'pending'; supplierOrderId: string; chargedUsdUnits?: number }
   | {
       status: 'failed_definitive';
       supplierOrderId?: string;
@@ -168,7 +188,20 @@ export type SupplierOutcome =
       inputRejected?: boolean;
       reason: string;
     }
-  | { status: 'unknown'; supplierOrderId?: string; reason: string };
+  | {
+      status: 'unknown';
+      supplierOrderId?: string;
+      reason: string;
+      /**
+       * S18 HE4: the supplier answered and the answer was read, but it does not settle the order
+       * yet (still processing, not found so soon): not a fault of the supplier.
+       */
+      answered?: boolean;
+      /** S18 HE6, FK1: the supplier's code, why there was no answer, and the reply's status. */
+      supplierCode?: string;
+      failure?: FailureKind;
+      httpStatus?: number;
+    };
 
 export type SupplierOutcomeStatus = SupplierOutcome['status'];
 
@@ -226,6 +259,8 @@ export interface SupplierAdapter {
   listOrders(page: number): Promise<SupplierStatementPage<SupplierOrderRow>>;
   /** S16 SF5, behind `platformStatus`. */
   getPlatformStatus(): Promise<SupplierPlatformStatus>;
+  /** S18 PQ1, behind `offerQuote`: one offer's current cost; throws a `SupplierError`. */
+  getOfferQuote(offerId: string): Promise<SupplierOfferQuote>;
   /**
    * S16 IM1, IM2: a category image's bytes, only from `imageHosts` over HTTPS, never through a
    * redirect to another host, within the limits; throws a `SupplierError` otherwise.

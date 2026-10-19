@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import {
   PRODUCT_KINDS,
   SUPPLIER_CATEGORY_STATES,
@@ -42,7 +42,6 @@ import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatSince } from '../../lib/format';
-import { CategoryPacks } from './category-packs';
 import { Thumbnail } from './category-thumbnail';
 import { ImportCategorySheet } from './import-category-sheet';
 import { LinkCategorySheet } from './link-category-sheet';
@@ -69,8 +68,8 @@ type Opened = { node: SupplierCategoryNode; dialog: 'import' | 'link' } | null;
 /**
  * "الكتالوج" (S16 SC4–SC9): the supplier's category tree, roots first and children on expand
  * (100 a page, "المزيد" for the next), or with a search or a state every matching node with its
- * path; per node its thumbnail (IM1), counts, state, linked game and actions; the selected node's
- * packs below (SF1). Filters and the selected node are in the URL.
+ * path; per node its thumbnail (IM1), counts, state, linked game and actions. A node's name opens
+ * its own page with its packs (S18). Filters are in the URL.
  */
 export function CatalogTab({
   supplier,
@@ -103,10 +102,7 @@ export function CatalogTab({
 
   const row = {
     supplier,
-    selected: search.node,
     busy: change.isPending,
-    onSelect: (node: SupplierCategoryNode) =>
-      onSearch({ ...search, node: search.node === node.categoryId ? undefined : node.categoryId }),
     onOpen: (node: SupplierCategoryNode, dialog: 'import' | 'link') => setOpened({ node, dialog }),
     onChange: act,
   };
@@ -116,7 +112,7 @@ export function CatalogTab({
       <Filters
         search={search}
         onSearch={(next) => onSearch({ ...search, ...next, cpage: undefined })}
-        onClear={() => onSearch(search.node ? { node: search.node } : {})}
+        onClear={() => onSearch({})}
       />
       {failure && <FormAlert>{failure}</FormAlert>}
       {flat ? (
@@ -130,15 +126,6 @@ export function CatalogTab({
           <Level kind={search.kind} depth={0} row={row} root />
         </ul>
       )}
-      {search.node && (
-        <CategoryPacks
-          // Another node starts at its first page: an earlier node's page may not exist in it.
-          key={`${supplier.code}:${search.node}`}
-          supplier={supplier}
-          categoryId={search.node}
-          onClose={() => onSearch({ ...search, node: undefined })}
-        />
-      )}
       <Sheet open={opened !== null} onOpenChange={(open) => !open && setOpened(null)}>
         {opened?.dialog === 'import' && (
           <ImportCategorySheet supplier={supplier} categoryId={opened.node.categoryId} />
@@ -151,9 +138,7 @@ export function CatalogTab({
 
 interface RowActions {
   supplier: SupplierDetail;
-  selected: string | undefined;
   busy: boolean;
-  onSelect: (node: SupplierCategoryNode) => void;
   onOpen: (node: SupplierCategoryNode, dialog: 'import' | 'link') => void;
   onChange: (node: SupplierCategoryNode, change: CategoryChange) => void;
 }
@@ -371,21 +356,20 @@ function NodeLine({
   withPath?: boolean;
 }) {
   const { t } = useTranslation();
-  const selected = row.selected === node.categoryId;
+  const navigate = useNavigate();
   const importable = node.game === null && node.state !== 'ignored' && !node.missingSince;
   const linkable = node.state !== 'ignored' && !node.missingSince;
+  const page = {
+    to: '/suppliers/$code/categories/$categoryId',
+    params: { code: row.supplier.code, categoryId: node.categoryId },
+  } as const;
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
       <Thumbnail node={node} supplierCode={row.supplier.code} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <button
-          type="button"
-          aria-pressed={selected}
-          className="text-start font-medium underline-offset-4 hover:underline aria-pressed:text-primary"
-          onClick={() => row.onSelect(node)}
-        >
+        <Link {...page} className="text-start font-medium underline-offset-4 hover:underline">
           <bdi>{node.name}</bdi>
-        </button>
+        </Link>
         {withPath && node.path.length > 0 && (
           <bdi className="text-xs text-muted-foreground">{node.path.join(' › ')}</bdi>
         )}
@@ -476,8 +460,8 @@ function NodeLine({
               {t('suppliers.catalog.unlink')}
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={() => row.onSelect(node)}>
-            {selected ? t('suppliers.catalog.hidePacks') : t('suppliers.catalog.showPacks')}
+          <DropdownMenuItem onClick={() => navigate(page)}>
+            {t('suppliers.catalog.showPacks')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

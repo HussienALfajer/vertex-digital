@@ -8,7 +8,7 @@ S08 can sell, but only from a developer's command line: the store has no catalog
 ## In scope / out of scope
 - In:
   - **F12 store pages:** home (`/`) and game pages (`/games/[slug]`), server-rendered and cached with Cache Components, refreshed when prices, availability, health, the rate or the catalog change. Public catalog read routes; responsive image widths; `sitemap.xml` and page metadata.
-  - **Service status** (A08 store side): per game ("تعمل بشكل طبيعي" / "أبطأ من المعتاد" / "غير متوفرة حالياً") and one line on the home page, derived from supplier health and availability, never naming a supplier (owner, 2026-10-09).
+  - **Service status** (A08 store side): per game ("تعمل بشكل طبيعي" / "أبطأ من المعتاد" / "غير متوفرة حالياً") and one line on the home page, derived from supplier health and availability, never naming a supplier (owner, 2026-10-09). Since 2026-10-19 (owner) the store shows only "غير متوفرة حالياً"; no normal or slow chip and no home line (SS1, SS2).
   - **Measured delivery time** on packs and in the buy box (S08 rule T1).
   - **"كم أحتاج؟" calculator**: the cheapest combination of available packs reaching a target in-game amount; each pack is bought on its own (owner, 2026-10-09; S10 adds "add all to cart").
   - **F13 buy box:** pack, input fields with the ID guide, quantity, totals in USD and SYP, live player validation with its cache, limits and daily supplier quota, the "confirm the ID yourself" path, slide-to-pay, and idempotent submission through S08's `POST /api/orders`.
@@ -95,8 +95,8 @@ Money is USD units (micro-dollars, ADR 0003). SYP is display only and never stor
 ## States and rules
 
 ### Storefront and game pages (F12)
-- SF1. The storefront shows active, unarchived games of unarchived categories, in category then game order. A paused game is not shown anywhere on the store: not on the home page, not in search, and its page answers not found. CT3 has new games paused until they are complete. Paused or unavailable **products** of an active game show greyed out in place, with "غير متوفرة حالياً", no price and no buy action (S06 CT9).
-- SF2. A pack shows its Arabic name, in-game amount, USD price (large), SYP equivalent (`sypDisplayPrice`, muted, with "≈"), the savings badge when PR7 gives one ("وفّر 12%"), and its delivery-time chip. Prices come from the product's current price row (S07). Without a rate, SYP is hidden.
+- SF1. The storefront shows active, unarchived games of unarchived categories, in category then game order. A paused game is not shown anywhere on the store: not on the home page, not in search, and its page answers not found. CT3 has new games paused until they are complete. Paused or unavailable **products** of an active game show greyed out, with "غير متوفرة حالياً", no price and no buy action (S06 CT9; owner, 2026-10-19: on a game page the available packs come first in the panel's order and the unavailable ones follow, greyed, in a folded list "باقات غير متوفرة حاليًا (N)" after the calculator, open when no pack is available or when `?pack=` names one of them).
+- SF2. A pack shows its Arabic name, in-game amount (none for a single unit, owner 2026-10-19), USD price (large), SYP equivalent (`sypDisplayPrice`, muted, with "≈"), the savings badge when PR7 gives one ("وفّر 12%"), and its delivery-time chip. Prices come from the product's current price row (S07). Without a rate, SYP is hidden.
 - SF3. **Delivery time** (S08 T1): with stats, the chip reads the median ("خلال 40 ثانية عادةً"). The buy box adds the p90 ("9 من كل 10 طلبات خلال دقيقتين"). Durations round up to whole seconds under a minute, to whole minutes under an hour, then to hours. Without stats (fewer than 5 orders): no chip on the pack; the buy box says "لا بيانات كافية بعد عن وقت التسليم".
 - SF4. **Freshness:** store pages read the public routes inside `'use cache'` with the tag `catalog` and `cacheLife` revalidation of 5 minutes. A change that alters what those routes return queues `store.revalidate` in its own transaction: catalog edits, price rows, availability changes, supplier health changes, a supplier pause, and rate changes. The job, a singleton queued at most once per 10 seconds, calls the store's `POST /_internal/revalidate` (loopback, `STORE_REVALIDATE_SECRET`). That route calls `revalidateTag('catalog')`. Delivery stats refresh within the 5-minute life. The price a customer pays is always checked again at pay (S08 O4, `PRICE_CHANGED`).
 - SF5. **Images:** `GET /api/catalog/images/:id?w=<160|320|640|1280>` serves the image fitted to that width (never upscaled) as WebP. `files` makes each variant once with the same decoder limits as CT10, stores it beside the original and serves it immutable. Any other `w` is `VALIDATION_FAILED`. The store uses `srcset` with these widths.
@@ -107,8 +107,8 @@ Money is USD units (micro-dollars, ADR 0003). SYP is display only and never stor
   - `normal` when at least one available product's basis route is a healthy automatic route;
   - `slow` when products are available but none has a healthy automatic basis route (degraded or manual only);
   - `unavailable` when no product is available.
-  - Labels: "تعمل بشكل طبيعي", "أبطأ من المعتاد", "غير متوفرة حالياً". The chips are quiet, with an icon (`brand/identity.md` §6).
-- SS2. The home page line is "كل الخدمات تعمل بشكل طبيعي" when no shown game is `slow`, otherwise "بعض الألعاب أبطأ من المعتاد". An `unavailable` game does not change the line, since a product can be out of stock with every supplier healthy. The S05 stop banner (SW9) is separate and stays as it is.
+  - Labels: "غير متوفرة حالياً" only, a quiet chip with an icon (`brand/identity.md` §6). Owner, 2026-10-19: `normal` and `slow` show no chip; a slow supplier is the panel's business, and the customer sees only what they can act on. The API still computes the three states.
+- SS2. Removed (owner, 2026-10-19): the home page has no service line. The S05 stop banner (SW9) is separate and stays as it is.
 - SS3. No supplier name, health number or cost ever reaches a public route.
 
 ### Calculator (F12)
@@ -259,7 +259,7 @@ Statuses: `409` for `PLAYER_NOT_CONFIRMED`, `RESERVATIONS_LIMIT_REACHED`, `ORDER
 - **Header (every page):** a search button (icon and, from `md`, "ابحث عن لعبة أو باقة" with the `Ctrl K` hint).
 - **`/` home:**
   - a short hero with the large search field (SR6);
-  - the service line (SS2) as a quiet chip;
+  - the service line (SS2) as a quiet chip (removed 2026-10-19, owner);
   - category jump chips;
   - one section per category with its games as cards: 2 columns at 360 px, 3 from `sm`, 5 from `lg`. Each card has the cover in the brand frame, the Arabic name, the English name muted, the status chip, and the accent on the border on hover. An `unavailable` game is greyed with "غير متوفرة حالياً".
   - Empty catalog: "نجهّز المتجر، عُد قريباً".
@@ -334,7 +334,7 @@ Statuses: `409` for `PLAYER_NOT_CONFIRMED`, `RESERVATIONS_LIMIT_REACHED`, `ORDER
 
 ## Acceptance
 The owner's browser check (local, `pnpm dev`, `SUPPLIER_FAKE_ENABLED=true`, `TELEGRAM_TRANSPORT=log`). The data is S06–S08's: PUBG Mobile active with "60 UC" (`game_amount` 60), "325 UC" and "660 UC" routed to fake offers, an iTunes code product, and a second game paused. The customer is a non-test one with $5 from a manual deposit adjustment.
-1. Open `/` at phone width: the PUBG card with "تعمل بشكل طبيعي", the paused game absent, and the service line. Open the game page: packs with USD, "≈" SYP, a savings badge where an official price is set, and delivery chips once S08's step 10 has run.
+1. Open `/` at phone width: the PUBG card without a status chip (2026-10-19: only an unavailable game carries one), the paused game absent, and no service line. Open the game page: packs with USD, "≈" SYP, a savings badge where an official price is set, and delivery chips once S08's step 10 has run.
 2. Type 1000 in "كم أحتاج؟": the cheapest combination with its totals; "اشترِ" opens the buy box on that pack.
 3. Signed out, choose "60 UC", fill the player ID and press the action: sign in, then back to the same pack with the ID kept.
 4. Type `51234567`: after a pause, "الاسم في اللعبة: …" appears. Type `invalid-1`: the warning and the required checkbox appear. Run `supplier:fake --errors on` and type another ID (then `--errors off`): "تعذّر التحقق…" and the checkbox.

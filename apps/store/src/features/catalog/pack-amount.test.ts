@@ -14,7 +14,8 @@ describe('packAmountText (rule SF2, audit A9)', () => {
     expect(packAmountText('الباقة الأساسية', 60)).toBe('60');
   });
 
-  it('shows nothing without an amount', () => {
+  it('shows nothing without an amount, or for a single unit', () => {
     expect(packAmountText('بطاقة 10$', null)).toBeNull();
+    expect(packAmountText('برايم شهر واحد', 1)).toBeNull();
   });
 });

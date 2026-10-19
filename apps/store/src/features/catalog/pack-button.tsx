@@ -30,7 +30,7 @@ export function PackButton({
         selected
           ? 'border-(--game-accent-light) outline-2 outline-(--game-accent-light) dark:border-(--game-accent) dark:outline-(--game-accent)'
           : 'border-border hover:border-(--game-accent-light) dark:hover:border-(--game-accent)'
-      } ${available ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+      } ${available ? 'cursor-pointer motion-safe:transition-[border-color,translate] motion-safe:hover:-translate-y-0.5' : 'cursor-not-allowed opacity-60'}`}
     >
       {children}
       {selected && (

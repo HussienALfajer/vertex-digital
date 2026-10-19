@@ -1,14 +1,16 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import {
   FAILING_SYNC_RUNS,
+  HEALTH_ALERT_HOLD_MINUTES,
   HEALTH_PROBE_REASON,
   type HealthStanding,
   type HealthVerdict,
-  healthWindowStart,
+  healthReadStart,
   isCostStale,
   PANEL_READ_OPERATIONS,
   probeOutcome,
   QUEUES,
+  type SupplierHealthState,
   type SupplierPolicy,
   supplierHasCatalog,
   supplierHealth,
@@ -35,7 +37,7 @@ import {
   type Transaction,
   telegramMessages,
 } from '@vertex-digital/db';
-import { and, asc, desc, eq, gte, isNull, lt, ne, notInArray, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, lt, ne, notInArray, or, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -54,9 +56,11 @@ const NEVER = new Date(0);
 const STALE_NEWS_MS = 2 * 60_000;
 
 /**
- * `suppliers.health` (S07 rules H1–H4, SY5), every minute: each available supplier but `manual`
- * (always healthy) is judged on its recorded calls; a `down` one is probed after its wait. A change
- * appends a `supplier_health_changes` row, reprices the supplier's products and tells the admin.
+ * `suppliers.health` (S07 rules H1–H4, SY5; S18 HE1–HE3, AL1–AL3), every minute: each available
+ * supplier but `manual` (always healthy) is judged on its recorded calls; a `down` one is probed
+ * after its wait. A change appends a `supplier_health_changes` row and reprices the supplier's
+ * products at once; the admin is told once the new state has held 5 minutes (`down` at once), so
+ * a short flap sends nothing.
  * Then the products whose price follows a stale cost are repriced, and a failing sync whose costs
  * went stale is reported once. Safe twice: a state is written only when it differs from the newest
  * row, read again under the supplier's row lock. A health change, and a cost newly stale, queue the
@@ -88,6 +92,7 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
       if (supplier.code === 'manual' || !supplier.available) continue;
       const verdict = await this.judge(db, supplier, policy, now);
       if (verdict) await this.change(db, supplier, verdict, now);
+      await this.tell(db, supplier, now);
     }
     await this.repriceStale(db, policy, now);
     for (const supplier of states) {
@@ -129,13 +134,14 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
         .where(
           and(
             eq(supplierCalls.supplierId, supplier.id),
-            gte(supplierCalls.createdAt, healthWindowStart(previous, now, policy)),
+            // S18 HE2: the recovery check reads the windows of the last minutes too.
+            gte(supplierCalls.createdAt, healthReadStart(previous, now, policy)),
             // S16 SF6: the panel's live reads never make a supplier degraded or down.
             notInArray(supplierCalls.operation, [...PANEL_READ_OPERATIONS]),
           ),
         )
         .orderBy(asc(supplierCalls.createdAt), asc(supplierCalls.id));
-      return supplierHealth(calls, policy, previous.state);
+      return supplierHealth(calls, policy, previous, now);
     }
     const since = () =>
       db
@@ -182,7 +188,7 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
     return call.ok || call.result === 'refused';
   }
 
-  /** Rule H4: the row, the repricing and the message, once per change. */
+  /** Rule H4: the row and the repricing, once per change; the message waits (`tell`). */
   private async change(
     db: Executor,
     supplier: SupplierState,
@@ -215,21 +221,59 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
         cause: 'route_change',
         context: { now, fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED },
       });
-      await queueTelegramMessage(tx, bossJobSender(this.pgBoss.boss), {
-        kind: 'supplier_health',
-        params: {
-          supplier: supplier.code,
-          supplierNameAr: supplier.nameAr,
-          state: verdict.state,
-          previous: previous.state,
-          successBp: verdict.successBp,
-        },
-        dedupeKey: `health:${row?.id}`,
-      });
+      if (!row) throw new Error(`No health change written for ${supplier.code}`);
       // S09 rule SF4: the store shows each game's service status and availability.
       await queueStoreRevalidate(tx, bossJobSender(this.pgBoss.boss));
       this.logger.log(`${supplier.code} is ${verdict.state}: ${verdict.reason}`);
     });
+  }
+
+  /**
+   * S18 AL1–AL3: tells the admin the supplier's state once it differs from the last state told
+   * and has held `HEALTH_ALERT_HOLD_MINUTES` (`down` at once). The message names the last state
+   * told, so the admin's newest message always matches the state; one per change row.
+   */
+  private async tell(db: Executor, supplier: SupplierState, now: Date): Promise<void> {
+    const current = await this.standingRow(db, supplier.id);
+    if (!current) return;
+    const [told] = await db
+      .select({ state: sql<SupplierHealthState>`${telegramMessages.params} ->> 'state'` })
+      .from(telegramMessages)
+      .where(
+        and(
+          eq(telegramMessages.kind, 'supplier_health'),
+          sql`${telegramMessages.params} ->> 'supplier' = ${supplier.code}`,
+        ),
+      )
+      .orderBy(desc(telegramMessages.createdAt), desc(telegramMessages.id))
+      .limit(1);
+    const previous = told?.state ?? 'healthy';
+    if (current.state === previous) return;
+    const holdMs = current.state === 'down' ? 0 : HEALTH_ALERT_HOLD_MINUTES * 60_000;
+    if (holdMs > 0 && now.getTime() - current.createdAt.getTime() < holdMs) return;
+    await db.transaction((tx) =>
+      queueTelegramMessage(tx, bossJobSender(this.pgBoss.boss), {
+        kind: 'supplier_health',
+        params: {
+          supplier: supplier.code,
+          supplierNameAr: supplier.nameAr,
+          state: current.state,
+          previous,
+          successBp: current.successBp,
+        },
+        dedupeKey: `health:${current.id}`,
+      }),
+    );
+  }
+
+  private async standingRow(db: Executor, supplierId: string) {
+    const [row] = await db
+      .select()
+      .from(supplierHealthChanges)
+      .where(eq(supplierHealthChanges.supplierId, supplierId))
+      .orderBy(desc(supplierHealthChanges.createdAt), desc(supplierHealthChanges.id))
+      .limit(1);
+    return row;
   }
 
   /**

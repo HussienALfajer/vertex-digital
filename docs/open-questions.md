@@ -6,7 +6,6 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 |---|---|---|---|
 | Q1 | Off-server backup destination (shared need with Vertex Hub) | Launch | Required: the system holds customer money |
 | Q3 | License for the public repository (none means all rights reserved) | Anytime | — |
-| Q17 | S07 rule P3: a large cost change seen through another basis route (a non-basis supplier drops its cost to near zero, so its route becomes the basis) reprices at once without review. Should such a basis switch also go to review when the price moves more than the threshold? | A second automatic supplier, chosen after the full system test (owner, 2026-10-15; ADR 0031 left WDGZone the only one); it cannot happen with one automatic supplier and `manual` | Review it too: the spec's abuse row says a cost dropped near zero is held for review |
 | Q20 | WDGZone lists top-ups that ask for the customer's game account email and password beside its id (9 supported by S16 MF1 on 2026-10-13, e.g. Genshin Impact's account top-ups). Sell them, asking customers for their password? | Importing such a pack (S16 PR 4 keeps every offer with a password field unsupported until then) | Do not sell them in V1: a password is personal data the store must never hold; if sold later, it needs its own spec (encrypted at rest, removed after delivery, never shown in the panel) |
 | Q22 | S16 SC5 (feature 9 audit, F9-15): an ignored subcategory under a linked game still counts its offers as "باقات جديدة" (the navigation badge, the supplier card and its parent's state); only an ignored offer leaves the count. Should ignoring a category also take its offers out of the new-packs count? | Before the professional catalog work, when the badge is used to find packs to add | Yes: ignoring a category is the admin saying none of it will be sold, so its offers should leave the count like ignored offers |
 
@@ -14,6 +13,7 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 
 | Question | Answer | Date |
 |---|---|---|
+| Q17: a basis switch to another route above the review threshold | Held for review as a same-route change (S19 RT10, ADR 0034) | 2026-10-19 |
 | Name, folder and package scope | VERTEX DIGITAL, `D:\vertex-digital`, `@vertex-digital/*` | 2026-10-06 |
 | Domains | Store and API `digital.vertexmedia.pro` (API under `/api`); admin `digital-admin.vertexmedia.pro` (ADR 0009) | 2026-10-06 |
 | Hosting | The existing VPS shared with Vertex Hub, PM2 + nginx (ADR 0009) | 2026-10-06 |

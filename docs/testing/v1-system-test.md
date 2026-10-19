@@ -1477,7 +1477,7 @@ Result: ✅ (2026-10-17)
 **What this checks:** the store shows only what is active, in the panel's order, and a paused pack never looks buyable.
 
 1. In the private window (signed out) open `https://digital.vertexmedia.pro`. Expected: the six categories in the panel's order, with their games in the panel's order.
-2. Open ببجي موبايل. Expected: the field "معرّف اللاعب" and the 29 packs in the panel's order: the 14 active ones with a price ("60 شدة" $0.99, ≈ 139 ل.س); the 15 paused ones greyed out in place with "غير متوفرة حاليًا", no price and no buy action; none of the 18 archived packs.
+2. Open ببجي موبايل. Expected: the field "معرّف اللاعب" and the 29 packs in the panel's order: the 14 active ones first, in the panel's order, with a price ("60 شدة" $0.99, ≈ 139 ل.س); then, under the calculator, the folded list "باقات غير متوفرة حاليًا (15)": open it, the 15 paused ones greyed with "غير متوفرة حاليًا", no price and no buy action (S09 SF1, 2026-10-19); none of the 18 archived packs.
 3. Open فورتنايت (every pack paused). Expected: the page opens, every pack greyed "غير متوفرة حاليًا"; on the home page its card reads "غير متوفرة حاليًا".
 4. Open `https://digital.vertexmedia.pro/games/system-test-7`. Expected: the not-found page (the game does not exist yet; 7.5 opens the same address once it exists, paused).
 
@@ -2269,7 +2269,7 @@ Result: **passed** — owner-run on production, 2026-10-18; reported by the owne
 
 **What this checks:** an unavailable pack cannot look buyable, and stock shortages do not falsely announce a supplier outage.
 
-1. On PUBG Mobile, press "660 شدة". Expected: greyed "غير متوفرة حاليًا", no USD, no SYP, no buy box. The card keeps its place.
+1. On PUBG Mobile, open "باقات غير متوفرة حاليًا" and press "660 شدة". Expected: greyed "غير متوفرة حاليًا", no USD, no SYP, no buy box. The card stays in the folded list.
 2. On `/games/fortnite`, check all nine cards. Expected: all unavailable, no buy action, and the game status "غير متوفرة حاليًا"; its names, cover and region note still show. No calculator for code packs.
 3. `/games/playstation`: the note "تعمل البطاقة على حساب PSN من نفس دولة البطاقة." and the one available $5.83 pack; the other 21 greyed. There is no pack-level region or redemption text in the current public data (F7-1); do not mark that missing content as a new rendering failure.
 4. Home and Free Fire. Expected: home **"كل الخدمات تعمل بشكل طبيعي"**, Free Fire **"تعمل بشكل طبيعي"** while those seven games are unavailable. No supplier name, success percentage or supplier balance in a status chip. The positive slow state is checked with the manual-only test game in 10.14.
@@ -2347,7 +2347,7 @@ Result: **passed** — owner-run on production, 2026-10-18; reported by the owne
 
 1. Search `free fire`, choose the Free Fire **game**. Expected: `/games/free-fire` with no automatically selected pack.
 2. Search `ببجي 60`, choose **"60 شدة"**, not the WOW row. Expected: `/games/pubg-mobile?pack=…`, the id of the UC pack and its empty form at $0.98, ≈ 138 ل.س. Close it without entering an ID.
-3. Search `660`, choose "660 شدة". Expected: its game page may retain `?pack=…`, but **no buy form**, price or payment action opens for that unavailable pack. A greyed search result may still be a navigable link.
+3. Search `660`, choose "660 شدة". Expected: its game page may retain `?pack=…`, with the folded list of unavailable packs open on it, but **no buy form**, price or payment action opens for that unavailable pack. A greyed search result may still be a navigable link.
 4. Replace `pack` in that page's URL with an unknown UUID (for example `00000000-0000-4000-8000-000000000000`). Expected: the game page works with no selected form. Browser back/forward never turns an unavailable pack into a buyable one.
 
 Result: **passed** — owner-run on production, 2026-10-18; reported by the owner as passed (no step-level discrepancies reported).

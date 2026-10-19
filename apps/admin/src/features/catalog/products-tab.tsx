@@ -1,8 +1,15 @@
 import { Link } from '@tanstack/react-router';
-import { formatSyp, formatUsd, type GameDetail, type Product } from '@vertex-digital/contracts';
+import {
+  formatSyp,
+  formatUsd,
+  type GameDetail,
+  marginPercent,
+  type Product,
+} from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
+  cn,
   Dialog,
   EmptyState,
   Table,
@@ -27,7 +34,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
-import { formatDuration } from '../../lib/format';
+import { formatDuration, ltr } from '../../lib/format';
 import { StockChip } from '../suppliers/offer-cells';
 import { RoutesDrawer } from '../suppliers/routes-drawer';
 import { useArchiveProduct, useReorderProducts, useUpdateProduct } from './catalog.queries';
@@ -108,6 +115,7 @@ export function ProductsTab({ game }: { game: GameDetail }) {
               <TableHead>{t('catalog.products.columns.amount')}</TableHead>
               <TableHead>{t('catalog.products.columns.official')}</TableHead>
               <TableHead>{t('catalog.products.columns.price')}</TableHead>
+              <TableHead>{t('catalog.products.columns.cost')}</TableHead>
               <TableHead>{t('catalog.products.columns.maxQuantity')}</TableHead>
               <TableHead>{t('catalog.products.columns.status')}</TableHead>
               <TableHead>{t('catalog.products.columns.availability')}</TableHead>
@@ -128,7 +136,9 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                     {t(`catalog.products.kinds.${product.kind}`)}
                   </Badge>
                 </TableCell>
-                <TableCell className="tabular-nums">{product.gameAmount ?? '—'}</TableCell>
+                <TableCell className="tabular-nums">
+                  {product.gameAmount === null ? '—' : product.gameAmount.toLocaleString('en-US')}
+                </TableCell>
                 <TableCell className="tabular-nums">
                   {product.officialPriceUsdUnits === null ? (
                     '—'
@@ -138,6 +148,9 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                 </TableCell>
                 <TableCell>
                   <ProductPrice product={product} />
+                </TableCell>
+                <TableCell>
+                  <ProductCost product={product} />
                 </TableCell>
                 <TableCell className="tabular-nums">{product.maxQuantity}</TableCell>
                 <TableCell>
@@ -287,6 +300,35 @@ export function ProductsTab({ game }: { game: GameDetail }) {
   );
 }
 
+/** The basis route's unit cost, and what the current price leaves over it. */
+function ProductCost({ product }: { product: Product }) {
+  const { t } = useTranslation();
+  const cost = product.basisCostUsdUnits;
+  if (cost === null) return <span className="text-muted-foreground">—</span>;
+  const profit = product.priceUsdUnits === null ? null : product.priceUsdUnits - cost;
+  const percent = profit === null ? null : marginPercent(profit, product.priceUsdUnits as number);
+  return (
+    <span className="flex flex-col items-start gap-0.5">
+      <bdi dir="ltr" className="font-medium tabular-nums">
+        {formatUsd(cost)}
+      </bdi>
+      {profit !== null && percent !== null && (
+        <span
+          className={cn(
+            'text-xs tabular-nums',
+            profit > 0 ? 'text-status-success-foreground' : 'text-destructive-text',
+          )}
+        >
+          {t('catalog.products.profit', {
+            amount: ltr(formatUsd(profit)),
+            percent: ltr(`${percent}%`),
+          })}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** The stored price (S07 rule P2) with its SYP display price, and the supplier it follows (P1). */
 function ProductPrice({ product }: { product: Product }) {
   const { t } = useTranslation();
@@ -294,7 +336,7 @@ function ProductPrice({ product }: { product: Product }) {
     return <span className="text-sm text-muted-foreground">{t('catalog.products.noPrice')}</span>;
   }
   return (
-    <span className="flex flex-col gap-0.5">
+    <span className="flex flex-col items-start gap-0.5">
       <bdi dir="ltr" className="font-medium tabular-nums">
         {formatUsd(product.priceUsdUnits)}
       </bdi>

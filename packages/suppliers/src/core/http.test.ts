@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { type FakeHttpServer, startFakeHttpServer } from '../testing/fake-http-server.js';
 import { outcomeOfOrderError, SupplierError } from './errors.js';
-import { SupplierHttp } from './http.js';
+import { networkFailure, SupplierHttp } from './http.js';
 
 let server: FakeHttpServer;
 let http: SupplierHttp;
@@ -121,8 +121,48 @@ describe('SupplierHttp', () => {
       await failure(down.request({ method: 'GET', path: 'x', schema: balanceSchema })),
     ).toMatchObject({
       kind: 'retryable',
-      message: 'Supplier unreachable',
+      // Port 9 is one `fetch` refuses to use: no socket error code.
+      message: 'Supplier unreachable (other)',
+      details: { failure: 'other' },
     });
+  });
+
+  it('keeps the status, the failure and when a rate limit lifts (S18 FK1)', async () => {
+    server.reply(
+      { status: 429, body: {}, headers: { 'x-ratelimit-reset': '1792430640' } },
+      { status: 429, body: {}, headers: { 'retry-after': '7' } },
+      { status: 429, body: {} },
+      { status: 503, body: {} },
+      { status: 400, body: {} },
+    );
+    const read = () => failure(http.request({ method: 'GET', path: 'x', schema: balanceSchema }));
+    expect(await read()).toMatchObject({
+      details: { status: 429, failure: 'rate_limited', retryAt: 1_792_430_640_000 },
+    });
+    const before = Date.now();
+    const after = (await read()) as SupplierError;
+    expect(after.details.retryAt).toBeGreaterThanOrEqual(before + 7_000);
+    expect((await read()) as SupplierError).not.toHaveProperty('details.retryAt');
+    expect(await read()).toMatchObject({ details: { failure: 'http_5xx' } });
+    expect(await read()).toMatchObject({ details: { failure: 'http_4xx' } });
+  });
+});
+
+describe('networkFailure (S18 FK1)', () => {
+  const coded = (code: string) =>
+    new TypeError('fetch failed', { cause: Object.assign(new Error(code), { code }) });
+
+  it('tells a timeout, DNS, a connection and TLS apart', () => {
+    expect(networkFailure(new DOMException('late', 'TimeoutError'))).toBe('timeout');
+    expect(networkFailure(coded('ENOTFOUND'))).toBe('dns');
+    expect(networkFailure(coded('EAI_AGAIN'))).toBe('dns');
+    expect(networkFailure(coded('ECONNREFUSED'))).toBe('connect');
+    expect(networkFailure(coded('UND_ERR_CONNECT_TIMEOUT'))).toBe('connect');
+    expect(networkFailure(coded('CERT_HAS_EXPIRED'))).toBe('tls');
+    expect(networkFailure(coded('ERR_TLS_CERT_ALTNAME_INVALID'))).toBe('tls');
+    expect(networkFailure(coded('ESOMETHING'))).toBe('other');
+    expect(networkFailure(new Error('no code'))).toBe('other');
+    expect(networkFailure('not an error')).toBe('other');
   });
 });
 
@@ -178,11 +218,27 @@ describe('outcomeOfOrderError', () => {
   });
 
   it('treats a lost or unreadable answer as unknown, never as failed', () => {
-    expect(outcomeOfOrderError(new SupplierError('retryable', 'Supplier timed out'))).toEqual({
+    expect(
+      outcomeOfOrderError(
+        new SupplierError('retryable', 'Supplier timed out', { failure: 'timeout' }),
+      ),
+    ).toEqual({ status: 'unknown', reason: 'Supplier timed out', failure: 'timeout' });
+    expect(
+      outcomeOfOrderError(
+        new SupplierError('retryable', 'HTTP 404', { status: 404, supplierCode: 'NOT_FOUND' }),
+      ),
+    ).toEqual({
       status: 'unknown',
-      reason: 'Supplier timed out',
+      reason: 'HTTP 404',
+      failure: 'other',
+      httpStatus: 404,
+      supplierCode: 'NOT_FOUND',
     });
     expect(outcomeOfOrderError(new Error('socket hang up'))).toMatchObject({ status: 'unknown' });
-    expect(outcomeOfOrderError('weird')).toEqual({ status: 'unknown', reason: 'weird' });
+    expect(outcomeOfOrderError('weird')).toEqual({
+      status: 'unknown',
+      reason: 'weird',
+      failure: 'other',
+    });
   });
 });

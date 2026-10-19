@@ -1,5 +1,6 @@
 // Public surface of the suppliers module. Code outside this folder imports from here only.
 
+export { RoutesService } from './routes.service.js';
 export { SupplierAdaptersService } from './supplier-adapters.service.js';
 export { SupplierLiveService } from './supplier-live.service.js';
 export { SuppliersModule } from './suppliers.module.js';

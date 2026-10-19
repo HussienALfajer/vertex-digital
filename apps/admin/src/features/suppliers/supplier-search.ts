@@ -8,8 +8,9 @@ import {
 } from '@vertex-digital/contracts';
 
 /*
- * A supplier page's tab, the offers tab's filters, the catalog tab's filters and selected node,
- * and the statement's list and page, as the URL holds them, so a view can be reloaded and shared.
+ * A supplier page's tab, the offers tab's filters, the catalog tab's filters, the statement's list
+ * and page, and (S18) a category page's offer filters, as the URL holds them, so a view can be
+ * reloaded and shared.
  */
 
 export const SUPPLIER_TABS = [
@@ -38,6 +39,8 @@ export interface OfferSearch {
   supported?: Flag;
   ignored?: Flag;
   lowStock?: Flag;
+  /** S18 DC1: offers with the supplier's own discount. */
+  discounted?: Flag;
   /** Absent for the first page. */
   page?: number;
 }
@@ -48,8 +51,6 @@ export interface CategorySearch {
   cq?: string;
   state?: SupplierCategoryState;
   kind?: ProductKind;
-  /** The selected node, whose packs show below the tree. */
-  node?: string;
   /** The page of a search; absent for the first. */
   cpage?: number;
 }
@@ -84,12 +85,9 @@ const text = (value: unknown, max: number): string | undefined => {
   return trimmed.length >= 1 && trimmed.length <= max ? trimmed : undefined;
 };
 
-/** Keeps only what is valid; anything else in the URL is dropped. */
-export function parseSupplierSearch(search: Record<string, unknown>): SupplierSearch {
-  const parsed: SupplierSearch = {};
-  if ((SUPPLIER_TABS as readonly unknown[]).includes(search.tab) && search.tab !== 'connection') {
-    parsed.tab = search.tab as SupplierSearch['tab'];
-  }
+/** S18: an offers list's filters (the offers tab, a category page); anything else is dropped. */
+export function parseOfferSearch(search: Record<string, unknown>): OfferSearch {
+  const parsed: OfferSearch = {};
   const q = text(search.q, 100);
   if (q) parsed.q = q;
   const group = text(search.group, 200);
@@ -103,12 +101,22 @@ export function parseSupplierSearch(search: Record<string, unknown>): SupplierSe
     'supported',
     'ignored',
     'lowStock',
+    'discounted',
   ] as const) {
     const value = flag(search[name]);
     if (value) parsed[name] = value;
   }
   const page = pageOf(search.page);
   if (page) parsed.page = page;
+  return parsed;
+}
+
+/** Keeps only what is valid; anything else in the URL is dropped. */
+export function parseSupplierSearch(search: Record<string, unknown>): SupplierSearch {
+  const parsed: SupplierSearch = parseOfferSearch(search);
+  if ((SUPPLIER_TABS as readonly unknown[]).includes(search.tab) && search.tab !== 'connection') {
+    parsed.tab = search.tab as SupplierSearch['tab'];
+  }
   const cq = text(search.cq, 100);
   if (cq) parsed.cq = cq;
   if ((SUPPLIER_CATEGORY_STATES as readonly unknown[]).includes(search.state)) {
@@ -117,7 +125,6 @@ export function parseSupplierSearch(search: Record<string, unknown>): SupplierSe
   if ((PRODUCT_KINDS as readonly unknown[]).includes(search.kind)) {
     parsed.kind = search.kind as ProductKind;
   }
-  if (typeof search.node === 'string' && CATEGORY_ID.test(search.node)) parsed.node = search.node;
   const cpage = pageOf(search.cpage);
   if (cpage) parsed.cpage = cpage;
   if (search.list === 'transactions') parsed.list = 'transactions';
@@ -128,8 +135,19 @@ export function parseSupplierSearch(search: Record<string, unknown>): SupplierSe
 
 /** The offers tab's filters, without the tab or another tab's state. */
 export function offerFilters(search: SupplierSearch): OfferSearch {
-  const { q, group, mapped, missing, inStock, categoryId, supported, ignored, lowStock, page } =
-    search;
+  const {
+    q,
+    group,
+    mapped,
+    missing,
+    inStock,
+    categoryId,
+    supported,
+    ignored,
+    lowStock,
+    discounted,
+    page,
+  } = search;
   return Object.fromEntries(
     Object.entries({
       q,
@@ -141,18 +159,23 @@ export function offerFilters(search: SupplierSearch): OfferSearch {
       supported,
       ignored,
       lowStock,
+      discounted,
       page,
     }).filter(([, value]) => value !== undefined),
   ) as OfferSearch;
 }
 
-/** The catalog tab's filters and node. */
+/** The catalog tab's filters. */
 export function categoryFilters(search: SupplierSearch): CategorySearch {
-  const { cq, state, kind, node, cpage } = search;
+  const { cq, state, kind, cpage } = search;
   return Object.fromEntries(
-    Object.entries({ cq, state, kind, node, cpage }).filter(([, value]) => value !== undefined),
+    Object.entries({ cq, state, kind, cpage }).filter(([, value]) => value !== undefined),
   ) as CategorySearch;
 }
+
+/** S18: a category id from the URL, or null. */
+export const categoryIdOf = (value: string): string | null =>
+  CATEGORY_ID.test(value) ? value : null;
 
 /** A `:code` from the URL that names a supplier, or null. */
 export const supplierCodeOf = (code: string): SupplierCode | null =>

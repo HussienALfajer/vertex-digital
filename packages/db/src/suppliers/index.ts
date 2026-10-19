@@ -12,6 +12,7 @@ export {
   encryptCredentials,
   supplierKey,
 } from './credentials.js';
+export { recordObservedCost } from './observed-cost.js';
 export { markOfferOutOfStock } from './stock.js';
 export { failedRunStreak } from './sync-runs.js';
 export { damascusDate, VALIDATION_DAY_TIME_ZONE, validationsToday } from './validations.js';

@@ -3,7 +3,7 @@
 import type { StoreGame, StoreProduct } from '@vertex-digital/contracts';
 import { Sheet, SheetContent, SheetTitle } from '@vertex-digital/ui/components/sheet';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
-import { MousePointerClickIcon } from 'lucide-react';
+import { ChevronDownIcon, MousePointerClickIcon } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
@@ -70,6 +70,9 @@ export function GameShop({
   const selected = data.products.find((product) => product.id === packId);
   const open = buyable(selected) ? selected : null;
   const packs = calculatorPacks(data.products);
+  // The packs that can be bought lead; the others wait folded at the end (2026-10-19).
+  const ready = data.products.filter(buyable);
+  const resting = data.products.filter((product) => !buyable(product));
 
   function choose(id: string | null, count = 1, next?: BuyBoxIntent) {
     setQuantity(count);
@@ -129,19 +132,21 @@ export function GameShop({
           {data.products.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('game.noPacks')}</p>
           ) : (
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {data.products.map((product) => (
-                <li key={product.id}>
-                  <PackButton
-                    available={buyable(product)}
-                    selected={product.id === open?.id}
-                    onSelect={() => choose(product.id)}
-                  >
-                    {cards[product.id]}
-                  </PackButton>
-                </li>
-              ))}
-            </ul>
+            ready.length > 0 && (
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {ready.map((product) => (
+                  <li key={product.id}>
+                    <PackButton
+                      available
+                      selected={product.id === open?.id}
+                      onSelect={() => choose(product.id)}
+                    >
+                      {cards[product.id]}
+                    </PackButton>
+                  </li>
+                ))}
+              </ul>
+            )
           )}
         </section>
         {packs.length >= 2 && (
@@ -154,6 +159,29 @@ export function GameShop({
               choose(first.product.id, 1, { kind: 'bundle', lines });
             }}
           />
+        )}
+        {resting.length > 0 && (
+          <details
+            className="group rounded-lg border border-border bg-surface"
+            open={ready.length === 0 || resting.some((product) => product.id === packId)}
+          >
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+              {t('game.unavailable', { count: resting.length })}
+              <ChevronDownIcon
+                className="size-4 transition-transform group-open:rotate-180"
+                aria-hidden="true"
+              />
+            </summary>
+            <ul className="grid grid-cols-2 gap-3 px-4 pb-4 sm:grid-cols-3">
+              {resting.map((product) => (
+                <li key={product.id}>
+                  <PackButton available={false} selected={false} onSelect={() => {}}>
+                    {cards[product.id]}
+                  </PackButton>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
       </div>
       {desktop === null ? null : desktop ? (

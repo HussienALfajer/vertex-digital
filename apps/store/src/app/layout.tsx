@@ -10,6 +10,7 @@ import { SiteAnnouncement } from '@/features/content/announcement';
 import { REGISTRATION_SCRIPT } from '@/features/pwa/registration';
 import { APP_NAME } from '@/features/pwa/service-worker';
 import { t } from '@/lib/i18n';
+import { SESSION_HINT_SCRIPT } from '@/lib/session';
 import { THEME_SCRIPT } from '@/lib/theme';
 // The brand files stay in brand/ (their single home); the build copies them with hashed names.
 import appleTouchIcon from '../../../../brand/logo/png/apple-touch-icon.png';
@@ -37,13 +38,16 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     // Dark by default (brand/identity.md §6); THEME_SCRIPT removes `dark` for a saved light choice
-    // before paint, so React must not warn that the class differs from the server's.
+    // and SESSION_HINT_SCRIPT may add `data-signed-in-hint` before paint, so React must not warn
+    // that the element differs from the server's.
     <html lang="ar" dir="rtl" className="dark" suppressHydrationWarning>
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a constant script, no input. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a constant script, no input (S15 SW2). */}
         <script dangerouslySetInnerHTML={{ __html: REGISTRATION_SCRIPT }} />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a constant script, no input. */}
+        <script dangerouslySetInnerHTML={{ __html: SESSION_HINT_SCRIPT }} />
       </head>
       <body className="flex min-h-dvh flex-col">
         <DirectionProvider direction="rtl">

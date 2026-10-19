@@ -22,6 +22,7 @@ import {
   placeBooks,
   shamCashCountCheck,
   supplierBalanceCheck,
+  supplierChargesCheck,
   usdtBalanceCheck,
 } from './external.js';
 import { internalChecks } from './internal.js';
@@ -427,6 +428,36 @@ describe('internal checks (C1–C9)', () => {
       expect(offendingIds(resultOf(after, 'journal_balance'))).toContain(
         exchange.movement.journalId,
       );
+    });
+  });
+});
+
+describe('supplier charges (S18 RC1, RC2)', () => {
+  it('is ok for a day without orders, and lists the orders no attempt names', async () => {
+    await rolledBack(db, async (tx) => {
+      const check = (orders: Parameters<typeof supplierChargesCheck>[1]['orders']) =>
+        supplierChargesCheck(tx, { supplier: 'fake', orders, toleranceUsdUnits: USD });
+      expect(await check([])).toMatchObject({
+        check: 'supplier_charges',
+        subject: 'supplier:fake',
+        status: 'ok',
+        booksUnits: 0,
+        actualUnits: 0,
+      });
+      const result = await check([
+        { supplierOrderId: 'not-ours-1', status: 'COMPLETED', totalUnits: USD / 2 },
+        // Refunded or unread: no money spent.
+        { supplierOrderId: 'not-ours-2', status: 'refunded', totalUnits: USD },
+        { supplierOrderId: 'not-ours-3', status: null, totalUnits: null },
+      ]);
+      // Within the tolerance, but an order of nobody's is a mismatch of its own.
+      expect(result).toMatchObject({
+        status: 'mismatch',
+        actualUnits: USD / 2,
+        booksUnits: 0,
+        offendingCount: 1,
+        details: { unmatchedSupplierOrders: ['not-ours-1'], lines: [] },
+      });
     });
   });
 });

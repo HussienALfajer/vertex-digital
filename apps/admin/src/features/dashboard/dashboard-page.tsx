@@ -49,7 +49,7 @@ import { useTranslation } from 'react-i18next';
 import { useAdminStream, useDebounced, useVisibleAgain } from '../../lib/admin-stream';
 import { useSession } from '../../lib/auth';
 import { errorMessage } from '../../lib/errors';
-import { formatDateTime, formatDuration, formatSince, ltr } from '../../lib/format';
+import { formatDateTime, formatDuration, formatSince, formatTime, ltr } from '../../lib/format';
 import { dashboardQuery } from './dashboard.queries';
 
 /** Rule DB9: a burst of order events is one read, ten seconds after the first. */
@@ -167,6 +167,7 @@ function Content({ data }: { data: Dashboard }) {
           label={t('dashboard.sales')}
           value={formatUsd(data.sales.today)}
           compared={data.sales}
+          asOf={data.generatedAt}
           format={formatUsd}
         >
           <Sparkline
@@ -174,12 +175,15 @@ function Content({ data }: { data: Dashboard }) {
             label={t('dashboard.salesLine', {
               values: data.salesLine.map((point) => formatUsd(point.salesUsdUnits)).join('، '),
             })}
+            className="mt-2"
           />
+          <span className="text-xs text-muted-foreground">{t('dashboard.salesLineCaption')}</span>
         </Kpi>
         <Kpi
           label={t('dashboard.profit')}
           value={formatUsd(data.profit.today)}
           compared={data.profit}
+          asOf={data.generatedAt}
           format={formatUsd}
         >
           <p className="text-sm text-muted-foreground">
@@ -192,12 +196,14 @@ function Content({ data }: { data: Dashboard }) {
           label={t('dashboard.delivered')}
           value={String(data.delivered.today)}
           compared={data.delivered}
+          asOf={data.generatedAt}
           format={String}
         />
         <Kpi
           label={t('dashboard.refunds')}
           value={String(data.refunds.today)}
           compared={data.refunds}
+          asOf={data.generatedAt}
           format={String}
           upIsBad
         >
@@ -321,6 +327,7 @@ function Kpi({
   label,
   value,
   compared,
+  asOf,
   format,
   upIsBad,
   children,
@@ -328,6 +335,8 @@ function Kpi({
   label: string;
   value: string;
   compared: Compared;
+  /** When the figures were read: yesterday is counted up to the same clock time. */
+  asOf: string;
   format: (value: number) => string;
   upIsBad?: boolean;
   children?: ReactNode;
@@ -343,7 +352,10 @@ function Kpi({
         <Delta compared={compared} upIsBad={upIsBad} />
       </span>
       <span className="text-xs text-muted-foreground">
-        {t('dashboard.yesterday', { value: ltr(format(compared.yesterday)) })}
+        {t('dashboard.yesterday', {
+          time: formatTime(asOf),
+          value: ltr(format(compared.yesterday)),
+        })}
       </span>
       {children}
     </Card>

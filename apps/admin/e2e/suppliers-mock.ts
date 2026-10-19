@@ -402,7 +402,8 @@ export class SuppliersMock {
   private pricing(productId: string) {
     const price = this.currentPrice(productId);
     const usable = this.usable(productId);
-    const basis = this.basisOf(productId)?.route;
+    const basisItem = this.basisOf(productId);
+    const basis = basisItem?.route;
     return {
       price: price
         ? {
@@ -412,6 +413,7 @@ export class SuppliersMock {
         : null,
       usableRouteCostsUsdUnits: usable.map((item) => item.costUsdUnits),
       basisSupplierNameAr: basis ? NAMES[basis.supplierCode] : null,
+      basisCostUsdUnits: basisItem?.costUsdUnits ?? null,
       basisStockLevel: basis ? this.stockLevelOf(this.offerOf(basis)) : null,
       priceHeld: !basis && usable.length > 0,
       routed: this.routes.some((route) => route.productId === productId && !route.archivedAt),
@@ -549,6 +551,10 @@ export class SuppliersMock {
       productsRepriced: 0,
       errorCode: null,
       errorMessage: null,
+      offersRead: true,
+      // S18 SY4, PS1: the sync reads the supplier's own status first.
+      platformStatus: supplierPanelCapabilities(code).platformStatus ? 'operational' : null,
+      catalogUpdatedAt: supplierPanelCapabilities(code).platformStatus ? now : null,
     };
     this.supplier(code).runs.unshift(run);
     if (code === 'fake' && this.failNextSync) {
@@ -598,6 +604,7 @@ export class SuppliersMock {
           fieldSpecs: fields?.fieldSpecs ?? (kind === 'direct' ? [PLAYER_FIELD] : []),
           unsupportedReason: null,
           ignoredAt: null,
+          discountBp: null,
         };
         this.offers.push(offer);
         run.offersNew += 1;
@@ -666,7 +673,14 @@ export class SuppliersMock {
           ['low', 'out'].includes(this.stockLevelOf(offer)) &&
           this.servesActive(offer),
       ).length,
-      platformStatus: null,
+      // S18 PS1: the newest run's reading; the cards never call the supplier.
+      platformStatus: row.runs[0]?.platformStatus
+        ? {
+            status: row.runs[0].platformStatus,
+            catalogUpdatedAt: row.runs[0].catalogUpdatedAt,
+            checkedAt: row.runs[0].startedAt,
+          }
+        : null,
     };
   }
 
@@ -942,6 +956,9 @@ export class SuppliersMock {
             productsRepriced: 0,
             errorCode: null,
             errorMessage: null,
+            offersRead: true,
+            platformStatus: null,
+            catalogUpdatedAt: null,
           });
         }
         return { status: 200, json: this.detail(row) };
@@ -989,6 +1006,10 @@ export class SuppliersMock {
               !flag('lowStock') ||
               String(offer.mapped !== null && ['low', 'out'].includes(offer.stockLevel)) ===
                 flag('lowStock'),
+          )
+          .filter(
+            (offer) =>
+              !flag('discounted') || String(offer.discountBp !== null) === flag('discounted'),
           )
           .sort(
             (a, b) =>
@@ -1074,6 +1095,7 @@ export class SuppliersMock {
           fieldSpecs: null,
           unsupportedReason: null,
           ignoredAt: null,
+          discountBp: null,
         };
         this.offers.push(offer);
         this.addRoute(productId, 'manual', offer.id, {});

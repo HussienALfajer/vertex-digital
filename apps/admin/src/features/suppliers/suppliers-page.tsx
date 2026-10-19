@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { BalanceLine, LastRun, PlatformStatusLine, SupplierChips } from './supplier-parts';
+import { BalanceLine, LastRun, PlatformStatusView, SupplierChips } from './supplier-parts';
 import { suppliersQuery, useRequestSync } from './suppliers.queries';
 
 /**
@@ -79,7 +79,7 @@ function SupplierCard({ supplier }: { supplier: SupplierSummary }) {
             <bdi>{supplier.nameAr}</bdi>
           </CardTitle>
           <SupplierChips supplier={supplier} />
-          {supplier.capabilities.platformStatus && <PlatformStatusLine code={supplier.code} />}
+          {supplier.platformStatus && <PlatformStatusView status={supplier.platformStatus} />}
         </div>
         <Button
           variant="outline"

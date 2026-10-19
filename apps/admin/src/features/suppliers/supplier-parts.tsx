@@ -9,7 +9,7 @@ import {
   type SupplierSummary,
   type SyncRun,
 } from '@vertex-digital/contracts';
-import { Badge } from '@vertex-digital/ui';
+import { Badge, Tooltip, TooltipContent, TooltipTrigger } from '@vertex-digital/ui';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime, formatSince } from '../../lib/format';
 import { platformStatusQuery } from './suppliers.queries';
@@ -25,10 +25,20 @@ const HEALTH_TONES = {
   down: 'danger',
 } as const satisfies Record<SupplierHealthState, string>;
 
-/** "سليم", "متراجع" or "متوقف" (rules H1–H3). */
+/** "سليم", "متراجع" or "متوقف" (rules H1–H3), with what the state means as its tooltip. */
 export function HealthBadge({ health }: { health: SupplierHealthState }) {
   const { t } = useTranslation();
-  return <Badge tone={HEALTH_TONES[health]}>{t(`suppliers.health.${health}`)}</Badge>;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<Badge tone={HEALTH_TONES[health]} tabIndex={0} />}
+        aria-label={`${t(`suppliers.health.${health}`)}: ${t(`suppliers.healthMeaning.${health}`)}`}
+      >
+        {t(`suppliers.health.${health}`)}
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">{t(`suppliers.healthMeaning.${health}`)}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 /** Available or not (rule SP1), configured, paused (rule SP3), and its health. */
@@ -170,19 +180,33 @@ export function PlatformStatusLine({ code }: { code: SupplierCode }) {
   if (status.isError) {
     return <span className="text-sm text-muted-foreground">{t('suppliers.platform.failed')}</span>;
   }
+  return <PlatformStatusView status={status.data} />;
+}
+
+/** S18: the supplier's words for its state in Arabic; any other shows as received. */
+const PLATFORM_STATES = ['operational', 'maintenance', 'degraded', 'down'] as const;
+
+/**
+ * The supplier's own status and when its catalog last changed; S18 PS1: the cards show the one
+ * the list carries (the sync's or the panel's last read) and never call the supplier.
+ */
+export function PlatformStatusView({
+  status,
+}: {
+  status: { status: string; catalogUpdatedAt: string | null };
+}) {
+  const { t } = useTranslation();
+  const known = PLATFORM_STATES.find((state) => state === status.status.toLowerCase());
   return (
     <span className="flex flex-wrap items-center gap-2 text-sm">
       <span className="text-muted-foreground">{t('suppliers.platform.label')}</span>
-      <Badge tone="outline">
-        <bdi>{status.data.status}</bdi>
+      <Badge tone={known === 'operational' ? 'success' : 'outline'}>
+        <bdi>{known ? t(`suppliers.platform.states.${known}`) : status.status}</bdi>
       </Badge>
-      {status.data.catalogUpdatedAt && (
-        <span
-          className="text-muted-foreground"
-          title={formatDateTime(status.data.catalogUpdatedAt)}
-        >
+      {status.catalogUpdatedAt && (
+        <span className="text-muted-foreground" title={formatDateTime(status.catalogUpdatedAt)}>
           {t('suppliers.platform.catalogUpdated', {
-            since: formatSince(status.data.catalogUpdatedAt),
+            since: formatSince(status.catalogUpdatedAt),
           })}
         </span>
       )}

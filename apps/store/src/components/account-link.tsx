@@ -7,20 +7,36 @@ import { useEffect, useState } from 'react';
 import { t } from '@/lib/i18n';
 import { readSession, type Session } from '@/lib/session';
 
+/** The signed-in header's shape (balance, bell, menu) while it loads. */
+function SignedInPlaceholder({ className }: { className?: string }) {
+  return (
+    <div aria-hidden="true" className={`items-center sm:gap-1 ${className ?? 'flex'}`}>
+      {/* The Skeleton component's classes, without its import in every page's first load. */}
+      <span className="h-11 w-24 animate-pulse rounded-md bg-muted" />
+      <span className="size-11 animate-pulse rounded-md bg-muted" />
+      <span className="size-11 animate-pulse rounded-full bg-muted" />
+    </div>
+  );
+}
+
 // Only signed-in customers download the balance, the bell and the menu, as one chunk: the first
 // load stays within its budget.
-const SignedInHeader = dynamic(() =>
-  import('./signed-in-header').then((module) => module.SignedInHeader),
+const SignedInHeader = dynamic(
+  () => import('./signed-in-header').then((module) => module.SignedInHeader),
+  { loading: () => <SignedInPlaceholder /> },
 );
 
 /**
  * The header's account entry. Read in the browser, so every page stays static and cacheable:
  * "sign in" (and "create account" while registration is open, rule C16) until a session is known
  * to exist, then the wallet balance (rule W8 of S02), the notification bell (S05) and the
- * customer's initial with the account menu.
+ * customer's initial with the account menu. While the session is read, a browser that was signed
+ * in last time (`data-signed-in-hint`, set before paint by SESSION_HINT_SCRIPT) shows the
+ * signed-in placeholder instead of flashing "sign in".
  */
 export function AccountLink() {
-  const [session, setSession] = useState<Session>(null);
+  // Undefined while the read is under way.
+  const [session, setSession] = useState<Session | undefined>(undefined);
   const [canSignUp, setCanSignUp] = useState(false);
 
   useEffect(() => {
@@ -29,6 +45,8 @@ export function AccountLink() {
       if (!active) return;
       setSession(value);
       if (value) return;
+      // Signed out since the last visit: the phone header shows the theme switch again.
+      document.documentElement.removeAttribute('data-signed-in-hint');
       const registration = await fetch('/api/auth/registration', {
         credentials: 'same-origin',
         cache: 'no-store',
@@ -44,8 +62,10 @@ export function AccountLink() {
 
   if (session) return <SignedInHeader name={session.user.name} email={session.user.email} />;
 
-  return (
-    <div className="flex items-center gap-1">
+  const signedOut = (
+    <div
+      className={`items-center gap-1 ${session === undefined ? 'flex [[data-signed-in-hint]_&]:hidden' : 'flex'}`}
+    >
       {canSignUp && (
         <Button
           variant="ghost"
@@ -67,5 +87,13 @@ export function AccountLink() {
         {t('header.signIn')}
       </Button>
     </div>
+  );
+
+  if (session === null) return signedOut;
+  return (
+    <>
+      <SignedInPlaceholder className="hidden [[data-signed-in-hint]_&]:flex" />
+      {signedOut}
+    </>
   );
 }

@@ -16,6 +16,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@vertex-digital/ui';
+import type { TFunction } from 'i18next';
 import { ReceiptTextIcon, RefreshCwIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,7 +30,9 @@ import { statementOrdersQuery, statementTransactionsQuery } from './suppliers.qu
  * "كشف الحساب" (S16 SF3): the supplier's orders and wallet movements, read live one page at a
  * time (one read per 5 seconds per list; never stored). A supplier order matched to one of our
  * attempts links to our order with the attempt's state; an unmatched one is marked as a possible
- * double purchase; a match on a refunded order is marked too (edge case 20).
+ * double purchase; a match on a refunded order is marked too (edge case 20). S18 ST3: each order's
+ * amount and delivery time, statuses and movement types in Arabic (as received when unknown), and
+ * a read refused by the 5-second limit waits and reads again.
  */
 export function StatementTab({
   supplier,
@@ -75,6 +78,39 @@ export function StatementTab({
   );
 }
 
+/** S18 ST3: the supplier's own words in Arabic; a value it adds later shows as received. */
+const ORDER_STATUSES = [
+  'completed',
+  'pending',
+  'processing',
+  'refunded',
+  'failed',
+  'cancelled',
+] as const;
+const MOVEMENT_TYPES = ['purchase', 'deposit', 'refund', 'adjustment'] as const;
+
+function orderStatusText(t: TFunction, status: string): string {
+  const known = ORDER_STATUSES.find((item) => item === status.toLowerCase());
+  return known ? t(`suppliers.statement.statuses.${known}`) : status;
+}
+
+function movementTypeText(t: TFunction, type: string): string {
+  const known = MOVEMENT_TYPES.find((item) => item === type.toLowerCase());
+  return known ? t(`suppliers.statement.types.${known}`) : type;
+}
+
+/** S18 ST3: how long the supplier took, from its own times. */
+function deliveryText(t: TFunction, createdAt: string | null, completedAt: string | null) {
+  if (!createdAt || !completedAt) return null;
+  const seconds = Math.max(
+    0,
+    Math.round((new Date(completedAt).getTime() - new Date(createdAt).getTime()) / 1000),
+  );
+  return seconds < 120
+    ? t('suppliers.statement.seconds', { count: seconds })
+    : t('suppliers.statement.minutes', { count: Math.round(seconds / 60) });
+}
+
 function OrdersList({
   supplier,
   page,
@@ -97,19 +133,22 @@ function OrdersList({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t('suppliers.statement.columns.order')}</TableHead>
+              <TableHead className="sticky start-0 z-10 bg-muted">
+                {t('suppliers.statement.columns.order')}
+              </TableHead>
               <TableHead>{t('suppliers.statement.columns.offer')}</TableHead>
               <TableHead>{t('suppliers.statement.columns.quantity')}</TableHead>
               <TableHead>{t('suppliers.statement.columns.total')}</TableHead>
               <TableHead>{t('suppliers.statement.columns.status')}</TableHead>
               <TableHead>{t('suppliers.statement.columns.time')}</TableHead>
+              <TableHead>{t('suppliers.statement.columns.delivery')}</TableHead>
               <TableHead>{t('suppliers.statement.columns.match')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {orders.data.items.map((order) => (
               <TableRow key={order.supplierOrderId}>
-                <TableCell>
+                <TableCell className="sticky start-0 z-10 bg-surface">
                   <bdi dir="ltr" className="text-sm">
                     {order.supplierOrderId}
                   </bdi>
@@ -129,9 +168,14 @@ function OrdersList({
                 <TableCell>
                   <Money units={order.totalUsdUnits} />
                 </TableCell>
-                <TableCell>{order.status ? <bdi>{order.status}</bdi> : '—'}</TableCell>
-                <TableCell className="text-sm">
+                <TableCell>
+                  {order.status ? <bdi>{orderStatusText(t, order.status)}</bdi> : '—'}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-sm">
                   {order.createdAt ? formatDateTime(order.createdAt) : '—'}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-sm tabular-nums">
+                  {deliveryText(t, order.createdAt, order.completedAt) ?? '—'}
                 </TableCell>
                 <TableCell>
                   <MatchCell match={order.match} />
@@ -167,7 +211,9 @@ function TransactionsList({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t('suppliers.statement.columns.type')}</TableHead>
+              <TableHead className="sticky start-0 z-10 bg-muted">
+                {t('suppliers.statement.columns.type')}
+              </TableHead>
               <TableHead>{t('suppliers.statement.columns.amount')}</TableHead>
               <TableHead>{t('suppliers.statement.columns.balanceAfter')}</TableHead>
               <TableHead>{t('suppliers.statement.columns.reference')}</TableHead>
@@ -178,7 +224,9 @@ function TransactionsList({
           <TableBody>
             {transactions.data.items.map((item) => (
               <TableRow key={item.id}>
-                <TableCell>{item.type ? <bdi>{item.type}</bdi> : '—'}</TableCell>
+                <TableCell className="sticky start-0 z-10 bg-surface">
+                  {item.type ? <bdi>{movementTypeText(t, item.type)}</bdi> : '—'}
+                </TableCell>
                 <TableCell>
                   <Money units={item.amountUsdUnits} signed />
                 </TableCell>
@@ -195,7 +243,7 @@ function TransactionsList({
                     )}
                   </span>
                 </TableCell>
-                <TableCell className="text-sm">
+                <TableCell className="whitespace-nowrap text-sm">
                   {item.createdAt ? formatDateTime(item.createdAt) : '—'}
                 </TableCell>
                 <TableCell>
@@ -250,7 +298,15 @@ function StatementFrame({
           {t('suppliers.statement.refresh')}
         </Button>
       </div>
-      {query.isPending && <Skeleton className="h-64 w-full" aria-hidden="true" />}
+      {query.isPending && (
+        <div className="flex flex-col gap-2">
+          {/* A slow supplier takes up to its 15-second limit: say so instead of a bare skeleton. */}
+          <p role="status" className="text-sm text-muted-foreground">
+            {t('suppliers.statement.reading')}
+          </p>
+          <Skeleton className="h-64 w-full" aria-hidden="true" />
+        </div>
+      )}
       {query.isError && <FormAlert>{errorMessage(t, query.error)}</FormAlert>}
       {query.data &&
         (query.data.items.length === 0 ? (

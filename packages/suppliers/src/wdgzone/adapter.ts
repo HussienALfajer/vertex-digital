@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+  type FailureKind,
   type FieldSpec,
   MAX_FIELD_SPEC_OPTIONS,
   MAX_FIELD_SPECS,
@@ -16,6 +17,7 @@ import type {
   SupplierCategory,
   SupplierMoney,
   SupplierOffer,
+  SupplierOfferQuote,
   SupplierOrderRow,
   SupplierOutcome,
   SupplierPlatformStatus,
@@ -37,6 +39,7 @@ import {
   meReplySchema,
   orderRowSchema,
   orderStateReplySchema,
+  productReplySchema,
   productSchema,
   productsPageSchema,
   purchaseReplySchema,
@@ -71,6 +74,28 @@ const MAX_PAGES_PER_TYPE = 300;
 const PAGE_SIZE = 100;
 /** WDG takes the order and reserves stock before it answers: longer than the default 15 s. */
 const PURCHASE_TIMEOUT_MS = 30_000;
+/** S18 PQ1: a quote that takes longer is skipped and the order sent as before. */
+const QUOTE_TIMEOUT_MS = 5_000;
+/** S18 SY1: a catalog page is read at most this many more times, after these waits. */
+const PAGE_RETRY_DELAYS_MS = [2_000, 5_000] as const;
+/** S18 SY1: failures a page is read again after; a refusal (401, 403, 404) is not. */
+const PAGE_RETRY_FAILURES: ReadonlySet<FailureKind> = new Set([
+  'timeout',
+  'dns',
+  'connect',
+  'tls',
+  'rate_limited',
+  'http_5xx',
+  'unreadable',
+  'other',
+]);
+/** S18 SY1: at most this long for a rate limit to lift. */
+const RATE_LIMIT_MAX_WAIT_MS = 61_000;
+/**
+ * S18 TZ1: WDG writes times without an offset in UTC+4 (`/health` gives `catalog_updated_at` 4
+ * hours ahead of its own UTC `time`; order 3940's `00:53:16` was our attempt at `20:53:16Z`).
+ */
+const WDG_TIME_OFFSET = '+04:00';
 /**
  * Webhooks carry no signed timestamp header; the signed body's `created_at` is checked instead.
  * WDG retries a failed delivery 6 times with exponential backoff, keeping the event: a day covers
@@ -114,6 +139,17 @@ export interface WdgzoneAdapterOptions {
   timeoutMs?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
+  /** S18 SY2: told of each catalog page read again, for the caller's log. */
+  onRetry?: (retry: PageRetry) => void;
+}
+
+/** S18 SY2: a catalog page read again, and why. */
+export interface PageRetry {
+  path: string;
+  attempt: number;
+  failure: FailureKind;
+  status?: number;
+  waitMs: number;
 }
 
 /** A header's whole number, or undefined when it is missing or not one. */
@@ -136,6 +172,7 @@ export class WdgzoneAdapter implements SupplierAdapter {
     categories: true,
     statement: true,
     platformStatus: true,
+    offerQuote: true,
   };
 
   readonly imageHosts: readonly string[] = IMAGE_HOSTS;
@@ -163,7 +200,7 @@ export class WdgzoneAdapter implements SupplierAdapter {
     const offers: SupplierOffer[] = [];
     for (const type of Object.keys(CATALOG_TYPES) as (keyof typeof CATALOG_TYPES)[]) {
       for (let page = 1; ; page += 1) {
-        const reply = await this.paced({
+        const reply = await this.pagedRead({
           method: 'GET',
           path: `products?type=${type}&limit=${PAGE_SIZE}&page=${page}`,
           schema: productsPageSchema,
@@ -187,7 +224,7 @@ export class WdgzoneAdapter implements SupplierAdapter {
   async listCategories(): Promise<SupplierCategory[]> {
     const categories: SupplierCategory[] = [];
     for (let page = 1; ; page += 1) {
-      const reply = await this.paced({
+      const reply = await this.pagedRead({
         method: 'GET',
         path: page === 1 ? 'categories' : `categories?page=${page}`,
         schema: categoriesReplySchema,
@@ -217,13 +254,20 @@ export class WdgzoneAdapter implements SupplierAdapter {
     });
     const items = reply.data.flatMap((item): SupplierTransactionRow[] => {
       const row = transactionRowSchema.safeParse(item);
-      if (!row.success || (row.data.currency != null && row.data.currency !== 'USD')) return [];
+      if (
+        !row.success ||
+        (row.data.currency != null && row.data.currency.toUpperCase() !== 'USD')
+      ) {
+        return [];
+      }
       const { data } = row;
       const amount = signedUsd(data.amount);
       const balanceAfter = signedUsd(data.balance_after);
       const createdAt = dateOf(data.created_at);
       const reference = (data.reference ?? data.description)?.trim().slice(0, 200);
-      const orderId = data.order_id ?? (data.reference_type === 'order' ? data.reference_id : null);
+      // S18 ST2: the live rows name their order by `reference_type` and `reference_id`.
+      const supplierOrderId =
+        data.reference_type === 'order' && data.reference_id ? data.reference_id : data.order_id;
       return [
         {
           id: data.id.slice(0, 64),
@@ -231,7 +275,7 @@ export class WdgzoneAdapter implements SupplierAdapter {
           ...(amount && { amount }),
           ...(balanceAfter && { balanceAfter }),
           ...(reference && { reference }),
-          ...(orderId && { supplierOrderId: orderId.slice(0, 64) }),
+          ...(supplierOrderId && { supplierOrderId: supplierOrderId.slice(0, 64) }),
           ...(createdAt && { createdAt }),
         },
       ];
@@ -252,10 +296,11 @@ export class WdgzoneAdapter implements SupplierAdapter {
       if (!row.success) return [];
       const { data } = row;
       const total =
-        data.currency == null || data.currency === 'USD'
-          ? signedUsd(data.total ?? data.total_price)
+        data.currency == null || data.currency.toUpperCase() === 'USD'
+          ? signedUsd(data.total_price ?? data.total)
           : null;
       const createdAt = dateOf(data.created_at);
+      const completedAt = dateOf(data.completed_at);
       const offerName = (data.product_name ?? data.product)?.trim().slice(0, 200);
       return [
         {
@@ -266,6 +311,7 @@ export class WdgzoneAdapter implements SupplierAdapter {
           ...(data.status && { status: data.status.slice(0, 64) }),
           ...(total && { total }),
           ...(createdAt && { createdAt }),
+          ...(completedAt && { completedAt }),
         },
       ];
     });
@@ -325,6 +371,33 @@ export class WdgzoneAdapter implements SupplierAdapter {
     return { currency: 'USD', amountUnits };
   }
 
+  /** S18 PQ1: `GET /products/{id}`, within 5 seconds; throws a `SupplierError`. */
+  async getOfferQuote(offerId: string): Promise<SupplierOfferQuote> {
+    if (!WDG_ID_PATTERN.test(offerId)) {
+      throw new SupplierError('definitive', 'Not a WDGZone product id', {
+        supplierCode: 'PRODUCT_NOT_FOUND',
+      });
+    }
+    const reply = await this.http.request({
+      method: 'GET',
+      path: `products/${offerId}`,
+      schema: productReplySchema,
+      errorCode: wdgErrorCode,
+      timeoutMs: Math.min(this.options.timeoutMs ?? QUOTE_TIMEOUT_MS, QUOTE_TIMEOUT_MS),
+    });
+    const product = reply.data;
+    const amountUnits = usdUnits(product.price);
+    if (product.currency !== 'USD' || amountUnits === null) {
+      throw new SupplierError('retryable', 'WDGZone product has an unexpected price', {
+        failure: 'unreadable',
+      });
+    }
+    return {
+      cost: { currency: 'USD', amountUnits },
+      inStock: product.available && (product.stock == null || product.stock > 0),
+    };
+  }
+
   async validatePlayer(): Promise<PlayerValidation> {
     throw new SupplierError('definitive', 'WDGZone does not check player ids');
   }
@@ -358,11 +431,12 @@ export class WdgzoneAdapter implements SupplierAdapter {
         timeoutMs: this.options.timeoutMs ?? PURCHASE_TIMEOUT_MS,
       });
       const supplierOrderId = String(reply.data.order_id);
+      const charged = chargedUnits(reply.data.total);
       if (reply.data.status.toLowerCase() !== 'completed') {
         // Any other state is followed by polling, whose 200 and 410 are the documented ends.
-        return { status: 'pending', supplierOrderId };
+        return { status: 'pending', supplierOrderId, ...charged };
       }
-      return delivered(supplierOrderId, request.quantity, reply.data.delivery_items);
+      return delivered(supplierOrderId, request.quantity, reply.data.delivery_items, charged);
     } catch (error) {
       if (
         error instanceof SupplierError &&
@@ -395,14 +469,31 @@ export class WdgzoneAdapter implements SupplierAdapter {
       if (reply.status === 202) return await this.orderState(supplierOrderId, placed.quantity);
       const ready = deliveryReplySchema.safeParse(reply.data);
       if (reply.status !== 200 || !ready.success) {
-        return { status: 'unknown', supplierOrderId, reason: 'WDGZone delivery reply unexpected' };
+        return {
+          status: 'unknown',
+          supplierOrderId,
+          reason: 'WDGZone delivery reply unexpected',
+          failure: 'unreadable',
+          httpStatus: reply.status,
+        };
       }
       const { quantity, status, delivery_items: items } = ready.data.data;
+      // S18 HE4: read answers that do not settle the order yet are no fault of WDG's.
       if (status != null && status.toLowerCase() !== 'completed') {
-        return { status: 'unknown', supplierOrderId, reason: 'WDGZone delivery is not completed' };
+        return {
+          status: 'unknown',
+          supplierOrderId,
+          reason: 'WDGZone delivery is not completed',
+          answered: true,
+        };
       }
       if (quantity !== undefined && quantity !== placed.quantity) {
-        return { status: 'unknown', supplierOrderId, reason: 'WDGZone delivered other units' };
+        return {
+          status: 'unknown',
+          supplierOrderId,
+          reason: 'WDGZone delivered other units',
+          answered: true,
+        };
       }
       return delivered(supplierOrderId, placed.quantity, items);
     } catch (error) {
@@ -415,8 +506,11 @@ export class WdgzoneAdapter implements SupplierAdapter {
         };
       }
       // Not found, a timeout or an error page: never a failure (the order may exist).
-      const reason = error instanceof Error ? error.message : String(error);
-      return { status: 'unknown', supplierOrderId, reason };
+      const outcome = outcomeOfOrderError(error);
+      if (outcome.status !== 'unknown') return { ...outcome, supplierOrderId };
+      // S18 HE4: "not found" is an answer (an order WDG has not listed yet), not a fault.
+      const notFound = outcome.supplierCode === 'ORDER_NOT_FOUND';
+      return { ...outcome, supplierOrderId, ...(notFound && { answered: true }) };
     }
   }
 
@@ -433,18 +527,29 @@ export class WdgzoneAdapter implements SupplierAdapter {
       errorCode: wdgErrorCode,
     });
     const status = reply.data.status.toLowerCase();
-    if (status === 'completed') return { status: 'delivered', supplierOrderId, quantity };
-    if (status === 'pending' || status === 'processing')
-      return { status: 'pending', supplierOrderId };
+    const charged = chargedUnits(reply.data.total_price);
+    if (status === 'completed') {
+      return { status: 'delivered', supplierOrderId, quantity, ...charged };
+    }
+    if (status === 'pending' || status === 'processing') {
+      return { status: 'pending', supplierOrderId, ...charged };
+    }
     if (status === 'refunded' || status === 'failed' || status === 'cancelled') {
+      // S18 DD1: the supplier's own reason, so the admin sees why it failed the order.
+      const message = reply.data.error_message?.trim().slice(0, 200);
       return {
         status: 'failed_definitive',
         supplierOrderId,
         supplierCode: reply.data.status.toUpperCase(),
-        reason: 'Failed by WDGZone',
+        reason: message || 'Failed by WDGZone',
       };
     }
-    return { status: 'unknown', supplierOrderId, reason: 'WDGZone order state unexpected' };
+    return {
+      status: 'unknown',
+      supplierOrderId,
+      reason: 'WDGZone order state unexpected',
+      answered: true,
+    };
   }
 
   verifyWebhook(request: WebhookRequest, now?: Date): boolean {
@@ -452,7 +557,9 @@ export class WdgzoneAdapter implements SupplierAdapter {
     if (!header?.startsWith('sha256=')) return false;
     let createdAt: number;
     try {
-      createdAt = Date.parse(webhookTimeSchema.parse(JSON.parse(request.rawBody)).created_at);
+      createdAt =
+        dateOf(webhookTimeSchema.parse(JSON.parse(request.rawBody)).created_at)?.getTime() ??
+        Number.NaN;
     } catch {
       return false;
     }
@@ -479,10 +586,16 @@ export class WdgzoneAdapter implements SupplierAdapter {
       if (body.data.refunded === true) {
         throw new SupplierError('definitive', 'WDGZone webhook is completed and refunded');
       }
+      const usd = body.data.currency == null || body.data.currency.toUpperCase() === 'USD';
       return {
         eventId: body.id,
         supplierOrderId,
-        outcome: delivered(supplierOrderId, body.data.quantity, body.data.delivery_items),
+        outcome: delivered(
+          supplierOrderId,
+          body.data.quantity,
+          body.data.delivery_items,
+          usd ? chargedUnits(body.data.total) : {},
+        ),
       };
     }
     return {
@@ -495,6 +608,46 @@ export class WdgzoneAdapter implements SupplierAdapter {
         reason: 'Failed by WDGZone',
       },
     };
+  }
+
+  /**
+   * S18 SY1: a catalog page through `paced`, read up to twice more when it fails without a
+   * refusal: after 2 s and 5 s, or once a rate limit lifts (at most 61 s).
+   */
+  private async pagedRead<T>(request: SupplierRequest<T>): Promise<T> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.paced(request);
+      } catch (error) {
+        const failure = error instanceof SupplierError ? error.details.failure : undefined;
+        const delay = PAGE_RETRY_DELAYS_MS[attempt];
+        if (
+          !(error instanceof SupplierError) ||
+          error.kind === 'definitive' ||
+          failure === undefined ||
+          !PAGE_RETRY_FAILURES.has(failure) ||
+          delay === undefined
+        ) {
+          throw error;
+        }
+        const retryAt = error.details.retryAt;
+        const waitMs =
+          failure === 'rate_limited' && retryAt !== undefined
+            ? Math.min(
+                Math.max(retryAt - this.now().getTime() + 1000, delay),
+                RATE_LIMIT_MAX_WAIT_MS,
+              )
+            : delay;
+        this.options.onRetry?.({
+          path: request.path.split('?')[0] ?? request.path,
+          attempt: attempt + 1,
+          failure,
+          ...(error.details.status !== undefined && { status: error.details.status }),
+          waitMs,
+        });
+        await this.sleep(waitMs);
+      }
+    }
   }
 
   /** A catalog page, then a pause until the window resets when few requests are left in it. */
@@ -612,6 +765,7 @@ function toOffer(product: WdgProduct): SupplierOffer | null {
   const group = product.brand?.trim() || product.category?.trim() || undefined;
   const category = product.category?.trim();
   const original = product.original_price == null ? null : usdUnits(product.original_price);
+  const discountBp = percentBp(product.discount_percent);
   const stock =
     product.stock == null || product.stock < 0 || product.stock >= UNLIMITED_STOCK
       ? undefined
@@ -633,7 +787,24 @@ function toOffer(product: WdgProduct): SupplierOffer | null {
       original > 0 && { originalCost: { currency: 'USD', amountUnits: original } }),
     fieldSpecs,
     ...(unsupported && { unsupportedReason: 'fields_unsupported' as const }),
+    ...(discountBp !== null && discountBp > 0 && { discountBp }),
   };
+}
+
+/** S18 DC1: a percent with up to 2 decimals (`2`, `2.5`, `"1.25"`) in basis points, or null. */
+function percentBp(value: number | string | null | undefined): number | null {
+  if (value == null) return null;
+  const match = /^(\d{1,3})(?:\.(\d{1,2}))?$/.exec(String(value).trim());
+  if (!match) return null;
+  const bp = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
+  return bp <= 10_000 ? bp : null;
+}
+
+/** S18 CH1: a WDG total as an outcome's `chargedUsdUnits`; nothing when unreadable. */
+function chargedUnits(value: number | string | null | undefined): { chargedUsdUnits?: number } {
+  if (value == null) return {};
+  const units = usdUnits(value);
+  return units === null ? {} : { chargedUsdUnits: units };
 }
 
 /** A signed WDG amount in USD (a purchase is negative on the statement), or null. */
@@ -646,19 +817,14 @@ function signedUsd(value: number | string | null | undefined): SupplierMoney | n
 }
 
 /**
- * WDG writes its statement times without a zone, in UTC+4 (F11-9, seen live on 2026-10-19: order
- * 3940's `created_at` "2026-10-19 00:53:16" and `completed_at` "00:53:23", its signed webhook
- * "2026-10-18T20:53:23+00:00"; the same four hours on orders 3507 and 3457). Read as the server's
- * local time (Europe/Berlin), they came out two hours late.
+ * A WDG time, or null when it does not parse. S18 TZ1: `2026-10-19 00:53:16` (no offset) is in
+ * UTC+4; a time with `Z` or an offset is read as given.
  */
-const WDG_ZONE_OFFSET = '+04:00';
-const ZONELESS_TIME = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/;
-
-/** A WDG time, with its own zone or else WDG's (never the server's), or null when it does not parse. */
 function dateOf(value: string | null | undefined): Date | null {
   if (!value) return null;
-  const zoneless = ZONELESS_TIME.exec(value.trim());
-  const time = Date.parse(zoneless ? `${zoneless[1]}T${zoneless[2]}${WDG_ZONE_OFFSET}` : value);
+  const text = value.trim();
+  const local = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?)$/.exec(text);
+  const time = Date.parse(local ? `${local[1]}T${local[2]}${WDG_TIME_OFFSET}` : text);
   return Number.isFinite(time) ? new Date(time) : null;
 }
 
@@ -690,16 +856,23 @@ function delivered(
   supplierOrderId: string,
   quantity: number,
   items: readonly WdgDeliveryItem[] | null | undefined,
+  charged: { chargedUsdUnits?: number } = {},
 ): SupplierOutcome {
   const codes = codeTexts(items ?? []);
   if (codes === null) {
-    return { status: 'unknown', supplierOrderId, reason: 'WDGZone delivered an unreadable code' };
+    return {
+      status: 'unknown',
+      supplierOrderId,
+      reason: 'WDGZone delivered an unreadable code',
+      answered: true,
+    };
   }
   return {
     status: 'delivered',
     supplierOrderId,
     quantity,
     ...(codes.length > 0 && { codes }),
+    ...charged,
   };
 }
 

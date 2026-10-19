@@ -4,6 +4,7 @@ import {
   CATALOG_IMAGE_MAX_BYTES,
   CATALOG_IMAGE_MAX_INPUT_PIXELS,
   type CatalogImage,
+  CONNECTION_TEST_INTERVAL_SECONDS,
   isNearbySupplierOrder,
   NEARBY_SUPPLIER_ORDER_MINUTES,
   type NearbySupplierOrders,
@@ -11,6 +12,7 @@ import {
   SUPPLIER_CODES,
   type SupplierCallOperation,
   type SupplierCode,
+  type SupplierConnectionTest,
   type SupplierOrder,
   type SupplierOrderPage,
   type SupplierPanelCapabilities,
@@ -36,9 +38,10 @@ import sharp from 'sharp';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
+import type { Actor } from '../catalog/index.js';
 import { CatalogService } from '../catalog/index.js';
 import { SupplierAdaptersService } from './supplier-adapters.service.js';
-import { refusals } from './supplier-records.js';
+import { auditSuppliers, refusals } from './supplier-records.js';
 
 /*
  * S16's live supplier reads for the panel (rules IM1–IM3, SF3–SF5): category images, the
@@ -310,6 +313,67 @@ export class SupplierLiveService {
     return adapter;
   }
 
+  /**
+   * S18 CS1: one live balance read, recorded as `test_connection` (outside health) and audited,
+   * answered with why it failed; once per 10 seconds per supplier (`RATE_LIMITED`).
+   */
+  async testConnection(actor: Actor, code: string): Promise<SupplierConnectionTest> {
+    const supplier = await this.supplier(code);
+    const key = `test:${supplier.id}`;
+    const now = Date.now();
+    const last = this.lastReads.get(key);
+    if (last !== undefined && now - last < CONNECTION_TEST_INTERVAL_SECONDS * 1_000) {
+      throw new CodedException(429, 'RATE_LIMITED', 'One connection test per 10 seconds');
+    }
+    this.lastReads.set(key, now);
+    const adapter = await this.adapters.connect(supplier);
+    if (!adapter) {
+      throw new CodedException(409, 'SUPPLIER_NOT_CONFIGURED', 'Set the credentials first');
+    }
+    const started = performance.now();
+    let balance: SupplierMoney | null = null;
+    let failure: unknown = null;
+    try {
+      balance = await adapter.getBalance();
+    } catch (error) {
+      failure = error;
+    }
+    const latencyMs = Math.max(0, Math.round(performance.now() - started));
+    const details = failure instanceof SupplierError ? failure.details : {};
+    const result =
+      failure === null
+        ? 'ok'
+        : failure instanceof SupplierError && failure.kind === 'definitive'
+          ? 'refused'
+          : 'error';
+    const failureKind = result === 'error' ? (details.failure ?? 'other') : null;
+    await this.db.transaction(async (tx) => {
+      await this.adapters.recordCall(tx, {
+        supplierId: supplier.id,
+        operation: 'test_connection',
+        result,
+        latencyMs,
+        error: failure ?? undefined,
+      });
+      await auditSuppliers(
+        tx,
+        actor,
+        'supplier.connection_tested',
+        { type: 'supplier', id: supplier.id },
+        { supplier: supplier.code, ok: failure === null, failureKind },
+      );
+    });
+    return {
+      ok: failure === null,
+      latencyMs,
+      balance,
+      failureKind,
+      httpStatus: details.status ?? null,
+      supplierCode: details.supplierCode?.slice(0, 64) ?? null,
+      testedAt: new Date().toISOString(),
+    };
+  }
+
   /** One adapter call, recorded (SF6); a failure answers `SUPPLIER_UNAVAILABLE`. */
   private async call<T>(
     supplier: SupplierRef,
@@ -317,12 +381,13 @@ export class SupplierLiveService {
     work: () => Promise<T>,
   ): Promise<T> {
     const started = performance.now();
-    const record = (result: 'ok' | 'refused' | 'error') =>
+    const record = (result: 'ok' | 'refused' | 'error', error?: unknown) =>
       this.adapters.recordCall(this.db, {
         supplierId: supplier.id,
         operation,
         result,
         latencyMs: Math.max(0, Math.round(performance.now() - started)),
+        error,
       });
     try {
       const value = await work();
@@ -331,6 +396,7 @@ export class SupplierLiveService {
     } catch (error) {
       await record(
         error instanceof SupplierError && error.kind === 'definitive' ? 'refused' : 'error',
+        error,
       );
       throw unavailable();
     }
@@ -360,6 +426,7 @@ export class SupplierLiveService {
       status: row.status ?? null,
       totalUsdUnits: usdUnits(row.total),
       createdAt: row.createdAt?.toISOString() ?? null,
+      completedAt: row.completedAt?.toISOString() ?? null,
       match: matches.get(row.supplierOrderId) ?? null,
     }));
   }
