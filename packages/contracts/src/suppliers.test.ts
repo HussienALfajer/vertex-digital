@@ -11,6 +11,7 @@ import {
   importOffersSchema,
   isCostStale,
   orderRoutes,
+  P90_MIN_SAMPLES,
   priceBasis,
   probeOutcome,
   type RouteFacts,
@@ -336,9 +337,11 @@ describe('supplierHealth (rules H1, H2; S18 HE1–HE3)', () => {
       reason: 'success 80% < 90%',
       successBp: 8_000,
     });
+    // The p90 counts from P90_MIN_SAMPLES timed calls: 3 slow of 20 make it slow.
     const slow = [
-      ...Array.from({ length: 8 }, () => call('ok', 400)),
+      ...Array.from({ length: P90_MIN_SAMPLES - 3 }, () => call('ok', 400)),
       call('ok', 12_000),
+      call('ok', 13_000),
       call('ok', 15_000),
     ];
     expect(supplierHealth(slow, P, healthy, now)).toMatchObject({
@@ -346,6 +349,8 @@ describe('supplierHealth (rules H1, H2; S18 HE1–HE3)', () => {
       reason: 'p90 12000 ms > 10000 ms',
       p90Ms: 12_000,
     });
+    // Two slow of 20 leave the p90 fast.
+    expect(supplierHealth(slow.slice(1), P, healthy, now)).toMatchObject({ state: 'healthy' });
     // At the limit exactly, and a slow catalog read does not count (rule H1).
     expect(
       supplierHealth(
@@ -358,6 +363,21 @@ describe('supplierHealth (rules H1, H2; S18 HE1–HE3)', () => {
     expect(
       supplierHealth([call('ok', 60_000, 'list_offers'), ...calls(9, 0)], P, healthy, now),
     ).toMatchObject({ state: 'healthy', calls: 10, p90Ms: 500 });
+  });
+
+  it('is not degraded by one slow call while the store is idle (2026-10-19)', () => {
+    // Production at 22:51 Damascus: six balance reads in the window, one of 11.8 s, two catalog
+    // reads each way, all answered. The p90 is shown but does not decide the state.
+    const idle = [
+      ...Array.from({ length: 5 }, () => call('ok', 50)),
+      call('ok', 11_794),
+      ...Array.from({ length: 2 }, () => call('ok', 150_000, 'list_offers')),
+      ...Array.from({ length: 2 }, () => call('ok', 400, 'list_categories')),
+    ];
+    expect(supplierHealth(idle, P, healthy, now)).toMatchObject({
+      state: 'healthy',
+      p90Ms: 11_794,
+    });
   });
 
   it('is down below 50% success, or after consecutive errors of two operations or more', () => {
@@ -447,12 +467,11 @@ describe('supplierHealth (rules H1, H2; S18 HE1–HE3)', () => {
       state: 'degraded',
       reason: 'recovering: held 2 of 5 minutes',
     });
-    // So is a slow p90.
-    const slowBefore = [
+    // So is a slow p90 (judged: 20 timed calls in the window two minutes back).
+    const slowBefore = Array.from({ length: 3 }, () =>
       call('ok', 15_000, 'get_balance', minutesAgo(31.5)),
-      call('ok', 15_000, 'get_balance', minutesAgo(31.5)),
-    ];
-    expect(supplierHealth([...slowBefore, ...spread(12, 5)], P, degraded, now)).toMatchObject({
+    );
+    expect(supplierHealth([...slowBefore, ...spread(17, 5)], P, degraded, now)).toMatchObject({
       state: 'degraded',
       reason: 'recovering: held 2 of 5 minutes',
     });

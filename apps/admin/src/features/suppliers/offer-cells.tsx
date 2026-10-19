@@ -90,6 +90,7 @@ export function OfferCost({
         originalCostUsdUnits={offer.originalCostUsdUnits}
         discountPercent={offer.discountPercent}
         discountBp={offer.discountBp ?? null}
+        costUsdUnits={offer.costUsdUnits}
       />
       {offer.costStale ? (
         <Badge tone="warning">{t('suppliers.offers.costStale')}</Badge>
@@ -109,24 +110,30 @@ export function OfferCost({
 
 /**
  * Rule SF1: the supplier's price before its discount, shown only with a discount; S18 DC1: the
- * supplier's own figure (WDG's VIP discount) as "خصم VIP" when it gives one.
+ * supplier's own figure (WDG's VIP discount) as "خصم VIP" when it gives one, with the original
+ * struck through whenever it is above the cost, even when the derived discount rounds below 1%.
  */
 export function OriginalPrice({
   originalCostUsdUnits,
   discountPercent,
   discountBp = null,
+  costUsdUnits = null,
 }: {
   originalCostUsdUnits: number | null;
   discountPercent: number | null;
   discountBp?: number | null;
+  costUsdUnits?: number | null;
 }) {
   const { t } = useTranslation();
   if (discountBp === null && (originalCostUsdUnits === null || discountPercent === null)) {
     return null;
   }
+  const struck =
+    originalCostUsdUnits !== null &&
+    (discountPercent !== null || (costUsdUnits !== null && originalCostUsdUnits > costUsdUnits));
   return (
     <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-      {originalCostUsdUnits !== null && discountPercent !== null && (
+      {struck && (
         <bdi dir="ltr" className="tabular-nums line-through">
           {formatUsd(originalCostUsdUnits)}
         </bdi>

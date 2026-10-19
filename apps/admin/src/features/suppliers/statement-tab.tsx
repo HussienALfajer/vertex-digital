@@ -298,7 +298,15 @@ function StatementFrame({
           {t('suppliers.statement.refresh')}
         </Button>
       </div>
-      {query.isPending && <Skeleton className="h-64 w-full" aria-hidden="true" />}
+      {query.isPending && (
+        <div className="flex flex-col gap-2">
+          {/* A slow supplier takes up to its 15-second limit: say so instead of a bare skeleton. */}
+          <p role="status" className="text-sm text-muted-foreground">
+            {t('suppliers.statement.reading')}
+          </p>
+          <Skeleton className="h-64 w-full" aria-hidden="true" />
+        </div>
+      )}
       {query.isError && <FormAlert>{errorMessage(t, query.error)}</FormAlert>}
       {query.data &&
         (query.data.items.length === 0 ? (

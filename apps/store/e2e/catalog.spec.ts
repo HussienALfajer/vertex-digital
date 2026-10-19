@@ -22,19 +22,23 @@ const syp = (units: number) => fill(c.price.syp, { amount: formatSyp(units) });
 const lightTheme = () => localStorage.setItem('vertex-theme', 'light');
 
 test.describe('home (rules SF1, SS2)', () => {
-  test('shows the service line, the category chips and the game cards', async ({
+  test('shows the category chips and the game cards, and no service line', async ({
     page,
     api: _api,
   }) => {
     await page.goto('/');
-    await expect(page.getByText(c.service.slow)).toBeVisible();
+    // Owner, 2026-10-19: a slow supplier is the panel's business, never the customer's.
+    await expect(page.getByText('أبطأ من المعتاد')).toHaveCount(0);
+    await expect(page.getByText('تعمل بشكل طبيعي')).toHaveCount(0);
     const categories = page.getByRole('navigation', { name: c.categories });
     // A category without games is not shown.
     await expect(categories.getByRole('link')).toHaveText(['ألعاب', 'بطاقات الهدايا']);
     const pubg = page.getByRole('link', { name: /ببجي موبايل/ });
     await expect(pubg).toContainText('PUBG Mobile');
-    await expect(pubg).toContainText(c.status.normal);
-    await expect(page.getByRole('link', { name: /فري فاير/ })).toContainText(c.status.slow);
+    // Only a game the customer cannot buy carries a chip (rule SS1).
+    await expect(page.getByRole('link', { name: /فري فاير/ })).not.toContainText(
+      c.status.unavailable,
+    );
     await expect(page.getByRole('link', { name: /موبايل ليجندز/ })).toContainText(
       c.status.unavailable,
     );
@@ -283,7 +287,7 @@ for (const theme of ['dark', 'light'] as const) {
     if (theme === 'light') await page.addInitScript(lightTheme);
     api.on('GET /api/catalog/search-index', 200, searchIndex());
     await page.goto('/');
-    await expect(page.getByText(c.service.slow)).toBeVisible();
+    await expect(page.getByRole('navigation', { name: c.categories })).toBeVisible();
     await screenshot(page, testInfo, `home-catalog-${theme}`);
     await page.goto(`${EMPTY_STORE_URL}/`);
     await expect(page.getByText(c.empty)).toBeVisible();

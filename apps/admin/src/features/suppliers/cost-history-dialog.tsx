@@ -57,6 +57,7 @@ export function CostHistoryDialog({ offer }: { offer: SupplierOffer }) {
             <figure className="flex flex-col gap-1">
               <Sparkline
                 className="h-16 w-full"
+                scale="range"
                 label={t('suppliers.costs.chart', { name: offer.name })}
                 values={costs.data.items
                   .toReversed()

@@ -35,7 +35,7 @@ An audit of the WDGZone integration before launch (2026-10-19, production data a
 ## States and rules
 
 ### Health (amends S07 H1–H4)
-- HE1. Window, success and p90 as before. `healthy`/`degraded` → `degraded` below `degraded_success_bp` or above `degraded_p90_ms`, with at least `health_min_calls` calls.
+- HE1. Window, success and p90 as before. `healthy`/`degraded` → `degraded` below `degraded_success_bp` or above `degraded_p90_ms`, with at least `health_min_calls` calls. The p90 decides only with at least 20 timed calls (catalog reads aside, `P90_MIN_SAMPLES`); with fewer it is shown but ignored, here and in HE2 (owner, 2026-10-19: one 11.8 s balance read among six made WDG `degraded` for half an hour while the store was idle).
 - HE2. **Recovery (hysteresis):** `degraded` → `healthy` only when, at each of the last `recover_minutes` whole minutes (now, now − 1 min, …), the window ending then has at least `health_min_calls` calls, success ≥ `recover_success_bp` and p90 ≤ `degraded_p90_ms`. Otherwise it stays `degraded`. The probe rule H3 is unchanged (a probe leads to `degraded`, then HE2).
 - HE3. **Consecutive errors:** `down` after the last `down_consecutive_errors` calls are all `error` **and span at least two operations**. One attempt's polls alone never make a supplier `down`; a real outage fails the balance read, the sync or a purchase too.
 - HE4. **Answered is not an error:** an order call whose outcome is `unknown` but whose reply the supplier gave and the adapter read (a 202 still processing, a delivery not yet completed, `ORDER_NOT_FOUND`, a quantity it does not report) counts as `ok`. Timeouts, connection failures, 5xx, 429 and unreadable replies stay `error`.

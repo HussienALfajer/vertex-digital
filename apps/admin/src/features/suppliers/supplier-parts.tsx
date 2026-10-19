@@ -9,7 +9,7 @@ import {
   type SupplierSummary,
   type SyncRun,
 } from '@vertex-digital/contracts';
-import { Badge } from '@vertex-digital/ui';
+import { Badge, Tooltip, TooltipContent, TooltipTrigger } from '@vertex-digital/ui';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime, formatSince } from '../../lib/format';
 import { platformStatusQuery } from './suppliers.queries';
@@ -25,10 +25,20 @@ const HEALTH_TONES = {
   down: 'danger',
 } as const satisfies Record<SupplierHealthState, string>;
 
-/** "سليم", "متراجع" or "متوقف" (rules H1–H3). */
+/** "سليم", "متراجع" or "متوقف" (rules H1–H3), with what the state means as its tooltip. */
 export function HealthBadge({ health }: { health: SupplierHealthState }) {
   const { t } = useTranslation();
-  return <Badge tone={HEALTH_TONES[health]}>{t(`suppliers.health.${health}`)}</Badge>;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<Badge tone={HEALTH_TONES[health]} tabIndex={0} />}
+        aria-label={`${t(`suppliers.health.${health}`)}: ${t(`suppliers.healthMeaning.${health}`)}`}
+      >
+        {t(`suppliers.health.${health}`)}
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">{t(`suppliers.healthMeaning.${health}`)}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 /** Available or not (rule SP1), configured, paused (rule SP3), and its health. */

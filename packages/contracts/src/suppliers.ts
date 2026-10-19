@@ -300,12 +300,27 @@ export function healthReadStart(
   return healthWindowStart(previous, earliest, policy);
 }
 
+/**
+ * The fewest timed calls (catalog reads aside) whose p90 can make a supplier `degraded`. Below it
+ * the p90 is the slowest call or the one after it, so one slow balance read while the store is idle
+ * (about six timed calls in 30 minutes) would decide the state alone (owner, 2026-10-19). The p90
+ * is still shown with fewer calls.
+ */
+export const P90_MIN_SAMPLES = 20;
+
 /** The figures of the window ending at `at` (rule H1): calls, success and p90. */
 function windowFigures(
   calls: readonly HealthCall[],
   from: Date,
   at: Date,
-): { inWindow: HealthCall[]; calls: number; successBp: number | null; p90Ms: number | null } {
+): {
+  inWindow: HealthCall[];
+  calls: number;
+  successBp: number | null;
+  p90Ms: number | null;
+  /** The p90 counts for the state (`P90_MIN_SAMPLES` timed calls or more). */
+  p90Judged: boolean;
+} {
   const inWindow = calls.filter((call) => call.at >= from && call.at <= at);
   const total = inWindow.length;
   const answered = inWindow.filter((call) => call.result !== 'error').length;
@@ -319,7 +334,13 @@ function windowFigures(
     latencies.length === 0
       ? null
       : (latencies[Math.ceil((latencies.length * 9) / 10) - 1] as number);
-  return { inWindow, calls: total, successBp, p90Ms };
+  return {
+    inWindow,
+    calls: total,
+    successBp,
+    p90Ms,
+    p90Judged: latencies.length >= P90_MIN_SAMPLES,
+  };
 }
 
 /**
@@ -341,7 +362,7 @@ export function supplierHealth(
   const at = (minutesBack: number) => new Date(now.getTime() - minutesBack * 60_000);
   const figuresAt = (moment: Date) =>
     windowFigures(calls, healthWindowStart(previous, moment, policy), moment);
-  const { inWindow, ...figures } = figuresAt(now);
+  const { inWindow, p90Judged, ...figures } = figuresAt(now);
   const { calls: total, successBp, p90Ms } = figures;
   const run = inWindow.slice(-policy.downConsecutiveErrors);
   if (
@@ -372,7 +393,7 @@ export function supplierHealth(
       ...figures,
     };
   }
-  if (p90Ms !== null && p90Ms > policy.degradedP90Ms) {
+  if (p90Judged && p90Ms !== null && p90Ms > policy.degradedP90Ms) {
     return {
       state: 'degraded',
       reason: `p90 ${p90Ms} ms > ${policy.degradedP90Ms} ms`,
@@ -386,7 +407,7 @@ export function supplierHealth(
         held.successBp !== null &&
         held.calls >= policy.healthMinCalls &&
         held.successBp >= policy.recoverSuccessBp &&
-        (held.p90Ms === null || held.p90Ms <= policy.degradedP90Ms);
+        (!held.p90Judged || held.p90Ms === null || held.p90Ms <= policy.degradedP90Ms);
       if (!recovered) {
         return {
           state: 'degraded',
