@@ -654,4 +654,18 @@ describe('fake supplier catalog tree, stock, statement and status (S16)', () => 
       SupplierError,
     );
   });
+
+  it('reads its catalog whole and has no account reads (S19)', async () => {
+    const fake = adapter();
+    expect(fake.capabilities).toMatchObject({ offerWindow: false, account: false });
+    for (const call of [
+      () => fake.listOffersIn(),
+      () => fake.getAccount(),
+      () => fake.getWebhook(),
+      () => fake.setWebhook(),
+      () => fake.testWebhook(),
+    ]) {
+      await expect(call()).rejects.toMatchObject({ kind: 'definitive' });
+    }
+  });
 });

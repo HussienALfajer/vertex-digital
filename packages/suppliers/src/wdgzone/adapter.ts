@@ -12,21 +12,25 @@ import type {
   PlacedOrder,
   PlaceOrderRequest,
   PlayerValidation,
+  SupplierAccount,
   SupplierAdapter,
   SupplierCapabilities,
   SupplierCategory,
   SupplierMoney,
   SupplierOffer,
   SupplierOfferQuote,
+  SupplierOfferWindow,
   SupplierOrderRow,
   SupplierOutcome,
   SupplierPlatformStatus,
   SupplierStatementPage,
   SupplierTransactionRow,
+  SupplierWebhookDeliveryRow,
   SupplierWebhookEvent,
+  SupplierWebhookState,
   WebhookRequest,
 } from '../core/adapter.js';
-import { outcomeOfOrderError, SupplierError } from '../core/errors.js';
+import { notSupported, outcomeOfOrderError, SupplierError } from '../core/errors.js';
 import { verifyHmacSignature } from '../core/hmac.js';
 import { SupplierHttp, type SupplierRequest } from '../core/http.js';
 import { fetchImageFromHosts, imageUrlAllowed } from '../core/image.js';
@@ -173,6 +177,8 @@ export class WdgzoneAdapter implements SupplierAdapter {
     statement: true,
     platformStatus: true,
     offerQuote: true,
+    offerWindow: false,
+    account: false,
   };
 
   readonly imageHosts: readonly string[] = IMAGE_HOSTS;
@@ -194,6 +200,27 @@ export class WdgzoneAdapter implements SupplierAdapter {
       : '';
     this.now = options.now ?? (() => new Date());
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  }
+
+  /** S19: the catalog is read whole (`listOffers`), with no account reads. */
+  listOffersIn(): Promise<SupplierOfferWindow> {
+    return notSupported('WDGZone', 'read offers by category');
+  }
+
+  getAccount(): Promise<SupplierAccount> {
+    return notSupported('WDGZone', 'report its plan');
+  }
+
+  getWebhook(): Promise<{ state: SupplierWebhookState; deliveries: SupplierWebhookDeliveryRow[] }> {
+    return notSupported('WDGZone', 'report its webhook');
+  }
+
+  setWebhook(): Promise<SupplierWebhookState> {
+    return notSupported('WDGZone', 'set its webhook');
+  }
+
+  testWebhook(): Promise<void> {
+    return notSupported('WDGZone', 'test its webhook');
   }
 
   async listOffers(): Promise<SupplierOffer[]> {

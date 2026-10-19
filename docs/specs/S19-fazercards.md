@@ -152,7 +152,9 @@ Audited: credentials, the webhook set and test, the game's check provider row, a
 9. S18 changes the same supplier contracts (`packages/contracts/src/suppliers.ts`, `core/adapter.ts`): S19's code PRs start after S18 merges, on its result.
 
 ## Open questions
-None blocking. Recorded for PR 2's exploration: the `validate-id` game list and its region values (edge 3); whether Bronze prices differ from the trial's (D1 accepts either).
+None blocking. PR 2's exploration (2026-10-20, read-only, `docs/suppliers/fazercards.md`): `validate-id` lists 5 check categories (`pubg_mobile`, `free_fire`, `mobile_legends`, two Magic Chess), whose ids differ from the order categories' (`pubg_mobile_auto`), so PC1's provider row names the check category; a "not found" answer carries no region, and a found player's region is still unseen (edge 3). The trial was active until 2026-10-24, so Bronze was not needed for it (D1). Still open: whether Bronze prices differ from the trial's (D1 accepts either).
+
+Settled in PR 2: categories are stored as `topup.<id>` and `gift.<id>` (the category id's own bounds); the panel's account calls (plan, webhook settings) are recorded as `account`, outside health; webhook events that name no order result are stored as `ignored`; FC9 also turns back on when the plan is active again (an `active` alert); the Connection tab shows the validation quota for a supplier with an account (FC8); a plan read or an order refused with `subscription_inactive` turns the plan inactive at once (FC5, FC9); a webhook set that fails is audited too (`set: false`); gift cards keep their order bounds on the offer (`min_quantity`, `max_quantity`), and a route whose product sells a quantity outside them is unusable (`quantity_unsupported`, RT4).
 
 ## Acceptance
 - Owner, after PR 1's deploy: enter the FazerCards key and webhook secret in the panel; the card shows "not available" until PR 2.

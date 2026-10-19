@@ -7,7 +7,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { BalanceLine, LastRun, PlatformStatusView, SupplierChips } from './supplier-parts';
+import {
+  BalanceLine,
+  LastRun,
+  PlatformStatusView,
+  SubscriptionLine,
+  SupplierChips,
+} from './supplier-parts';
 import { suppliersQuery, useRequestSync } from './suppliers.queries';
 
 /**
@@ -94,6 +100,14 @@ function SupplierCard({ supplier }: { supplier: SupplierSummary }) {
             <dt className="text-muted-foreground">{t('suppliers.balance.title')}</dt>
             <dd>
               <BalanceLine supplier={supplier} />
+            </dd>
+          </div>
+        )}
+        {supplier.capabilities.account && (
+          <div className="flex flex-col gap-1">
+            <dt className="text-muted-foreground">{t('suppliers.subscription.title')}</dt>
+            <dd>
+              <SubscriptionLine supplier={supplier} />
             </dd>
           </div>
         )}

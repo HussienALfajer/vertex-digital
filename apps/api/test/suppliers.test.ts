@@ -343,13 +343,13 @@ describe('access', () => {
 });
 
 describe('suppliers (rules SP1–SP3)', () => {
-  it('lists the four suppliers; FazerCards without its adapter yet (S19 FC2)', async () => {
+  it('lists the four suppliers, FazerCards with its adapter (S19 FC2)', async () => {
     const list = await json<
       { code: string; available: boolean; configured: boolean; lowBalanceUsdUnits: number }[]
     >(await get('/api/admin/suppliers'), 200);
     expect(list.map((item) => [item.code, item.available])).toEqual([
       ['wdgzone', true],
-      ['fazercards', false],
+      ['fazercards', true],
       ['manual', true],
       ['fake', true],
     ]);
@@ -414,7 +414,7 @@ describe('suppliers (rules SP1–SP3)', () => {
     expect(JSON.stringify(audit)).not.toContain(SECRET.slice(0, -4));
   });
 
-  it('stores FazerCards key and webhook secret before its adapter, starting no sync (S19 FC2)', async () => {
+  it('stores FazerCards key and webhook secret, then tests them with a sync (S19 FC2)', async () => {
     const detail = await json<{
       available: boolean;
       configured: boolean;
@@ -427,14 +427,14 @@ describe('suppliers (rules SP1–SP3)', () => {
       }),
       200,
     );
-    expect(detail).toMatchObject({ available: false, configured: true, lastRun: null });
+    // Rule SP2: new keys are tested by an admin run (the worker reads FazerCards with them).
+    expect(detail).toMatchObject({
+      available: true,
+      configured: true,
+      lastRun: { status: 'running', trigger: 'admin' },
+    });
     expect(detail.credentialFields).toEqual(['apiKey', 'webhookSecret']);
     expect(detail.credentials.hints).toEqual({ apiKey: 'c3d4', webhookSecret: 'a1b2' });
-    // Unavailable: nothing to sync until PR 2's adapter.
-    expect(await body(await post('/api/admin/suppliers/fazercards/sync'))).toMatchObject({
-      status: 409,
-      code: 'SUPPLIER_UNAVAILABLE',
-    });
   });
 
   it('starts a sync once: the running run, then one a minute (rule SY1)', async () => {

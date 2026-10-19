@@ -26,6 +26,7 @@ import {
   askSupplier,
   checkCharge,
   markStockRefusal,
+  markSubscriptionRefusal,
   orderContext,
   type QuoteCheck,
   quoteBeforeSend,
@@ -96,7 +97,10 @@ export class OrdersPollJob implements OnApplicationBootstrap {
       // S17 WR8: only a rerouted attempt's first send (S16 RS1) is a refusal for stock; a status
       // read or a re-send never marks the offer.
       const routing = routingContext(this.env);
-      if (call === 'place') await markStockRefusal(tx, applied, outcome, routing);
+      if (call === 'place') {
+        await markStockRefusal(tx, applied, outcome, routing);
+        await markSubscriptionRefusal(tx, applied, outcome, { ...routing, jobs: context.jobs });
+      }
       await applyQuotedCost(tx, applied.attempt, quote, routing);
       if (applied.applied) await checkCharge(tx, applied, { ...routing, jobs: context.jobs });
       return applied;

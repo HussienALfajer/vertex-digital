@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "kind": "topup",
+  "category_id": "pubg_mobile_manual",
+  "name": "PUBG Mobile (Manual)",
+  "offers": [
+    {
+      "offer_id": "60_uc",
+      "name": "60 UC",
+      "price_usd": "0.8976"
+    },
+    {
+      "offer_id": "325_uc",
+      "name": "325 UC",
+      "price_usd": "4.4370"
+    },
+    {
+      "offer_id": "660_uc",
+      "name": "660 UC",
+      "price_usd": "8.4752"
+    },
+    {
+      "offer_id": "1800_uc",
+      "name": "1800 UC",
+      "price_usd": "20.9100"
+    },
+    {
+      "offer_id": "3850_uc",
+      "name": "3850 UC",
+      "price_usd": "41.5140"
+    },
+    {
+      "offer_id": "8100_uc",
+      "name": "8100 UC",
+      "price_usd": "82.3140"
+    }
+  ],
+  "fields": [
+    {
+      "key": "player_id",
+      "label": "Player ID",
+      "type": "text"
+    }
+  ],
+  "note": "Region: Global\nManual PUBG Mobile top-up.\nAverage delivery time: 5–15 minutes.\nSuccess rate is approximately 50/50 depending on the provider status.\nIf the top-up cannot be completed, a refund can be issued."
+}

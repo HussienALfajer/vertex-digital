@@ -64,6 +64,9 @@ test.describe('supplier catalog', () => {
     await page.getByRole('button', { name: fill(c.expand, { name: 'PUBG Mobile' }) }).click();
     await expect(page.getByRole('link', { name: 'Global', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'MENA', exact: true })).toBeVisible();
+    // S19: the supplier's note on a category is shown under it, as text.
+    await page.getByRole('button', { name: fill(c.expand, { name: 'Free Fire' }) }).click();
+    await expect(page.getByText(/^Region: MENA/)).toBeVisible();
 
     // A search lists nodes at any depth with their path.
     await page.getByLabel(c.search).fill('mena');

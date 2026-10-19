@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "order": {
+    "id": "ord-101",
+    "kind": "topup",
+    "status": "completed",
+    "offer_id": "60_uc",
+    "category_id": "pubg_mobile_auto",
+    "price_usd": "0.8750",
+    "total_usd": "0.8750",
+    "cards": [],
+    "fail_reason": null,
+    "status_history": [
+      {
+        "status": "created",
+        "at": "2026-10-20T09:00:00Z"
+      },
+      {
+        "status": "processing",
+        "at": "2026-10-20T09:00:01Z"
+      },
+      {
+        "status": "completed",
+        "at": "2026-10-20T09:00:02Z"
+      }
+    ],
+    "created_at": "2026-10-20T09:00:00.000Z",
+    "completed_at": "2026-10-20T09:00:02.000Z"
+  }
+}

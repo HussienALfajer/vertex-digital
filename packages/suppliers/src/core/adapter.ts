@@ -31,6 +31,13 @@ export interface SupplierCapabilities {
   platformStatus: boolean;
   /** S18 PQ1: reads one offer's current cost (`getOfferQuote`), before a purchase. */
   offerQuote: boolean;
+  /**
+   * S19 FC3: offers are read one category at a time (`listOffersIn`), for the categories the sync
+   * picks; `listOffers` is not used.
+   */
+  offerWindow: boolean;
+  /** S19 FC8, FC9: reads its plan (`getAccount`) and sets its webhook (`setWebhook`, …). */
+  account: boolean;
 }
 
 /** A money amount in integer units of a currency (ADR 0003). */
@@ -63,6 +70,9 @@ export interface SupplierOffer {
   unsupportedReason?: OfferUnsupportedReason;
   /** S18 DC1: the supplier's own discount on this offer, in basis points (2% = 200). */
   discountBp?: number;
+  /** S19: the units one order may take, when the supplier bounds them (gift cards). */
+  minQuantity?: number;
+  maxQuantity?: number;
 }
 
 /** S18 PQ1: one offer's cost and availability now. */
@@ -81,6 +91,43 @@ export interface SupplierCategory {
   inStockCount?: number;
   /** HTTPS on one of the adapter's `imageHosts`; left out otherwise (rule IM1). */
   imageUrl?: string;
+  /** S19: the supplier's own text on the category (FazerCards' region and delivery note). */
+  note?: string;
+}
+
+/** S19 FC3: the offers of the categories read, and which were read (a failed one is not). */
+export interface SupplierOfferWindow {
+  offers: SupplierOffer[];
+  readCategoryIds: string[];
+}
+
+/** S19 FC9: the supplier's plan. */
+export interface SupplierAccount {
+  plan: string;
+  expiresAt?: Date;
+  active: boolean;
+  autoRenew?: boolean;
+}
+
+/** S19 FC8: one delivery in the supplier's webhook log. */
+export interface SupplierWebhookDeliveryRow {
+  id: string;
+  event: string;
+  attempt?: number;
+  status: string;
+  responseStatus?: number;
+  durationMs?: number;
+  createdAt?: Date;
+}
+
+/** S19 FC8: the supplier's webhook settings, never its secret. */
+export interface SupplierWebhookState {
+  url?: string;
+  enabled: boolean;
+  consecutiveFailures?: number;
+  lastSuccessAt?: Date;
+  lastFailureAt?: Date;
+  lastFailureReason?: string;
 }
 
 /** S16 SF3: a page of the supplier's statement, newest first. */
@@ -129,6 +176,8 @@ export interface PlayerValidation {
   valid: boolean;
   /** The in-game name, when the supplier returns it. */
   playerName?: string;
+  /** S19 PC3: the account's region, when the supplier returns it. */
+  region?: string;
 }
 
 /** Input field values of an order, keyed by the supplier's own field names (ADR 0005). */
@@ -168,6 +217,12 @@ export interface PlaceOrderRequest {
  * out until the next sync); WDGZone's own code, which the fake supplier uses too.
  */
 export const OUT_OF_STOCK_CODE = 'OUT_OF_STOCK';
+
+/**
+ * S19 FC5, FC9: the code an adapter gives a refusal for an inactive plan (FazerCards' own): the
+ * worker then treats the supplier's plan as inactive, so it takes no order or check until renewed.
+ */
+export const SUBSCRIPTION_INACTIVE_CODE = 'subscription_inactive';
 
 export type SupplierOutcome =
   | {
@@ -230,6 +285,8 @@ export interface SupplierWebhookEvent {
   /** The supplier's own order id, for suppliers whose webhooks carry only that (WDGZone). */
   supplierOrderId?: string;
   outcome: SupplierOutcome;
+  /** S19 FC7: an event that names no order result (a test, a creation): stored, never applied. */
+  ignored?: boolean;
 }
 
 export interface SupplierAdapter {
@@ -238,7 +295,12 @@ export interface SupplierAdapter {
   readonly capabilities: SupplierCapabilities;
   listOffers(): Promise<SupplierOffer[]>;
   getBalance(): Promise<SupplierMoney>;
-  validatePlayer(input: { offerId: string; fields: OrderFields }): Promise<PlayerValidation>;
+  /** `categoryId`: the supplier's own check category, for suppliers that check by one (S19 PC2). */
+  validatePlayer(input: {
+    offerId: string;
+    categoryId?: string;
+    fields: OrderFields;
+  }): Promise<PlayerValidation>;
   /** Never throws: every failure is classified into the outcome. */
   placeOrder(request: PlaceOrderRequest): Promise<SupplierOutcome>;
   /**
@@ -266,4 +328,14 @@ export interface SupplierAdapter {
    * redirect to another host, within the limits; throws a `SupplierError` otherwise.
    */
   fetchImage(url: string, limits: ImageLimits): Promise<Uint8Array>;
+  /** S19 FC3, behind `offerWindow`: the offers of these categories; throws when none was read. */
+  listOffersIn(categoryIds: readonly string[]): Promise<SupplierOfferWindow>;
+  /** S19 FC9, behind `account`. */
+  getAccount(): Promise<SupplierAccount>;
+  /** S19 FC8, behind `account`: the settings and the last deliveries. */
+  getWebhook(): Promise<{ state: SupplierWebhookState; deliveries: SupplierWebhookDeliveryRow[] }>;
+  /** S19 FC8: points the supplier's webhook at `url`, enabled. */
+  setWebhook(url: string): Promise<SupplierWebhookState>;
+  /** S19 FC8: asks the supplier to send its test event. */
+  testWebhook(): Promise<void>;
 }

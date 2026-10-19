@@ -34,6 +34,8 @@ import {
   supplierOfferPageSchema,
   supplierPolicySchema,
   supplierSummarySchema,
+  supplierWebhookSettingsSchema,
+  supplierWebhookTestSchema,
   syncRunPageSchema,
   syncRunSchema,
   type UpdateSupplier,
@@ -123,6 +125,45 @@ export class SuppliersAdminController {
   @ApiOkResponse({ description: 'The supplier', standardSchema: supplierDetailSchema })
   detail(@Param('code') code: string) {
     return this.suppliers.detail(code);
+  }
+
+  /** S19 FC8: the supplier's webhook settings and last deliveries, read live. */
+  @Get(':code/webhook')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: supplierWebhookSettingsSchema })
+  @ApiOkResponse({ description: 'Read live', standardSchema: supplierWebhookSettingsSchema })
+  webhook(@Param('code') code: string) {
+    return this.live.webhook(code);
+  }
+
+  /** S19 FC8: points the supplier's webhook at this store and sends its test event. */
+  @Put(':code/webhook')
+  @AdminRoute()
+  @Sensitive()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: supplierWebhookSettingsSchema })
+  @ApiOkResponse({ description: 'Read again live', standardSchema: supplierWebhookSettingsSchema })
+  setWebhook(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('code') code: string,
+    @Req() request: Request,
+  ) {
+    return this.live.setWebhook(actor(admin, request), code);
+  }
+
+  @Post(':code/webhook/test')
+  @AdminRoute()
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: supplierWebhookTestSchema })
+  @ApiOkResponse({ description: 'Whether it was sent', standardSchema: supplierWebhookTestSchema })
+  testWebhook(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('code') code: string,
+    @Req() request: Request,
+  ) {
+    return this.live.testWebhook(actor(admin, request), code);
   }
 
   /** Rule SP2: answered with hints only, never the values. */

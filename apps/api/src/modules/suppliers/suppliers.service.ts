@@ -838,6 +838,15 @@ export class SuppliersService {
         validationQuota: state.validationDailyQuota,
         validationsToday: validations.get(state.id) ?? 0,
         capabilities: supplierPanelCapabilities(state.code),
+        subscription: state.account
+          ? {
+              plan: state.account.plan,
+              expiresAt: state.account.expiresAt?.toISOString() ?? null,
+              active: state.account.active,
+              autoRenew: state.account.autoRenew,
+              checkedAt: state.account.checkedAt.toISOString(),
+            }
+          : null,
         newOfferCount: newOffers.get(state.id) ?? 0,
         lowStockCount: (lowStock.get(state.id)?.low ?? 0) + (lowStock.get(state.id)?.out ?? 0),
         // S18 PS1: the cards never call the supplier: the panel's last read, else the sync's.

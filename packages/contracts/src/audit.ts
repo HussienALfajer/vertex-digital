@@ -517,6 +517,17 @@ export const AUDIT_DETAILS = {
     ok: z.boolean(),
     failureKind: failureKindSchema.nullable(),
   }),
+  /**
+   * S19 FC8: the supplier's webhook pointed at our URL (`set`: whether the supplier took it; a
+   * failed call may still have changed it), and whether its test event was then sent.
+   */
+  'supplier.webhook_set': z.strictObject({
+    ...supplier,
+    url: z.string(),
+    set: z.boolean(),
+    ok: z.boolean(),
+  }),
+  'supplier.webhook_tested': z.strictObject({ ...supplier, ok: z.boolean() }),
   /** S09 rule AD2. */
   'supplier.validation_quota_set': z.strictObject({
     ...supplier,

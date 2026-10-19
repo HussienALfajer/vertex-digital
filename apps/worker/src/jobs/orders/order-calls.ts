@@ -27,11 +27,13 @@ import {
 import {
   OUT_OF_STOCK_CODE,
   outcomeOfOrderError,
+  SUBSCRIPTION_INACTIVE_CODE,
   type SupplierOutcome,
 } from '@vertex-digital/suppliers';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Env } from '../../core/config/env.js';
 import type { PgBossService } from '../../core/jobs/pg-boss.service.js';
+import { recordAccount } from '../../suppliers/subscription.js';
 import {
   type CallVerdict,
   recordedCall,
@@ -76,6 +78,28 @@ export async function markStockRefusal(
   if (!applied.applied || outcome.status !== 'failed' || attempt.offerId === null) return false;
   if (outcome.supplierErrorCode !== OUT_OF_STOCK_CODE) return false;
   return markOfferOutOfStock(tx, attempt.offerId, context);
+}
+
+/**
+ * S19 FC5, FC9, in the transaction that failed the attempt: a first send refused for an inactive
+ * plan turns the supplier's plan inactive at once (its routes stop, the admin is told), without
+ * waiting for the next plan read.
+ */
+export async function markSubscriptionRefusal(
+  tx: Transaction,
+  applied: AppliedOutcome,
+  outcome: AttemptOutcome,
+  context: RoutingContext & { jobs: JobSender },
+): Promise<boolean> {
+  if (!applied.applied || outcome.status !== 'failed') return false;
+  if (outcome.supplierErrorCode !== SUBSCRIPTION_INACTIVE_CODE) return false;
+  const [supplier] = await tx
+    .select({ id: suppliers.id, code: suppliers.code, nameAr: suppliers.nameAr })
+    .from(suppliers)
+    .where(eq(suppliers.id, applied.attempt.supplierId));
+  if (!supplier) return false;
+  await recordAccount(tx, context.jobs, supplier, { active: false }, context);
+  return true;
 }
 
 /**

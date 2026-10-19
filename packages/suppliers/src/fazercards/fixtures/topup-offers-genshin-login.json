@@ -1,0 +1,86 @@
+{
+  "ok": true,
+  "kind": "topup",
+  "category_id": "genshin_impact_login",
+  "name": "Genshin Impact (Auto Via Login)",
+  "offers": [
+    {
+      "offer_id": "60",
+      "name": "60 Genesis Crystals",
+      "price_usd": "0.7979"
+    },
+    {
+      "offer_id": "chronicles_of_the_realms",
+      "name": "Chronicles of the Realms",
+      "price_usd": "4.0795"
+    },
+    {
+      "offer_id": "blessing_of_the_welkin_moon",
+      "name": "Blessing of the Welkin Moon",
+      "price_usd": "4.0795"
+    },
+    {
+      "offer_id": "330",
+      "name": "300 + 30 Genesis Crystals",
+      "price_usd": "4.0795"
+    },
+    {
+      "offer_id": "gnostic_hymn",
+      "name": "Gnostic Hymn",
+      "price_usd": "8.1590"
+    },
+    {
+      "offer_id": "travel_notes",
+      "name": "Travel Notes",
+      "price_usd": "9.7537"
+    },
+    {
+      "offer_id": "1090",
+      "name": "980 + 110 Genesis Crystals",
+      "price_usd": "12.0951"
+    },
+    {
+      "offer_id": "epic_of_the_realms",
+      "name": "Epic of the Realms",
+      "price_usd": "12.0951"
+    },
+    {
+      "offer_id": "gnostic_chorus",
+      "name": "Gnostic Chorus",
+      "price_usd": "16.1736"
+    },
+    {
+      "offer_id": "2240",
+      "name": "1980 + 260 Genesis Crystals",
+      "price_usd": "24.3225"
+    },
+    {
+      "offer_id": "3880",
+      "name": "3280 + 600 Genesis Crystals",
+      "price_usd": "40.7928"
+    },
+    {
+      "offer_id": "8080",
+      "name": "6480 + 1600 Genesis Crystals",
+      "price_usd": "80.1233"
+    }
+  ],
+  "fields": [
+    {
+      "key": "email",
+      "label": "Email",
+      "type": "text"
+    },
+    {
+      "key": "password",
+      "label": "Password",
+      "type": "text"
+    },
+    {
+      "key": "genshin_uid",
+      "label": "Genshin UID",
+      "type": "text"
+    }
+  ],
+  "note": "Automatic top-up via account login.\nEnter your HoYoverse account email and password plus your Genshin UID. Only HoYoverse account login is supported."
+}

@@ -20,6 +20,7 @@ import {
 import {
   FakeSupplierAdapter,
   type FakeSupplierState,
+  FazercardsAdapter,
   fakeSupplierStateSchema,
   type SupplierAdapter,
   SupplierError,
@@ -74,6 +75,14 @@ export class SupplierAdaptersService {
     // The API only verifies and reads webhooks: no callback URL is needed here.
     if (supplier.code === 'wdgzone') {
       return credentials.apiKey ? new WdgzoneAdapter({ apiKey: credentials.apiKey }) : null;
+    }
+    if (supplier.code === 'fazercards') {
+      return credentials.apiKey && credentials.webhookSecret
+        ? new FazercardsAdapter({
+            apiKey: credentials.apiKey,
+            webhookSecret: credentials.webhookSecret,
+          })
+        : null;
     }
     if (supplier.code !== 'fake') return null;
     return new FakeSupplierAdapter({

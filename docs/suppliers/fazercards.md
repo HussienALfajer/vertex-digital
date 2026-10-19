@@ -1,6 +1,6 @@
-# FazerCards (`fazercards`): evaluation, not integrated
+# FazerCards (`fazercards`)
 
-A B2B aggregator of game top-ups, gift cards, game keys, Steam and Telegram products. **Status: evaluated on 2026-10-15, no adapter, not routed.** WDGZone stays the only automatic supplier (ADR 0031) until the owner decides otherwise and `docs/open-questions.md` Q17 is answered. The owner will choose a second supplier only after the full system test (`docs/ROADMAP.md`, Pilot).
+A B2B aggregator of game top-ups, gift cards, game keys, Steam and Telegram products. **Status: the second automatic supplier (S19, ADR 0034).** Adapter: `packages/suppliers/src/fazercards/` (S19 PR 2). No route uses it until the owner maps one; gift-card routes stay off until a clean live order per brand (S19 D6). The evaluation of 2026-10-15 below is kept; "Read from the live API (2026-10-20)" corrects it where they differ.
 
 Sources, all read on 2026-10-15: the public site and API reference (https://reseller.fazercards.com/en, `/en/docs`, `/en/docs/webhooks`, `/en/pricing`, `/en/terms`, `/en/suppliers`), the OpenAPI document (`https://api.fzr.cards/public/docs/openapi.json`, "FazerCards Public API" 0.1.0, 47 paths), the official Node SDK (`fazercards` 0.2.0 on npm, MIT, whose types say they were checked against live replies), and the owner's trial account in the reseller panel (read only: nothing was bought, funded, activated or written). Trustpilot reviews were read for the risk section.
 
@@ -17,6 +17,19 @@ Sources, all read on 2026-10-15: the public site and API reference (https://rese
 | Sandbox | None. Every order is charged to the real balance. |
 | IP allowlist | None documented. Webhook source addresses are not published. |
 | Other | An MCP endpoint (`https://api.fzr.cards/mcp`, `mcp_` tokens from the panel's "Connect to AI") spends the real balance: never create one for this store. |
+
+## Read from the live API (2026-10-20)
+
+Read-only calls with the owner's key, from the production server (S19 PR 2's exploration, owner's go-ahead; nothing was bought, funded, activated or written). The fixtures in `packages/suppliers/src/fazercards/fixtures/` come from these replies, sanitized (no login, email, secret or delivery id of the account); the order, statement and webhook bodies follow the OpenAPI document and the SDK, since the account had no order yet.
+
+- **Account:** a new account (created 2026-10-19 21:33 UTC) on a `trial` plan until 2026-10-24 21:33 UTC, `subscriptionActive: true`, balance `0.0000`. `GET /me` and `GET /subscription` give `plan`, `planExpiresAt`, `planAutoRenew`, `subscriptionActive` (camelCase). `GET /subscription/plans`: bronze 3.99, silver 6.99, gold 9.99.
+- **Rate limits seen** (`x-ratelimit-limit` per minute, `x-ratelimit-reset` = seconds left in the window): catalog and player check 300, orders 120, account and balance 60, webhook settings 120. The adapter reads the catalog at most 100 a minute (600 ms apart, FC1), pauses when 10 or fewer remain, and waits out a `429` once on a read.
+- **Top-up categories:** `GET /topups?limit=500&include_ui=1` lists all 300 in one page (`meta.has_more: false`): `category_id`, `name`, `note`, `imageurl` (289 with an image, all on `reseller.fazercards.com`). The `note` carries the region ("Region: Global", "Region: MENA") and the delivery text: stored as the category's note.
+- **Offers:** `GET /topups/offers?category_id=` answers the category's `name`, `note`, `fields` (once for the category: `key`, `label`, `type` `text` or `select` with `options`) and `offers` (`offer_id`, `name`, `price_usd`). PUBG Mobile (Auto) has 29 offers with one `player_id` field; Mobile Legends: Adventure has `player_id` and `server_id`; "(Auto Via Login)" categories ask `email` and `password` (unsupported, Q20); "(Manual)" categories are manual delivery (unsupported, FC4). An unknown category answers `404 { ok: false, error: "Unknown or unavailable category_id." }`.
+- **Gift cards:** `GET /giftcards` pages by cursor (`limit` up to 200, `meta.next_cursor`, `has_more`; 553 categories); images only with `include_ui=1` (`imageurl`, webp or jpg). `GET /giftcards/cards?category_id=` answers the cards under `offers` (`card_id`, `name`, `price_usd`, `stock`, `min_order_quantity`, `max_order_quantity`).
+- **Player check:** `GET /topups/validate-id` lists 5 check categories: `pubg_mobile`, `free_fire` (`player_id`), `mobile_legends`, `magic_chess_gogo_global`, `magic_chess_gogo_ru` (`player_id`, `zone_id`). **Their ids are not the order categories' ids** (`pubg_mobile`, not `pubg_mobile_auto`): a check is asked by the game's check category (S19 PC1, PR 3), never by the route's (open question 4 below, answered). `POST /topups/validate-id` with an unknown id answers `200 { valid: false, player_name: null }` (no region); an unknown category `400 "ID validation is not available for this category_id."`; a missing field `400 "Missing or invalid fields …"`. The region of a found player is still unseen (S19 edge case 3).
+- **Orders:** `GET /orders/ord-0` answers `400 "Invalid order id: expected ord-<number>"`; the account's order and transaction lists are empty (`{ items: [], total, page, limit }`).
+- **Webhook settings:** the owner set the URL in the panel on 2026-10-19 (`https://digital.vertexmedia.pro/api/webhooks/suppliers/fazercards`, enabled); its test event failed with our `404` (no adapter before PR 2). `GET /account/webhook/deliveries` lists `id`, `event`, `event_id`, `attempt`, `status`, `response_status`, `duration_ms`, `created_at`, `next_retry_at`.
 
 ## Plans and prices
 
@@ -119,9 +132,9 @@ There is no health or status endpoint (`platformStatus` off) and no category tre
 
 The list of `code` values is not published.
 
-## Integration with this project (if the owner approves)
+## Integration with this project
 
-Built through `/supplier-adapter fazercards` after Q17 is answered, as its own PRs:
+Built by S19 (spec `docs/specs/S19-fazercards.md`). PR 1 added the enum, the seeded row, the switch, the credentials and the labels; PR 2 the adapter (ids `topup.<id>` and `gift.<id>` for categories, `topup:<category>:<offer>` and `gift:<category>:<card>` for offers), the windowed sync (FC3: linked and mapped categories each run, plus 40 unlinked ones read longest ago; the category list once a day and on "sync now"; an offer goes missing only when its category was read without it, or left the list), the plan watch (FC9: read every 5 minutes with the balance, an alert 48 hours before the end and when it turns inactive or comes back; inactive stops its routes), the webhook card (FC8) and ignored events (a test, a creation). Gift cards keep their order bounds (a route whose product sells outside them is unusable). A plan read or an order refused with `subscription_inactive` turns the plan inactive at once. Orders refused with any code but `subscription_inactive` stay `unknown` until a funded test maps FazerCards' codes. The plan of 2026-10-15, kept for reference:
 
 1. **Database** (`/db-migration`): `fazercards` in the supplier code enum and its `fazercards_paused` store switch, a seeded supplier row; credentials `apiKey` and `webhookSecret` (two values, unlike WDGZone).
 2. **Adapter** (`packages/suppliers/src/fazercards/`, copying `wdgzone/`): `SupplierHttp`, Zod schemas from the OpenAPI document, fixtures recorded read-only with the owner's key. Capabilities: `validatePlayer`, `webhooks`, `balance`, `catalog`, `categories` (flat), `statement` on; `platformStatus` off. Image hosts from `imageurl`.
@@ -142,5 +155,5 @@ Built through `/supplier-adapter fazercards` after Q17 is answered, as its own P
 1. Whether the plan changes top-up and gift card prices at all, and the Bronze and Silver prices of the same packs.
 2. What an order does when the plan has expired.
 3. The `code` values of `400` replies.
-4. Whether `POST /topups/validate-id` category ids match the order category ids.
+4. ~~Whether `POST /topups/validate-id` category ids match the order category ids.~~ They do not (2026-10-20): `pubg_mobile` checks, `pubg_mobile_auto` orders.
 5. Webhook source addresses, for an nginx allow list.

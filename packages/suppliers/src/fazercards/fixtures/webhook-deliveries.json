@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "deliveries": [
+    {
+      "id": "1000001",
+      "event": "webhook.test",
+      "event_id": "00000000-0000-4000-8000-000000000001",
+      "attempt": 1,
+      "status": "failed",
+      "response_status": 404,
+      "duration_ms": 355,
+      "created_at": "2026-10-19T21:34:34.806Z",
+      "next_retry_at": null
+    }
+  ]
+}

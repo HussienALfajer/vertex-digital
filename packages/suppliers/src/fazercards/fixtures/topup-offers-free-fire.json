@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "kind": "topup",
+  "category_id": "free_fire_mena",
+  "name": "Free Fire (MENA)",
+  "offers": [
+    {
+      "offer_id": "110_diamonds",
+      "name": "110 Diamonds",
+      "price_usd": "0.9100"
+    },
+    {
+      "offer_id": "231_diamonds",
+      "name": "231 Diamonds",
+      "price_usd": "1.8200"
+    },
+    {
+      "offer_id": "583_diamonds",
+      "name": "583 Diamonds",
+      "price_usd": "4.5500"
+    },
+    {
+      "offer_id": "1188_diamonds",
+      "name": "1188 Diamonds",
+      "price_usd": "9.1000"
+    },
+    {
+      "offer_id": "2420_diamonds",
+      "name": "2420 Diamonds",
+      "price_usd": "18.2348"
+    }
+  ],
+  "fields": [
+    {
+      "key": "player_id",
+      "label": "Player ID",
+      "type": "text"
+    }
+  ],
+  "note": "Region: MENA\nAutomatic Free Fire top-up.\nDiamonds are delivered automatically after the order is placed."
+}

@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "webhook": {
+    "url": "https://digital.vertexmedia.pro/api/webhooks/suppliers/fazercards",
+    "enabled": true,
+    "consecutive_failures": 1,
+    "last_success_at": null,
+    "last_failure_at": "2026-10-19T21:34:34.806Z",
+    "last_failure_reason": "http_404",
+    "created_at": "2026-10-19T21:34:22.761Z",
+    "updated_at": "2026-10-19T21:34:34.806Z"
+  }
+}

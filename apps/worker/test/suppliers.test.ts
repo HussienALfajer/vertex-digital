@@ -11,6 +11,8 @@ import {
   type TelegramMessageParams,
 } from '@vertex-digital/contracts';
 import {
+  type AppliedOutcome,
+  type AttemptOutcome,
   catalogProducts,
   createDatabase,
   encryptCredentials,
@@ -20,6 +22,7 @@ import {
   productRoutes,
   productRoutingStates,
   repriceProducts,
+  type SupplierState,
   supplierBalanceReads,
   supplierCalls,
   supplierCategories,
@@ -29,12 +32,15 @@ import {
   supplierKey,
   supplierOffers,
   supplierPolicy,
+  supplierStates,
   supplierSyncRuns,
   suppliers,
   type Transaction,
   telegramMessages,
 } from '@vertex-digital/db';
 import {
+  FazercardsAdapter,
+  type SupplierAccount,
   type SupplierAdapter,
   SupplierError,
   type SupplierMoney,
@@ -58,6 +64,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TelegramAlerts } from '../src/core/alerts/telegram-alerts.js';
 import { parseEnv } from '../src/core/config/env.js';
 import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
+import { markSubscriptionRefusal } from '../src/jobs/orders/order-calls.js';
 import { SupplierBalancesJob } from '../src/jobs/suppliers/balances.job.js';
 import { SupplierHealthJob } from '../src/jobs/suppliers/health.job.js';
 import { listedOffers, SupplierSyncJob } from '../src/jobs/suppliers/sync.job.js';
@@ -150,6 +157,25 @@ const payload = (extra: { runId?: string; supplierId?: string } = {}) => ({
   trigger: 'schedule' as const,
   ...extra,
 });
+
+/** S19: an adapter with the account reads (FazerCards'). */
+const ACCOUNT_CAPABILITIES = {
+  balance: true,
+  catalog: true,
+  categories: false,
+  statement: false,
+  platformStatus: false,
+  validatePlayer: false,
+  webhooks: false,
+  offerQuote: false,
+  offerWindow: false,
+  account: true,
+};
+
+const fakeState = async (tx: Transaction) =>
+  (await supplierStates(tx, { fakeEnabled: true })).find(
+    (state) => state.id === ids.fake,
+  ) as SupplierState;
 
 beforeAll(async () => {
   const rows = await db.select({ id: suppliers.id, code: suppliers.code }).from(suppliers);
@@ -910,6 +936,18 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
       ).toMatchObject({ status: 'failed', errorCode: 'SUPPLIER_UNAVAILABLE' });
     }));
 
+  it('keeps the order bounds of an offer only when both are whole, in range and in order (S19)', () => {
+    const bounds = (minQuantity?: number, maxQuantity?: number) => {
+      const [row] = listedOffers([{ ...offer('q', 1), minQuantity, maxQuantity }]);
+      return [row?.minQuantity, row?.maxQuantity];
+    };
+    expect(bounds(1, 100)).toEqual([1, 100]);
+    expect(bounds(1, undefined)).toEqual([null, null]);
+    expect(bounds(5, 2)).toEqual([null, null]);
+    expect(bounds(0, 2)).toEqual([null, null]);
+    expect(bounds(1, 1.5)).toEqual([null, null]);
+  });
+
   it('checks each offer on its own (SY2)', () => {
     expect(
       listedOffers([
@@ -991,6 +1029,8 @@ describe('S18: the catalog version, discounts and why calls fail', () => {
     validatePlayer: false,
     webhooks: false,
     offerQuote: false,
+    offerWindow: false,
+    account: false,
   };
   const newestRun = async (tx: Transaction) =>
     (
@@ -1115,7 +1155,7 @@ describe('S18: the catalog version, discounts and why calls fail', () => {
 describe('suppliers.sync-schedule (rule SY1)', () => {
   it('queues a sync for each configured, available supplier with a catalog', () =>
     isolated(async (tx) => {
-      // S19 FC2: FazerCards' credentials before its adapter queue nothing.
+      // S19 FC2: FazerCards syncs once it has its credentials, like any supplier with a catalog.
       await tx.insert(supplierCredentials).values({
         id: newId(),
         supplierId: ids.fazercards,
@@ -1127,8 +1167,13 @@ describe('suppliers.sync-schedule (rule SY1)', () => {
         adminId: newId(),
       });
       const queued = await schedule.enqueue(tx);
-      expect(queued.map((job) => job.supplierCode)).toEqual(['fake']);
+      expect(queued.map((job) => job.supplierCode)).toEqual(['fazercards', 'fake']);
       expect(sent).toEqual([
+        {
+          queue: QUEUES.suppliersSync,
+          data: { supplierId: ids.fazercards, supplierCode: 'fazercards', trigger: 'schedule' },
+          options: { retryLimit: 0 },
+        },
         {
           queue: QUEUES.suppliersSync,
           data: { supplierId: ids.fake, supplierCode: 'fake', trigger: 'schedule' },
@@ -1510,6 +1555,134 @@ describe('suppliers.balances (rule H5)', () => {
     }));
 });
 
+describe('suppliers.balances: the plan (S19 FC9)', () => {
+  const NOW = new Date('2026-10-20T12:00:00Z');
+  const account = (plan: SupplierAccount): Partial<SupplierAdapter> => ({
+    capabilities: { ...ACCOUNT_CAPABILITIES },
+    getBalance: async () => ({ currency: 'USD', amountUnits: usd(1_000_000) }),
+    getAccount: async () => plan,
+  });
+  const supplierRow = async (tx: Transaction) =>
+    (await tx.select().from(suppliers).where(eq(suppliers.id, ids.fake)))[0];
+
+  it('keeps the plan, warns 48 hours before it ends once, and stops routes while inactive', () =>
+    isolated(async (tx) => {
+      const p = await product(tx);
+      current = listing(offer('plan', 2));
+      await sync.sync(payload(), tx);
+      await route(tx, p, (await offerRow(tx, 'plan')).id);
+      const expiresAt = new Date('2026-10-21T22:00:00Z');
+
+      current = account({ plan: 'bronze', active: true, expiresAt, autoRenew: false });
+      await balances.readAll(tx, NOW);
+      expect(await supplierRow(tx)).toMatchObject({
+        accountPlan: 'bronze',
+        accountActive: true,
+        accountAutoRenew: false,
+        accountPlanExpiresAt: expiresAt,
+        accountCheckedAt: NOW,
+        planExpiryAlertedFor: expiresAt,
+      });
+      const expiring = await message(tx, `subscription:fake:expiring:${expiresAt.toISOString()}`);
+      expect(expiring?.params).toEqual({
+        supplier: 'fake',
+        supplierNameAr: 'مورد تجريبي',
+        reason: 'expiring',
+        plan: 'bronze',
+        expiresAt: expiresAt.toISOString(),
+      });
+      await balances.readAll(tx, new Date(NOW.getTime() + 300_000));
+      expect(await messages(tx, 'supplier_subscription')).toHaveLength(1);
+
+      current = account({ plan: 'bronze', active: false });
+      sent.length = 0;
+      await balances.readAll(tx, new Date(NOW.getTime() + 600_000));
+      expect((await routing(tx, p))?.routes[0]?.unusableReason).toBe('supplier_paused');
+      expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
+      await balances.readAll(tx, new Date(NOW.getTime() + 900_000));
+      expect(
+        (await messages(tx, 'supplier_subscription')).map(
+          (row) => (row.params as { reason: string }).reason,
+        ),
+      ).toEqual(['expiring', 'inactive']);
+
+      current = account({ plan: 'silver', active: true });
+      await balances.readAll(tx, new Date(NOW.getTime() + 1_200_000));
+      expect((await routing(tx, p))?.routes[0]?.unusableReason).toBeNull();
+      expect(
+        (await messages(tx, 'supplier_subscription')).map(
+          (row) => (row.params as { reason: string }).reason,
+        ),
+      ).toEqual(['expiring', 'inactive', 'active']);
+      expect(await supplierRow(tx)).toMatchObject({ accountPlan: 'silver', accountActive: true });
+
+      // A failed read changes nothing; an adapter without the capability is not asked.
+      current = {
+        capabilities: { ...ACCOUNT_CAPABILITIES },
+        getBalance: async () => ({ currency: 'USD', amountUnits: usd(1_000_000) }),
+        getAccount: async () => {
+          throw new SupplierError('retryable', 'Timed out');
+        },
+      };
+      expect(await balances.readAccount(tx, await fakeState(tx), NOW)).toBe(false);
+      current = { getAccount: async () => ({ plan: 'gold', active: false }) };
+      expect(await balances.readAccount(tx, await fakeState(tx), NOW)).toBe(false);
+      expect(await supplierRow(tx)).toMatchObject({ accountPlan: 'silver', accountActive: true });
+    }));
+});
+
+describe('suppliers: a refusal for an inactive plan (S19 FC5, FC9)', () => {
+  const supplierRow = async (tx: Transaction) =>
+    (await tx.select().from(suppliers).where(eq(suppliers.id, ids.fake)))[0];
+
+  it('turns the plan inactive when the plan read itself is refused for it', () =>
+    isolated(async (tx) => {
+      current = {
+        capabilities: { ...ACCOUNT_CAPABILITIES },
+        getBalance: async () => ({ currency: 'USD', amountUnits: usd(1_000_000) }),
+        getAccount: async () => {
+          throw new SupplierError('retryable', 'Supplier answered HTTP 403', {
+            status: 403,
+            supplierCode: 'subscription_inactive',
+          });
+        },
+      };
+      expect(await balances.readAccount(tx, await fakeState(tx), new Date())).toBe(true);
+      expect(await supplierRow(tx)).toMatchObject({ accountActive: false, accountPlan: 'unknown' });
+      expect(
+        (await messages(tx, 'supplier_subscription')).map(
+          (row) => (row.params as { reason: string }).reason,
+        ),
+      ).toEqual(['inactive']);
+    }));
+
+  it('turns the plan inactive when a first send is refused for it, stopping the routes', () =>
+    isolated(async (tx) => {
+      const p = await product(tx);
+      current = listing(offer('inactive', 2));
+      await sync.sync(payload(), tx);
+      await route(tx, p, (await offerRow(tx, 'inactive')).id);
+      const applied = { applied: true, attempt: { supplierId: ids.fake } } as AppliedOutcome;
+      const jobs = { ...context(), jobs: { send: async () => newId() } };
+      const refused = (code: string) =>
+        ({ status: 'failed', supplierErrorCode: code, reason: 'refused' }) as AttemptOutcome;
+      expect(await markSubscriptionRefusal(tx, applied, refused('OUT_OF_STOCK'), jobs)).toBe(false);
+      expect(
+        await markSubscriptionRefusal(
+          tx,
+          { ...applied, applied: false },
+          refused('subscription_inactive'),
+          jobs,
+        ),
+      ).toBe(false);
+      expect(
+        await markSubscriptionRefusal(tx, applied, refused('subscription_inactive'), jobs),
+      ).toBe(true);
+      expect(await supplierRow(tx)).toMatchObject({ accountActive: false });
+      expect((await routing(tx, p))?.routes[0]?.unusableReason).toBe('supplier_paused');
+    }));
+});
+
 describe('the supplier registry (rules SP1, SP2)', () => {
   it('decrypts the newest credentials per call and scripts the fake from its state file', () =>
     isolated(async (tx) => {
@@ -1554,8 +1727,11 @@ describe('the supplier registry (rules SP1, SP2)', () => {
       expect(await real.get('wdgzone', {})).toBeNull();
       expect(await real.get('wdgzone', { apiKey: SECRET })).toBeInstanceOf(WdgzoneAdapter);
       expect(await real.get('manual', {})).toBeNull();
-      // S19 FC2: no FazerCards adapter before PR 2, whatever its credentials.
-      expect(await real.get('fazercards', { apiKey: SECRET, webhookSecret: SECRET })).toBeNull();
+      // S19 FC2, FC7: FazerCards needs its key and its webhook secret.
+      expect(
+        await real.get('fazercards', { apiKey: SECRET, webhookSecret: SECRET }),
+      ).toBeInstanceOf(FazercardsAdapter);
+      expect(await real.get('fazercards', { apiKey: SECRET })).toBeNull();
       await rm(env.FAKE_SUPPLIER_STATE_FILE, { force: true });
       expect((await (await real.get('fake', {}))?.listOffers())?.length).toBe(14);
     }));
@@ -1611,6 +1787,24 @@ describe('the supplier messages', () => {
     kind: Kind,
     params: Parameters<typeof renderTelegramMessage<Kind>>[1],
   ) => renderTelegramMessage(kind, params, LINKS).text.split('\n');
+
+  it('render the plan alerts in Arabic (S19 FC9)', () => {
+    const plan = { supplier: 'fazercards' as const, supplierNameAr: 'FazerCards', plan: 'bronze' };
+    const at = '2026-10-21T22:00:00.000Z';
+    expect(text('supplier_subscription', { ...plan, reason: 'expiring', expiresAt: at })).toEqual([
+      '⏰ اشتراك FazerCards (bronze) ينتهي 22/10 01:00: جدّده من لوحة المورد.',
+      'http://127.0.0.1:5173/suppliers/fazercards',
+    ]);
+    expect(text('supplier_subscription', { ...plan, reason: 'inactive', expiresAt: null })[0]).toBe(
+      '⛔ اشتراك FazerCards غير فعّال: أُوقفت طلباته وفحص اللاعبين حتى يُجدَّد.',
+    );
+    expect(text('supplier_subscription', { ...plan, reason: 'active', expiresAt: at })[0]).toBe(
+      '✅ عاد اشتراك FazerCards (bronze) فعّالاً حتى 22/10 01:00.',
+    );
+    expect(text('supplier_subscription', { ...plan, reason: 'active', expiresAt: null })[0]).toBe(
+      '✅ عاد اشتراك FazerCards (bronze) فعّالاً.',
+    );
+  });
 
   it('render the sync summary, health, balance and failing sync in Arabic', () => {
     expect(
@@ -1702,6 +1896,8 @@ describe('suppliers.sync: categories, offer fields and stock (S16 SC2, SC3, SF2)
       validatePlayer: false,
       webhooks: false,
       offerQuote: false,
+      offerWindow: false,
+      account: false,
     },
     listCategories: categories as SupplierAdapter['listCategories'],
     listOffers: async () => offers,
@@ -1873,5 +2069,144 @@ describe('suppliers.sync: categories, offer fields and stock (S16 SC2, SC3, SF2)
       current = stocked(5);
       await sync.sync(payload(), tx);
       expect((await offerRow(tx, 'stock')).stockAlert).toBeNull();
+    }));
+});
+
+describe('suppliers.sync: a category window (S19 FC3)', () => {
+  const cat = (name: string) => `c-${run}-w${name}`;
+  const windowed = (
+    categories: () => Promise<{ categoryId: string; name: string }[]>,
+    read: (ids: readonly string[]) => { offers: SupplierOffer[]; readCategoryIds: string[] },
+    asked: string[][],
+  ): Partial<SupplierAdapter> => ({
+    capabilities: {
+      balance: true,
+      catalog: true,
+      categories: true,
+      statement: false,
+      platformStatus: false,
+      validatePlayer: false,
+      webhooks: false,
+      offerQuote: false,
+      offerWindow: true,
+      account: false,
+    },
+    listCategories: categories as SupplierAdapter['listCategories'],
+    listOffers: async () => {
+      throw new Error('a windowed supplier is never read whole');
+    },
+    listOffersIn: async (ids) => {
+      asked.push(ids.filter((id) => id.startsWith(`c-${run}-w`)));
+      return read(ids);
+    },
+  });
+  const offersOf = (ids: readonly string[], skip: string[] = []) =>
+    ids
+      .filter((id) => id.startsWith(`c-${run}-w`) && !skip.includes(id))
+      .flatMap((id) => [
+        offer(`${id}-1`, 1, { categoryId: id }),
+        ...(id === cat('L') && skip.includes('drop-L2')
+          ? []
+          : [offer(`${id}-2`, 2, { categoryId: id })]),
+      ]);
+  const missing = async (tx: Transaction, name: string) =>
+    (await offerRow(tx, name)).missingSince !== null;
+
+  it('reads linked and mapped categories first, then the oldest read; misses only what it read', () =>
+    isolated(async (tx) => {
+      // Other tests' categories of the fake supplier stay out of this window.
+      await tx.execute(
+        sql`update supplier_categories set ignored_at = now(), game_id = null, linked_at = null
+          where supplier_id = ${ids.fake} and category_id not like ${`c-${run}-w%`}`,
+      );
+      const asked: string[][] = [];
+      const calls: string[] = [];
+      const list = [cat('L'), cat('U1'), cat('U2')];
+      let listed = list;
+      const categories = async () => {
+        calls.push('categories');
+        return listed.map((categoryId) => ({ categoryId, name: categoryId }));
+      };
+      // Run 1: no list yet, so it is read; every category is in the rolling part.
+      current = windowed(
+        categories,
+        (ids) => ({ offers: offersOf(ids), readCategoryIds: [...ids] }),
+        asked,
+      );
+      expect(await sync.sync(payload(), tx)).toMatchObject({
+        status: 'succeeded',
+        categoriesSkipped: false,
+      });
+      expect(calls).toEqual(['categories']);
+      expect(asked[0]).toEqual(list);
+      const first = await tx
+        .select()
+        .from(supplierCategories)
+        .where(eq(supplierCategories.categoryId, cat('U2')));
+      expect(first[0]?.offersReadAt).not.toBeNull();
+
+      // Run 2: the list is fresh (not read); L is linked, so it comes first. U2 fails, and L no
+      // longer lists its second pack: only L's pack goes missing.
+      const p = await product(tx);
+      const [{ gameId } = { gameId: '' }] = await tx
+        .select({ gameId: catalogProducts.gameId })
+        .from(catalogProducts)
+        .where(eq(catalogProducts.id, p));
+      await tx
+        .update(supplierCategories)
+        .set({ gameId, linkedAt: new Date() })
+        .where(eq(supplierCategories.categoryId, cat('L')));
+      current = windowed(
+        categories,
+        (ids) => ({
+          offers: offersOf(ids, [cat('U2'), 'drop-L2']),
+          readCategoryIds: ids.filter((id) => id !== cat('U2')),
+        }),
+        asked,
+      );
+      expect(await sync.sync(payload(), tx)).toMatchObject({
+        status: 'succeeded',
+        categoriesSkipped: false,
+      });
+      expect(calls).toEqual(['categories']);
+      expect(asked[1]?.[0]).toBe(cat('L'));
+      expect(await missing(tx, `${cat('L')}-2`)).toBe(true);
+      expect(await missing(tx, `${cat('L')}-1`)).toBe(false);
+      expect(await missing(tx, `${cat('U2')}-1`)).toBe(false);
+
+      // Run 3, "sync now": the list is read again and U1 left it: its packs go missing although
+      // the window no longer reads it; U2 (read longest ago) comes before nothing else.
+      listed = [cat('L'), cat('U2')];
+      current = windowed(
+        categories,
+        (ids) => ({ offers: offersOf(ids), readCategoryIds: [...ids] }),
+        asked,
+      );
+      const third = await sync.sync({ ...payload(), trigger: 'admin' }, tx);
+      expect(third).toMatchObject({ status: 'succeeded' });
+      expect(calls).toEqual(['categories', 'categories']);
+      expect(asked[2]).toEqual([cat('L'), cat('U2')]);
+      expect(await missing(tx, `${cat('U1')}-1`)).toBe(true);
+      expect(await missing(tx, `${cat('L')}-2`)).toBe(false);
+      const u1 = await tx
+        .select()
+        .from(supplierCategories)
+        .where(eq(supplierCategories.categoryId, cat('U1')));
+      expect(u1[0]?.missingSince).toEqual(third?.startedAt);
+    }));
+
+  it('fails the run when the window could not be read, changing nothing', () =>
+    isolated(async (tx) => {
+      current = {
+        ...windowed(
+          async () => [{ categoryId: cat('F'), name: 'F' }],
+          () => ({ offers: [], readCategoryIds: [] }),
+          [],
+        ),
+        listOffersIn: async () => {
+          throw new SupplierError('retryable', 'Timed out', { failure: 'timeout' });
+        },
+      };
+      expect(await sync.sync(payload(), tx)).toMatchObject({ status: 'failed' });
     }));
 });

@@ -410,8 +410,23 @@ describe('WdgzoneAdapter balance and players', () => {
       statement: true,
       platformStatus: true,
       offerQuote: true,
+      offerWindow: false,
+      account: false,
     });
     await expect(wdg.validatePlayer()).rejects.toBeInstanceOf(SupplierError);
+  });
+
+  it('reads its catalog whole and has no account reads (S19)', async () => {
+    const wdg = adapter();
+    for (const call of [
+      () => wdg.listOffersIn(),
+      () => wdg.getAccount(),
+      () => wdg.getWebhook(),
+      () => wdg.setWebhook(),
+      () => wdg.testWebhook(),
+    ]) {
+      await expect(call()).rejects.toMatchObject({ kind: 'definitive' });
+    }
   });
 });
 

@@ -349,13 +349,21 @@ describe('nearby supplier orders (rule SF4)', () => {
 });
 
 describe('capabilities and health (S16, SF6)', () => {
-  it('declares the panel reads for wdgzone and fake only', () => {
+  it('declares the panel reads for wdgzone, fazercards and fake only', () => {
     expect(supplierPanelCapabilities('wdgzone').categories).toBe(true);
     expect(supplierPanelCapabilities('fake').statement).toBe(true);
+    expect(supplierPanelCapabilities('fazercards')).toEqual({
+      categories: true,
+      statement: true,
+      platformStatus: false,
+      account: true,
+    });
+    expect(supplierPanelCapabilities('wdgzone').account).toBe(false);
     expect(supplierPanelCapabilities('manual')).toEqual({
       categories: false,
       statement: false,
       platformStatus: false,
+      account: false,
     });
     expect(PANEL_READ_OPERATIONS).not.toContain('list_categories');
   });

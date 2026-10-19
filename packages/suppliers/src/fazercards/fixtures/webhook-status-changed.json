@@ -1,0 +1,11 @@
+{
+  "event": "order.status_changed",
+  "event_id": "00000000-0000-4000-8000-0000000000aa",
+  "timestamp": "2026-10-20T09:00:02.500Z",
+  "data": {
+    "order_id": "ord-101",
+    "type": "topup",
+    "status": "completed",
+    "previous_status": "processing"
+  }
+}

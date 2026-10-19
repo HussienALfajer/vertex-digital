@@ -412,6 +412,16 @@ function NodeLine({
             unsupported: node.counts.unsupported,
           })}
         </p>
+        {node.note && (
+          // S19: the supplier's own text (FazerCards' region and delivery note), as text.
+          <p
+            dir="auto"
+            className="line-clamp-2 whitespace-pre-line text-xs text-muted-foreground"
+            title={node.note}
+          >
+            {node.note}
+          </p>
+        )}
       </div>
       <DropdownMenu>
         <Tooltip>

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   formatSyp,
   formatUsd,
+  PLAN_EXPIRY_ALERT_HOURS,
   type RouteUnusableReason,
   type SupplierBalance,
   type SupplierCode,
@@ -80,6 +81,41 @@ export function BalanceLine({ supplier }: { supplier: SupplierSummary }) {
       <span className="text-xs text-muted-foreground">
         {t('suppliers.balance.readAt', { since: formatSince(supplier.balance.createdAt) })}
       </span>
+    </span>
+  );
+}
+
+/**
+ * S19 FC9: the supplier's plan and its end as the worker's last read said: "غير فعّال" while
+ * inactive (no orders, no checks), "ينتهي قريباً" within 48 hours of its end.
+ */
+export function SubscriptionLine({ supplier }: { supplier: SupplierSummary }) {
+  const { t } = useTranslation();
+  const plan = supplier.subscription;
+  if (!plan) {
+    return (
+      <span className="text-sm text-muted-foreground">{t('suppliers.subscription.none')}</span>
+    );
+  }
+  const endsSoon =
+    plan.active &&
+    plan.expiresAt !== null &&
+    new Date(plan.expiresAt).getTime() - Date.now() <= PLAN_EXPIRY_ALERT_HOURS * 3_600_000;
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <bdi dir="ltr" className="text-lg font-bold">
+        {plan.plan}
+      </bdi>
+      {!plan.active ? (
+        <Badge tone="danger">{t('suppliers.subscription.inactive')}</Badge>
+      ) : (
+        endsSoon && <Badge tone="warning">{t('suppliers.subscription.endsSoon')}</Badge>
+      )}
+      {plan.expiresAt && (
+        <span className="text-xs text-muted-foreground">
+          {t('suppliers.subscription.until', { time: formatDateTime(plan.expiresAt) })}
+        </span>
+      )}
     </span>
   );
 }

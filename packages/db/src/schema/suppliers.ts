@@ -71,6 +71,17 @@ export const suppliers = pgTable(
     lowBalanceUsdUnits: amountUnits('low_balance_usd_units').notNull().default(50_000_000),
     /** S09 rule PV5: player checks a Damascus day; 0 turns them off for this supplier. */
     validationDailyQuota: integer('validation_daily_quota').notNull().default(1_000),
+    /**
+     * S19 FC9: the plan as the balance job's last account read said (suppliers with the `account`
+     * capability); `account_active = false` keeps the supplier out of routing and checks.
+     */
+    accountPlan: text('account_plan'),
+    accountPlanExpiresAt: timestamp('account_plan_expires_at', { withTimezone: true }),
+    accountActive: boolean('account_active'),
+    accountAutoRenew: boolean('account_auto_renew'),
+    accountCheckedAt: timestamp('account_checked_at', { withTimezone: true }),
+    /** FC9: the expiry whose 48-hour alert was sent, so it is sent once. */
+    planExpiryAlertedFor: timestamp('plan_expiry_alerted_for', { withTimezone: true }),
     ...timestamps(),
   },
   (table) => [
@@ -82,6 +93,11 @@ export const suppliers = pgTable(
     check(
       'suppliers_validation_daily_quota_check',
       sql`${table.validationDailyQuota} between 0 and 1000000`,
+    ),
+    check('suppliers_account_plan_check', sql`char_length(${table.accountPlan}) between 1 and 32`),
+    check(
+      'suppliers_account_checked_check',
+      sql`(${table.accountPlan} is null) = (${table.accountCheckedAt} is null) and (${table.accountPlan} is null) = (${table.accountActive} is null)`,
     ),
   ],
 );
@@ -141,7 +157,7 @@ export const supplierOffers = pgTable(
     originalCostUsdUnits: amountUnits('original_cost_usd_units'),
     /** S16 SC3: the supplier's account fields with labels, types and options. */
     fieldSpecs: jsonb('field_specs').$type<FieldSpec[]>(),
-    /** S16 SC3: `fields_unsupported` until Q19 (never usable by RT4). */
+    /** S16 SC3: `fields_unsupported` until Q19; S19 FC4 `manual_delivery` (never usable by RT4). */
     unsupportedReason: text('unsupported_reason'),
     /** S16 SC6: no longer counted as new; reversible. */
     ignoredAt: timestamp('ignored_at', { withTimezone: true }),
@@ -150,6 +166,9 @@ export const supplierOffers = pgTable(
     stockAlert: stockLevelEnum('stock_alert'),
     /** S18 DC1: the supplier's own discount on the offer, in basis points (2% = 200). */
     discountBp: integer('discount_bp'),
+    /** S19: the units one order of it may take, when the supplier bounds them (gift cards). */
+    minQuantity: integer('min_quantity'),
+    maxQuantity: integer('max_quantity'),
     ...timestamps(),
   },
   (table) => [
@@ -170,7 +189,7 @@ export const supplierOffers = pgTable(
     ),
     check(
       'supplier_offers_unsupported_reason_check',
-      sql`${table.unsupportedReason} in ('fields_unsupported')`,
+      sql`${table.unsupportedReason} in ('fields_unsupported', 'manual_delivery')`,
     ),
     check(
       'supplier_offers_ignored_check',
@@ -187,6 +206,10 @@ export const supplierOffers = pgTable(
     check('supplier_offers_cost_raw_check', sql`char_length(${table.costRaw}) <= 64`),
     check('supplier_offers_cost_check', sql`${table.costUsdUnits} between 1 and 10000000000`),
     check('supplier_offers_discount_check', sql`${table.discountBp} between 1 and 10000`),
+    check(
+      'supplier_offers_quantity_check',
+      sql`${table.minQuantity} between 1 and 1000000 and ${table.maxQuantity} between 1 and 1000000 and ${table.minQuantity} <= ${table.maxQuantity}`,
+    ),
   ],
 );
 
@@ -421,7 +444,11 @@ export const supplierCategories = pgTable(
     inStockCount: integer('in_stock_count'),
     /** HTTPS on a host the adapter declares, else null (rule IM1). */
     imageUrl: text('image_url'),
+    /** S19: the supplier's own text on the category (FazerCards' region and delivery note). */
+    note: text('note'),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+    /** S19 FC3: when a windowed sync last read this category's offers; the window takes the oldest. */
+    offersReadAt: timestamp('offers_read_at', { withTimezone: true }),
     missingSince: timestamp('missing_since', { withTimezone: true }),
     gameId: uuid('game_id').references(() => catalogGames.id),
     linkedAt: timestamp('linked_at', { withTimezone: true }),
@@ -461,6 +488,7 @@ export const supplierCategories = pgTable(
       'supplier_categories_image_url_check',
       sql`char_length(${table.imageUrl}) <= 500 and ${table.imageUrl} like 'https://%'`,
     ),
+    check('supplier_categories_note_check', sql`char_length(${table.note}) between 1 and 1000`),
     check(
       'supplier_categories_linked_check',
       sql`(${table.gameId} is null) = (${table.linkedAt} is null)`,

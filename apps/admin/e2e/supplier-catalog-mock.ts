@@ -41,6 +41,8 @@ type Body = Record<string, unknown> | null;
 interface StoredCategory {
   supplierCode: SupplierCode;
   categoryId: string;
+  /** S19: the supplier's note (FazerCards' region text). */
+  note?: string;
   parentCategoryId: string | null;
   name: string;
   kind: ProductKind | null;
@@ -86,6 +88,10 @@ export class SupplierCatalogMock implements CategoryReader {
     productCount: null,
     inStockCount: null,
     hasImage: true,
+    // S19: a supplier's note on a category, as FazerCards writes them.
+    ...(categoryId === 'fake-ff-auto' && {
+      note: 'Region: MENA\nDiamonds are delivered automatically after the order is placed.',
+    }),
     gameId: null,
     ignoredAt: null,
     missingSince: null,
@@ -459,6 +465,7 @@ export class SupplierCatalogMock implements CategoryReader {
       productCount: row.productCount ?? offers.length,
       inStockCount: row.inStockCount ?? offers.filter((offer) => offer.inStock).length,
       hasImage: row.hasImage,
+      note: row.note ?? null,
       childCount: this.categories.filter(
         (item) =>
           item.supplierCode === row.supplierCode && item.parentCategoryId === row.categoryId,

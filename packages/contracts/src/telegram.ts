@@ -104,6 +104,8 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'supplier_stock_low',
   /** S18 CH2: a supplier charged an attempt more than 2% off its expected cost (one per attempt). */
   'supplier_charge_mismatch',
+  /** S19 FC9: the plan expires within 48 hours (once per expiry), turned inactive, or came back. */
+  'supplier_subscription',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -347,6 +349,14 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     amountUnits: z.int(),
     thresholdUsdUnits: z.int().nonnegative(),
     recovered: z.boolean(),
+  }),
+  /** S19 FC9. */
+  supplier_subscription: z.object({
+    supplier: supplierCodeSchema,
+    supplierNameAr: z.string(),
+    reason: z.enum(['expiring', 'inactive', 'active']),
+    plan: z.string(),
+    expiresAt: z.iso.datetime().nullable(),
   }),
   /** S07: syncs failing in a row, then once when costs go stale and products become unavailable. */
   supplier_sync_failing: z.discriminatedUnion('reason', [

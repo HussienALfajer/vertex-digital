@@ -30,6 +30,7 @@ import {
   type SupplierOffer,
   type SupplierPolicy,
   type SupplierSummary,
+  type SupplierWebhookSettings,
   type SyncRun,
   stockLevel,
   supplierAvailable,
@@ -125,7 +126,15 @@ interface StoredSupplier {
   healthHistory: SupplierHealthChange[];
   balanceHistory: SupplierBalance[];
   runs: SyncRun[];
+  /** S19 FC9: the plan as the worker's last account read said. */
+  subscription?: SupplierSummary['subscription'];
+  /** S19 FC8: the supplier's webhook as its API would answer it (FazerCards only). */
+  webhook?: SupplierWebhookSettings;
 }
+
+/** S19 FC8: where the production store asks FazerCards to send its webhooks. */
+export const STORE_WEBHOOK_URL =
+  'https://digital.vertexmedia.pro/api/webhooks/suppliers/fazercards';
 
 /** What the API derives from an offer's row: its path, stock level and discount (S16 SF1, SF2). */
 type DerivedFields = 'categoryPath' | 'stockLevel' | 'discountPercent';
@@ -297,7 +306,7 @@ export class SuppliersMock {
     this.reprice(this.productsOf(code), 'route_change');
   }
 
-  private supplier(code: SupplierCode): StoredSupplier {
+  supplier(code: SupplierCode): StoredSupplier {
     return this.suppliers.find((item) => item.code === code) as StoredSupplier;
   }
 
@@ -668,6 +677,7 @@ export class SuppliersMock {
       validationQuota: row.validationQuota ?? 1_000,
       validationsToday: row.code === 'fake' ? 312 : 0,
       capabilities: supplierPanelCapabilities(row.code),
+      subscription: row.subscription ?? null,
       newOfferCount: this.categories?.newOfferCount(row.code) ?? 0,
       lowStockCount: this.offers.filter(
         (offer) =>
@@ -899,6 +909,51 @@ export class SuppliersMock {
     if (costs && method === 'GET') {
       if (!this.offers.some((offer) => offer.id === costs[1])) return notFound();
       return { status: 200, json: page([], url) };
+    }
+    // S19 FC8: the webhook card's live reads and changes.
+    const webhookPath = match(/^\/api\/admin\/suppliers\/([^/]+)\/webhook(\/test)?$/);
+    if (webhookPath) {
+      const code = webhookPath[1] as SupplierCode;
+      const row = this.suppliers.find((item) => item.code === code);
+      if (!row) return notFound();
+      if (!supplierPanelCapabilities(code).account) return error(409, 'CAPABILITY_UNSUPPORTED');
+      if (!row.credentials) return error(409, 'SUPPLIER_NOT_CONFIGURED');
+      row.webhook ??= {
+        url: null,
+        enabled: false,
+        expectedUrl: STORE_WEBHOOK_URL,
+        consecutiveFailures: null,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        lastFailureReason: null,
+        deliveries: [],
+      };
+      const hook = row.webhook;
+      const delivered = (event: string) =>
+        hook.deliveries.unshift({
+          id: nextId(),
+          event,
+          attempt: 1,
+          status: 'delivered',
+          responseStatus: 200,
+          durationMs: 120,
+          createdAt: new Date().toISOString(),
+        });
+      if (webhookPath[2] && method === 'POST') {
+        if (!hook.enabled) return { status: 200, json: { ok: false } };
+        delivered('webhook.test');
+        return { status: 200, json: { ok: true } };
+      }
+      if (method === 'GET') return { status: 200, json: hook };
+      if (method === 'PUT') {
+        const refusal = sensitive();
+        if (refusal) return refusal;
+        hook.url = STORE_WEBHOOK_URL;
+        hook.enabled = true;
+        hook.consecutiveFailures = 0;
+        delivered('webhook.test');
+        return { status: 200, json: hook };
+      }
     }
     const supplierPath = match(/^\/api\/admin\/suppliers\/([^/]+)(?:\/([a-z-]+))?$/);
     if (supplierPath) {

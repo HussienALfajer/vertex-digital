@@ -16,10 +16,12 @@ import {
   type Transaction,
   telegramMessages,
 } from '@vertex-digital/db';
+import { SUBSCRIPTION_INACTIVE_CODE, SupplierError } from '@vertex-digital/suppliers';
 import { and, asc, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
+import { type AccountRead, recordAccount } from '../../suppliers/subscription.js';
 import { recordedCall } from '../../suppliers/supplier-calls.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
 
@@ -52,6 +54,7 @@ const usdLimit = (read: BalanceRead | undefined) =>
  * `supplier_balance_reads`. When the new balance crosses the cost of a mapped offer, the
  * supplier's products are repriced (RT4). Below the threshold: a message the first time, again
  * every 6 hours, and one when it is back (dedupe keys `balance:<supplier>:<since>[:<n>]`).
+ * S19 FC9: a supplier with the `account` capability has its plan read too.
  */
 @Injectable()
 export class SupplierBalancesJob implements OnApplicationBootstrap {
@@ -77,7 +80,44 @@ export class SupplierBalancesJob implements OnApplicationBootstrap {
     for (const supplier of states) {
       if (supplier.code === 'manual' || !supplier.available || !supplier.configured) continue;
       await this.read(db, supplier, now);
+      await this.readAccount(db, supplier, now);
     }
+  }
+
+  /**
+   * S19 FC9: the plan read once (recorded as `account`, left out of health) and kept by
+   * `recordAccount`. A refusal saying the plan is inactive (FazerCards answers its other calls
+   * with `403 subscription_inactive` then) counts as an inactive plan; any other failure changes
+   * nothing.
+   */
+  async readAccount(db: Executor, supplier: SupplierState, now: Date): Promise<boolean> {
+    let connected: Awaited<ReturnType<SupplierRegistry['connect']>>;
+    try {
+      connected = await this.registry.connect(db, supplier);
+    } catch {
+      return false;
+    }
+    if (!connected?.adapter.capabilities.account) return false;
+    const { adapter } = connected;
+    const call = await recordedCall(db, supplier.id, 'account', () => adapter.getAccount());
+    let read: AccountRead;
+    if (call.ok) {
+      read = call.value;
+    } else if (
+      call.error instanceof SupplierError &&
+      call.error.details.supplierCode === SUBSCRIPTION_INACTIVE_CODE
+    ) {
+      read = { active: false };
+    } else {
+      return false;
+    }
+    await db.transaction((tx) =>
+      recordAccount(tx, bossJobSender(this.pgBoss.boss), supplier, read, {
+        now,
+        fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED,
+      }),
+    );
+    return true;
   }
 
   /**

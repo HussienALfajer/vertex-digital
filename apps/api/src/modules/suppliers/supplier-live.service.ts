@@ -17,6 +17,8 @@ import {
   type SupplierOrderPage,
   type SupplierPanelCapabilities,
   type SupplierTransactionPage,
+  type SupplierWebhookSettings,
+  type SupplierWebhookTest,
   supplierPanelCapabilities,
 } from '@vertex-digital/contracts';
 import {
@@ -311,6 +313,109 @@ export class SupplierLiveService {
       throw new CodedException(409, 'SUPPLIER_NOT_CONFIGURED', 'Set the credentials first');
     }
     return adapter;
+  }
+
+  // Webhook settings (S19 FC8) ------------------------------------------------------------------
+
+  /** FC8: the URL the supplier calls for this store: its public HTTPS address, else none. */
+  private webhookUrl(code: SupplierCode): string | null {
+    return this.env.STORE_URL.startsWith('https://')
+      ? new URL(`/api/webhooks/suppliers/${code}`, this.env.STORE_URL).href
+      : null;
+  }
+
+  /** FC8: the supplier's webhook settings and its last deliveries, read live. */
+  async webhook(code: string): Promise<SupplierWebhookSettings> {
+    const supplier = await this.supplier(code);
+    const adapter = await this.adapter(supplier, 'account');
+    this.throttle(`${supplier.id}:webhook`);
+    const read = await this.call(supplier, 'account', () => adapter.getWebhook());
+    const { state } = read;
+    return {
+      url: state.url ?? null,
+      enabled: state.enabled,
+      expectedUrl: this.webhookUrl(supplier.code),
+      consecutiveFailures: state.consecutiveFailures ?? null,
+      lastSuccessAt: state.lastSuccessAt?.toISOString() ?? null,
+      lastFailureAt: state.lastFailureAt?.toISOString() ?? null,
+      lastFailureReason: state.lastFailureReason ?? null,
+      deliveries: read.deliveries.slice(0, 50).map((row) => ({
+        id: row.id,
+        event: row.event,
+        attempt: row.attempt ?? null,
+        status: row.status,
+        responseStatus: row.responseStatus ?? null,
+        durationMs: row.durationMs ?? null,
+        createdAt: row.createdAt?.toISOString() ?? null,
+      })),
+    };
+  }
+
+  /**
+   * FC8 ("ضبط الإشعارات"): the supplier's webhook pointed at this store and enabled, then its test
+   * event asked for; audited with whether the test was sent. The secret is never set from here: the
+   * admin enters FazerCards' own with the key (S07 SP2).
+   */
+  async setWebhook(actor: Actor, code: string): Promise<SupplierWebhookSettings> {
+    const supplier = await this.supplier(code);
+    const url = this.webhookUrl(supplier.code);
+    if (url === null) {
+      throw new CodedException(409, 'STORE_URL_NOT_PUBLIC', 'The store has no public HTTPS URL');
+    }
+    const adapter = await this.adapter(supplier, 'account');
+    const audit = (set: boolean, ok: boolean) =>
+      this.db.transaction((tx) =>
+        auditSuppliers(
+          tx,
+          actor,
+          'supplier.webhook_set',
+          { type: 'supplier', id: supplier.id },
+          { supplier: supplier.code, url, set, ok },
+        ),
+      );
+    try {
+      await this.call(supplier, 'account', () => adapter.setWebhook(url));
+    } catch (error) {
+      // Audited too: a call that failed may still have changed the supplier's settings.
+      await audit(false, false);
+      throw error;
+    }
+    await audit(true, await this.tryTest(supplier, adapter));
+    this.lastReads.delete(`${supplier.id}:webhook`);
+    return this.webhook(code);
+  }
+
+  /** FC8: the supplier's test event asked for again, once per 10 seconds; audited. */
+  async testWebhook(actor: Actor, code: string): Promise<SupplierWebhookTest> {
+    const supplier = await this.supplier(code);
+    const adapter = await this.adapter(supplier, 'account');
+    const key = `${supplier.id}:webhook-test`;
+    const last = this.lastReads.get(key);
+    if (last !== undefined && Date.now() - last < CONNECTION_TEST_INTERVAL_SECONDS * 1_000) {
+      throw new CodedException(429, 'RATE_LIMITED', 'One webhook test per 10 seconds');
+    }
+    this.lastReads.set(key, Date.now());
+    const ok = await this.tryTest(supplier, adapter);
+    await this.db.transaction((tx) =>
+      auditSuppliers(
+        tx,
+        actor,
+        'supplier.webhook_tested',
+        { type: 'supplier', id: supplier.id },
+        { supplier: supplier.code, ok },
+      ),
+    );
+    return { ok };
+  }
+
+  /** The test event asked for, recorded; whether the supplier took the request. */
+  private async tryTest(supplier: SupplierRef, adapter: SupplierAdapter): Promise<boolean> {
+    try {
+      await this.call(supplier, 'account', () => adapter.testWebhook());
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

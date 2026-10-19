@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "kind": "gift_card",
+  "category_id": "acash_my",
+  "name": "A-Cash (MY)",
+  "offers": [
+    {
+      "card_id": "10_myr",
+      "name": "10 MYR",
+      "price_usd": "2.6000",
+      "stock": 100,
+      "min_order_quantity": 1,
+      "max_order_quantity": 100
+    },
+    {
+      "card_id": "20_myr",
+      "name": "20 MYR",
+      "price_usd": "5.1900",
+      "stock": 100,
+      "min_order_quantity": 1,
+      "max_order_quantity": 100
+    },
+    {
+      "card_id": "50_myr",
+      "name": "50 MYR",
+      "price_usd": "12.9800",
+      "stock": 100,
+      "min_order_quantity": 1,
+      "max_order_quantity": 100
+    },
+    {
+      "card_id": "100_myr",
+      "name": "100 MYR",
+      "price_usd": "25.9700",
+      "stock": 100,
+      "min_order_quantity": 1,
+      "max_order_quantity": 100
+    }
+  ],
+  "note": "Region: MY\nA-Cash Malaysia gift cards.\nCodes can be safely stored and redeemed later."
+}

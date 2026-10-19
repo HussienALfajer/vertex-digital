@@ -861,9 +861,9 @@ describe('the dashboard (rules DB1–DB8)', () => {
       target: '/orders/live',
     });
     expect(after.suppliers.map((supplier) => supplier.code)).toContain('fake');
-    // S19 FC2: FazerCards is listed as not ready until its adapter arrives.
+    // S19 FC2: FazerCards is listed with its adapter.
     expect(after.suppliers.find((supplier) => supplier.code === 'fazercards')).toMatchObject({
-      available: false,
+      available: true,
     });
   });
 
