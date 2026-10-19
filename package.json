@@ -16,7 +16,9 @@
     "test:e2e": "turbo run test:e2e",
     "db:setup-local": "node scripts/setup-local-db.mjs",
     "db:generate": "pnpm --filter @vertex-digital/db db:generate",
-    "db:migrate": "pnpm --filter @vertex-digital/db db:migrate"
+    "db:migrate": "pnpm --filter @vertex-digital/db db:migrate",
+    "db:reset-local": "node scripts/reset-local-db.mjs",
+    "db:seed-local": "pnpm --filter @vertex-digital/api build && pnpm --filter @vertex-digital/api seed:local"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",

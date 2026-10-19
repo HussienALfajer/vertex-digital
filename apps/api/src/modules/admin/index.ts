@@ -6,6 +6,7 @@ export {
   createAdmin,
   resetAdminPassword,
   resetAdminTwoFactor,
+  theAdmin,
 } from './admin-accounts.js';
 export {
   ADMIN_AUTH_BASE_PATH,

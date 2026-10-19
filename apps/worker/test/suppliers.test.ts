@@ -1325,6 +1325,7 @@ describe('the supplier registry (rules SP1, SP2)', () => {
         stockCounts: {},
         missingCategories: [],
         addedOffers: [],
+        mirroredOffers: [],
       });
       const connected = await real.connect(tx, { id: ids.fake, code: 'fake' });
       expect(connected?.secrets).toEqual([SECRET]);
