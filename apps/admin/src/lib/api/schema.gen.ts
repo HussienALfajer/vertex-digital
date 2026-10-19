@@ -5704,7 +5704,7 @@ export interface components {
             firstSeenAt: string;
         };
         /** @enum {string} */
-        ReconciliationCheck: "journal_balance" | "ledger_total" | "wallet_non_negative" | "account_journal_kinds" | "attempt_cost" | "order_purchase" | "order_refund" | "deposit_credit" | "manual_journals" | "supplier_balance" | "usdt_balance" | "sham_cash_count" | "count_stale" | "order_conflicts";
+        ReconciliationCheck: "journal_balance" | "ledger_total" | "wallet_non_negative" | "account_journal_kinds" | "attempt_cost" | "order_purchase" | "order_refund" | "deposit_credit" | "manual_journals" | "supplier_balance" | "usdt_balance" | "sham_cash_count" | "supplier_charges" | "count_stale" | "order_conflicts";
         /** @enum {string} */
         ReconciliationResultStatus: "ok" | "mismatch" | "warning" | "skipped";
         ReconciliationDetails: {
@@ -5715,12 +5715,14 @@ export interface components {
             }[];
             lines: {
                 /** @enum {string} */
-                kind: "in_flight_attempt" | "uncredited_transfer" | "deposit_in_review";
+                kind: "in_flight_attempt" | "uncredited_transfer" | "deposit_in_review" | "charge_differs" | "delivered_but_failed" | "failed_but_delivered";
                 /** Format: uuid */
                 id: string;
                 amountUnits: number;
             }[];
             reason: components["schemas"]["ReconciliationSkipReason"] | null;
+            /** @default [] */
+            unmatchedSupplierOrders: string[];
         };
         /** @enum {string} */
         OffendingKind: "journal" | "order" | "attempt" | "deposit" | "adjustment" | "movement" | "transfer" | "customer";
@@ -6921,6 +6923,10 @@ export interface components {
             productsRepriced: number;
             errorCode: string | null;
             errorMessage: string | null;
+            offersRead: boolean;
+            platformStatus: string | null;
+            /** Format: date-time */
+            catalogUpdatedAt: string | null;
         };
         /** @enum {string} */
         SyncRunTrigger: "schedule" | "admin";
@@ -6949,6 +6955,8 @@ export interface components {
             downConsecutiveErrors: number;
             probeAfterMinutes: number;
             lowStockUnits: number;
+            recoverSuccessBp: number;
+            recoverMinutes: number;
         };
         OfferCostChangePage: {
             items: components["schemas"]["OfferCostChange"][];
@@ -7483,6 +7491,8 @@ export interface components {
             totalUsdUnits: number | null;
             /** Format: date-time */
             createdAt: string | null;
+            /** Format: date-time */
+            completedAt: string | null;
             match: components["schemas"]["SupplierOrderMatch"] | null;
         };
         PlayerCheckRequest: {
@@ -8364,7 +8374,7 @@ export interface components {
             } | null;
         };
         /** @enum {string} */
-        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test" | "supplier_sync_summary" | "supplier_health" | "supplier_balance_low" | "supplier_sync_failing" | "manual_order" | "manual_order_reminder" | "order_needs_review" | "order_conflict" | "validation_quota_reached" | "ticket_opened" | "ticket_reply" | "reconciliation_alert" | "admin_order_placed" | "supplier_stock_low";
+        TelegramMessageKind: "switch_changed" | "usdt_unmatched" | "review_reminder" | "daily_summary" | "bot_reply" | "link_changed" | "test" | "supplier_sync_summary" | "supplier_health" | "supplier_balance_low" | "supplier_sync_failing" | "manual_order" | "manual_order_reminder" | "order_needs_review" | "order_conflict" | "validation_quota_reached" | "ticket_opened" | "ticket_reply" | "reconciliation_alert" | "admin_order_placed" | "supplier_stock_low" | "supplier_charge_mismatch";
         /** @enum {string} */
         TelegramMessageStatus: "pending" | "sent" | "failed" | "skipped";
         TelegramLinkCode: {

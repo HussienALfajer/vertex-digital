@@ -1,3 +1,4 @@
+import type { FailureKind } from '@vertex-digital/contracts';
 import type { z } from 'zod';
 import { SupplierError } from './errors.js';
 
@@ -44,6 +45,64 @@ const MAX_REDIRECTS = 3;
 /** Timeout, conflict (a request with the same key in progress), too early, too many requests. */
 const ALWAYS_RETRYABLE_STATUSES = new Set([408, 409, 425, 429]);
 
+/** Node's and undici's error codes, by what failed (S18 FK1). */
+const DNS_CODES = new Set(['ENOTFOUND', 'EAI_AGAIN', 'EAI_FAIL', 'EAI_NONAME', 'ENODATA']);
+const CONNECT_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ECONNABORTED',
+  'EHOSTUNREACH',
+  'EHOSTDOWN',
+  'ENETUNREACH',
+  'ENETDOWN',
+  'ETIMEDOUT',
+  'EPIPE',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_SOCKET',
+  'UND_ERR_CLOSED',
+]);
+const TLS_CODE = /^(ERR_TLS|ERR_SSL|CERT_|UNABLE_TO_|DEPTH_ZERO|SELF_SIGNED|ERR_OSSL)/;
+
+/** The first `code` along an error's causes (undici wraps the socket's error). */
+function errorCodeOf(error: unknown): string | undefined {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current instanceof Error; depth += 1) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === 'string') return code;
+    current = current.cause;
+  }
+  return undefined;
+}
+
+/** S18 FK1: why a request got no reply at all. */
+export function networkFailure(error: unknown): FailureKind {
+  if (error instanceof DOMException && error.name === 'TimeoutError') return 'timeout';
+  const code = errorCodeOf(error);
+  if (code === undefined) return 'other';
+  if (DNS_CODES.has(code)) return 'dns';
+  if (TLS_CODE.test(code)) return 'tls';
+  if (CONNECT_CODES.has(code)) return 'connect';
+  return 'other';
+}
+
+/** S18 FK1: what a refused reply's status says. */
+function statusFailure(status: number): FailureKind {
+  if (status === 429) return 'rate_limited';
+  return status >= 500 ? 'http_5xx' : 'http_4xx';
+}
+
+/**
+ * When a rate limit lifts, from `x-ratelimit-reset` (Unix seconds) or `retry-after` (seconds),
+ * as epoch milliseconds; undefined without either.
+ */
+function retryAtOf(headers: Headers, now: number): number | undefined {
+  const reset = headers.get('x-ratelimit-reset');
+  if (reset !== null && /^\d{1,12}$/.test(reset)) return Number(reset) * 1000;
+  const after = headers.get('retry-after');
+  if (after !== null && /^\d{1,6}$/.test(after)) return now + Number(after) * 1000;
+  return undefined;
+}
+
 /** JSON over HTTP for one supplier, with timeouts, parsing and error classification. */
 export class SupplierHttp {
   private readonly fetchFn: typeof fetch;
@@ -80,13 +139,11 @@ export class SupplierHttp {
           signal,
         });
       } catch (cause) {
-        const timedOut = cause instanceof DOMException && cause.name === 'TimeoutError';
+        const failure = networkFailure(cause);
         throw new SupplierError(
           'retryable',
-          timedOut ? 'Supplier timed out' : 'Supplier unreachable',
-          {
-            cause,
-          },
+          failure === 'timeout' ? 'Supplier timed out' : `Supplier unreachable (${failure})`,
+          { failure, cause },
         );
       }
       const location = REDIRECT_STATUSES.has(response.status)
@@ -99,6 +156,7 @@ export class SupplierHttp {
         // An order sent and redirected may have been placed: retryable, so its outcome is unknown.
         throw new SupplierError('retryable', `Supplier redirected (HTTP ${response.status})`, {
           status: response.status,
+          failure: 'redirect',
         });
       }
       await response.body?.cancel().catch(() => undefined);
@@ -120,10 +178,16 @@ export class SupplierHttp {
         !ALWAYS_RETRYABLE_STATUSES.has(response.status) &&
         supplierCode !== undefined &&
         (request.definitiveCodes ?? []).includes(supplierCode);
+      const retryAt = response.status === 429 ? retryAtOf(response.headers, Date.now()) : undefined;
       throw new SupplierError(
         definitive ? 'definitive' : 'retryable',
         `Supplier answered HTTP ${response.status}${supplierCode ? ` (${supplierCode})` : ''}`,
-        { status: response.status, ...(supplierCode !== undefined && { supplierCode }) },
+        {
+          status: response.status,
+          failure: statusFailure(response.status),
+          ...(supplierCode !== undefined && { supplierCode }),
+          ...(retryAt !== undefined && { retryAt }),
+        },
       );
     }
 
@@ -131,6 +195,7 @@ export class SupplierHttp {
     if (!parsed.success) {
       throw new SupplierError('retryable', 'Supplier reply has an unexpected shape', {
         status: response.status,
+        failure: 'unreadable',
         cause: parsed.error,
       });
     }

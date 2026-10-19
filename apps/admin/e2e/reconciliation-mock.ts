@@ -51,7 +51,7 @@ export const RUN_IDS = { nightly: id(1), previous: id(2) };
 export const RESULT_IDS = { supplier: id(11), internal: id(12) };
 export const OPENED_ORDER_ID = '0199b000-0000-7000-8000-000000000001';
 
-const noDetails = { offending: [], lines: [], reason: null };
+const noDetails = { offending: [], lines: [], reason: null, unmatchedSupplierOrders: [] };
 
 const result = (
   values: Partial<ReconciliationResult> & Pick<ReconciliationResult, 'id' | 'check' | 'subject'>,

@@ -516,6 +516,10 @@ export const fulfilmentAttempts = pgTable(
     hardLimitMinutes: integer('hard_limit_minutes'),
     quantity: integer('quantity').notNull(),
     unitCostUsdUnits: amountUnits('unit_cost_usd_units').notNull(),
+    /** S18 CH1: what the supplier says it charged for the attempt, in USD units. */
+    chargedUsdUnits: amountUnits('charged_usd_units'),
+    /** S18 PQ1: the unit cost read just before the first send. */
+    costCheckedUsdUnits: amountUnits('cost_checked_usd_units'),
     status: attemptStatusEnum('status').notNull(),
     deliveredQuantity: integer('delivered_quantity').notNull().default(0),
     supplierOrderId: text('supplier_order_id'),
@@ -616,6 +620,14 @@ export const fulfilmentAttempts = pgTable(
         and char_length(${table.deliveryReference}) between 1 and 200`,
     ),
     check('fulfilment_attempts_poll_count_check', sql`${table.pollCount} >= 0`),
+    check(
+      'fulfilment_attempts_charged_check',
+      sql`${table.chargedUsdUnits} between 0 and 1000000000000`,
+    ),
+    check(
+      'fulfilment_attempts_cost_checked_check',
+      sql`${table.costCheckedUsdUnits} between 1 and 10000000000`,
+    ),
   ],
 );
 

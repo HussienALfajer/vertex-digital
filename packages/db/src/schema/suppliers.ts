@@ -1,4 +1,5 @@
 import {
+  FAILURE_KINDS,
   type FieldSpec,
   STOCK_LEVELS,
   SUPPLIER_CALL_OPERATIONS,
@@ -147,6 +148,8 @@ export const supplierOffers = pgTable(
     ignoredAdminId: uuid('ignored_admin_id'),
     /** S16 SF2: the last stock level alerted; null once back at or above the threshold. */
     stockAlert: stockLevelEnum('stock_alert'),
+    /** S18 DC1: the supplier's own discount on the offer, in basis points (2% = 200). */
+    discountBp: integer('discount_bp'),
     ...timestamps(),
   },
   (table) => [
@@ -183,6 +186,7 @@ export const supplierOffers = pgTable(
     ),
     check('supplier_offers_cost_raw_check', sql`char_length(${table.costRaw}) <= 64`),
     check('supplier_offers_cost_check', sql`${table.costUsdUnits} between 1 and 10000000000`),
+    check('supplier_offers_discount_check', sql`${table.discountBp} between 1 and 10000`),
   ],
 );
 
@@ -206,6 +210,11 @@ export const supplierSyncRuns = pgTable(
     productsRepriced: integer('products_repriced').notNull().default(0),
     /** S16 SC2: the category read failed or was empty; the previous tree was kept. */
     categoriesSkipped: boolean('categories_skipped').notNull().default(false),
+    /** S18 SY4: false when the supplier's catalog had not changed and no offer was read. */
+    offersRead: boolean('offers_read').notNull().default(true),
+    /** S18 SY4, PS1: the supplier's own status and catalog version, read before the offers. */
+    platformStatus: text('platform_status'),
+    catalogUpdatedAt: timestamp('catalog_updated_at', { withTimezone: true }),
     /** Sanitized: never credentials, URLs with keys or raw bodies. */
     errorCode: text('error_code'),
     errorMessage: text('error_message'),
@@ -226,6 +235,10 @@ export const supplierSyncRuns = pgTable(
     ),
     check('supplier_sync_runs_error_code_check', sql`char_length(${table.errorCode}) <= 64`),
     check('supplier_sync_runs_error_message_check', sql`char_length(${table.errorMessage}) <= 500`),
+    check(
+      'supplier_sync_runs_platform_status_check',
+      sql`char_length(${table.platformStatus}) between 1 and 64`,
+    ),
   ],
 );
 
@@ -242,6 +255,8 @@ export const supplierCostChanges = pgTable(
     /** Null for a manual cost set by the admin. */
     syncRunId: uuid('sync_run_id').references(() => supplierSyncRuns.id),
     adminId: uuid('admin_id'),
+    /** S18 PQ3: the attempt whose quote or charge moved the cost (no run, no admin). */
+    attemptId: uuid('attempt_id').references(() => fulfilmentAttempts.id),
     createdAt: insertedAt(),
   },
   (table) => [
@@ -250,6 +265,7 @@ export const supplierCostChanges = pgTable(
       table.createdAt.desc(),
     ),
     index('supplier_cost_changes_sync_run_id_idx').on(table.syncRunId),
+    index('supplier_cost_changes_attempt_id_idx').on(table.attemptId),
   ],
 );
 
@@ -266,6 +282,9 @@ export const supplierCalls = pgTable(
     latencyMs: integer('latency_ms').notNull(),
     /** The supplier's error code, never a message with player data. */
     supplierCode: text('supplier_code'),
+    /** S18 FK1: why an `error` call got no trustworthy answer, and the reply's status. */
+    failureKind: text('failure_kind'),
+    httpStatus: integer('http_status'),
     createdAt: insertedAt(),
   },
   (table) => [
@@ -278,6 +297,11 @@ export const supplierCalls = pgTable(
     ),
     check('supplier_calls_latency_check', sql`${table.latencyMs} >= 0`),
     check('supplier_calls_supplier_code_check', sql`char_length(${table.supplierCode}) <= 64`),
+    check(
+      'supplier_calls_failure_kind_check',
+      sql`${table.failureKind} in (${sql.raw(FAILURE_KINDS.map((kind) => `'${kind}'`).join(', '))})`,
+    ),
+    check('supplier_calls_http_status_check', sql`${table.httpStatus} between 100 and 599`),
   ],
 );
 
@@ -344,6 +368,9 @@ export const supplierPolicy = pgTable(
     probeAfterMinutes: integer('probe_after_minutes').notNull(),
     /** S16 SF2: a count of units in stock, bigint as every `*_units` column; 10 on older rows. */
     lowStockUnits: amountUnits('low_stock_units').notNull().default(10),
+    /** S18 HE2: back to `healthy` at this success or above, held this many minutes. */
+    recoverSuccessBp: integer('recover_success_bp').notNull().default(9500),
+    recoverMinutes: integer('recover_minutes').notNull().default(5),
     /** Null for the seed. */
     adminId: uuid('admin_id'),
     createdAt: insertedAt(),
@@ -364,6 +391,11 @@ export const supplierPolicy = pgTable(
         and ${table.probeAfterMinutes} between 1 and 120`,
     ),
     check('supplier_policy_low_stock_check', sql`${table.lowStockUnits} between 1 and 1000`),
+    check(
+      'supplier_policy_recover_check',
+      sql`${table.recoverSuccessBp} between ${table.degradedSuccessBp} and 10000
+        and ${table.recoverMinutes} between 1 and 60`,
+    ),
   ],
 );
 

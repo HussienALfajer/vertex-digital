@@ -799,7 +799,16 @@ export class SuppliersService {
         capabilities: supplierPanelCapabilities(state.code),
         newOfferCount: newOffers.get(state.id) ?? 0,
         lowStockCount: (lowStock.get(state.id)?.low ?? 0) + (lowStock.get(state.id)?.out ?? 0),
-        platformStatus: this.live.cachedStatus(state.id),
+        // S18 PS1: the cards never call the supplier: the panel's last read, else the sync's.
+        platformStatus:
+          this.live.cachedStatus(state.id) ??
+          (run?.platformStatus
+            ? {
+                status: run.platformStatus,
+                catalogUpdatedAt: run.catalogUpdatedAt?.toISOString() ?? null,
+                checkedAt: run.startedAt.toISOString(),
+              }
+            : null),
       };
     });
   }

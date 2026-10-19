@@ -1,4 +1,5 @@
 import {
+  CHARGE_MISMATCH_BP,
   type Currency,
   heldUnits,
   RECONCILIATION_MAX_OFFENDING_IDS,
@@ -50,9 +51,15 @@ interface Line {
   amountUnits: number;
 }
 
+type ExternalCheckName =
+  | 'supplier_balance'
+  | 'usdt_balance'
+  | 'sham_cash_count'
+  | 'supplier_charges';
+
 /** A result from the books, the actual balance and the range it may fall in (rule E1). */
 function rangeResult(input: {
-  check: 'supplier_balance' | 'usdt_balance' | 'sham_cash_count';
+  check: ExternalCheckName;
   place: TreasuryPlace;
   currency: Currency;
   booksUnits: number;
@@ -80,7 +87,7 @@ function rangeResult(input: {
 
 /** A skipped external check (rules E2, E5, RN4): no amounts compared, the reason in details. */
 export function skippedResult(
-  check: 'supplier_balance' | 'usdt_balance' | 'sham_cash_count',
+  check: ExternalCheckName,
   place: TreasuryPlace,
   reason: ReconciliationDetails['reason'],
   booksUnits: number | null = null,
@@ -138,6 +145,99 @@ export async function supplierBalanceCheck(
     toleranceUnits: input.toleranceUsdUnits,
     lines,
   });
+}
+
+/** S18 RC1: one order of the supplier's day, as its statement gives it. */
+export interface SupplierDayOrder {
+  supplierOrderId: string;
+  status: string | null;
+  totalUnits: number | null;
+}
+
+const SUPPLIER_FAILED_STATUSES = new Set(['failed', 'refunded', 'cancelled']);
+
+/**
+ * S18 RC1, RC2: what a supplier charged for the orders of a business day against our attempts
+ * that name them. Actual = Σ the totals of its `completed` orders; books = Σ unit cost × units
+ * delivered of the attempts they name; within the tolerance, and every order accounted for, it is
+ * `ok`. Lines: an attempt charged more than 2% off its cost (`charge_differs`, the difference),
+ * completed there but failed here (`delivered_but_failed`, the charge), failed or refunded there
+ * but delivered here (`failed_but_delivered`, the cost); orders no attempt names are listed by the
+ * supplier's id (`unmatchedSupplierOrders`): money spent we do not count.
+ */
+export async function supplierChargesCheck(
+  db: Executor,
+  input: { supplier: SupplierCode; orders: SupplierDayOrder[]; toleranceUsdUnits: number },
+): Promise<CheckResult> {
+  const place = supplierPlace(input.supplier);
+  const ids = [...new Set(input.orders.map((order) => order.supplierOrderId))];
+  const { rows } =
+    ids.length === 0
+      ? { rows: [] }
+      : await db.execute<{
+          id: string;
+          supplier_order_id: string;
+          status: string;
+          cost: string;
+        }>(sql`
+    select distinct on (f.supplier_order_id) f.id, f.supplier_order_id, f.status::text as status,
+      (f.unit_cost_usd_units * f.delivered_quantity)::text as cost
+    from fulfilment_attempts f join suppliers s on s.id = f.supplier_id
+    where s.code = ${input.supplier}
+      and f.supplier_order_id in (${sql.join(
+        ids.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+    order by f.supplier_order_id, f.created_at desc, f.id desc`);
+  const attempts = new Map(rows.map((row) => [row.supplier_order_id, row]));
+  const lines: Line[] = [];
+  const unmatched: string[] = [];
+  let actualUnits = 0;
+  let booksUnits = 0;
+  for (const order of input.orders) {
+    const status = order.status?.toLowerCase() ?? '';
+    const charged = status === 'completed' ? (order.totalUnits ?? 0) : 0;
+    actualUnits += charged;
+    const attempt = attempts.get(order.supplierOrderId);
+    if (!attempt) {
+      if (status === 'completed') unmatched.push(order.supplierOrderId.slice(0, 64));
+      continue;
+    }
+    const cost = units(attempt.cost);
+    booksUnits += cost;
+    if (status === 'completed' && attempt.status === 'failed') {
+      lines.push({ kind: 'delivered_but_failed', id: attempt.id, amountUnits: charged });
+    } else if (SUPPLIER_FAILED_STATUSES.has(status) && cost > 0) {
+      lines.push({ kind: 'failed_but_delivered', id: attempt.id, amountUnits: cost });
+    } else if (
+      status === 'completed' &&
+      order.totalUnits !== null &&
+      Math.abs(order.totalUnits - cost) * 10_000 > cost * CHARGE_MISMATCH_BP
+    ) {
+      lines.push({ kind: 'charge_differs', id: attempt.id, amountUnits: order.totalUnits - cost });
+    }
+  }
+  const result = rangeResult({
+    check: 'supplier_charges',
+    place,
+    currency: 'USD',
+    booksUnits,
+    actualUnits,
+    lowUnits: booksUnits,
+    highUnits: booksUnits,
+    toleranceUnits: input.toleranceUsdUnits,
+    lines,
+  });
+  const accounted = lines.length === 0 && unmatched.length === 0;
+  return {
+    ...result,
+    status: result.status === 'ok' && accounted ? 'ok' : 'mismatch',
+    offendingCount: lines.length + unmatched.length + (result.status === 'ok' ? 0 : 1),
+    details: {
+      ...result.details,
+      unmatchedSupplierOrders: unmatched.slice(0, RECONCILIATION_MAX_OFFENDING_IDS),
+    },
+  };
 }
 
 /**

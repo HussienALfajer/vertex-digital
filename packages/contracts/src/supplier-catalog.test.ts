@@ -363,14 +363,15 @@ describe('capabilities and health (S16, SF6)', () => {
   it('leaves category reads out of the p90', () => {
     const at = new Date('2026-10-13T10:00:00Z');
     const verdict = supplierHealth(
-      Array.from({ length: 5 }, () => ({
+      Array.from({ length: 10 }, () => ({
         operation: 'list_categories' as const,
         result: 'ok' as const,
         latencyMs: 60_000,
         at,
       })),
       SUPPLIER_POLICY_DEFAULTS,
-      'healthy',
+      { state: 'healthy', reason: 'x', since: new Date(0) },
+      at,
     );
     expect(verdict).toMatchObject({ state: 'healthy', p90Ms: null });
   });

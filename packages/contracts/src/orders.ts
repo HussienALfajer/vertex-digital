@@ -1997,6 +1997,8 @@ export const supplierOrderSchema = z
     status: z.string().nullable(),
     totalUsdUnits: z.int().nullable(),
     createdAt: z.iso.datetime().nullable(),
+    /** S18 ST1: when the supplier completed it (its delivery time is the difference). */
+    completedAt: z.iso.datetime().nullable(),
     /** Null: "غير مطابق لطلب عندنا", a possible double purchase. */
     match: supplierOrderMatchSchema.nullable(),
   })

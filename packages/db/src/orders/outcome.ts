@@ -53,8 +53,10 @@ export type AttemptOutcome =
       /** One per unit for a code product; kept encrypted, never in `result`. */
       codes?: readonly string[];
       supplierOrderId?: string | null;
+      /** S18 CH1: what the supplier says it charged, kept on the attempt once. */
+      chargedUsdUnits?: number | null;
     }
-  | { status: 'pending'; supplierOrderId?: string | null }
+  | { status: 'pending'; supplierOrderId?: string | null; chargedUsdUnits?: number | null }
   | {
       status: 'failed';
       reason: string;
@@ -153,6 +155,16 @@ export async function applyOutcome(
 
   const admin = resolution.admin;
   const event = { actor: eventActor(resolution), actorId: admin?.id ?? null, attemptId };
+  // S18 CH1: the first charge the supplier reports is kept; a later one changes nothing.
+  const reported =
+    outcome.status === 'delivered' || outcome.status === 'pending'
+      ? outcome.chargedUsdUnits
+      : undefined;
+  const chargedUsdUnits =
+    attempt.chargedUsdUnits ??
+    (typeof reported === 'number' && Number.isSafeInteger(reported) && reported >= 0
+      ? reported
+      : null);
   const supplierOrderId = clip(outcome.supplierOrderId, 128) ?? attempt.supplierOrderId;
   const closing = {
     resolvedAt: context.now,
@@ -180,6 +192,7 @@ export async function applyOutcome(
           supplierOrderId,
           nextPollAt: null,
           costJournalId: journalId,
+          chargedUsdUnits,
           result: { status: 'delivered', quantity: units, codeCount: outcome.codes?.length ?? 0 },
         })
         .where(eq(fulfilmentAttempts.id, attemptId))
@@ -244,6 +257,7 @@ export async function applyOutcome(
           supplierOrderId,
           nextPollAt: pollAt,
           sentAt,
+          chargedUsdUnits,
           ...(outcome.status === 'unknown' && {
             failureReason: clip(outcome.reason, 200),
             ...(outcome.supplierErrorCode && {

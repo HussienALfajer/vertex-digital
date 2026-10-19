@@ -409,6 +409,7 @@ describe('WdgzoneAdapter balance and players', () => {
       categories: true,
       statement: true,
       platformStatus: true,
+      offerQuote: true,
     });
     await expect(wdg.validatePlayer()).rejects.toBeInstanceOf(SupplierError);
   });
@@ -421,11 +422,13 @@ describe('WdgzoneAdapter placeOrder', () => {
       callbackUrl: 'https://store.test/api/webhooks/suppliers/wdgzone',
     }).placeOrder(order({ offerId: '8451', fields: { player_id: '5000000001' } }));
 
+    // S18 CH1: what WDG charged comes with the outcome.
     expect(outcome).toEqual({
       status: 'delivered',
       supplierOrderId: '1024',
       quantity: 1,
       codes: ['TEST-CODE-0001'],
+      chargedUsdUnits: 10_475_000,
     });
     const sent = server.requests.at(-1);
     expect(sent).toMatchObject({ method: 'POST', path: '/api/v1/products/8451/purchase' });
@@ -539,6 +542,7 @@ describe('WdgzoneAdapter placeOrder', () => {
         status: 'unknown',
         supplierOrderId: '3002',
         reason: 'WDGZone delivered an unreadable code',
+        answered: true,
       });
     }
   });
@@ -554,6 +558,16 @@ describe('WdgzoneAdapter placeOrder', () => {
         supplierOrderId: '2048',
       });
     }
+    // A total already charged is kept with a pending order (S18 CH1).
+    server.reply({
+      status: 201,
+      body: { success: true, data: { order_id: 2050, status: 'processing', total: '0.875' } },
+    });
+    expect(await adapter().placeOrder(order())).toEqual({
+      status: 'pending',
+      supplierOrderId: '2050',
+      chargedUsdUnits: 875_000,
+    });
     // A completed top-up has no items: delivered without codes.
     server.reply({
       status: 201,
@@ -592,11 +606,33 @@ describe('WdgzoneAdapter placeOrder', () => {
     expect(await adapter().placeOrder(order())).toMatchObject({ status: 'unknown' });
   });
 
+  it.each([
+    [
+      { status: 429, body: { success: false, error: { code: 'RATE_LIMITED' } } },
+      'rate_limited',
+      429,
+    ],
+    [{ status: 500, body: 'Internal error' }, 'http_5xx', 500],
+    [{ status: 422, body: { success: false, error: { code: 'NEW' } } }, 'http_4xx', 422],
+    [{ status: 201, body: '<html>' }, 'unreadable', 201],
+  ])(
+    'keeps why an order got no trustworthy answer (S18 FK1): %#',
+    async (reply, failure, status) => {
+      server.reply(reply);
+      expect(await adapter().placeOrder(order())).toMatchObject({
+        status: 'unknown',
+        failure,
+        httpStatus: status,
+      });
+    },
+  );
+
   it('maps a timeout after sending as unknown', async () => {
     server.reply({ status: 201, body: fixture('purchase-completed'), delayMs: 500 });
     expect(await adapter({ timeoutMs: 50 }).placeOrder(order())).toEqual({
       status: 'unknown',
       reason: 'Supplier timed out',
+      failure: 'timeout',
     });
   });
 
@@ -684,10 +720,40 @@ describe('WdgzoneAdapter getOrder', () => {
     server.reply({
       body: { success: true, data: { status: 'PROCESSING', delivery_items: ['TEST-CODE-0001'] } },
     });
+    // S18 HE4: an answer that does not settle the order yet is no fault of WDG's.
     expect(await adapter().getOrder(ATTEMPT_ID, placed)).toEqual({
       status: 'unknown',
       supplierOrderId: '1024',
       reason: 'WDGZone delivery is not completed',
+      answered: true,
+    });
+  });
+
+  it('reads the charge and the failure reason of the order state (S18 CH1, DD1)', async () => {
+    server.reply(
+      { status: 202, body: { success: true, data: { status: 'COMPLETED', delivery_items: null } } },
+      { body: fixture('order-state-completed') },
+    );
+    expect(await adapter().getOrder(ATTEMPT_ID, { supplierOrderId: '1024', quantity: 1 })).toEqual({
+      status: 'delivered',
+      supplierOrderId: '1024',
+      quantity: 1,
+      chargedUsdUnits: 880_000,
+    });
+    server.reply(
+      { status: 202, body: { success: true, data: { status: 'PROCESSING' } } },
+      {
+        body: {
+          success: true,
+          data: { status: 'failed', error_message: '  Player not found in region  ' },
+        },
+      },
+    );
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toEqual({
+      status: 'failed_definitive',
+      supplierOrderId: '1024',
+      supplierCode: 'FAILED',
+      reason: 'Player not found in region',
     });
   });
 
@@ -697,7 +763,7 @@ describe('WdgzoneAdapter getOrder', () => {
     ['refunded', { status: 'failed_definitive', supplierCode: 'REFUNDED' }],
     ['FAILED', { status: 'failed_definitive', supplierCode: 'FAILED' }],
     ['cancelled', { status: 'failed_definitive', supplierCode: 'CANCELLED' }],
-    ['on_hold', { status: 'unknown', reason: 'WDGZone order state unexpected' }],
+    ['on_hold', { status: 'unknown', reason: 'WDGZone order state unexpected', answered: true }],
   ])('reads the order state %s after a 202 (MF4)', async (status, outcome) => {
     server.reply(
       { status: 202, body: { success: true, data: { status: 'PROCESSING' } } },
@@ -747,20 +813,29 @@ describe('WdgzoneAdapter getOrder', () => {
   });
 
   it.each([
-    ['not found', { status: 404, body: fixture('error-order-not-found') }],
-    ['a server error', { status: 502, body: 'Bad gateway' }],
-    ['an unexpected status', { status: 204, body: '' }],
+    [
+      'not found',
+      { status: 404, body: fixture('error-order-not-found') },
+      { answered: true, supplierCode: 'ORDER_NOT_FOUND', failure: 'http_4xx' },
+    ],
+    ['a server error', { status: 502, body: 'Bad gateway' }, { failure: 'http_5xx' }],
+    ['an unexpected status', { status: 204, body: '' }, { failure: 'unreadable' }],
     [
       'an unreadable delivery',
       { status: 200, body: { success: true, data: { delivery_items: 'x' } } },
+      { failure: 'unreadable' },
     ],
-    ['other units', { status: 200, body: { success: true, data: { quantity: 1 } } }],
-  ])('maps %s as unknown', async (_, reply) => {
+    [
+      'other units',
+      { status: 200, body: { success: true, data: { quantity: 1 } } },
+      { answered: true },
+    ],
+  ])('maps %s as unknown', async (_, reply, flags) => {
     server.reply(reply);
-    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toMatchObject({
-      status: 'unknown',
-      supplierOrderId: '1024',
-    });
+    const outcome = await adapter().getOrder(ATTEMPT_ID, placed);
+    expect(outcome).toMatchObject({ status: 'unknown', supplierOrderId: '1024', ...flags });
+    // S18 HE4: only what WDG answered is marked so.
+    if (!('answered' in flags)) expect(outcome).not.toHaveProperty('answered');
   });
 
   it('asks nothing without WDG’s order id', async () => {
@@ -809,6 +884,9 @@ describe('WdgzoneAdapter webhooks', () => {
     expect(wdg.verifyWebhook({ ...good, rawBody: rawBody.replace('1024', '1025') })).toBe(false);
     expect(wdg.verifyWebhook(good, new Date('2026-08-08T12:30:01Z'))).toBe(false);
     expect(wdg.verifyWebhook(signed(body({ created_at: 'yesterday' })))).toBe(false);
+    // S18 TZ1: a time without an offset is UTC+4, so 16:30 there is 12:30Z, within the day.
+    expect(wdg.verifyWebhook(signed(body({ created_at: '2026-08-07 16:30:00' })))).toBe(true);
+    expect(wdg.verifyWebhook(signed(body({ created_at: '2026-08-06 16:30:00' })))).toBe(false);
     expect(wdg.verifyWebhook(signed('not json'))).toBe(false);
     expect(new WdgzoneAdapter({ apiKey: '' }).verifyWebhook(signed(rawBody, ''))).toBe(false);
   });
@@ -823,8 +901,13 @@ describe('WdgzoneAdapter webhooks', () => {
         supplierOrderId: '1024',
         quantity: 1,
         codes: ['TEST-CODE-0001'],
+        chargedUsdUnits: 10_475_000,
       },
     });
+    // A total in another currency is not a USD charge.
+    expect(
+      adapter().parseWebhook(signed(body({}, { currency: 'EUR' }))).outcome,
+    ).not.toHaveProperty('chargedUsdUnits');
     // The same delivery again carries the same event id: the API stores it once.
     expect(adapter().parseWebhook(signed(body())).eventId).toBe(event.eventId);
   });
@@ -858,6 +941,134 @@ describe('WdgzoneAdapter webhooks', () => {
     ]) {
       expect(() => adapter().parseWebhook({ headers: {}, rawBody })).toThrow(SupplierError);
     }
+  });
+});
+
+describe('WdgzoneAdapter quotes, discounts and page retries (S18)', () => {
+  const product = (overrides: Record<string, unknown> = {}) => ({
+    success: true,
+    data: {
+      id: 235203,
+      name: '60 UC',
+      description: null,
+      category_id: 14693,
+      category: 'Auto',
+      brand: 'PUBG Mobile',
+      type: 'topup',
+      price: 0.875,
+      original_price: 0.887,
+      discount_percent: 2,
+      currency: 'USD',
+      stock: 999999,
+      available: true,
+      requires_player_id: true,
+      required_fields: [{ key: 'player_id', label: 'Player ID', type: 'text' }],
+      ...overrides,
+    },
+  });
+
+  it('quotes one product by its id (PQ1)', async () => {
+    server.reply({ body: product() });
+    const before = server.requests.length;
+    expect(await adapter().getOfferQuote('235203')).toEqual({
+      cost: { currency: 'USD', amountUnits: 875_000 },
+      inStock: true,
+    });
+    expect(sentSince(before).map((request) => request.path)).toEqual(['/api/v1/products/235203']);
+    server.reply({ body: product({ available: false }) });
+    expect(await adapter().getOfferQuote('235203')).toMatchObject({ inStock: false });
+    server.reply({ body: product({ stock: 0 }) });
+    expect(await adapter().getOfferQuote('235203')).toMatchObject({ inStock: false });
+  });
+
+  it('refuses a quote it cannot trust', async () => {
+    const before = server.requests.length;
+    await expect(adapter().getOfferQuote('../me')).rejects.toMatchObject({ kind: 'definitive' });
+    expect(server.requests.length).toBe(before);
+    server.reply({ body: product({ currency: 'EUR' }) });
+    await expect(adapter().getOfferQuote('235203')).rejects.toMatchObject({
+      kind: 'retryable',
+      details: { failure: 'unreadable' },
+    });
+    server.reply({ status: 404, body: fixture('error-product-not-found') });
+    await expect(adapter().getOfferQuote('235203')).rejects.toMatchObject({
+      details: { status: 404, supplierCode: 'PRODUCT_NOT_FOUND' },
+    });
+    server.reply({ body: product(), delayMs: 500 });
+    await expect(adapter({ timeoutMs: 50 }).getOfferQuote('235203')).rejects.toMatchObject({
+      details: { failure: 'timeout' },
+    });
+  });
+
+  it('reads the VIP discount in basis points (DC1)', async () => {
+    const page = (discounts: unknown[]) => ({
+      success: true,
+      data: discounts.map((discount, index) => ({
+        ...product({ id: 1000 + index, discount_percent: discount }).data,
+      })),
+      pagination: { page: 1, total_pages: 1 },
+    });
+    server.reply({ body: page([2, '1.25', 0, null, 'x', 101, '2.5']) }, { body: page([]) });
+    const offers = await adapter().listOffers();
+    expect(offers.map((offer) => offer.discountBp)).toEqual([
+      200,
+      125,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      250,
+    ]);
+  });
+
+  it('reads a failed catalog page again, then goes on (SY1)', async () => {
+    const retries: unknown[] = [];
+    const wdg = new WdgzoneAdapter({
+      apiKey: API_KEY,
+      baseUrl: `${server.url}/api/v1/`,
+      timeoutMs: 5_000,
+      now: () => NOW,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+      onRetry: (retry) => retries.push(retry),
+    });
+    const empty = { success: true, data: [], pagination: { page: 1, total_pages: 0 } };
+    server.reply(
+      { status: 502, body: 'Bad gateway' },
+      { status: 503, body: 'Unavailable' },
+      { body: fixture('products-topup-page-1') },
+      { body: fixture('products-topup-page-2') },
+      {
+        status: 429,
+        body: { success: false, error: { code: 'RATE_LIMITED' } },
+        headers: { 'x-ratelimit-reset': String(NOW.getTime() / 1000 + 30) },
+      },
+      { body: empty },
+    );
+    expect((await wdg.listOffers()).length).toBeGreaterThan(0);
+    expect(sleeps).toEqual([2_000, 5_000, 31_000]);
+    expect(retries).toEqual([
+      { path: 'products', attempt: 1, failure: 'http_5xx', status: 502, waitMs: 2_000 },
+      { path: 'products', attempt: 2, failure: 'http_5xx', status: 503, waitMs: 5_000 },
+      { path: 'products', attempt: 1, failure: 'rate_limited', status: 429, waitMs: 31_000 },
+    ]);
+  });
+
+  it('gives up on a page after two retries, and at once on a refusal', async () => {
+    server.reply(
+      { status: 500, body: 'x' },
+      { status: 500, body: 'x' },
+      { status: 500, body: 'x' },
+    );
+    await expect(adapter().listOffers()).rejects.toMatchObject({
+      details: { failure: 'http_5xx' },
+    });
+    expect(sleeps).toEqual([2_000, 5_000]);
+    sleeps = [];
+    server.reply({ status: 401, body: fixture('error-unauthorized') });
+    await expect(adapter().listCategories()).rejects.toMatchObject({ details: { status: 401 } });
+    expect(sleeps).toEqual([]);
   });
 });
 
@@ -925,7 +1136,7 @@ describe('WdgzoneAdapter catalog tree, statement and status (S16)', () => {
     await expect(adapter().listCategories()).rejects.toThrow('larger than expected');
   });
 
-  it('reads transactions leniently: signed amounts, matches by order id, others left out', async () => {
+  it('reads transactions as WDG sends them: orders by reference, UTC+4 times (S18 ST2)', async () => {
     const before = server.requests.length;
     server.reply({ body: fixture('transactions-page-1') });
     const page = await adapter().listTransactions(1);
@@ -933,28 +1144,62 @@ describe('WdgzoneAdapter catalog tree, statement and status (S16)', () => {
     expect(page).toEqual({
       items: [
         {
-          id: '9001',
+          id: '5268',
           type: 'purchase',
+          amount: { currency: 'USD', amountUnits: -880_000 },
+          reference: 'Product purchase',
+          supplierOrderId: '1024',
+          createdAt: new Date('2026-10-18T20:53:16Z'),
+        },
+        // A deposit names no order.
+        {
+          id: '4530',
+          type: 'deposit',
+          amount: { currency: 'USD', amountUnits: 5_050_000 },
+          reference: 'Binance USDT BEP20',
+          createdAt: new Date('2026-10-12T19:24:39Z'),
+        },
+      ],
+      // No `pagination`: a short page ends the list.
+      hasMore: false,
+    });
+    // The older shapes are read as well: `order_id`, `reference`, `balance_after`, a currency.
+    server.reply({
+      body: {
+        success: true,
+        data: [
+          {
+            id: 9001,
+            amount: '-0.881',
+            balance_after: 24.119,
+            reference: 'Order #1024',
+            order_id: 1024,
+            currency: 'usd',
+            created_at: '2026-10-12T10:00:00Z',
+          },
+          { id: 8999, type: 'adjustment', amount: 1, currency: 'EUR' },
+        ],
+        pagination: { page: 1, total_pages: 2 },
+      },
+    });
+    expect(await adapter().listTransactions(1)).toEqual({
+      items: [
+        {
+          id: '9001',
           amount: { currency: 'USD', amountUnits: -881_000 },
           balanceAfter: { currency: 'USD', amountUnits: 24_119_000 },
           reference: 'Order #1024',
           supplierOrderId: '1024',
           createdAt: new Date('2026-10-12T10:00:00Z'),
         },
-        {
-          id: '9000',
-          type: 'deposit',
-          amount: { currency: 'USD', amountUnits: 25_000_000 },
-          createdAt: new Date('2026-10-12T09:00:00Z'),
-        },
       ],
       hasMore: true,
     });
   });
 
-  it('reads orders leniently, and ends the list on a short page without paging', async () => {
+  it('reads orders with their price and completion time (S18 ST1)', async () => {
     server.reply({ body: fixture('orders-page-1') });
-    expect(await adapter().listOrders(2)).toEqual({
+    expect(await adapter().listOrders(1)).toEqual({
       items: [
         {
           supplierOrderId: '1024',
@@ -962,14 +1207,36 @@ describe('WdgzoneAdapter catalog tree, statement and status (S16)', () => {
           offerName: '60 UC',
           quantity: 1,
           status: 'completed',
-          total: { currency: 'USD', amountUnits: 881_000 },
-          createdAt: new Date('2026-10-12T10:00:00Z'),
+          total: { currency: 'USD', amountUnits: 880_000 },
+          createdAt: new Date('2026-10-18T20:53:16Z'),
+          completedAt: new Date('2026-10-18T20:53:23Z'),
         },
-        // Another currency: the total is left out.
-        { supplierOrderId: '1023', offerName: 'Steam Wallet 10 USD' },
+        {
+          supplierOrderId: '1023',
+          offerId: '235203',
+          offerName: '60 UC',
+          quantity: 1,
+          status: 'refunded',
+          total: { currency: 'USD', amountUnits: 887_000 },
+          createdAt: new Date('2026-10-14T08:34:37Z'),
+        },
       ],
       hasMore: false,
     });
+    // Another currency: the total is left out; `total` is read when there is no `total_price`.
+    server.reply({
+      body: {
+        success: true,
+        data: [
+          { id: 1023, product: 'Steam Wallet 10 USD', total: 10.475, currency: 'EUR' },
+          { id: 1022, total: 10.475 },
+        ],
+      },
+    });
+    expect((await adapter().listOrders(2)).items).toEqual([
+      { supplierOrderId: '1023', offerName: 'Steam Wallet 10 USD' },
+      { supplierOrderId: '1022', total: { currency: 'USD', amountUnits: 10_475_000 } },
+    ]);
     const full = Array.from({ length: 50 }, (_, index) => ({ id: index + 1, total: 'x' }));
     server.reply({ body: { success: true, data: full } });
     expect((await adapter().listOrders(1)).hasMore).toBe(true);
@@ -985,6 +1252,12 @@ describe('WdgzoneAdapter catalog tree, statement and status (S16)', () => {
       body: { success: true, data: { status: 'maintenance', catalog_updated_at: 'x' } },
     });
     expect(await adapter().getPlatformStatus()).toEqual({ status: 'maintenance' });
+    // S18 TZ1: as WDG sends it live, without an offset: UTC+4.
+    server.reply({ body: fixture('health-live') });
+    expect(await adapter().getPlatformStatus()).toEqual({
+      status: 'operational',
+      catalogUpdatedAt: new Date('2026-10-19T17:19:06Z'),
+    });
   });
 
   it('fetches images from wdgzone.tech only, never sending the key', async () => {

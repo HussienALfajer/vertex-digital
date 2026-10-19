@@ -43,6 +43,7 @@ import {
   storeSwitchChanges,
   supplierBalanceReads,
   supplierCalls,
+  supplierCostChanges,
   supplierCredentials,
   supplierHealthChanges,
   supplierKey,
@@ -66,7 +67,7 @@ import { parseEnv } from '../src/core/config/env.js';
 import { LOG_REDACT_PATHS } from '../src/core/config/log-redact.js';
 import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { OrdersFulfilJob } from '../src/jobs/orders/fulfil.job.js';
-import { attemptOutcome, markStockRefusal } from '../src/jobs/orders/order-calls.js';
+import { attemptOutcome, checkCharge, markStockRefusal } from '../src/jobs/orders/order-calls.js';
 import { OrdersPayWaitingJob } from '../src/jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from '../src/jobs/orders/poll.job.js';
 import { OrdersSweepJob } from '../src/jobs/orders/sweep.job.js';
@@ -220,6 +221,8 @@ async function fakeOffer(tx: Transaction, offerId: string, cost: number): Promis
     .from(supplierOffers)
     .where(and(eq(supplierOffers.supplierId, ids.fake), eq(supplierOffers.offerId, offerId)));
   const id = existing?.id ?? newId();
+  // S18 PQ1, CH1: the fake quotes and charges the cost the test gives its offer.
+  fakeState = { ...fakeState, costs: { ...fakeState.costs, [offerId]: cost } };
   const values = {
     inStock: true,
     costUsdUnits: cost,
@@ -888,6 +891,145 @@ describe('polling, the hard limit and the sweep (rules F3, F6, F7)', () => {
       expect(reminder).toMatchObject({ kind: 'manual_order_reminder' });
       expect(reminder?.params).toMatchObject({ orderNumber: order.number, waitMinutes: 16 });
       expect((await sweep.sweep(now, tx)).reminded).not.toContain(manual?.id);
+    });
+  });
+});
+
+describe('the cost read before buying and the charge (S18 PQ1–PQ3, CH1–CH3)', () => {
+  const links = { admin: 'http://127.0.0.1:5173' };
+  const offerOf = async (tx: Transaction, routeId: string) => {
+    const [row] = await tx
+      .select({ offer: supplierOffers })
+      .from(productRoutes)
+      .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
+      .where(eq(productRoutes.id, routeId));
+    return row?.offer;
+  };
+
+  it('never buys at a quoted cost above the price paid, and reprices on that cost', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      fakeState = { ...fakeState, costs: { ...fakeState.costs, 'fake-uc-60': usd(5) } };
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [refused] = await attemptsOf(tx, order.id);
+      expect(refused).toMatchObject({
+        routeId: item.fakeRoute,
+        status: 'failed',
+        supplierErrorCode: 'COST_ABOVE_PRICE',
+        costCheckedUsdUnits: usd(5),
+      });
+      // Nothing reached the supplier's order book.
+      expect(fakeState.orders[refused?.id as string]).toBeUndefined();
+      const offer = await offerOf(tx, item.fakeRoute as string);
+      expect(offer?.costUsdUnits).toBe(usd(5));
+      const changes = await tx
+        .select()
+        .from(supplierCostChanges)
+        .where(eq(supplierCostChanges.attemptId, refused?.id as string));
+      expect(changes).toMatchObject([{ fromUsdUnits: usd(0.88), toUsdUnits: usd(5) }]);
+      const quotes = await tx
+        .select({ result: supplierCalls.result })
+        .from(supplierCalls)
+        .where(
+          and(eq(supplierCalls.supplierId, ids.fake), eq(supplierCalls.operation, 'get_offer')),
+        );
+      expect(quotes.length).toBeGreaterThan(0);
+      // No other route: the order is refunded, never sold below the supplier's cost.
+      expect((await fulfil.fulfil(order.id, tx)).kind).toBe('refunded');
+    });
+  });
+
+  it('sends as before when the quote cannot be read', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      fakeState = { ...fakeState, removed: ['fake-uc-60'] };
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      // Refused by the fake when sent (an unknown offer), not before: the send happened.
+      const [attempt] = await attemptsOf(tx, order.id);
+      expect(attempt).toMatchObject({
+        supplierErrorCode: 'FAKE_REFUSED',
+        costCheckedUsdUnits: null,
+      });
+    });
+  });
+
+  it('keeps the charge, notes and alerts one off the cost, and takes the charged cost', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      // The stored cost is behind the supplier's: the fake quotes and charges $0.88.
+      await tx
+        .update(supplierOffers)
+        .set({ costUsdUnits: usd(0.5) })
+        .where(eq(supplierOffers.id, (await offerOf(tx, item.fakeRoute as string))?.id as string));
+      fakeState = { ...fakeState, costs: { ...fakeState.costs, 'fake-uc-60': usd(0.88) } };
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [attempt] = await attemptsOf(tx, order.id);
+      expect(attempt).toMatchObject({
+        status: 'delivered',
+        unitCostUsdUnits: usd(0.5),
+        chargedUsdUnits: usd(0.88),
+        costCheckedUsdUnits: usd(0.88),
+      });
+      const [alert] = await messagesOf(tx, [`charge:${attempt?.id}`]);
+      expect(alert).toMatchObject({
+        kind: 'supplier_charge_mismatch',
+        params: {
+          orderNumber: order.number,
+          expectedUsdUnits: usd(0.5),
+          chargedUsdUnits: usd(0.88),
+          loss: false,
+        },
+      });
+      const notes = await tx
+        .select()
+        .from(orderEvents)
+        .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.reason, 'charge_mismatch')));
+      expect(notes).toHaveLength(1);
+      expect((await offerOf(tx, item.fakeRoute as string))?.costUsdUnits).toBe(usd(0.88));
+      expect(
+        renderTelegramMessage('supplier_charge_mismatch', alert?.params as never, links).text,
+      ).toContain(order.number);
+    });
+  });
+
+  it('pauses what a charge above the price would sell at a loss, once per attempt', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [attempt] = await attemptsOf(tx, order.id);
+      const [current] = await tx.select().from(orders).where(eq(orders.id, order.id));
+      const applied = {
+        applied: true,
+        order: current,
+        attempt: { ...attempt, chargedUsdUnits: item.price * 3 },
+      } as unknown as AppliedOutcome;
+      const context = { now: new Date(), fakeEnabled: true, jobs: bossJobSender(pgBoss.boss) };
+      expect(await checkCharge(tx, applied, context)).toBe('loss');
+      expect((await offerOf(tx, item.fakeRoute as string))?.costUsdUnits).toBe(item.price * 3);
+      const [alert] = await messagesOf(tx, [`charge:${attempt?.id}`]);
+      expect(alert?.params).toMatchObject({ loss: true });
+      expect(
+        renderTelegramMessage('supplier_charge_mismatch', alert?.params as never, links).text,
+      ).toContain('حارس الهامش');
+      // A second answer for the attempt tells nothing more.
+      expect(await checkCharge(tx, applied, context)).toBe('loss');
+      const notes = await tx
+        .select()
+        .from(orderEvents)
+        .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.reason, 'charge_mismatch')));
+      expect(notes).toHaveLength(1);
+      // Within 2%, or not yet known: nothing to tell.
+      const close = {
+        ...applied,
+        attempt: { ...attempt, chargedUsdUnits: attempt?.unitCostUsdUnits },
+      };
+      expect(await checkCharge(tx, close as AppliedOutcome, context)).toBe('ok');
+      const unknown = { ...applied, attempt: { ...attempt, chargedUsdUnits: null } };
+      expect(await checkCharge(tx, unknown as AppliedOutcome, context)).toBeNull();
     });
   });
 });

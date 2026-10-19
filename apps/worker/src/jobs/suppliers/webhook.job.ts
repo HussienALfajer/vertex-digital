@@ -22,7 +22,13 @@ import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
 import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
-import { attemptOutcome, orderContext, reportLateResult } from '../orders/order-calls.js';
+import {
+  attemptOutcome,
+  checkCharge,
+  orderContext,
+  reportLateResult,
+  routingContext,
+} from '../orders/order-calls.js';
 
 type Executor = Database | Transaction;
 
@@ -43,7 +49,7 @@ export class SupplierWebhookJob implements OnApplicationBootstrap {
     private readonly pgBoss: PgBossService,
     private readonly registry: SupplierRegistry,
     @Inject(DATABASE) private readonly db: Database,
-    @Inject(ENV) env: Env,
+    @Inject(ENV) private readonly env: Env,
   ) {
     this.codesKey = orderCodesKey(env.ORDER_CODES_SECRET);
   }
@@ -103,6 +109,9 @@ export class SupplierWebhookJob implements OnApplicationBootstrap {
       if (locked?.processedAt) return null;
       const context = orderContext(this.pgBoss, this.codesKey);
       const applied = await applyOutcome(tx, context, attempt.id, outcome, { by: 'webhook' });
+      if (applied.applied) {
+        await checkCharge(tx, applied, { ...routingContext(this.env), jobs: context.jobs });
+      }
       const result: WebhookEventResult = applied.applied
         ? 'applied'
         : await reportLateResult(tx, context, applied, outcome, { kind: 'webhook', eventId });

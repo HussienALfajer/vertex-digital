@@ -234,6 +234,7 @@ test.describe('supplier catalog', () => {
         status: 'completed',
         totalUsdUnits: 880_000,
         createdAt: new Date().toISOString(),
+        completedAt: null,
         match: {
           orderId: delivered.id,
           orderNumber: 'VO-DONE67',
@@ -250,6 +251,7 @@ test.describe('supplier catalog', () => {
         status: 'completed',
         totalUsdUnits: 4_400_000,
         createdAt: new Date().toISOString(),
+        completedAt: null,
         match: null,
       },
     ];
@@ -291,6 +293,7 @@ test.describe('supplier catalog', () => {
           status: 'completed',
           totalUsdUnits: 880_000,
           createdAt: new Date().toISOString(),
+          completedAt: null,
           match: null,
         },
       ],
@@ -378,6 +381,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           status: 'completed',
           totalUsdUnits: 880_000,
           createdAt: new Date().toISOString(),
+          completedAt: null,
           match: done
             ? {
                 orderId: done.id,
@@ -396,6 +400,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           status: 'completed',
           totalUsdUnits: 4_400_000,
           createdAt: new Date().toISOString(),
+          completedAt: null,
           match: null,
         },
       ];

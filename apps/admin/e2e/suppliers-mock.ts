@@ -551,6 +551,9 @@ export class SuppliersMock {
       productsRepriced: 0,
       errorCode: null,
       errorMessage: null,
+      offersRead: true,
+      platformStatus: null,
+      catalogUpdatedAt: null,
     };
     this.supplier(code).runs.unshift(run);
     if (code === 'fake' && this.failNextSync) {
@@ -944,6 +947,9 @@ export class SuppliersMock {
             productsRepriced: 0,
             errorCode: null,
             errorMessage: null,
+            offersRead: true,
+            platformStatus: null,
+            catalogUpdatedAt: null,
           });
         }
         return { status: 200, json: this.detail(row) };

@@ -317,12 +317,13 @@ export class SupplierLiveService {
     work: () => Promise<T>,
   ): Promise<T> {
     const started = performance.now();
-    const record = (result: 'ok' | 'refused' | 'error') =>
+    const record = (result: 'ok' | 'refused' | 'error', error?: unknown) =>
       this.adapters.recordCall(this.db, {
         supplierId: supplier.id,
         operation,
         result,
         latencyMs: Math.max(0, Math.round(performance.now() - started)),
+        error,
       });
     try {
       const value = await work();
@@ -331,6 +332,7 @@ export class SupplierLiveService {
     } catch (error) {
       await record(
         error instanceof SupplierError && error.kind === 'definitive' ? 'refused' : 'error',
+        error,
       );
       throw unavailable();
     }
@@ -360,6 +362,7 @@ export class SupplierLiveService {
       status: row.status ?? null,
       totalUsdUnits: usdUnits(row.total),
       createdAt: row.createdAt?.toISOString() ?? null,
+      completedAt: row.completedAt?.toISOString() ?? null,
       match: matches.get(row.supplierOrderId) ?? null,
     }));
   }

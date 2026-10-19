@@ -18159,6 +18159,7 @@
           "supplier_balance",
           "usdt_balance",
           "sham_cash_count",
+          "supplier_charges",
           "count_stale",
           "order_conflicts"
         ]
@@ -18208,7 +18209,10 @@
                   "enum": [
                     "in_flight_attempt",
                     "uncredited_transfer",
-                    "deposit_in_review"
+                    "deposit_in_review",
+                    "charge_differs",
+                    "delivered_but_failed",
+                    "failed_but_delivered"
                   ]
                 },
                 "id": {
@@ -18237,12 +18241,22 @@
                 "$ref": "#/components/schemas/ReconciliationSkipReason"
               }
             ]
+          },
+          "unmatchedSupplierOrders": {
+            "default": [],
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
           }
         },
         "required": [
           "offending",
           "lines",
-          "reason"
+          "reason",
+          "unmatchedSupplierOrders"
         ],
         "additionalProperties": false
       },
@@ -23605,6 +23619,19 @@
           "errorMessage": {
             "nullable": true,
             "type": "string"
+          },
+          "offersRead": {
+            "type": "boolean"
+          },
+          "platformStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "catalogUpdatedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           }
         },
         "required": [
@@ -23621,7 +23648,10 @@
           "reviewsOpened",
           "productsRepriced",
           "errorCode",
-          "errorMessage"
+          "errorMessage",
+          "offersRead",
+          "platformStatus",
+          "catalogUpdatedAt"
         ],
         "additionalProperties": false
       },
@@ -23738,6 +23768,16 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 1000
+          },
+          "recoverSuccessBp": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "recoverMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
           }
         },
         "required": [
@@ -23750,7 +23790,9 @@
           "downSuccessBp",
           "downConsecutiveErrors",
           "probeAfterMinutes",
-          "lowStockUnits"
+          "lowStockUnits",
+          "recoverSuccessBp",
+          "recoverMinutes"
         ],
         "additionalProperties": false
       },
@@ -26151,6 +26193,12 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "completedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
           "match": {
             "nullable": true,
             "allOf": [
@@ -26168,6 +26216,7 @@
           "status",
           "totalUsdUnits",
           "createdAt",
+          "completedAt",
           "match"
         ],
         "additionalProperties": false
@@ -30067,7 +30116,8 @@
           "ticket_reply",
           "reconciliation_alert",
           "admin_order_placed",
-          "supplier_stock_low"
+          "supplier_stock_low",
+          "supplier_charge_mismatch"
         ]
       },
       "TelegramMessageStatus": {

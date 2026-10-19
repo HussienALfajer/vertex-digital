@@ -64,7 +64,7 @@ import { listedOffers, SupplierSyncJob } from '../src/jobs/suppliers/sync.job.js
 import { SupplierSyncScheduleJob } from '../src/jobs/suppliers/sync-schedule.job.js';
 import { DailySummaryJob } from '../src/jobs/telegram/daily-summary.job.js';
 import { writeFakeSupplierState } from '../src/suppliers/fake-state-file.js';
-import { sanitizedMessage } from '../src/suppliers/supplier-calls.js';
+import { recordedCall, sanitizedMessage } from '../src/suppliers/supplier-calls.js';
 import { SupplierRegistry } from '../src/suppliers/supplier-registry.js';
 import { renderTelegramMessage } from '../src/telegram/messages.js';
 
@@ -981,6 +981,137 @@ describe('suppliers.sync: audit F9 regressions', () => {
     }));
 });
 
+describe('S18: the catalog version, discounts and why calls fail', () => {
+  const CAPABILITIES = {
+    balance: true,
+    catalog: true,
+    categories: false,
+    statement: false,
+    platformStatus: true,
+    validatePlayer: false,
+    webhooks: false,
+    offerQuote: false,
+  };
+  const newestRun = async (tx: Transaction) =>
+    (
+      await tx
+        .select()
+        .from(supplierSyncRuns)
+        .where(eq(supplierSyncRuns.supplierId, ids.fake))
+        .orderBy(desc(supplierSyncRuns.startedAt), desc(supplierSyncRuns.id))
+        .limit(1)
+    )[0];
+
+  it('reads no offers while the catalog has not changed within the hour (SY4)', () =>
+    isolated(async (tx) => {
+      let reads = 0;
+      let version = new Date('2026-10-19T17:19:06Z');
+      current = {
+        capabilities: CAPABILITIES,
+        getPlatformStatus: async () => ({ status: 'operational', catalogUpdatedAt: version }),
+        listOffers: async () => {
+          reads += 1;
+          return [offer('a', 1, { discountBp: 200 })];
+        },
+      };
+      await sync.sync(payload(), tx);
+      expect(await newestRun(tx)).toMatchObject({
+        status: 'succeeded',
+        offersRead: true,
+        platformStatus: 'operational',
+        catalogUpdatedAt: version,
+      });
+      // DC1: the discount is kept on the offer.
+      expect((await offerRow(tx, 'a')).discountBp).toBe(200);
+      await sync.sync(payload(), tx);
+      expect(reads).toBe(1);
+      expect(await newestRun(tx)).toMatchObject({ status: 'succeeded', offersRead: false });
+      version = new Date('2026-10-19T17:34:06Z');
+      await sync.sync(payload(), tx);
+      expect(reads).toBe(2);
+      expect(await newestRun(tx)).toMatchObject({ offersRead: true, catalogUpdatedAt: version });
+    }));
+
+  it('reads in full when the status cannot be read', () =>
+    isolated(async (tx) => {
+      let reads = 0;
+      current = {
+        capabilities: CAPABILITIES,
+        getPlatformStatus: async () => {
+          throw new SupplierError('retryable', 'Timed out', { failure: 'timeout' });
+        },
+        listOffers: async () => {
+          reads += 1;
+          return [offer('a', 1)];
+        },
+      };
+      await sync.sync(payload(), tx);
+      await sync.sync(payload(), tx);
+      expect(reads).toBe(2);
+      expect(await newestRun(tx)).toMatchObject({ offersRead: true, platformStatus: null });
+    }));
+
+  it('records why a call failed and the supplier code, never a message (FK1, HE6)', () =>
+    isolated(async (tx) => {
+      const newestCall = async () =>
+        (
+          await tx
+            .select()
+            .from(supplierCalls)
+            .where(eq(supplierCalls.supplierId, ids.fake))
+            .orderBy(desc(supplierCalls.createdAt), desc(supplierCalls.id))
+            .limit(1)
+        )[0];
+      await recordedCall(tx, ids.fake, 'get_balance', async () => {
+        throw new SupplierError('retryable', 'Supplier answered HTTP 503', {
+          status: 503,
+          failure: 'http_5xx',
+        });
+      });
+      expect(await newestCall()).toMatchObject({
+        result: 'error',
+        failureKind: 'http_5xx',
+        httpStatus: 503,
+        supplierCode: null,
+      });
+      await recordedCall(tx, ids.fake, 'get_balance', async () => {
+        throw new Error('a bug of ours');
+      });
+      expect(await newestCall()).toMatchObject({ result: 'error', failureKind: 'other' });
+      await recordedCall(tx, ids.fake, 'place_order', async () => {
+        throw new SupplierError('definitive', 'Refused', { status: 422, supplierCode: 'NO' });
+      });
+      expect(await newestCall()).toMatchObject({
+        result: 'refused',
+        failureKind: null,
+        httpStatus: 422,
+        supplierCode: 'NO',
+      });
+      // An order answer the supplier gave that does not settle it yet: no error (HE4).
+      await recordedCall(
+        tx,
+        ids.fake,
+        'get_order',
+        async () => 'answer',
+        () => ({ result: 'ok', supplierCode: 'ORDER_NOT_FOUND', httpStatus: 404 }),
+      );
+      expect(await newestCall()).toMatchObject({
+        result: 'ok',
+        failureKind: null,
+        supplierCode: 'ORDER_NOT_FOUND',
+        httpStatus: 404,
+      });
+      await recordedCall(
+        tx,
+        ids.fake,
+        'get_order',
+        async () => 'answer',
+        () => ({ result: 'error', httpStatus: 42 }),
+      );
+      expect(await newestCall()).toMatchObject({ failureKind: 'other', httpStatus: null });
+    }));
+});
+
 describe('suppliers.sync-schedule (rule SY1)', () => {
   it('queues a sync for each configured, available supplier with a catalog', () =>
     isolated(async (tx) => {
@@ -997,12 +1128,14 @@ describe('suppliers.sync-schedule (rule SY1)', () => {
 });
 
 describe('suppliers.health (rules H1–H4, SY5)', () => {
+  const OPERATIONS = ['get_balance', 'list_offers', 'get_order'] as const;
+  /** Calls of the balance read, the catalog and a poll in turn (S18 HE3 needs two or more). */
   const calls = (tx: Transaction, ...results: ('ok' | 'error')[]) =>
     tx.insert(supplierCalls).values(
-      results.map((result) => ({
+      results.map((result, index) => ({
         id: newId(),
         supplierId: ids.fake,
-        operation: 'get_balance' as const,
+        operation: OPERATIONS[index % OPERATIONS.length] as (typeof OPERATIONS)[number],
         result,
         latencyMs: 200,
       })),
@@ -1026,6 +1159,18 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
       const manual = await manualRoute(tx, p, 1.2);
       expect(await latestPrice(tx, p)).toMatchObject({ routeId: fakeRoute });
 
+      // S18 AL2: the admin was last told `healthy` (other runs' messages stay in the database).
+      await tx.insert(telegramMessages).values({
+        id: newId(),
+        kind: 'supplier_health',
+        params: {
+          supplier: 'fake',
+          supplierNameAr: 'مورد تجريبي',
+          state: 'healthy',
+          previous: 'degraded',
+          successBp: null,
+        },
+      });
       await calls(tx, 'error', 'error', 'error');
       const checkedAt = new Date();
       sent.length = 0;
@@ -1071,18 +1216,70 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
       await health.check(new Date(Date.now() + 11 * 60_000), tx);
       expect(await standing(tx)).toMatchObject({ state: 'degraded', reason: HEALTH_PROBE_REASON });
 
-      // Healthy only once the calls since the probe meet the rules with the minimum count.
+      // Healthy only once the calls since the probe meet the rules with the minimum count, held
+      // at each of the last 5 minutes (S18 HE2).
       await calls(tx, 'ok', 'ok', 'ok', 'ok');
       await health.check(new Date(), tx);
       expect((await standing(tx))?.state).toBe('degraded');
-      await calls(tx, 'ok');
+      await calls(tx, 'ok', 'ok', 'ok', 'ok', 'ok', 'ok');
       await health.check(new Date(), tx);
+      expect((await standing(tx))?.state).toBe('degraded');
+      await health.check(new Date(Date.now() + 6 * 60_000), tx);
       expect(await standing(tx)).toMatchObject({ state: 'healthy', reason: 'success 100%' });
       expect(await latestPrice(tx, p)).toMatchObject({ routeId: fakeRoute });
       const states = (await messages(tx, 'supplier_health')).map(
         (row) => (row.params as { state: string }).state,
       );
-      expect(states).toEqual(['down', 'degraded', 'healthy']);
+      // The baseline this test wrote, then one message per state that held.
+      expect(states).toEqual(['healthy', 'down', 'degraded', 'healthy']);
+    }));
+
+  it('tells a degraded state only once it has held 5 minutes (S18 AL1, AL2)', () =>
+    isolated(async (tx) => {
+      // A probe's degraded: only calls since it count, too few to change the state.
+      const [row] = await tx
+        .insert(supplierHealthChanges)
+        .values({
+          id: newId(),
+          supplierId: ids.fake,
+          state: 'degraded',
+          reason: HEALTH_PROBE_REASON,
+          createdAt: new Date(Date.now() - 2 * 60_000),
+        })
+        .returning();
+      await health.check(new Date(), tx);
+      expect((await standing(tx))?.id).toBe(row?.id);
+      expect(await message(tx, `health:${row?.id}`)).toBeUndefined();
+      await health.check(new Date(Date.now() + 4 * 60_000), tx);
+      expect((await message(tx, `health:${row?.id}`))?.params).toMatchObject({
+        supplier: 'fake',
+        state: 'degraded',
+      });
+      // Told once.
+      await health.check(new Date(Date.now() + 5 * 60_000), tx);
+      expect(
+        (await messages(tx, 'supplier_health')).filter(
+          (sentRow) => sentRow.dedupeKey === `health:${row?.id}`,
+        ),
+      ).toHaveLength(1);
+    }));
+
+  it('is not down from one operation erring three times (S18 HE3)', () =>
+    isolated(async (tx) => {
+      const before = await standing(tx);
+      await tx.insert(supplierCalls).values(
+        [1, 2, 3].map(() => ({
+          id: newId(),
+          supplierId: ids.fake,
+          operation: 'get_order' as const,
+          result: 'error' as const,
+          latencyMs: 15_000,
+          failureKind: 'timeout',
+        })),
+      );
+      await health.check(new Date(), tx);
+      const after = await standing(tx);
+      expect(after?.state === 'down' && after.id !== before?.id).toBe(false);
     }));
 
   it('waits again after a failed probe', () =>
@@ -1491,6 +1688,7 @@ describe('suppliers.sync: categories, offer fields and stock (S16 SC2, SC3, SF2)
       platformStatus: false,
       validatePlayer: false,
       webhooks: false,
+      offerQuote: false,
     },
     listCategories: categories as SupplierAdapter['listCategories'],
     listOffers: async () => offers,

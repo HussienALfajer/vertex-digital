@@ -22,6 +22,7 @@ import {
   type FakeSupplierState,
   fakeSupplierStateSchema,
   type SupplierAdapter,
+  SupplierError,
   WdgzoneAdapter,
 } from '@vertex-digital/suppliers';
 import { desc, eq } from 'drizzle-orm';
@@ -81,7 +82,10 @@ export class SupplierAdaptersService {
     });
   }
 
-  /** One adapter call made by the API, recorded for health (S07 rule H1). */
+  /**
+   * One adapter call made by the API, recorded for health (S07 rule H1); S18 FK1: a failed one
+   * with why (`error`), its HTTP status and the supplier's code, from the error it threw.
+   */
   async recordCall(
     tx: Database | Transaction,
     call: {
@@ -89,9 +93,19 @@ export class SupplierAdaptersService {
       operation: SupplierCallOperation;
       result: SupplierCallResult;
       latencyMs: number;
+      error?: unknown;
     },
   ): Promise<void> {
-    await tx.insert(supplierCalls).values({ id: newId(), supplierCode: null, ...call });
+    const { error, ...row } = call;
+    const details = error instanceof SupplierError ? error.details : {};
+    const status = details.status;
+    await tx.insert(supplierCalls).values({
+      id: newId(),
+      ...row,
+      supplierCode: details.supplierCode?.slice(0, 64) ?? null,
+      failureKind: row.result === 'error' ? (details.failure ?? 'other') : null,
+      httpStatus: status !== undefined && status >= 100 && status <= 599 ? status : null,
+    });
   }
 
   /** The fake's scripted state (`supplier:fake --errors`), read only; no file is the default. */

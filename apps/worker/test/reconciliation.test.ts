@@ -34,6 +34,7 @@ import {
 } from '../src/jobs/reconciliation/reconciliation-runner.js';
 import { ReconciliationRunJob } from '../src/jobs/reconciliation/run.job.js';
 import type { BalanceOutcome, SupplierBalancesJob } from '../src/jobs/suppliers/balances.job.js';
+import type { SupplierRegistry } from '../src/suppliers/supplier-registry.js';
 
 /*
  * The reconciliation jobs (S13 rules RN1–RN5, E2–E5, NT1) against the test database, each test in
@@ -90,9 +91,38 @@ const readers: ChainReaders = {
   usdt_bep20: reader('usdt_bep20'),
 };
 
+/** S18 RC1: the fake supplier's statement of orders, page by page, or an error. */
+interface ScriptedOrder {
+  supplierOrderId: string;
+  status?: string;
+  total?: { currency: 'USD'; amountUnits: number };
+  createdAt?: Date;
+}
+let supplierOrders: ScriptedOrder[][] | Error = [[]];
+const statementPages: number[] = [];
+const registry = {
+  connect: async (_db: unknown, supplier: { code: string }) =>
+    supplier.code === 'fake'
+      ? {
+          secrets: [],
+          adapter: {
+            capabilities: { statement: true },
+            listOrders: async (page: number) => {
+              statementPages.push(page);
+              if (supplierOrders instanceof Error) throw supplierOrders;
+              const items = supplierOrders[page - 1] ?? [];
+              return { items, hasMore: page < supplierOrders.length };
+            },
+          },
+        }
+      : null,
+} as unknown as SupplierRegistry;
+
 beforeEach(() => {
   sent.length = 0;
   supplierOutcome = null;
+  supplierOrders = [[]];
+  statementPages.length = 0;
   usdtRead.usdt_trc20 = 0n;
   usdtRead.usdt_bep20 = 0n;
 });
@@ -148,6 +178,7 @@ async function inRollback(
       const runner = new ReconciliationRunner(
         pgBoss,
         balances,
+        registry,
         readers,
         tx as unknown as Database,
         {
@@ -254,6 +285,48 @@ describe('reconciliation.run (RN1–RN5)', () => {
       const alert = await alertOf(tx, runId);
       expect(alert?.lines.map((line) => line.subject) ?? []).not.toContain('supplier:fake');
       expect(alert?.lines.map((line) => line.subject) ?? []).not.toContain('usdt_trc20');
+    });
+  });
+
+  it('compares the supplier charges of the day with our attempts (S18 RC1, RC2)', async () => {
+    await inRollback(async ({ tx, runner }) => {
+      await script(tx);
+      const runId = await manualRun(tx);
+      const today = new Date(Date.now() - 60_000);
+      supplierOrders = [
+        [
+          {
+            supplierOrderId: `nobody-${newId()}`,
+            status: 'completed',
+            total: { currency: 'USD', amountUnits: USD / 2 },
+            createdAt: today,
+          },
+        ],
+        // The second page reaches before the day: the read stops there.
+        [{ supplierOrderId: 'old', status: 'completed', createdAt: new Date(0) }],
+        [{ supplierOrderId: 'never read', status: 'completed', createdAt: today }],
+      ];
+      await runner.execute(runId);
+      expect(statementPages).toEqual([1, 2]);
+      // Off its range: read again after 10 minutes (RN4), then stored.
+      expect(sent.some((job) => job.queue === QUEUES.reconciliationRecheck)).toBe(true);
+      await runner.recheck(runId);
+      const result = await resultOf(tx, runId, 'supplier_charges', 'supplier:fake');
+      expect(result).toMatchObject({ status: 'mismatch', actualUnits: USD / 2 });
+      expect(result?.details).toMatchObject({ unmatchedSupplierOrders: [expect.any(String)] });
+    });
+  });
+
+  it('skips the supplier charges when the statement cannot be read', async () => {
+    await inRollback(async ({ tx, runner }) => {
+      await script(tx);
+      const runId = await manualRun(tx);
+      supplierOrders = new Error('down');
+      await runner.execute(runId);
+      expect(await resultOf(tx, runId, 'supplier_charges', 'supplier:fake')).toMatchObject({
+        status: 'skipped',
+        details: { reason: 'reader_failed' },
+      });
     });
   });
 

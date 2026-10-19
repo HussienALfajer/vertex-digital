@@ -27,8 +27,10 @@ import {
   reconciliationResults,
   reconciliationRuns,
   runInternalChecks,
+  type SupplierDayOrder,
   skippedResult,
   supplierBalanceCheck,
+  supplierChargesCheck,
   supplierStates,
   type Transaction,
   usdtBalanceCheck,
@@ -38,12 +40,17 @@ import { eq, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
+import { recordedCall } from '../../suppliers/supplier-calls.js';
+import { SupplierRegistry } from '../../suppliers/supplier-registry.js';
 import {
   CHAIN_READERS,
   ChainReaderError,
   type ChainReaders,
 } from '../deposits/chain/chain-reader.js';
 import { SupplierBalancesJob } from '../suppliers/balances.job.js';
+
+/** S18 RC1: at most this many statement pages of a supplier's orders per run. */
+const CHARGE_PAGES = 20;
 
 type RunRow = typeof reconciliationRuns.$inferSelect;
 
@@ -104,6 +111,7 @@ export class ReconciliationRunner {
   constructor(
     private readonly pgBoss: PgBossService,
     private readonly balances: SupplierBalancesJob,
+    private readonly registry: SupplierRegistry,
     @Inject(CHAIN_READERS) private readonly readers: ChainReaders,
     @Inject(DATABASE) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
@@ -156,16 +164,12 @@ export class ReconciliationRunner {
     if (run?.status !== 'running' || run.recheckAt !== null) return;
     const internal = await runInternalChecks(this.db);
     const settings = await currentReconciliationSettings(this.db);
-    // The night's Damascus day; a manual run looks at the day so far.
-    const day = await dayBounds(this.db, run.businessDate ?? dateFormat.format(now));
+    const day = await this.dayOf(run, now);
     const warnings = [
       await countStaleCheck(this.db, { now, staleDays: settings.countStaleDays }),
-      await orderConflictsCheck(this.db, {
-        from: day.from,
-        to: run.businessDate ? day.to : now,
-      }),
+      await orderConflictsCheck(this.db, day),
     ];
-    const external = await this.externalChecks(settings.toleranceUsdUnits, () => true);
+    const external = await this.externalChecks(settings.toleranceUsdUnits, day, () => true);
     const kept = external.filter((result) => result.status !== 'mismatch');
     const recheck = kept.length < external.length;
     await this.db.transaction(async (tx) => {
@@ -207,6 +211,7 @@ export class ReconciliationRunner {
     const settings = await currentReconciliationSettings(this.db);
     const results = await this.externalChecks(
       settings.toleranceUsdUnits,
+      await this.dayOf(run, new Date()),
       (target) => !done.has(`${target.check}|${target.subject}`),
     );
     await this.db.transaction(async (tx) => {
@@ -223,6 +228,49 @@ export class ReconciliationRunner {
       failReconciliationRun(tx, bossJobSender(this.pgBoss.boss), runId, failure),
     );
     this.logger.warn(`Reconciliation run ${runId} failed: ${failure}`);
+  }
+
+  /** The night's Damascus day; a manual run looks at the day so far. */
+  private async dayOf(run: RunRow, now: Date): Promise<{ from: Date; to: Date }> {
+    const day = await dayBounds(this.db, run.businessDate ?? dateFormat.format(now));
+    return { from: day.from, to: run.businessDate ? day.to : now };
+  }
+
+  /**
+   * S18 RC1: the supplier's orders created in `[from, to)`, newest first, page by page until one
+   * reaches before the day (at most 20 pages); null when the statement cannot be read.
+   */
+  private async supplierDay(
+    db: Database,
+    supplier: { id: string; code: Parameters<SupplierRegistry['connect']>[1]['code'] },
+    day: { from: Date; to: Date },
+  ): Promise<SupplierDayOrder[] | null> {
+    let connected: Awaited<ReturnType<SupplierRegistry['connect']>> = null;
+    try {
+      connected = await this.registry.connect(db, supplier);
+    } catch {
+      return null;
+    }
+    if (!connected?.adapter.capabilities.statement) return null;
+    const { adapter } = connected;
+    const orders: SupplierDayOrder[] = [];
+    for (let page = 1; page <= CHARGE_PAGES; page += 1) {
+      const read = await recordedCall(db, supplier.id, 'list_orders', () =>
+        adapter.listOrders(page),
+      );
+      if (!read.ok) return null;
+      for (const row of read.value.items) {
+        if (!row.createdAt || row.createdAt < day.from || row.createdAt >= day.to) continue;
+        orders.push({
+          supplierOrderId: row.supplierOrderId,
+          status: row.status ?? null,
+          totalUnits: row.total?.currency === 'USD' ? row.total.amountUnits : null,
+        });
+      }
+      const oldest = read.value.items.at(-1)?.createdAt;
+      if (!read.value.hasMore || (oldest !== undefined && oldest < day.from)) return orders;
+    }
+    return orders;
   }
 
   private async load(runId: string): Promise<RunRow | undefined> {
@@ -245,10 +293,11 @@ export class ReconciliationRunner {
   /** E2, E3: each target's outside read, then its books (RN4); in a fixed order. */
   private async externalChecks(
     toleranceUsdUnits: number,
+    day: { from: Date; to: Date },
     wanted: (target: Pick<ExternalTarget, 'check' | 'subject'>) => boolean,
   ): Promise<CheckResult[]> {
     const results: CheckResult[] = [];
-    for (const target of await this.targets(toleranceUsdUnits)) {
+    for (const target of await this.targets(toleranceUsdUnits, day)) {
       const result = wanted(target) ? await target.read(this.db) : null;
       if (result) results.push(result);
     }
@@ -260,7 +309,10 @@ export class ReconciliationRunner {
    * build, not `manual`, rule E6) with a balance capability, and each network with a store
    * address. Internal checks never depend on them.
    */
-  private async targets(toleranceUsdUnits: number): Promise<ExternalTarget[]> {
+  private async targets(
+    toleranceUsdUnits: number,
+    day: { from: Date; to: Date },
+  ): Promise<ExternalTarget[]> {
     const targets: ExternalTarget[] = [];
     const now = new Date();
     const suppliers = await supplierStates(this.db, {
@@ -283,6 +335,20 @@ export class ReconciliationRunner {
           return supplierBalanceCheck(db, {
             supplier: supplier.code,
             actualUnits: outcome.balance.amountUnits,
+            toleranceUsdUnits,
+          });
+        },
+      });
+      // S18 RC1: what it charged for the day's orders, where its statement can be read.
+      targets.push({
+        check: 'supplier_charges',
+        subject: place,
+        read: async (db) => {
+          const orders = await this.supplierDay(db, supplier, day);
+          if (orders === null) return skippedResult('supplier_charges', place, 'reader_failed');
+          return supplierChargesCheck(db, {
+            supplier: supplier.code,
+            orders,
             toleranceUsdUnits,
           });
         },
