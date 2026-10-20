@@ -6,11 +6,22 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 |---|---|---|---|
 | Q1 | Off-server backup destination (shared need with Vertex Hub) | Launch | Required: the system holds customer money. Interim (owner, 2026-10-20): the daily backups stay on the production server until the owner subscribes to a second server; the destination is set up and a restore tested then |
 | Q3 | License for the public repository (none means all rights reserved) | Anytime | — |
+| Q23 | Merchant mini-store (F40): whose customers and money are they, and how does the merchant earn? | S22 | The shop's customers are Vertex Digital accounts attributed to the merchant; they deposit and pay as today, Vertex Digital fulfils and supports; the merchant sets prices between their own price and a ceiling, and the difference is credited to the merchant's wallet when an order is delivered (refunded orders earn nothing). A path such as `/s/<shop>` first; subdomains and custom domains later. The merchant manages it from a "my store" section of their store account, never from the admin panel |
+| Q24 | Mini-store branding (F40): what may an enabled merchant change? | S22 | Only for merchants the admin enables: shop name, logo, a cover image and one accent color from colors that pass the contrast check; the layout, fonts and texts stay the store's; a logo or cover is shown only after the admin approves it (no publisher or other-store marks); a small "powered by Vertex Digital" line stays |
 
 ## Resolved
 
 | Question | Answer | Date |
 |---|---|---|
+| Merchants, tiers and price lists (moved from Phase 4) | Started now, before the pilot opens; Phase M in `v1-scope.md` (F28–F43) | 2026-10-20 |
+| Merchant approval and form | Approval only by the admin in the panel; the form in F28 | 2026-10-20 |
+| Default wholesale margin | 5% | 2026-10-20 |
+| Cost price list | Cost + 1% (the minimum margin of every rule stays at least $0.01, ADR 0020) | 2026-10-20 |
+| Custom pricing | Named lists, each assignable to one or many accounts | 2026-10-20 |
+| Merchant deposit limits | A merchant tier set in the panel, default $2,000 (per deposit, per 24 hours or both: S20 interview) | 2026-10-20 |
+| Merchant credit lines; cash-in points and wallet vouchers | Later, after the merchant features | 2026-10-20 |
+| Merchant features | Accepted: T1–T9, T11, T13 (F30–F40); declined: staff accounts, reseller API, credit lines (for now) | 2026-10-20 |
+| Store growth features | Accepted: quick buy (F41), receipt verification QR (F35), order problem buttons (F42), availability and price alerts (F43); the others proposed on 2026-10-20 declined (`v1-scope.md` §6) | 2026-10-20 |
 | Q22: an ignored category and the "باقات جديدة" count (S16 SC5, F9-15) | Yes: ignoring a category takes its offers (and its subcategories' offers) out of the new-packs count, like ignored offers; the change is still to be built, before the professional catalog work | 2026-10-20 |
 | Q20: top-ups that ask for the customer's game account email and password | Not sold in V1: every offer with a password field stays unsupported (S16 MF1, S19 FC4); selling them later needs its own spec (encrypted at rest, removed after delivery, never shown in the panel) | 2026-10-20 |
 | Q17: a basis switch to another route above the review threshold | Held for review as a same-route change, between automatic routes; a manual fallback and its end reprice at once (S19 RT10, ADR 0034; scope 2026-10-20) | 2026-10-19 |

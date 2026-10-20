@@ -75,10 +75,15 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [ ] Registration opened with the F26 switch, without promotion; low deposit and purchase limits
 - [ ] Limits raised step by step as reconciliation stays clean
 
+## Phase M — Merchants and store growth (owner, 2026-10-20: moved from Phase 4, started before the pilot)
+Scope: `docs/product/v1-scope.md` Phase M (F28–F43). One `/spec` session per spec, in this order; the pilot items above continue in parallel.
+- [ ] S20 Merchant accounts and price lists: F28 · F29 (account types, the application and its review, merchant deposit limits, the four price kinds with named custom lists, per-list guard and repricing, private prices in the store; amends ADR 0020)
+- [ ] S21 Merchant tools: F30 · F31 · F32 · F33 · F34 · F35 · F36 · F37 · F38 · F39
+- [ ] S22 Merchant mini-store and branding: F40 (Q23, Q24 first)
+- [ ] S23 Quick buy and order help: F41 · F42 · F43
+
 ## Phase 4 — Growth (after V1)
-- [ ] Resellers with tiers and a reseller API
 - [ ] Telegram purchase bot
-- [ ] Loyalty and referrals
 - [ ] Syrian mobile credit
 - [ ] Sham Cash automation
 - [ ] English UI
