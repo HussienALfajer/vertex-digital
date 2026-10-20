@@ -38,10 +38,14 @@ export const PURPOSE_TONES = {
 /** S09 rule AD3: how the player id was checked before the order was paid or reserved. */
 export function playerCheckText(
   t: TFunction,
-  order: Pick<AdminOrder, 'playerCheck' | 'playerName'>,
+  order: Pick<AdminOrder, 'playerCheck' | 'playerName' | 'playerRegion'>,
 ): string {
   if (order.playerCheck !== 'valid') return t(`orders.playerChecks.${order.playerCheck}`);
-  return order.playerName
+  const named = order.playerName
     ? t('orders.playerChecks.valid', { name: order.playerName })
     : t('orders.playerChecks.validNoName');
+  // S19 PC9: the region beside the name.
+  return order.playerRegion
+    ? `${named} · ${t('orders.playerChecks.region', { region: order.playerRegion })}`
+    : named;
 }

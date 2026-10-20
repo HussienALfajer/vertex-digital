@@ -5,9 +5,11 @@ import {
   type AdminOrderTab,
   type AdminPurchaseContext,
   adminOrderShape,
+  type CheckCategory,
   createAdminOrderSchema,
   fulfilIsLoss,
   fulfilOrderSchema,
+  type GamePlayerCheck,
   LIVE_COLUMNS,
   type LiveBoard,
   type LiveOrderCard,
@@ -17,12 +19,15 @@ import {
   orderDecisions,
   orderPolicySchema,
   orderTotal,
+  type PlayerCheck,
   type Product,
   type RerouteOptions,
   refundOrderSchema,
   rerouteOrderSchema,
   resolveAttemptSchema,
   revokeShareLinkSchema,
+  unmappedFields,
+  updateGamePlayerCheckSchema,
 } from '@vertex-digital/contracts';
 import type { Answer } from './catalog-mock';
 
@@ -517,10 +522,22 @@ export class OrdersMock {
   /** S16: owner-funded totals paid today, for the owner cap (AP7). */
   ownerUsedToday = 0;
   /** S16: what the next admin player check answers (AP8). */
-  nextPlayerCheck: { result: 'valid'; playerName: string } | { result: 'invalid' } = {
+  nextPlayerCheck: PlayerCheck = {
     result: 'valid',
     playerName: 'Player 6789',
+    region: null,
   };
+  /** S19 PC1: the games' check provider rows, by game id. */
+  readonly gameChecks = new Map<string, GamePlayerCheck>();
+  /** S19 PC1: the fake provider's check categories (its `listCheckCategories`). */
+  checkCategories: CheckCategory[] = [
+    {
+      categoryId: 'player',
+      name: 'Fake player check',
+      fields: [{ key: 'player_id', label: 'Player ID', type: 'text' }],
+    },
+    { categoryId: 'zone', name: 'Fake zone check', fields: [] },
+  ];
 
   constructor(
     private readonly reauthenticationRequired: () => boolean,
@@ -623,6 +640,32 @@ export class OrdersMock {
     this.orders = [created, ...this.orders];
     this.keys.set(idempotencyKey, created.id);
     return { status: 201, json: created };
+  }
+
+  /** S19 PC1: `GET`/`PUT /api/admin/catalog/games/:id/player-check`, checked as the API does. */
+  gamePlayerCheck(method: string, gameId: string, body: unknown, gameKeys: string[]): Answer {
+    if (method === 'GET') {
+      return { status: 200, json: { check: this.gameChecks.get(gameId) ?? null } };
+    }
+    if (this.reauthenticationRequired()) return error(403, 'REAUTHENTICATION_REQUIRED');
+    const parsed = updateGamePlayerCheckSchema.safeParse(body);
+    if (!parsed.success) return error(400, 'VALIDATION_FAILED');
+    const input = parsed.data;
+    if (input.supplierCode !== 'fake') return error(409, 'CAPABILITY_UNSUPPORTED');
+    const category = this.checkCategories.find((item) => item.categoryId === input.categoryId);
+    if (input.enabled && !category) {
+      return error(400, 'VALIDATION_FAILED', [{ path: ['categoryId'], message: 'Unknown' }]);
+    }
+    const theirs = category?.fields.map((field) => field.key) ?? [];
+    if (
+      !Object.values(input.fieldMap).every((key) => gameKeys.includes(key)) ||
+      (category && unmappedFields(theirs, input.fieldMap).length > 0)
+    ) {
+      return error(400, 'VALIDATION_FAILED', [{ path: ['fieldMap'], message: 'Unmapped' }]);
+    }
+    const check: GamePlayerCheck = { gameId, ...input, updatedAt: new Date().toISOString() };
+    this.gameChecks.set(gameId, check);
+    return { status: 200, json: { check } };
   }
 
   /** S16 rule AP8: the admin's player check. */

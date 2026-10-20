@@ -177,6 +177,38 @@ test.describe('buy box', () => {
     expect(api.last('POST /api/orders')?.body).toMatchObject({ confirmPlayer: true });
   });
 
+  test('shows the region beside the name, and refuses an account on another region (S19 PC3, PC9)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on('POST /api/player-checks', 200, {
+      result: 'valid',
+      playerName: 'Lina_99',
+      region: 'ME',
+    });
+    await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
+    await idField(page).fill('51234567');
+    await expect(buyBox(page).getByText('Lina_99')).toBeVisible();
+    await expect(buyBox(page).getByText(p.regionIs)).toBeVisible();
+    await expect(buyBox(page).getByText('ME', { exact: true })).toBeVisible();
+    await buyBox(page).getByRole('button', { name: p.continue }).click();
+    await expect(buyBox(page).getByText(p.regionLabel, { exact: true })).toBeVisible();
+
+    signedIn(api).on('POST /api/player-checks', 200, {
+      result: 'region_mismatch',
+      playerName: 'Omar',
+      region: 'NA',
+    });
+    await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
+    await idField(page).fill('51234568');
+    await expect(buyBox(page).getByText(fill(p.regionMismatch, { region: 'NA' }))).toBeVisible();
+    // No confirmation can pass it (PC3): "متابعة" stays on the details.
+    await expect(buyBox(page).getByText(p.confirmPlayer, { exact: true })).toHaveCount(0);
+    await buyBox(page).getByRole('button', { name: p.continue }).click();
+    await expect(buyBox(page).getByRole('slider')).toHaveCount(0);
+    await expect(buyBox(page).getByText(fill(p.regionMismatch, { region: 'NA' }))).toBeVisible();
+  });
+
   test('a check that cannot run (a limit) asks the customer to confirm the id', async ({
     page,
     api,
@@ -426,6 +458,8 @@ for (const theme of ['dark', 'light'] as const) {
       ['valid', { result: 'valid', playerName: 'Lina_99' }],
       ['invalid', { result: 'invalid' }],
       ['unavailable', { result: 'unavailable', reason: 'quota' }],
+      ['region', { result: 'valid', playerName: 'Lina_99', region: 'ME' }],
+      ['region-mismatch', { result: 'region_mismatch', playerName: 'Omar', region: 'NA' }],
     ] as const) {
       signedIn(api).on('POST /api/player-checks', 200, check);
       await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
@@ -433,7 +467,13 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(buyBox(page).getByText(p.checking)).toBeHidden();
       await expect(
         buyBox(page).getByText(
-          name === 'valid' ? 'Lina_99' : name === 'invalid' ? p.playerInvalid : p.playerUnavailable,
+          name === 'valid' || name === 'region'
+            ? 'Lina_99'
+            : name === 'invalid'
+              ? p.playerInvalid
+              : name === 'region-mismatch'
+                ? fill(p.regionMismatch, { region: 'NA' })
+                : p.playerUnavailable,
         ),
       ).toBeVisible();
       await screenshot(page, testInfo, `buy-box-${name}-${theme}`);

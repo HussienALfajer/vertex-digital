@@ -64,6 +64,7 @@ function reservations(admin: AdminApi) {
       status: 'awaiting_balance',
       playerCheck: 'valid',
       playerName: 'Lina_99',
+      playerRegion: 'ME',
     },
     {
       ...shared,
@@ -99,7 +100,12 @@ test.describe('reservations (S09 rule AD3)', () => {
     await page.goto(`/orders/${RESERVED_ID}`);
     await expect(page.getByText(o.detail.reservedAt, { exact: true })).toBeVisible();
     await expect(page.getByText(o.detail.expiresAt)).toBeVisible();
-    await expect(page.getByText(fill(o.playerChecks.valid, { name: 'Lina_99' }))).toBeVisible();
+    // S19 PC9: the region beside the name.
+    await expect(
+      page.getByText(
+        `${fill(o.playerChecks.valid, { name: 'Lina_99' })} · ${fill(o.playerChecks.region, { region: 'ME' })}`,
+      ),
+    ).toBeVisible();
 
     await page.goto(`/orders/${CANCELLED_ID}`);
     await expect(page.getByText(o.cancelReasons.price_rose).first()).toBeVisible();

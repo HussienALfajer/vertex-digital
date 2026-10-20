@@ -1,6 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import type { CatalogImage, GameDetail, SupplierCategoryNode } from '@vertex-digital/contracts';
+import type {
+  CatalogImage,
+  GameDetail,
+  SupplierCategoryNode,
+  SupplierCode,
+} from '@vertex-digital/contracts';
 import { Badge, Button, Card } from '@vertex-digital/ui';
 import { ImageDownIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -94,8 +99,9 @@ function UnlinkDialog({ node, onClose }: { node: SupplierCategoryNode; onClose: 
 }
 
 /**
- * Rule IM3: "استخدام صورة المورد" beside the cover, for a game linked to a category with an
- * image: the API downloads it again and stores it as a new cover.
+ * Rule IM3, S19 D10: "صورة <المورد>" beside the cover, one per supplier with a linked category
+ * that has an image: the API downloads it again and stores it as a new cover. The admin picks;
+ * a cover never changes on its own.
  */
 export function SupplierCoverButton({
   gameId,
@@ -107,12 +113,19 @@ export function SupplierCoverButton({
   const { t } = useTranslation();
   const linked = useQuery(gameCategoriesQuery(gameId));
   const cover = useCoverFromSupplier(gameId);
+  const [pending, setPending] = useState<SupplierCode | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const node = linked.data?.find((item) => item.hasImage && !item.missingSince);
-  if (!node) return null;
+  const sources = (linked.data ?? [])
+    .filter((item) => item.hasImage && !item.missingSince)
+    .filter(
+      (item, index, all) =>
+        all.findIndex((other) => other.supplierCode === item.supplierCode) === index,
+    );
+  if (sources.length === 0) return null;
 
   async function use(source: SupplierCategoryNode) {
     setFailure(null);
+    setPending(source.supplierCode);
     try {
       const game = await cover.mutateAsync({
         supplier: source.supplierCode,
@@ -121,21 +134,32 @@ export function SupplierCoverButton({
       onCover(game.cover);
     } catch (error) {
       setFailure(errorMessage(t, error));
+    } finally {
+      setPending(null);
     }
   }
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={cover.isPending}
-        onClick={() => use(node)}
-      >
-        <ImageDownIcon />
-        {cover.isPending ? t('suppliers.gameLinks.coverPending') : t('suppliers.gameLinks.cover')}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        {sources.map((source) => (
+          <Button
+            key={source.supplierCode}
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={cover.isPending}
+            onClick={() => use(source)}
+          >
+            <ImageDownIcon />
+            {pending === source.supplierCode
+              ? t('suppliers.gameLinks.coverPending')
+              : t('suppliers.gameLinks.cover', {
+                  supplier: t(`suppliers.names.${source.supplierCode}`),
+                })}
+          </Button>
+        ))}
+      </div>
       {failure && <FormAlert>{failure}</FormAlert>}
     </div>
   );

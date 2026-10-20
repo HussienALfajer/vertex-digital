@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
+import { GamePlayerCheckCard } from '../orders/game-player-check';
 import { GamePricing } from '../pricing/game-pricing';
 import { GameSupplierLinks } from '../suppliers/game-supplier-links';
 import { gameQuery, useArchiveGame } from './catalog.queries';
@@ -120,7 +121,10 @@ export function GamePage({
           <GameForm game={data} />
         </TabsContent>
         <TabsContent value="fields">
-          <FieldsTab game={data} />
+          <div className="flex flex-col gap-6">
+            <FieldsTab game={data} />
+            <GamePlayerCheckCard game={data} />
+          </div>
         </TabsContent>
         <TabsContent value="products">
           <div className="flex flex-col gap-6">

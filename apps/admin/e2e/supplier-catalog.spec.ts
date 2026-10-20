@@ -334,7 +334,9 @@ test.describe('supplier catalog', () => {
 
     await page.goto(`/catalog/games/${game.id}`);
     const before = game.coverFileId;
-    await page.getByRole('button', { name: s.gameLinks.cover }).click();
+    await page
+      .getByRole('button', { name: s.gameLinks.cover.replace('{{supplier}}', s.names.fake) })
+      .click();
     await expect.poll(() => game.coverFileId).not.toBe(before);
 
     await page.goto(`/catalog/games/${game.id}?tab=products`);

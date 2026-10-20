@@ -79,11 +79,17 @@ export function FieldInput({
         inputMode={numeric ? 'numeric' : field.type === 'phone' ? 'tel' : 'text'}
         type={field.type === 'phone' ? 'tel' : 'text'}
         autoComplete="off"
+        // S19 ID3: a Supercell tag is upper-case (upper-cased as typed or pasted too).
+        autoCapitalize={field.type === 'supercell_tag' ? 'characters' : undefined}
         spellCheck={false}
         maxLength={field.type === 'text' ? 64 : 32}
         className="h-11 text-md"
         aria-invalid={!!error}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) =>
+          onChange(
+            field.type === 'supercell_tag' ? event.target.value.toUpperCase() : event.target.value,
+          )
+        }
         onBlur={onBlur}
       />
       {field.helpAr && <FieldDescription>{field.helpAr}</FieldDescription>}

@@ -356,6 +356,7 @@ test.describe('the cart (CT1–CT6)', () => {
       line(p325, {
         gift: { senderName: 'أحمد', message: 'كل عام وأنت بخير' },
         fields: { player_id: '51234568' },
+        playerCheck: { result: 'valid', playerName: 'Omar_7', region: 'ME' },
       }),
       line(p1800, { expectedUnitPriceUsdUnits: 19_990_000 }),
     ]);
@@ -389,6 +390,9 @@ test.describe('the cart (CT1–CT6)', () => {
     await expect(page.getByText(c.unavailable)).toBeVisible();
     await expect(page.getByText(c.removeUnavailable)).toBeVisible();
     await expect(page.getByText(c.gift, { exact: true })).toBeVisible();
+    // S19 PC9: the line's checked name with its region.
+    await expect(page.getByText('Omar_7')).toBeVisible();
+    await expect(page.getByText('ME', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: fill(c.remove, { name: '1800 UC' }) }).click();
     const slider = page.getByRole('slider', {
       name: fill(c.slide, { total: ltr(formatUsd(total)) }),
@@ -460,6 +464,21 @@ test.describe('the cart (CT1–CT6)', () => {
       lines: [{ expectedUnitPriceUsdUnits: 1_090_000 }, { confirmPlayer: true }],
     });
     expect(second?.headers['idempotency-key']).not.toBe(first?.headers['idempotency-key']);
+  });
+
+  test('a line refused for the account region says why (S19 PC3)', async ({ page, api }) => {
+    await seedCart(page, [line(p60)]);
+    signedIn(api)
+      .on('GET /api/catalog/search-index', 200, searchIndex())
+      .on('POST /api/checkouts', 409, {
+        code: 'CHECKOUT_REFUSED',
+        details: { lines: [{ index: 0, code: 'PLAYER_REGION_MISMATCH', details: {} }] },
+      });
+    await page.goto('/cart');
+    await page.getByRole('slider').focus();
+    await page.keyboard.press('End');
+    await expect(page.getByText(c.refused)).toBeVisible();
+    await expect(page.getByText(c.refusals.PLAYER_REGION_MISMATCH)).toBeVisible();
   });
 
   test('a short balance shows what is missing with the deposit; signed out asks to sign in', async ({

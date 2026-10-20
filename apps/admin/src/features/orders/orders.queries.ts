@@ -11,6 +11,7 @@ import type {
   RerouteOrder,
   ResolveAttempt,
   RevokeShareLink,
+  UpdateGamePlayerCheck,
 } from '@vertex-digital/contracts';
 import { api, BACKGROUND_REQUEST, call } from '../../lib/api/client';
 import { useReauthentication } from '../account/reauthentication';
@@ -277,6 +278,40 @@ export function useAdminPlayerCheck() {
   return useMutation({
     mutationFn: (body: AdminPlayerCheck) =>
       call(api.POST('/api/admin/player-checks', { body: body as never })),
+  });
+}
+
+/** S19 PC1: a game's check provider; null until the admin sets one. */
+export const gamePlayerCheckQuery = (gameId: string) =>
+  queryOptions({
+    queryKey: ['orders', 'player-check', gameId],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/catalog/games/{id}/player-check', { params: { path: { id: gameId } } }),
+      ),
+  });
+
+/** S19 PC1: the game's check provider saved (audited), then the row and the audit log read again. */
+export function useSetGamePlayerCheck(gameId: string) {
+  const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: (body: UpdateGamePlayerCheck) =>
+      withReauthentication(() =>
+        call(
+          api.PUT('/api/admin/catalog/games/{id}/player-check', {
+            params: { path: { id: gameId } },
+            body: body as never,
+          }),
+        ),
+      ),
+    onSuccess: (state) => queryClient.setQueryData(gamePlayerCheckQuery(gameId).queryKey, state),
+    onSettled: () =>
+      Promise.all(
+        [['orders', 'player-check', gameId], ['audit']].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey }),
+        ),
+      ),
   });
 }
 

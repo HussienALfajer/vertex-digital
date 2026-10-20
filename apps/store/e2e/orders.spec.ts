@@ -149,6 +149,7 @@ const ORDERS: Record<Exclude<keyof typeof IDS, 'other'>, Order> = {
     timeline: [{ step: 'reserved', at: '2026-10-09T11:00:00.000Z' }],
     expiresAt: new Date(Date.now() + 23 * 3_600_000).toISOString(),
     playerName: 'Lina_99',
+    playerRegion: 'ME',
   }),
   cancelled: order({
     id: IDS.cancelled,
@@ -298,6 +299,8 @@ test.describe('orders', () => {
     await expect(page.getByRole('heading', { name: o.reservation.title })).toBeVisible();
     await expect(page.getByRole('timer')).toHaveText(/^2[23]:\d\d:\d\d$/);
     await expect(page.getByText('Lina_99')).toBeVisible();
+    // S19 PC9: the region beside the name.
+    await expect(page.getByText('ME', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: o.reservation.deposit })).toHaveAttribute(
       'href',
       `/wallet/deposit?amount=499&order=${IDS.reserved}`,
