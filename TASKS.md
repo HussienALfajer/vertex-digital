@@ -10,9 +10,10 @@ Spec `docs/specs/S20-merchant-accounts-and-price-lists.md`, ADR 0035. Three PRs 
 - [x] Worker: sync and health read retail's rows and reprice every list through `repriceProducts`; the cancel-reason email label. RP5's `fixed_price_fallback` notice moves to PR 2 with the fixed-price writer (nothing sets a fixed price before it)
 - [x] Bridge: OpenAPI export and admin client (the two enum additions); E2E mocks need no change
 - [x] AGENTS.md commands table: the reprice command
-- [ ] Wiring checklist, checks, reviewer (2 findings fixed: the release before misreads seeded list rules and list rows, so the rules arrive with `pricing:reprice-lists` and unseeded lists are not priced; tests for PO4 and the public catalog), acceptance, PR with auto-merge
+- [ ] Wiring checklist, checks, reviewer (2 findings fixed: the release before misreads seeded list rules and list rows, so the rules arrive with `pricing:reprice-lists` and unseeded lists are not priced; tests for PO4 and the public catalog; re-review: the one-way step in `docs/deployment.md` and `deploy/CLAUDE.md`, the seed's pre-S20 snapshot columns), acceptance, PR with auto-merge
 
 ## PR 2 — lists, rules, fixed prices, matrix, assignment, private prices: server and screens (branch `feat/s20-price-lists`)
+- [ ] Refuse a custom list, an assignment or a merchant while `seedRootListRules` has not run (or price a list by the first global rule along its chain): `repriceListsAfterRetail` prices only lists whose root has a global rule (PR 1 re-review)
 - [ ] RP5 (moved from PR 1): `fixed_price_fallback` Telegram message kind and notice on entering `fixed_price_fallback`, dedupe `fixed-fallback:<list>:<product>:<Damascus date>`; daily summary line
 - [ ] Contract step for PR 1's defaults: drop the retail `DEFAULT` of `margin_rules`, `product_prices` and `orders.price_list_id` once no deployed code relies on it (a release after PR 1)
 - [ ] Contracts: `priceListSchema`, `createPriceListSchema`, `fixedPriceSchema`, `priceMatrixQuerySchema`, `priceMatrixSchema`, `customerPricesSchema`, rule input `priceListId`; errors `PRICE_LIST_IN_USE`, `PRICE_LISTS_LIMIT_REACHED`, `PRICE_LIST_NAME_TAKEN`, `PRICE_LIST_ARCHIVED` with Arabic texts; audit actions `price_list.*`, `customer.price_list_changed`; notification `price_list_changed`

@@ -82,11 +82,14 @@ async function upsert(tx: Transaction, table: string, rows: Row[]): Promise<void
         .filter((column) => column !== 'id')
         .map((column) => `"${column}" = EXCLUDED."${column}"`)
         .join(', ')}`;
+  // Only the snapshot's own columns: one taken before a migration leaves the new columns to their
+  // defaults (S20: a pre-S20 snapshot's rules and prices are retail's).
+  const list = columns.map((column) => `"${column}"`).join(', ');
   for (let at = 0; at < rows.length; at += CHUNK) {
     const chunk = rows.slice(at, at + CHUNK);
     await tx.execute(
       sql.raw(
-        `INSERT INTO "${table}" SELECT * FROM json_populate_recordset(NULL::"${table}", '${JSON.stringify(
+        `INSERT INTO "${table}" (${list}) SELECT ${list} FROM json_populate_recordset(NULL::"${table}", '${JSON.stringify(
           chunk,
         ).replaceAll("'", "''")}'::json) ON CONFLICT (id) ${conflict}`,
       ),
