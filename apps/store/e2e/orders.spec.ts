@@ -67,6 +67,7 @@ function order(changes: Partial<Order> & { id: string }): Order {
     isGift: false,
     gift: null,
     shareLinks: [],
+    privatePrice: false,
     repeatable: false,
     createdAt: '2026-10-09T10:00:00.000Z',
     ...changes,

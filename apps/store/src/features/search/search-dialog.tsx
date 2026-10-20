@@ -307,7 +307,8 @@ function OptionRow({ option }: { option: Option }) {
         <span className="truncate text-xs text-muted-foreground">{gameName}</span>
       </span>
       {product.available && product.priceUsdUnits !== null ? (
-        <span className="flex shrink-0 flex-col items-end">
+        // S20 AT4: the index carries retail only; an account with its own prices sees none here.
+        <span className="flex shrink-0 flex-col items-end [[data-private-prices-hint]_&]:hidden">
           <bdi dir="ltr" className="font-bold tabular-nums">
             {formatUsd(product.priceUsdUnits)}
           </bdi>

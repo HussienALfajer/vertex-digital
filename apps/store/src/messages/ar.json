@@ -506,7 +506,10 @@
       "order_placed_for_you_on_behalf": "أنشأ المتجر بطلبك طلب {product} ({number}) ودفعه من رصيدك.",
       "order_placed_for_you_gift": "هدية من المتجر: طلب {product} ({number}).",
       "order_placed_for_you_compensation": "تعويض من المتجر: طلب {product} ({number}).",
-      "order_placed_for_you_message": "رسالة المتجر: {message}"
+      "order_placed_for_you_message": "رسالة المتجر: {message}",
+      "price_list_changed_retail": "تغيّرت أسعار حسابك: تدفع الآن سعر التجزئة.",
+      "price_list_changed_wholesale": "تغيّرت أسعار حسابك: تدفع الآن سعر التاجر.",
+      "price_list_changed_special": "تغيّرت أسعار حسابك: تدفع الآن سعراً خاصاً."
     }
   },
   "errors": {
@@ -901,6 +904,14 @@
       "pay": "ادفع من محفظتك",
       "delivered": "يُشحن حسابك تلقائيًا",
       "code": "استلم الكود فورًا في طلباتك"
+    },
+    "privatePrices": {
+      "failed": "تعذّر تحميل أسعارك. أعد المحاولة لتتمكن من الشراء.",
+      "retry": "أعد المحاولة",
+      "kinds": {
+        "wholesale": "سعر التاجر",
+        "special": "سعر خاص"
+      }
     }
   },
   "calculator": {

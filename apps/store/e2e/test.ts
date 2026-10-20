@@ -147,7 +147,13 @@ export class MockApi {
     // Catalog images are public files on every catalog page (S09 rule SF5): a PNG by default.
     const answer =
       this.answers.get(key) ??
-      (key.startsWith('GET /api/catalog/images/') ? ({ status: 200, image: true } as const) : null);
+      (key.startsWith('GET /api/catalog/images/')
+        ? ({ status: 200, image: true } as const)
+        : null) ??
+      // S20 AT4: a signed-in account reads its own prices of a game: retail unless a test says.
+      (/^GET \/api\/catalog\/games\/[^/]+\/prices$/.test(key)
+        ? { status: 200, body: { priceKind: 'retail', products: [], rateId: null } }
+        : null);
     if (!answer) {
       this.unexpected.push(key);
       await route.fulfill({ status: 404, json: { statusCode: 404, code: 'NOT_FOUND' } });

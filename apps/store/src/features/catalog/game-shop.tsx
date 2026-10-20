@@ -1,6 +1,8 @@
 'use client';
 
 import type { StoreGame, StoreProduct } from '@vertex-digital/contracts';
+import { Badge } from '@vertex-digital/ui/components/badge';
+import { Button } from '@vertex-digital/ui/components/button';
 import { Sheet, SheetContent, SheetTitle } from '@vertex-digital/ui/components/sheet';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { ChevronDownIcon, MousePointerClickIcon } from 'lucide-react';
@@ -13,6 +15,12 @@ import { useCustomer } from '@/features/purchase/session';
 import { t } from '@/lib/i18n';
 import { CalculatorCard, calculatorPacks } from './calculator-card';
 import { PackButton } from './pack-button';
+import { usePrivatePrices } from './private-prices';
+
+// S20: an account's own prices render their cards in the browser; retail accounts never load it.
+const PrivatePackContent = dynamic(() =>
+  import('./pack-card').then((module) => module.PackContent),
+);
 
 // The buy box (its field rules, the player check, slide-to-pay) loads once a pack is chosen, so
 // the game page's first load stays light (apps/store/CLAUDE.md, the game page's budget).
@@ -63,16 +71,26 @@ export function GameShop({
   const searchParams = useSearchParams();
   const desktop = useDesktop();
   const customer = useCustomer();
+  const prices = usePrivatePrices(data.game.slug, customer, data.products);
+  const products = prices.status === 'ready' ? prices.products : data.products;
+  // AT4: no buy while an account's own prices are unknown (its last read had them, or it failed).
+  const waiting = prices.status === 'failed' || (prices.status === 'loading' && prices.hinted);
   const [quantity, setQuantity] = useState(1);
   const [intent, setIntent] = useState<BuyBoxIntent | undefined>();
   const [repeatFailed, setRepeatFailed] = useState(false);
   const packId = searchParams.get('pack');
-  const selected = data.products.find((product) => product.id === packId);
-  const open = buyable(selected) ? selected : null;
-  const packs = calculatorPacks(data.products);
+  const selected = products.find((product) => product.id === packId);
+  const open = buyable(selected) && !waiting ? selected : null;
+  const packs = calculatorPacks(products);
   // The packs that can be bought lead; the others wait folded at the end (2026-10-19).
-  const ready = data.products.filter(buyable);
-  const resting = data.products.filter((product) => !buyable(product));
+  const ready = products.filter(buyable);
+  const resting = products.filter((product) => !buyable(product));
+  const card = (product: StoreProduct) =>
+    prices.status === 'ready' ? (
+      <PrivatePackContent product={product} cached={false} />
+    ) : (
+      cards[product.id]
+    );
 
   function choose(id: string | null, count = 1, next?: BuyBoxIntent) {
     setQuantity(count);
@@ -102,7 +120,7 @@ export function GameShop({
       .then(({ getOrder }) => getOrder(repeat))
       .then((result) => {
         const product = result.ok
-          ? data.products.find((item) => item.id === result.data.product.id)
+          ? products.find((item) => item.id === result.data.product.id)
           : undefined;
         if (!product || !buyable(product)) return setRepeatFailed(true);
         choose(product.id, 1, next);
@@ -125,10 +143,23 @@ export function GameShop({
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="flex flex-col gap-6">
         {repeatFailed && <FormAlert>{t('purchase.repeat.unavailable')}</FormAlert>}
+        {prices.status === 'failed' && (
+          <div className="flex flex-wrap items-center gap-3">
+            <FormAlert>{t('game.privatePrices.failed')}</FormAlert>
+            <Button variant="outline" size="xl" onClick={prices.retry}>
+              {t('game.privatePrices.retry')}
+            </Button>
+          </div>
+        )}
         <section aria-labelledby="packs-title" className="flex flex-col gap-3">
-          <h2 id="packs-title" className="text-lg font-bold">
-            {t('game.packs')}
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 id="packs-title" className="text-lg font-bold">
+              {t('game.packs')}
+            </h2>
+            {prices.status === 'ready' && (
+              <Badge tone="gold">{t(`game.privatePrices.kinds.${prices.kind}`)}</Badge>
+            )}
+          </div>
           {data.products.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('game.noPacks')}</p>
           ) : (
@@ -137,11 +168,11 @@ export function GameShop({
                 {ready.map((product) => (
                   <li key={product.id}>
                     <PackButton
-                      available
+                      available={!waiting}
                       selected={product.id === open?.id}
                       onSelect={() => choose(product.id)}
                     >
-                      {cards[product.id]}
+                      {card(product)}
                     </PackButton>
                   </li>
                 ))}
@@ -149,7 +180,7 @@ export function GameShop({
             )
           )}
         </section>
-        {packs.length >= 2 && (
+        {packs.length >= 2 && !waiting && (
           <CalculatorCard
             packs={packs}
             onBuy={(id, count) => choose(id, count)}
@@ -176,7 +207,7 @@ export function GameShop({
               {resting.map((product) => (
                 <li key={product.id}>
                   <PackButton available={false} selected={false} onSelect={() => {}}>
-                    {cards[product.id]}
+                    {card(product)}
                   </PackButton>
                 </li>
               ))}

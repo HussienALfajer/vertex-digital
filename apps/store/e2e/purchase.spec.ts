@@ -69,6 +69,7 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     isGift: false,
     gift: null,
     shareLinks: [],
+    privatePrice: false,
     repeatable: false,
     createdAt: new Date().toISOString(),
     ...changes,
