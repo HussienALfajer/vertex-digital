@@ -35,6 +35,7 @@ export {
   type Resolution,
   refundRemaining,
 } from './outcome.js';
+export { type PlayerCheckProvider, playerCheckProviders } from './player-check-providers.js';
 export {
   checkOrderFields,
   type LineInput,

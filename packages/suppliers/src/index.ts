@@ -16,6 +16,7 @@ export {
 } from './core/http.js';
 export { fetchImageFromHosts, imageUrlAllowed } from './core/image.js';
 export {
+  FAKE_CHECK_CATEGORY,
   FAKE_IMAGE_HOST,
   FAKE_SIGNATURE_HEADER,
   FAKE_SUPPLIER_CODE,

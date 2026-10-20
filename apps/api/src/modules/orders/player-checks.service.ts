@@ -8,6 +8,9 @@ import {
   PLAYER_CHECK_TTL_MS,
   type PlayerCheck,
   type PlayerCheckRequest,
+  playerRegionSchema,
+  regionMismatch,
+  type SupplierCode,
   supplierServesCustomer,
 } from '@vertex-digital/contracts';
 import {
@@ -18,14 +21,16 @@ import {
   newId,
   type PlayerCheckLookup,
   type ProductRoutingState,
+  playerCheckProviders,
   playerChecks,
   productRoutingStates,
   queueTelegramMessage,
-  type RouteState,
+  supplierStates,
   type Transaction,
   validationsToday,
   withinLimits,
 } from '@vertex-digital/db';
+import type { PlayerValidation } from '@vertex-digital/suppliers';
 import { and, desc, eq, gt } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
@@ -41,11 +46,34 @@ type Executor = Database | Transaction;
 
 const HOUR = 60 * 60 * 1000;
 
-/** A route a player check may use (rule PV2), with its supplier's quota. */
-interface CheckRoute {
-  route: RouteState;
+/**
+ * Where one check may go (S19 PC1, S09 PV2): the game's provider by its check category, or a
+ * route by its offer; what it sends, and the supplier's daily quota.
+ */
+interface CheckTarget {
+  supplier: { id: string; code: SupplierCode; nameAr: string };
   quota: number;
+  fieldMap: Record<string, string>;
+  optionMap: Record<string, Record<string, string>>;
+  offerId?: string;
+  categoryId?: string;
 }
+
+/**
+ * Who checks a pack for a requester: nobody (`not_supported`, and the purchase needs no
+ * confirmation), a provider that cannot answer now (S19 PC5: `unavailable`, the customer
+ * confirms), or targets in order with the game's allowed regions (PC3; none for a route).
+ */
+type CheckPlan = { allowedRegions: readonly string[] } & (
+  | { kind: 'none' }
+  | { kind: 'unavailable' }
+  | { kind: 'targets'; targets: CheckTarget[] }
+);
+
+/** A cached or fresh answer before the game's regions are applied. */
+type Answer =
+  | { result: 'valid'; playerName: string | null; region: string | null }
+  | { result: 'invalid' };
 
 /** Thrown by a supplier call that took longer than rule PV6 allows. */
 class Timeout extends Error {}
@@ -57,7 +85,9 @@ type Requester = { kind: 'customer'; id: string } | { kind: 'admin'; id: string 
  * Player checks (S09 rules PV1–PV8): the supplier's answer for a player id, cached by an HMAC of
  * the fields (`player_checks`, no player id stored), limited per customer and address for the
  * calls that reach a supplier, and bounded by each supplier's daily quota. The purchase reads the
- * same cache (`lookup`) and never calls a supplier.
+ * same cache (`lookup`) and never calls a supplier. S19 PC1–PC9: a game with an enabled check
+ * provider is checked by it for every `direct` pack; an answer keeps the account's region, which
+ * the game's allowed regions turn into `region_mismatch` whenever it is read.
  */
 @Injectable()
 export class PlayerChecksService {
@@ -116,30 +146,36 @@ export class PlayerChecksService {
     if (state.kind !== 'direct') return { result: 'not_supported' };
     const isTest =
       requester.kind === 'customer' && (await this.customers.isTestCustomer(requester.id));
-    const routes = this.checkRoutes(state, isTest);
-    if (routes.length === 0) return { result: 'not_supported' };
+    const plan = await this.plan(this.db, state, isTest);
+    if (plan.kind === 'none') return { result: 'not_supported' };
+    if (plan.kind === 'unavailable') return { result: 'unavailable', reason: 'supplier' };
 
     const fieldsHash = this.fieldsHash(state.gameId, fields);
     const cached = await this.cached(this.db, state.gameId, fieldsHash);
-    if (cached) return cached;
+    if (cached) return withRegions(cached, plan.allowedRegions);
 
     const used = await validationsToday(
       this.db,
-      routes.map(({ route }) => route.supplier.id),
+      plan.targets.map((target) => target.supplier.id),
     );
-    for (const { route, quota } of routes) {
-      if ((used.get(route.supplier.id) ?? 0) >= quota) {
-        await this.quotaReached(route, quota);
+    for (const target of plan.targets) {
+      if ((used.get(target.supplier.id) ?? 0) >= target.quota) {
+        await this.quotaReached(target);
         continue;
       }
-      return this.ask(route, state.gameId, fieldsHash, fields, requester, meta);
+      const answer = await this.ask(target, state.gameId, fieldsHash, fields, requester, meta);
+      return answer.result === 'valid' || answer.result === 'invalid'
+        ? withRegions(answer, plan.allowedRegions)
+        : answer;
     }
     return { result: 'unavailable', reason: 'quota' };
   }
 
   /**
    * Rule PV8 for the purchase, in its transaction: null when no check is possible for this
-   * customer now (rule PV1), else what the cache holds for these fields.
+   * customer now (rule PV1), else what the cache holds for these fields. S19 PC3: a cached account
+   * on a region the game does not allow is `region_mismatch` whatever the provider can do now
+   * (paused, out of quota), so a confirmation never buys a pack for another region.
    */
   async lookup(
     tx: Transaction,
@@ -156,27 +192,73 @@ export class PlayerChecksService {
       order.productId,
     );
     if (!state) return null;
-    const routes = this.checkRoutes(state, order.isTest);
-    const used = await validationsToday(
-      tx,
-      routes.map(({ route }) => route.supplier.id),
-    );
-    if (!routes.some(({ route, quota }) => (used.get(route.supplier.id) ?? 0) < quota)) {
-      return null;
-    }
+    const plan = await this.plan(tx, state, order.isTest);
     const cached = await this.cached(tx, order.gameId, this.fieldsHash(order.gameId, order.fields));
-    if (!cached) return { result: 'none' };
-    return cached.result === 'valid'
-      ? { result: 'valid', playerName: cached.playerName }
-      : { result: 'invalid' };
+    const answer = cached && withRegions(cached, plan.allowedRegions);
+    if (answer?.result === 'region_mismatch') {
+      return { result: 'region_mismatch', region: answer.region };
+    }
+    if (plan.kind === 'none') return null;
+    if (plan.kind === 'targets') {
+      const used = await validationsToday(
+        tx,
+        plan.targets.map((target) => target.supplier.id),
+      );
+      if (!plan.targets.some((target) => (used.get(target.supplier.id) ?? 0) < target.quota)) {
+        return null;
+      }
+    }
+    return answer ?? { result: 'none' };
   }
 
   /**
-   * Rules PV1, PV2: the usable routes in order (RT5–RT6) whose supplier checks player ids here
-   * with a quota above 0; a test customer's only through `fake` (S08 R4).
+   * S19 PC1, PC5, PC8: a game with an enabled provider row is checked by that provider only: not
+   * at all for a test customer unless it is the fake, `unavailable` while it is paused, without
+   * credentials, on an inactive plan (FC9) or down. Without one, rules PV1, PV2: the usable routes
+   * in order (RT5–RT6) whose supplier checks player ids by a route with a quota above 0; a test
+   * customer's only through `fake` (S08 R4).
    */
-  private checkRoutes(state: ProductRoutingState, isTest: boolean): CheckRoute[] {
-    return state.routes
+  private async plan(
+    db: Executor,
+    state: ProductRoutingState,
+    isTest: boolean,
+  ): Promise<CheckPlan> {
+    const provider = (await playerCheckProviders(db, [state.gameId])).get(state.gameId);
+    if (provider?.enabled) {
+      const { allowedRegions } = provider;
+      if (
+        (isTest && provider.supplierCode !== 'fake') ||
+        !this.adapters.canValidatePlayer(provider.supplierCode) ||
+        provider.validationDailyQuota <= 0
+      ) {
+        return { kind: 'none', allowedRegions };
+      }
+      const supplier = (await supplierStates(db, routingContext(this.env))).find(
+        (row) => row.id === provider.supplierId,
+      );
+      if (
+        !supplier?.configured ||
+        supplier.paused ||
+        supplier.subscriptionInactive ||
+        supplier.health === 'down'
+      ) {
+        return { kind: 'unavailable', allowedRegions };
+      }
+      return {
+        kind: 'targets',
+        targets: [
+          {
+            supplier,
+            quota: provider.validationDailyQuota,
+            fieldMap: provider.fieldMap,
+            optionMap: provider.optionMap,
+            categoryId: provider.categoryId,
+          },
+        ],
+        allowedRegions,
+      };
+    }
+    const targets = state.routes
       .filter(
         (route) =>
           route.unusableReason === null &&
@@ -184,10 +266,21 @@ export class PlayerChecksService {
           (isTest
             ? route.supplierCode === 'fake'
             : supplierServesCustomer(route.supplierCode, false)) &&
-          this.adapters.canValidatePlayer(route.supplierCode) &&
+          this.adapters.canValidatePlayer(route.supplierCode, 'route') &&
           route.supplier.validationDailyQuota > 0,
       )
-      .map((route) => ({ route, quota: route.supplier.validationDailyQuota }));
+      .map(
+        (route): CheckTarget => ({
+          supplier: route.supplier,
+          quota: route.supplier.validationDailyQuota,
+          fieldMap: route.fieldMap,
+          optionMap: route.optionMap,
+          offerId: route.offer.offerId,
+        }),
+      );
+    return targets.length === 0
+      ? { kind: 'none', allowedRegions: [] }
+      : { kind: 'targets', targets, allowedRegions: [] };
   }
 
   /** Rule BB2: the game's unarchived fields, the same schema the purchase uses. */
@@ -211,13 +304,13 @@ export class PlayerChecksService {
   }
 
   /** Rule PV3: the newest unexpired answer for these fields, whoever asked. */
-  private async cached(
-    db: Executor,
-    gameId: string,
-    fieldsHash: string,
-  ): Promise<Extract<PlayerCheck, { result: 'valid' | 'invalid' }> | null> {
+  private async cached(db: Executor, gameId: string, fieldsHash: string): Promise<Answer | null> {
     const [row] = await db
-      .select({ result: playerChecks.result, playerName: playerChecks.playerName })
+      .select({
+        result: playerChecks.result,
+        playerName: playerChecks.playerName,
+        region: playerChecks.region,
+      })
       .from(playerChecks)
       .where(
         and(
@@ -230,31 +323,32 @@ export class PlayerChecksService {
       .limit(1);
     if (!row) return null;
     return row.result === 'valid'
-      ? { result: 'valid', playerName: row.playerName }
+      ? { result: 'valid', playerName: row.playerName, region: row.region }
       : { result: 'invalid' };
   }
 
   /**
-   * One supplier call (rule PV6): mapped by the route's `field_map`, 5 seconds at most, recorded
-   * in `supplier_calls`; an answer is cached, an error or timeout is `unavailable`.
+   * One supplier call (rule PV6): mapped by the target's `field_map`, 5 seconds at most, recorded
+   * in `supplier_calls`; an answer is cached with its region (S19 PC3), an error or timeout is
+   * `unavailable`.
    */
   private async ask(
-    route: RouteState,
+    target: CheckTarget,
     gameId: string,
     fieldsHash: string,
     fields: Record<string, string>,
     requester: Requester,
     meta: RequestMeta | null,
-  ): Promise<PlayerCheck> {
-    const adapter = await this.adapters.connect(route.supplier);
+  ): Promise<Answer | Extract<PlayerCheck, { result: 'unavailable' | 'not_supported' }>> {
+    const adapter = await this.adapters.connect(target.supplier);
     if (!adapter?.capabilities.validatePlayer) return { result: 'not_supported' };
     // As the order would send them (S16 MF2: a select as the supplier's option value); an option
-    // the route cannot send is never sent to check.
+    // the target cannot send is never sent to check.
     let sendable = true;
     const mapped = Object.fromEntries(
-      Object.entries(route.fieldMap).map(([supplierField, key]) => {
+      Object.entries(target.fieldMap).map(([supplierField, key]) => {
         const value = fields[key] ?? '';
-        const options = route.optionMap[supplierField];
+        const options = target.optionMap[supplierField];
         if (!options || value === '') return [supplierField, value];
         const sent = Object.hasOwn(options, value) ? options[value] : undefined;
         if (sent === undefined) sendable = false;
@@ -275,11 +369,15 @@ export class PlayerChecksService {
     );
     if (!allowed) throw orderRefusals.rateLimited();
     const started = performance.now();
-    let answer: { valid: boolean; playerName?: string } | null = null;
+    let answer: PlayerValidation | null = null;
     let timer: NodeJS.Timeout | undefined;
     try {
       answer = await Promise.race([
-        adapter.validatePlayer({ offerId: route.offer.offerId, fields: mapped }),
+        adapter.validatePlayer({
+          ...(target.offerId !== undefined && { offerId: target.offerId }),
+          ...(target.categoryId !== undefined && { categoryId: target.categoryId }),
+          fields: mapped,
+        }),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Timeout()), PLAYER_CHECK_TIMEOUT_MS);
         }),
@@ -292,7 +390,7 @@ export class PlayerChecksService {
     const latencyMs = Math.max(0, Math.round(performance.now() - started));
     return this.db.transaction(async (tx) => {
       await this.adapters.recordCall(tx, {
-        supplierId: route.supplier.id,
+        supplierId: target.supplier.id,
         operation: 'validate_player',
         result: answer === null ? 'error' : 'ok',
         latencyMs,
@@ -300,30 +398,47 @@ export class PlayerChecksService {
       if (answer === null) return { result: 'unavailable', reason: 'supplier' } as const;
       const result = answer.valid ? 'valid' : 'invalid';
       const playerName = answer.valid ? cleanPlayerName(answer.playerName) : null;
+      const parsedRegion = playerRegionSchema.safeParse(answer.region);
+      const region = answer.valid && parsedRegion.success ? parsedRegion.data : null;
       await tx.insert(playerChecks).values({
         id: newId(),
         gameId,
         fieldsHash,
         result,
         playerName,
-        supplierId: route.supplier.id,
+        region,
+        supplierId: target.supplier.id,
         ...(requester.kind === 'customer'
           ? { customerId: requester.id }
           : { adminId: requester.id }),
         expiresAt: new Date(Date.now() + PLAYER_CHECK_TTL_MS[result]),
       });
-      return result === 'valid' ? { result, playerName } : { result };
+      return result === 'valid' ? { result, playerName, region } : { result };
     });
   }
 
   /** Rule PV5: the first refusal of the day tells the admin, once (its dedupe key). */
-  private async quotaReached(route: RouteState, quota: number): Promise<void> {
+  private async quotaReached(target: CheckTarget): Promise<void> {
+    const { supplier, quota } = target;
     await this.db.transaction((tx) =>
       queueTelegramMessage(tx, this.jobs, {
         kind: 'validation_quota_reached',
-        params: { supplier: route.supplierCode, supplierNameAr: route.supplier.nameAr, quota },
-        dedupeKey: `validation-quota:${route.supplierCode}:${damascusDate(new Date())}`,
+        params: { supplier: supplier.code, supplierNameAr: supplier.nameAr, quota },
+        dedupeKey: `validation-quota:${supplier.code}:${damascusDate(new Date())}`,
       }),
     );
   }
+}
+
+/** S19 PC3: a valid answer on a region the game does not allow is `region_mismatch`. */
+function withRegions(
+  answer: Answer,
+  allowedRegions: readonly string[],
+): Answer | Extract<PlayerCheck, { result: 'region_mismatch' }> {
+  if (answer.result !== 'valid' || !regionMismatch(answer.region, allowedRegions)) return answer;
+  return {
+    result: 'region_mismatch',
+    playerName: answer.playerName,
+    region: answer.region as string,
+  };
 }

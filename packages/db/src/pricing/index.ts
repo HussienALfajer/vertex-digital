@@ -14,6 +14,7 @@ export {
 export {
   cheapestAvailablePrice,
   currentSupplierPolicy,
+  forgetDeliveryMeasure,
   type PriceRow,
   type ProductRoutingState,
   productRoutingStates,
@@ -22,5 +23,6 @@ export {
   type RoutingContext,
   routedProductIds,
   type SupplierState,
+  supplierDeliveryMedians,
   supplierStates,
 } from './routing.js';

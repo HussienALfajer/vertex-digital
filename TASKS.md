@@ -22,7 +22,19 @@ Spec `docs/specs/S19-fazercards.md`, ADR 0034. Three code PRs as the spec's deli
 - [x] Admin: plan on the card, plan and webhook cards in Connection, the quota card for FazerCards, the category note, labels; E2E mocks; RTL screenshots light and dark
 - [x] Wiring checklist, checks, reviewer (3 findings fixed: the inactive plan from a refused read or order, the failed webhook set audited, gift card order bounds), owner acceptance (2026-10-20), PR with auto-merge
 
-## PR 3 — routing ties, store-wide player check, ID formats, screens (later session)
-- Carried from PR 2: `validatePlayer` gets the check category from the provider row of the game (the adapter already takes `categoryId`); FC9 checks unavailable while the plan is inactive (`subscriptionInactive` on `SupplierState`); PC7 moves `validate_player` out of health
-- RT10–RT12; `game_player_checks`, `player_checks.region`, `orders.player_region`, PC1–PC9, `PLAYER_REGION_MISMATCH`; `hoyoverse_uid`, `supercell_tag` (ID1–ID4); game "فحص اللاعب" card, image suggestion (D10), store buy box name and region; E2E and screenshots
+## PR 3 — routing ties, store-wide player check and ID formats, server side (branch `feat/s19-player-check`)
+- [x] Contracts: `gamePlayerCheckSchema` (category, field and option maps, allowed regions 0–20 upper-cased, enabled), check-category list schema, `region` and `region_mismatch` in `playerCheckSchema`, error `PLAYER_REGION_MISMATCH`, audit `game.player_check_set`; input types `hoyoverse_uid` (ID2, server from the leading digits) and `supercell_tag` (ID3, normalized) with unit tests; RT11 tie-break and supplier precedence, RT10 basis-switch review rule as pure functions with unit tests
+- [x] DB (`/db-migration`): `game_player_checks`; `player_checks.region`, `orders.player_region`; `input_field_type` gains `hoyoverse_uid`, `supercell_tag` (enum added safely); routing read takes RT11/RT12 inputs; reprice opens a review on a basis switch (RT10) with tests; drift
+- [x] Suppliers: `validatePlayer({ categoryId, fields })` with the check category from the provider row; `listCheckCategories` (FazerCards `GET /topups/validate-id`, `notSupported` elsewhere); region passed through; adapter tests
+- [x] API: `GET /api/admin/suppliers/:code/check-categories`, `GET`/`PUT /api/admin/catalog/games/:id/player-check` (audited); `PlayerChecksService` per PC1–PC8 (provider row first, route-based fallback, region mismatch, inactive plan and paused provider unavailable, test customers on the fake only, cache keyed by game); `PLAYER_REGION_MISMATCH` on order and checkout even with `confirmPlayer`, `player_region` stored; ID2 server/uid contradiction refused; tests (401/403 per route, every PC rule, the order refusal)
+- [x] Worker: health job computes RT12 delivery medians and drops `validate_player` from routing health (PC7); routing uses RT11; tests
+- [x] Bridge: OpenAPI export and admin client; E2E mocks for changed shapes
+- [x] Error texts (store and admin), audit label, input-type labels (admin catalog) so typecheck holds
+- [x] Wiring checklist, checks, reviewer (2 findings fixed: a cached region mismatch past an unavailable or spent provider, the region refusal per cart line), owner acceptance (2026-10-20; RT10 narrowed to automatic routes by the owner), PR with auto-merge
+
+## PR 4 — screens (later session)
+- Admin: game page "فحص اللاعب" card (provider, searchable check category, field map proposed by key, region chips, enabled, "تجربة"); image suggestion "صورة FazerCards" on import, link and the game page (D10); the new input types in the field editor
+- Store: name and region in the buy box (PC9), the region refusal (PC3), saved ids, cart, order page; the new input types' inputs; admin order shows the region
+- Catalog data ID4 (PUBG 8–12, Free Fire 8–12, MLBB 5–12 and 3–5) set in production as data
+- E2E flows and RTL screenshots (store phone dark and light, admin light and dark); wiring, checks, reviewer, owner acceptance, PR with auto-merge
 - Then: production deploy and the funded pilot (spec "Acceptance")

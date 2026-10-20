@@ -1338,6 +1338,25 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
       expect(after?.state === 'down' && after.id !== before?.id).toBe(false);
     }));
 
+  it('never counts player checks toward health (S19 PC7)', () =>
+    isolated(async (tx) => {
+      const before = await standing(tx);
+      // Counted, the checks would make two operations erring in a row (S18 HE3): down.
+      await tx.insert(supplierCalls).values(
+        Array.from({ length: 6 }, (_, index) => ({
+          id: newId(),
+          supplierId: ids.fake,
+          operation: index % 2 === 0 ? ('get_order' as const) : ('validate_player' as const),
+          result: 'error' as const,
+          latencyMs: 5_000,
+          failureKind: 'timeout',
+        })),
+      );
+      await health.check(new Date(), tx);
+      const after = await standing(tx);
+      expect(after?.state === 'down' && after.id !== before?.id).toBe(false);
+    }));
+
   it('waits again after a failed probe', () =>
     isolated(async (tx) => {
       await tx.insert(supplierHealthChanges).values({

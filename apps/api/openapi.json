@@ -1032,6 +1032,7 @@
                 "catalog_game.restored",
                 "catalog_game.reordered",
                 "catalog_game.activated_all",
+                "catalog_game.player_check_set",
                 "catalog_input_field.created",
                 "catalog_input_field.updated",
                 "catalog_input_field.archived",
@@ -7503,6 +7504,36 @@
         ]
       }
     },
+    "/api/admin/suppliers/{code}/check-categories": {
+      "get": {
+        "operationId": "SuppliersAdminController_checkCategories",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read live, kept a minute",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckCategoryList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ]
+      }
+    },
     "/api/admin/suppliers/{code}/webhook": {
       "get": {
         "operationId": "SuppliersAdminController_webhook",
@@ -10419,6 +10450,74 @@
         ]
       }
     },
+    "/api/admin/catalog/games/{id}/player-check": {
+      "get": {
+        "operationId": "GamePlayerChecksAdminController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The row, or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GamePlayerCheckState"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      },
+      "put": {
+        "operationId": "GamePlayerChecksAdminController_set",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGamePlayerCheck"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The row as saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GamePlayerCheckState"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/api/shares/{token}": {
       "get": {
         "operationId": "SharesController_share",
@@ -12524,6 +12623,7 @@
           "catalog_game.restored",
           "catalog_game.reordered",
           "catalog_game.activated_all",
+          "catalog_game.player_check_set",
           "catalog_input_field.created",
           "catalog_input_field.updated",
           "catalog_input_field.archived",
@@ -20146,7 +20246,9 @@
           "digits",
           "text",
           "select",
-          "phone"
+          "phone",
+          "hoyoverse_uid",
+          "supercell_tag"
         ]
       },
       "SelectOption": {
@@ -21459,6 +21561,128 @@
                 "type": "string",
                 "enum": [
                   "phone"
+                ]
+              },
+              "minLength": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              },
+              "maxLength": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              },
+              "options": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              }
+            },
+            "required": [
+              "key",
+              "labelAr",
+              "required",
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "labelAr": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+              },
+              "helpAr": {
+                "nullable": true,
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "hoyoverse_uid"
+                ]
+              },
+              "minLength": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              },
+              "maxLength": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              },
+              "options": {
+                "default": null,
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
+              }
+            },
+            "required": [
+              "key",
+              "labelAr",
+              "required",
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "labelAr": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+              },
+              "helpAr": {
+                "nullable": true,
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]+$"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "supercell_tag"
                 ]
               },
               "minLength": {
@@ -24442,6 +24666,97 @@
         ],
         "additionalProperties": false
       },
+      "CheckCategoryList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckCategory"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "CheckCategory": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "fields": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSpec"
+            }
+          }
+        },
+        "required": [
+          "categoryId",
+          "name",
+          "fields"
+        ],
+        "additionalProperties": false
+      },
+      "FieldSpec": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,32}$"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "select"
+            ]
+          },
+          "options": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "label",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "type"
+        ],
+        "additionalProperties": false
+      },
       "SupplierWebhookSettings": {
         "type": "object",
         "properties": {
@@ -25160,55 +25475,6 @@
           "unsupportedReason",
           "ignoredAt",
           "mapped"
-        ],
-        "additionalProperties": false
-      },
-      "FieldSpec": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_.-]{1,32}$"
-          },
-          "label": {
-            "type": "string",
-            "maxLength": 64
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "text",
-              "select"
-            ]
-          },
-          "options": {
-            "maxItems": 50,
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "label": {
-                  "type": "string",
-                  "maxLength": 64
-                },
-                "value": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 64
-                }
-              },
-              "required": [
-                "label",
-                "value"
-              ],
-              "additionalProperties": false
-            }
-          }
-        },
-        "required": [
-          "key",
-          "label",
-          "type"
         ],
         "additionalProperties": false
       },
@@ -27021,11 +27287,40 @@
               "playerName": {
                 "nullable": true,
                 "type": "string"
+              },
+              "region": {
+                "nullable": true,
+                "type": "string"
               }
             },
             "required": [
               "result",
-              "playerName"
+              "playerName",
+              "region"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "string",
+                "enum": [
+                  "region_mismatch"
+                ]
+              },
+              "playerName": {
+                "nullable": true,
+                "type": "string"
+              },
+              "region": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "result",
+              "playerName",
+              "region"
             ],
             "additionalProperties": false
           },
@@ -27376,6 +27671,10 @@
             "nullable": true,
             "type": "string"
           },
+          "playerRegion": {
+            "nullable": true,
+            "type": "string"
+          },
           "deliveryStats": {
             "nullable": true,
             "allOf": [
@@ -27464,6 +27763,7 @@
           "expiresAt",
           "cancelReason",
           "playerName",
+          "playerRegion",
           "deliveryStats",
           "expectedWithinMinutes",
           "checkoutId",
@@ -28268,6 +28568,10 @@
             "nullable": true,
             "type": "string"
           },
+          "playerRegion": {
+            "nullable": true,
+            "type": "string"
+          },
           "deliveryStats": {
             "nullable": true,
             "allOf": [
@@ -28348,6 +28652,7 @@
           "expiresAt",
           "cancelReason",
           "playerName",
+          "playerRegion",
           "deliveryStats",
           "expectedWithinMinutes",
           "checkoutId",
@@ -28675,6 +28980,10 @@
             "nullable": true,
             "type": "string"
           },
+          "playerRegion": {
+            "nullable": true,
+            "type": "string"
+          },
           "paidAt": {
             "nullable": true,
             "type": "string",
@@ -28935,6 +29244,7 @@
           "cancelReason",
           "playerCheck",
           "playerName",
+          "playerRegion",
           "paidAt",
           "deliveredAt",
           "finishedAt",
@@ -30617,6 +30927,114 @@
           {
             "$ref": "#/components/schemas/PlayerCheckRequest"
           }
+        ]
+      },
+      "GamePlayerCheckState": {
+        "type": "object",
+        "properties": {
+          "check": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GamePlayerCheck"
+              }
+            ]
+          }
+        },
+        "required": [
+          "check"
+        ],
+        "additionalProperties": false
+      },
+      "GamePlayerCheck": {
+        "type": "object",
+        "properties": {
+          "gameId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "supplierCode": {
+            "$ref": "#/components/schemas/SupplierCode"
+          },
+          "categoryId": {
+            "type": "string"
+          },
+          "fieldMap": {
+            "$ref": "#/components/schemas/FieldMap"
+          },
+          "optionMap": {
+            "$ref": "#/components/schemas/OptionMap"
+          },
+          "allowedRegions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "gameId",
+          "supplierCode",
+          "categoryId",
+          "fieldMap",
+          "optionMap",
+          "allowedRegions",
+          "enabled",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateGamePlayerCheck": {
+        "type": "object",
+        "properties": {
+          "supplierCode": {
+            "$ref": "#/components/schemas/SupplierCode"
+          },
+          "categoryId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "fieldMap": {
+            "$ref": "#/components/schemas/FieldMap"
+          },
+          "optionMap": {
+            "default": {},
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OptionMap"
+              }
+            ]
+          },
+          "allowedRegions": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16,
+              "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N} _-]*$"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "supplierCode",
+          "categoryId",
+          "fieldMap",
+          "enabled"
         ]
       },
       "PublicShare": {

@@ -1,4 +1,8 @@
-import { orderFieldValuesSchema, type StoreField } from '@vertex-digital/contracts';
+import {
+  orderFieldValuesSchema,
+  SERVER_MISMATCH,
+  type StoreField,
+} from '@vertex-digital/contracts';
 import { t } from '@/lib/i18n';
 
 /*
@@ -23,7 +27,11 @@ export function checkFields(fields: readonly StoreField[], typed: FieldValues): 
     const key = String(issue.path[0]);
     const field = fields.find((item) => item.key === key);
     if (!field || errors[key]) continue;
-    errors[key] = fieldMessage(field, input[key] ?? '');
+    // S19 ID2: a server that contradicts the HoYoverse uid.
+    errors[key] =
+      issue.code === 'custom' && issue.params?.reason === SERVER_MISMATCH
+        ? t('purchase.fieldErrors.serverMismatch')
+        : fieldMessage(field, input[key] ?? '');
   }
   return { ok: false, errors };
 }
@@ -47,5 +55,9 @@ function fieldMessage(field: StoreField, value: string): string {
       return t('purchase.fieldErrors.phone');
     case 'select':
       return t('purchase.fieldErrors.select');
+    case 'hoyoverse_uid':
+      return t('purchase.fieldErrors.hoyoverseUid');
+    case 'supercell_tag':
+      return t('purchase.fieldErrors.supercellTag');
   }
 }

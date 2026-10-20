@@ -15,6 +15,7 @@ import type {
   SupplierAdapter,
   SupplierCapabilities,
   SupplierCategory,
+  SupplierCheckCategory,
   SupplierMoney,
   SupplierOffer,
   SupplierOfferQuote,
@@ -38,6 +39,8 @@ import {
   balanceReplySchema,
   categoriesPageSchema,
   categorySchema,
+  checkCategoriesReplySchema,
+  checkCategorySchema,
   deliveriesReplySchema,
   deliverySchema,
   type FzrCard,
@@ -534,6 +537,33 @@ export class FazercardsAdapter implements SupplierAdapter {
   /** FC11: without the API key, from FazerCards' image hosts only. */
   fetchImage(url: string, limits: ImageLimits): Promise<Uint8Array> {
     return fetchImageFromHosts(url, this.imageHosts, limits, this.options.fetch);
+  }
+
+  /**
+   * PC1: `GET /topups/validate-id`, the games FazerCards checks; an item with an unreadable id or
+   * fields is left out.
+   */
+  async listCheckCategories(): Promise<SupplierCheckCategory[]> {
+    const reply = await this.catalogRead({
+      method: 'GET',
+      path: 'topups/validate-id',
+      schema: checkCategoriesReplySchema,
+      errorCode: fzrErrorCode,
+    });
+    return reply.items.flatMap((item): SupplierCheckCategory[] => {
+      const parsed = checkCategorySchema.safeParse(item);
+      if (!parsed.success || !CATEGORY_ID.test(parsed.data.category_id)) return [];
+      const fields = fieldSpecsOf(parsed.data.fields ?? []);
+      if (fields === null) return [];
+      const categoryId = parsed.data.category_id;
+      return [
+        {
+          categoryId,
+          name: parsed.data.name?.trim().slice(0, 200) || categoryId,
+          fields: fields.specs,
+        },
+      ];
+    });
   }
 
   /**

@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
+  checkCategoryListSchema,
   importOffersSchema,
   importResultSchema,
   type OfferListQuery,
@@ -125,6 +126,19 @@ export class SuppliersAdminController {
   @ApiOkResponse({ description: 'The supplier', standardSchema: supplierDetailSchema })
   detail(@Param('code') code: string) {
     return this.suppliers.detail(code);
+  }
+
+  /** S19 PC1: the supplier's player-check categories, for a game's check provider card. */
+  @Get(':code/check-categories')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: checkCategoryListSchema })
+  @ApiOkResponse({
+    description: 'Read live, kept a minute',
+    standardSchema: checkCategoryListSchema,
+  })
+  checkCategories(@Param('code') code: string) {
+    return this.live.checkCategories(code);
   }
 
   /** S19 FC8: the supplier's webhook settings and last deliveries, read live. */

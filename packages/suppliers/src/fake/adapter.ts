@@ -17,6 +17,7 @@ import type {
   SupplierAdapter,
   SupplierCapabilities,
   SupplierCategory,
+  SupplierCheckCategory,
   SupplierMoney,
   SupplierOffer,
   SupplierOfferQuote,
@@ -70,6 +71,9 @@ import { imageUrlAllowed } from '../core/image.js';
  */
 
 export const FAKE_SUPPLIER_CODE = 'fake';
+
+/** S19 PC1: the fake's one player-check category. */
+export const FAKE_CHECK_CATEGORY = 'player';
 
 /** The headers of a fake webhook: Unix seconds, and HMAC-SHA256 hex of `${timestamp}.${body}`. */
 export const FAKE_TIMESTAMP_HEADER = 'x-fake-timestamp';
@@ -462,6 +466,18 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     return notSupported('The fake supplier', 'test its webhook');
   }
 
+  /** S19 PC1: one check category, asking for `playerId`. */
+  async listCheckCategories(): Promise<SupplierCheckCategory[]> {
+    this.failIfScripted();
+    return [
+      {
+        categoryId: FAKE_CHECK_CATEGORY,
+        name: 'Fake player check',
+        fields: [{ key: 'playerId', label: 'Player ID', type: 'text' }],
+      },
+    ];
+  }
+
   async listOffers(): Promise<SupplierOffer[]> {
     this.failIfScripted();
     if (this.state.failSync) throw new SupplierError('retryable', 'Fake catalog unavailable');
@@ -553,12 +569,27 @@ export class FakeSupplierAdapter implements SupplierAdapter {
     return solidPng(category.color);
   }
 
-  async validatePlayer(input: { offerId: string; fields: OrderFields }): Promise<PlayerValidation> {
+  /**
+   * By the route's offer (S09 PV2), or by its check category (S19 PC1), which also returns a
+   * region: `EU` for a player id starting with 7, else `ME`.
+   */
+  async validatePlayer(input: {
+    offerId?: string;
+    categoryId?: string;
+    fields: OrderFields;
+  }): Promise<PlayerValidation> {
     this.failIfScripted();
-    const playerId = this.playerIdOf(input.offerId, input.fields);
+    if (input.categoryId !== undefined && input.categoryId !== FAKE_CHECK_CATEGORY) {
+      throw new SupplierError('definitive', 'No such fake check category');
+    }
+    const playerId = this.playerIdOf(input.offerId ?? '', input.fields);
     if (!playerId) throw new SupplierError('definitive', 'playerId is required');
     if (playerId.startsWith('invalid')) return { valid: false };
-    return { valid: true, playerName: `Player ${playerId.slice(-4)}` };
+    return {
+      valid: true,
+      playerName: `Player ${playerId.slice(-4)}`,
+      ...(input.categoryId !== undefined && { region: playerId.startsWith('7') ? 'EU' : 'ME' }),
+    };
   }
 
   async placeOrder(request: PlaceOrderRequest): Promise<SupplierOutcome> {

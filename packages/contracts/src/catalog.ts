@@ -21,8 +21,19 @@ export const productKindSchema = z.enum(PRODUCT_KINDS).meta({ id: 'ProductKind' 
 
 export type ProductKind = z.infer<typeof productKindSchema>;
 
-/** Fixed field types with fixed value rules (rule CT7): no admin-defined patterns. */
-export const INPUT_FIELD_TYPES = ['digits', 'text', 'select', 'phone'] as const;
+/**
+ * Fixed field types with fixed value rules (rule CT7): no admin-defined patterns. S19 ID1–ID3:
+ * `hoyoverse_uid` (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero) and `supercell_tag`
+ * (Clash of Clans, Clash Royale, Brawl Stars) are built-in formats.
+ */
+export const INPUT_FIELD_TYPES = [
+  'digits',
+  'text',
+  'select',
+  'phone',
+  'hoyoverse_uid',
+  'supercell_tag',
+] as const;
 
 export const inputFieldTypeSchema = z.enum(INPUT_FIELD_TYPES).meta({ id: 'InputFieldType' });
 
@@ -246,12 +257,20 @@ export const selectOptionInputSchema = z
 
 export type SelectOption = z.infer<typeof selectOptionSchema>;
 
+/** A type whose value rules are fixed: no length bounds, no options. */
+const fixedFormat = {
+  minLength: z.null().default(null),
+  maxLength: z.null().default(null),
+  options: z.null().default(null),
+};
+
 const lengthBound = (max: number) => z.int().min(1).max(max).nullable().default(null);
 
 /**
  * A field's type with what that type allows (rule CT7): length bounds for `digits` (1–32) and
- * `text` (1–64), 2–50 options with unique values for `select`, nothing more for `phone`; options
- * as given (`selectOptionInputSchema`) or as stored (`selectOptionSchema`).
+ * `text` (1–64), 2–50 options with unique values for `select`, nothing more for `phone` and the
+ * built-in formats (S19 ID2, ID3); options as given (`selectOptionInputSchema`) or as stored
+ * (`selectOptionSchema`).
  */
 const inputFieldShape = (option: typeof selectOptionSchema | typeof selectOptionInputSchema) =>
   z
@@ -281,12 +300,9 @@ const inputFieldShape = (option: typeof selectOptionSchema | typeof selectOption
             'Expected unique option values',
           ),
       }),
-      z.object({
-        type: z.literal('phone'),
-        minLength: z.null().default(null),
-        maxLength: z.null().default(null),
-        options: z.null().default(null),
-      }),
+      z.object({ type: z.literal('phone'), ...fixedFormat }),
+      z.object({ type: z.literal('hoyoverse_uid'), ...fixedFormat }),
+      z.object({ type: z.literal('supercell_tag'), ...fixedFormat }),
     ])
     .refine(
       (shape) =>

@@ -512,6 +512,20 @@
       "when": 1792449312057,
       "tag": "0072_puzzling_cerebro",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792451037713,
+      "tag": "0073_chemical_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792451048669,
+      "tag": "0074_s19_player_check_guards",
+      "breakpoints": true
     }
   ]
 }

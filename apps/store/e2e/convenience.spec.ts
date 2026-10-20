@@ -116,6 +116,7 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     expiresAt: null,
     cancelReason: null,
     playerName: 'Lina_99',
+    playerRegion: null,
     deliveryStats: product.deliveryStats,
     expectedWithinMinutes: null,
     checkoutId: null,

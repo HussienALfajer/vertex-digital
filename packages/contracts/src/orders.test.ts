@@ -18,12 +18,15 @@ import {
   displaySypTotal,
   expectedWithinMinutes,
   firstPollAt,
+  hoyoverseServerOfOption,
+  hoyoverseServerOfUid,
   isOpenAttempt,
   isResendRefusal,
   isTerminalOrderStatus,
   manualReminderAt,
   maskCode,
   nextPollAt,
+  normalizeSupercellTag,
   ORDER_POLICY_DEFAULTS,
   ORDER_STATUSES,
   ORDER_TRANSITIONS,
@@ -41,11 +44,15 @@ import {
   pastHardLimit,
   playerCheckRequestSchema,
   playerCheckSchema,
+  playerRegionSchema,
   refundAmount,
+  regionMismatch,
   reservationCharge,
   resolveAttemptSchema,
   routeProfitable,
+  SERVER_MISMATCH,
   storeOrderHidesPrice,
+  updateGamePlayerCheckSchema,
 } from './orders.js';
 
 /** ADR 0004's transition table, plus `paid → refunded` (ADR 0013), written out independently. */
@@ -238,13 +245,47 @@ describe('reservations and player checks (S09)', () => {
     expect(
       playerCheckRequestSchema.parse({ productId: '0199a000-0000-7000-8000-000000000001' }),
     ).toEqual({ productId: '0199a000-0000-7000-8000-000000000001', fields: {} });
-    expect(playerCheckSchema.safeParse({ result: 'valid', playerName: null }).success).toBe(true);
+    expect(
+      playerCheckSchema.safeParse({ result: 'valid', playerName: null, region: null }).success,
+    ).toBe(true);
     expect(playerCheckSchema.safeParse({ result: 'unavailable', reason: 'quota' }).success).toBe(
       true,
     );
     expect(playerCheckSchema.safeParse({ result: 'unavailable', reason: 'busy' }).success).toBe(
       false,
     );
+  });
+
+  it('refuses a known region outside the allowed ones only (S19 PC3)', () => {
+    expect(regionMismatch('EU', ['ME', 'GLOBAL'])).toBe(true);
+    expect(regionMismatch('ME', ['ME', 'GLOBAL'])).toBe(false);
+    expect(regionMismatch(null, ['ME'])).toBe(false);
+    expect(regionMismatch('EU', [])).toBe(false);
+    expect(playerRegionSchema.parse(' me ')).toBe('ME');
+    expect(playerRegionSchema.safeParse('-ME').success).toBe(false);
+  });
+
+  it('bounds the player-check row of a game (S19 PC1)', () => {
+    const row = {
+      supplierCode: 'fazercards',
+      categoryId: 'pubg_mobile',
+      fieldMap: { player_id: 'player_id' },
+      enabled: true,
+    };
+    expect(updateGamePlayerCheckSchema.parse(row)).toEqual({
+      ...row,
+      optionMap: {},
+      allowedRegions: [],
+    });
+    expect(
+      updateGamePlayerCheckSchema.safeParse({ ...row, allowedRegions: ['me', 'ME'] }).success,
+    ).toBe(false);
+    expect(
+      updateGamePlayerCheckSchema.safeParse({
+        ...row,
+        allowedRegions: Array.from({ length: 21 }, (_, index) => `R${index}`),
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -499,6 +540,63 @@ describe('order field values (rule O5, S06 CT7)', () => {
         player_id: 'x',
       }).success,
     ).toBe(false);
+  });
+
+  it('checks the built-in formats (S19 ID2, ID3)', () => {
+    const formats = orderFieldValuesSchema([
+      field({ key: 'uid', type: 'hoyoverse_uid' }),
+      field({ key: 'tag', type: 'supercell_tag', required: false }),
+      field({
+        key: 'server',
+        type: 'select',
+        required: false,
+        options: [
+          { value: 'os_usa', labelAr: 'أمريكا' },
+          { value: 'os_euro', labelAr: 'أوروبا' },
+          { value: 'other', labelAr: 'غيره' },
+        ],
+      }),
+    ]);
+    expect(formats.parse({ uid: ' 712345678 ', tag: ' 2pp0o ', server: 'os_euro' })).toEqual({
+      uid: '712345678',
+      tag: '#2PP00',
+      server: 'os_euro',
+    });
+    expect(formats.parse({ uid: '1812345678', tag: '#yq9', server: 'other' })).toEqual({
+      uid: '1812345678',
+      tag: '#YQ9',
+      server: 'other',
+    });
+    const refused = (values: Record<string, string>) =>
+      formats
+        .safeParse(values)
+        .error?.issues.map((issue) => [
+          issue.path[0],
+          issue.code === 'custom' ? issue.params?.reason : undefined,
+        ]);
+    expect(refused({ uid: '71234567' })).toEqual([['uid', undefined]]);
+    expect(refused({ uid: '712345678', tag: '#AB' })).toEqual([['tag', undefined]]);
+    expect(refused({ uid: '612345678', server: 'os_euro' })).toEqual([['server', SERVER_MISMATCH]]);
+    expect(formats.parse({ uid: '712345678' })).toEqual({ uid: '712345678' });
+    expect(
+      orderFieldValuesSchema([field({ key: 'uid', type: 'hoyoverse_uid', required: false })]).parse(
+        {},
+      ),
+    ).toEqual({});
+    // A uid of no known server is never contradicted.
+    expect(formats.safeParse({ uid: '112345678', server: 'os_euro' }).success).toBe(true);
+  });
+
+  it('reads the server of a uid and of an option (S19 ID2)', () => {
+    expect(
+      ['612345678', '712345678', '812345678', '1812345678', '912345678', '512345678', '12'].map(
+        hoyoverseServerOfUid,
+      ),
+    ).toEqual(['america', 'europe', 'asia', 'asia', 'tw_hk_mo', null, null]);
+    expect(
+      ['os_usa', 'Europe', 'asia', 'tw-hk-mo', 'cn', 'us_eu'].map(hoyoverseServerOfOption),
+    ).toEqual(['america', 'europe', 'asia', 'tw_hk_mo', null, null]);
+    expect(normalizeSupercellTag('#abc')).toBe('#ABC');
   });
 
   it('bounds the purchase request', () => {

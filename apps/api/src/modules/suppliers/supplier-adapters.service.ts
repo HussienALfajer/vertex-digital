@@ -51,9 +51,12 @@ export class SupplierAdaptersService {
       : resolve('..', 'worker', env.FAKE_SUPPLIER_STATE_FILE);
   }
 
-  /** Rule PV1: this build has an adapter for the supplier that checks player ids. */
-  canValidatePlayer(code: SupplierCode): boolean {
-    return supplierChecksPlayers(code, { fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED });
+  /**
+   * Rule PV1: this build has an adapter for the supplier that checks player ids, as a game's
+   * provider (S19 PC1, the default) or by a route (S09 PV2).
+   */
+  canValidatePlayer(code: SupplierCode, by: 'route' | 'provider' = 'provider'): boolean {
+    return supplierChecksPlayers(code, { fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED, by });
   }
 
   /** The adapter with its newest credentials, or null: none in this build, or none set. */

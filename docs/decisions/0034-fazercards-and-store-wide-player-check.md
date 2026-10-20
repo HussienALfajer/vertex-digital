@@ -11,7 +11,7 @@ WDGZone does not check player ids, so the store never shows whose account a top-
 - A region outside the game's allowed regions **blocks** the purchase; "not found" stays a warning the customer confirms (ADR 0023).
 - Player-check calls do not count toward a supplier's routing health.
 - Routing order within a tier and a cost: shorter measured delivery time (median over the last 7 days, at least 10 delivered attempts), then route priority, then the supplier precedence `wdgzone`, `fazercards`, `fake`, `manual`.
-- A price-basis switch to another route that moves the price above the review threshold opens a review, as a same-route change does (Q17).
+- A price-basis switch to another route that moves the price above the review threshold opens a review, as a same-route change does (Q17). It applies between automatic routes; a move to or from a manual route (a fallback and its end) reprices at once (owner, 2026-10-20).
 
 ## Consequences
 - Customers see the account name and region before paying for every game FazerCards checks, even when WDGZone delivers.

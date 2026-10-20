@@ -4,6 +4,7 @@ import {
   CATALOG_IMAGE_MAX_BYTES,
   CATALOG_IMAGE_MAX_INPUT_PIXELS,
   type CatalogImage,
+  type CheckCategoryList,
   CONNECTION_TEST_INTERVAL_SECONDS,
   isNearbySupplierOrder,
   NEARBY_SUPPLIER_ORDER_MINUTES,
@@ -19,6 +20,7 @@ import {
   type SupplierTransactionPage,
   type SupplierWebhookSettings,
   type SupplierWebhookTest,
+  supplierChecksPlayers,
   supplierPanelCapabilities,
 } from '@vertex-digital/contracts';
 import {
@@ -83,6 +85,7 @@ export class SupplierLiveService {
   /** IM1's memory cache: the newest 500 thumbnails, by supplier, category and source URL. */
   private readonly thumbnails = new Map<string, Buffer>();
   private readonly statuses = new Map<string, PlatformStatus & { readAt: number }>();
+  private readonly checkCategoryLists = new Map<string, CheckCategoryList & { readAt: number }>();
   private readonly lastReads = new Map<string, number>();
 
   constructor(
@@ -269,6 +272,40 @@ export class SupplierLiveService {
     };
     this.statuses.set(supplier.id, { ...status, readAt: Date.now() });
     return status;
+  }
+
+  /**
+   * S19 PC1: the provider's player-check categories with their fields, read live and kept a
+   * minute; `CAPABILITY_UNSUPPORTED` for a supplier that checks none as a provider.
+   */
+  async checkCategories(code: string): Promise<CheckCategoryList> {
+    const supplier = await this.supplier(code);
+    const cached = this.checkCategoryLists.get(supplier.id);
+    if (cached && Date.now() - cached.readAt <= STATUS_TTL_MS) {
+      const { readAt: _, ...list } = cached;
+      return list;
+    }
+    const checks = supplierChecksPlayers(supplier.code, {
+      fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED,
+      by: 'provider',
+    });
+    if (!checks) {
+      throw new CodedException(409, 'CAPABILITY_UNSUPPORTED', 'The supplier checks no player ids');
+    }
+    const adapter = await this.adapters.connect(supplier);
+    if (!adapter) {
+      throw new CodedException(409, 'SUPPLIER_NOT_CONFIGURED', 'Set the credentials first');
+    }
+    const items = await this.call(supplier, 'list_categories', () => adapter.listCheckCategories());
+    const list: CheckCategoryList = {
+      items: items.map((item) => ({
+        categoryId: item.categoryId,
+        name: item.name,
+        fields: item.fields,
+      })),
+    };
+    this.checkCategoryLists.set(supplier.id, { ...list, readAt: Date.now() });
+    return list;
   }
 
   /** The status read in the last minute, or null (the supplier cards never call the supplier). */

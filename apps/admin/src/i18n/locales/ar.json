@@ -293,6 +293,7 @@
       "CODES_COUNT_MISMATCH": "عدد الأكواد لا يساوي عدد الوحدات المسلّمة. أدخل كوداً لكل وحدة.",
       "WEBHOOK_SIGNATURE_INVALID": "توقيع إشعار المورد غير صحيح.",
       "PLAYER_NOT_CONFIRMED": "المعرّف غير مؤكد ولم يؤكده العميل.",
+      "PLAYER_REGION_MISMATCH": "حساب اللاعب على منطقة لا تصلح لها هذه الباقة.",
       "RESERVATIONS_LIMIT_REACHED": "بلغ العميل الحد الأقصى من الطلبات المحجوزة.",
       "ORDER_NOT_CANCELLABLE": "لا يمكن إلغاء هذا الطلب في حالته الحالية.",
       "CHECKOUT_REFUSED": "رُفضت السلة كاملة لأن بعض بنودها لم تعد صالحة.",
@@ -656,6 +657,7 @@
       "catalog_game.restored": "استعادة لعبة",
       "catalog_game.reordered": "ترتيب الألعاب",
       "catalog_game.activated_all": "تفعيل كل باقات لعبة",
+      "catalog_game.player_check_set": "ضبط فحص اللاعب للعبة",
       "catalog_input_field.created": "إضافة حقل إدخال",
       "catalog_input_field.updated": "تعديل حقل إدخال",
       "catalog_input_field.archived": "أرشفة حقل إدخال",
@@ -1871,13 +1873,17 @@
         "digits": "أرقام",
         "text": "نص",
         "select": "قائمة خيارات",
-        "phone": "رقم هاتف"
+        "phone": "رقم هاتف",
+        "hoyoverse_uid": "رقم حساب HoYoverse",
+        "supercell_tag": "وسم Supercell"
       },
       "typeHints": {
         "digits": "أرقام 0-9 فقط، بطول بين الحدّين.",
         "text": "نص بلا رموز تحكم، بطول بين الحدّين.",
         "select": "خيار واحد من القائمة.",
-        "phone": "رقم هاتف دولي، سوري افتراضيًا."
+        "phone": "رقم هاتف دولي، سوري افتراضيًا.",
+        "hoyoverse_uid": "9 أو 10 أرقام؛ يُرفض خادم يخالف أول أرقامه.",
+        "supercell_tag": "# ثم 3 إلى 15 حرفًا من 0289CGJLPQRUVY، يُصحَّح O إلى 0."
       },
       "label": "العنوان الظاهر للعميل",
       "help": "نص المساعدة (اختياري)",

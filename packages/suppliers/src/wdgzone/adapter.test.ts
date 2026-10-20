@@ -424,6 +424,7 @@ describe('WdgzoneAdapter balance and players', () => {
       () => wdg.getWebhook(),
       () => wdg.setWebhook(),
       () => wdg.testWebhook(),
+      () => wdg.listCheckCategories(),
     ]) {
       await expect(call()).rejects.toMatchObject({ kind: 'definitive' });
     }

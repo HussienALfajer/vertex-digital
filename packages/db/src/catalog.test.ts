@@ -170,6 +170,11 @@ describe('catalog checks and indexes', () => {
       expect(await insert('a2', 'digits', 1, 33, null)).toBe('catalog_input_fields_bounds_check');
       expect(await insert('a3', 'text', 1, 64, null)).toBeNull();
       expect(await insert('a4', 'phone', 1, null, null)).toBe('catalog_input_fields_bounds_check');
+      // S19 ID2, ID3: the built-in formats take no bounds and no options.
+      expect(await insert('uid', 'hoyoverse_uid', null, null, null)).toBeNull();
+      expect(await insert('tag', 'supercell_tag', 1, null, null)).toBe(
+        'catalog_input_fields_bounds_check',
+      );
       const two = [
         { value: 'a', labelAr: 'أ' },
         { value: 'b', labelAr: 'ب' },

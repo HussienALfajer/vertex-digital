@@ -187,6 +187,7 @@ function order(n: keyof typeof ORDER_IDS, number: string, fields: Partial<AdminO
     cancelReason: null,
     playerCheck: 'none',
     playerName: null,
+    playerRegion: null,
     paidAt: at(46),
     deliveredAt: null,
     finishedAt: null,

@@ -17,7 +17,9 @@ import {
   catalogInputFields,
   catalogProducts,
   type Database,
+  type PlayerCheckProvider,
   type ProductRoutingState,
+  playerCheckProviders,
   productDeliveryStats,
   productRoutingStates,
 } from '@vertex-digital/db';
@@ -94,13 +96,15 @@ export class CatalogStoreService {
       this.rates.current(),
       this.images([game]),
     ]);
-    const [states, delivery] = await Promise.all([
+    const [states, delivery, providers] = await Promise.all([
       this.states(products),
       productDeliveryStats(
         this.db,
         products.map((product) => product.id),
       ),
+      playerCheckProviders(this.db, [game.id]),
     ]);
+    const provider = providers.get(game.id);
     const storeProducts = products.map((row): StoreProduct => {
       const state = states.get(row.id);
       const available = state?.availability === 'available';
@@ -120,7 +124,7 @@ export class CatalogStoreService {
             : null,
         savings: saving && { amountUsdUnits: saving.amountUsdUnits, percent: saving.percent },
         deliveryStats: delivery.get(row.id) ?? null,
-        playerCheck: row.kind === 'direct' && this.checksPlayers(state),
+        playerCheck: row.kind === 'direct' && this.checksPlayers(state, provider),
         regionAr: row.regionAr,
         redemptionAr: row.redemptionAr,
       };
@@ -254,9 +258,21 @@ export class CatalogStoreService {
 
   /**
    * Rule PV1 for the store's flag: a usable route on a supplier that checks player ids here, with
-   * a quota above 0 (today's usage aside: the buy box learns it from the check).
+   * a quota above 0 (today's usage aside: the buy box learns it from the check). S19 PC1: a game's
+   * enabled provider answers for every pack instead, its pause or outage aside (PC5).
    */
-  private checksPlayers(state: ProductRoutingState | undefined): boolean {
+  private checksPlayers(
+    state: ProductRoutingState | undefined,
+    provider: PlayerCheckProvider | undefined,
+  ): boolean {
+    if (provider?.enabled) {
+      return (
+        supplierChecksPlayers(provider.supplierCode, {
+          fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED,
+          by: 'provider',
+        }) && provider.validationDailyQuota > 0
+      );
+    }
     return (
       state?.routes.some(
         (route) =>

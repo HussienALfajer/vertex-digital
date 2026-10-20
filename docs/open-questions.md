@@ -13,7 +13,7 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 
 | Question | Answer | Date |
 |---|---|---|
-| Q17: a basis switch to another route above the review threshold | Held for review as a same-route change (S19 RT10, ADR 0034) | 2026-10-19 |
+| Q17: a basis switch to another route above the review threshold | Held for review as a same-route change, between automatic routes; a manual fallback and its end reprice at once (S19 RT10, ADR 0034; scope 2026-10-20) | 2026-10-19 |
 | Name, folder and package scope | VERTEX DIGITAL, `D:\vertex-digital`, `@vertex-digital/*` | 2026-10-06 |
 | Domains | Store and API `digital.vertexmedia.pro` (API under `/api`); admin `digital-admin.vertexmedia.pro` (ADR 0009) | 2026-10-06 |
 | Hosting | The existing VPS shared with Vertex Hub, PM2 + nginx (ADR 0009) | 2026-10-06 |

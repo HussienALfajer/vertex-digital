@@ -16,6 +16,7 @@ import type {
   SupplierAdapter,
   SupplierCapabilities,
   SupplierCategory,
+  SupplierCheckCategory,
   SupplierMoney,
   SupplierOffer,
   SupplierOfferQuote,
@@ -221,6 +222,10 @@ export class WdgzoneAdapter implements SupplierAdapter {
 
   testWebhook(): Promise<void> {
     return notSupported('WDGZone', 'test its webhook');
+  }
+
+  listCheckCategories(): Promise<SupplierCheckCategory[]> {
+    return notSupported('WDGZone', 'check player ids');
   }
 
   async listOffers(): Promise<SupplierOffer[]> {

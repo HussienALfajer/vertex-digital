@@ -502,6 +502,44 @@ describe('FazercardsAdapter player check (PC2)', () => {
     });
   });
 
+  it('lists the check categories with their fields (S19 PC1)', async () => {
+    const before = server.requests.length;
+    const games = fixture('validate-id-games') as { items: unknown[] };
+    server.reply({
+      body: {
+        ...games,
+        items: [
+          ...games.items,
+          { category_id: 'bad id!', name: 'Bad', fields: [] },
+          { category_id: 'no_fields' },
+          { category_id: 'odd_fields', fields: [{ key: 'bad key!' }] },
+        ],
+      },
+    });
+    const categories = await adapter().listCheckCategories();
+    expect(categories.map((item) => item.categoryId)).toEqual([
+      'pubg_mobile',
+      'free_fire',
+      'mobile_legends',
+      'magic_chess_gogo_global',
+      'magic_chess_gogo_ru',
+      'no_fields',
+    ]);
+    expect(categories[2]).toEqual({
+      categoryId: 'mobile_legends',
+      name: 'Mobile Legends',
+      fields: [
+        { key: 'player_id', label: 'User ID', type: 'text' },
+        { key: 'zone_id', label: 'Zone ID', type: 'text' },
+      ],
+    });
+    expect(categories[5]).toEqual({ categoryId: 'no_fields', name: 'no_fields', fields: [] });
+    expect(sentSince(before)[0]).toMatchObject({
+      method: 'GET',
+      path: '/api/v2/topups/validate-id',
+    });
+  });
+
   it('throws without a check category, and on a refusal (the check is then unavailable)', async () => {
     await expect(adapter().validatePlayer({ fields: {} })).rejects.toMatchObject({
       kind: 'definitive',

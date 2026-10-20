@@ -90,9 +90,13 @@ export interface PurchaseInput extends PurchaseCommon, LineInput {
   whenBalanceShort: 'refuse' | 'reserve';
 }
 
-/** What the cache knows of the order's fields (S09 rule PV8); `none`: no unexpired row. */
+/**
+ * What the cache knows of the order's fields (S09 rule PV8); `none`: no unexpired row. S19 PC3:
+ * `region_mismatch` when the account's region is outside the game's allowed ones.
+ */
 export type PlayerCheckLookup =
-  | { result: 'valid'; playerName: string | null }
+  | { result: 'valid'; playerName: string | null; region: string | null }
+  | { result: 'region_mismatch'; region: string }
   | { result: 'invalid' }
   | { result: 'none' };
 
@@ -181,7 +185,9 @@ export async function checkOrderFields(
     if (issue.code === 'unrecognized_keys') {
       for (const key of issue.keys) refusals[key] = 'unknown';
     } else {
-      refusals[String(issue.path[0])] ??= issue.code;
+      // S19 ID2: a refinement names its own reason (`server_mismatch`).
+      const reason = issue.code === 'custom' ? issue.params?.reason : undefined;
+      refusals[String(issue.path[0])] ??= typeof reason === 'string' ? reason : issue.code;
     }
   }
   return { ok: false, refusals };
@@ -213,6 +219,7 @@ export interface PreparedLine {
   fields: Record<string, string>;
   playerCheck: PlayerCheckState;
   playerName: string | null;
+  playerRegion: string | null;
   gift: { senderName: string | null; message: string | null } | null;
   savePlayer: { label: string } | null;
 }
@@ -266,9 +273,11 @@ export async function prepareLine(
   }
   const fields = checked.fields;
 
-  // S09 rule PV8: a player id not known valid needs the customer's confirmation.
+  // S09 rule PV8: a player id not known valid needs the customer's confirmation. S19 PC3: an
+  // account outside the game's regions is refused, confirmed or not.
   let playerCheck: PlayerCheckState = 'none';
   let playerName: string | null = null;
+  let playerRegion: string | null = null;
   const lookup = await common.playerCheck(tx, {
     productId: product.id,
     gameId: product.gameId,
@@ -276,9 +285,15 @@ export async function prepareLine(
     isTest: common.isTest,
     fields,
   });
+  if (lookup?.result === 'region_mismatch') {
+    throw new OrderError('PLAYER_REGION_MISMATCH', 'The account is on another region', {
+      region: lookup.region,
+    });
+  }
   if (lookup?.result === 'valid') {
     playerCheck = 'valid';
     playerName = lookup.playerName;
+    playerRegion = lookup.region;
   } else if (lookup) {
     if (!line.confirmPlayer) {
       throw new OrderError('PLAYER_NOT_CONFIRMED', 'The player id is not confirmed', {
@@ -299,6 +314,7 @@ export async function prepareLine(
     fields,
     playerCheck,
     playerName,
+    playerRegion,
     gift: line.gift
       ? { senderName: line.gift.senderName || null, message: line.gift.message || null }
       : null,
@@ -341,6 +357,7 @@ export function lineValues(line: PreparedLine) {
     fields: line.fields,
     playerCheck: line.playerCheck,
     playerName: line.playerName,
+    playerRegion: line.playerRegion,
     isGift: line.gift !== null,
     giftSenderName: line.gift?.senderName ?? null,
     giftMessage: line.gift?.message ?? null,

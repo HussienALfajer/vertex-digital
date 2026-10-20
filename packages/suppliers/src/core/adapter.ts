@@ -180,6 +180,13 @@ export interface PlayerValidation {
   region?: string;
 }
 
+/** S19 PC1: a player-check category of a supplier that checks by one, and its fields. */
+export interface SupplierCheckCategory {
+  categoryId: string;
+  name: string;
+  fields: FieldSpec[];
+}
+
 /** Input field values of an order, keyed by the supplier's own field names (ADR 0005). */
 export type OrderFields = Record<string, string>;
 
@@ -295,12 +302,17 @@ export interface SupplierAdapter {
   readonly capabilities: SupplierCapabilities;
   listOffers(): Promise<SupplierOffer[]>;
   getBalance(): Promise<SupplierMoney>;
-  /** `categoryId`: the supplier's own check category, for suppliers that check by one (S19 PC2). */
+  /**
+   * `offerId`: the route's offer (S09 PV2); `categoryId`: the supplier's own check category, for
+   * suppliers that check by one (S19 PC1, PC2).
+   */
   validatePlayer(input: {
-    offerId: string;
+    offerId?: string;
     categoryId?: string;
     fields: OrderFields;
   }): Promise<PlayerValidation>;
+  /** S19 PC1, behind `validatePlayer`: the check categories it offers; throws a `SupplierError`. */
+  listCheckCategories(): Promise<SupplierCheckCategory[]>;
   /** Never throws: every failure is classified into the outcome. */
   placeOrder(request: PlaceOrderRequest): Promise<SupplierOutcome>;
   /**
