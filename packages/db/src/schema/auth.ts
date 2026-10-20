@@ -1,3 +1,4 @@
+import { ACCOUNT_TYPES } from '@vertex-digital/contracts';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -5,6 +6,7 @@ import {
   check,
   index,
   integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -13,6 +15,9 @@ import {
 } from 'drizzle-orm/pg-core';
 import { archivedAt, id, timestamps } from './columns.js';
 import { contentPageVersions } from './content.js';
+import { priceLists } from './price-lists.js';
+
+export const accountTypeEnum = pgEnum('account_type', ACCOUNT_TYPES);
 
 /*
  * Customer identity, owned by the api `auth` module: the tables of the customer Better Auth
@@ -40,6 +45,10 @@ export const customers = pgTable(
     /** S14 TA2: the terms and privacy versions in force at sign-up; null before publication. */
     termsVersionId: uuid('terms_version_id').references(() => contentPageVersions.id),
     privacyVersionId: uuid('privacy_version_id').references(() => contentPageVersions.id),
+    /** S20 AT1: written only by the `merchants` and `pricing` admin paths, customer locked. */
+    accountType: accountTypeEnum('account_type').notNull().default('customer'),
+    /** S20 AT1: an assigned list; null is the type's default (`effectivePriceListId`). */
+    priceListId: uuid('price_list_id').references(() => priceLists.id),
     ...timestamps(),
     archivedAt: archivedAt(),
   },
@@ -47,6 +56,7 @@ export const customers = pgTable(
     index('customers_phone_idx').on(table.phone),
     index('customers_terms_version_id_idx').on(table.termsVersionId),
     index('customers_privacy_version_id_idx').on(table.privacyVersionId),
+    index('customers_price_list_id_idx').on(table.priceListId),
   ],
 );
 

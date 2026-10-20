@@ -97,13 +97,17 @@ The migrate step prints "Migrations are up to date." whether it applied migratio
 
 The previous release keeps running until the switch, and a rollback runs old code against the migrated database. Write migrations as expand then contract: add columns and tables first, remove old ones in a later release once no deployed code uses them.
 
+### One-way steps after a deploy
+
+- **S20 price lists:** once the S20 release is healthy, run `pnpm --filter @vertex-digital/api pricing:reprice-lists` as the site user in the current release (the commands table in `AGENTS.md`). It adds the wholesale and cost rules and every list's prices. Until it runs, no list but retail is priced and a rollback stays safe; **after it, going back to a release before S20 needs `restore`, not `rollback`**: that code reads the newest price row of any list and would sell at the cost list's price.
+
 ## Roll back
 
 ```bash
 ssh vertex "vertexdigital-deploy rollback"
 ```
 
-Switches to the previous release and checks it; if it is unhealthy, switches back to the one that was running. Migrations are not reverted. To restore the database as it was before a deploy, restore the snapshot named after that release (as the owner role; the password reaches `pg_restore` through its environment, never its arguments):
+Switches to the previous release and checks it; if it is unhealthy, switches back to the one that was running. Migrations are not reverted. Never roll back past a one-way step that has run ("One-way steps after a deploy"): restore instead. To restore the database as it was before a deploy, restore the snapshot named after that release (as the owner role; the password reaches `pg_restore` through its environment, never its arguments):
 
 ```bash
 ssh vertex "vertexdigital-deploy restore <release>"

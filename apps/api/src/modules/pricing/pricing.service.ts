@@ -18,6 +18,7 @@ import {
   type PricingPreviewRequest,
   type ProductPricePage,
   priceFromCost,
+  ROOT_PRICE_LIST_IDS,
   resolveMarginRule,
   type SetMarginRule,
   savings,
@@ -37,6 +38,7 @@ import {
   type ReviewListRow,
   type ReviewRow,
   recordAudit,
+  repriceListsAfterRetail,
   repriceProducts,
   type Transaction,
 } from '@vertex-digital/db';
@@ -157,6 +159,7 @@ export class PricingService {
       .from(marginRules)
       .where(
         and(
+          eq(marginRules.priceListId, ROOT_PRICE_LIST_IDS.retail),
           eq(marginRules.scope, input.scope),
           targetId === null ? isNull(marginRules.targetId) : eq(marginRules.targetId, targetId),
           isNull(marginRules.archivedAt),
@@ -171,7 +174,13 @@ export class PricingService {
     if (current) {
       await tx.update(marginRules).set(after).where(eq(marginRules.id, ruleId));
     } else {
-      await tx.insert(marginRules).values({ id: ruleId, scope: input.scope, targetId, ...after });
+      await tx.insert(marginRules).values({
+        id: ruleId,
+        priceListId: ROOT_PRICE_LIST_IDS.retail,
+        scope: input.scope,
+        targetId,
+        ...after,
+      });
     }
     await this.audit(tx, adminId, meta, ruleId, 'margin_rule.set', {
       scope: input.scope,
@@ -194,7 +203,13 @@ export class PricingService {
       const [row] = await tx
         .select()
         .from(marginRules)
-        .where(and(eq(marginRules.id, id), isNull(marginRules.archivedAt)))
+        .where(
+          and(
+            eq(marginRules.id, id),
+            eq(marginRules.priceListId, ROOT_PRICE_LIST_IDS.retail),
+            isNull(marginRules.archivedAt),
+          ),
+        )
         .for('no key update');
       if (!row) throw notFound('margin rule');
       if (row.scope === 'global') {
@@ -401,7 +416,12 @@ export class PricingService {
     }
     const { current } = state;
     const unchanged = current?.priceUsdUnits === target && current.routeId === state.basis.id;
-    if (!unchanged) await appendProductPrice(tx, state, options.cause, review.id);
+    const retailRow =
+      unchanged && current
+        ? current
+        : await appendProductPrice(tx, state, options.cause, review.id);
+    // S20 RP2: one review holds every list; deciding it reprices them all with the same cause.
+    await repriceListsAfterRetail(tx, [{ state, retailRow }], options.cause, review.id);
     await this.close(tx, actor, review, options.status, target);
   }
 
@@ -490,7 +510,12 @@ export class PricingService {
     return this.db
       .select()
       .from(marginRules)
-      .where(isNull(marginRules.archivedAt))
+      .where(
+        and(
+          eq(marginRules.priceListId, ROOT_PRICE_LIST_IDS.retail),
+          isNull(marginRules.archivedAt),
+        ),
+      )
       .orderBy(asc(marginRules.createdAt));
   }
 

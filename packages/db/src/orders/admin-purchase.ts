@@ -2,6 +2,7 @@ import {
   type AdminOrderPurpose,
   adminOrderShape,
   ownerCapRemaining,
+  ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
@@ -150,7 +151,14 @@ export async function adminPurchaseOrder(
   const line = await prepareLine(
     tx,
     context,
-    { ...input, isTest, allowPaused: shape.payer === 'owner' },
+    {
+      ...input,
+      isTest,
+      allowPaused: shape.payer === 'owner',
+      // S20 PO4: on behalf charges the customer's list; walk-in and owner-funded take retail.
+      priceListId:
+        customer && shape.payer === 'customer' ? customer.priceListId : ROOT_PRICE_LIST_IDS.retail,
+    },
     { ...input, savePlayer: undefined, gift: undefined },
     product,
   );

@@ -1,5 +1,6 @@
 import {
   type CustomerLimitOverrides,
+  effectivePriceListId,
   NO_LIMIT_OVERRIDES,
   type PurchaseCapBreach,
   purchaseCapBreach,
@@ -20,6 +21,8 @@ import { customerLimits, customers, orders } from '../schema/index.js';
 export interface PurchasingCustomer {
   id: string;
   isTest: boolean;
+  /** S20 AT1: the list the customer pays (`effectivePriceListId`), read under the lock (AT3). */
+  priceListId: string;
   /** The daily purchase cap (LM4), or null for none. */
   capUnits: number | null;
 }
@@ -54,6 +57,8 @@ export async function lockActiveCustomer(
       isTest: customers.isTest,
       frozenAt: customers.frozenAt,
       archivedAt: customers.archivedAt,
+      accountType: customers.accountType,
+      priceListId: customers.priceListId,
     })
     .from(customers)
     .where(eq(customers.id, customerId))
@@ -63,7 +68,12 @@ export async function lockActiveCustomer(
     throw new OrderError('ACCOUNT_FROZEN', 'The account is frozen');
   }
   const overrides = await customerLimitOverrides(tx, customerId);
-  return { id: customerId, isTest: customer.isTest, capUnits: overrides.dailyPurchaseUsdUnits };
+  return {
+    id: customerId,
+    isTest: customer.isTest,
+    priceListId: effectivePriceListId(customer),
+    capUnits: overrides.dailyPurchaseUsdUnits,
+  };
 }
 
 /**

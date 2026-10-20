@@ -1,16 +1,18 @@
 import {
   DELIVERY_MEASURE_DAYS,
   DELIVERY_MEASURE_MIN_DELIVERIES,
+  listPrice,
   type MarginRuleValues,
   orderRoutes,
+  type PriceSource,
   type ProductAvailability,
   type ProductKind,
   priceBasis,
-  priceFromCost,
   productAvailability,
+  ROOT_PRICE_LIST_IDS,
   type RouteTier,
   type RouteUnusableReason,
-  resolveMarginRule,
+  resolveListEntry,
   routeTier,
   routeUnusableReason,
   STORE_SWITCH_DEFAULTS,
@@ -30,6 +32,7 @@ import {
   catalogProducts,
   fulfilmentAttempts,
   marginRules,
+  priceListFixedPrices,
   priceReviews,
   productPrices,
   productRoutes,
@@ -125,11 +128,22 @@ export interface ProductRoutingState {
   basis: RouteState | null;
   /** S17 WR4: a priced product with usable routes but none that counts: the price stays. */
   priceHeld: boolean;
+  /** Retail's rule (S20 LS4): the one that applies, or a retail fixed price's guarding rule. */
   rule: { id: string; values: MarginRuleValues };
-  /** The price the basis gives now (rule P1); null with no usable route. */
+  /** The retail price the basis gives now (rule P1, S20 LP1); null with no usable route. */
   targetPriceUsdUnits: number | null;
+  /** S20 LP1: where the retail target comes from, and the retail fixed price it uses. */
+  targetSource: PriceSource;
+  targetFixedPriceId: string | null;
+  /** S20: the list read (`priceListId`, retail by default) and its newest price row there. */
+  priceListId: string;
   current: PriceRow | null;
+  /** The minimum margin guarding `current` (P6): retail's rule, or a list row's own (S20 PO1). */
+  currentMinMarginUsdUnits: number;
+  /** The newest retail row; `current` when the list read is retail. */
+  retailCurrent: PriceRow | null;
   openReview: ReviewRow | null;
+  /** On the list read (S20 PO1). */
   availability: ProductAvailability;
 }
 
@@ -300,57 +314,101 @@ export function forgetDeliveryMeasure(): void {
   deliveryMeasure = null;
 }
 
+/** The newest price row of each product on a list (S20: one row set per list). */
+export function newestListPrices(db: Executor, productIds: readonly string[], priceListId: string) {
+  return db
+    .selectDistinctOn([productPrices.productId])
+    .from(productPrices)
+    .where(
+      and(
+        inArray(productPrices.productId, [...productIds]),
+        eq(productPrices.priceListId, priceListId),
+      ),
+    )
+    .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id));
+}
+
 /**
  * The routing state of each product (rules RT4–RT6, P1, P6), keyed by product id. Unknown ids are
  * left out. Reads only: the repricing write path locks the products first. S19 RT11: routes of one
- * tier and cost are ordered by their suppliers' measured delivery time (RT12).
+ * tier and cost are ordered by their suppliers' measured delivery time (RT12). S20: the target is
+ * retail's (LS4 with retail's fixed prices, LP1); `current` and the availability are the given
+ * list's (PO1), retail by default.
  */
 export async function productRoutingStates(
   db: Executor,
   productIds: readonly string[],
   context: RoutingContext,
+  priceListId: string = ROOT_PRICE_LIST_IDS.retail,
 ): Promise<Map<string, ProductRoutingState>> {
   const states = new Map<string, ProductRoutingState>();
   if (productIds.length === 0) return states;
   const ids = [...new Set(productIds)];
-  const [products, routeRows, supplierList, rules, prices, reviews, policy, medians] =
-    await readAll(db, [
-      () =>
-        db
-          .select({
-            product: catalogProducts,
-            gameStatus: catalogGames.status,
-            gameArchivedAt: catalogGames.archivedAt,
-            categoryId: catalogGames.categoryId,
-            categoryArchivedAt: catalogCategories.archivedAt,
-          })
-          .from(catalogProducts)
-          .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
-          .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
-          .where(inArray(catalogProducts.id, ids)),
-      () =>
-        db
-          .select({ route: productRoutes, offer: supplierOffers })
-          .from(productRoutes)
-          .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
-          .where(inArray(productRoutes.productId, ids))
-          .orderBy(asc(productRoutes.createdAt)),
-      () => supplierStates(db, context),
-      () => db.select().from(marginRules).where(isNull(marginRules.archivedAt)),
-      () =>
-        db
-          .selectDistinctOn([productPrices.productId])
-          .from(productPrices)
-          .where(inArray(productPrices.productId, ids))
-          .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id)),
-      () =>
-        db
-          .select()
-          .from(priceReviews)
-          .where(and(inArray(priceReviews.productId, ids), eq(priceReviews.status, 'open'))),
-      () => currentSupplierPolicy(db),
-      () => measuredDelivery(db, context.now),
-    ]);
+  const retail = priceListId === ROOT_PRICE_LIST_IDS.retail;
+  const [
+    products,
+    routeRows,
+    supplierList,
+    rules,
+    fixedPrices,
+    prices,
+    listPrices,
+    reviews,
+    policy,
+    medians,
+  ] = await readAll(db, [
+    () =>
+      db
+        .select({
+          product: catalogProducts,
+          gameStatus: catalogGames.status,
+          gameArchivedAt: catalogGames.archivedAt,
+          categoryId: catalogGames.categoryId,
+          categoryArchivedAt: catalogCategories.archivedAt,
+        })
+        .from(catalogProducts)
+        .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
+        .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
+        .where(inArray(catalogProducts.id, ids)),
+    () =>
+      db
+        .select({ route: productRoutes, offer: supplierOffers })
+        .from(productRoutes)
+        .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
+        .where(inArray(productRoutes.productId, ids))
+        .orderBy(asc(productRoutes.createdAt)),
+    () => supplierStates(db, context),
+    () =>
+      db
+        .select()
+        .from(marginRules)
+        .where(
+          and(
+            eq(marginRules.priceListId, ROOT_PRICE_LIST_IDS.retail),
+            isNull(marginRules.archivedAt),
+          ),
+        ),
+    () =>
+      db
+        .select()
+        .from(priceListFixedPrices)
+        .where(
+          and(
+            eq(priceListFixedPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
+            inArray(priceListFixedPrices.productId, ids),
+            isNull(priceListFixedPrices.archivedAt),
+          ),
+        ),
+    () => newestListPrices(db, ids, ROOT_PRICE_LIST_IDS.retail),
+    () => (retail ? Promise.resolve([]) : newestListPrices(db, ids, priceListId)),
+    () =>
+      db
+        .select()
+        .from(priceReviews)
+        .where(and(inArray(priceReviews.productId, ids), eq(priceReviews.status, 'open'))),
+    () => currentSupplierPolicy(db),
+    () => measuredDelivery(db, context.now),
+  ]);
   const gameIds = [...new Set(products.map((row) => row.product.gameId))];
   const fields =
     gameIds.length === 0
@@ -367,6 +425,7 @@ export async function productRoutingStates(
           );
   const supplierOf = new Map(supplierList.map((supplier) => [supplier.id, supplier]));
   const priceOf = new Map(prices.map((row) => [row.productId, row]));
+  const listPriceOf = retail ? priceOf : new Map(listPrices.map((row) => [row.productId, row]));
   const reviewOf = new Map(reviews.map((row) => [row.productId, row]));
   const keysOf = new Map<string, string[]>();
   const selectsOf = new Map<string, Record<string, string[]>>();
@@ -444,21 +503,25 @@ export async function productRoutingStates(
       ...routes.filter((route) => route.unusableReason !== null && route.archivedAt === null),
       ...routes.filter((route) => route.archivedAt !== null),
     ];
-    const current = priceOf.get(product.id) ?? null;
-    const basis = priceBasis(usable, current !== null);
-    const ruleRow = resolveMarginRule(rules, {
-      productId: product.id,
-      gameId: product.gameId,
-      categoryId: where.categoryId,
-    });
-    const rule = {
-      id: ruleRow.id,
-      values: {
-        percentBp: ruleRow.percentBp,
-        fixedUsdUnits: ruleRow.fixedUsdUnits,
-        minMarginUsdUnits: ruleRow.minMarginUsdUnits,
-      },
-    };
+    const retailCurrent = priceOf.get(product.id) ?? null;
+    const current = listPriceOf.get(product.id) ?? null;
+    const basis = priceBasis(usable, retailCurrent !== null);
+    const entry = resolveListEntry(
+      [ROOT_PRICE_LIST_IDS.retail],
+      { rules, fixedPrices },
+      { productId: product.id, gameId: product.gameId, categoryId: where.categoryId },
+    );
+    const rule = { id: entry.rule.id, values: ruleValues(entry.rule) };
+    const target = basis
+      ? listPrice(
+          basis.costUsdUnits as number,
+          { fixedPriceUsdUnits: entry.fixed?.priceUsdUnits ?? null, rule: rule.values },
+          null,
+        )
+      : null;
+    const currentMinMarginUsdUnits = retail
+      ? rule.values.minMarginUsdUnits
+      : (current?.minMarginUsdUnits ?? rule.values.minMarginUsdUnits);
     states.set(product.id, {
       productId: product.id,
       nameAr: product.nameAr,
@@ -469,8 +532,13 @@ export async function productRoutingStates(
       basis,
       priceHeld: basis === null && usable.length > 0,
       rule,
-      targetPriceUsdUnits: basis ? priceFromCost(basis.costUsdUnits as number, rule.values) : null,
+      targetPriceUsdUnits: target?.priceUsdUnits ?? null,
+      targetSource: target?.source ?? 'rule',
+      targetFixedPriceId: target?.source === 'rule' ? null : (entry.fixed?.id ?? null),
+      priceListId,
       current,
+      currentMinMarginUsdUnits,
+      retailCurrent,
       openReview: reviewOf.get(product.id) ?? null,
       availability: productAvailability({
         categoryArchived: where.categoryArchivedAt !== null,
@@ -479,16 +547,26 @@ export async function productRoutingStates(
         gameStatus: where.gameStatus,
         productStatus: product.status,
         price: current
-          ? {
-              priceUsdUnits: current.priceUsdUnits,
-              minMarginUsdUnits: rule.values.minMarginUsdUnits,
-            }
+          ? { priceUsdUnits: current.priceUsdUnits, minMarginUsdUnits: currentMinMarginUsdUnits }
           : null,
         usableRouteCostsUsdUnits: usable.map((route) => route.costUsdUnits as number),
       }),
     });
   }
   return states;
+}
+
+/** A margin rule row's values (rule PR1). */
+export function ruleValues(row: {
+  percentBp: number;
+  fixedUsdUnits: number;
+  minMarginUsdUnits: number;
+}): MarginRuleValues {
+  return {
+    percentBp: row.percentBp,
+    fixedUsdUnits: row.fixedUsdUnits,
+    minMarginUsdUnits: row.minMarginUsdUnits,
+  };
 }
 
 /** Products with an unarchived route to one of these suppliers, to reprice after their change. */
@@ -515,7 +593,8 @@ export async function cheapestAvailablePrice(
 ): Promise<number | null> {
   const priced = await db
     .selectDistinct({ productId: productPrices.productId })
-    .from(productPrices);
+    .from(productPrices)
+    .where(eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail));
   const states = await productRoutingStates(
     db,
     priced.map((row) => row.productId),

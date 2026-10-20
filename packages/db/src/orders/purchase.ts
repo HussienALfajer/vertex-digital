@@ -117,14 +117,20 @@ const uniqueViolation = (error: unknown, constraint: string): boolean => {
   return pg.code === '23505' && pg.constraint === constraint;
 };
 
-/** The product's routing state now; routes of a supplier this build cannot use stay out (SP1). */
+/**
+ * The product's routing state now, with its price on the list (S20 PO1, PO2); routes of a supplier
+ * this build cannot use stay out (SP1).
+ */
 export async function routingNow(
   tx: Transaction,
   productId: string,
   now: Date,
   fakeEnabled: boolean,
+  priceListId: string,
 ): Promise<ProductRoutingState | undefined> {
-  return (await productRoutingStates(tx, [productId], { now, fakeEnabled })).get(productId);
+  return (await productRoutingStates(tx, [productId], { now, fakeEnabled }, priceListId)).get(
+    productId,
+  );
 }
 
 /**
@@ -146,7 +152,7 @@ export function availabilityNow(usable: ProductRoutingState, isTest: boolean, al
           price: current
             ? {
                 priceUsdUnits: current.priceUsdUnits,
-                minMarginUsdUnits: usable.rule.values.minMarginUsdUnits,
+                minMarginUsdUnits: usable.currentMinMarginUsdUnits,
               }
             : null,
         },
@@ -213,7 +219,8 @@ type ProductRow = typeof catalogProducts.$inferSelect;
 /** A line that passed its checks: the price in force, the fields as stored, the player check. */
 export interface PreparedLine {
   product: ProductRow;
-  price: { id: string; priceUsdUnits: number; minMarginUsdUnits: number };
+  /** S20 PO2: the row of the customer's list, and the list. */
+  price: { id: string; priceUsdUnits: number; minMarginUsdUnits: number; priceListId: string };
   quantity: number;
   total: number;
   fields: Record<string, string>;
@@ -235,13 +242,21 @@ export async function prepareLine(
   context: Pick<OrderContext, 'now'>,
   common: Pick<PurchaseCommon, 'fakeEnabled' | 'playerCheck'> & {
     isTest: boolean;
+    /** S20 PO2: the list the line is charged on (the customer's effective list, PO4). */
+    priceListId: string;
     /** S16 rule AP5: an owner-funded admin order may buy a paused pack. */
     allowPaused?: boolean;
   },
   line: LineInput,
   product: ProductRow,
 ): Promise<PreparedLine> {
-  const usable = await routingNow(tx, product.id, context.now, common.fakeEnabled);
+  const usable = await routingNow(
+    tx,
+    product.id,
+    context.now,
+    common.fakeEnabled,
+    common.priceListId,
+  );
   if (!usable) throw new OrderError('NOT_FOUND', 'No such product');
   const current = usable.current;
   const availability = availabilityNow(usable, common.isTest, common.allowPaused);
@@ -308,6 +323,7 @@ export async function prepareLine(
       id: current.id,
       priceUsdUnits: current.priceUsdUnits,
       minMarginUsdUnits: current.minMarginUsdUnits,
+      priceListId: common.priceListId,
     },
     quantity: line.quantity,
     total: orderTotal(current.priceUsdUnits, line.quantity),
@@ -354,6 +370,7 @@ export function lineValues(line: PreparedLine) {
     totalUsdUnits: line.total,
     priceId: line.price.id,
     minMarginUsdUnits: line.price.minMarginUsdUnits,
+    priceListId: line.price.priceListId,
     fields: line.fields,
     playerCheck: line.playerCheck,
     playerName: line.playerName,
@@ -406,7 +423,7 @@ export async function purchaseOrder(
   const line = await prepareLine(
     tx,
     context,
-    { ...input, isTest: customer.isTest },
+    { ...input, isTest: customer.isTest, priceListId: customer.priceListId },
     input,
     product,
   );

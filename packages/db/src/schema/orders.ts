@@ -14,6 +14,7 @@ import {
   PLAYER_CHECK_STATES,
   RECEIPT_PLAYER_DISPLAYS,
   REFUND_REASONS,
+  ROOT_PRICE_LIST_IDS,
   type RouteCandidate,
   SHARE_KINDS,
   SHARE_REVOKERS,
@@ -37,6 +38,7 @@ import { customers } from './auth.js';
 import { catalogGames, catalogProducts, productKindEnum } from './catalog.js';
 import { amountUnits, bytea, id, timestamps } from './columns.js';
 import { storedFiles } from './files.js';
+import { priceLists } from './price-lists.js';
 import { productPrices } from './pricing.js';
 import { exchangeRates } from './rates.js';
 import { productRoutes, supplierOffers, suppliers } from './suppliers.js';
@@ -116,6 +118,11 @@ export const orders = pgTable(
       .notNull()
       .references(() => productPrices.id),
     minMarginUsdUnits: amountUnits('min_margin_usd_units').notNull(),
+    /** S20 PO2: the list charged (walk-in and owner-funded orders: retail, PO4). */
+    priceListId: uuid('price_list_id')
+      .notNull()
+      .default(ROOT_PRICE_LIST_IDS.retail)
+      .references(() => priceLists.id),
     /** Input field key → value, trimmed (rule O5). */
     fields: jsonb('fields').$type<Record<string, string>>().notNull(),
     /** The pounds shown at purchase (rule O6): display only, no SYP moves. */
@@ -182,6 +189,7 @@ export const orders = pgTable(
     index('orders_product_id_idx').on(table.productId),
     index('orders_game_id_idx').on(table.gameId),
     index('orders_price_id_idx').on(table.priceId),
+    index('orders_price_list_id_idx').on(table.priceListId),
     index('orders_display_rate_id_idx').on(table.displayRateId),
     /** S09 rules RS2, RS4 (by customer) and RS7 (by deadline): open reservations. */
     index('orders_awaiting_customer_id_idx')

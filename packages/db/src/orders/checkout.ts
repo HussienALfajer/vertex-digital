@@ -107,7 +107,13 @@ export async function checkoutOrders(
     try {
       if (!product) throw new OrderError('NOT_FOUND', 'No such product');
       prepared.push(
-        await prepareLine(tx, context, { ...input, isTest: customer.isTest }, line, product),
+        await prepareLine(
+          tx,
+          context,
+          { ...input, isTest: customer.isTest, priceListId: customer.priceListId },
+          line,
+          product,
+        ),
       );
     } catch (error) {
       if (!(error instanceof OrderError)) throw error;

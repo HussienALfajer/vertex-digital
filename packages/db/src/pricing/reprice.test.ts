@@ -1,5 +1,5 @@
-import { priceFromCost } from '@vertex-digital/contracts';
-import { desc, eq, sql } from 'drizzle-orm';
+import { priceFromCost, ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../client.js';
 import { newId } from '../id.js';
@@ -38,12 +38,17 @@ beforeAll(async () => {
 });
 
 const categories: string[] = [];
+/** S20: custom lists made here, archived at the end so later repricings skip them. */
+const customLists: string[] = [];
 
 // Archived at the end: no product of these tests stays available to other tests (rule P9 reads
 // the cheapest available product).
 afterAll(async () => {
   await pool.query('update catalog_categories set archived_at = now() where id = any($1::uuid[])', [
     categories,
+  ]);
+  await pool.query('update price_lists set archived_at = now() where id = any($1::uuid[])', [
+    customLists,
   ]);
   await connection.close();
 });
@@ -105,14 +110,28 @@ const setCost = (offerId: string, costUsdUnits: number | null) =>
     [offerId, costUsdUnits],
   );
 
-const reprice = (productIds: string[], cause: 'cost_sync' | 'route_change' | 'rule_change') =>
-  db.transaction((tx) => repriceProducts(tx, { productIds, cause, context: context() }));
+/** Retail's counts; the S20 block reads the other lists' rows itself. */
+const reprice = async (
+  productIds: string[],
+  cause: 'cost_sync' | 'route_change' | 'rule_change' | 'list_change',
+) => {
+  const { repriced, reviewsOpened } = await db.transaction((tx) =>
+    repriceProducts(tx, { productIds, cause, context: context() }),
+  );
+  return { repriced, reviewsOpened };
+};
 
+/** The retail list's rows, newest first. */
 const prices = (productId: string) =>
   db
     .select()
     .from(productPrices)
-    .where(eq(productPrices.productId, productId))
+    .where(
+      and(
+        eq(productPrices.productId, productId),
+        eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
+      ),
+    )
     .orderBy(desc(productPrices.createdAt));
 
 const openReview = async (productId: string) =>
@@ -508,5 +527,262 @@ describe('price basis routes (S17 WR3–WR5, WR8, WR11)', () => {
     const mapped = (await mappedStockOffers(db)).map((row) => row.id);
     expect(mapped).toContain(dearOffer);
     expect(mapped).not.toContain(cheapOffer);
+  });
+});
+
+describe('price lists (S20 RP1, RP2, LP1–LP4)', () => {
+  const { retail, wholesale, cost } = ROOT_PRICE_LIST_IDS;
+
+  /** The newest row of each list for the product. */
+  const listRows = async (productId: string) => {
+    const rows = await db
+      .select()
+      .from(productPrices)
+      .where(eq(productPrices.productId, productId))
+      .orderBy(desc(productPrices.createdAt), desc(productPrices.id));
+    const newest = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) if (!newest.has(row.priceListId)) newest.set(row.priceListId, row);
+    return { newest, count: rows.length };
+  };
+
+  const repriceAll = (productIds: string[], cause: 'route_change' | 'cost_sync' | 'list_change') =>
+    db.transaction((tx) => repriceProducts(tx, { productIds, cause, context: context() }));
+
+  async function customList(parentListId: string) {
+    const id = newId();
+    customLists.push(id);
+    await pool.query(
+      `insert into price_lists (id, kind, name, parent_list_id) values ($1, 'custom', $2, $3)`,
+      [id, `قائمة ${unique()}`, parentListId],
+    );
+    return id;
+  }
+
+  async function listRule(
+    priceListId: string,
+    scope: 'global' | 'product',
+    targetId: string | null,
+    values: { percentBp: number; minMarginUsdUnits: number },
+  ) {
+    const id = newId();
+    await pool.query(
+      `insert into margin_rules (id, price_list_id, scope, target_id, percent_bp, fixed_usd_units,
+         min_margin_usd_units) values ($1, $2, $3, $4, $5, 0, $6)`,
+      [id, priceListId, scope, targetId, values.percentBp, values.minMarginUsdUnits],
+    );
+    return id;
+  }
+
+  async function fixedPrice(priceListId: string, productId: string, priceUsdUnits: number) {
+    const id = newId();
+    await pool.query(
+      `insert into price_list_fixed_prices (id, price_list_id, product_id, price_usd_units)
+       values ($1, $2, $3, $4)`,
+      [id, priceListId, productId, priceUsdUnits],
+    );
+    return id;
+  }
+
+  it('prices every list from the basis route and writes only what changed (RP1, Q21)', async () => {
+    const p = await product();
+    const route1 = await route(p.id, 'fake', await offer('fake', usd(1)));
+    const first = await repriceAll([p.id], 'route_change');
+    expect(first.repriced).toBe(1);
+    const { newest, count } = await listRows(p.id);
+    expect(newest.get(retail)).toMatchObject({ priceUsdUnits: usd(1.1), source: 'rule' });
+    // Decision 2: wholesale 5% with a $0.05 minimum, cost 1% with a $0.01 minimum.
+    expect(newest.get(wholesale)).toMatchObject({
+      priceUsdUnits: usd(1.05),
+      costUsdUnits: usd(1),
+      routeId: route1,
+      source: 'rule',
+      fixedPriceId: null,
+      percentBp: 500,
+      minMarginUsdUnits: usd(0.05),
+      cause: 'route_change',
+    });
+    expect(newest.get(cost)).toMatchObject({
+      priceUsdUnits: usd(1.01),
+      source: 'rule',
+      minMarginUsdUnits: usd(0.01),
+    });
+    expect(first.listRowsAppended).toBe(newest.size - 1);
+
+    // Nothing changed: no row on any list.
+    expect(await repriceAll([p.id], 'list_change')).toEqual({
+      repriced: 0,
+      reviewsOpened: 0,
+      listRowsAppended: 0,
+    });
+    expect((await listRows(p.id)).count).toBe(count);
+  });
+
+  it('caps a list at the retail price with retail’s rule (LP2, edge case 5)', async () => {
+    const p = await product();
+    await pool.query(
+      'update margin_rules set percent_bp = 100, min_margin_usd_units = 10000 where target_id = $1',
+      [p.id],
+    );
+    await route(p.id, 'fake', await offer('fake', usd(1)));
+    await repriceAll([p.id], 'route_change');
+    const { newest } = await listRows(p.id);
+    const retailRow = newest.get(retail);
+    expect(retailRow).toMatchObject({ priceUsdUnits: usd(1.01) });
+    expect(newest.get(wholesale)).toMatchObject({
+      priceUsdUnits: usd(1.01),
+      source: 'retail_cap',
+      ruleId: retailRow?.ruleId,
+      percentBp: 100,
+      minMarginUsdUnits: usd(0.01),
+    });
+    // Equal to retail: not capped.
+    expect(newest.get(cost)).toMatchObject({ priceUsdUnits: usd(1.01), source: 'rule' });
+  });
+
+  it('resolves a custom list list-first, with fixed prices and their fallback (LS4, LP1)', async () => {
+    const p = await product();
+    const vip = await customList(wholesale);
+    const gold = await customList(vip);
+    const silver = await customList(wholesale);
+    const vipRule = await listRule(vip, 'global', null, {
+      percentBp: 300,
+      minMarginUsdUnits: usd(0.01),
+    });
+    const offerId = await offer('fake', usd(1));
+    await route(p.id, 'fake', offerId);
+    await repriceAll([p.id], 'route_change');
+    let { newest } = await listRows(p.id);
+    expect(newest.get(vip)).toMatchObject({ priceUsdUnits: usd(1.03), ruleId: vipRule });
+    // Edge case 3: a list without entries prices as its parent.
+    expect(newest.get(gold)).toMatchObject({ priceUsdUnits: usd(1.03), ruleId: vipRule });
+    expect(newest.get(silver)).toMatchObject({ priceUsdUnits: usd(1.05) });
+
+    // A fixed price covering cost + $0.01 applies, to the children too.
+    const fixed = await fixedPrice(vip, p.id, usd(1.02));
+    expect((await repriceAll([p.id], 'list_change')).listRowsAppended).toBe(2);
+    ({ newest } = await listRows(p.id));
+    expect(newest.get(vip)).toMatchObject({
+      priceUsdUnits: usd(1.02),
+      source: 'fixed',
+      fixedPriceId: fixed,
+      ruleId: vipRule,
+      cause: 'list_change',
+    });
+    expect(newest.get(gold)).toMatchObject({ source: 'fixed', fixedPriceId: fixed });
+
+    // The cost rises past it: the guarding rule's price, until the admin acts (decision 6).
+    await setCost(offerId, usd(1.015));
+    await repriceAll([p.id], 'cost_sync');
+    ({ newest } = await listRows(p.id));
+    expect(newest.get(vip)).toMatchObject({
+      priceUsdUnits: priceFromCost(usd(1.015), {
+        percentBp: 300,
+        fixedUsdUnits: 0,
+        minMarginUsdUnits: usd(0.01),
+      }),
+      source: 'fixed_fallback',
+      fixedPriceId: fixed,
+    });
+
+    // A parent's rule reprices the child that has none (RP3), not the one with its own.
+    await listRule(wholesale, 'product', p.id, { percentBp: 200, minMarginUsdUnits: usd(0.01) });
+    await repriceAll([p.id], 'list_change');
+    ({ newest } = await listRows(p.id));
+    expect(newest.get(silver)).toMatchObject({ priceUsdUnits: usd(1.04) });
+    expect(newest.get(vip)?.source).toBe('fixed_fallback');
+    await pool.query(
+      `update margin_rules set archived_at = now()
+       where target_id = $1 and price_list_id = $2`,
+      [p.id, wholesale],
+    );
+  });
+
+  it('writes each list’s new row once when a sync and a list change run at once', async () => {
+    const p = await product();
+    const offerId = await offer('fake', usd(1));
+    await route(p.id, 'fake', offerId);
+    await repriceAll([p.id], 'route_change');
+    const before = await listRows(p.id);
+    await setCost(offerId, usd(1.05));
+    const results = await Promise.all([
+      repriceAll([p.id], 'cost_sync'),
+      repriceAll([p.id], 'list_change'),
+    ]);
+    // The product locks serialize them: the second finds every list at its target.
+    expect(results.map((result) => result.repriced).sort()).toEqual([0, 1]);
+    const after = await listRows(p.id);
+    expect(after.count - before.count).toBe(before.newest.size);
+    expect(after.newest.get(wholesale)?.priceUsdUnits).toBe(
+      priceFromCost(usd(1.05), { percentBp: 500, fixedUsdUnits: 0, minMarginUsdUnits: usd(0.05) }),
+    );
+  });
+
+  it('prices no list whose root has no global rule yet (seedRootListRules after a deploy)', async () => {
+    const p = await product();
+    await route(p.id, 'fake', await offer('fake', usd(1)));
+    const rollback = new Error('rollback');
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.execute(
+          sql`update margin_rules set archived_at = now()
+              where scope = 'global' and price_list_id <> ${retail} and archived_at is null`,
+        );
+        const result = await repriceProducts(tx, {
+          productIds: [p.id],
+          cause: 'route_change',
+          context: context(),
+        });
+        expect(result).toEqual({ repriced: 1, reviewsOpened: 0, listRowsAppended: 0 });
+        const lists = await tx
+          .selectDistinct({ id: productPrices.priceListId })
+          .from(productPrices)
+          .where(eq(productPrices.productId, p.id));
+        expect(lists).toEqual([{ id: retail }]);
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+  });
+
+  it('holds every list while a review is open (RP2, decision 4)', async () => {
+    const p = await product();
+    const offerId = await offer('fake', usd(1));
+    await route(p.id, 'fake', offerId);
+    await repriceAll([p.id], 'route_change');
+    const before = await listRows(p.id);
+
+    await setCost(offerId, usd(1.2));
+    expect(await repriceAll([p.id], 'cost_sync')).toEqual({
+      repriced: 0,
+      reviewsOpened: 1,
+      listRowsAppended: 0,
+    });
+    // The open review keeps them on the next repricing too.
+    await setCost(offerId, usd(1.25));
+    expect((await repriceAll([p.id], 'cost_sync')).listRowsAppended).toBe(0);
+    const after = await listRows(p.id);
+    expect(after.count).toBe(before.count);
+    expect(after.newest.get(wholesale)?.priceUsdUnits).toBe(usd(1.05));
+  });
+
+  it('reads a list’s row and guards it by its own minimum margin (PO1)', async () => {
+    const p = await product();
+    const offerId = await offer('fake', usd(1));
+    await route(p.id, 'fake', offerId);
+    await repriceAll([p.id], 'route_change');
+    const read = async () =>
+      (await productRoutingStates(db, [p.id], context(), wholesale)).get(p.id);
+    expect(await read()).toMatchObject({
+      priceListId: wholesale,
+      current: { priceUsdUnits: usd(1.05), priceListId: wholesale },
+      retailCurrent: { priceUsdUnits: usd(1.1) },
+      currentMinMarginUsdUnits: usd(0.05),
+      availability: 'available',
+    });
+    // A list with no row yet: out of stock for its accounts (RP4, edge case 1).
+    const fresh = await customList(wholesale);
+    expect((await productRoutingStates(db, [p.id], context(), fresh)).get(p.id)).toMatchObject({
+      current: null,
+      availability: 'out_of_stock',
+    });
   });
 });

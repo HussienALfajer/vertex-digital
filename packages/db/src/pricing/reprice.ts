@@ -1,14 +1,21 @@
 import {
   costChangeBasisPoints,
+  listChain,
+  listPrice,
   needsReview,
   type PriceChangeCause,
+  ROOT_PRICE_LIST_IDS,
+  resolveListEntry,
 } from '@vertex-digital/contracts';
-import { asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { readAll, type Transaction } from '../client.js';
 import { newId } from '../id.js';
 import {
   catalogGames,
   catalogProducts,
+  marginRules,
+  priceListFixedPrices,
+  priceLists,
   priceReviews,
   productPrices,
   productRoutes,
@@ -19,6 +26,7 @@ import {
   type ProductRoutingState,
   productRoutingStates,
   type RoutingContext,
+  ruleValues,
 } from './routing.js';
 
 /*
@@ -37,12 +45,16 @@ const REVIEWED_CAUSES: ReadonlySet<PriceChangeCause> = new Set([
   'cost_sync',
   'route_change',
   'rule_change',
+  // S20 RP4: the backfill and list changes never move retail past a review either.
+  'list_change',
 ]);
 
 export interface RepriceResult {
-  /** Products that got a new `product_prices` row. */
+  /** Products that got a new retail `product_prices` row. */
   repriced: number;
   reviewsOpened: number;
+  /** S20 RP1: rows appended on the other lists. */
+  listRowsAppended: number;
 }
 
 /**
@@ -79,7 +91,10 @@ export async function lockProductsForPricing(
   return rows.map((row) => row.id);
 }
 
-/** Appends the product's price at its target (rule P1) with the cause; the caller holds the lock. */
+/**
+ * Appends the product's retail price at its target (rule P1, S20 LP1) with the cause; the caller
+ * holds the lock. The other lists follow through `repriceListsAfterRetail`.
+ */
 export async function appendProductPrice(
   tx: Transaction,
   state: ProductRoutingState,
@@ -93,6 +108,9 @@ export async function appendProductPrice(
     .values({
       id: newId(),
       productId: state.productId,
+      priceListId: ROOT_PRICE_LIST_IDS.retail,
+      source: state.targetSource,
+      fixedPriceId: state.targetFixedPriceId,
       priceUsdUnits: price,
       costUsdUnits: basis.costUsdUnits as number,
       routeId: basis.id,
@@ -103,6 +121,133 @@ export async function appendProductPrice(
     })
     .returning();
   return row as PriceRow;
+}
+
+/** A product whose retail price is settled, for its other lists (S20 RP1). */
+export interface SettledRetail {
+  state: ProductRoutingState;
+  /** The retail row in force after this change: appended now, or the current one. */
+  retailRow: PriceRow;
+}
+
+/**
+ * S20 RP1, LP1–LP4: prices every unarchived list but retail for products whose retail price is
+ * settled (none under review), from the same basis route and cost, capped at the retail row. A
+ * list's row is appended only when its price, source, basis route, rule id, rule values or fixed
+ * price differ from its current row (Q21 per list). The caller holds the product locks.
+ */
+export async function repriceListsAfterRetail(
+  tx: Transaction,
+  settled: readonly SettledRetail[],
+  cause: PriceChangeCause,
+  reviewId: string | null = null,
+): Promise<number> {
+  const priced = settled.filter(({ state }) => state.basis !== null);
+  if (priced.length === 0) return 0;
+  const ids = priced.map(({ state }) => state.productId);
+  const [lists, rules, fixedPrices, currentRows] = await readAll(tx, [
+    () =>
+      tx
+        .select({ id: priceLists.id, parentListId: priceLists.parentListId })
+        .from(priceLists)
+        .where(isNull(priceLists.archivedAt))
+        .orderBy(asc(priceLists.id)),
+    () => tx.select().from(marginRules).where(isNull(marginRules.archivedAt)),
+    () =>
+      tx
+        .select()
+        .from(priceListFixedPrices)
+        .where(
+          and(
+            inArray(priceListFixedPrices.productId, ids),
+            isNull(priceListFixedPrices.archivedAt),
+          ),
+        ),
+    () =>
+      tx
+        .selectDistinctOn([productPrices.productId, productPrices.priceListId])
+        .from(productPrices)
+        .where(inArray(productPrices.productId, ids))
+        .orderBy(
+          productPrices.productId,
+          productPrices.priceListId,
+          desc(productPrices.createdAt),
+          desc(productPrices.id),
+        ),
+  ]);
+  const chains = new Map(
+    lists
+      .filter((list) => list.id !== ROOT_PRICE_LIST_IDS.retail)
+      .map((list) => [list.id, listChain(lists, list.id)]),
+  );
+  // Lists whose root has no global rule yet are not priced (`seedRootListRules`): until then the
+  // database holds retail rows only, which the release before S20 reads correctly.
+  const others = lists.filter((list) => {
+    const root = chains.get(list.id)?.at(-1);
+    return (
+      root !== undefined &&
+      rules.some((rule) => rule.priceListId === root && rule.scope === 'global')
+    );
+  });
+  const currentOf = new Map(currentRows.map((row) => [`${row.productId}:${row.priceListId}`, row]));
+  const rows: (typeof productPrices.$inferInsert)[] = [];
+  for (const { state, retailRow } of priced) {
+    const basis = state.basis as NonNullable<ProductRoutingState['basis']>;
+    const cost = basis.costUsdUnits as number;
+    for (const list of others) {
+      const entry = resolveListEntry(
+        chains.get(list.id) as string[],
+        { rules, fixedPrices },
+        { productId: state.productId, gameId: state.gameId, categoryId: state.categoryId },
+      );
+      const values = ruleValues(entry.rule);
+      const price = listPrice(
+        cost,
+        { fixedPriceUsdUnits: entry.fixed?.priceUsdUnits ?? null, rule: values },
+        {
+          priceUsdUnits: retailRow.priceUsdUnits,
+          minMarginUsdUnits: retailRow.minMarginUsdUnits,
+        },
+      );
+      const capped = price.source === 'retail_cap';
+      const row = {
+        source: price.source,
+        fixedPriceId: price.source === 'rule' || capped ? null : (entry.fixed?.id ?? null),
+        priceUsdUnits: price.priceUsdUnits,
+        routeId: basis.id,
+        ruleId: capped ? retailRow.ruleId : entry.rule.id,
+        percentBp: capped ? retailRow.percentBp : values.percentBp,
+        fixedUsdUnits: capped ? retailRow.fixedUsdUnits : values.fixedUsdUnits,
+        minMarginUsdUnits: price.minMarginUsdUnits,
+      };
+      const current = currentOf.get(`${state.productId}:${list.id}`);
+      if (
+        current &&
+        current.source === row.source &&
+        current.fixedPriceId === row.fixedPriceId &&
+        current.priceUsdUnits === row.priceUsdUnits &&
+        current.routeId === row.routeId &&
+        current.ruleId === row.ruleId &&
+        current.percentBp === row.percentBp &&
+        current.fixedUsdUnits === row.fixedUsdUnits &&
+        current.minMarginUsdUnits === row.minMarginUsdUnits
+      ) {
+        continue;
+      }
+      rows.push({
+        id: newId(),
+        productId: state.productId,
+        priceListId: list.id,
+        costUsdUnits: cost,
+        ...row,
+        cause:
+          current && current.routeId !== basis.id && cause === 'cost_sync' ? 'route_change' : cause,
+        reviewId,
+      });
+    }
+  }
+  if (rows.length > 0) await tx.insert(productPrices).values(rows);
+  return rows.length;
 }
 
 /**
@@ -123,13 +268,15 @@ export async function repriceProducts(
   tx: Transaction,
   input: { productIds: readonly string[]; cause: PriceChangeCause; context: RoutingContext },
 ): Promise<RepriceResult> {
-  const result: RepriceResult = { repriced: 0, reviewsOpened: 0 };
+  const result: RepriceResult = { repriced: 0, reviewsOpened: 0, listRowsAppended: 0 };
   const ids = await lockProductsForPricing(tx, input.productIds);
   if (ids.length === 0) return result;
   const [states, policy] = await readAll(tx, [
     () => productRoutingStates(tx, ids, input.context),
     () => currentSupplierPolicy(tx),
   ]);
+  // S20 RP1, RP2: products whose retail price is settled; a held one keeps every list.
+  const settled: SettledRetail[] = [];
   for (const id of ids) {
     const state = states.get(id);
     const target = state?.targetPriceUsdUnits ?? null;
@@ -164,8 +311,13 @@ export async function repriceProducts(
       current?.ruleId === state.rule.id &&
       current.percentBp === state.rule.values.percentBp &&
       current.fixedUsdUnits === state.rule.values.fixedUsdUnits &&
-      current.minMarginUsdUnits === state.rule.values.minMarginUsdUnits;
-    if (current && sameRoute && sameRule && current.priceUsdUnits === target) continue;
+      current.minMarginUsdUnits === state.rule.values.minMarginUsdUnits &&
+      current.source === state.targetSource &&
+      current.fixedPriceId === state.targetFixedPriceId;
+    if (current && sameRoute && sameRule && current.priceUsdUnits === target) {
+      settled.push({ state, retailRow: current });
+      continue;
+    }
     const reviewed =
       current !== null &&
       REVIEWED_CAUSES.has(input.cause) &&
@@ -189,9 +341,10 @@ export async function repriceProducts(
     }
     const cause =
       current && !sameRoute && input.cause === 'cost_sync' ? 'route_change' : input.cause;
-    await appendProductPrice(tx, state, cause);
+    settled.push({ state, retailRow: await appendProductPrice(tx, state, cause) });
     result.repriced += 1;
   }
+  result.listRowsAppended = await repriceListsAfterRetail(tx, settled, input.cause);
   return result;
 }
 

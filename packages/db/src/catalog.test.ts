@@ -68,12 +68,17 @@ describe('seeds', () => {
       { slug: 'apps', name_ar: 'تطبيقات' },
       { slug: 'gift-cards', name_ar: 'بطاقات هدايا' },
     ]);
+    // S20 decision 2: one live global rule per root list; the retail one is S06's.
     const global = await connection.pool.query(
-      `select percent_bp, fixed_usd_units, min_margin_usd_units from margin_rules
-       where scope = 'global' and archived_at is null`,
+      `select l.kind, r.percent_bp, r.fixed_usd_units, r.min_margin_usd_units
+       from margin_rules r join price_lists l on l.id = r.price_list_id
+       where r.scope = 'global' and r.archived_at is null and l.kind <> 'custom'
+       order by r.percent_bp desc`,
     );
     expect(global.rows).toEqual([
-      { percent_bp: 1000, fixed_usd_units: '0', min_margin_usd_units: '100000' },
+      { kind: 'retail', percent_bp: 1000, fixed_usd_units: '0', min_margin_usd_units: '100000' },
+      { kind: 'wholesale', percent_bp: 500, fixed_usd_units: '0', min_margin_usd_units: '50000' },
+      { kind: 'cost', percent_bp: 100, fixed_usd_units: '0', min_margin_usd_units: '10000' },
     ]);
   });
 
@@ -253,8 +258,10 @@ describe('margin rules', () => {
     rolledBack(async (client) => {
       const target = newId();
       expect(await insert(client, 'game', target)).toBeNull();
-      expect(await insert(client, 'game', target)).toBe('margin_rules_scope_target_id_live_idx');
-      expect(await insert(client, 'global', null)).toBe('margin_rules_global_live_idx');
+      expect(await insert(client, 'game', target)).toBe(
+        'margin_rules_list_scope_target_id_live_idx',
+      );
+      expect(await insert(client, 'global', null)).toBe('margin_rules_list_global_live_idx');
       await client.query(`update margin_rules set archived_at = now() where target_id = $1`, [
         target,
       ]);

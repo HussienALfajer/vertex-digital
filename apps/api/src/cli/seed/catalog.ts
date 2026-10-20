@@ -1,6 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { type Database, newId, repriceProducts, type Transaction } from '@vertex-digital/db';
+import {
+  type Database,
+  newId,
+  repriceProducts,
+  seedRootListRules,
+  type Transaction,
+} from '@vertex-digital/db';
 import { type FakeSupplierState, fakeSupplierStateSchema } from '@vertex-digital/suppliers';
 import { sql } from 'drizzle-orm';
 
@@ -76,11 +82,14 @@ async function upsert(tx: Transaction, table: string, rows: Row[]): Promise<void
         .filter((column) => column !== 'id')
         .map((column) => `"${column}" = EXCLUDED."${column}"`)
         .join(', ')}`;
+  // Only the snapshot's own columns: one taken before a migration leaves the new columns to their
+  // defaults (S20: a pre-S20 snapshot's rules and prices are retail's).
+  const list = columns.map((column) => `"${column}"`).join(', ');
   for (let at = 0; at < rows.length; at += CHUNK) {
     const chunk = rows.slice(at, at + CHUNK);
     await tx.execute(
       sql.raw(
-        `INSERT INTO "${table}" SELECT * FROM json_populate_recordset(NULL::"${table}", '${JSON.stringify(
+        `INSERT INTO "${table}" (${list}) SELECT ${list} FROM json_populate_recordset(NULL::"${table}", '${JSON.stringify(
           chunk,
         ).replaceAll("'", "''")}'::json) ON CONFLICT (id) ${conflict}`,
       ),
@@ -187,6 +196,8 @@ export async function loadCatalog(
 /** Reprices every product once the fake supplier is configured (its routes are then usable). */
 export async function repriceCatalog(db: Database, now: Date): Promise<number> {
   return db.transaction(async (tx) => {
+    // S20: the wholesale and cost rules, as `pricing:reprice-lists` adds them after a deploy.
+    await seedRootListRules(tx);
     const ids = (
       await tx.execute<{ id: string }>(
         sql`SELECT id FROM catalog_products WHERE archived_at IS NULL ORDER BY id`,

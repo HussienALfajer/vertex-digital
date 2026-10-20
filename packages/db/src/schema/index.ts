@@ -9,6 +9,7 @@ export * from './deposits.js';
 export * from './files.js';
 export * from './notifications.js';
 export * from './orders.js';
+export * from './price-lists.js';
 export * from './pricing.js';
 export * from './rates.js';
 export * from './reconciliation.js';

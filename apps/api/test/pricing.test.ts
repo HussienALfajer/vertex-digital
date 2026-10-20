@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { QUEUES, sypDisplayPrice } from '@vertex-digital/contracts';
+import { QUEUES, ROOT_PRICE_LIST_IDS, sypDisplayPrice } from '@vertex-digital/contracts';
 import {
   catalogCategories,
   catalogGames,
@@ -119,7 +119,13 @@ afterAll(async () => {
   await test.db
     .update(marginRules)
     .set(GLOBAL)
-    .where(and(eq(marginRules.scope, 'global'), isNull(marginRules.archivedAt)));
+    .where(
+      and(
+        eq(marginRules.priceListId, ROOT_PRICE_LIST_IDS.retail),
+        eq(marginRules.scope, 'global'),
+        isNull(marginRules.archivedAt),
+      ),
+    );
   await test.db.delete(catalogProducts).where(eq(catalogProducts.gameId, target.gameId));
   await test.db.delete(catalogGames).where(eq(catalogGames.id, target.gameId));
   await test.db.delete(catalogCategories).where(eq(catalogCategories.id, target.categoryId));

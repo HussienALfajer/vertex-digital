@@ -1,8 +1,15 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { ORDER_POLICY_DEFAULTS, priceFromCost, QUEUES } from '@vertex-digital/contracts';
+import {
+  ORDER_POLICY_DEFAULTS,
+  priceFromCost,
+  QUEUES,
+  ROOT_PRICE_LIST_IDS,
+} from '@vertex-digital/contracts';
 import {
   applyOutcome,
   catalogCategories,
+  catalogGames,
+  customers,
   ensureCustomerWallet,
   ensureSystemAccount,
   fulfilmentAttempts,
@@ -10,6 +17,7 @@ import {
   lockOrder,
   newId,
   orderCodesKey,
+  orders,
   postJournal,
   supplierBalanceReads,
   supplierOffers,
@@ -407,6 +415,56 @@ describe('POST /api/orders (rules O1–O6)', () => {
     const codes = await Promise.all(results.map(async (r) => (await body(r)).code ?? r.status));
     expect(codes.sort()).toEqual([201, 'INSUFFICIENT_BALANCE', 'INSUFFICIENT_BALANCE']);
     expect(await balance(customer)).toBe(0);
+  });
+
+  it("charges a merchant's list and records it on the order (S20 PO2, AT1)", async () => {
+    const item = await product(ids.gameId, 'direct', 0.88);
+    const merchant = await buyer(usd(10));
+    await test.db
+      .update(customers)
+      .set({ accountType: 'merchant' })
+      .where(eq(customers.id, merchant.id));
+    // Wholesale (decision 2): $0.88 + 5% is under the $0.05 minimum: $0.93.
+    const wholesale = priceFromCost(usd(0.88), {
+      percentBp: 500,
+      fixedUsdUnits: 0,
+      minMarginUsdUnits: usd(0.05),
+    });
+    expect(wholesale).toBe(usd(0.93));
+    expect(await body(await purchase(merchant, item))).toMatchObject({
+      status: 409,
+      code: 'PRICE_CHANGED',
+      details: { unitPriceUsdUnits: wholesale },
+    });
+    const order = await json<{ id: string; totalUsdUnits: number }>(
+      await purchase(merchant, item, { expectedUnitPriceUsdUnits: wholesale }),
+      201,
+    );
+    expect(order.totalUsdUnits).toBe(wholesale);
+    expect(await balance(merchant)).toBe(usd(10) - wholesale);
+    const [row] = await test.db
+      .select({ priceListId: orders.priceListId })
+      .from(orders)
+      .where(eq(orders.id, order.id));
+    expect(row?.priceListId).toBe(ROOT_PRICE_LIST_IDS.wholesale);
+
+    // The public catalog carries retail only, whoever asks (abuse table: the public cache).
+    const [game] = await test.db
+      .select({ slug: catalogGames.slug })
+      .from(catalogGames)
+      .where(eq(catalogGames.id, ids.gameId));
+    const read = async (cookie?: string) =>
+      Promise.all(
+        [
+          `/api/catalog/games/${game?.slug}`,
+          '/api/catalog/storefront',
+          '/api/catalog/search-index',
+        ].map(async (path) => json<unknown>(await client.get(path, cookie ? { cookie } : {}), 200)),
+      );
+    const [anonymous, asMerchant] = await Promise.all([read(), read(merchant.cookie)]);
+    expect(asMerchant).toEqual(anonymous);
+    expect(JSON.stringify(anonymous[0])).toContain(String(item.price));
+    expect(JSON.stringify(anonymous[0])).not.toContain(`:${wholesale},`);
   });
 
   it('refuses a stopped store, a changed price, an unavailable product and bad fields', async () => {

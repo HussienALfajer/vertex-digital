@@ -1,5 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { CURRENCY_SCALE, priceFromCost, QUEUES } from '@vertex-digital/contracts';
+import {
+  CURRENCY_SCALE,
+  priceFromCost,
+  QUEUES,
+  ROOT_PRICE_LIST_IDS,
+} from '@vertex-digital/contracts';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Transaction } from '../client.js';
@@ -1089,7 +1094,12 @@ describe('reservations (S09 rules RS1–RS9, PV8)', () => {
     const [current] = await db
       .select()
       .from(productPrices)
-      .where(eq(productPrices.productId, fell.id))
+      .where(
+        and(
+          eq(productPrices.productId, fell.id),
+          eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
+        ),
+      )
       .orderBy(desc(productPrices.createdAt))
       .limit(1);
     expect(await orderRow(a.id)).toMatchObject({
@@ -1256,7 +1266,12 @@ describe('reservations (S09 rules RS1–RS9, PV8)', () => {
     const [current] = await db
       .select()
       .from(productPrices)
-      .where(eq(productPrices.productId, item.id))
+      .where(
+        and(
+          eq(productPrices.productId, item.id),
+          eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
+        ),
+      )
       .orderBy(desc(productPrices.createdAt))
       .limit(1);
     expect((current?.priceUsdUnits as number) < item.price).toBe(true);
@@ -3101,6 +3116,36 @@ describe('admin purchases (S16 AP1–AP15, AM1–AM3)', () => {
 
   const drawings = () => db.transaction(async (tx) => accountBalance(tx, await ownerDrawings(tx)));
 
+  it('charges a merchant on behalf at their list; owner-funded orders take retail (S20 PO4)', async () => {
+    const item = await product({ cost: usd(1) });
+    const merchant = await customer({ funds: usd(10) });
+    await db.update(customers).set({ accountType: 'merchant' }).where(eq(customers.id, merchant));
+    expect(
+      await refusal(adminBuy(adminInput(item, { purpose: 'on_behalf', customerId: merchant }))),
+    ).toMatchObject({ code: 'PRICE_CHANGED', details: { unitPriceUsdUnits: usd(1.05) } });
+    const onBehalf = await adminBuy(
+      adminInput({ id: item.id, price: usd(1.05) }, { purpose: 'on_behalf', customerId: merchant }),
+    );
+    expect(onBehalf.order).toMatchObject({
+      priceListId: ROOT_PRICE_LIST_IDS.wholesale,
+      unitPriceUsdUnits: usd(1.05),
+      payer: 'customer',
+    });
+    expect(await balance(merchant)).toBe(usd(10) - usd(1.05));
+    for (const purpose of ['gift', 'compensation'] as const) {
+      const { order } = await adminBuy(
+        adminInput(item, { purpose, customerId: merchant, reason: 'A gift from the owner' }),
+      );
+      expect(order).toMatchObject({
+        priceListId: ROOT_PRICE_LIST_IDS.retail,
+        unitPriceUsdUnits: item.price,
+        payer: 'owner',
+      });
+    }
+    const walkIn = await adminBuy(adminInput(item));
+    expect(walkIn.order.priceListId).toBe(ROOT_PRICE_LIST_IDS.retail);
+  });
+
   it('pays a walk-in order from owner drawings, without a customer or a notice (AP1, AM2, AP12, AP13)', async () => {
     const item = await product();
     const before = await drawings();
@@ -3447,5 +3492,114 @@ describe('the supplier statement matched to attempts (S16 SF3, SF4)', () => {
       quantity: 1,
     });
     expect(await attemptSupplierFacts(db, newId(), attemptId)).toBeNull();
+  });
+});
+
+describe('price lists (S20 PO2–PO4)', () => {
+  const { retail, wholesale, cost } = ROOT_PRICE_LIST_IDS;
+  const listRow = async (productId: string, priceListId: string) =>
+    (
+      await db
+        .select()
+        .from(productPrices)
+        .where(
+          and(eq(productPrices.productId, productId), eq(productPrices.priceListId, priceListId)),
+        )
+        .orderBy(desc(productPrices.createdAt))
+        .limit(1)
+    )[0];
+  const setAccount = (
+    id: string,
+    values: { accountType?: 'merchant' | 'customer'; priceListId?: string | null },
+  ) => db.update(customers).set(values).where(eq(customers.id, id));
+
+  it('charges the effective list’s row and records the list on the order (PO2, AT1)', async () => {
+    const item = await product({ cost: usd(1) });
+    expect(item.price).toBe(usd(1.1));
+    const merchant = await customer({ funds: usd(10) });
+    await setAccount(merchant, { accountType: 'merchant' });
+    const row = await listRow(item.id, wholesale);
+    expect(row?.priceUsdUnits).toBe(usd(1.05));
+
+    // The retail figure is refused with the merchant's price.
+    expect(await refusal(buy(request(merchant, item)))).toMatchObject({
+      code: 'PRICE_CHANGED',
+      details: { unitPriceUsdUnits: usd(1.05) },
+    });
+    const { order } = await buy(request(merchant, { id: item.id, price: usd(1.05) }));
+    expect(order).toMatchObject({
+      priceListId: wholesale,
+      priceId: row?.id,
+      unitPriceUsdUnits: usd(1.05),
+      minMarginUsdUnits: usd(0.05),
+    });
+    expect(await balance(merchant)).toBe(usd(10) - usd(1.05));
+
+    // An assigned list wins over the type's default; a customer stays on retail.
+    await setAccount(merchant, { priceListId: cost });
+    const special = await buy(request(merchant, { id: item.id, price: usd(1.01) }));
+    expect(special.order).toMatchObject({ priceListId: cost, unitPriceUsdUnits: usd(1.01) });
+    const buyer = await customer({ funds: usd(10) });
+    expect((await buy(request(buyer, item))).order.priceListId).toBe(retail);
+
+    // Migration 0078: the list is fixed with the price.
+    await expect(
+      pool.query('update orders set price_list_id = $2 where id = $1', [order.id, retail]),
+    ).rejects.toThrow(/fixed once paid/);
+  });
+
+  it('refuses a product without a row on the list (RP4, edge case 1)', async () => {
+    const item = await product();
+    const listId = newId();
+    await pool.query(
+      `insert into price_lists (id, kind, name, parent_list_id) values ($1, 'custom', $2, $3)`,
+      [listId, `قائمة ${unique()}`, wholesale],
+    );
+    try {
+      const buyer = await customer({ funds: usd(10) });
+      await setAccount(buyer, { priceListId: listId });
+      expect(await refusal(buy(request(buyer, item)))).toMatchObject({
+        code: 'PRODUCT_UNAVAILABLE',
+        details: { availability: 'out_of_stock' },
+      });
+    } finally {
+      await pool.query('update price_lists set archived_at = now() where id = $1', [listId]);
+    }
+  });
+
+  it('cancels a reservation whose list is no longer the account’s, never pays it (PO3)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(0.1) });
+    const { order } = await buy(request(buyer, item, { whenBalanceShort: 'reserve' }));
+    expect(order).toMatchObject({ status: 'awaiting_balance', priceListId: retail });
+    await setAccount(buyer, { accountType: 'merchant' });
+    await db.transaction(async (tx) => {
+      await postJournal(tx, {
+        idempotencyKey: `test:${newId()}`,
+        kind: 'adjustment',
+        postings: [
+          { accountId: await ensureCustomerWallet(tx, buyer), amountUnits: usd(10) },
+          {
+            accountId: await ensureSystemAccount(tx, {
+              code: 'adjustments:test_funds',
+              kind: 'adjustments',
+              currency: 'USD',
+            }),
+            amountUnits: -usd(10),
+          },
+        ],
+      });
+    });
+    const run = await payWaitingOrders(
+      db,
+      { ...context(), now: () => new Date(), fakeEnabled: true },
+      buyer,
+    );
+    expect(run.outcomes).toEqual([{ orderId: order.id, outcome: 'cancelled_price_list_changed' }]);
+    expect(await orderRow(order.id)).toMatchObject({
+      status: 'cancelled',
+      cancelReason: 'price_list_changed',
+    });
+    expect(await balance(buyer)).toBe(usd(10.1));
   });
 });

@@ -4221,7 +4221,7 @@ export interface components {
                 orderNumber: string;
                 productNameAr: string;
                 /** @enum {string} */
-                reason: "expired" | "price_rose" | "product_changed" | "frozen";
+                reason: "expired" | "price_rose" | "product_changed" | "frozen" | "price_list_changed";
             };
         } | {
             /** Format: uuid */
@@ -7043,7 +7043,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        PriceChangeCause: "cost_sync" | "route_change" | "rule_change" | "review_accepted" | "margin_adjusted";
+        PriceChangeCause: "cost_sync" | "route_change" | "rule_change" | "review_accepted" | "margin_adjusted" | "list_change";
         SupplierSummary: {
             code: components["schemas"]["SupplierCode"];
             nameAr: string;
@@ -7907,7 +7907,7 @@ export interface components {
             firstRevealedAt: string | null;
         };
         /** @enum {string} */
-        CancelReason: "expired" | "customer" | "price_rose" | "product_changed" | "frozen";
+        CancelReason: "expired" | "customer" | "price_rose" | "product_changed" | "frozen" | "price_list_changed";
         DeliveryStats: {
             medianMs: number;
             p90Ms: number;

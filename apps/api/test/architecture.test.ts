@@ -213,6 +213,7 @@ describe('module boundaries', () => {
     files: 'files',
     notifications: 'notifications',
     orders: 'orders',
+    'price-lists': 'pricing',
     pricing: 'pricing',
     rates: 'rates',
     reconciliation: 'reconciliation',

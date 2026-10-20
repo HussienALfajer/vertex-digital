@@ -107,6 +107,7 @@ const CANCEL_REASON_LABELS: Record<Exclude<CancelReason, 'customer'>, string> = 
   price_rose: 'تغيّر سعر الباقة',
   product_changed: 'تغيّرت بيانات الباقة',
   frozen: 'أُوقف حسابك مؤقتاً، تواصل مع الدعم',
+  price_list_changed: 'تغيّرت أسعار حسابك',
 };
 
 /** A browser or system the user agent did not name reads as "unknown", in Arabic (feature 2 audit). */

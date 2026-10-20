@@ -10,6 +10,7 @@ import {
   PANEL_READ_OPERATIONS,
   probeOutcome,
   QUEUES,
+  ROOT_PRICE_LIST_IDS,
   type SupplierHealthState,
   type SupplierPolicy,
   supplierHasCatalog,
@@ -288,6 +289,7 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
         routeId: productPrices.routeId,
       })
       .from(productPrices)
+      .where(eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail))
       .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id))
       .as('latest');
     const stale = await db

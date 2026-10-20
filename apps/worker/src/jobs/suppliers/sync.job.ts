@@ -12,6 +12,7 @@ import {
   type ProductKind,
   productKindSchema,
   QUEUES,
+  ROOT_PRICE_LIST_IDS,
   type StockLevel,
   SUPPLIER_COST_MAX_USD_UNITS,
   type SuppliersSyncPayload,
@@ -896,6 +897,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
           costUsdUnits: productPrices.costUsdUnits,
         })
         .from(productPrices)
+        .where(eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail))
         .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id))
         .as('latest');
       const drifted = await tx
