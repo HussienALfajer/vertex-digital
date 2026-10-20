@@ -8,6 +8,7 @@ import {
   refundReasonSchema,
   STORE_PLACED_PURPOSES,
 } from './orders.js';
+import { priceKindSchema } from './pricing.js';
 import { adjustmentCategorySchema, adjustmentDirectionSchema } from './wallet.js';
 
 /*
@@ -90,6 +91,8 @@ export const NOTIFICATION_EVENTS = [
   'checkout_finished',
   'ticket_replied',
   'order_placed_for_you',
+  /** S20 AT3: the account's price list changed (center only, never the list's name). */
+  'price_list_changed',
 ] as const;
 
 export const notificationEventSchema = z
@@ -184,6 +187,8 @@ export const NOTIFICATION_PARAMS = {
     /** The order's note to the customer (named apart from internal notes, rule NT3). */
     message: z.string().max(ADMIN_ORDER_NOTE_MAX_LENGTH).optional(),
   }),
+  // S20 AT3, AT4: the price kind the account now pays, never a list's name or rule.
+  price_list_changed: z.object({ priceKind: priceKindSchema }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
@@ -250,6 +255,7 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   checkout_finished: 'customer_checkout_finished',
   ticket_replied: 'customer_ticket_replied',
   order_placed_for_you: 'customer_order_placed_for_you',
+  price_list_changed: null,
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -300,6 +306,7 @@ export const customerNotificationSchema = z
     notification('checkout_finished'),
     notification('ticket_replied'),
     notification('order_placed_for_you'),
+    notification('price_list_changed'),
   ])
   .meta({ id: 'CustomerNotification' });
 

@@ -240,6 +240,19 @@ export const ERROR_CODES = [
   'CAPABILITY_UNSUPPORTED',
   /** S19 FC8: the store has no public HTTPS address for a supplier's webhook (`STORE_URL`). */
   'STORE_URL_NOT_PUBLIC',
+  /** S20 LS5: accounts are assigned to the list or lists name it as parent; `details.accounts`, `details.children`. */
+  'PRICE_LIST_IN_USE',
+  /** S20 LS1: 20 unarchived custom lists already. */
+  'PRICE_LISTS_LIMIT_REACHED',
+  /** S20: another unarchived list has this name (case-insensitive). */
+  'PRICE_LIST_NAME_TAKEN',
+  /** S20: the list is archived. */
+  'PRICE_LIST_ARCHIVED',
+  /**
+   * S20 RP4: the list's root has no global rule yet (`pricing:reprice-lists` has not run), so the
+   * list is not priced and cannot be used.
+   */
+  'PRICE_LIST_NOT_READY',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

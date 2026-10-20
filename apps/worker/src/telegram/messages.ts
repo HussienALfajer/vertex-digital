@@ -539,6 +539,9 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
     ...(summary.stockLow.low + summary.stockLow.out > 0
       ? [`📉 مخزون الباقات المربوطة: ${summary.stockLow.low} منخفض، ${summary.stockLow.out} نافد`]
       : []),
+    ...(summary.fixedPriceFallbacks > 0
+      ? [`🏷️ أسعار ثابتة تحت الهامش تُباع بسعر القاعدة: ${summary.fixedPriceFallbacks}`]
+      : []),
     `الطلبات اليوم: ${summary.ordersDelivered} مُسلّمة، ${summary.ordersPartiallyRefunded} جزئية، ${summary.ordersRefunded} مستردة`,
     `بحاجة لمراجعة: ${summary.ordersInReview} · يدوي بانتظارك: ${summary.manualWaiting}`,
     ...(summary.medianDeliveryMs === null
@@ -748,6 +751,17 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
         text: [
           `⚠️ بلغت حصة التحقق اليومية لدى ${quota.supplierNameAr} (${quota.quota}). العملاء يؤكدون المعرّف بأنفسهم حتى منتصف الليل.`,
           `${links.admin}/suppliers/${quota.supplier}`,
+        ].join('\n'),
+      };
+    }
+    case 'fixed_price_fallback': {
+      // S20 RP5: the fixed price no longer covers the cost and the minimum margin.
+      const cell = params as TelegramMessageParams<'fixed_price_fallback'>;
+      return {
+        text: [
+          `🏷️ السعر الثابت ${formatUsd(cell.fixedPriceUsdUnits)} في قائمة ${cell.priceListName} لم يعد يغطي التكلفة والهامش الأدنى`,
+          `${cell.gameNameAr} · ${cell.productNameAr}: التكلفة ${formatUsd(cell.costUsdUnits)}، يُباع الآن بسعر القاعدة ${formatUsd(cell.priceUsdUnits)}`,
+          `${links.admin}/pricing/lists/${cell.priceListId}`,
         ].join('\n'),
       };
     }

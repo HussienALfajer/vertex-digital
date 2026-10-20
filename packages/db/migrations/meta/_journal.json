@@ -554,6 +554,13 @@
       "when": 1792520763921,
       "tag": "0078_s20_price_list_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792523484012,
+      "tag": "0079_shocking_corsair",
+      "breakpoints": true
     }
   ]
 }

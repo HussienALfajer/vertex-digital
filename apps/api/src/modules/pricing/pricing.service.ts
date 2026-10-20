@@ -19,6 +19,7 @@ import {
   type ProductPricePage,
   priceFromCost,
   ROOT_PRICE_LIST_IDS,
+  resolveListEntry,
   resolveMarginRule,
   type SetMarginRule,
   savings,
@@ -27,14 +28,18 @@ import {
 import {
   appendProductPrice,
   type Database,
+  listIsPriced,
+  listPricingFacts,
   lockProductsForPricing,
   marginRules,
   newId,
+  priceLists,
   priceReviewPage,
   priceReviews,
   priceReviewsById,
   productPricePage,
   productRoutingStates,
+  queueStoreRevalidate,
   type ReviewListRow,
   type ReviewRow,
   recordAudit,
@@ -48,6 +53,7 @@ import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
+import { JobsService } from '../../core/jobs/index.js';
 import {
   type Actor,
   CatalogItemsService,
@@ -71,9 +77,12 @@ const sameValues = (a: MarginRuleValues, b: MarginRuleValues) =>
 
 const notFound = (what: string) => new CodedException(404, 'NOT_FOUND', `No such ${what}`);
 
-/** The advisory lock of one target's rule: parallel sets of it leave one live rule (PR9). */
-const ruleLock = (scope: MarginScope, targetId: string | null) =>
-  sql`select pg_advisory_xact_lock(hashtext(${`margin_rule:${scope}:${targetId}`}))`;
+/**
+ * The advisory lock of one target's rule on a list: parallel sets of it leave one live rule (PR9,
+ * S20 LS2).
+ */
+const ruleLock = (priceListId: string, scope: MarginScope, targetId: string | null) =>
+  sql`select pg_advisory_xact_lock(hashtext(${`margin_rule:${priceListId}:${scope}:${targetId}`}))`;
 
 const REVIEW_REFUSALS = ['NOT_FOUND', 'REVIEW_CLOSED', 'REVIEW_STALE'] as const;
 
@@ -95,11 +104,20 @@ export class PricingService {
     private readonly catalog: CatalogService,
     private readonly items: CatalogItemsService,
     private readonly rates: RatesService,
+    private readonly jobs: JobsService,
   ) {}
 
-  /** `GET /api/admin/pricing/rules`: live rules with their target and the products they govern. */
-  async rules(): Promise<MarginRule[]> {
-    const rows = await this.liveRules();
+  /**
+   * `GET /api/admin/pricing/rules`: a list's live rules (retail by default) with their target and
+   * the products each governs on the list (LS4, fixed prices aside).
+   */
+  async rules(priceListId: string = ROOT_PRICE_LIST_IDS.retail): Promise<MarginRule[]> {
+    const facts = await listPricingFacts(this.db, []);
+    const chain = facts.lists.find((list) => list.id === priceListId)?.chain;
+    if (!chain) throw notFound('price list');
+    const rows = facts.rules
+      .filter((rule) => rule.priceListId === priceListId)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     const [names, paths] = await Promise.all([
       this.catalog.pricingTargetNames(
         rows.flatMap((row) => (row.targetId === null ? [] : [row.targetId])),
@@ -107,14 +125,17 @@ export class PricingService {
       this.catalog.livePricingPaths(),
     ]);
     const governed = new Map<string, number>();
-    for (const path of paths) {
-      const rule = resolveMarginRule(rows, path);
-      governed.set(rule.id, (governed.get(rule.id) ?? 0) + 1);
+    if (listIsPriced(facts, chain)) {
+      for (const path of paths) {
+        const { rule } = resolveListEntry(chain, { rules: facts.rules, fixedPrices: [] }, path);
+        governed.set(rule.id, (governed.get(rule.id) ?? 0) + 1);
+      }
     }
     return rows.map((row) => {
       const target = row.targetId === null ? undefined : names.get(row.targetId);
       return {
         id: row.id,
+        priceListId: row.priceListId,
         scope: row.scope,
         targetId: row.targetId,
         ...valuesOf(row),
@@ -132,14 +153,15 @@ export class PricingService {
    */
   async setRule(adminId: string, input: SetMarginRule, meta: RequestMeta): Promise<MarginRule> {
     const id = await this.db.transaction((tx) => this.setRuleIn(tx, adminId, input, meta));
-    const rule = (await this.rules()).find((candidate) => candidate.id === id);
+    const rule = (await this.rules(input.priceListId)).find((candidate) => candidate.id === id);
     if (!rule) throw notFound('margin rule');
     return rule;
   }
 
   /**
    * `setRule` in the caller's transaction (S07: a review's margin); returns the rule's id. A
-   * change reprices every product the target covers in the same transaction (S07 rule P5).
+   * change reprices every product the target covers in the same transaction (S07 rule P5), on
+   * every list (S20 RP3); a retail change refreshes the store (SF4: it shows retail only).
    */
   private async setRuleIn(
     tx: Transaction,
@@ -153,13 +175,15 @@ export class PricingService {
       if (!target || target.archived) throw notFound('catalog target');
     }
     const after = valuesOf(input);
-    await tx.execute(ruleLock(input.scope, targetId));
+    const priceListId = input.priceListId ?? ROOT_PRICE_LIST_IDS.retail;
+    await tx.execute(ruleLock(priceListId, input.scope, targetId));
+    await this.lockLiveList(tx, priceListId);
     const [current] = await tx
       .select()
       .from(marginRules)
       .where(
         and(
-          eq(marginRules.priceListId, ROOT_PRICE_LIST_IDS.retail),
+          eq(marginRules.priceListId, priceListId),
           eq(marginRules.scope, input.scope),
           targetId === null ? isNull(marginRules.targetId) : eq(marginRules.targetId, targetId),
           isNull(marginRules.archivedAt),
@@ -176,53 +200,73 @@ export class PricingService {
     } else {
       await tx.insert(marginRules).values({
         id: ruleId,
-        priceListId: ROOT_PRICE_LIST_IDS.retail,
+        priceListId,
         scope: input.scope,
         targetId,
         ...after,
       });
     }
     await this.audit(tx, adminId, meta, ruleId, 'margin_rule.set', {
+      priceListId,
       scope: input.scope,
       targetId,
       before: current ? valuesOf(current) : null,
       after,
     });
     await this.repriceCovered(tx, input.scope, targetId);
+    if (priceListId === ROOT_PRICE_LIST_IDS.retail) await queueStoreRevalidate(tx, this.jobs);
     return ruleId;
   }
 
   /**
-   * Its target falls back to the parent rule; the global rule stays (rule PR2). The target's
-   * `ruleLock` first, as `setRule` and a review's margin take it before the catalog rows (F8-3).
+   * Its target falls back to the parent rule; a root list's global rule stays (rule PR2, S20
+   * LS2), a custom list's may go (its parent's then apply). The target's `ruleLock` first, as
+   * `setRule` and a review's margin take it before the catalog rows (F8-3).
    */
   async archiveRule(adminId: string, id: string, meta: RequestMeta): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [found] = await tx.select().from(marginRules).where(eq(marginRules.id, id));
-      if (found) await tx.execute(ruleLock(found.scope, found.targetId));
+      if (!found) throw notFound('margin rule');
+      await tx.execute(ruleLock(found.priceListId, found.scope, found.targetId));
+      const list = await this.lockLiveList(tx, found.priceListId);
       const [row] = await tx
         .select()
         .from(marginRules)
-        .where(
-          and(
-            eq(marginRules.id, id),
-            eq(marginRules.priceListId, ROOT_PRICE_LIST_IDS.retail),
-            isNull(marginRules.archivedAt),
-          ),
-        )
+        .where(and(eq(marginRules.id, id), isNull(marginRules.archivedAt)))
         .for('no key update');
       if (!row) throw notFound('margin rule');
-      if (row.scope === 'global') {
+      if (row.scope === 'global' && list.kind !== 'custom') {
         throw new CodedException(409, 'GLOBAL_RULE_REQUIRED', 'The global rule cannot be archived');
       }
       await tx.update(marginRules).set({ archivedAt: new Date() }).where(eq(marginRules.id, id));
       await this.audit(tx, adminId, meta, id, 'margin_rule.archived', {
+        priceListId: row.priceListId,
         scope: row.scope,
         targetId: row.targetId,
         values: valuesOf(row),
       });
       await this.repriceCovered(tx, row.scope, row.targetId);
+      if (row.priceListId === ROOT_PRICE_LIST_IDS.retail) {
+        await queueStoreRevalidate(tx, this.jobs);
+      }
     });
+  }
+
+  /**
+   * The list `FOR SHARE`, so an archive (`FOR NO KEY UPDATE`, LS5) waits for the change; refused
+   * when unknown or archived.
+   */
+  async lockLiveList(tx: Transaction, priceListId: string) {
+    const [list] = await tx
+      .select()
+      .from(priceLists)
+      .where(eq(priceLists.id, priceListId))
+      .for('share');
+    if (!list) throw notFound('price list');
+    if (list.archivedAt !== null) {
+      throw new CodedException(409, 'PRICE_LIST_ARCHIVED', 'The price list is archived');
+    }
+    return list;
   }
 
   /** Rule PR10: PR3–PR8 for a cost and the target's rule or draft values; writes nothing. */
@@ -233,9 +277,22 @@ export class PricingService {
       target = await this.catalog.pricingTarget(scope, input.target.targetId as string);
       if (!target) throw notFound('catalog target');
     }
-    const found = input.values
-      ? null
-      : resolveMarginRule(await this.liveRules(), target?.path ?? {});
+    let found: RuleRow | null = null;
+    if (!input.values) {
+      const facts = await listPricingFacts(this.db, []);
+      const chain = facts.lists.find(
+        (list) => list.id === (input.priceListId ?? ROOT_PRICE_LIST_IDS.retail),
+      )?.chain;
+      if (!chain) throw notFound('price list');
+      if (!listIsPriced(facts, chain)) {
+        throw new CodedException(409, 'PRICE_LIST_NOT_READY', 'The price list is not priced yet');
+      }
+      found = resolveListEntry(
+        chain,
+        { rules: facts.rules, fixedPrices: [] },
+        { ...target?.path, productId: target?.path.productId ?? '' },
+      ).rule;
+    }
     const rule = input.values ?? valuesOf(found as RuleRow);
     const price = priceFromCost(input.costUsdUnits, rule);
     const rate = await this.rates.current();
@@ -344,7 +401,7 @@ export class PricingService {
         .from(priceReviews)
         .where(eq(priceReviews.id, reviewId));
       if (!found) throw notFound('review');
-      await tx.execute(ruleLock('product', found.productId));
+      await tx.execute(ruleLock(ROOT_PRICE_LIST_IDS.retail, 'product', found.productId));
       const review = await this.lockReview(tx, reviewId);
       await this.setRuleIn(
         tx,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   costChangeBasisPoints,
+  createPriceListSchema,
   decideReviewsSchema,
   effectivePriceListId,
   isProfitable,
@@ -8,17 +9,22 @@ import {
   listPrice,
   type MarginRuleValues,
   marginBasisPoints,
+  marginRuleListQuerySchema,
+  matrixCellWarnings,
   needsReview,
   PRICE_LIST_MAX_DEPTH,
   priceFromCost,
   priceKindOf,
+  priceMatrixQuerySchema,
   priceReviewListQuerySchema,
   pricingPreviewRequestSchema,
   ROOT_PRICE_LIST_IDS,
+  renamePriceListSchema,
   resolveListEntry,
   resolveMarginRule,
   savings,
   savingsWarning,
+  setFixedPriceSchema,
   setMarginRuleSchema,
 } from './pricing.js';
 
@@ -441,5 +447,76 @@ describe('listPrice (S20 LP1–LP4)', () => {
     expect(
       listPrice(usd(1), { fixedPriceUsdUnits: usd(2), rule: wholesale }, retail),
     ).toMatchObject({ priceUsdUnits: usd(1.1), source: 'retail_cap' });
+  });
+});
+
+describe('list schemas (S20 PR 2)', () => {
+  const id = ROOT_PRICE_LIST_IDS.wholesale;
+
+  it('trims names to 2–60 characters', () => {
+    expect(createPriceListSchema.parse({ name: '  VIP  ', parentListId: id }).name).toBe('VIP');
+    expect(createPriceListSchema.safeParse({ name: ' a ', parentListId: id }).success).toBe(false);
+    expect(renamePriceListSchema.safeParse({ name: 'x'.repeat(61) }).success).toBe(false);
+  });
+
+  it('takes whole-cent fixed prices from $0.01 to $10,000', () => {
+    expect(setFixedPriceSchema.safeParse({ priceUsdUnits: usd(0.99) }).success).toBe(true);
+    expect(setFixedPriceSchema.safeParse({ priceUsdUnits: 0 }).success).toBe(false);
+    expect(setFixedPriceSchema.safeParse({ priceUsdUnits: 990_001 }).success).toBe(false);
+    expect(setFixedPriceSchema.safeParse({ priceUsdUnits: usd(10_000.01) }).success).toBe(false);
+  });
+
+  it('reads a list filter on rules', () => {
+    expect(marginRuleListQuerySchema.parse({})).toEqual({});
+    expect(marginRuleListQuerySchema.parse({ priceListId: id })).toEqual({ priceListId: id });
+  });
+
+  it('reads the matrix query: a game or a search, up to 8 comma-separated lists', () => {
+    expect(
+      priceMatrixQuerySchema.parse({ gameId: id, listIds: `${id},${ROOT_PRICE_LIST_IDS.cost}` }),
+    ).toEqual({ gameId: id, listIds: [id, ROOT_PRICE_LIST_IDS.cost] });
+    expect(priceMatrixQuerySchema.parse({ q: ' شدة ', warnings: 'true' })).toEqual({
+      q: 'شدة',
+      warnings: true,
+    });
+    expect(priceMatrixQuerySchema.parse({ q: 'x', listIds: [id] }).listIds).toEqual([id]);
+    expect(priceMatrixQuerySchema.safeParse({}).success).toBe(false);
+    expect(priceMatrixQuerySchema.safeParse({ gameId: id, q: 'x' }).success).toBe(false);
+    expect(
+      priceMatrixQuerySchema.safeParse({ q: 'x', listIds: Array(9).fill(id).join(',') }).success,
+    ).toBe(false);
+  });
+});
+
+describe('matrixCellWarnings (S20 screens)', () => {
+  const base = {
+    source: 'rule' as const,
+    priceUsdUnits: usd(1),
+    parentPriceUsdUnits: usd(1),
+    held: false,
+    available: true,
+  };
+
+  it('has none for a plain rule price', () => {
+    expect(matrixCellWarnings(base)).toEqual([]);
+    expect(matrixCellWarnings({ ...base, parentPriceUsdUnits: null })).toEqual([]);
+  });
+
+  it('names the fallback, the cap, a price above its parent and a hold', () => {
+    expect(matrixCellWarnings({ ...base, source: 'fixed_fallback' })).toEqual(['fallback']);
+    expect(matrixCellWarnings({ ...base, source: 'retail_cap' })).toEqual(['capped']);
+    expect(matrixCellWarnings({ ...base, parentPriceUsdUnits: usd(0.99) })).toEqual([
+      'above_parent',
+    ]);
+    expect(matrixCellWarnings({ ...base, held: true, available: false })).toEqual([
+      'held',
+      'unavailable',
+    ]);
+  });
+
+  it('names a missing row rather than its unavailability', () => {
+    expect(
+      matrixCellWarnings({ ...base, source: null, priceUsdUnits: null, available: false }),
+    ).toEqual(['no_row']);
   });
 });

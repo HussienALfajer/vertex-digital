@@ -551,6 +551,7 @@ describe('the messages of PR 4', () => {
       ownerOrders: { count: 2, usedUsdUnits: 12_500_000, capUsdUnits: 100_000_000 },
       newPacks: [{ supplierNameAr: 'WDGZone', count: 7 }],
       stockLow: { low: 2, out: 1 },
+      fixedPriceFallbacks: 2,
     };
     const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
     for (const line of [
@@ -572,6 +573,7 @@ describe('the messages of PR 4', () => {
       'التحقق من المعرّف اليوم: مورد تجريبي 12، WDGZone 3',
       '📦 باقات جديدة في فئات مستوردة: 7 (WDGZone)',
       '📉 مخزون الباقات المربوطة: 2 منخفض، 1 نافد',
+      '🏷️ أسعار ثابتة تحت الهامش تُباع بسعر القاعدة: 2',
       'المطابقة الليلية 2029-12-31: 2 فروقات · مفتوحة الآن: 3',
       'طلبات من مال المالك اليوم: 2 بقيمة $12.50 من سقف $100.00',
     ]) {

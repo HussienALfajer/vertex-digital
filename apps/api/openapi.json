@@ -991,6 +991,7 @@
                 "customer.test_password_reset",
                 "customer.frozen",
                 "customer.unfrozen",
+                "customer.price_list_changed",
                 "customer.limits_changed",
                 "customer.archived",
                 "customer.unarchived",
@@ -1045,6 +1046,11 @@
                 "catalog_product.reordered",
                 "margin_rule.set",
                 "margin_rule.archived",
+                "price_list.created",
+                "price_list.renamed",
+                "price_list.archived",
+                "price_list.fixed_price_set",
+                "price_list.fixed_price_archived",
                 "supplier.credentials_set",
                 "supplier.updated",
                 "supplier.sync_requested",
@@ -1146,6 +1152,7 @@
                 "catalog_input_field",
                 "catalog_product",
                 "margin_rule",
+                "price_list",
                 "supplier",
                 "supplier_policy",
                 "supplier_offer",
@@ -3244,6 +3251,46 @@
         ]
       }
     },
+    "/api/admin/customers/{id}/price-list": {
+      "put": {
+        "operationId": "CustomersAdminController_priceList",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCustomerPriceList"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The profile with its new list (AT2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomer"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
     "/api/support/channels": {
       "get": {
         "operationId": "SupportController_channels",
@@ -4795,6 +4842,36 @@
         "responses": {
           "200": {
             "description": "A catalog image (WebP)"
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/games/{slug}/prices": {
+      "get": {
+        "operationId": "CatalogPricesController_prices",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The account’s prices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerPrices"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -7009,10 +7086,21 @@
     "/api/admin/pricing/rules": {
       "get": {
         "operationId": "PricingAdminController_rules",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "priceListId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Live rules",
+            "description": "A list’s live rules",
             "content": {
               "application/json": {
                 "schema": {
@@ -7248,6 +7336,303 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PriceReview"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "pricing"
+        ]
+      }
+    },
+    "/api/admin/pricing/lists": {
+      "get": {
+        "operationId": "PriceListsAdminController_all",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Every list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PriceList"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "pricing"
+        ]
+      },
+      "post": {
+        "operationId": "PriceListsAdminController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePriceList"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new list, priced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "pricing"
+        ]
+      }
+    },
+    "/api/admin/pricing/lists/{id}": {
+      "get": {
+        "operationId": "PriceListsAdminController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The list page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceListDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "pricing"
+        ]
+      },
+      "patch": {
+        "operationId": "PriceListsAdminController_rename",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenamePriceList"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The renamed list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "pricing"
+        ]
+      }
+    },
+    "/api/admin/pricing/lists/{id}/archive": {
+      "post": {
+        "operationId": "PriceListsAdminController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The archived list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "pricing"
+        ]
+      }
+    },
+    "/api/admin/pricing/lists/{id}/fixed-prices/{productId}": {
+      "put": {
+        "operationId": "PriceListsAdminController_setFixedPrice",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetFixedPrice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The fixed price and the list’s resulting price",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedPrice"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "pricing"
+        ]
+      },
+      "delete": {
+        "operationId": "PriceListsAdminController_archiveFixedPrice",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Archived"
+          }
+        },
+        "tags": [
+          "pricing"
+        ]
+      }
+    },
+    "/api/admin/pricing/matrix": {
+      "get": {
+        "operationId": "PriceListsAdminController_matrix",
+        "parameters": [
+          {
+            "name": "gameId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "listIds",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minItems": 1,
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            }
+          },
+          {
+            "name": "warnings",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Products × lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceMatrix"
                 }
               }
             }
@@ -11596,6 +11981,53 @@
               "params"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "price_list_changed"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "priceKind": {
+                    "$ref": "#/components/schemas/PriceKind"
+                  }
+                },
+                "required": [
+                  "priceKind"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -11636,6 +12068,14 @@
           "routes_exhausted",
           "input_rejected",
           "admin"
+        ]
+      },
+      "PriceKind": {
+        "type": "string",
+        "enum": [
+          "retail",
+          "wholesale",
+          "special"
         ]
       },
       "MarkNotificationsRead": {
@@ -11686,7 +12126,8 @@
               "order_cancelled",
               "checkout_finished",
               "ticket_replied",
-              "order_placed_for_you"
+              "order_placed_for_you",
+              "price_list_changed"
             ]
           },
           "push": {
@@ -11707,7 +12148,8 @@
               "order_cancelled",
               "checkout_finished",
               "ticket_replied",
-              "order_placed_for_you"
+              "order_placed_for_you",
+              "price_list_changed"
             ]
           }
         },
@@ -11772,7 +12214,8 @@
           "order_cancelled",
           "checkout_finished",
           "ticket_replied",
-          "order_placed_for_you"
+          "order_placed_for_you",
+          "price_list_changed"
         ]
       },
       "PushConfig": {
@@ -12323,6 +12766,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "priceKind": {
+            "$ref": "#/components/schemas/PriceKind"
           }
         },
         "required": [
@@ -12330,7 +12776,8 @@
           "name",
           "email",
           "phone",
-          "createdAt"
+          "createdAt",
+          "priceKind"
         ],
         "additionalProperties": false
       },
@@ -12583,6 +13030,7 @@
           "customer.test_password_reset",
           "customer.frozen",
           "customer.unfrozen",
+          "customer.price_list_changed",
           "customer.limits_changed",
           "customer.archived",
           "customer.unarchived",
@@ -12637,6 +13085,11 @@
           "catalog_product.reordered",
           "margin_rule.set",
           "margin_rule.archived",
+          "price_list.created",
+          "price_list.renamed",
+          "price_list.archived",
+          "price_list.fixed_price_set",
+          "price_list.fixed_price_archived",
           "supplier.credentials_set",
           "supplier.updated",
           "supplier.sync_requested",
@@ -12733,6 +13186,7 @@
           "catalog_input_field",
           "catalog_product",
           "margin_rule",
+          "price_list",
           "supplier",
           "supplier_policy",
           "supplier_offer",
@@ -16359,6 +16813,52 @@
           "limits": {
             "$ref": "#/components/schemas/CustomerLimits"
           },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "accountType": {
+                "$ref": "#/components/schemas/AccountType"
+              },
+              "assignedListId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "effectiveList": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "kind": {
+                    "$ref": "#/components/schemas/PriceListKind"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "kind",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "priceKind": {
+                "$ref": "#/components/schemas/PriceKind"
+              }
+            },
+            "required": [
+              "accountType",
+              "assignedListId",
+              "effectiveList",
+              "priceKind"
+            ],
+            "additionalProperties": false
+          },
           "pinnedNote": {
             "nullable": true,
             "allOf": [
@@ -16466,6 +16966,7 @@
           "status",
           "statusChange",
           "limits",
+          "pricing",
           "pinnedNote",
           "balanceUnits",
           "counts",
@@ -16580,6 +17081,22 @@
           "default_established",
           "custom",
           "none"
+        ]
+      },
+      "AccountType": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "merchant"
+        ]
+      },
+      "PriceListKind": {
+        "type": "string",
+        "enum": [
+          "retail",
+          "wholesale",
+          "cost",
+          "custom"
         ]
       },
       "CustomerNote": {
@@ -16926,6 +17443,26 @@
         },
         "required": [
           "body"
+        ]
+      },
+      "SetCustomerPriceList": {
+        "type": "object",
+        "properties": {
+          "priceListId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "priceListId",
+          "reason"
         ]
       },
       "SupportChannels": {
@@ -20529,6 +21066,87 @@
           }
         }
       },
+      "CustomerPrices": {
+        "type": "object",
+        "properties": {
+          "priceKind": {
+            "$ref": "#/components/schemas/PriceKind"
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "priceUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "priceSypUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "savings": {
+                  "nullable": true,
+                  "type": "object",
+                  "properties": {
+                    "amountUsdUnits": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "percent": {
+                      "nullable": true,
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "amountUsdUnits",
+                    "percent"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id",
+                "available",
+                "priceUsdUnits",
+                "priceSypUnits",
+                "savings"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "rateId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "priceKind",
+          "products",
+          "rateId"
+        ],
+        "additionalProperties": false
+      },
       "CategoryListQuery": {
         "type": "object",
         "properties": {
@@ -23229,6 +23847,16 @@
         ],
         "additionalProperties": false
       },
+      "MarginRuleListQuery": {
+        "type": "object",
+        "properties": {
+          "priceListId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        }
+      },
       "MarginRule": {
         "type": "object",
         "properties": {
@@ -23248,6 +23876,11 @@
             "maximum": 50000000
           },
           "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "priceListId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
@@ -23284,6 +23917,7 @@
           "fixedUsdUnits",
           "minMarginUsdUnits",
           "id",
+          "priceListId",
           "scope",
           "targetId",
           "targetName",
@@ -23328,6 +23962,11 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "priceListId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           }
         },
         "required": [
@@ -23368,6 +24007,11 @@
                 "$ref": "#/components/schemas/MarginRuleValues"
               }
             ]
+          },
+          "priceListId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           }
         },
         "required": [
@@ -23789,6 +24433,522 @@
           "results"
         ],
         "additionalProperties": false
+      },
+      "PriceList": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PriceListKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentListId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "chain": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "accounts": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "rules": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "fixedPrices": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "fallbackCells": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "archivedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "parentListId",
+          "chain",
+          "accounts",
+          "rules",
+          "fixedPrices",
+          "fallbackCells",
+          "ready",
+          "archivedAt",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "CreatePriceList": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          },
+          "parentListId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "name",
+          "parentListId"
+        ]
+      },
+      "PriceListDetail": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "$ref": "#/components/schemas/PriceList"
+          },
+          "chain": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/PriceListKind"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "fixedPrices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FixedPrice"
+            }
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceListAccount"
+            }
+          }
+        },
+        "required": [
+          "list",
+          "chain",
+          "fixedPrices",
+          "accounts"
+        ],
+        "additionalProperties": false
+      },
+      "FixedPrice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "priceListId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "productNameAr": {
+            "type": "string"
+          },
+          "gameId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "gameNameAr": {
+            "type": "string"
+          },
+          "priceUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "result": {
+            "$ref": "#/components/schemas/ListPriceCell"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "priceListId",
+          "productId",
+          "productNameAr",
+          "gameId",
+          "gameNameAr",
+          "priceUsdUnits",
+          "result",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ListPriceCell": {
+        "type": "object",
+        "properties": {
+          "priceUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "source": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PriceSource"
+              }
+            ]
+          },
+          "marginUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "marginBp": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "priceUsdUnits",
+          "source",
+          "marginUsdUnits",
+          "marginBp"
+        ],
+        "additionalProperties": false
+      },
+      "PriceSource": {
+        "type": "string",
+        "enum": [
+          "rule",
+          "fixed",
+          "fixed_fallback",
+          "retail_cap"
+        ]
+      },
+      "PriceListAccount": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "accountType": {
+            "$ref": "#/components/schemas/AccountType"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "accountType"
+        ],
+        "additionalProperties": false
+      },
+      "RenamePriceList": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "SetFixedPrice": {
+        "type": "object",
+        "properties": {
+          "priceUsdUnits": {
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 10000000000
+          }
+        },
+        "required": [
+          "priceUsdUnits"
+        ]
+      },
+      "PriceMatrixQuery": {
+        "type": "object",
+        "properties": {
+          "gameId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "listIds": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "warnings": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      "PriceMatrix": {
+        "type": "object",
+        "properties": {
+          "lists": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/PriceListKind"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "productNameAr": {
+                  "type": "string"
+                },
+                "gameId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "gameNameAr": {
+                  "type": "string"
+                },
+                "costUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "supplierCode": {
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SupplierCode"
+                    }
+                  ]
+                },
+                "held": {
+                  "type": "boolean"
+                },
+                "cells": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PriceMatrixCell"
+                  }
+                }
+              },
+              "required": [
+                "productId",
+                "productNameAr",
+                "gameId",
+                "gameNameAr",
+                "costUsdUnits",
+                "supplierCode",
+                "held",
+                "cells"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "lists",
+          "rows"
+        ],
+        "additionalProperties": false
+      },
+      "PriceMatrixCell": {
+        "type": "object",
+        "properties": {
+          "priceUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "source": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PriceSource"
+              }
+            ]
+          },
+          "marginUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "marginBp": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "priceListId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "availability": {
+            "$ref": "#/components/schemas/ProductAvailability"
+          },
+          "targetPriceUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "fixedPriceUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceMatrixWarning"
+            }
+          }
+        },
+        "required": [
+          "priceUsdUnits",
+          "source",
+          "marginUsdUnits",
+          "marginBp",
+          "priceListId",
+          "availability",
+          "targetPriceUsdUnits",
+          "fixedPriceUsdUnits",
+          "warnings"
+        ],
+        "additionalProperties": false
+      },
+      "PriceMatrixWarning": {
+        "type": "string",
+        "enum": [
+          "fallback",
+          "capped",
+          "above_parent",
+          "held",
+          "unavailable",
+          "no_row"
+        ]
       },
       "ProductPricePage": {
         "type": "object",
@@ -27726,6 +28886,9 @@
               "$ref": "#/components/schemas/ShareLink"
             }
           },
+          "privatePrice": {
+            "type": "boolean"
+          },
           "repeatable": {
             "type": "boolean"
           },
@@ -27772,6 +28935,7 @@
           "isGift",
           "gift",
           "shareLinks",
+          "privatePrice",
           "repeatable",
           "createdAt",
           "savedPlayer"
@@ -28624,6 +29788,9 @@
               "$ref": "#/components/schemas/ShareLink"
             }
           },
+          "privatePrice": {
+            "type": "boolean"
+          },
           "repeatable": {
             "type": "boolean"
           },
@@ -28662,6 +29829,7 @@
           "isGift",
           "gift",
           "shareLinks",
+          "privatePrice",
           "repeatable",
           "createdAt"
         ],
@@ -31321,7 +32489,8 @@
           "admin_order_placed",
           "supplier_stock_low",
           "supplier_charge_mismatch",
-          "supplier_subscription"
+          "supplier_subscription",
+          "fixed_price_fallback"
         ]
       },
       "TelegramMessageStatus": {
