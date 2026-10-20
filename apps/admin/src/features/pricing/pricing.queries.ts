@@ -5,21 +5,26 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import type {
-  DecideReviews,
-  MarginRuleValues,
-  PricingPreviewRequest,
-  SetMarginRule,
+import {
+  type CreatePriceList,
+  type DecideReviews,
+  type MarginRuleValues,
+  type PricingPreviewRequest,
+  ROOT_PRICE_LIST_IDS,
+  type SetMarginRule,
 } from '@vertex-digital/contracts';
 import { api, BACKGROUND_REQUEST, call } from '../../lib/api/client';
 import { useReauthentication } from '../account/reauthentication';
+import type { MatrixSearch } from './matrix-search';
 import type { ReviewSearch } from './review-search';
 
 /*
  * The pricing engine (S06, F10): the live margin rules, their changes (re-authentication, rule
  * PR9) and the preview (rule PR10). S07: the price reviews and their decisions (rule P4). Keys
  * start with `pricing`. A rule change or a decision reprices products (rule P5), so they read the
- * catalog and the suppliers' routes again too.
+ * catalog and the suppliers' routes again too. S20: the price lists, their rules and fixed prices
+ * (re-authentication, LS6) and the matrix; a list change reprices every list, so it reads all of
+ * `pricing` again.
  */
 
 /** How often the navigation badge reads the open reviews again on its own. */
@@ -35,10 +40,15 @@ const invalidatePricing = (queryClient: QueryClient) =>
     ),
   );
 
-export const rulesQuery = queryOptions({
-  queryKey: ['pricing', 'rules'],
-  queryFn: () => call(api.GET('/api/admin/pricing/rules')),
-});
+/** A list's live rules (S20), retail by default. */
+export const listRulesQuery = (priceListId: string = ROOT_PRICE_LIST_IDS.retail) =>
+  queryOptions({
+    queryKey: ['pricing', 'rules', priceListId],
+    queryFn: () =>
+      call(api.GET('/api/admin/pricing/rules', { params: { query: { priceListId } } })),
+  });
+
+export const rulesQuery = listRulesQuery();
 
 /**
  * PR3–PR8 for a cost and a target's rule or draft values; writes nothing, so it is a read here.
@@ -134,6 +144,123 @@ export function useAdjustMargin() {
           api.POST('/api/admin/pricing/reviews/{id}/adjust-margin', {
             params: { path: { id } },
             body: values,
+          }),
+        ),
+      ),
+    onSettled: () => invalidatePricing(queryClient),
+  });
+}
+
+// Price lists (S20) ------------------------------------------------------------------------------
+
+export const priceListsQuery = queryOptions({
+  queryKey: ['pricing', 'lists'],
+  queryFn: () => call(api.GET('/api/admin/pricing/lists')),
+});
+
+export const priceListQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['pricing', 'lists', id],
+    queryFn: () => call(api.GET('/api/admin/pricing/lists/{id}', { params: { path: { id } } })),
+  });
+
+/** The matrix of a game or a search on the chosen lists; the previous answer stays meanwhile. */
+export const priceMatrixQuery = (search: MatrixSearch) =>
+  queryOptions({
+    queryKey: ['pricing', 'matrix', search],
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/pricing/matrix', {
+          params: {
+            query: {
+              gameId: search.gameId,
+              q: search.q,
+              listIds: search.lists?.join(','),
+              warnings: search.warnings ? 'true' : undefined,
+            } as never,
+          },
+        }),
+      ),
+    enabled: !!search.gameId || !!search.q,
+    placeholderData: keepPreviousData,
+  });
+
+/** LS1–LS3: a custom list under a parent, priced at once. */
+export function useCreatePriceList() {
+  const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: (body: CreatePriceList) =>
+      withReauthentication(() => call(api.POST('/api/admin/pricing/lists', { body }))),
+    onSettled: () => invalidatePricing(queryClient),
+  });
+}
+
+export function useRenamePriceList() {
+  const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      withReauthentication(() =>
+        call(
+          api.PATCH('/api/admin/pricing/lists/{id}', {
+            params: { path: { id } },
+            body: { name },
+          }),
+        ),
+      ),
+    onSettled: () => invalidatePricing(queryClient),
+  });
+}
+
+/** LS5: refused while an account or a list uses it (`PRICE_LIST_IN_USE` with the counts). */
+export function useArchivePriceList() {
+  const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: (id: string) =>
+      withReauthentication(() =>
+        call(api.POST('/api/admin/pricing/lists/{id}/archive', { params: { path: { id } } })),
+      ),
+    onSettled: () => invalidatePricing(queryClient),
+  });
+}
+
+/** LS2, LP1: a list's fixed price for a pack, answered with the list's resulting price. */
+export function useSetFixedPrice() {
+  const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: ({
+      listId,
+      productId,
+      priceUsdUnits,
+    }: {
+      listId: string;
+      productId: string;
+      priceUsdUnits: number;
+    }) =>
+      withReauthentication(() =>
+        call(
+          api.PUT('/api/admin/pricing/lists/{id}/fixed-prices/{productId}', {
+            params: { path: { id: listId, productId } },
+            body: { priceUsdUnits },
+          }),
+        ),
+      ),
+    onSettled: () => invalidatePricing(queryClient),
+  });
+}
+
+export function useArchiveFixedPrice() {
+  const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: ({ listId, productId }: { listId: string; productId: string }) =>
+      withReauthentication(() =>
+        call(
+          api.DELETE('/api/admin/pricing/lists/{id}/fixed-prices/{productId}', {
+            params: { path: { id: listId, productId } },
           }),
         ),
       ),

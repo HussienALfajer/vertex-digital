@@ -11,7 +11,7 @@ import {
   parseGameAmount,
   priceFromCost,
   proposeOptionMap,
-  resolveMarginRule,
+  ROOT_PRICE_LIST_IDS,
   type SupplierCall,
   type SupplierCategoryNode,
   type SupplierCategoryState,
@@ -522,7 +522,7 @@ export class SupplierCatalogMock implements CategoryReader {
     const products = game
       ? this.catalog.products.filter((item) => item.gameId === game.id && !item.archivedAt)
       : [];
-    const global = resolveMarginRule(this.catalog.rules, {});
+    const global = this.catalog.ruleFor(ROOT_PRICE_LIST_IDS.retail, {});
     const packs: ImportDraftPack[] = offers.map((offer) => {
       const leaf = this.find(row.supplierCode, offer.categoryId as string) as StoredCategory;
       const view = this.suppliers.offer(offer);

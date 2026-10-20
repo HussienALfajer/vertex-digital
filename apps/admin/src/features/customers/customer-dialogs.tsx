@@ -1,8 +1,10 @@
+import { useQuery } from '@tanstack/react-query';
 import {
   type AdminCustomer,
   type ArchiveBlocker,
   customerStateChangeSchema,
   formatUsd,
+  setCustomerPriceListSchema,
   updateCustomerLimitsSchema,
 } from '@vertex-digital/contracts';
 import {
@@ -28,10 +30,13 @@ import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
+import { Picker } from '../pricing/picker';
+import { priceListsQuery } from '../pricing/pricing.queries';
 import { LIMIT_SOURCE_KEYS, limitInput, parseLimitInput } from './customer-labels';
 import {
   type CustomerStateAction,
   useCustomerStateChange,
+  useSetCustomerPriceList,
   useUpdateCustomerLimits,
 } from './customers.queries';
 
@@ -272,6 +277,82 @@ export function LimitsDialog({
         <DialogFooter>
           <Button type="submit" disabled={update.isPending}>
             {update.isPending ? t('customers.dialogs.submitting') : t('customers.limits.submit')}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  );
+}
+
+/** The select's value for the type's default list (AT2: `priceListId: null`). */
+const DEFAULT_LIST = 'default';
+
+/**
+ * S20 AT2, AT3: "تغيير قائمة الأسعار": an unarchived, priced list or the type's default, with a
+ * reason; the account's reservations are cancelled and the customer told (re-authentication).
+ */
+export function PriceListDialog({
+  customer,
+  onDone,
+}: {
+  customer: AdminCustomer;
+  onDone: () => void;
+}) {
+  const { t } = useTranslation();
+  const lists = useQuery(priceListsQuery);
+  const change = useSetCustomerPriceList(customer.id);
+  const [value, setValue] = useState<string>(customer.pricing.assignedListId ?? DEFAULT_LIST);
+  const [invalid, setInvalid] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFailure(null);
+    const parsed = setCustomerPriceListSchema.safeParse({
+      priceListId: value === DEFAULT_LIST ? null : value,
+      reason: String(new FormData(event.currentTarget).get('reason') ?? ''),
+    });
+    setInvalid(!parsed.success);
+    if (!parsed.success) return;
+    try {
+      await change.mutateAsync(parsed.data);
+      onDone();
+    } catch (error) {
+      setFailure(errorMessage(t, error));
+    }
+  }
+
+  const items = [
+    { value: DEFAULT_LIST, label: t('customers.pricing.default') },
+    ...(lists.data ?? [])
+      .filter((list) => list.archivedAt === null && list.ready)
+      .map((list) => ({ value: list.id, label: list.name })),
+  ];
+  return (
+    <DialogContent closeLabel={t('common.close')}>
+      <DialogHeader>
+        <DialogTitle>{t('customers.pricing.dialogTitle', { name: customer.name })}</DialogTitle>
+        <DialogDescription>{t('customers.pricing.dialogDescription')}</DialogDescription>
+      </DialogHeader>
+      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+        <Field>
+          <FieldLabel render={<span />}>{t('customers.pricing.list')}</FieldLabel>
+          <Picker
+            label={t('customers.pricing.list')}
+            items={items}
+            value={value}
+            onChange={setValue}
+          />
+        </Field>
+        <Field invalid={invalid}>
+          <FieldLabel>{t('customers.dialogs.reason')}</FieldLabel>
+          <Textarea name="reason" rows={3} maxLength={500} />
+          <FieldError match={invalid}>{t('customers.dialogs.reasonError')}</FieldError>
+        </Field>
+        {failure && <FormAlert>{failure}</FormAlert>}
+        <DialogFooter>
+          <Button type="submit" disabled={change.isPending}>
+            {t('customers.pricing.save')}
           </Button>
         </DialogFooter>
       </form>
