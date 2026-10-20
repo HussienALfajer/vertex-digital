@@ -11,7 +11,7 @@ import { useId } from 'react';
 import { t } from '@/lib/i18n';
 
 /**
- * A 6-digit email code in six slots, as the panel's TOTP code (2026-10-15 system test, F2-4): the
+ * A 6-digit email code in six slots, as the panel's TOTP code (2026-10-15, F2-4): the
  * numeric keyboard on phones, the code from the email pasted whole into any slot (spaces
  * dropped), and the browser's one-time-code autofill on the first slot.
  */

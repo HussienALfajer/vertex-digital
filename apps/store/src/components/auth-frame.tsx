@@ -13,7 +13,7 @@ const POINTS = [
 
 /**
  * The frame of the account entry screens (sign-in, sign-up, the email code, forgot password;
- * 2026-10-15 system test F2-5): one card with a brand panel, the sand logo on Vertex Green with
+ * 2026-10-15, F2-5): one card with a brand panel, the sand logo on Vertex Green with
  * the 60° hairlines (brand/identity.md §5, §8), beside the form. On a phone the panel is a short
  * band above the form; from `md` it is the card's start column with three plain promises.
  */

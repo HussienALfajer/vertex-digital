@@ -129,7 +129,7 @@ export class AuthAccountService {
       .from(customers)
       .where(eq(customers.email, email));
     if (existing) {
-      // An unverified account keeps its pending code (2026-10-15 system test, F2-3): the same
+      // An unverified account keeps its pending code (2026-10-15, F2-3): the same
       // person signing up twice can still enter the first code. No new code is sent, so whoever
       // signed up first never hands the address's owner an account holding their own password:
       // the owner goes through "forgot password", which sets the password (edge case 7).
@@ -202,7 +202,7 @@ export class AuthAccountService {
   /**
    * Rule C7: the code and the account's password verify the email; the caller signs the customer
    * in. The password proves the person holding the code is the one who chose it (2026-10-15
-   * system test, F2-7): someone who signed up first with another person's address never hands the
+   * F2-7): someone who signed up first with another person's address never hands the
    * address's owner an account whose password they know. A right code with another password
    * answers `PASSWORD_MISMATCH` (the code is used): the owner sets a password through "forgot
    * password". Only a right code reaches the password, so it never tests a password for a stranger.

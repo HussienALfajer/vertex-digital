@@ -80,7 +80,7 @@ const PEOPLE = [
     phone: '+963999100213',
     unverified: true,
   },
-  // Test customers (S01 T1–T4), as the system test's TC1–TC3.
+  // Test customers (S01 T1–T4).
   {
     key: 'tc1',
     name: 'عميل اختبار مشتري',
