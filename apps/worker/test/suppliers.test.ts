@@ -291,8 +291,8 @@ async function product(tx: Transaction): Promise<string> {
       values (${id}, ${game}, 'direct', ${`باقة ${unique()}`}, 1, 1)`,
   );
   await tx.execute(
-    sql`insert into margin_rules (id, scope, target_id, percent_bp, fixed_usd_units,
-      min_margin_usd_units) values (${newId()}, 'product', ${id}, ${RULE.percentBp},
+    sql`insert into margin_rules (id, price_list_id, scope, target_id, percent_bp,
+      fixed_usd_units, min_margin_usd_units) values (${newId()}, ${ROOT_PRICE_LIST_IDS.retail}, 'product', ${id}, ${RULE.percentBp},
       ${RULE.fixedUsdUnits}, ${RULE.minMarginUsdUnits})`,
   );
   return id;

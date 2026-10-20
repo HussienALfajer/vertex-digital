@@ -1,3 +1,4 @@
+import { ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
 import type pg from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDatabase } from './client.js';
@@ -249,9 +250,9 @@ describe('margin rules', () => {
   ) =>
     violation(
       client,
-      `insert into margin_rules (id, scope, target_id, percent_bp, fixed_usd_units, min_margin_usd_units)
-       values ($1, $2, $3, $4, $5, $6)`,
-      [newId(), scope, targetId, ...values],
+      `insert into margin_rules (id, price_list_id, scope, target_id, percent_bp, fixed_usd_units,
+         min_margin_usd_units) values ($1, $2, $3, $4, $5, $6, $7)`,
+      [newId(), ROOT_PRICE_LIST_IDS.retail, scope, targetId, ...values],
     );
 
   it('keep one live rule per target and one global rule', () =>

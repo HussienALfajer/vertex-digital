@@ -208,9 +208,16 @@ async function product(
     [id, game, kind, `باقة ${unique()}`, kind === 'code' ? 10 : 1],
   );
   await pool.query(
-    `insert into margin_rules (id, scope, target_id, percent_bp, fixed_usd_units,
-       min_margin_usd_units) values ($1, 'product', $2, $3, $4, $5)`,
-    [newId(), id, rule.percentBp, rule.fixedUsdUnits, rule.minMarginUsdUnits],
+    `insert into margin_rules (id, price_list_id, scope, target_id, percent_bp, fixed_usd_units,
+       min_margin_usd_units) values ($1, $2, 'product', $3, $4, $5, $6)`,
+    [
+      newId(),
+      ROOT_PRICE_LIST_IDS.retail,
+      id,
+      rule.percentBp,
+      rule.fixedUsdUnits,
+      rule.minMarginUsdUnits,
+    ],
   );
   await pool.query(
     `insert into supplier_offers (id, supplier_id, offer_id, name, in_stock, cost_usd_units,
@@ -406,8 +413,8 @@ describe('purchase (rules O1–O6, M1)', () => {
         .where(eq(productPrices.productId, item.id));
       await repricing.query(
         `insert into product_prices (id, product_id, price_usd_units, cost_usd_units, route_id,
-           rule_id, percent_bp, fixed_usd_units, min_margin_usd_units, cause)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'rule_change')`,
+           rule_id, percent_bp, fixed_usd_units, min_margin_usd_units, cause, price_list_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'rule_change', '${ROOT_PRICE_LIST_IDS.retail}')`,
         [
           newId(),
           item.id,
@@ -2101,9 +2108,9 @@ describe('checkouts, saved ids, gifts and share links (S10)', () => {
         `insert into orders (id, number, customer_id, is_test, product_id, game_id, kind, status,
            quantity, unit_price_usd_units, total_usd_units, price_id, min_margin_usd_units, fields,
            idempotency_key, request_hash, purchase_journal_id, paid_at, checkout_id,
-           checkout_line, reserved_at, expires_at, is_gift, gift_message)
+           checkout_line, reserved_at, expires_at, is_gift, gift_message, price_list_id)
          values ($1, $2, $3, false, $4, $5, $6, 'paid', 1, $7, $7, $8, 0, '{}', $9, $10, $11,
-           now(), $12, $13, $14, $15, $16, $17)`,
+           now(), $12, $13, $14, $15, $16, $17, '${ROOT_PRICE_LIST_IDS.retail}')`,
         [
           newId(),
           `VO-${'23456789ABCDEFGHJKMNPQRSTUVWXYZ'.charAt(Math.floor(Math.random() * 31))}2345${Math.floor(Math.random() * 8) + 2}`,
