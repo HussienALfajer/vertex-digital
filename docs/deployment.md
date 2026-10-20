@@ -150,7 +150,7 @@ Restore the files from the same backup:
 ssh vertex "rsync -a /var/backups/digital.vertexmedia.pro/<time>/files/ /srv/digital.vertexmedia.pro/shared/files/ && chown -R vertexdigital:www-data /srv/digital.vertexmedia.pro/shared/files"
 ```
 
-Backups stay on the server until an off-server destination is chosen. That is required before launch (ADR 0009), and before the first real deposit receipt is stored.
+Backups stay on the server until an off-server destination is chosen. That is required before launch (ADR 0009). Interim (owner, 2026-10-20): they stay on this server until the owner subscribes to a second server, which then becomes the destination (Q1); a disk or server loss until then loses the backups with the database.
 
 ## First-time setup
 
