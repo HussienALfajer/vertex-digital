@@ -487,6 +487,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
             categoryId: supplierCategories.categoryId,
             gameId: supplierCategories.gameId,
             ignoredAt: supplierCategories.ignoredAt,
+            kind: supplierCategories.kind,
             missingSince: supplierCategories.missingSince,
             offersReadAt: supplierCategories.offersReadAt,
           })
@@ -515,9 +516,14 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
     const first = live.filter((id) => storedById.get(id)?.gameId != null || mapped.has(id));
     const firstSet = new Set(first);
     const readAt = (id: string) => storedById.get(id)?.offersReadAt?.getTime() ?? 0;
+    // At equal read time, top-ups before gift cards (gift routes wait for a clean live order, D6);
+    // the kind from this run's list when read, else the stored one.
+    const listedKind = new Map(listed?.map((category) => [category.categoryId, category.kind]));
+    const kindRank = (id: string) =>
+      (listedKind.get(id) ?? storedById.get(id)?.kind) === 'direct' ? 0 : 1;
     const rolling = live
       .filter((id) => !firstSet.has(id) && storedById.get(id)?.ignoredAt == null)
-      .sort((a, b) => readAt(a) - readAt(b) || a.localeCompare(b))
+      .sort((a, b) => readAt(a) - readAt(b) || kindRank(a) - kindRank(b) || a.localeCompare(b))
       .slice(0, OFFER_WINDOW_ROLLING);
     return { ids: [...first, ...rolling], vanished };
   }

@@ -2094,7 +2094,7 @@ describe('suppliers.sync: categories, offer fields and stock (S16 SC2, SC3, SF2)
 describe('suppliers.sync: a category window (S19 FC3)', () => {
   const cat = (name: string) => `c-${run}-w${name}`;
   const windowed = (
-    categories: () => Promise<{ categoryId: string; name: string }[]>,
+    categories: () => Promise<{ categoryId: string; name: string; kind?: string }[]>,
     read: (ids: readonly string[]) => { offers: SupplierOffer[]; readCategoryIds: string[] },
     asked: string[][],
   ): Partial<SupplierAdapter> => ({
@@ -2212,6 +2212,36 @@ describe('suppliers.sync: a category window (S19 FC3)', () => {
         .from(supplierCategories)
         .where(eq(supplierCategories.categoryId, cat('U1')));
       expect(u1[0]?.missingSince).toEqual(third?.startedAt);
+    }));
+
+  it('reads top-up categories before gift cards at equal read time', () =>
+    isolated(async (tx) => {
+      await tx.execute(
+        sql`update supplier_categories set ignored_at = now(), game_id = null, linked_at = null
+          where supplier_id = ${ids.fake} and category_id not like ${`c-${run}-k%`}`,
+      );
+      const kinded = (name: string) => `c-${run}-k${name}`;
+      const asked: string[][] = [];
+      current = {
+        ...windowed(
+          async () => [
+            { categoryId: kinded('A-gift'), name: 'A', kind: 'code' },
+            { categoryId: kinded('B-gift'), name: 'B', kind: 'code' },
+            { categoryId: kinded('Z-topup'), name: 'Z', kind: 'direct' },
+          ],
+          () => ({ offers: [], readCategoryIds: [] }),
+          asked,
+        ),
+        listOffersIn: async (window) => {
+          asked.push([...window]);
+          return {
+            offers: window.map((id) => offer(`${id}-1`, 1, { categoryId: id })),
+            readCategoryIds: [...window],
+          };
+        },
+      };
+      expect(await sync.sync(payload(), tx)).toMatchObject({ status: 'succeeded' });
+      expect(asked[0]).toEqual([kinded('Z-topup'), kinded('A-gift'), kinded('B-gift')]);
     }));
 
   it('fails the run when the window could not be read, changing nothing', () =>
