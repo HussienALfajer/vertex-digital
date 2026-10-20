@@ -26,12 +26,15 @@ export function FieldMapEditor({
   entries,
   fields,
   missing = [],
+  extendable = true,
   onChange,
 }: {
   entries: FieldMapEntry[];
   /** The game's unarchived input fields. */
   fields: Pick<InputField, 'key' | 'labelAr'>[];
   missing?: readonly string[];
+  /** Fields typed beside the required ones (off where the supplier lists every field, S19 PC2). */
+  extendable?: boolean;
   onChange: (entries: FieldMapEntry[]) => void;
 }) {
   const { t } = useTranslation();
@@ -123,16 +126,18 @@ export function FieldMapEditor({
           </div>
         );
       })}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="self-start"
-        onClick={() => onChange([...entries, { field: '', key: '', required: false }])}
-      >
-        <PlusIcon />
-        {t('suppliers.fieldMap.add')}
-      </Button>
+      {extendable && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="self-start"
+          onClick={() => onChange([...entries, { field: '', key: '', required: false }])}
+        >
+          <PlusIcon />
+          {t('suppliers.fieldMap.add')}
+        </Button>
+      )}
     </fieldset>
   );
 }

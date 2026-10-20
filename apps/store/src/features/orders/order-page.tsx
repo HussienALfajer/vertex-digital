@@ -172,6 +172,12 @@ export function OrderPage() {
             />
             <span>
               {t('orders.detail.playerName')} <bdi className="font-bold">{order.playerName}</bdi>
+              {order.playerRegion && (
+                <>
+                  {' · '}
+                  {t('orders.detail.region')} <bdi dir="ltr">{order.playerRegion}</bdi>
+                </>
+              )}
             </span>
           </p>
         )}

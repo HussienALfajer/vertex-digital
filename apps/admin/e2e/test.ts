@@ -969,6 +969,23 @@ export class AdminApi {
       );
       if (answer && 'json' in answer) return json(answer.status, answer.json);
     }
+    // S19 PC1: a game's check provider and the provider's check categories.
+    const gameCheck = /^\/api\/admin\/catalog\/games\/([^/]+)\/player-check$/.exec(path);
+    if (gameCheck?.[1]) {
+      const game = this.catalog.games.find((row) => row.id === gameCheck[1]);
+      if (!game) return json(404, { code: 'NOT_FOUND', message: 'Not found' });
+      const keys = this.catalog.fields
+        .filter((field) => field.gameId === game.id && !field.archivedAt)
+        .map((field) => field.key);
+      const answer = this.orders.gamePlayerCheck(request.method(), game.id, body, keys);
+      if ('json' in answer) return json(answer.status, answer.json);
+    }
+    const checkCategories = /^\/api\/admin\/suppliers\/([^/]+)\/check-categories$/.exec(path);
+    if (checkCategories?.[1] && request.method() === 'GET') {
+      return checkCategories[1] === 'fake'
+        ? json(200, { items: this.orders.checkCategories })
+        : json(409, { code: 'CAPABILITY_UNSUPPORTED', message: 'No checks' });
+    }
     if (
       path.startsWith('/api/admin/suppliers') ||
       path.startsWith('/api/admin/catalog/games/') ||

@@ -296,7 +296,8 @@ export function BuyBox({
       checkable &&
       result !== null &&
       result.result !== 'valid' &&
-      result.result !== 'not_supported');
+      result.result !== 'not_supported' &&
+      result.result !== 'region_mismatch');
 
   function change(key: string, value: string) {
     setTyped((current) => ({ ...current, [key]: value }));
@@ -434,6 +435,9 @@ export function BuyBox({
       return null;
     }
     const result = checkable && !isTrusted ? (check ?? (await playerCheck.run())) : null;
+    // S19 PC3: an account on a region the game does not serve is refused, confirmed or not.
+    // Its refusal stands in the check's slot, right above the button.
+    if (result?.result === 'region_mismatch' && !forceConfirm) return null;
     if (needsConfirm(result) && !confirmed) {
       setConfirmMissing(true);
       focusInvalid();
@@ -455,7 +459,9 @@ export function BuyBox({
     const { result } = passed;
     const confirmPlayer = isTrusted || (needsConfirm(result) && confirmed);
     const shown: CartPlayerCheck | null = result
-      ? { result: result.result, playerName: result.result === 'valid' ? result.playerName : null }
+      ? result.result === 'valid'
+        ? { result: 'valid', playerName: result.playerName, region: result.region }
+        : { result: result.result, playerName: null }
       : isTrusted && chosen
         ? { result: 'valid', playerName: chosen.playerName }
         : (editing?.playerCheck ?? null);
@@ -642,6 +648,7 @@ export function BuyBox({
     const order = body();
     const giftValue = giftable ? giftOf(gift) : undefined;
     const lastName = check?.result === 'valid' ? check.playerName : null;
+    const lastRegion = check?.result === 'valid' ? check.region : null;
     return (
       <div className="flex flex-col gap-5">
         {header}
@@ -671,6 +678,13 @@ export function BuyBox({
                 <bdi className="text-lg font-bold">{chosen.playerName}</bdi>
               </Row>
             )
+          )}
+          {lastRegion && (
+            <Row label={t('purchase.regionLabel')}>
+              <bdi dir="ltr" className="text-lg font-bold">
+                {lastRegion}
+              </bdi>
+            </Row>
           )}
           {giftValue && (
             <Row label={t('purchase.gift.summary')}>
@@ -1032,12 +1046,22 @@ function CheckResult({
         {check.playerName ? (
           <span>
             {t('purchase.playerNameIs')} <bdi>{check.playerName}</bdi>
+            {/* S19 PC9: the region only when the provider returned one. */}
+            {check.region && (
+              <>
+                {' · '}
+                {t('purchase.regionIs')} <bdi dir="ltr">{check.region}</bdi>
+              </>
+            )}
           </span>
         ) : (
           t('purchase.playerValid')
         )}
       </Badge>
     );
+  }
+  if (check?.result === 'region_mismatch' && !forced) {
+    return <FormAlert>{t('purchase.regionMismatch', { region: check.region })}</FormAlert>;
   }
   if (check?.result === 'invalid' && !forced) {
     return <FormAlert tone="warning">{t('purchase.playerInvalid')}</FormAlert>;

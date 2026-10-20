@@ -256,6 +256,16 @@ export const webhookQuery = (code: SupplierCode) =>
     retryDelay: 5_000,
   });
 
+/** S19 PC1: a provider's player-check categories with their fields (the API keeps them a minute). */
+export const checkCategoriesQuery = (code: SupplierCode) =>
+  queryOptions({
+    queryKey: ['suppliers', 'check-categories', code],
+    queryFn: () =>
+      call(api.GET('/api/admin/suppliers/{code}/check-categories', { params: { path: { code } } })),
+    staleTime: 60_000,
+    retry: false,
+  });
+
 /**
  * S18 ST3: a statement read refused by the API's 5-second limit waits it out and reads again
  * (twice at most); any other failure is shown at once.

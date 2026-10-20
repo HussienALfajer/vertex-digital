@@ -499,6 +499,7 @@ function LineCard({
   const confirmId = useId();
   const cover = line.display.cover;
   const name = line.playerCheck?.result === 'valid' ? line.playerCheck.playerName : null;
+  const region = line.playerCheck?.result === 'valid' ? (line.playerCheck.region ?? null) : null;
   return (
     <Card className={`gap-3 ${refusal || price === null ? 'border-status-warning' : ''}`}>
       <div className="flex items-start gap-3">
@@ -559,6 +560,11 @@ function LineCard({
             aria-hidden="true"
           />
           <bdi className="font-medium">{name}</bdi>
+          {region && (
+            <span className="text-muted-foreground">
+              · {t('purchase.regionIs')} <bdi dir="ltr">{region}</bdi>
+            </span>
+          )}
         </p>
       ) : (
         line.confirmPlayer && (
@@ -643,6 +649,9 @@ function Refusal({
       return <FormAlert tone="warning">{t('cart.refusals.PRICE_CHANGED')}</FormAlert>;
     case 'PRODUCT_UNAVAILABLE':
       return <FormAlert>{t('cart.refusals.PRODUCT_UNAVAILABLE')}</FormAlert>;
+    // S19 PC3: the account is on a region the pack does not serve; removing the line is the way on.
+    case 'PLAYER_REGION_MISMATCH':
+      return <FormAlert>{t('cart.refusals.PLAYER_REGION_MISMATCH')}</FormAlert>;
     case 'VALIDATION_FAILED':
       return (
         <div className="flex flex-col gap-2">

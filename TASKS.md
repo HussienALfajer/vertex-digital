@@ -32,9 +32,12 @@ Spec `docs/specs/S19-fazercards.md`, ADR 0034. Three code PRs as the spec's deli
 - [x] Error texts (store and admin), audit label, input-type labels (admin catalog) so typecheck holds
 - [x] Wiring checklist, checks, reviewer (2 findings fixed: a cached region mismatch past an unavailable or spent provider, the region refusal per cart line), owner acceptance (2026-10-20; RT10 narrowed to automatic routes by the owner), PR with auto-merge
 
-## PR 4 — screens (later session)
-- Admin: game page "فحص اللاعب" card (provider, searchable check category, field map proposed by key, region chips, enabled, "تجربة"); image suggestion "صورة FazerCards" on import, link and the game page (D10); the new input types in the field editor
-- Store: name and region in the buy box (PC9), the region refusal (PC3), saved ids, cart, order page; the new input types' inputs; admin order shows the region
-- Catalog data ID4 (PUBG 8–12, Free Fire 8–12, MLBB 5–12 and 3–5) set in production as data
-- E2E flows and RTL screenshots (store phone dark and light, admin light and dark); wiring, checks, reviewer, owner acceptance, PR with auto-merge
-- Then: production deploy and the funded pilot (spec "Acceptance")
+## PR 4 — screens (branch `feat/s19-screens`)
+- [x] Admin: game page "فحص اللاعب" card in the fields tab (`features/orders/game-player-check.tsx`, queries in `orders.queries.ts`): provider (suppliers that check as a provider), searchable check category from `check-categories`, field map proposed by key (`proposedFieldMap`) with the option map, allowed regions as chips, enabled; "تجربة" runs AP8 with a direct pack of the game; loading, empty, error, refusals by code
+- [x] Admin: the region beside the name on the order page and in "شراء من اللوحة" (`region_mismatch` answer)
+- [x] Admin: image suggestion D10 on the game page only (owner, 2026-10-20): one "صورة <supplier>" button per linked supplier category with an image
+- [x] Store: buy box name and region (PC9), `region_mismatch` refuses "متابعة" and the cart (PC3), `PLAYER_REGION_MISMATCH` on submit; cart line keeps and shows the region; order page region beside the name; saved ids show no region (owner, 2026-10-20)
+- [x] Store: `supercell_tag` input upper-cased as typed or pasted (ID3); the cart's `PLAYER_REGION_MISMATCH` line refusal (reviewer)
+- [x] E2E: admin player-check card flow (mocks in `catalog-mock.ts`/`suppliers-mock.ts`), store buy box valid with region and region refusal (`purchase.spec.ts`), order page; RTL screenshots (store phone dark and light, admin light and dark)
+- [x] Wiring checklist, checks, reviewer (3 findings fixed: the cart's region refusal, the save notice lost on a remount, the tag upper-cased as typed), owner acceptance (2026-10-20), PR with auto-merge
+- After the merge: production deploy; ID4 catalog data (PUBG 8–12, Free Fire 8–12, MLBB 5–12 and 3–5) set in production; set the check providers; the funded pilot (spec "Acceptance")

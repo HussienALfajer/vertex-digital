@@ -13,6 +13,8 @@ const VERSION = 1;
 export type CartPlayerCheck = {
   result: 'valid' | 'invalid' | 'unavailable' | 'not_supported' | 'region_mismatch';
   playerName: string | null;
+  /** S19 PC9: the account's region a valid check returned (absent in lines added before S19). */
+  region?: string | null;
 };
 
 /** What the cart page shows of a line without reading the catalog again. */

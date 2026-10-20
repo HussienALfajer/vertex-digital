@@ -48,6 +48,7 @@ import { customerListQuery } from '../customers/customers.queries';
 import { StockChip } from '../suppliers/offer-cells';
 import type { NewOrderSearch } from './new-order-search';
 import { purchaseContextQuery, useAdminPlayerCheck, useCreateAdminOrder } from './orders.queries';
+import { PlayerCheckAnswer } from './player-check-answer';
 
 /** The fields of the form a refusal may name. */
 type FieldKey = 'customerId' | 'productId' | 'quantity' | 'reason' | 'customerNote' | 'fields';
@@ -344,7 +345,7 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
                   <SearchIcon />
                   {playerCheck.isPending ? t('orders.buy.checking') : t('orders.buy.check')}
                 </Button>
-                {check && <CheckAnswer check={check} />}
+                {check && <PlayerCheckAnswer check={check} />}
               </div>
             )}
             {product.kind === 'direct' && check?.result === 'invalid' && (
@@ -721,26 +722,6 @@ function AccountFields({
       </div>
     </div>
   );
-}
-
-function CheckAnswer({ check }: { check: PlayerCheck }) {
-  const { t } = useTranslation();
-  switch (check.result) {
-    case 'valid':
-      return (
-        <Badge tone="success">
-          {check.playerName
-            ? t('orders.buy.checkValid', { name: check.playerName })
-            : t('orders.buy.checkValidNoName')}
-        </Badge>
-      );
-    case 'invalid':
-      return <Badge tone="danger">{t('orders.buy.checkInvalid')}</Badge>;
-    case 'unavailable':
-      return <Badge tone="warning">{t('orders.buy.checkUnavailable')}</Badge>;
-    default:
-      return <Badge tone="neutral">{t('orders.buy.checkNotSupported')}</Badge>;
-  }
 }
 
 /** The total, who pays, and the customer's balance after or the owner's day against the cap. */
