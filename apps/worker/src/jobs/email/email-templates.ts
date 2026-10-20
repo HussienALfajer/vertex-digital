@@ -339,7 +339,7 @@ const escapeHtml = (value: string) =>
     .replaceAll('"', '&quot;');
 
 /*
- * The brand frame of every email (brand/identity.md, 2026-10-15 system test F2-5): the sand logo on
+ * The brand frame of every email (brand/identity.md, 2026-10-15, F2-5): the sand logo on
  * a Vertex Green band, a white card on the light background, the sand start bar on the title, the
  * code in a framed block and the action in Vertex Green. Tables and inline styles only, since
  * email clients ignore style sheets; physical sides, since they ignore logical ones (RTL: the
