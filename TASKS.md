@@ -26,6 +26,7 @@ Spec `docs/specs/S20-merchant-accounts-and-price-lists.md`, ADR 0035. Three PRs 
 - [ ] Wiring checklist, checks, reviewer, acceptance, PR with auto-merge
 
 ## PR 3 — merchants: server and screens (branch `feat/s20-merchants`)
+- [ ] Admin order form (S16) reads the chosen customer's list prices (spec API note; found in PR 2's review: today an on-behalf order for an assigned account shows retail and the server answers `PRICE_CHANGED` with the right price)
 - [ ] Contract step for PR 1's defaults (moved from PR 2): drop the retail `DEFAULT` of `margin_rules`, `product_prices` and `orders.price_list_id`, once PR 1 is deployed and no deployed code relies on it
 - [ ] Contracts: `merchants.ts` (form enums, application schemas, `applicationTransition`, `merchantSettingsSchema`), `ACCOUNT_TYPES`, `effectiveDepositLimitSettings` merchant tier (MD1), `merchant_terms` page, `merchant_shop_photo` file kind, errors, audit actions, notifications, Telegram `merchant_application`; unit tests
 - [ ] DB (`/db-migration`): `merchant_profiles`, `merchant_applications` with its guard, `merchant_application_events`, `merchant_settings` (seeded); drift
