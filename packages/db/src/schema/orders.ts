@@ -149,6 +149,8 @@ export const orders = pgTable(
     /** S09 rule PV8: what the purchase knew of the player id, and the in-game name when valid. */
     playerCheck: orderPlayerCheckEnum('player_check').notNull().default('none'),
     playerName: text('player_name'),
+    /** S19 PC9: the account's region the valid check returned; fixed with the name. */
+    playerRegion: text('player_region'),
     /** S10 rule CT5: the checkout that paid the order, and its line there (1–10). */
     checkoutId: uuid('checkout_id').references(() => checkouts.id),
     checkoutLine: integer('checkout_line'),
@@ -282,6 +284,11 @@ export const orders = pgTable(
       'orders_player_name_check',
       sql`${table.playerName} is null
         or (${table.playerCheck} = 'valid' and char_length(${table.playerName}) between 1 and 64)`,
+    ),
+    check(
+      'orders_player_region_check',
+      sql`${table.playerRegion} is null
+        or (${table.playerCheck} = 'valid' and char_length(${table.playerRegion}) between 1 and 16)`,
     ),
     check(
       'orders_checkout_check',
@@ -736,6 +743,9 @@ export const playerChecks = pgTable(
     fieldsHash: text('fields_hash').notNull(),
     result: playerCheckResultEnum('result').notNull(),
     playerName: text('player_name'),
+    /** S19 PC3: the account's region a valid answer returned; compared with the game's at read. */
+    region: text('region'),
+    /** The supplier that answered: the game's provider (S19 PC1) or a route's (S09 PV2). */
     supplierId: uuid('supplier_id')
       .notNull()
       .references(() => suppliers.id),
@@ -761,10 +771,65 @@ export const playerChecks = pgTable(
       sql`${table.playerName} is null
         or (${table.result} = 'valid' and char_length(${table.playerName}) between 1 and 64)`,
     ),
+    check(
+      'player_checks_region_check',
+      sql`${table.region} is null
+        or (${table.result} = 'valid' and char_length(${table.region}) between 1 and 16)`,
+    ),
     check('player_checks_expires_at_check', sql`${table.expiresAt} > ${table.createdAt}`),
     check(
       'player_checks_requester_check',
       sql`(${table.customerId} is null) <> (${table.adminId} is null)`,
+    ),
+  ],
+);
+
+/**
+ * S19 PC1–PC3: the provider that checks every `direct` pack of a game, whichever supplier fulfils
+ * it: its check category, our fields mapped onto its own, the regions the game's packs serve
+ * (empty: no region check). One row per game, its current state; each change is audited
+ * (`catalog_game.player_check_set`); `enabled` false falls back to S09's route-based check.
+ */
+export const gamePlayerChecks = pgTable(
+  'game_player_checks',
+  {
+    gameId: uuid('game_id')
+      .primaryKey()
+      .references(() => catalogGames.id),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id),
+    categoryId: text('category_id').notNull(),
+    /** Provider field → our input key (`fieldMapSchema`). */
+    fieldMap: jsonb('field_map').$type<Record<string, string>>().notNull(),
+    /** Provider field → our option value → the provider's (`optionMapSchema`). */
+    optionMap: jsonb('option_map')
+      .$type<Record<string, Record<string, string>>>()
+      .notNull()
+      .default({}),
+    allowedRegions: text('allowed_regions').array().notNull().default(sql`'{}'::text[]`),
+    enabled: boolean('enabled').notNull(),
+    /** No foreign key: the admin row is replaceable. */
+    adminId: uuid('admin_id').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index('game_player_checks_supplier_id_idx').on(table.supplierId),
+    check(
+      'game_player_checks_category_id_check',
+      sql`char_length(${table.categoryId}) between 1 and 128`,
+    ),
+    check(
+      'game_player_checks_maps_check',
+      sql`jsonb_typeof(${table.fieldMap}) = 'object' and jsonb_typeof(${table.optionMap}) = 'object'`,
+    ),
+    check(
+      'game_player_checks_allowed_regions_check',
+      sql`coalesce(array_length(${table.allowedRegions}, 1), 0) <= 20
+        and array_position(${table.allowedRegions}, null) is null`,
     ),
   ],
 );

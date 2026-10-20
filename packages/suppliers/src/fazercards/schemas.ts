@@ -147,6 +147,15 @@ export const orderRowSchema = z.object({
   completed_at: z.string().max(64).nullish(),
 });
 
+/** `GET /topups/validate-id`: the games FazerCards checks, each by its own check category. */
+export const checkCategoriesReplySchema = z.object({ items: z.array(z.unknown()).max(500) });
+
+export const checkCategorySchema = z.object({
+  category_id: z.string().max(128),
+  name: z.string().max(200).nullish(),
+  fields: z.array(z.unknown()).nullish(),
+});
+
 /** `POST /topups/validate-id`: `player_name` is null when the id is not found. */
 export const validateReplySchema = z.object({
   valid: z.boolean(),

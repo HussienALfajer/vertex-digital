@@ -1077,7 +1077,9 @@ describe('two routes of one supplier (S17 WR8, WR9)', () => {
    * Web Purchase timing and a finite stock, and an Auto-like route on `fake-uc-60` that does.
    */
   async function webAndAuto(tx: Transaction, stock: number | null = 1_000) {
-    const item = await product(tx, { offerId: 'fake-uc-325', fake: usd(0.8) });
+    // Within the review threshold of the Auto route's price, so the basis moves to it at once
+    // (S19 RT10).
+    const item = await product(tx, { offerId: 'fake-uc-325', fake: usd(0.81) });
     const web = item.fakeRoute as string;
     const [route] = await tx
       .update(productRoutes)

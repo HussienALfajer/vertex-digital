@@ -236,9 +236,9 @@ describe('repriceProducts (rule P2)', () => {
       [fakeRoute, 'offer_missing'],
     ]);
 
-    // It comes back: the price returns with it.
+    // It comes back: the price returns with it, at once (the end of a manual fallback, S19 RT10).
     await pool.query('update supplier_offers set missing_since = null where id = $1', [fakeOffer]);
-    await reprice([p.id], 'cost_sync');
+    expect(await reprice([p.id], 'cost_sync')).toEqual({ repriced: 1, reviewsOpened: 0 });
     expect((await prices(p.id))[0]).toMatchObject({ routeId: fakeRoute, cause: 'route_change' });
 
     // No usable route: nothing is written; the product is out of stock with its last price.
@@ -246,6 +246,34 @@ describe('repriceProducts (rule P2)', () => {
     expect(await reprice([p.id], 'route_change')).toEqual({ repriced: 0, reviewsOpened: 0 });
     expect((await prices(p.id)).length).toBe(3);
     expect((await state(p.id))?.availability).toBe('out_of_stock');
+  });
+
+  it('reviews a switch between automatic routes beyond the threshold, not a small one (S19 RT10)', async () => {
+    const p = await product();
+    const first = await offer('fake', usd(1));
+    const firstRoute = await route(p.id, 'fake', first);
+    const second = await offer('fake', usd(1.05));
+    const secondRoute = await route(p.id, 'fake', second);
+    await reprice([p.id], 'route_change');
+    expect((await prices(p.id))[0]?.routeId).toBe(firstRoute);
+
+    // +5% through the other route: within the threshold, at once.
+    await pool.query('update supplier_offers set missing_since = now() where id = $1', [first]);
+    expect(await reprice([p.id], 'cost_sync')).toEqual({ repriced: 1, reviewsOpened: 0 });
+    expect((await prices(p.id))[0]).toMatchObject({ routeId: secondRoute, cause: 'route_change' });
+    await pool.query('update supplier_offers set missing_since = null where id = $1', [first]);
+    expect(await reprice([p.id], 'cost_sync')).toEqual({ repriced: 1, reviewsOpened: 0 });
+
+    // +200% through the other route: held for review, the price stays.
+    await setCost(second, usd(3));
+    await pool.query('update supplier_offers set missing_since = now() where id = $1', [first]);
+    expect(await reprice([p.id], 'cost_sync')).toEqual({ repriced: 0, reviewsOpened: 1 });
+    expect((await prices(p.id))[0]?.routeId).toBe(firstRoute);
+    expect(await openReview(p.id)).toMatchObject({
+      routeId: secondRoute,
+      costBeforeUsdUnits: usd(1),
+      costAfterUsdUnits: usd(3),
+    });
   });
 
   it('reviews a large cost change met when the route comes back, not a manual cost (edge case 7)', async () => {

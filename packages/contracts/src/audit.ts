@@ -21,6 +21,7 @@ import { notificationEventSchema } from './notifications.js';
 import {
   adminOrderPurposeSchema,
   cancelReasonSchema,
+  gamePlayerCheckSchema,
   orderPayerSchema,
   orderPolicySchema,
   refundReasonSchema,
@@ -174,6 +175,11 @@ const gameValues = {
   accentColor: z.string().nullable(),
   regionNotesAr: z.string().nullable(),
 };
+/** S19 PC1: a game's player-check row as recorded. */
+const playerCheckValues = z.strictObject({
+  ...gamePlayerCheckSchema.omit({ gameId: true, updatedAt: true, supplierCode: true }).shape,
+  supplier: supplierCodeSchema,
+});
 /** A field's `key` is recorded as `identifier`: the audit test refuses any key named like a secret. */
 const inputFieldValues = {
   identifier: z.string(),
@@ -482,6 +488,11 @@ export const AUDIT_DETAILS = {
     gameId: z.uuid(),
     activated: z.int().nonnegative(),
     skipped: z.int().nonnegative(),
+  }),
+  /** S19 PC1: the game's player-check provider row; `before` is null for the first. */
+  'catalog_game.player_check_set': z.strictObject({
+    before: playerCheckValues.nullable(),
+    after: playerCheckValues,
   }),
   'catalog_input_field.created': z.strictObject({ gameId: z.uuid(), ...inputFieldValues }),
   'catalog_input_field.updated': changed(inputFieldValues),

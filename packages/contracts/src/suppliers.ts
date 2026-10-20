@@ -61,9 +61,11 @@ export const SUPPLIER_CALL_OPERATIONS = [
 /**
  * S16 SF6: calls made on request or for information; health counts the operations orders depend
  * on. S18 SY4: the platform status counts now: the sync reads it every run, so a supplier whose
- * catalog has not changed still has enough calls in its window to be judged.
+ * catalog has not changed still has enough calls in its window to be judged. S19 PC7: player
+ * checks do not count either: a check outage must not stop deliveries, nor the reverse.
  */
 export const PANEL_READ_OPERATIONS: readonly SupplierCallOperation[] = [
+  'validate_player',
   'list_transactions',
   'list_orders',
   'fetch_image',
@@ -127,18 +129,20 @@ export function supplierAvailable(code: SupplierCode, options: { fakeEnabled: bo
   return ADAPTERS_READY.includes(code);
 }
 
-/** Suppliers that list offers (rule SY1); `manual` offers are the admin's. */
 /**
- * S09 rule PV1: this build has an adapter for the supplier that checks player ids by its route.
- * FazerCards checks by its own check categories, not its order ones, so it answers through a game's
- * check provider (S19 PC1, PR 3), never a route.
+ * S09 rule PV1: this build has an adapter for the supplier that checks player ids, by a route
+ * (`route`, the default) or as a game's check provider (`provider`, S19 PC1). FazerCards checks by
+ * its own check categories, not its order ones, so it answers only as a provider.
  */
 export function supplierChecksPlayers(
   code: SupplierCode,
-  options: { fakeEnabled: boolean },
+  options: { fakeEnabled: boolean; by?: 'route' | 'provider' },
 ): boolean {
-  return code === 'fake' && supplierAvailable(code, options);
+  if (!supplierAvailable(code, options)) return false;
+  return code === 'fake' || (options.by === 'provider' && code === 'fazercards');
 }
+
+/** Suppliers that list offers (rule SY1); `manual` offers are the admin's. */
 
 export function supplierHasCatalog(code: SupplierCode): boolean {
   return code !== 'manual';
@@ -630,21 +634,46 @@ export interface OrderedRoute {
   health: SupplierHealthState;
   costUsdUnits: number | null;
   priority: number;
+  /** S19 RT12: its supplier's measured delivery time; null or absent: no measure. */
+  deliveryMedianMs?: number | null;
 }
+
+/** S19 RT11: the last tie-break between suppliers, replacing the alphabetical one. */
+export const SUPPLIER_PRECEDENCE: readonly SupplierCode[] = [
+  'wdgzone',
+  'fazercards',
+  'fake',
+  'manual',
+];
+
+/** S19 RT12: the delivery time is measured over this many days, from at least this many. */
+export const DELIVERY_MEASURE_DAYS = 7;
+export const DELIVERY_MEASURE_MIN_DELIVERIES = 10;
 
 /**
  * Routes in the order the price basis and the router use (rules RT5, RT6): by tier, then cost
- * (unknown last), then priority, then supplier code.
+ * (unknown last). S19 RT11: among routes of one tier and one cost, the shorter measured delivery
+ * time first when every one of them has a measure (one without makes the group skip to priority,
+ * so the order never depends on which pair is compared), then priority, then
+ * `SUPPLIER_PRECEDENCE`.
  */
 export function orderRoutes<Route extends OrderedRoute>(routes: readonly Route[]): Route[] {
   const tier = (route: Route) => ROUTE_TIERS.indexOf(routeTier(route.supplierCode, route.health));
   const cost = (route: Route) => route.costUsdUnits ?? Number.MAX_SAFE_INTEGER;
+  const group = (route: Route) => `${tier(route)}:${cost(route)}`;
+  const unmeasured = new Set(
+    routes.filter((route) => route.deliveryMedianMs == null).map((route) => group(route)),
+  );
+  const delivery = (a: Route, b: Route) =>
+    unmeasured.has(group(a)) ? 0 : (a.deliveryMedianMs as number) - (b.deliveryMedianMs as number);
+  const precedence = (route: Route) => SUPPLIER_PRECEDENCE.indexOf(route.supplierCode);
   return [...routes].sort(
     (a, b) =>
       tier(a) - tier(b) ||
       cost(a) - cost(b) ||
+      delivery(a, b) ||
       a.priority - b.priority ||
-      a.supplierCode.localeCompare(b.supplierCode),
+      precedence(a) - precedence(b),
   );
 }
 
@@ -735,6 +764,26 @@ export const fieldSpecSchema = z
   .meta({ id: 'FieldSpec' });
 
 export type FieldSpec = z.infer<typeof fieldSpecSchema>;
+
+/**
+ * `GET /api/admin/suppliers/:code/check-categories` (S19 PC1): the provider's own player-check
+ * categories and the fields each asks for (FazerCards' `GET /topups/validate-id`).
+ */
+export const checkCategorySchema = z
+  .object({
+    categoryId: z.string().min(1).max(128),
+    name: z.string().max(200),
+    fields: z.array(fieldSpecSchema).max(MAX_FIELD_SPECS),
+  })
+  .meta({ id: 'CheckCategory' });
+
+export type CheckCategory = z.infer<typeof checkCategorySchema>;
+
+export const checkCategoryListSchema = z
+  .object({ items: z.array(checkCategorySchema) })
+  .meta({ id: 'CheckCategoryList' });
+
+export type CheckCategoryList = z.infer<typeof checkCategoryListSchema>;
 
 /** S16 SF5: the supplier's own status and catalog time, as it reports them. */
 export const platformStatusSchema = z

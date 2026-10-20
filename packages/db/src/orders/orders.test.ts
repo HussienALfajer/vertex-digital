@@ -17,7 +17,7 @@ import { accountBalance } from '../ledger/balance.js';
 import { ensureCustomerWallet, ensureSystemAccount, findCustomerWallet } from '../ledger/index.js';
 import { postJournal } from '../ledger/post-journal.js';
 import { walletTimeline } from '../ledger/wallet.js';
-import { repriceProducts } from '../pricing/index.js';
+import { repriceProducts, supplierDeliveryMedians } from '../pricing/index.js';
 import { type CheckResult, internalChecks, runInternalChecks } from '../reconciliation/index.js';
 import {
   auditEntries,
@@ -26,6 +26,7 @@ import {
   customers,
   emailOutbox,
   fulfilmentAttempts,
+  gamePlayerChecks,
   orderCodes,
   orderEvents,
   orderShareLinks,
@@ -990,9 +991,20 @@ describe('reservations (S09 rules RS1–RS9, PV8)', () => {
     const item = await product();
     const buyer = await customer({ funds: usd(10) });
     const valid = await buy(
-      request(buyer, item, { playerCheck: async () => ({ result: 'valid', playerName: 'Hero' }) }),
+      request(buyer, item, {
+        playerCheck: async () => ({ result: 'valid', playerName: 'Hero', region: 'ME' }),
+      }),
     );
-    expect(valid.order).toMatchObject({ playerCheck: 'valid', playerName: 'Hero' });
+    expect(valid.order).toMatchObject({
+      playerCheck: 'valid',
+      playerName: 'Hero',
+      playerRegion: 'ME',
+    });
+    // S19 PC3: an account outside the game's regions is refused, even confirmed.
+    const mismatch = async () => ({ result: 'region_mismatch' as const, region: 'EU' });
+    expect(
+      await refusal(buy(request(buyer, item, { playerCheck: mismatch, confirmPlayer: true }))),
+    ).toMatchObject({ code: 'PLAYER_REGION_MISMATCH', details: { region: 'EU' } });
     for (const result of ['invalid', 'none'] as const) {
       const lookup = async () => ({ result });
       expect(await refusal(buy(request(buyer, item, { playerCheck: lookup })))).toMatchObject({
@@ -1404,7 +1416,102 @@ describe('reservations (S09 rules RS1–RS9, PV8)', () => {
         [newId(), item.game, 'b'.repeat(64), suppliers.fake, buyer],
       ),
     ).rejects.toThrow(/player_checks_player_name_check/);
+    await expect(
+      pool.query(
+        `insert into player_checks (id, game_id, fields_hash, result, region, supplier_id, customer_id, expires_at)
+         values ($1, $2, $3, 'invalid', 'ME', $4, $5, now() + interval '1 hour')`,
+        [newId(), item.game, 'c'.repeat(64), suppliers.fake, buyer],
+      ),
+    ).rejects.toThrow(/player_checks_region_check/);
     await db.delete(playerChecks).where(eq(playerChecks.id, id));
+  });
+
+  it('fixes the player region with the name (S19 PC9, migration 0074)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    const { order } = await buy(
+      request(buyer, item, {
+        playerCheck: async () => ({ result: 'valid', playerName: 'Hero', region: 'ME' }),
+      }),
+    );
+    await expect(
+      pool.query(`update orders set player_region = 'EU' where id = $1`, [order.id]),
+    ).rejects.toThrow(/identity and fields are fixed/);
+    const other = await buy(request(buyer, item));
+    await expect(
+      owner.pool.query(`update orders set player_region = 'EU' where id = $1`, [other.order.id]),
+    ).rejects.toThrow(/orders_player_region_check|identity and fields are fixed/);
+  });
+
+  it('keeps a game check provider row, never deletes it (S19 PC1, migration 0074)', async () => {
+    const item = await product();
+    await db.insert(gamePlayerChecks).values({
+      gameId: item.game,
+      supplierId: suppliers.fake,
+      categoryId: 'player',
+      fieldMap: { playerId: 'player_id' },
+      allowedRegions: ['ME'],
+      enabled: true,
+      adminId: newId(),
+    });
+    await expect(
+      pool.query('delete from game_player_checks where game_id = $1', [item.game]),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      pool.query(
+        `update game_player_checks set allowed_regions = array_fill('X'::text, array[21])
+         where game_id = $1`,
+        [item.game],
+      ),
+    ).rejects.toThrow(/game_player_checks_allowed_regions_check/);
+  });
+});
+
+describe('measured delivery time (S19 RT12)', () => {
+  it('measures a supplier from 10 deliveries by its own answer, never from fewer', async () => {
+    const item = await product({ cost: usd(0.1) });
+    const buyer = await customer({ funds: usd(20) });
+    const {
+      rows: [wdgzone],
+    } = await pool.query<{ id: string }>(`select id from suppliers where code = 'wdgzone'`);
+    class Rollback extends Error {}
+    await db
+      .transaction(async (tx) => {
+        const now = new Date();
+        for (let minutes = 1; minutes <= 10; minutes += 1) {
+          const { order } = await purchaseOrder(tx, context(), request(buyer, item));
+          const locked = (await lockOrder(tx, order.id)) as OrderRow;
+          const id = newId();
+          await tx.insert(fulfilmentAttempts).values({
+            id,
+            orderId: order.id,
+            routeId: item.route,
+            supplierId: wdgzone?.id as string,
+            offerId: item.offer,
+            supplierOfferId: 'o-test',
+            quantity: 1,
+            unitCostUsdUnits: item.cost,
+            status: 'sending',
+            candidates: [],
+            sentAt: now,
+            sendStartedAt: new Date(now.getTime() - minutes * 60_000),
+          });
+          await transitionOrder(tx, locked, 'sent_to_supplier', { actor: 'system', attemptId: id });
+          await applyOutcome(
+            tx,
+            { ...context(), now },
+            id,
+            { status: 'delivered', quantity: 1 },
+            { by: 'supplier' },
+          );
+          const measured = (await supplierDeliveryMedians(tx, now)).get(wdgzone?.id as string);
+          expect(measured).toBe(minutes < 10 ? undefined : 330_000);
+        }
+        throw new Rollback();
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof Rollback)) throw error;
+      });
   });
 });
 
@@ -1565,10 +1672,11 @@ describe('checkouts, saved ids, gifts and share links (S10)', () => {
   });
 
   it('refuses the whole cart with every line’s reason, writing nothing (CT5 step 3)', async () => {
-    const [ok, dear, code, checked] = [
+    const [ok, dear, code, checked, far] = [
       await product(),
       await product(),
       await product({ kind: 'code' }),
+      await product(),
       await product(),
     ];
     const buyer = await customer({ funds: usd(20) });
@@ -1583,10 +1691,15 @@ describe('checkouts, saved ids, gifts and share links (S10)', () => {
             line(code, { fields: {}, gift: {} }),
             line(ok, { fields: { player_id: 'abc' } }),
             line(checked),
+            line(far, { confirmPlayer: true }),
           ],
           {
             playerCheck: async (_tx, order) =>
-              order.productId === checked.id ? { result: 'invalid' } : null,
+              order.productId === checked.id
+                ? { result: 'invalid' }
+                : order.productId === far.id
+                  ? { result: 'region_mismatch', region: 'EU' }
+                  : null,
           },
         ),
       ),
@@ -1604,6 +1717,8 @@ describe('checkouts, saved ids, gifts and share links (S10)', () => {
             details: { fields: { player_id: expect.any(String) } },
           },
           { index: 5, code: 'PLAYER_NOT_CONFIRMED', details: { result: 'invalid' } },
+          // S19 PC3: confirmed or not.
+          { index: 6, code: 'PLAYER_REGION_MISMATCH', details: { region: 'EU' } },
         ],
       },
     });
@@ -1783,7 +1898,7 @@ describe('checkouts, saved ids, gifts and share links (S10)', () => {
     const item = await product();
     const buyer = await customer({ funds: usd(20) });
     const fields = { player_id: '5123456789' };
-    const valid = async () => ({ result: 'valid' as const, playerName: 'Hero' });
+    const valid = async () => ({ result: 'valid' as const, playerName: 'Hero', region: null });
     const first = await buy(
       request(buyer, item, { savePlayer: { label: 'حسابي' }, playerCheck: valid }),
     );

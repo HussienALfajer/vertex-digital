@@ -161,6 +161,8 @@ export const ERROR_CODES = [
   'WEBHOOK_SIGNATURE_INVALID',
   /** The player id is not known valid and the customer did not confirm it (S09 rule PV8). */
   'PLAYER_NOT_CONFIRMED',
+  /** The checked account's region is not one the game's packs serve; `details.region` (S19 PC3). */
+  'PLAYER_REGION_MISMATCH',
   /** The customer already holds the most open reservations; `details.limit` (S09 rule RS2). */
   'RESERVATIONS_LIMIT_REACHED',
   /** Only a reservation can be cancelled; `details.status` (S09 rule RS8). */

@@ -1,4 +1,6 @@
 import {
+  DELIVERY_MEASURE_DAYS,
+  DELIVERY_MEASURE_MIN_DELIVERIES,
   type MarginRuleValues,
   orderRoutes,
   type ProductAvailability,
@@ -19,13 +21,14 @@ import {
   type SupplierPolicy,
   supplierAvailable,
 } from '@vertex-digital/contracts';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { type Database, readAll, type Transaction } from '../client.js';
 import {
   catalogCategories,
   catalogGames,
   catalogInputFields,
   catalogProducts,
+  fulfilmentAttempts,
   marginRules,
   priceReviews,
   productPrices,
@@ -103,6 +106,8 @@ export interface RouteState {
   unusableReason: RouteUnusableReason | null;
   /** Null for an unusable route. */
   tier: RouteTier | null;
+  /** S19 RT12: its supplier's measured delivery time, or null without a measure. */
+  deliveryMedianMs: number | null;
 }
 
 export type PriceRow = typeof productPrices.$inferSelect;
@@ -235,9 +240,70 @@ export async function supplierStates(
   });
 }
 
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+/**
+ * S19 RT12: per supplier, the median time from the first send to the delivery of its routed
+ * attempts delivered in the last 7 days by the supplier's own answer (an admin's resolution says
+ * nothing of its speed), for suppliers with at least 10 of them; in milliseconds.
+ */
+export async function supplierDeliveryMedians(
+  db: Executor,
+  now: Date,
+): Promise<Map<string, number>> {
+  const rows = await db
+    .select({
+      supplierId: fulfilmentAttempts.supplierId,
+      medianMs:
+        sql<number>`percentile_cont(0.5) within group (order by extract(epoch from ${fulfilmentAttempts.resolvedAt} - ${fulfilmentAttempts.sendStartedAt}) * 1000)`.mapWith(
+          Number,
+        ),
+    })
+    .from(fulfilmentAttempts)
+    .where(
+      and(
+        eq(fulfilmentAttempts.status, 'delivered'),
+        eq(fulfilmentAttempts.kind, 'routed'),
+        ne(fulfilmentAttempts.resolvedBy, 'admin'),
+        isNotNull(fulfilmentAttempts.sendStartedAt),
+        gte(
+          fulfilmentAttempts.resolvedAt,
+          new Date(now.getTime() - DELIVERY_MEASURE_DAYS * DAY_MS),
+        ),
+      ),
+    )
+    .groupBy(fulfilmentAttempts.supplierId)
+    .having(sql`count(*) >= ${DELIVERY_MEASURE_MIN_DELIVERIES}`);
+  return new Map(
+    rows.flatMap((row) =>
+      row.supplierId === null ? [] : [[row.supplierId, Math.max(0, Math.round(row.medianMs))]],
+    ),
+  );
+}
+
+/** S19 RT12: the measure is read again at most once a minute per process (no table). */
+const DELIVERY_MEASURE_TTL_MS = 60_000;
+
+let deliveryMeasure: { at: number; medians: ReadonlyMap<string, number> } | null = null;
+
+async function measuredDelivery(db: Executor, now: Date): Promise<ReadonlyMap<string, number>> {
+  if (deliveryMeasure && Math.abs(now.getTime() - deliveryMeasure.at) < DELIVERY_MEASURE_TTL_MS) {
+    return deliveryMeasure.medians;
+  }
+  const medians = await supplierDeliveryMedians(db, now);
+  deliveryMeasure = { at: now.getTime(), medians };
+  return medians;
+}
+
+/** Drops the kept measure, so the next routing read measures again (tests). */
+export function forgetDeliveryMeasure(): void {
+  deliveryMeasure = null;
+}
+
 /**
  * The routing state of each product (rules RT4–RT6, P1, P6), keyed by product id. Unknown ids are
- * left out. Reads only: the repricing write path locks the products first.
+ * left out. Reads only: the repricing write path locks the products first. S19 RT11: routes of one
+ * tier and cost are ordered by their suppliers' measured delivery time (RT12).
  */
 export async function productRoutingStates(
   db: Executor,
@@ -247,42 +313,44 @@ export async function productRoutingStates(
   const states = new Map<string, ProductRoutingState>();
   if (productIds.length === 0) return states;
   const ids = [...new Set(productIds)];
-  const [products, routeRows, supplierList, rules, prices, reviews, policy] = await readAll(db, [
-    () =>
-      db
-        .select({
-          product: catalogProducts,
-          gameStatus: catalogGames.status,
-          gameArchivedAt: catalogGames.archivedAt,
-          categoryId: catalogGames.categoryId,
-          categoryArchivedAt: catalogCategories.archivedAt,
-        })
-        .from(catalogProducts)
-        .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
-        .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
-        .where(inArray(catalogProducts.id, ids)),
-    () =>
-      db
-        .select({ route: productRoutes, offer: supplierOffers })
-        .from(productRoutes)
-        .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
-        .where(inArray(productRoutes.productId, ids))
-        .orderBy(asc(productRoutes.createdAt)),
-    () => supplierStates(db, context),
-    () => db.select().from(marginRules).where(isNull(marginRules.archivedAt)),
-    () =>
-      db
-        .selectDistinctOn([productPrices.productId])
-        .from(productPrices)
-        .where(inArray(productPrices.productId, ids))
-        .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id)),
-    () =>
-      db
-        .select()
-        .from(priceReviews)
-        .where(and(inArray(priceReviews.productId, ids), eq(priceReviews.status, 'open'))),
-    () => currentSupplierPolicy(db),
-  ]);
+  const [products, routeRows, supplierList, rules, prices, reviews, policy, medians] =
+    await readAll(db, [
+      () =>
+        db
+          .select({
+            product: catalogProducts,
+            gameStatus: catalogGames.status,
+            gameArchivedAt: catalogGames.archivedAt,
+            categoryId: catalogGames.categoryId,
+            categoryArchivedAt: catalogCategories.archivedAt,
+          })
+          .from(catalogProducts)
+          .innerJoin(catalogGames, eq(catalogGames.id, catalogProducts.gameId))
+          .innerJoin(catalogCategories, eq(catalogCategories.id, catalogGames.categoryId))
+          .where(inArray(catalogProducts.id, ids)),
+      () =>
+        db
+          .select({ route: productRoutes, offer: supplierOffers })
+          .from(productRoutes)
+          .innerJoin(supplierOffers, eq(supplierOffers.id, productRoutes.offerId))
+          .where(inArray(productRoutes.productId, ids))
+          .orderBy(asc(productRoutes.createdAt)),
+      () => supplierStates(db, context),
+      () => db.select().from(marginRules).where(isNull(marginRules.archivedAt)),
+      () =>
+        db
+          .selectDistinctOn([productPrices.productId])
+          .from(productPrices)
+          .where(inArray(productPrices.productId, ids))
+          .orderBy(productPrices.productId, desc(productPrices.createdAt), desc(productPrices.id)),
+      () =>
+        db
+          .select()
+          .from(priceReviews)
+          .where(and(inArray(priceReviews.productId, ids), eq(priceReviews.status, 'open'))),
+      () => currentSupplierPolicy(db),
+      () => measuredDelivery(db, context.now),
+    ]);
   const gameIds = [...new Set(products.map((row) => row.product.gameId))];
   const fields =
     gameIds.length === 0
@@ -368,6 +436,7 @@ export async function productRoutingStates(
           updatedAt: route.updatedAt,
           unusableReason,
           tier: unusableReason === null ? routeTier(supplier.code, supplier.health) : null,
+          deliveryMedianMs: medians.get(supplier.id) ?? null,
         };
       });
     const usable = orderRoutes(routes.filter((route) => route.unusableReason === null));

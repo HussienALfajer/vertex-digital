@@ -94,6 +94,9 @@ describe('suppliers (rule SP1)', () => {
   it('make FazerCards available with its adapter, never checking players by route (S19 FC2)', () => {
     expect(supplierAvailable('fazercards', { fakeEnabled: false })).toBe(true);
     expect(supplierChecksPlayers('fazercards', { fakeEnabled: true })).toBe(false);
+    expect(supplierChecksPlayers('fazercards', { fakeEnabled: true, by: 'provider' })).toBe(true);
+    expect(supplierChecksPlayers('wdgzone', { fakeEnabled: true, by: 'provider' })).toBe(false);
+    expect(supplierChecksPlayers('fake', { fakeEnabled: false, by: 'provider' })).toBe(false);
   });
 
   describe('subscription alerts (S19 FC9)', () => {
@@ -228,13 +231,19 @@ describe('route order and basis (rules RT5, RT6, P1)', () => {
   const route = (
     supplierCode: (typeof SUPPLIER_CODES)[number],
     costUsdUnits: number | null,
-    extra: { health?: 'healthy' | 'degraded'; priority?: number; priceBasis?: boolean } = {},
+    extra: {
+      health?: 'healthy' | 'degraded';
+      priority?: number;
+      priceBasis?: boolean;
+      deliveryMedianMs?: number | null;
+    } = {},
   ) => ({
     supplierCode,
     costUsdUnits,
     health: extra.health ?? 'healthy',
     priority: extra.priority ?? 1,
     priceBasis: extra.priceBasis ?? true,
+    deliveryMedianMs: extra.deliveryMedianMs,
   });
 
   it('puts healthy, then degraded, then manual routes first, whatever the cost', () => {
@@ -248,21 +257,39 @@ describe('route order and basis (rules RT5, RT6, P1)', () => {
     expect(routeTier('fake', 'down')).toBe('degraded');
   });
 
-  it('breaks ties by cost, then priority, then supplier code; unknown costs last', () => {
+  it('breaks ties by cost, then priority, then supplier precedence; unknown costs last', () => {
     const ordered = orderRoutes([
-      route('wdgzone', 500, { priority: 2 }),
-      route('fake', null),
       route('fake', 500, { priority: 2 }),
+      route('fake', null),
+      route('wdgzone', 500, { priority: 2 }),
       route('fake', 500, { priority: 1 }),
       route('fake', 400, { priority: 9 }),
+      route('fazercards', 500, { priority: 2 }),
     ]);
-    expect(ordered.map((item) => [item.supplierCode, item.costUsdUnits])).toEqual([
-      ['fake', 400],
-      ['fake', 500],
-      ['fake', 500],
-      ['wdgzone', 500],
-      ['fake', null],
+    expect(ordered.map((item) => [item.supplierCode, item.costUsdUnits, item.priority])).toEqual([
+      ['fake', 400, 9],
+      ['fake', 500, 1],
+      ['wdgzone', 500, 2],
+      ['fazercards', 500, 2],
+      ['fake', 500, 2],
+      ['fake', null, 1],
     ]);
+  });
+
+  it('puts the faster supplier first among equal costs when every one is measured (RT11)', () => {
+    const measured = orderRoutes([
+      route('wdgzone', 500, { priority: 1, deliveryMedianMs: 9_000 }),
+      route('fazercards', 500, { priority: 2, deliveryMedianMs: 4_000 }),
+      route('fake', 400, { priority: 9, deliveryMedianMs: 60_000 }),
+    ]);
+    expect(measured.map((item) => item.supplierCode)).toEqual(['fake', 'fazercards', 'wdgzone']);
+    // One route without a measure: its whole group skips to priority, then precedence.
+    const partly = orderRoutes([
+      route('fazercards', 500, { priority: 1, deliveryMedianMs: 4_000 }),
+      route('fake', 500, { priority: 1, deliveryMedianMs: null }),
+      route('wdgzone', 500, { priority: 1, deliveryMedianMs: 9_000 }),
+    ]);
+    expect(partly.map((item) => item.supplierCode)).toEqual(['wdgzone', 'fazercards', 'fake']);
   });
 
   it('bases the price on the first route, or none', () => {

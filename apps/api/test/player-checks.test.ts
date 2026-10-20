@@ -27,6 +27,7 @@ import { parseEnv } from '../src/core/config/env.js';
 import { SupplierAdaptersService } from '../src/modules/suppliers/supplier-adapters.service.js';
 import {
   api,
+  auditOf,
   body,
   notificationsOf,
   openEventStream,
@@ -54,7 +55,7 @@ const run = randomBytes(4).toString('hex');
 const usd = (dollars: number) => Math.round(dollars * 1_000_000);
 const RULE = { percentBp: 1000, fixedUsdUnits: 0, minMarginUsdUnits: usd(0.1) };
 const STATE_FILE = parseEnv().FAKE_SUPPLIER_STATE_FILE;
-const ids = { fake: '', gameId: '', codeGameId: '' };
+const ids = { fake: '', manual: '', wdgzone: '', fazercards: '', gameId: '', codeGameId: '' };
 let quotaBefore = 1_000;
 
 interface Item {
@@ -85,7 +86,12 @@ async function game(slug: string) {
   ).id;
 }
 
-async function product(gameId: string, kind: 'direct' | 'code', cost: number): Promise<Item> {
+async function product(
+  gameId: string,
+  kind: 'direct' | 'code',
+  cost: number,
+  supplier: 'fake' | 'manual' = 'fake',
+): Promise<Item> {
   await test.db.execute(sql`update catalog_games set status = 'paused' where id = ${gameId}`);
   const created = await json<{ id: string }>(
     await adminPost(`/api/admin/catalog/games/${gameId}/products`, {
@@ -94,28 +100,38 @@ async function product(gameId: string, kind: 'direct' | 'code', cost: number): P
     }),
     201,
   );
-  const now = new Date();
-  const [offer] = await test.db
-    .insert(supplierOffers)
-    .values({
-      supplierId: ids.fake,
-      offerId: `o-${randomBytes(4).toString('hex')}`,
-      name: 'Fake offer',
-      kind,
-      requiredFields: kind === 'direct' ? ['playerId'] : [],
-      costUsdUnits: usd(cost),
-      inStock: true,
-      costConfirmedAt: now,
-      lastSeenAt: now,
-    })
-    .returning({ id: supplierOffers.id });
-  await json(
-    await adminPost(`/api/admin/catalog/products/${created.id}/routes`, {
-      offerId: offer?.id,
-      fieldMap: kind === 'direct' ? { playerId: 'player_id' } : {},
-    }),
-    201,
-  );
+  if (supplier === 'manual') {
+    // S19 PC1: a pack no route can check, so only a game's provider checks it.
+    await json(
+      await adminPost(`/api/admin/catalog/products/${created.id}/routes/manual`, {
+        costUsdUnits: usd(cost),
+      }),
+      201,
+    );
+  } else {
+    const now = new Date();
+    const [offer] = await test.db
+      .insert(supplierOffers)
+      .values({
+        supplierId: ids.fake,
+        offerId: `o-${randomBytes(4).toString('hex')}`,
+        name: 'Fake offer',
+        kind,
+        requiredFields: kind === 'direct' ? ['playerId'] : [],
+        costUsdUnits: usd(cost),
+        inStock: true,
+        costConfirmedAt: now,
+        lastSeenAt: now,
+      })
+      .returning({ id: supplierOffers.id });
+    await json(
+      await adminPost(`/api/admin/catalog/products/${created.id}/routes`, {
+        offerId: offer?.id,
+        fieldMap: kind === 'direct' ? { playerId: 'player_id' } : {},
+      }),
+      201,
+    );
+  }
   await test.db.execute(sql`update catalog_games set status = 'active' where id = ${gameId}`);
   return { id: created.id, price: priceFromCost(usd(cost), RULE) };
 }
@@ -208,8 +224,12 @@ beforeAll(async () => {
     200,
   );
   await setSwitches(test.db);
-  const [fake] = await test.db.select().from(suppliers).where(eq(suppliers.code, 'fake'));
+  const rows = await test.db.select().from(suppliers);
+  const fake = rows.find((row) => row.code === 'fake');
   ids.fake = fake?.id as string;
+  for (const code of ['manual', 'wdgzone', 'fazercards'] as const) {
+    ids[code] = rows.find((row) => row.code === code)?.id as string;
+  }
   quotaBefore = fake?.validationDailyQuota ?? 1_000;
   vi.spyOn(SupplierAdaptersService.prototype, 'recordCall').mockImplementation(
     async (_tx, call) => {
@@ -332,6 +352,7 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
     expect(await json(response, 200)).toEqual({
       result: 'valid',
       playerName: `Player ${playerId.slice(-4)}`,
+      region: null,
     });
     expect(recorded.slice(calls)).toEqual([
       expect.objectContaining({ supplierId: ids.fake, operation: 'validate_player', result: 'ok' }),
@@ -724,3 +745,257 @@ async function auditOfAction(entityId: string, action: string) {
     .where(and(eq(auditEntries.entityId, entityId), sql`${auditEntries.action} = ${action}`));
   return rows.length;
 }
+
+describe('the game check provider (S19 PC1–PC9)', () => {
+  let gameId = '';
+  let slug = '';
+  const path = () => `/api/admin/catalog/games/${gameId}/player-check`;
+  const row = {
+    supplierCode: 'fake',
+    categoryId: 'player',
+    fieldMap: { playerId: 'player_id' },
+    allowedRegions: ['me'],
+    enabled: true,
+  };
+  const put = (payload: unknown, cookie = admin.cookie) =>
+    client.put(path(), { cookie, body: payload });
+
+  beforeAll(async () => {
+    slug = `chk-pc-${run}`;
+    gameId = await game(slug);
+    await test.db.execute(
+      sql`insert into catalog_input_fields (id, game_id, key, label_ar, type, required, sort_order,
+        min_length, max_length) values (${newId()}, ${gameId}, 'player_id', 'المعرف', 'digits',
+        true, 1, 5, 12)`,
+    );
+  });
+
+  it('answers 401 signed out and to a customer, null before a row, 404 for no game', async () => {
+    const customer = await buyer();
+    expect((await client.get(path())).status).toBe(401);
+    expect([401, 403]).toContain((await client.get(path(), { cookie: customer.cookie })).status);
+    expect([401, 403]).toContain((await put(row, customer.cookie)).status);
+    expect(await json(await client.get(path(), { cookie: admin.cookie }), 200)).toEqual({
+      check: null,
+    });
+    expect(
+      (
+        await client.get(`/api/admin/catalog/games/${newId()}/player-check`, {
+          cookie: admin.cookie,
+        })
+      ).status,
+    ).toBe(404);
+  });
+
+  it("refuses a supplier that checks none, an unknown category and a map that misses the game's fields", async () => {
+    expect(await json(await put({ ...row, supplierCode: 'wdgzone' }), 409)).toMatchObject({
+      code: 'CAPABILITY_UNSUPPORTED',
+    });
+    expect(await json(await put({ ...row, categoryId: 'other' }), 400)).toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+    expect(await json(await put({ ...row, fieldMap: { playerId: 'zone_id' } }), 400)).toMatchObject(
+      {
+        code: 'VALIDATION_FAILED',
+      },
+    );
+    expect(await json(await put({ ...row, fieldMap: {} }), 400)).toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+  });
+
+  it('saves the row with its audit entry, and the store flags every direct pack', async () => {
+    const saved = await json<{ check: Record<string, unknown> }>(await put(row), 200);
+    expect(saved.check).toMatchObject({
+      gameId,
+      supplierCode: 'fake',
+      categoryId: 'player',
+      allowedRegions: ['ME'],
+      enabled: true,
+    });
+    await json(await put({ ...row, allowedRegions: ['ME', 'GLOBAL'] }), 200);
+    const audits = (await auditOf(test.db, gameId)).filter(
+      (entry) => entry.action === 'catalog_game.player_check_set',
+    );
+    expect(audits.map((entry) => entry.details)).toEqual([
+      {
+        before: null,
+        after: expect.objectContaining({ supplier: 'fake', allowedRegions: ['ME'] }),
+      },
+      {
+        before: expect.objectContaining({ allowedRegions: ['ME'] }),
+        after: expect.objectContaining({ allowedRegions: ['ME', 'GLOBAL'] }),
+      },
+    ]);
+    await json(await put(row), 200);
+    // A manual route checks nothing by itself: the provider answers for the pack (PC1).
+    const item = await product(gameId, 'direct', 1, 'manual');
+    const page = await json<{ products: Record<string, unknown>[] }>(
+      await client.get(`/api/catalog/games/${slug}`),
+      200,
+    );
+    expect(page.products.find((entry) => entry.id === item.id)).toMatchObject({
+      playerCheck: true,
+    });
+  });
+
+  it('answers with the region, refuses a region outside the allowed ones at check and purchase', async () => {
+    const item = await product(gameId, 'direct', 1, 'manual');
+    const customer = await buyer({ funds: usd(20) });
+    const calls = recorded.length;
+    const near = `5${fresh().slice(1)}`;
+    expect(await json(await check(customer, item, near), 200)).toEqual({
+      result: 'valid',
+      playerName: `Player ${near.slice(-4)}`,
+      region: 'ME',
+    });
+    expect(recorded.slice(calls)).toEqual([
+      expect.objectContaining({ supplierId: ids.fake, operation: 'validate_player' }),
+    ]);
+    const order = await json<Record<string, unknown>>(
+      await purchase(customer, item, { playerId: near }),
+      201,
+    );
+    expect(order).toMatchObject({ playerName: `Player ${near.slice(-4)}`, playerRegion: 'ME' });
+
+    const far = `7${fresh().slice(1)}`;
+    expect(await json(await check(customer, item, far), 200)).toEqual({
+      result: 'region_mismatch',
+      playerName: `Player ${far.slice(-4)}`,
+      region: 'EU',
+    });
+    expect(
+      await json(await purchase(customer, item, { playerId: far, confirmPlayer: true }), 409),
+    ).toMatchObject({ code: 'PLAYER_REGION_MISMATCH', details: { region: 'EU' } });
+    // The cache keeps the answer: allowing the region lets the same check pass without a call.
+    await json(await put({ ...row, allowedRegions: [] }), 200);
+    const before = recorded.length;
+    expect(await json(await check(customer, item, far), 200)).toMatchObject({
+      result: 'valid',
+      region: 'EU',
+    });
+    expect(recorded).toHaveLength(before);
+    await json(await put(row), 200);
+  });
+
+  it('falls back to a confirmation while the provider is paused, never past a cached mismatch (PC5, PC3)', async () => {
+    const item = await product(gameId, 'direct', 1, 'manual');
+    const customer = await buyer({ funds: usd(20) });
+    const far = `7${fresh().slice(1)}`;
+    expect(await json(await check(customer, item, far), 200)).toMatchObject({
+      result: 'region_mismatch',
+    });
+    // Out of quota: no check and no confirmation, but the cached region still refuses.
+    await setQuota(0);
+    try {
+      expect(
+        await json(await purchase(customer, item, { playerId: far, confirmPlayer: true }), 409),
+      ).toMatchObject({ code: 'PLAYER_REGION_MISMATCH' });
+    } finally {
+      await setQuota(1_000_000);
+    }
+    await setSwitches(test.db, { fake_paused: true });
+    try {
+      const calls = recorded.length;
+      expect(await json(await check(customer, item, fresh()), 200)).toEqual({
+        result: 'unavailable',
+        reason: 'supplier',
+      });
+      expect(recorded).toHaveLength(calls);
+      const playerId = fresh();
+      expect(await json(await purchase(customer, item, { playerId }), 409)).toMatchObject({
+        code: 'PLAYER_NOT_CONFIRMED',
+      });
+      await json(await purchase(customer, item, { playerId, confirmPlayer: true }), 201);
+      expect(
+        await json(await purchase(customer, item, { playerId: far, confirmPlayer: true }), 409),
+      ).toMatchObject({ code: 'PLAYER_REGION_MISMATCH' });
+    } finally {
+      await setSwitches(test.db);
+    }
+  });
+
+  it('checks a test customer through the fake only, and the route again when turned off (PC1, PC8)', async () => {
+    const item = await product(gameId, 'direct', 1, 'manual');
+    const tester = await buyer({ isTest: true });
+    // A provider row naming FazerCards answers nothing to a test customer, before any call.
+    await test.db.execute(
+      sql`update game_player_checks set supplier_id = ${ids.fazercards} where game_id = ${gameId}`,
+    );
+    try {
+      expect(await json(await check(tester, item, fresh()), 200)).toEqual({
+        result: 'not_supported',
+      });
+    } finally {
+      await json(await put(row), 200);
+    }
+    // Turned off: the manual route checks nothing, so the pack is not checked at all.
+    await json(await put({ ...row, enabled: false }), 200);
+    expect(await json(await check(tester, item, fresh()), 200)).toEqual({
+      result: 'not_supported',
+    });
+  });
+
+  it('refuses a server that contradicts a HoYoverse uid before any check (S19 ID2)', async () => {
+    const hoyo = await game(`chk-uid-${run}`);
+    await test.db.execute(
+      sql`insert into catalog_input_fields (id, game_id, key, label_ar, type, required, sort_order)
+        values (${newId()}, ${hoyo}, 'uid', 'المعرف', 'hoyoverse_uid', true, 1)`,
+    );
+    await test.db.execute(
+      sql`insert into catalog_input_fields (id, game_id, key, label_ar, type, required, sort_order,
+        options) values (${newId()}, ${hoyo}, 'server', 'الخادم', 'select', true, 2,
+        ${JSON.stringify([
+          { value: 'os_usa', labelAr: 'أمريكا' },
+          { value: 'os_euro', labelAr: 'أوروبا' },
+        ])}::jsonb)`,
+    );
+    const item = await product(hoyo, 'direct', 1, 'manual');
+    const customer = await buyer();
+    const calls = recorded.length;
+    expect(
+      await json(
+        await client.post('/api/player-checks', {
+          cookie: customer.cookie,
+          body: { productId: item.id, fields: { uid: '612345678', server: 'os_euro' } },
+        }),
+        400,
+      ),
+    ).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      details: { fields: { server: 'server_mismatch' } },
+    });
+    expect(recorded).toHaveLength(calls);
+  });
+});
+
+describe('GET /api/admin/suppliers/:code/check-categories (S19 PC1)', () => {
+  it("lists the fake's check category, refuses a supplier that checks none and a customer", async () => {
+    expect(
+      await json(
+        await client.get('/api/admin/suppliers/fake/check-categories', { cookie: admin.cookie }),
+        200,
+      ),
+    ).toEqual({
+      items: [
+        {
+          categoryId: 'player',
+          name: 'Fake player check',
+          fields: [{ key: 'playerId', label: 'Player ID', type: 'text' }],
+        },
+      ],
+    });
+    expect(
+      await json(
+        await client.get('/api/admin/suppliers/wdgzone/check-categories', { cookie: admin.cookie }),
+        409,
+      ),
+    ).toMatchObject({ code: 'CAPABILITY_UNSUPPORTED' });
+    expect((await client.get('/api/admin/suppliers/fake/check-categories')).status).toBe(401);
+    const customer = await buyer();
+    expect([401, 403]).toContain(
+      (await client.get('/api/admin/suppliers/fake/check-categories', { cookie: customer.cookie }))
+        .status,
+    );
+  });
+});

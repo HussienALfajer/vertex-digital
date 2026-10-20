@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PlaceOrderRequest } from '../core/adapter.js';
 import { SupplierError } from '../core/errors.js';
 import {
+  FAKE_CHECK_CATEGORY,
   FAKE_SIGNATURE_HEADER,
   FAKE_TIMESTAMP_HEADER,
   FakeSupplierAdapter,
@@ -124,6 +125,29 @@ describe('fake supplier', () => {
     await expect(fake.validatePlayer({ offerId: 'fake-uc-60', fields: {} })).rejects.toThrow(
       SupplierError,
     );
+  });
+
+  it('checks by its one check category with a region (S19 PC1)', async () => {
+    const fake = adapter();
+    expect(await fake.listCheckCategories()).toEqual([
+      {
+        categoryId: FAKE_CHECK_CATEGORY,
+        name: 'Fake player check',
+        fields: [{ key: 'playerId', label: 'Player ID', type: 'text' }],
+      },
+    ]);
+    const check = (playerId: string) =>
+      fake.validatePlayer({ categoryId: FAKE_CHECK_CATEGORY, fields: { playerId } });
+    expect(await check('51234567')).toEqual({
+      valid: true,
+      playerName: 'Player 4567',
+      region: 'ME',
+    });
+    expect(await check('71234567')).toMatchObject({ region: 'EU' });
+    await expect(
+      fake.validatePlayer({ categoryId: 'other', fields: { playerId: '1' } }),
+    ).rejects.toMatchObject({ kind: 'definitive' });
+    await expect(fake.validatePlayer({ fields: {} })).rejects.toThrow(SupplierError);
   });
 
   it('delivers at once, with codes for code products, and charges its balance', async () => {

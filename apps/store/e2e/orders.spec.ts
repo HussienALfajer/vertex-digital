@@ -60,6 +60,7 @@ function order(changes: Partial<Order> & { id: string }): Order {
     expiresAt: null,
     cancelReason: null,
     playerName: null,
+    playerRegion: null,
     deliveryStats: null,
     expectedWithinMinutes: null,
     checkoutId: null,

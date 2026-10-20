@@ -16,6 +16,8 @@ import { REFERENCE_CODE_ALPHABET, storedFileRefSchema } from './deposits.js';
 import { cursorQuerySchema, pagedListSchema, pageQuerySchema } from './lists.js';
 import { CURRENCY_SCALE, usdCentsSchema } from './money.js';
 import {
+  fieldMapSchema,
+  optionMapSchema,
   orderRoutes,
   ROUTE_UNUSABLE_REASONS,
   type RouteTier,
@@ -236,6 +238,69 @@ export function cleanPlayerName(name: string | null | undefined): string | null 
     .trim();
   return clean === '' ? null : clean;
 }
+
+/** S19 PC3: a region as a provider returns it and the admin allows it: upper-cased, 1–16. */
+export const PLAYER_REGION_MAX_LENGTH = 16;
+
+export const playerRegionSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .min(1)
+  .max(PLAYER_REGION_MAX_LENGTH)
+  .regex(/^[\p{L}\p{N}][\p{L}\p{N} _-]*$/u);
+
+/** S19 PC3: the region is known and the game allows other regions only. A missing one passes. */
+export function regionMismatch(region: string | null, allowedRegions: readonly string[]): boolean {
+  return allowedRegions.length > 0 && region !== null && !allowedRegions.includes(region);
+}
+
+/** S19 Data: a game's allowed regions, at most 20. */
+export const MAX_ALLOWED_REGIONS = 20;
+
+/**
+ * `PUT /api/admin/catalog/games/:id/player-check` (S19 PC1–PC3): the provider that checks every
+ * `direct` pack of the game, its check category, how our fields fill the provider's, and the
+ * regions the game's packs serve (empty: no region check).
+ */
+export const updateGamePlayerCheckSchema = z
+  .object({
+    supplierCode: supplierCodeSchema,
+    categoryId: z.string().trim().min(1).max(128),
+    fieldMap: fieldMapSchema,
+    optionMap: optionMapSchema.default({}),
+    allowedRegions: z
+      .array(playerRegionSchema)
+      .max(MAX_ALLOWED_REGIONS)
+      .refine((regions) => new Set(regions).size === regions.length, 'Expected unique regions')
+      .default([]),
+    enabled: z.boolean(),
+  })
+  .meta({ id: 'UpdateGamePlayerCheck' });
+
+export type UpdateGamePlayerCheck = z.input<typeof updateGamePlayerCheckSchema>;
+
+export const gamePlayerCheckSchema = z
+  .object({
+    gameId: z.uuid(),
+    supplierCode: supplierCodeSchema,
+    categoryId: z.string(),
+    fieldMap: fieldMapSchema,
+    optionMap: optionMapSchema,
+    allowedRegions: z.array(z.string()),
+    enabled: z.boolean(),
+    updatedAt: z.iso.datetime(),
+  })
+  .meta({ id: 'GamePlayerCheck' });
+
+export type GamePlayerCheck = z.infer<typeof gamePlayerCheckSchema>;
+
+/** `GET /api/admin/catalog/games/:id/player-check`: null until the admin sets one (PC1). */
+export const gamePlayerCheckStateSchema = z
+  .object({ check: gamePlayerCheckSchema.nullable() })
+  .meta({ id: 'GamePlayerCheckState' });
+
+export type GamePlayerCheckState = z.infer<typeof gamePlayerCheckStateSchema>;
 
 // Convenience (S10): saved player ids, gifts, the cart, share links ------------------------------
 
@@ -960,15 +1025,81 @@ function fieldValueSchema(field: OrderFieldRules): z.ZodType<string, string> {
       return length(z.string().trim(), 64).regex(/^[^\p{Cc}]+$/u);
     case 'phone':
       return phoneSchema;
+    case 'hoyoverse_uid':
+      return z.string().trim().regex(HOYOVERSE_UID);
+    case 'supercell_tag':
+      return z
+        .string()
+        .max(32)
+        .transform(normalizeSupercellTag)
+        .pipe(z.string().regex(SUPERCELL_TAG));
     case 'select':
       return z.enum((field.options ?? []).map((option) => option.value) as [string, ...string[]]);
   }
 }
 
+/** S19 ID2: a HoYoverse uid, 9 or 10 digits. */
+const HOYOVERSE_UID = /^[0-9]{9,10}$/;
+
+/** S19 ID2: the HoYoverse servers a uid's leading digits name. */
+export const HOYOVERSE_SERVERS = ['america', 'europe', 'asia', 'tw_hk_mo'] as const;
+
+export type HoyoverseServer = (typeof HOYOVERSE_SERVERS)[number];
+
+/**
+ * S19 ID2: the server of a uid by its leading digits (6 America, 7 Europe, 8 or 18 Asia, 9
+ * TW/HK/MO); null for any other uid (the China servers) or a value that is not a uid.
+ */
+export function hoyoverseServerOfUid(uid: string): HoyoverseServer | null {
+  if (!HOYOVERSE_UID.test(uid)) return null;
+  if (uid.startsWith('18')) return 'asia';
+  const byDigit: Record<string, HoyoverseServer> = {
+    '6': 'america',
+    '7': 'europe',
+    '8': 'asia',
+    '9': 'tw_hk_mo',
+  };
+  return byDigit[uid[0] as string] ?? null;
+}
+
+/** The words of a server option's value that name each server. */
+const SERVER_WORDS: Readonly<Record<HoyoverseServer, readonly string[]>> = {
+  america: ['america', 'usa', 'us', 'na'],
+  europe: ['europe', 'euro', 'eu'],
+  asia: ['asia'],
+  tw_hk_mo: ['tw', 'hk', 'mo', 'cht', 'sar', 'taiwan'],
+};
+
+/**
+ * S19 ID2: the server a `select` option's value names (`os_usa`, `europe`, `tw-hk-mo`); null when
+ * it names none or more than one, so an option the rule cannot read is never refused.
+ */
+export function hoyoverseServerOfOption(value: string): HoyoverseServer | null {
+  const words = new Set(value.toLowerCase().split(/[^a-z0-9]+/));
+  const named = HOYOVERSE_SERVERS.filter((server) =>
+    SERVER_WORDS[server].some((word) => words.has(word)),
+  );
+  return named.length === 1 ? (named[0] as HoyoverseServer) : null;
+}
+
+/** S19 ID3: `#` and 3–15 characters of Supercell's tag alphabet. */
+const SUPERCELL_TAG = /^#[0289CGJLPQRUVY]{3,15}$/;
+
+/** S19 ID3: a tag as typed, upper-cased, `O` read as `0`, the `#` added when missing. */
+export function normalizeSupercellTag(value: string): string {
+  const tag = value.trim().toUpperCase().replace(/O/g, '0');
+  return tag.startsWith('#') ? tag : `#${tag}`;
+}
+
+/** The refusal of a server `select` that contradicts the game's HoYoverse uid (S19 ID2). */
+export const SERVER_MISMATCH = 'server_mismatch';
+
 /**
  * Rule O5: the values of an order for a game's unarchived input fields (S06 CT7). Required fields
  * must be present; an empty optional field is left out; unknown keys are refused. Values come out
- * trimmed (phones in E.164). Issues carry the field's key as their first path element.
+ * trimmed (phones in E.164, Supercell tags normalized). S19 ID2: a `select` whose value names
+ * another server than the game's HoYoverse uid is refused (`params.reason` `server_mismatch`).
+ * Issues carry the field's key as their first path element.
  */
 export function orderFieldValuesSchema(
   fields: readonly OrderFieldRules[],
@@ -984,12 +1115,33 @@ export function orderFieldValuesSchema(
           .transform((typed) => (typed?.trim() ? typed : undefined))
           .pipe(value.optional());
   }
-  return z.strictObject(shape).transform((values) => {
-    const present: Record<string, string> = {};
-    for (const [key, value] of Object.entries(values))
-      if (value !== undefined) present[key] = value;
-    return present;
-  }) as z.ZodType<Record<string, string>, Record<string, string>>;
+  const uidKeys = fields.filter((field) => field.type === 'hoyoverse_uid').map((f) => f.key);
+  const selectKeys = fields.filter((field) => field.type === 'select').map((f) => f.key);
+  return z
+    .strictObject(shape)
+    .transform((values) => {
+      const present: Record<string, string> = {};
+      for (const [key, value] of Object.entries(values))
+        if (value !== undefined) present[key] = value;
+      return present;
+    })
+    .superRefine((values, context) => {
+      for (const uidKey of uidKeys) {
+        const server = hoyoverseServerOfUid(values[uidKey] ?? '');
+        if (server === null) continue;
+        for (const key of selectKeys) {
+          const named = hoyoverseServerOfOption(values[key] ?? '');
+          if (named !== null && named !== server) {
+            context.addIssue({
+              code: 'custom',
+              path: [key],
+              message: 'The server does not match the account id',
+              params: { reason: SERVER_MISMATCH },
+            });
+          }
+        }
+      }
+    }) as z.ZodType<Record<string, string>, Record<string, string>>;
 }
 
 // Customer routes -------------------------------------------------------------------------------
@@ -1026,10 +1178,22 @@ export const playerCheckRequestSchema = createOrderSchema
 
 export type PlayerCheckRequest = z.input<typeof playerCheckRequestSchema>;
 
-/** Rule PV6: the answer of a player check. */
+/**
+ * Rule PV6: the answer of a player check. S19 PC3, PC9: the region the provider returned, and
+ * `region_mismatch` when the game allows other regions only.
+ */
 export const playerCheckSchema = z
   .discriminatedUnion('result', [
-    z.object({ result: z.literal('valid'), playerName: z.string().nullable() }),
+    z.object({
+      result: z.literal('valid'),
+      playerName: z.string().nullable(),
+      region: z.string().nullable(),
+    }),
+    z.object({
+      result: z.literal('region_mismatch'),
+      playerName: z.string().nullable(),
+      region: z.string(),
+    }),
     z.object({ result: z.literal('invalid') }),
     z.object({ result: z.literal('unavailable'), reason: z.enum(['quota', 'supplier']) }),
     z.object({ result: z.literal('not_supported') }),
@@ -1223,6 +1387,8 @@ export const orderSchema = z
     cancelReason: cancelReasonSchema.nullable(),
     /** The in-game name of a validated order (rule LT3). */
     playerName: z.string().nullable(),
+    /** S19 PC9: the account's region the check returned, beside the name. */
+    playerRegion: z.string().nullable(),
     /** The product's delivery time (S08 rule T1), shown while the order is open (rule LT3). */
     deliveryStats: deliveryStatsSchema.nullable(),
     /** S17 WR10: shown in place of the delivery time while set. */
@@ -1281,6 +1447,8 @@ export const CHECKOUT_LINE_REFUSALS = [
   'PRICE_CHANGED',
   'VALIDATION_FAILED',
   'PLAYER_NOT_CONFIRMED',
+  /** S19 PC3. */
+  'PLAYER_REGION_MISMATCH',
 ] as const;
 
 export const checkoutLineRefusalSchema = z
@@ -1576,6 +1744,8 @@ export const adminOrderSchema = z
     cancelReason: cancelReasonSchema.nullable(),
     playerCheck: playerCheckStateSchema,
     playerName: z.string().nullable(),
+    /** S19 PC9. */
+    playerRegion: z.string().nullable(),
     paidAt: z.iso.datetime().nullable(),
     deliveredAt: z.iso.datetime().nullable(),
     finishedAt: z.iso.datetime().nullable(),

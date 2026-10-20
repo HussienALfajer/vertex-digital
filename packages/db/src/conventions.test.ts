@@ -81,6 +81,8 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   order_share_links: 'A link record (S10 SH1): revoked, never deleted or archived',
   customer_sign_ins: 'A log (S12): deleted after 90 days, never archived',
   customer_limits: "A customer's overrides (S12 LM5): overwritten with an audit entry",
+  game_player_checks:
+    "A game's player-check provider (S19 PC1): overwritten with an audit entry, turned off by `enabled`",
   support_tickets: 'A conversation record (S12 TK3): closed, never archived or deleted',
   support_messages: 'Append-only (S12 TK7): a ticket conversation is a record',
   support_attachments: 'Append-only (S12 TK11): the images of a message',
@@ -105,6 +107,7 @@ const NATURAL_KEYS: Record<string, string> = {
   telegram_deposit_cards: 'Keyed by deposit and submission: one card per submission (S05 TC1)',
   telegram_bot_state: 'One row, id 1 (S05 RM3)',
   customer_limits: 'Keyed by its customer: one row of overrides per customer (S12 LM5)',
+  game_player_checks: 'Keyed by its game: one check provider per game (S19 PC1)',
   support_attachments: 'Keyed by message and position: up to 3 images per message (S12 TK11)',
   support_settings: 'One row, id 1 (S12 SC1)',
   content_page_drafts: 'Keyed by its page: one draft per fixed page (S14 PG1)',

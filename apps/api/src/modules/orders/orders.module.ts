@@ -1,10 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AdminModule } from '../admin/index.js';
 import { AuthModule } from '../auth/index.js';
+import { CatalogModule } from '../catalog/index.js';
 import { FilesModule } from '../files/index.js';
 import { SettingsModule } from '../settings/index.js';
 import { SuppliersModule } from '../suppliers/index.js';
 import { AdminPurchasesService } from './admin-purchases.service.js';
+import { GamePlayerChecksAdminController } from './game-player-checks.admin.controller.js';
+import { GamePlayerChecksService } from './game-player-checks.service.js';
 import { OrderActionsService } from './order-actions.service.js';
 import { OrderDecisionsService } from './order-decisions.service.js';
 import { OrdersAdminController } from './orders.admin.controller.js';
@@ -24,13 +27,15 @@ import { SharesController } from './shares.controller.js';
  * ids and share links, with the public share pages and images (`shares.controller.ts`). S11: the
  * live room and the admin's reroute, delivery proof and manual fulfil (`order-actions.service.ts`).
  * S16: purchases from the panel and the admin's player checks (`admin-purchases.service.ts`).
+ * S19: a game's player-check provider (`game_player_checks`, `game-player-checks.service.ts`).
  */
 @Module({
-  imports: [AdminModule, AuthModule, FilesModule, SettingsModule, SuppliersModule],
+  imports: [AdminModule, AuthModule, CatalogModule, FilesModule, SettingsModule, SuppliersModule],
   controllers: [
     OrdersController,
     OrdersAdminController,
     PlayerChecksAdminController,
+    GamePlayerChecksAdminController,
     SharesController,
   ],
   providers: [
@@ -39,6 +44,7 @@ import { SharesController } from './shares.controller.js';
     OrderDecisionsService,
     OrderActionsService,
     PlayerChecksService,
+    GamePlayerChecksService,
     SavedPlayersService,
     ShareLinksService,
   ],

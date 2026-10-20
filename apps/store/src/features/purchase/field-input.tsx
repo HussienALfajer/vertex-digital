@@ -67,7 +67,8 @@ export function FieldInput({
       </Field>
     );
   }
-  const latin = field.type === 'digits' || field.type === 'phone';
+  const latin = field.type !== 'text';
+  const numeric = field.type === 'digits' || field.type === 'hoyoverse_uid';
   return (
     <Field invalid={!!error}>
       <FieldLabel>{label}</FieldLabel>
@@ -75,11 +76,11 @@ export function FieldInput({
         name={field.key}
         value={value}
         dir={latin ? 'ltr' : undefined}
-        inputMode={field.type === 'digits' ? 'numeric' : field.type === 'phone' ? 'tel' : 'text'}
+        inputMode={numeric ? 'numeric' : field.type === 'phone' ? 'tel' : 'text'}
         type={field.type === 'phone' ? 'tel' : 'text'}
         autoComplete="off"
         spellCheck={false}
-        maxLength={field.type === 'digits' ? 32 : field.type === 'phone' ? 32 : 64}
+        maxLength={field.type === 'text' ? 64 : 32}
         className="h-11 text-md"
         aria-invalid={!!error}
         onChange={(event) => onChange(event.target.value)}

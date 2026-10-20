@@ -11,7 +11,7 @@ import { CART_KEY, clearStoredCart, notifyCart } from './cart-keys';
 const VERSION = 1;
 
 export type CartPlayerCheck = {
-  result: 'valid' | 'invalid' | 'unavailable' | 'not_supported';
+  result: 'valid' | 'invalid' | 'unavailable' | 'not_supported' | 'region_mismatch';
   playerName: string | null;
 };
 
