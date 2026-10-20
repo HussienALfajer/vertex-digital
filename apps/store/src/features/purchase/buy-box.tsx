@@ -35,6 +35,7 @@ import {
   PlusIcon,
   ShoppingCartIcon,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
@@ -109,6 +110,10 @@ function useSavedPlayers(enabled: boolean): Saved {
   return saved;
 }
 
+const TermsSheet = dynamic(() =>
+  import('@/features/merchant/terms-sheet').then((module) => module.TermsSheet),
+);
+
 /**
  * The purchase's refusals decided after the API looked the key up (rules O1–O6, PV8, RS2): no
  * order holds the key, so the same body may go with a new one. `IDEMPOTENCY_KEY_REUSED` too: the
@@ -124,6 +129,7 @@ const REFUSED_AFTER_LOOKUP: ReadonlySet<Failure> = new Set<Failure>([
   'RESERVATIONS_LIMIT_REACHED',
   'NOT_FOUND',
   'IDEMPOTENCY_KEY_REUSED',
+  'MERCHANT_TERMS_REQUIRED',
 ]);
 
 /**
@@ -192,6 +198,8 @@ export function BuyBox({
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState<Sending>({ status: 'idle' });
+  // S20 MT2: a directly granted merchant accepts the terms in a sheet, then slides again.
+  const [termsOpen, setTermsOpen] = useState(false);
   const [slide, setSlide] = useState(0);
   // S10: the saved ID chosen, and the fields the customer already confirmed (a saved ID, a
   // delivered order's, a cart line's): unchanged, they need no new check or confirmation.
@@ -575,6 +583,10 @@ export function BuyBox({
           message: purchaseRefusalText(reason, details),
           retry: false,
         });
+      case 'MERCHANT_TERMS_REQUIRED':
+        setTermsOpen(true);
+        again();
+        return setSending({ status: 'idle' });
       case 'UNAUTHORIZED':
         return signIn();
       case 'NETWORK':
@@ -644,6 +656,11 @@ export function BuyBox({
     </div>
   );
 
+  // S20 MT2: in either step, so a refused slide on the confirmation opens it too.
+  const termsSheet = termsOpen && (
+    <TermsSheet open={termsOpen} onOpenChange={setTermsOpen} onAccepted={() => {}} />
+  );
+
   if (step === 'confirm') {
     const order = body();
     const giftValue = giftable ? giftOf(gift) : undefined;
@@ -652,6 +669,7 @@ export function BuyBox({
     return (
       <div className="flex flex-col gap-5">
         {header}
+        {termsSheet}
         <dl className="flex flex-col gap-3 rounded-lg border border-border p-4">
           {isTrusted && chosen && (
             <Row label={t('purchase.saved.label')}>
@@ -933,6 +951,7 @@ export function BuyBox({
           {added === 'full' && <FormAlert>{t('purchase.cart.full')}</FormAlert>}
         </div>
       )}
+      {termsSheet}
     </div>
   );
 }

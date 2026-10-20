@@ -22,6 +22,7 @@ import { DashboardModule } from './modules/dashboard/index.js';
 import { DepositsModule } from './modules/deposits/index.js';
 import { FilesModule } from './modules/files/index.js';
 import { HealthModule } from './modules/health/index.js';
+import { MerchantsModule } from './modules/merchants/index.js';
 import { NotificationsModule } from './modules/notifications/index.js';
 import { OrdersModule } from './modules/orders/index.js';
 import { PricingModule } from './modules/pricing/index.js';
@@ -63,6 +64,7 @@ import { WalletModule } from './modules/wallet/index.js';
     FilesModule,
     DepositsModule,
     CustomersModule,
+    MerchantsModule,
     SupportModule,
     TreasuryModule,
     ReconciliationModule,

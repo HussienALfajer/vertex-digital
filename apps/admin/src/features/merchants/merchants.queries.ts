@@ -1,0 +1,144 @@
+import {
+  infiniteQueryOptions,
+  keepPreviousData,
+  queryOptions,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
+import type {
+  GrantMerchant,
+  MerchantSettingsInput,
+  RevokeMerchant,
+} from '@vertex-digital/contracts';
+import { api, call } from '../../lib/api/client';
+import { useReauthentication } from '../account/reauthentication';
+import { type ApplicationsSearch, type MerchantsSearch, statusOf, tabOf } from './merchants-search';
+
+/*
+ * Merchants as the admin works them (S20 F28): the applications queue and one application with
+ * its decisions (MA4–MA8), the direct grant and the revocation from the customer's profile or the
+ * merchants list (MA6, MA7), the merchants list and the merchant settings. Keys start with
+ * `merchants`.
+ */
+
+/** MA8: under review oldest first, the other tabs newest first. */
+export const applicationsQuery = (search: ApplicationsSearch) =>
+  infiniteQueryOptions({
+    queryKey: ['merchants', 'applications', search],
+    queryFn: ({ pageParam }) =>
+      call(
+        api.GET('/api/admin/merchant-applications', {
+          params: { query: { status: statusOf(tabOf(search)), cursor: pageParam } as never },
+        }),
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  });
+
+export const applicationQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['merchants', 'application', id],
+    queryFn: () =>
+      call(api.GET('/api/admin/merchant-applications/{id}', { params: { path: { id } } })),
+  });
+
+/** The shop photo (MA3): served to the admin only, never cached. */
+export const applicationPhotoUrl = (id: string) => `/api/admin/merchant-applications/${id}/photo`;
+
+export const merchantsQuery = (search: MerchantsSearch) =>
+  infiniteQueryOptions({
+    queryKey: ['merchants', 'list', search],
+    queryFn: ({ pageParam }) =>
+      call(
+        api.GET('/api/admin/merchants', {
+          params: { query: { q: search.q, listId: search.listId, cursor: pageParam } as never },
+        }),
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  });
+
+export const merchantSettingsQuery = queryOptions({
+  queryKey: ['merchants', 'settings'],
+  queryFn: () => call(api.GET('/api/admin/merchant-settings')),
+});
+
+/**
+ * A merchant change shows in the queue, the application, the merchants list, the customer's
+ * profile, the dashboard and the audit log.
+ */
+function useMerchantsMutation<Input, Output>(request: (input: Input) => Promise<Output>) {
+  const queryClient = useQueryClient();
+  const withReauthentication = useReauthentication();
+  return useMutation({
+    mutationFn: (input: Input) => withReauthentication(() => request(input)),
+    onSettled: () =>
+      Promise.all(
+        ['merchants', 'customers', 'dashboard', 'audit'].map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key] }),
+        ),
+      ),
+  });
+}
+
+/** MA4: a request for information, shown to the customer. */
+export const useRequestApplicationInfo = (id: string) =>
+  useMerchantsMutation((message: string) =>
+    call(
+      api.POST('/api/admin/merchant-applications/{id}/request-info', {
+        params: { path: { id } },
+        body: { message },
+      }),
+    ),
+  );
+
+/** MA4: a rejection with the reason the customer reads. */
+export const useRejectApplication = (id: string) =>
+  useMerchantsMutation((reason: string) =>
+    call(
+      api.POST('/api/admin/merchant-applications/{id}/reject', {
+        params: { path: { id } },
+        body: { reason },
+      }),
+    ),
+  );
+
+/** MA5: an approval with a list (no list: wholesale), re-authenticated. */
+export const useApproveApplication = (id: string) =>
+  useMerchantsMutation((priceListId: string | undefined) =>
+    call(
+      api.POST('/api/admin/merchant-applications/{id}/approve', {
+        params: { path: { id } },
+        body: priceListId ? { priceListId } : {},
+      }),
+    ),
+  );
+
+/** MA6: the direct grant, re-authenticated. */
+export const useGrantMerchant = (customerId: string) =>
+  useMerchantsMutation((body: GrantMerchant) =>
+    call(
+      api.POST('/api/admin/customers/{id}/merchant', {
+        params: { path: { id: customerId } },
+        body,
+      }),
+    ),
+  );
+
+/** MA7: the revocation, re-authenticated. */
+export const useRevokeMerchant = (customerId: string) =>
+  useMerchantsMutation((body: RevokeMerchant) =>
+    call(
+      api.POST('/api/admin/customers/{id}/merchant/revoke', {
+        params: { path: { id: customerId } },
+        body,
+      }),
+    ),
+  );
+
+export const useSaveMerchantSettings = () =>
+  useMerchantsMutation((body: MerchantSettingsInput) =>
+    call(api.PUT('/api/admin/merchant-settings', { body })),
+  );

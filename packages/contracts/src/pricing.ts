@@ -12,7 +12,12 @@ import {
   USD_CENT,
   usdCentsSchema,
 } from './money.js';
-import { type PriceKind, priceKindSchema } from './price-kinds.js';
+import {
+  type AccountType,
+  accountTypeSchema,
+  type PriceKind,
+  priceKindSchema,
+} from './price-kinds.js';
 import { supplierCodeSchema } from './suppliers.js';
 
 /*
@@ -459,12 +464,11 @@ export const priceSourceSchema = z.enum(PRICE_SOURCES).meta({ id: 'PriceSource' 
 
 export type PriceSource = z.infer<typeof priceSourceSchema>;
 
-/** An account's type (S20 AT1): what the person sees and the limits tier. */
-export const ACCOUNT_TYPES = ['customer', 'merchant'] as const;
-
-export const accountTypeSchema = z.enum(ACCOUNT_TYPES).meta({ id: 'AccountType' });
-
-export type AccountType = z.infer<typeof accountTypeSchema>;
+export {
+  ACCOUNT_TYPES,
+  type AccountType,
+  accountTypeSchema,
+} from './price-kinds.js';
 
 /**
  * S20 AT1: the list an account pays, its assigned list, else retail for a customer and wholesale

@@ -16,6 +16,7 @@ export {
   type PurchasingCustomer,
   purchaseCapCheck,
   purchasedLastDay,
+  requireMerchantTerms,
 } from './guard.js';
 export {
   type AccountPriceList,
@@ -23,9 +24,11 @@ export {
   accountsOnList,
   assignedAccountCounts,
   assignedAccounts,
+  cancelAccountReservations,
   lockAccountsOnList,
   releaseArchivedAccounts,
   setCustomerPriceList,
+  usableList,
 } from './price-lists.js';
 export { customerMarks, customerSignals, pinnedNote } from './reads.js';
 export {

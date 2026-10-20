@@ -15,6 +15,7 @@ export {
 export {
   type AdminPurchaseInput,
   adminPurchaseOrder,
+  gameListPrices,
   ownerSpentToday,
 } from './admin-purchase.js';
 export {

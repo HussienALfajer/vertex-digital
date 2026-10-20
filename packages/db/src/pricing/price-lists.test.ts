@@ -219,9 +219,16 @@ describe('fixed prices and list rows', () => {
       ).toMatch(/only archived/);
     });
     await rolledBack(async (client) => {
-      expect(await violation(client, 'delete from price_list_fixed_prices')).toMatch(
-        /never deleted/,
+      // A row of its own: an empty table would fire no row trigger.
+      const id = newId();
+      await client.query(
+        `insert into price_list_fixed_prices (id, price_list_id, product_id, price_usd_units)
+         values ($1, $2, $3, 990000)`,
+        [id, wholesale, await anyProduct(client)],
       );
+      expect(
+        await violation(client, 'delete from price_list_fixed_prices where id = $1', [id]),
+      ).toMatch(/never deleted/);
     }, owner.pool);
   });
 

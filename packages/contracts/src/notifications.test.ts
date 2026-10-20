@@ -47,7 +47,12 @@ describe('notifications (S05 F27)', () => {
       NOTIFICATION_EVENTS.filter(
         (event) => !(EMAIL_NOTIFICATION_EVENTS as readonly string[]).includes(event),
       ),
-    ).toEqual(['order_delayed', 'order_paid', 'price_list_changed']);
+    ).toEqual([
+      'order_delayed',
+      'order_paid',
+      'price_list_changed',
+      'merchant_application_expired',
+    ]);
   });
 
   it('carry no notes, transaction numbers, TXIDs or flags (rule NT3)', () => {

@@ -1,5 +1,7 @@
 import {
+  type AccountType,
   type AdminCustomer,
+  effectivePriceListId,
   type FixedPrice,
   type ListPriceCell,
   listChain,
@@ -115,13 +117,14 @@ export class PriceListsMock {
   }
 
   /** The profile's pricing card (AT1). */
-  pricing(customerId: string): AdminCustomer['pricing'] {
+  pricing(customerId: string, accountType: AccountType = 'customer'): AdminCustomer['pricing'] {
     const assignedListId = this.assigned.get(customerId) ?? null;
     const list = this.lists.find(
-      (row) => row.id === (assignedListId ?? ROOT_PRICE_LIST_IDS.retail),
+      (row) =>
+        row.id === (assignedListId ?? effectivePriceListId({ accountType, priceListId: null })),
     ) as StoredList;
     return {
-      accountType: 'customer',
+      accountType,
       assignedListId,
       effectiveList: { id: list.id, kind: list.kind, name: list.name },
       priceKind: priceKindOf(list.kind),

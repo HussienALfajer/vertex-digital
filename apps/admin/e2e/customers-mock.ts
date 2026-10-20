@@ -30,6 +30,7 @@ import {
   updateCustomerLimitsSchema,
 } from '@vertex-digital/contracts';
 import type { Answer } from './catalog-mock';
+import type { MerchantsMock } from './merchants-mock';
 import { ORDER_CUSTOMER_ID } from './orders-mock';
 import type { PriceListsMock } from './price-lists-mock';
 
@@ -336,6 +337,8 @@ export class CustomersMock {
   private readonly ticketKeys = new Map<string, { body: string; ticketId: string }>();
 
   /** S20: the accounts' lists, set by the price lists mock. */
+  /** S20: the merchant state of an account (the merchants mock). */
+  merchants: Pick<MerchantsMock, 'isMerchant' | 'profileOf' | 'settings'> | null = null;
   priceLists: Pick<PriceListsMock, 'pricing' | 'assign'> | null = null;
 
   constructor(
@@ -473,20 +476,38 @@ export class CustomersMock {
     };
   }
 
+  /** S20 MD1: the merchant tier of a merchant's deposit limits. */
+  private merchantTier(customerId: string) {
+    const settings = this.merchants?.settings;
+    return settings && this.merchants?.isMerchant(customerId)
+      ? {
+          perDepositUsdUnits: settings.perDepositUsdUnits,
+          dailyDepositUsdUnits: settings.dailyDepositUsdUnits,
+        }
+      : null;
+  }
+
   profile(row: MockCustomer): AdminCustomer {
     const pinned = this.pinned(row.id);
+    const merchant = this.merchants?.isMerchant(row.id) ?? false;
     return {
       ...this.row(row),
       emailVerified: row.emailVerified,
       established: row.established,
       statusChange: this.status(row) === 'active' ? null : row.statusChange,
-      limits: customerLimits(DEPOSIT_SETTINGS_DEFAULTS, row.established, row.overrides),
-      pricing: this.priceLists?.pricing(row.id) ?? {
+      limits: customerLimits(
+        DEPOSIT_SETTINGS_DEFAULTS,
+        row.established,
+        row.overrides,
+        this.merchantTier(row.id),
+      ),
+      pricing: this.priceLists?.pricing(row.id, merchant ? 'merchant' : 'customer') ?? {
         accountType: 'customer',
         assignedListId: null,
         effectiveList: { id: ROOT_PRICE_LIST_IDS.retail, kind: 'retail', name: 'التجزئة' },
         priceKind: 'retail',
       },
+      merchant: this.merchants?.profileOf(row.id) ?? null,
       pinnedNote: pinned && {
         id: pinned.id,
         body: pinned.body,
@@ -893,7 +914,14 @@ export class CustomersMock {
       const { reason, ...overrides } = parsed.data;
       row.overrides = overrides;
       this.record('customer.limits_changed', 'customer', row.id, row.id, reason);
-      return ok(customerLimits(DEPOSIT_SETTINGS_DEFAULTS, row.established, row.overrides));
+      return ok(
+        customerLimits(
+          DEPOSIT_SETTINGS_DEFAULTS,
+          row.established,
+          row.overrides,
+          this.merchantTier(row.id),
+        ),
+      );
     }
 
     const change = rest.match(/^\/(freeze|unfreeze|archive|unarchive|sessions\/revoke)$/);

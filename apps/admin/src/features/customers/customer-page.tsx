@@ -30,12 +30,15 @@ import {
   ShoppingCartIcon,
   SlidersHorizontalIcon,
   SnowflakeIcon,
+  StoreIcon,
   SunIcon,
+  UserRoundXIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { errorMessage } from '../../lib/errors';
 import { formatDate, formatDateTime } from '../../lib/format';
+import { GrantMerchantDialog, RevokeMerchantDialog } from '../merchants/merchant-dialogs';
 import { LimitsDialog, PriceListDialog, StateChangeDialog } from './customer-dialogs';
 import { CHIP_TONES, type CustomerChip, statusChips } from './customer-labels';
 import { NotesSection } from './customer-notes';
@@ -51,7 +54,7 @@ import {
 } from './customer-sections';
 import { type CustomerStateAction, customerQuery } from './customers.queries';
 
-type Dialogs = CustomerStateAction | 'limits' | 'priceList';
+type Dialogs = CustomerStateAction | 'limits' | 'priceList' | 'grantMerchant' | 'revokeMerchant';
 
 /**
  * One customer (S12 CS3–CS5): the header with the chips, the balance and the actions (CF, LM,
@@ -159,9 +162,19 @@ export function CustomerPage({
         {dialog === 'priceList' && (
           <PriceListDialog customer={data} onDone={() => setDialog(null)} />
         )}
-        {dialog !== null && dialog !== 'limits' && dialog !== 'priceList' && (
-          <StateChangeDialog customer={data} action={dialog} onDone={() => setDialog(null)} />
+        {dialog === 'grantMerchant' && (
+          <GrantMerchantDialog customer={data} onDone={() => setDialog(null)} />
         )}
+        {dialog === 'revokeMerchant' && (
+          <RevokeMerchantDialog customer={data} onDone={() => setDialog(null)} />
+        )}
+        {dialog !== null &&
+          dialog !== 'limits' &&
+          dialog !== 'priceList' &&
+          dialog !== 'grantMerchant' &&
+          dialog !== 'revokeMerchant' && (
+            <StateChangeDialog customer={data} action={dialog} onDone={() => setDialog(null)} />
+          )}
       </Dialog>
     </>
   );
@@ -258,6 +271,19 @@ function Actions({
           <DropdownMenuItem onClick={() => onAction('unfreeze')}>
             <SunIcon />
             {t('customers.actions.unfreeze')}
+          </DropdownMenuItem>
+        )}
+        {/* S20 MA6, MA7: a merchant from the panel, or back to a customer. */}
+        {status === 'active' && customer.pricing.accountType === 'customer' && (
+          <DropdownMenuItem onClick={() => onAction('grantMerchant')}>
+            <StoreIcon />
+            {t('merchants.grant.action')}
+          </DropdownMenuItem>
+        )}
+        {customer.pricing.accountType === 'merchant' && (
+          <DropdownMenuItem variant="destructive" onClick={() => onAction('revokeMerchant')}>
+            <UserRoundXIcon />
+            {t('merchants.revoke.action')}
           </DropdownMenuItem>
         )}
         {status !== 'archived' && (

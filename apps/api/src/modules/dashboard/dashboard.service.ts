@@ -9,6 +9,7 @@ import {
   marginPercent,
 } from '@vertex-digital/contracts';
 import { DepositReviewService } from '../deposits/index.js';
+import { MerchantsAdminService } from '../merchants/index.js';
 import { OrderActionsService } from '../orders/index.js';
 import { PricingService } from '../pricing/index.js';
 import { RatesService } from '../rates/index.js';
@@ -38,6 +39,7 @@ export class DashboardService {
     private readonly telegram: TelegramService,
     private readonly support: SupportAdminService,
     private readonly reconciliation: ReconciliationService,
+    private readonly merchants: MerchantsAdminService,
   ) {}
 
   async dashboard(now = new Date()): Promise<Dashboard> {
@@ -53,6 +55,7 @@ export class DashboardService {
       telegram,
       tickets,
       books,
+      applications,
     ] = await Promise.all([
       this.orders.figures(bounds, now),
       this.deposits.dashboardFigures(now, bounds.todayStart),
@@ -64,6 +67,7 @@ export class DashboardService {
       this.telegram.status(),
       this.support.waiting(),
       this.reconciliation.attention(now),
+      this.merchants.waiting(),
     ]);
     const { today, yesterday, live } = orders;
     const profit = (period: typeof today) => period.salesUsdUnits - period.costUsdUnits;
@@ -130,6 +134,13 @@ export class DashboardService {
         count: tickets.count,
         oldestAt: tickets.oldestAt,
         target: '/support',
+      },
+      // S20 MA8: merchant applications under review, with the oldest submission.
+      {
+        kind: 'merchant_applications_waiting',
+        count: applications.count,
+        oldestAt: applications.oldestAt,
+        target: '/merchants/applications',
       },
       ...(telegram.link === null
         ? [{ kind: 'telegram_unlinked' as const, count: 1, target: '/settings/telegram' }]

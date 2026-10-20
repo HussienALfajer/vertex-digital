@@ -40,6 +40,8 @@ const deposit = (params: { depositId: string }) => ({
   tag: `deposit-${params.depositId}`,
 });
 
+const merchant = { url: '/account/merchant', tag: 'merchant' };
+
 const PLACED_FOR_YOU = {
   on_behalf: 'أنشأ المتجر طلباً بطلبك',
   gift: 'هدية من المتجر',
@@ -105,6 +107,21 @@ const RENDERERS: Renderers = {
     body: `ردّ فريق الدعم على تذكرتك ${params.number}`,
     url: `/support/${params.ticketId}`,
     tag: `ticket-${params.ticketId}`,
+  }),
+  // S20: never the admin's message or reason (PT2).
+  merchant_info_requested: () => ({
+    body: 'نحتاج معلومات إضافية لطلب حساب التاجر',
+    ...merchant,
+  }),
+  merchant_approved: () => ({ body: 'تمت الموافقة على حساب التاجر', ...merchant }),
+  merchant_rejected: () => ({
+    body: 'لم تتم الموافقة على طلب حساب التاجر. افتحه لمعرفة السبب',
+    ...merchant,
+  }),
+  merchant_revoked: () => ({
+    body: 'تغيّر نوع حسابك إلى حساب عميل',
+    url: '/account',
+    tag: 'merchant',
   }),
 };
 

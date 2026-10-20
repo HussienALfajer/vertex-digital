@@ -992,6 +992,9 @@
                 "customer.frozen",
                 "customer.unfrozen",
                 "customer.price_list_changed",
+                "customer.merchant_granted",
+                "customer.merchant_revoked",
+                "merchant.terms_accepted",
                 "customer.limits_changed",
                 "customer.archived",
                 "customer.unarchived",
@@ -1051,6 +1054,14 @@
                 "price_list.archived",
                 "price_list.fixed_price_set",
                 "price_list.fixed_price_archived",
+                "merchant_application.submitted",
+                "merchant_application.resubmitted",
+                "merchant_application.info_requested",
+                "merchant_application.approved",
+                "merchant_application.rejected",
+                "merchant_application.expired",
+                "merchant_application.withdrawn",
+                "merchant_settings.changed",
                 "supplier.credentials_set",
                 "supplier.updated",
                 "supplier.sync_requested",
@@ -1153,6 +1164,8 @@
                 "catalog_product",
                 "margin_rule",
                 "price_list",
+                "merchant_application",
+                "merchant_settings",
                 "supplier",
                 "supplier_policy",
                 "supplier_offer",
@@ -3291,6 +3304,629 @@
         ]
       }
     },
+    "/api/merchant/application": {
+      "get": {
+        "operationId": "MerchantsController_state",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The latest application and whether one may be submitted (MA1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantApplicationState"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      },
+      "post": {
+        "operationId": "MerchantsController_submit",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per attempt; a retry with the same key returns the first result",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MerchantApplicationInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Submitted (200: a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantApplication"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      },
+      "put": {
+        "operationId": "MerchantsController_resubmit",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MerchantApplicationInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resubmitted (MA4)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantApplication"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/application/withdraw": {
+      "post": {
+        "operationId": "MerchantsController_withdraw",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Withdrawn (MA4)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantApplication"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/application/photo": {
+      "post": {
+        "operationId": "MerchantsController_photoUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The stored photo (MA3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantPhoto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/application/photo/{fileId}": {
+      "get": {
+        "operationId": "MerchantsController_photo",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A shop photo of this customer (MA3)"
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/terms": {
+      "post": {
+        "operationId": "MerchantsController_acceptTerms",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptMerchantTerms"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "The merchant terms in force accepted (MT2)"
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-applications": {
+      "get": {
+        "operationId": "MerchantsAdminController_queue",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "under_review",
+                "info_requested",
+                "approved",
+                "rejected",
+                "expired",
+                "withdrawn"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Under review oldest first, otherwise newest first (MA8)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMerchantApplicationPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-applications/{id}": {
+      "get": {
+        "operationId": "MerchantsAdminController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The application",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMerchantApplication"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-applications/{id}/photo": {
+      "get": {
+        "operationId": "MerchantsAdminController_photo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The shop photo (MA3)"
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-applications/{id}/request-info": {
+      "post": {
+        "operationId": "MerchantsAdminController_requestInfo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestApplicationInfo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Waiting for information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMerchantApplication"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-applications/{id}/reject": {
+      "post": {
+        "operationId": "MerchantsAdminController_reject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectApplication"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMerchantApplication"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-applications/{id}/approve": {
+      "post": {
+        "operationId": "MerchantsAdminController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveApplication"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approved (MA5)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMerchantApplication"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchants": {
+      "get": {
+        "operationId": "MerchantsAdminController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "listId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Merchants, newest grant first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMerchantPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/merchant": {
+      "post": {
+        "operationId": "MerchantsAdminController_grant",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantMerchant"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The profile, now a merchant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomer"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/merchant/revoke": {
+      "post": {
+        "operationId": "MerchantsAdminController_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeMerchant"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The profile, a customer again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomer"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-settings": {
+      "get": {
+        "operationId": "MerchantsAdminController_settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The settings in force",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      },
+      "put": {
+        "operationId": "MerchantsAdminController_saveSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MerchantSettingsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The new version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
     "/api/support/channels": {
       "get": {
         "operationId": "SupportController_channels",
@@ -4387,7 +5023,9 @@
               "enum": [
                 "game",
                 "product",
-                "supplier"
+                "supplier",
+                "price_list",
+                "merchant"
               ]
             }
           }
@@ -4442,7 +5080,9 @@
               "enum": [
                 "game",
                 "product",
-                "supplier"
+                "supplier",
+                "price_list",
+                "merchant"
               ]
             }
           }
@@ -4497,7 +5137,9 @@
               "enum": [
                 "game",
                 "product",
-                "supplier"
+                "supplier",
+                "price_list",
+                "merchant"
               ]
             }
           }
@@ -4552,7 +5194,9 @@
               "enum": [
                 "game",
                 "product",
-                "supplier"
+                "supplier",
+                "price_list",
+                "merchant"
               ]
             }
           }
@@ -4607,7 +5251,9 @@
               "enum": [
                 "game",
                 "product",
-                "supplier"
+                "supplier",
+                "price_list",
+                "merchant"
               ]
             }
           }
@@ -4662,7 +5308,9 @@
               "enum": [
                 "game",
                 "product",
-                "supplier"
+                "supplier",
+                "price_list",
+                "merchant"
               ]
             }
           }
@@ -4725,7 +5373,9 @@
               "enum": [
                 "game",
                 "product",
-                "supplier"
+                "supplier",
+                "price_list",
+                "merchant"
               ]
             }
           }
@@ -10134,6 +10784,16 @@
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             }
+          },
+          {
+            "name": "gameId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
           }
         ],
         "responses": {
@@ -12028,6 +12688,254 @@
               "params"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "merchant_info_requested"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "applicationId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "applicationId",
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "merchant_approved"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "priceKind": {
+                    "$ref": "#/components/schemas/PriceKind"
+                  }
+                },
+                "required": [
+                  "priceKind"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "merchant_rejected"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "applicationId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "availableAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  }
+                },
+                "required": [
+                  "applicationId",
+                  "reason",
+                  "availableAt"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "merchant_application_expired"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "applicationId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "applicationId"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "merchant_revoked"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -12127,7 +13035,12 @@
               "checkout_finished",
               "ticket_replied",
               "order_placed_for_you",
-              "price_list_changed"
+              "price_list_changed",
+              "merchant_info_requested",
+              "merchant_approved",
+              "merchant_rejected",
+              "merchant_application_expired",
+              "merchant_revoked"
             ]
           },
           "push": {
@@ -12149,7 +13062,12 @@
               "checkout_finished",
               "ticket_replied",
               "order_placed_for_you",
-              "price_list_changed"
+              "price_list_changed",
+              "merchant_info_requested",
+              "merchant_approved",
+              "merchant_rejected",
+              "merchant_application_expired",
+              "merchant_revoked"
             ]
           }
         },
@@ -12215,7 +13133,12 @@
           "checkout_finished",
           "ticket_replied",
           "order_placed_for_you",
-          "price_list_changed"
+          "price_list_changed",
+          "merchant_info_requested",
+          "merchant_approved",
+          "merchant_rejected",
+          "merchant_application_expired",
+          "merchant_revoked"
         ]
       },
       "PushConfig": {
@@ -12769,6 +13692,12 @@
           },
           "priceKind": {
             "$ref": "#/components/schemas/PriceKind"
+          },
+          "accountType": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "merchant": {
+            "$ref": "#/components/schemas/AccountMerchant"
           }
         },
         "required": [
@@ -12777,7 +13706,33 @@
           "email",
           "phone",
           "createdAt",
-          "priceKind"
+          "priceKind",
+          "accountType",
+          "merchant"
+        ],
+        "additionalProperties": false
+      },
+      "AccountType": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "merchant"
+        ]
+      },
+      "AccountMerchant": {
+        "nullable": true,
+        "type": "object",
+        "properties": {
+          "tradeName": {
+            "type": "string"
+          },
+          "termsAccepted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tradeName",
+          "termsAccepted"
         ],
         "additionalProperties": false
       },
@@ -13031,6 +13986,9 @@
           "customer.frozen",
           "customer.unfrozen",
           "customer.price_list_changed",
+          "customer.merchant_granted",
+          "customer.merchant_revoked",
+          "merchant.terms_accepted",
           "customer.limits_changed",
           "customer.archived",
           "customer.unarchived",
@@ -13090,6 +14048,14 @@
           "price_list.archived",
           "price_list.fixed_price_set",
           "price_list.fixed_price_archived",
+          "merchant_application.submitted",
+          "merchant_application.resubmitted",
+          "merchant_application.info_requested",
+          "merchant_application.approved",
+          "merchant_application.rejected",
+          "merchant_application.expired",
+          "merchant_application.withdrawn",
+          "merchant_settings.changed",
           "supplier.credentials_set",
           "supplier.updated",
           "supplier.sync_requested",
@@ -13187,6 +14153,8 @@
           "catalog_product",
           "margin_rule",
           "price_list",
+          "merchant_application",
+          "merchant_settings",
           "supplier",
           "supplier_policy",
           "supplier_offer",
@@ -16859,6 +17827,14 @@
             ],
             "additionalProperties": false
           },
+          "merchant": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdminMerchantProfile"
+              }
+            ]
+          },
           "pinnedNote": {
             "nullable": true,
             "allOf": [
@@ -16967,6 +17943,7 @@
           "statusChange",
           "limits",
           "pricing",
+          "merchant",
           "pinnedNote",
           "balanceUnits",
           "counts",
@@ -17079,15 +18056,9 @@
         "enum": [
           "default_new",
           "default_established",
+          "default_merchant",
           "custom",
           "none"
-        ]
-      },
-      "AccountType": {
-        "type": "string",
-        "enum": [
-          "customer",
-          "merchant"
         ]
       },
       "PriceListKind": {
@@ -17097,6 +18068,74 @@
           "wholesale",
           "cost",
           "custom"
+        ]
+      },
+      "AdminMerchantProfile": {
+        "type": "object",
+        "properties": {
+          "tradeName": {
+            "type": "string"
+          },
+          "governorate": {
+            "$ref": "#/components/schemas/Governorate"
+          },
+          "city": {
+            "type": "string"
+          },
+          "applicationId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "termsVersion": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "grantedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "revokedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "tradeName",
+          "governorate",
+          "city",
+          "applicationId",
+          "termsVersion",
+          "grantedAt",
+          "revokedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Governorate": {
+        "type": "string",
+        "enum": [
+          "damascus",
+          "rif_dimashq",
+          "aleppo",
+          "homs",
+          "hama",
+          "latakia",
+          "tartus",
+          "idlib",
+          "deir_ez_zor",
+          "raqqa",
+          "hasakah",
+          "daraa",
+          "as_suwayda",
+          "quneitra",
+          "outside_syria"
         ]
       },
       "CustomerNote": {
@@ -17463,6 +18502,1056 @@
         "required": [
           "priceListId",
           "reason"
+        ]
+      },
+      "MerchantApplicationState": {
+        "type": "object",
+        "properties": {
+          "application": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MerchantApplication"
+              }
+            ]
+          },
+          "canApply": {
+            "type": "boolean"
+          },
+          "availableAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "termsVersionId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "application",
+          "canApply",
+          "availableAt",
+          "termsVersionId"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantApplication": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MerchantApplicationStatus"
+          },
+          "tradeName": {
+            "type": "string"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/MerchantActivity"
+          },
+          "activityOther": {
+            "nullable": true,
+            "type": "string"
+          },
+          "yearsInBusiness": {
+            "$ref": "#/components/schemas/YearsInBusiness"
+          },
+          "governorate": {
+            "$ref": "#/components/schemas/Governorate"
+          },
+          "city": {
+            "type": "string"
+          },
+          "streetAddress": {
+            "type": "string"
+          },
+          "whatsapp": {
+            "type": "string"
+          },
+          "telegramUsername": {
+            "nullable": true,
+            "type": "string"
+          },
+          "monthlyVolume": {
+            "$ref": "#/components/schemas/MonthlyVolume"
+          },
+          "productInterests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductInterest"
+            }
+          },
+          "salesChannels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesChannel"
+            }
+          },
+          "shopPhotoFileId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "shopLink": {
+            "nullable": true,
+            "type": "string"
+          },
+          "heardFrom": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeardFrom"
+              }
+            ]
+          },
+          "adminMessage": {
+            "nullable": true,
+            "type": "string"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "infoRequestedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "decidedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MerchantApplicationEvent"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "tradeName",
+          "activity",
+          "activityOther",
+          "yearsInBusiness",
+          "governorate",
+          "city",
+          "streetAddress",
+          "whatsapp",
+          "telegramUsername",
+          "monthlyVolume",
+          "productInterests",
+          "salesChannels",
+          "shopPhotoFileId",
+          "shopLink",
+          "heardFrom",
+          "adminMessage",
+          "submittedAt",
+          "infoRequestedAt",
+          "expiresAt",
+          "decidedAt",
+          "events"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantApplicationStatus": {
+        "type": "string",
+        "enum": [
+          "under_review",
+          "info_requested",
+          "approved",
+          "rejected",
+          "expired",
+          "withdrawn"
+        ]
+      },
+      "MerchantActivity": {
+        "type": "string",
+        "enum": [
+          "phone_shop",
+          "gaming_lounge",
+          "services_shop",
+          "wholesale_distributor",
+          "online_store",
+          "other"
+        ]
+      },
+      "YearsInBusiness": {
+        "type": "string",
+        "enum": [
+          "under_1",
+          "1_3",
+          "over_3"
+        ]
+      },
+      "MonthlyVolume": {
+        "type": "string",
+        "enum": [
+          "under_200",
+          "200_500",
+          "500_2000",
+          "2000_5000",
+          "over_5000"
+        ]
+      },
+      "ProductInterest": {
+        "type": "string",
+        "enum": [
+          "game_topups",
+          "gift_cards",
+          "chat_apps"
+        ]
+      },
+      "SalesChannel": {
+        "type": "string",
+        "enum": [
+          "shop_counter",
+          "whatsapp_telegram",
+          "social_pages",
+          "online_store"
+        ]
+      },
+      "HeardFrom": {
+        "type": "string",
+        "enum": [
+          "friend_or_shop",
+          "facebook",
+          "instagram",
+          "telegram",
+          "whatsapp",
+          "search",
+          "other"
+        ]
+      },
+      "MerchantApplicationEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/MerchantApplicationEventKind"
+          },
+          "message": {
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "event",
+          "message",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantApplicationEventKind": {
+        "type": "string",
+        "enum": [
+          "submitted",
+          "info_requested",
+          "resubmitted",
+          "approved",
+          "rejected",
+          "expired",
+          "withdrawn"
+        ]
+      },
+      "MerchantApplicationInput": {
+        "type": "object",
+        "properties": {
+          "tradeName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/MerchantActivity"
+          },
+          "activityOther": {
+            "nullable": true,
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "yearsInBusiness": {
+            "$ref": "#/components/schemas/YearsInBusiness"
+          },
+          "governorate": {
+            "$ref": "#/components/schemas/Governorate"
+          },
+          "city": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "streetAddress": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 160,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "whatsapp": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "telegramUsername": {
+            "nullable": true,
+            "type": "string"
+          },
+          "monthlyVolume": {
+            "$ref": "#/components/schemas/MonthlyVolume"
+          },
+          "productInterests": {
+            "minItems": 1,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductInterest"
+            }
+          },
+          "salesChannels": {
+            "minItems": 1,
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesChannel"
+            }
+          },
+          "shopPhotoFileId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "shopLink": {
+            "nullable": true,
+            "type": "string",
+            "maxLength": 300
+          },
+          "termsVersionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "heardFrom": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeardFrom"
+              }
+            ]
+          }
+        },
+        "required": [
+          "tradeName",
+          "activity",
+          "activityOther",
+          "yearsInBusiness",
+          "governorate",
+          "city",
+          "streetAddress",
+          "whatsapp",
+          "telegramUsername",
+          "monthlyVolume",
+          "productInterests",
+          "salesChannels",
+          "shopPhotoFileId",
+          "shopLink",
+          "termsVersionId",
+          "heardFrom"
+        ]
+      },
+      "MerchantPhoto": {
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "fileId"
+        ],
+        "additionalProperties": false
+      },
+      "AcceptMerchantTerms": {
+        "type": "object",
+        "properties": {
+          "versionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "versionId"
+        ]
+      },
+      "MerchantApplicationListQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MerchantApplicationStatus"
+              }
+            ]
+          }
+        }
+      },
+      "AdminMerchantApplicationPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminMerchantApplicationRow"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "AdminMerchantApplicationRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MerchantApplicationStatus"
+          },
+          "tradeName": {
+            "type": "string"
+          },
+          "governorate": {
+            "$ref": "#/components/schemas/Governorate"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/MerchantActivity"
+          },
+          "monthlyVolume": {
+            "$ref": "#/components/schemas/MonthlyVolume"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "frozen": {
+                "type": "boolean"
+              },
+              "sharedPhone": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "newAccount": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "frozen",
+              "sharedPhone",
+              "newAccount"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "tradeName",
+          "governorate",
+          "activity",
+          "monthlyVolume",
+          "submittedAt",
+          "customer"
+        ],
+        "additionalProperties": false
+      },
+      "AdminMerchantApplication": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MerchantApplicationStatus"
+          },
+          "tradeName": {
+            "type": "string"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/MerchantActivity"
+          },
+          "activityOther": {
+            "nullable": true,
+            "type": "string"
+          },
+          "yearsInBusiness": {
+            "$ref": "#/components/schemas/YearsInBusiness"
+          },
+          "governorate": {
+            "$ref": "#/components/schemas/Governorate"
+          },
+          "city": {
+            "type": "string"
+          },
+          "streetAddress": {
+            "type": "string"
+          },
+          "whatsapp": {
+            "type": "string"
+          },
+          "telegramUsername": {
+            "nullable": true,
+            "type": "string"
+          },
+          "monthlyVolume": {
+            "$ref": "#/components/schemas/MonthlyVolume"
+          },
+          "productInterests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductInterest"
+            }
+          },
+          "salesChannels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesChannel"
+            }
+          },
+          "shopPhotoFileId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "shopLink": {
+            "nullable": true,
+            "type": "string"
+          },
+          "heardFrom": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeardFrom"
+              }
+            ]
+          },
+          "adminMessage": {
+            "nullable": true,
+            "type": "string"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "infoRequestedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "decidedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MerchantApplicationEvent"
+            }
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "phone"
+            ],
+            "additionalProperties": false
+          },
+          "termsVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "approvedPriceList": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "earlier": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/MerchantApplicationStatus"
+                },
+                "submittedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "decidedAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "submittedAt",
+                "decidedAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "tradeName",
+          "activity",
+          "activityOther",
+          "yearsInBusiness",
+          "governorate",
+          "city",
+          "streetAddress",
+          "whatsapp",
+          "telegramUsername",
+          "monthlyVolume",
+          "productInterests",
+          "salesChannels",
+          "shopPhotoFileId",
+          "shopLink",
+          "heardFrom",
+          "adminMessage",
+          "submittedAt",
+          "infoRequestedAt",
+          "expiresAt",
+          "decidedAt",
+          "events",
+          "customer",
+          "termsVersion",
+          "approvedPriceList",
+          "earlier"
+        ],
+        "additionalProperties": false
+      },
+      "RequestApplicationInfo": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500,
+            "pattern": "^(?:[^\\p{Cc}]|\\n)+$"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "RejectApplication": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500,
+            "pattern": "^(?:[^\\p{Cc}]|\\n)+$"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "ApproveApplication": {
+        "type": "object",
+        "properties": {
+          "priceListId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        }
+      },
+      "MerchantListQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "listId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        }
+      },
+      "AdminMerchantPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminMerchantRow"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "AdminMerchantRow": {
+        "type": "object",
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "tradeName": {
+            "type": "string"
+          },
+          "governorate": {
+            "$ref": "#/components/schemas/Governorate"
+          },
+          "city": {
+            "type": "string"
+          },
+          "priceList": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "priceKind": {
+            "$ref": "#/components/schemas/PriceKind"
+          },
+          "termsAccepted": {
+            "type": "boolean"
+          },
+          "frozen": {
+            "type": "boolean"
+          },
+          "grantedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "sales30dUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "customerId",
+          "name",
+          "email",
+          "tradeName",
+          "governorate",
+          "city",
+          "priceList",
+          "priceKind",
+          "termsAccepted",
+          "frozen",
+          "grantedAt",
+          "sales30dUsdUnits"
+        ],
+        "additionalProperties": false
+      },
+      "GrantMerchant": {
+        "type": "object",
+        "properties": {
+          "tradeName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "governorate": {
+            "$ref": "#/components/schemas/Governorate"
+          },
+          "city": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "priceListId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500,
+            "pattern": "^(?:[^\\p{Cc}]|\\n)+$"
+          }
+        },
+        "required": [
+          "tradeName",
+          "governorate",
+          "city",
+          "reason"
+        ]
+      },
+      "RevokeMerchant": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 500,
+            "pattern": "^(?:[^\\p{Cc}]|\\n)+$"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "MerchantSettings": {
+        "type": "object",
+        "properties": {
+          "perDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "dailyDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "ordersPerTenMinutes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "reapplyWaitDays": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "infoExpiryDays": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "minDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "perDepositUsdUnits",
+          "dailyDepositUsdUnits",
+          "ordersPerTenMinutes",
+          "reapplyWaitDays",
+          "infoExpiryDays",
+          "minDepositUsdUnits",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantSettingsInput": {
+        "type": "object",
+        "properties": {
+          "perDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 100000000000
+          },
+          "dailyDepositUsdUnits": {
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 100000000000
+          },
+          "ordersPerTenMinutes": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 500
+          },
+          "reapplyWaitDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 365
+          },
+          "infoExpiryDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          }
+        },
+        "required": [
+          "perDepositUsdUnits",
+          "dailyDepositUsdUnits",
+          "ordersPerTenMinutes",
+          "reapplyWaitDays",
+          "infoExpiryDays"
         ]
       },
       "SupportChannels": {
@@ -19545,7 +21634,9 @@
         "enum": [
           "game",
           "product",
-          "supplier"
+          "supplier",
+          "price_list",
+          "merchant"
         ]
       },
       "SalesReport": {
@@ -22734,7 +24825,8 @@
           "terms",
           "privacy",
           "refund",
-          "about"
+          "about",
+          "merchant_terms"
         ]
       },
       "PublishedPage": {
@@ -30959,6 +33051,11 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "gameId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           }
         }
       },
@@ -30999,6 +33096,38 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "priceKind": {
+                "$ref": "#/components/schemas/PriceKind"
+              },
+              "merchantTermsRequired": {
+                "type": "boolean"
+              },
+              "listPrices": {
+                "nullable": true,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "productId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "priceUsdUnits": {
+                      "nullable": true,
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "productId",
+                    "priceUsdUnits"
+                  ],
+                  "additionalProperties": false
+                }
               },
               "savedPlayers": {
                 "type": "array",
@@ -31049,6 +33178,9 @@
               "frozen",
               "balanceUsdUnits",
               "purchaseCapLeftUsdUnits",
+              "priceKind",
+              "merchantTermsRequired",
+              "listPrices",
               "savedPlayers"
             ],
             "additionalProperties": false
@@ -32490,7 +34622,8 @@
           "supplier_stock_low",
           "supplier_charge_mismatch",
           "supplier_subscription",
-          "fixed_price_fallback"
+          "fixed_price_fallback",
+          "merchant_application"
         ]
       },
       "TelegramMessageStatus": {
@@ -33008,7 +35141,8 @@
           "switches_active",
           "order_conflicts",
           "telegram_unlinked",
-          "tickets_waiting"
+          "tickets_waiting",
+          "merchant_applications_waiting"
         ]
       },
       "HealthResponse": {

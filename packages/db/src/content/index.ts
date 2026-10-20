@@ -3,4 +3,5 @@ export {
   type AcceptedVersion,
   acceptedVersionsNow,
   customerAcceptedVersions,
+  merchantTermsInForce,
 } from './versions.js';

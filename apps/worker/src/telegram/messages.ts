@@ -542,6 +542,9 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
     ...(summary.fixedPriceFallbacks > 0
       ? [`🏷️ أسعار ثابتة تحت الهامش تُباع بسعر القاعدة: ${summary.fixedPriceFallbacks}`]
       : []),
+    ...(summary.merchantApplicationsWaiting > 0
+      ? [`🏪 طلبات تاجر بانتظار المراجعة: ${summary.merchantApplicationsWaiting}`]
+      : []),
     `الطلبات اليوم: ${summary.ordersDelivered} مُسلّمة، ${summary.ordersPartiallyRefunded} جزئية، ${summary.ordersRefunded} مستردة`,
     `بحاجة لمراجعة: ${summary.ordersInReview} · يدوي بانتظارك: ${summary.manualWaiting}`,
     ...(summary.medianDeliveryMs === null
@@ -762,6 +765,19 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
           `🏷️ السعر الثابت ${formatUsd(cell.fixedPriceUsdUnits)} في قائمة ${cell.priceListName} لم يعد يغطي التكلفة والهامش الأدنى`,
           `${cell.gameNameAr} · ${cell.productNameAr}: التكلفة ${formatUsd(cell.costUsdUnits)}، يُباع الآن بسعر القاعدة ${formatUsd(cell.priceUsdUnits)}`,
           `${links.admin}/pricing/lists/${cell.priceListId}`,
+        ].join('\n'),
+      };
+    }
+    case 'merchant_application': {
+      // S20 (Jobs): no personal data, the panel link and how many wait.
+      const application = params as TelegramMessageParams<'merchant_application'>;
+      return {
+        text: [
+          application.resubmitted
+            ? '🏪 طلب تاجر أُعيد إرساله بانتظار المراجعة'
+            : '🏪 طلب تاجر جديد بانتظار المراجعة',
+          `بانتظار المراجعة: ${application.waiting}`,
+          `${links.admin}/merchants/applications/${application.applicationId}`,
         ].join('\n'),
       };
     }

@@ -4,6 +4,7 @@ import { acceptedVersionSchema } from './content.js';
 import { customerStatusSchema } from './customer-status.js';
 import { type DepositLimitSettings, referenceCodeSchema } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
+import { adminMerchantProfileSchema, type MerchantDepositTier } from './merchants.js';
 import { amountUnitsSchema, isWholeCents, USD_CENT } from './money.js';
 import { orderNumberSchema } from './orders.js';
 import { accountTypeSchema, priceKindSchema, priceListKindSchema } from './pricing.js';
@@ -159,14 +160,16 @@ export const NO_LIMIT_OVERRIDES: CustomerLimitOverrides = {
 
 /**
  * Rule LM2: the deposit limit settings with the customer's overrides in place of both tiers'
- * per-deposit and daily values; the minimum is unchanged.
+ * per-deposit and daily values; the minimum is unchanged. S20 MD1, MD2: a merchant's tier (null for
+ * a customer) replaces both tiers first, and the overrides still win over it.
  */
 export function effectiveDepositLimitSettings<Settings extends DepositLimitSettings>(
   settings: Settings,
   overrides: Pick<CustomerLimitOverrides, 'perDepositUsdUnits' | 'dailyDepositUsdUnits'>,
+  merchantTier: MerchantDepositTier | null,
 ): Settings {
-  const perDeposit = overrides.perDepositUsdUnits;
-  const daily = overrides.dailyDepositUsdUnits;
+  const perDeposit = overrides.perDepositUsdUnits ?? merchantTier?.perDepositUsdUnits;
+  const daily = overrides.dailyDepositUsdUnits ?? merchantTier?.dailyDepositUsdUnits;
   return {
     ...settings,
     newAccountPerDepositUsdUnits: perDeposit ?? settings.newAccountPerDepositUsdUnits,
@@ -195,10 +198,14 @@ export function purchaseCapBreach(
   return { limitUnits: capUnits, remainingUnits: Math.max(0, capUnits - usedUnits) };
 }
 
-/** Where a limit's value comes from (LM3): a tier's default, the override, or no cap. */
+/**
+ * Where a limit's value comes from (LM3): a tier's default (S20 MD2: the merchant tier), the
+ * override, or no cap.
+ */
 export const CUSTOMER_LIMIT_SOURCES = [
   'default_new',
   'default_established',
+  'default_merchant',
   'custom',
   'none',
 ] as const;
@@ -233,13 +240,22 @@ export const customerLimitsSchema = z
 
 export type CustomerLimits = z.infer<typeof customerLimitsSchema>;
 
-/** Rule LM3: the overrides and, for each limit, its value in force and where it comes from. */
+/**
+ * Rule LM3: the overrides and, for each limit, its value in force and where it comes from; S20 MD2:
+ * a merchant's tier (null for a customer) in place of the new and established tiers.
+ */
 export function customerLimits(
   settings: DepositLimitSettings,
   established: boolean,
   overrides: CustomerLimitOverrides,
+  merchantTier: MerchantDepositTier | null,
 ): CustomerLimits {
-  const tier: CustomerLimitSource = established ? 'default_established' : 'default_new';
+  const tier: CustomerLimitSource =
+    merchantTier !== null
+      ? 'default_merchant'
+      : established
+        ? 'default_established'
+        : 'default_new';
   const pick = (override: number | null, fallback: number): EffectiveLimit =>
     override === null ? { units: fallback, source: tier } : { units: override, source: 'custom' };
   const cap = overrides.dailyPurchaseUsdUnits;
@@ -248,13 +264,15 @@ export function customerLimits(
     effective: {
       perDeposit: pick(
         overrides.perDepositUsdUnits,
-        established
-          ? settings.establishedPerDepositUsdUnits
-          : settings.newAccountPerDepositUsdUnits,
+        merchantTier?.perDepositUsdUnits ??
+          (established
+            ? settings.establishedPerDepositUsdUnits
+            : settings.newAccountPerDepositUsdUnits),
       ),
       dailyDeposit: pick(
         overrides.dailyDepositUsdUnits,
-        established ? settings.establishedDailyUsdUnits : settings.newAccountDailyUsdUnits,
+        merchantTier?.dailyDepositUsdUnits ??
+          (established ? settings.establishedDailyUsdUnits : settings.newAccountDailyUsdUnits),
       ),
       dailyPurchase:
         cap === null ? { units: null, source: 'none' } : { units: cap, source: 'custom' },
@@ -432,6 +450,8 @@ export const adminCustomerSchema = z
       effectiveList: z.object({ id: z.uuid(), kind: priceListKindSchema, name: z.string() }),
       priceKind: priceKindSchema,
     }),
+    /** S20: the merchant profile; null for an account never made a merchant. */
+    merchant: adminMerchantProfileSchema.nullable(),
     pinnedNote: customerNoteSchema.nullable(),
     balanceUnits: amountUnitsSchema,
     counts: z.object({

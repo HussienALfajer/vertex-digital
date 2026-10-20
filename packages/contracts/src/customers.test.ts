@@ -119,25 +119,33 @@ const SETTINGS = {
 
 describe('limits (LM2–LM5)', () => {
   it('keep the tiers without overrides', () => {
-    expect(effectiveDepositLimitSettings(SETTINGS, NO_LIMIT_OVERRIDES)).toEqual(SETTINGS);
+    expect(effectiveDepositLimitSettings(SETTINGS, NO_LIMIT_OVERRIDES, null)).toEqual(SETTINGS);
   });
 
   it('replace both tiers with each override, the minimum unchanged', () => {
     expect(
-      effectiveDepositLimitSettings(SETTINGS, {
-        perDepositUsdUnits: 500_000_000,
-        dailyDepositUsdUnits: null,
-      }),
+      effectiveDepositLimitSettings(
+        SETTINGS,
+        {
+          perDepositUsdUnits: 500_000_000,
+          dailyDepositUsdUnits: null,
+        },
+        null,
+      ),
     ).toEqual({
       ...SETTINGS,
       newAccountPerDepositUsdUnits: 500_000_000,
       establishedPerDepositUsdUnits: 500_000_000,
     });
     expect(
-      effectiveDepositLimitSettings(SETTINGS, {
-        perDepositUsdUnits: null,
-        dailyDepositUsdUnits: 10_000_000,
-      }),
+      effectiveDepositLimitSettings(
+        SETTINGS,
+        {
+          perDepositUsdUnits: null,
+          dailyDepositUsdUnits: 10_000_000,
+        },
+        null,
+      ),
     ).toEqual({
       ...SETTINGS,
       newAccountDailyUsdUnits: 10_000_000,
@@ -146,7 +154,7 @@ describe('limits (LM2–LM5)', () => {
   });
 
   it('say where each limit comes from', () => {
-    expect(customerLimits(SETTINGS, false, NO_LIMIT_OVERRIDES).effective).toEqual({
+    expect(customerLimits(SETTINGS, false, NO_LIMIT_OVERRIDES, null).effective).toEqual({
       perDeposit: { units: 50_000_000, source: 'default_new' },
       dailyDeposit: { units: 100_000_000, source: 'default_new' },
       dailyPurchase: { units: null, source: 'none' },
@@ -156,13 +164,46 @@ describe('limits (LM2–LM5)', () => {
       dailyDepositUsdUnits: null,
       dailyPurchaseUsdUnits: 20_000_000,
     };
-    expect(customerLimits(SETTINGS, true, custom)).toEqual({
+    expect(customerLimits(SETTINGS, true, custom, null)).toEqual({
       ...custom,
       effective: {
         perDeposit: { units: 1_000_000, source: 'custom' },
         dailyDeposit: { units: 500_000_000, source: 'default_established' },
         dailyPurchase: { units: 20_000_000, source: 'custom' },
       },
+    });
+  });
+
+  it('take the merchant tier for both tiers, the overrides still winning (S20 MD1, MD2)', () => {
+    const tier = { perDepositUsdUnits: 2_000_000_000, dailyDepositUsdUnits: 5_000_000_000 };
+    expect(effectiveDepositLimitSettings(SETTINGS, NO_LIMIT_OVERRIDES, tier)).toEqual({
+      ...SETTINGS,
+      newAccountPerDepositUsdUnits: 2_000_000_000,
+      establishedPerDepositUsdUnits: 2_000_000_000,
+      newAccountDailyUsdUnits: 5_000_000_000,
+      establishedDailyUsdUnits: 5_000_000_000,
+    });
+    expect(
+      effectiveDepositLimitSettings(
+        SETTINGS,
+        { perDepositUsdUnits: 100_000_000, dailyDepositUsdUnits: null },
+        tier,
+      ),
+    ).toMatchObject({
+      newAccountPerDepositUsdUnits: 100_000_000,
+      establishedDailyUsdUnits: 5_000_000_000,
+    });
+    expect(
+      customerLimits(
+        SETTINGS,
+        false,
+        { ...NO_LIMIT_OVERRIDES, dailyDepositUsdUnits: 1_000_000 },
+        tier,
+      ).effective,
+    ).toEqual({
+      perDeposit: { units: 2_000_000_000, source: 'default_merchant' },
+      dailyDeposit: { units: 1_000_000, source: 'custom' },
+      dailyPurchase: { units: null, source: 'none' },
     });
   });
 

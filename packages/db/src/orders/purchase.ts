@@ -17,7 +17,12 @@ import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { PgInsertValue } from 'drizzle-orm/pg-core';
 import { recordAudit } from '../audit/index.js';
 import type { Transaction } from '../client.js';
-import { checkPurchaseCap, checkReservationCap, lockActiveCustomer } from '../customers/guard.js';
+import {
+  checkPurchaseCap,
+  checkReservationCap,
+  lockActiveCustomer,
+  requireMerchantTerms,
+} from '../customers/guard.js';
 import { newId } from '../id.js';
 import {
   accountBalance,
@@ -414,6 +419,7 @@ export async function purchaseOrder(
 
   // S12 CF2: the customer `FOR SHARE` before any write; a frozen customer is refused.
   const customer = await lockActiveCustomer(tx, input.customerId);
+  requireMerchantTerms(customer);
   const [product] = await tx
     .select()
     .from(catalogProducts)

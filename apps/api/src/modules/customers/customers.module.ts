@@ -10,10 +10,12 @@ import { CustomersService } from './customers.service.js';
  * Customer administration (S12 F19): `customer_limits` and `customer_notes`. The customer rows
  * stay the `auth` module's; the profile reads and the state changes go through
  * `packages/db/src/customers`. Above `audit` (the history tab) and `deposits` (the limit tiers).
+ * S20: `merchants` answers its grants and revocations with `CustomersService.profile`.
  */
 @Module({
   imports: [AuthModule, AdminModule, AuditModule, DepositsModule],
   controllers: [CustomersAdminController],
   providers: [CustomersService],
+  exports: [CustomersService],
 })
 export class CustomersModule {}

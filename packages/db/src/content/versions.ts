@@ -3,8 +3,9 @@ import { type Database, readAll, type Transaction } from '../client.js';
 import { contentPageVersions, customers } from '../schema/index.js';
 
 /*
- * The terms and privacy versions a customer accepted at sign-up (S14 TA2, TA3), read here so the
- * api `auth` and `customers` modules never read the content tables themselves.
+ * The terms and privacy versions a customer accepted at sign-up (S14 TA2, TA3), and the merchant
+ * terms in force (S20 MT1, MT2), read here so the api `auth`, `customers` and `merchants` modules
+ * never read the content tables themselves.
  */
 
 type Executor = Database | Transaction;
@@ -61,4 +62,17 @@ export async function customerAcceptedVersions(
     return row ? { version: row.version, publishedAt: row.publishedAt } : null;
   };
   return { terms: find(customer?.terms), privacy: find(customer?.privacy) };
+}
+
+/** S20 MT1, MT2: the `merchant_terms` version in force (the newest), or null before the first. */
+export async function merchantTermsInForce(
+  db: Executor,
+): Promise<{ id: string; version: number } | null> {
+  const [row] = await db
+    .select({ id: contentPageVersions.id, version: contentPageVersions.version })
+    .from(contentPageVersions)
+    .where(eq(contentPageVersions.page, 'merchant_terms'))
+    .orderBy(desc(contentPageVersions.version))
+    .limit(1);
+  return row ?? null;
 }

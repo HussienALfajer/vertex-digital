@@ -253,6 +253,20 @@ export const ERROR_CODES = [
    * list is not priced and cannot be used.
    */
   'PRICE_LIST_NOT_READY',
+  /** S20 MA1: the customer has an open merchant application; `details.applicationId`. */
+  'MERCHANT_APPLICATION_OPEN',
+  /** S20 MA1: rejected less than the reapply wait ago; `details.availableAt`. */
+  'MERCHANT_REAPPLY_TOO_SOON',
+  /** S20 MT1: no `merchant_terms` version is published yet. */
+  'MERCHANT_TERMS_UNAVAILABLE',
+  /** S20 MT2: a merchant must accept the merchant terms in force before buying. */
+  'MERCHANT_TERMS_REQUIRED',
+  /** S20 MA1, MA6: the account is a merchant already. */
+  'ALREADY_MERCHANT',
+  /** S20 MA7, MT2: the account is not a merchant. */
+  'NOT_MERCHANT',
+  /** S20 MA4: the application's status does not allow this; `details.status`. */
+  'APPLICATION_STATE_INVALID',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

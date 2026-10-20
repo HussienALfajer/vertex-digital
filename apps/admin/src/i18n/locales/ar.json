@@ -71,7 +71,11 @@
     "pricingRules": "قواعد التسعير",
     "settings": "الإعدادات",
     "priceLists": "قوائم الأسعار",
-    "priceMatrix": "مصفوفة الأسعار"
+    "priceMatrix": "مصفوفة الأسعار",
+    "merchants": "التجّار",
+    "merchantApplications": "طلبات التجّار",
+    "merchantsList": "قائمة التجّار",
+    "merchantSettings": "إعدادات التجّار"
   },
   "user": {
     "menu": "قائمة الحساب",
@@ -119,7 +123,8 @@
         "switches_active": "مفتاح مفعّل في المتجر: {{switch}}",
         "order_conflicts": "تعارضات طلبات في آخر 7 أيام: {{count}}",
         "telegram_unlinked": "بوت تيليجرام غير مربوط: لا تصل التنبيهات",
-        "tickets_waiting": "تذاكر بانتظار ردّك: {{count}}"
+        "tickets_waiting": "تذاكر بانتظار ردّك: {{count}}",
+        "merchant_applications_waiting": "طلبات تاجر بانتظار المراجعة: {{count}}"
       }
     },
     "now": {
@@ -335,7 +340,14 @@
       "PRICE_LISTS_LIMIT_REACHED": "بلغت 20 قائمة مخصصة غير مؤرشفة. أرشف قائمة أولاً.",
       "PRICE_LIST_NAME_TAKEN": "لقائمة أخرى هذا الاسم.",
       "PRICE_LIST_ARCHIVED": "القائمة مؤرشفة.",
-      "PRICE_LIST_NOT_READY": "القائمة غير مسعّرة بعد: شغّل pricing:reprice-lists بعد النشر."
+      "PRICE_LIST_NOT_READY": "القائمة غير مسعّرة بعد: شغّل pricing:reprice-lists بعد النشر.",
+      "MERCHANT_APPLICATION_OPEN": "لدى العميل طلب تاجر مفتوح.",
+      "MERCHANT_REAPPLY_TOO_SOON": "لا يمكن التقديم مجدداً قبل انتهاء مدة الانتظار بعد الرفض.",
+      "MERCHANT_TERMS_UNAVAILABLE": "لم تُنشر شروط حساب التاجر بعد: انشرها من المحتوى.",
+      "MERCHANT_TERMS_REQUIRED": "لم يوافق التاجر على شروط حساب التاجر بعد، فلا يمكن الشراء من رصيده.",
+      "ALREADY_MERCHANT": "الحساب تاجر بالفعل.",
+      "NOT_MERCHANT": "الحساب ليس حساب تاجر.",
+      "APPLICATION_STATE_INVALID": "حالة الطلب لا تسمح بهذا الإجراء، حدّث الصفحة."
     }
   },
   "changePassword": {
@@ -495,7 +507,9 @@
       "banner": "بانر",
       "announcement": "إعلان",
       "content_settings": "إعدادات المحتوى",
-      "price_list": "قائمة أسعار"
+      "price_list": "قائمة أسعار",
+      "merchant_application": "طلب تاجر",
+      "merchant_settings": "إعدادات التجّار"
     },
     "fields": {
       "name": "الاسم",
@@ -771,7 +785,18 @@
       "price_list.archived": "أرشفة قائمة أسعار",
       "price_list.fixed_price_set": "تحديد سعر ثابت في قائمة",
       "price_list.fixed_price_archived": "إزالة سعر ثابت من قائمة",
-      "customer.price_list_changed": "تغيير قائمة أسعار حساب"
+      "customer.price_list_changed": "تغيير قائمة أسعار حساب",
+      "customer.merchant_granted": "جعل العميل تاجراً",
+      "customer.merchant_revoked": "سحب صفة التاجر",
+      "merchant.terms_accepted": "موافقة التاجر على الشروط",
+      "merchant_application.submitted": "تقديم طلب تاجر",
+      "merchant_application.resubmitted": "إعادة إرسال طلب تاجر",
+      "merchant_application.info_requested": "طلب معلومات من مقدّم طلب تاجر",
+      "merchant_application.approved": "الموافقة على طلب تاجر",
+      "merchant_application.rejected": "رفض طلب تاجر",
+      "merchant_application.expired": "انتهاء طلب تاجر بلا رد",
+      "merchant_application.withdrawn": "سحب طلب تاجر",
+      "merchant_settings.changed": "تعديل إعدادات التجّار"
     }
   },
   "testCustomers": {
@@ -1245,7 +1270,8 @@
       "supplier_stock_low": "مخزون منخفض لدى مورد",
       "supplier_charge_mismatch": "خصم مورد مختلف",
       "supplier_subscription": "اشتراك مورد",
-      "fixed_price_fallback": "سعر ثابت تحت الهامش"
+      "fixed_price_fallback": "سعر ثابت تحت الهامش",
+      "merchant_application": "طلب تاجر جديد"
     }
   },
   "rates": {
@@ -3749,7 +3775,8 @@
         "default_new": "الافتراضي: حساب جديد",
         "default_established": "الافتراضي: حساب موثوق",
         "custom": "مخصّص",
-        "none": "الافتراضي: بلا حد"
+        "none": "الافتراضي: بلا حد",
+        "default_merchant": "الافتراضي: تاجر"
       }
     },
     "sections": {
@@ -4301,7 +4328,9 @@
       "by": {
         "game": "اللعبة",
         "product": "المنتج",
-        "supplier": "المورد"
+        "supplier": "المورد",
+        "price_list": "قائمة الأسعار",
+        "merchant": "التاجر"
       }
     },
     "sales": {
@@ -4633,6 +4662,240 @@
         "hours_few": "منذ نحو {{count}} ساعات",
         "hours_many": "منذ نحو {{count}} ساعة",
         "hours_other": "منذ نحو {{count}} ساعة"
+      }
+    }
+  },
+  "merchants": {
+    "statuses": {
+      "under_review": "قيد المراجعة",
+      "info_requested": "بانتظار معلومات",
+      "approved": "مقبول",
+      "rejected": "مرفوض",
+      "expired": "منتهٍ",
+      "withdrawn": "مسحوب"
+    },
+    "events": {
+      "submitted": "قُدّم الطلب",
+      "info_requested": "طُلبت معلومات",
+      "resubmitted": "أُعيد الإرسال",
+      "approved": "قُبل الطلب",
+      "rejected": "رُفض الطلب",
+      "expired": "انتهى الطلب بلا رد",
+      "withdrawn": "سحب العميل الطلب"
+    },
+    "activities": {
+      "phone_shop": "محل موبايلات واتصالات",
+      "gaming_lounge": "صالة ألعاب",
+      "services_shop": "مكتب خدمات",
+      "wholesale_distributor": "موزّع جملة",
+      "online_store": "متجر إلكتروني",
+      "other": "نشاط آخر"
+    },
+    "years": {
+      "under_1": "أقل من سنة",
+      "1_3": "سنة إلى 3 سنوات",
+      "over_3": "أكثر من 3 سنوات"
+    },
+    "governorates": {
+      "damascus": "دمشق",
+      "rif_dimashq": "ريف دمشق",
+      "aleppo": "حلب",
+      "homs": "حمص",
+      "hama": "حماة",
+      "latakia": "اللاذقية",
+      "tartus": "طرطوس",
+      "idlib": "إدلب",
+      "deir_ez_zor": "دير الزور",
+      "raqqa": "الرقة",
+      "hasakah": "الحسكة",
+      "daraa": "درعا",
+      "as_suwayda": "السويداء",
+      "quneitra": "القنيطرة",
+      "outside_syria": "خارج سوريا"
+    },
+    "volumes": {
+      "under_200": "أقل من $200",
+      "200_500": "$200 إلى $500",
+      "500_2000": "$500 إلى $2,000",
+      "2000_5000": "$2,000 إلى $5,000",
+      "over_5000": "أكثر من $5,000"
+    },
+    "interests": {
+      "game_topups": "شحن الألعاب",
+      "gift_cards": "بطاقات الهدايا",
+      "chat_apps": "تطبيقات الدردشة"
+    },
+    "channels": {
+      "shop_counter": "من المحل",
+      "whatsapp_telegram": "واتساب وتيليجرام",
+      "social_pages": "صفحات التواصل",
+      "online_store": "متجر إلكتروني"
+    },
+    "heard": {
+      "friend_or_shop": "صديق أو محل",
+      "facebook": "فيسبوك",
+      "instagram": "إنستغرام",
+      "telegram": "تيليجرام",
+      "whatsapp": "واتساب",
+      "search": "البحث",
+      "other": "غير ذلك"
+    },
+    "columns": {
+      "tradeName": "المحل",
+      "customer": "العميل",
+      "governorate": "المحافظة",
+      "activity": "النشاط",
+      "volume": "الحجم الشهري",
+      "status": "الحالة",
+      "submitted": "قُدّم",
+      "list": "قائمة الأسعار",
+      "since": "تاجر منذ",
+      "sales30d": "مبيعات 30 يوماً",
+      "actions": "إجراءات"
+    },
+    "flags": {
+      "frozen": "مجمّد",
+      "newAccount": "حساب جديد",
+      "sharedPhone": "هاتف مشترك ({{count}})",
+      "unverified": "بريد غير مؤكد",
+      "signals": "إشارات: {{count}}",
+      "termsPending": "لم يوافق على الشروط"
+    },
+    "fields": {
+      "tradeName": "الاسم التجاري",
+      "activity": "النشاط",
+      "yearsInBusiness": "مدة العمل",
+      "governorate": "المحافظة",
+      "city": "المدينة",
+      "streetAddress": "العنوان",
+      "whatsapp": "واتساب",
+      "telegramUsername": "تيليجرام",
+      "monthlyVolume": "الحجم الشهري المتوقع",
+      "productInterests": "ما يريد بيعه",
+      "salesChannels": "طرق البيع",
+      "heardFrom": "كيف عرف عنا",
+      "shopLink": "رابط المحل",
+      "shopPhoto": "صورة المحل",
+      "priceList": "قائمة الأسعار",
+      "reason": "السبب",
+      "choose": "اختر"
+    },
+    "validation": {
+      "tradeName": "اكتب اسماً تجارياً من 2 إلى 80 حرفاً، من دون روابط.",
+      "governorate": "اختر المحافظة.",
+      "city": "اكتب المدينة من 2 إلى 60 حرفاً.",
+      "reason": "اكتب سبباً من 5 إلى 500 حرف.",
+      "message": "اكتب رسالة من 5 إلى 500 حرف يقرؤها العميل."
+    },
+    "applications": {
+      "title": "طلبات التجّار",
+      "subtitle": "راجع طلبات حسابات التجّار: الأقدم أولاً.",
+      "tabs": {
+        "under_review": "قيد المراجعة",
+        "info_requested": "بانتظار معلومات",
+        "all": "الكل"
+      },
+      "empty": {
+        "under_review": "لا طلبات بانتظار المراجعة.",
+        "info_requested": "لا طلبات بانتظار معلومات من أصحابها.",
+        "all": "لا طلبات بعد."
+      }
+    },
+    "application": {
+      "title": "طلب تاجر",
+      "back": "الطلبات",
+      "submitted": "قُدّم {{date}}",
+      "terms": "شروط التاجر: النسخة {{version}}",
+      "approvedList": "قُبل على: {{name}}",
+      "form": "بيانات الطلب",
+      "events": "سجل الطلب",
+      "earlier": "طلبات سابقة للعميل",
+      "profile": "ملف العميل",
+      "openPhoto": "فتح صورة المحل بحجم كبير"
+    },
+    "customer": {
+      "since": "عميل منذ",
+      "balance": "الرصيد",
+      "deposits": "إيداعات مقبولة",
+      "orders": "طلبات مسلّمة",
+      "amountCount": "{{count}} بقيمة {{amount}}",
+      "phone": "هاتف الحساب",
+      "phoneDiffers": "يختلف عن رقم واتساب في الطلب"
+    },
+    "decisions": {
+      "approve": "موافقة",
+      "approveTitle": "الموافقة على طلب التاجر",
+      "approveDescription": "يصبح الحساب تاجراً ويدفع بالقائمة المختارة. تُلغى حجوزاته المفتوحة ويصله إشعار.",
+      "request_info": "طلب معلومات",
+      "request_infoTitle": "طلب معلومات إضافية",
+      "request_infoDescription": "يرى العميل رسالتك ويعدّل طلبه ثم يعيد إرساله. ينتهي الطلب إن لم يرد في المهلة.",
+      "request_infoField": "الرسالة التي يقرؤها العميل",
+      "reject": "رفض",
+      "rejectTitle": "رفض طلب التاجر",
+      "rejectDescription": "يرى العميل السبب، ويمكنه التقديم من جديد بعد مدة الانتظار.",
+      "rejectField": "السبب الذي يقرؤه العميل"
+    },
+    "grant": {
+      "action": "جعله تاجراً",
+      "title": "جعل {{name}} تاجراً",
+      "description": "يصبح الحساب تاجراً فوراً، ويوافق التاجر على شروط حساب التاجر قبل أول شراء. يُغلق أي طلب مفتوح له كمقبول.",
+      "submit": "جعله تاجراً"
+    },
+    "revoke": {
+      "action": "سحب صفة التاجر",
+      "title": "سحب صفة التاجر من {{name}}",
+      "description": "يعود الحساب إلى أسعار التجزئة وحدود العميل العادية. تُلغى حجوزاته المفتوحة، ويبقى رصيده وطلباته. لا يرى العميل السبب.",
+      "submit": "سحب صفة التاجر"
+    },
+    "profile": {
+      "title": "حساب التاجر",
+      "tradeName": "الاسم التجاري",
+      "place": "المكان",
+      "grantedAt": "تاجر منذ",
+      "revokedAt": "سُحبت الصفة",
+      "source": "المصدر",
+      "fromApplication": "طلب تاجر",
+      "direct": "منح مباشر",
+      "terms": "شروط التاجر",
+      "termsAccepted": "وافق على النسخة {{version}}",
+      "termsPending": "لم يوافق بعد",
+      "openApplication": "عرض الطلب"
+    },
+    "list": {
+      "title": "التجّار",
+      "subtitle": "الحسابات التجارية الحالية وقوائم أسعارها.",
+      "search": "بحث بالاسم أو البريد أو المحل",
+      "searchSubmit": "بحث",
+      "listFilter": "قائمة الأسعار",
+      "allLists": "كل القوائم",
+      "empty": "لا تجّار بعد.",
+      "emptyFiltered": "لا تجّار يطابقون البحث."
+    },
+    "settings": {
+      "title": "إعدادات التجّار",
+      "subtitle": "حدود إيداع التجّار ومعدّل طلباتهم ومُهل طلبات التاجر.",
+      "save": "حفظ",
+      "saved": "حُفظت الإعدادات.",
+      "fields": {
+        "perDepositUsdUnits": "حد الإيداع الواحد ($)",
+        "dailyDepositUsdUnits": "حد الإيداع خلال 24 ساعة ($)",
+        "ordersPerTenMinutes": "الطلبات خلال 10 دقائق",
+        "reapplyWaitDays": "أيام الانتظار بعد الرفض",
+        "infoExpiryDays": "مهلة الرد على طلب المعلومات (أيام)"
+      },
+      "hints": {
+        "perDepositUsdUnits": "لا يقل عن أدنى إيداع ({{minimum}}) ولا يزيد على حد الـ24 ساعة. تحل محله الحدود الخاصة بالعميل إن وُجدت.",
+        "dailyDepositUsdUnits": "حتى $100,000.",
+        "ordersPerTenMinutes": "من 10 إلى 500. العميل العادي: 10.",
+        "reapplyWaitDays": "من 0 إلى 365.",
+        "infoExpiryDays": "من 1 إلى 60."
+      },
+      "errors": {
+        "perDepositUsdUnits": "اكتب مبلغاً بالسنت لا يقل عن {{minimum}} ولا يتجاوز حد الـ24 ساعة.",
+        "dailyDepositUsdUnits": "اكتب مبلغاً بالسنت لا يقل عن {{minimum}} ولا يتجاوز $100,000.",
+        "ordersPerTenMinutes": "اكتب عدداً من 10 إلى 500.",
+        "reapplyWaitDays": "اكتب عدداً من 0 إلى 365.",
+        "infoExpiryDays": "اكتب عدداً من 1 إلى 60."
       }
     }
   }

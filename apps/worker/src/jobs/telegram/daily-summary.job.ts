@@ -20,6 +20,7 @@ import {
   fulfilmentAttempts,
   ledgerSummary,
   lowStockCounts,
+  merchantApplications,
   newOfferCounts,
   openMismatchCount,
   orders,
@@ -432,7 +433,7 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       context,
     );
     const inUse = states.filter((state) => state.available && state.code !== 'manual');
-    const [newPacks, stock, fallbacks] = await readAll(db, [
+    const [newPacks, stock, fallbacks, [applications]] = await readAll(db, [
       () =>
         newOfferCounts(
           db,
@@ -444,6 +445,11 @@ export class DailySummaryJob implements OnApplicationBootstrap {
           inUse.map((state) => state.id),
         ),
       () => fixedPriceFallbacks(db),
+      () =>
+        db
+          .select({ count: count() })
+          .from(merchantApplications)
+          .where(eq(merchantApplications.status, 'under_review')),
     ]);
     const stockLow = { low: 0, out: 0 };
     for (const count of stock.values()) {
@@ -459,6 +465,7 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       stockLow,
       // S20 RP5.
       fixedPriceFallbacks: fallbacks.length,
+      merchantApplicationsWaiting: applications?.count ?? 0,
       openReviews: open.length,
       marginGuarded: [...routing.values()].filter(
         (state) => state.availability === 'paused_by_margin_guard',

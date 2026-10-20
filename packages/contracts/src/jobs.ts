@@ -60,6 +60,8 @@ export const QUEUES = {
   pushSend: 'push.send',
   /** Tells the admin of fixed prices that fell back to their rule, every 10 minutes (S20 RP5). */
   pricingFallbackNotices: 'pricing.fallback-notices',
+  /** Expires merchant applications left without an answer, every 15 minutes (S20 MA4). */
+  merchantsExpireApplications: 'merchants.expire-applications',
 } as const;
 
 /**

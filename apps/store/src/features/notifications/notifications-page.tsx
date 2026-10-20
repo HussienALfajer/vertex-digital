@@ -20,6 +20,7 @@ import {
   ReceiptTextIcon,
   ShoppingCartIcon,
   SlidersHorizontalIcon,
+  StoreIcon,
   TagIcon,
   Undo2Icon,
   WalletIcon,
@@ -56,6 +57,11 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   checkout_finished: ShoppingCartIcon,
   order_placed_for_you: GiftIcon,
   price_list_changed: TagIcon,
+  merchant_info_requested: StoreIcon,
+  merchant_approved: StoreIcon,
+  merchant_rejected: StoreIcon,
+  merchant_application_expired: StoreIcon,
+  merchant_revoked: StoreIcon,
 };
 
 /** Marks everything up to the newest shown as read and tells the bell (rule NT5). */

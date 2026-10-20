@@ -133,7 +133,10 @@ export async function salesReport(
   };
 }
 
-/** R2 (rule RP4): the same figures by game, product or supplier, by sales descending. */
+/**
+ * R2 (rule RP4): the same figures by game, product or supplier (S20: or price list, or merchant),
+ * by sales descending.
+ */
 export async function breakdownReport(
   db: Executor,
   period: ReportPeriod,
@@ -186,6 +189,28 @@ export async function breakdownReport(
       from suppliers s left join attempts a on a.supplier_id = s.id
       where exists (select 1 from delivered d where d.supplier_id = s.id) or coalesce(a.sent, 0) > 0
         or coalesce(a.resolved, 0) > 0`;
+  } else if (by === 'price_list') {
+    // S20: by the list each order was charged at (`orders.price_list_id`).
+    query = sql`
+      select l.id::text as key, l.name as name_ar, null as game_name_ar, null as game_id,
+        null as supplier,
+        sum(o.is_delivered)::text as delivered, sum(o.delivered_quantity)::text as units,
+        sum(o.sales)::text as sales, sum(o.cost)::text as cost,
+        null as sent, null as failed, null as resolved
+      from (${finishedOrders(period)}) o
+      join price_lists l on l.id = o.price_list_id
+      group by l.id, l.name`;
+  } else if (by === 'merchant') {
+    // S20: the orders of accounts that are or were merchants, by trade name.
+    query = sql`
+      select m.customer_id::text as key, m.trade_name as name_ar, null as game_name_ar,
+        null as game_id, null as supplier,
+        sum(o.is_delivered)::text as delivered, sum(o.delivered_quantity)::text as units,
+        sum(o.sales)::text as sales, sum(o.cost)::text as cost,
+        null as sent, null as failed, null as resolved
+      from (${finishedOrders(period)}) o
+      join merchant_profiles m on m.customer_id = o.customer_id
+      group by m.customer_id, m.trade_name`;
   } else {
     const product = by === 'product';
     query = sql`

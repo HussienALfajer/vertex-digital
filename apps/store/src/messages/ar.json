@@ -183,7 +183,12 @@
         "order_cancelled": "عند إلغاء طلب محجوز",
         "checkout_finished": "عند اكتمال كل طلبات سلة",
         "ticket_replied": "ردود الدعم",
-        "order_placed_for_you": "أنشأ المتجر طلباً لي"
+        "order_placed_for_you": "أنشأ المتجر طلباً لي",
+        "merchant_info_requested": "عند طلب معلومات إضافية لطلب التاجر",
+        "merchant_approved": "عند الموافقة على حساب التاجر",
+        "merchant_rejected": "عند رفض طلب التاجر",
+        "merchant_application_expired": "عند انتهاء طلب التاجر",
+        "merchant_revoked": "عند تغيّر نوع حسابك"
       },
       "emailLabel": "البريد: {event}",
       "pushLabel": "الهاتف: {event}",
@@ -509,7 +514,12 @@
       "order_placed_for_you_message": "رسالة المتجر: {message}",
       "price_list_changed_retail": "تغيّرت أسعار حسابك: تدفع الآن سعر التجزئة.",
       "price_list_changed_wholesale": "تغيّرت أسعار حسابك: تدفع الآن سعر التاجر.",
-      "price_list_changed_special": "تغيّرت أسعار حسابك: تدفع الآن سعراً خاصاً."
+      "price_list_changed_special": "تغيّرت أسعار حسابك: تدفع الآن سعراً خاصاً.",
+      "merchant_info_requested": "نحتاج معلومات إضافية لطلب حساب التاجر: {message}",
+      "merchant_approved": "تمت الموافقة على حساب التاجر. أسعار التاجر تظهر لك الآن.",
+      "merchant_rejected": "لم تتم الموافقة على طلب حساب التاجر: {reason}",
+      "merchant_application_expired": "انتهى طلب حساب التاجر لأننا لم نتلقَّ المعلومات المطلوبة. يمكنك التقديم من جديد.",
+      "merchant_revoked": "أصبح حسابك حساب عميل عادي، وتظهر لك أسعار التجزئة."
     }
   },
   "errors": {
@@ -566,7 +576,14 @@
     "TICKET_ALREADY_OPEN": "لهذا الطلب أو الإيداع تذكرة مفتوحة. تابعها بدل فتح تذكرة جديدة.",
     "TICKET_CLOSED": "هذه التذكرة مغلقة. افتح تذكرة جديدة.",
     "TICKET_LINK_INVALID": "اختر الطلب أو الإيداع الذي تسأل عنه من قائمتك.",
-    "IMAGE_INVALID": "الملف ليس صورة صالحة. أرسل صورة بصيغة JPEG أو PNG أو WebP لا تتجاوز 5 ميغابايت."
+    "IMAGE_INVALID": "الملف ليس صورة صالحة. أرسل صورة بصيغة JPEG أو PNG أو WebP لا تتجاوز 5 ميغابايت.",
+    "MERCHANT_APPLICATION_OPEN": "لديك طلب حساب تاجر قيد المراجعة بالفعل.",
+    "MERCHANT_REAPPLY_TOO_SOON": "لا يمكنك التقديم من جديد قبل انتهاء مدة الانتظار بعد الرفض.",
+    "MERCHANT_TERMS_UNAVAILABLE": "حسابات التجّار غير متاحة بعد. عد قريباً.",
+    "MERCHANT_TERMS_REQUIRED": "وافق على شروط حساب التاجر أولاً لتتمكن من الشراء.",
+    "ALREADY_MERCHANT": "حسابك حساب تاجر بالفعل.",
+    "NOT_MERCHANT": "حسابك ليس حساب تاجر.",
+    "APPLICATION_STATE_INVALID": "تغيّرت حالة طلبك. حدّث الصفحة."
   },
   "notFound": {
     "title": "الصفحة غير موجودة",
@@ -1195,5 +1212,199 @@
       "offFailed": "تعذّر إيقاف الإشعارات. حاول مرة أخرى"
     },
     "fallback": "لديك إشعار جديد"
+  },
+  "merchant": {
+    "title": "حساب التاجر",
+    "subtitle": "أسعار الجملة لأصحاب المحلات بعد مراجعة طلبك.",
+    "loadFailed": "تعذّر تحميل طلب حساب التاجر. أعد المحاولة.",
+    "retry": "أعد المحاولة",
+    "card": {
+      "title": "حساب التاجر",
+      "apply": "هل لديك محل؟ قدّم طلب حساب تاجر",
+      "applyAction": "قدّم الطلب",
+      "soon": "حسابات التجّار: قريباً",
+      "soonHint": "نجهّز شروط حساب التاجر، وسيُفتح التقديم قريباً.",
+      "status": "طلبك:",
+      "open": "عرض الطلب",
+      "merchant": "حساب تاجر · {tradeName}",
+      "priceKind": "تظهر لك: {kind}",
+      "termsBanner": "وافق على شروط حساب التاجر لتتمكن من الشراء بأسعار التاجر.",
+      "termsAction": "قراءة الشروط والموافقة"
+    },
+    "priceKinds": {
+      "retail": "أسعار التجزئة",
+      "wholesale": "سعر التاجر",
+      "special": "سعر خاص"
+    },
+    "statuses": {
+      "under_review": "قيد المراجعة",
+      "info_requested": "بانتظار معلومات منك",
+      "approved": "تمت الموافقة",
+      "rejected": "لم تتم الموافقة",
+      "expired": "انتهى بلا رد",
+      "withdrawn": "سُحب الطلب"
+    },
+    "state": {
+      "under_review": "طلبك قيد المراجعة. نراجع الطلبات عادةً خلال يوم عمل، وسيصلك إشعار بالنتيجة.",
+      "info_requested": "نحتاج معلومات إضافية قبل المراجعة. عدّل البيانات ثم أعد الإرسال قبل {date}.",
+      "approved": "تمت الموافقة على طلبك، وحسابك الآن حساب تاجر.",
+      "rejected": "لم تتم الموافقة على طلبك.",
+      "rejectedReason": "السبب: {reason}",
+      "reapplyAt": "يمكنك التقديم من جديد ابتداءً من {date}.",
+      "expired": "انتهى الطلب لأننا لم نتلقَّ المعلومات المطلوبة. يمكنك التقديم من جديد.",
+      "withdrawn": "سحبت الطلب. يمكنك التقديم من جديد متى شئت.",
+      "adminMessage": "رسالة فريق المراجعة",
+      "merchant": "حسابك حساب تاجر باسم {tradeName}.",
+      "applyAgain": "قدّم طلباً جديداً",
+      "withdraw": "سحب الطلب",
+      "withdrawing": "جارٍ السحب…",
+      "withdrawTitle": "سحب طلب حساب التاجر؟",
+      "withdrawBody": "لن يُراجع الطلب بعد سحبه، ويمكنك التقديم من جديد لاحقاً.",
+      "withdrawConfirm": "اسحب الطلب",
+      "cancel": "إلغاء",
+      "soon": "حسابات التجّار غير متاحة بعد. عد قريباً."
+    },
+    "timeline": {
+      "title": "سجل الطلب",
+      "submitted": "أُرسل الطلب",
+      "info_requested": "طُلبت معلومات إضافية",
+      "resubmitted": "أُعيد إرسال الطلب",
+      "approved": "تمت الموافقة",
+      "rejected": "لم تتم الموافقة",
+      "expired": "انتهى الطلب",
+      "withdrawn": "سُحب الطلب"
+    },
+    "steps": {
+      "shop": "المحل",
+      "contact": "التواصل",
+      "activity": "النشاط",
+      "proof": "الإثبات والشروط"
+    },
+    "stepOf": "الخطوة {current} من {total}",
+    "next": "التالي",
+    "back": "السابق",
+    "review": "مراجعة الطلب",
+    "submit": "إرسال الطلب",
+    "resubmit": "إعادة الإرسال",
+    "sending": "جارٍ الإرسال…",
+    "edit": "تعديل",
+    "summaryTitle": "راجع طلبك قبل الإرسال",
+    "fields": {
+      "tradeName": "اسم المحل التجاري",
+      "activity": "نوع النشاط",
+      "activityOther": "صف نشاطك",
+      "yearsInBusiness": "منذ متى تعمل",
+      "governorate": "المحافظة",
+      "city": "المدينة أو البلدة",
+      "streetAddress": "العنوان",
+      "streetAddressHint": "الشارع ومعلم قريب، ليسهل التحقق من المحل.",
+      "contactName": "اسم صاحب الطلب",
+      "contactNameHint": "اسم حسابك. غيّره من صفحة الحساب إن لزم.",
+      "whatsapp": "رقم واتساب",
+      "telegramUsername": "معرّف تيليجرام (اختياري)",
+      "telegramUsernameHint": "من دون @، مثل nour_shop.",
+      "monthlyVolume": "حجم المبيعات الشهري المتوقع",
+      "productInterests": "ما الذي تريد بيعه",
+      "salesChannels": "كيف تبيع لزبائنك",
+      "heardFrom": "كيف عرفت عنا (اختياري)",
+      "shopPhoto": "صورة واجهة المحل (اختياري)",
+      "shopPhotoHint": "صورة واضحة لواجهة المحل أو داخله، حتى 5 ميغابايت.",
+      "choosePhoto": "اختر صورة",
+      "changePhoto": "غيّر الصورة",
+      "removePhoto": "احذف الصورة",
+      "uploading": "جارٍ رفع الصورة…",
+      "shopLink": "رابط صفحة المحل (اختياري)",
+      "shopLinkHint": "صفحة فيسبوك أو إنستغرام أو متجر، يبدأ بـ https://",
+      "termsLink": "شروط حساب التاجر",
+      "choose": "اختر",
+      "termsBefore": "قرأت",
+      "termsAfter": "وأوافق عليها",
+      "photoAttached": "مرفقة"
+    },
+    "validation": {
+      "tradeName": "اكتب اسم المحل من 2 إلى 80 حرفاً، من دون روابط.",
+      "activity": "اختر نوع النشاط.",
+      "activityOther": "صف نشاطك في 2 إلى 80 حرفاً.",
+      "yearsInBusiness": "اختر منذ متى تعمل.",
+      "governorate": "اختر المحافظة.",
+      "city": "اكتب المدينة من 2 إلى 60 حرفاً.",
+      "streetAddress": "اكتب العنوان من 5 إلى 160 حرفاً، من دون روابط.",
+      "whatsapp": "اكتب رقم واتساب صحيحاً.",
+      "telegramUsername": "اكتب المعرّف من 5 إلى 32 حرفاً لاتينياً أو رقماً أو _.",
+      "monthlyVolume": "اختر حجم المبيعات المتوقع.",
+      "productInterests": "اختر ما تريد بيعه.",
+      "salesChannels": "اختر طريقة بيع واحدة على الأقل.",
+      "heardFrom": "اختر من القائمة.",
+      "shopPhotoFileId": "ارفع الصورة من جديد.",
+      "shopLink": "اكتب رابطاً كاملاً يبدأ بـ https://",
+      "terms": "وافق على شروط حساب التاجر لإرسال الطلب.",
+      "photo": "تعذّر رفع الصورة: اختر صورة JPEG أو PNG أو WebP حتى 5 ميغابايت."
+    },
+    "activities": {
+      "phone_shop": "محل موبايلات واتصالات",
+      "gaming_lounge": "صالة ألعاب",
+      "services_shop": "مكتب خدمات",
+      "wholesale_distributor": "موزّع جملة",
+      "online_store": "متجر إلكتروني",
+      "other": "نشاط آخر"
+    },
+    "years": {
+      "under_1": "أقل من سنة",
+      "1_3": "من سنة إلى 3 سنوات",
+      "over_3": "أكثر من 3 سنوات"
+    },
+    "governorates": {
+      "damascus": "دمشق",
+      "rif_dimashq": "ريف دمشق",
+      "aleppo": "حلب",
+      "homs": "حمص",
+      "hama": "حماة",
+      "latakia": "اللاذقية",
+      "tartus": "طرطوس",
+      "idlib": "إدلب",
+      "deir_ez_zor": "دير الزور",
+      "raqqa": "الرقة",
+      "hasakah": "الحسكة",
+      "daraa": "درعا",
+      "as_suwayda": "السويداء",
+      "quneitra": "القنيطرة",
+      "outside_syria": "خارج سوريا"
+    },
+    "volumes": {
+      "under_200": "أقل من $200",
+      "200_500": "$200 إلى $500",
+      "500_2000": "$500 إلى $2,000",
+      "2000_5000": "$2,000 إلى $5,000",
+      "over_5000": "أكثر من $5,000"
+    },
+    "interests": {
+      "game_topups": "شحن الألعاب",
+      "gift_cards": "بطاقات الهدايا",
+      "chat_apps": "تطبيقات الدردشة"
+    },
+    "channels": {
+      "shop_counter": "من المحل مباشرة",
+      "whatsapp_telegram": "واتساب وتيليجرام",
+      "social_pages": "صفحات التواصل",
+      "online_store": "متجر إلكتروني"
+    },
+    "heard": {
+      "friend_or_shop": "صديق أو محل",
+      "facebook": "فيسبوك",
+      "instagram": "إنستغرام",
+      "telegram": "تيليجرام",
+      "whatsapp": "واتساب",
+      "search": "البحث على الإنترنت",
+      "other": "غير ذلك"
+    },
+    "terms": {
+      "title": "شروط حساب التاجر",
+      "body": "قبل أول شراء بأسعار التاجر، اقرأ شروط حساب التاجر ووافق عليها.",
+      "read": "اقرأ الشروط",
+      "accept": "أوافق على الشروط",
+      "accepting": "جارٍ الحفظ…",
+      "accepted": "شكراً، يمكنك الشراء الآن.",
+      "check": "قرأت شروط حساب التاجر وأوافق عليها"
+    }
   }
 }

@@ -33,6 +33,7 @@ import {
   ScrollTextIcon,
   SettingsIcon,
   ShoppingBagIcon,
+  StoreIcon,
   TruckIcon,
   UserRoundCogIcon,
   UsersRoundIcon,
@@ -61,6 +62,7 @@ interface NavItem {
     | 'nav.deposits'
     | 'nav.wallets'
     | 'nav.customers'
+    | 'nav.merchants'
     | 'nav.support'
     | 'nav.catalog'
     | 'nav.content'
@@ -95,7 +97,10 @@ interface NavChild {
     | 'nav.priceMatrix'
     | 'nav.rates'
     | 'nav.switches'
-    | 'nav.telegram';
+    | 'nav.telegram'
+    | 'nav.merchantApplications'
+    | 'nav.merchantsList'
+    | 'nav.merchantSettings';
   /** Sub-pages with their own navigation items, where this one is not active. */
   except?: readonly string[];
 }
@@ -124,6 +129,16 @@ const navItems: NavItem[] = [
   },
   { to: '/wallets', label: 'nav.wallets', icon: WalletIcon },
   { to: '/customers', label: 'nav.customers', icon: ContactRoundIcon },
+  {
+    to: '/merchants/applications',
+    label: 'nav.merchants',
+    icon: StoreIcon,
+    children: [
+      { to: '/merchants/applications', label: 'nav.merchantApplications' },
+      { to: '/merchants', label: 'nav.merchantsList', except: ['/merchants/applications'] },
+      { to: '/settings/merchants', label: 'nav.merchantSettings' },
+    ],
+  },
   {
     to: '/support',
     label: 'nav.support',

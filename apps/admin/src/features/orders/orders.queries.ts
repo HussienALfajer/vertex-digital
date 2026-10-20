@@ -247,13 +247,13 @@ export const useRevokeShareLink = (orderId: string) =>
 /* S16 purchases from the panel ------------------------------------------------------------- */
 
 /** Rules AP4, AP7, AP8: the customer's wallet, caps and saved ids, and the owner cap today. */
-export const purchaseContextQuery = (customerId: string | undefined) =>
+export const purchaseContextQuery = (customerId: string | undefined, gameId?: string) =>
   queryOptions({
-    queryKey: ['orders', 'purchase-context', customerId ?? null],
+    queryKey: ['orders', 'purchase-context', customerId ?? null, gameId ?? null],
     queryFn: () =>
       call(
         api.GET('/api/admin/orders/purchase-context', {
-          params: { query: customerId ? { customerId } : {} },
+          params: { query: customerId ? { customerId, ...(gameId && { gameId }) } : {} },
         }),
       ),
     staleTime: 0,

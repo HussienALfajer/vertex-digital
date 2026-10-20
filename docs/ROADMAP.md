@@ -77,7 +77,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 
 ## Phase M — Merchants and store growth (owner, 2026-10-20: moved from Phase 4, started before the pilot)
 Scope: `docs/product/v1-scope.md` Phase M (F28–F42). One `/spec` session per spec, in this order; the pilot items above continue in parallel.
-- [~] S20 Merchant accounts and price lists: F28 · F29 (account types, the application and its review, merchant deposit limits, the four price kinds with named custom lists, per-list guard and repricing, private prices in the store; amends ADR 0020): spec `docs/specs/S20-merchant-accounts-and-price-lists.md`, ADR 0035
+- [x] S20 Merchant accounts and price lists: F28 · F29 (account types, the application and its review, merchant deposit limits, the four price kinds with named custom lists, per-list guard and repricing, private prices in the store; amends ADR 0020): spec `docs/specs/S20-merchant-accounts-and-price-lists.md`, ADR 0035; PR 1 lists in the database and the engine, PR 2 lists, rules, fixed prices, matrix, assignment and private prices, PR 3 merchants (applications and their review, terms, the merchant tier and order rate, the panel's queue, merchants and settings, reports by list and merchant) done (2026-10-21); not deployed yet: the Phase M deploy, then `pricing:reprice-lists`, then the follow-up dropping PR 1's defaults
 - [ ] S21 Merchant tools: F30 · F31 · F32 · F33 · F34 · F35 · F36 · F37 · F38 · F39
 - [ ] S22 Quick buy and order help: F40 · F41 · F42
 

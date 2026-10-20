@@ -164,6 +164,8 @@ export type PayOutcome =
   | 'skipped_balance'
   /** S12 CF2: the customer was frozen meanwhile (a freeze cancels the reservations). */
   | 'skipped_frozen'
+  /** S20 MT2: a merchant who has not accepted the merchant terms (a grant cancels them). */
+  | 'skipped_terms'
   /** S12 LM4: the payment would pass the daily purchase cap; tried again until it fits or expires. */
   | 'skipped_cap'
   | 'cancelled_price_rose'
@@ -219,6 +221,10 @@ export async function payWaitingOrders(
             return;
           }
           throw error;
+        }
+        if (customer.merchantTermsRequired) {
+          outcome = 'skipped_terms';
+          return;
         }
         outcome = await payOne(tx, context, id, customer);
       });

@@ -105,6 +105,9 @@ Money is USD units (micro-dollars, ADR 0003). The api `pricing` module owns the 
 - One open application per customer: partial unique index on `customer_id` where `status in ('under_review', 'info_requested')`. Indexes `(status, submitted_at)`, `(customer_id, created_at desc)`, and on each foreign key.
 - `merchant_applications_guard` (hand-written): no delete; a final status (`approved`, `rejected`, `expired`, `withdrawn`) never changes; transitions only on MA's table; `customer_id`, `idempotency_key` fixed; the form fields change only on `info_requested → under_review` (a resubmission).
 
+### `merchant_shop_photos` (new; append-only; owner `merchants`; PR 3)
+- `file_id` → `stored_files` (primary key), `customer_id` → `customers`, `created_at`. Who uploaded a photo (MA3): served to that customer and the admin only; an application may name only its customer's photo (the guard) and a photo serves one application (a unique index on `merchant_applications.shop_photo_file_id`).
+
 ### `merchant_application_events` (new; append-only)
 - `id`, `application_id` → `merchant_applications`, `event` (`submitted`, `info_requested`, `resubmitted`, `approved`, `rejected`, `expired`, `withdrawn`), `message` (nullable, the admin's text), `created_at` stamped with `clock_timestamp()`. The customer's status timeline. `append_only_guard` and the revokes.
 
@@ -162,7 +165,7 @@ Money is USD units (micro-dollars, ADR 0003). The api `pricing` module owns the 
 
 ### Merchant terms
 - MT1. The `merchant_terms` content page (S14: draft, publish, versions) is shown at `/merchant-terms`. Until a version is published, applications answer `MERCHANT_TERMS_UNAVAILABLE` and the store shows the apply card as "قريباً".
-- MT2. An application records the version in force when it was submitted (and again on a resubmission). A directly granted merchant has no accepted version: until they accept the version in force (`POST /api/merchant/terms`), purchases, checkouts and reservations answer `MERCHANT_TERMS_REQUIRED` and the store shows the acceptance sheet (decision 10). Reads and deposits are allowed.
+- MT2. An application records the version in force when it was submitted (and again on a resubmission). A directly granted merchant has no accepted version: until they accept the version in force (`POST /api/merchant/terms`), purchases, checkouts and reservations answer `MERCHANT_TERMS_REQUIRED` and the store shows the acceptance sheet (decision 10). Reads and deposits are allowed. (PR 3) The check is a merchant profile without a terms version: every grant writes the profile, an approval with the application's version.
 
 ### Merchant applications
 - MA1. **Who:** a verified, not frozen, unarchived customer of type `customer` with no open application (`MERCHANT_APPLICATION_OPEN`), and, when their latest application was rejected, at least `reapply_wait_days` after its decision (`MERCHANT_REAPPLY_TOO_SOON` with `availableAt`). A merchant answers `ALREADY_MERCHANT`. Test customers may apply (their accounts stay out of reports).
@@ -203,7 +206,7 @@ No new journal kind. A purchase at a list price posts S08 M1 (`purchase`, `order
 | `POST /api/merchant/terms` | Customer (merchant) | `{ versionId }` | `204` | `NOT_MERCHANT`, `VALIDATION_FAILED` (not the version in force) |
 | `GET /api/content/pages/merchant_terms` (S14) | Public | — | the page | `NOT_FOUND` |
 | `GET /api/admin/merchant-applications` | Admin | `status?`, cursor | page of rows | — |
-| `GET /api/admin/merchant-applications/:id` | Admin | — | `adminMerchantApplicationSchema`: the form, photo url, events, the customer summary (age, verified, deposits credited count and total, orders and sales, balance, frozen, signals of S12, pinned note, earlier applications) | `NOT_FOUND` |
+| `GET /api/admin/merchant-applications/:id` | Admin | — | `adminMerchantApplicationSchema`: the form, events, the applicant's name, email and phone, the terms version, the approved list and earlier applications; the photo at `…/photo`. (PR 3) The customer summary (age, verified, deposits, orders and sales, balance, frozen, signals, pinned note) is read beside it from the customer profile, `GET /api/admin/customers/:id` | `NOT_FOUND` |
 | `POST /api/admin/merchant-applications/:id/request-info` | Admin | `{ message }` | the application | `APPLICATION_STATE_INVALID` |
 | `POST /api/admin/merchant-applications/:id/reject` | Admin | `{ reason }` | the application | `APPLICATION_STATE_INVALID` |
 | `POST /api/admin/merchant-applications/:id/approve` | Admin, re-authentication | `{ priceListId? }` | the application | `APPLICATION_STATE_INVALID`, `CUSTOMER_STATE_INVALID`, `PRICE_LIST_ARCHIVED` |
@@ -222,7 +225,7 @@ No new journal kind. A purchase at a list price posts S08 M1 (`purchase`, `order
 | `GET /api/admin/pricing/matrix` | Admin | `gameId` or `q`, `listIds?` (up to 8), `warnings?` | `priceMatrixSchema`: per product the cost, basis route, and per list the price, margin, source, target while held, warnings (`fallback`, `capped`, `above_parent`, `held`, `unavailable`, `no_row`) | — |
 | `GET /api/admin/reports/breakdown` (S13 R2, extended) | Admin | `by` gains `price_list` and `merchant` | as R2 | — |
 
-The S06 preview (PR10) gains `priceListId`. The admin order form's product list (S16) reads the chosen customer's list prices.
+The S06 preview (PR10) gains `priceListId`. The admin order form's product list (S16) reads the chosen customer's list prices: (PR 3) `GET /api/admin/orders/purchase-context` takes `gameId` and answers the customer's `priceKind`, `merchantTermsRequired` and `listPrices` (null on retail).
 
 ## Jobs and integrations
 - `merchants.expire-applications` (cron every 15 minutes): applications `info_requested` with `info_requested_at` older than `info_expiry_days`, `FOR UPDATE SKIP LOCKED`, each in its own transaction with its event, audit (system actor) and notification; the status check makes a second run a no-op.
@@ -254,6 +257,7 @@ The S06 preview (PR10) gains `priceListId`. The admin order form's product list 
 
 ## Audit and notifications
 - Audit (each in the transaction of its change, before and after where something changes): `price_list.created`, `price_list.renamed`, `price_list.archived`, `margin_rule.set` and `margin_rule.archived` (details gain `priceListId`), `price_list.fixed_price_set`, `price_list.fixed_price_archived`, `customer.price_list_changed` (reason), `customer.merchant_granted` (application id or reason), `customer.merchant_revoked` (reason), `merchant_application.submitted`, `.resubmitted`, `.info_requested`, `.approved`, `.rejected`, `.expired`, `.withdrawn`, `merchant.terms_accepted`, `merchant_settings.changed`.
+- (PR 3) The emails and pushes of an information request and a rejection link to `/account/merchant` and never carry the admin's text (S01 rule E3); the center notification carries it.
 - Customer notifications (center and email unless noted, with templates and preferences on by default): `merchant_info_requested`, `merchant_approved`, `merchant_rejected` (the reason), `merchant_application_expired` (center only), `merchant_revoked` (no reason), `price_list_changed` (center only); reservations cancelled by AT3 send S09's cancellation email. Push follows S15 for emailed events.
 - Telegram: `merchant_application`, `fixed_price_fallback`, the summary lines (Jobs).
 

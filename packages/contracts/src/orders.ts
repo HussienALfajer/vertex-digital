@@ -15,6 +15,7 @@ import { customerMarksSchema } from './customer-status.js';
 import { REFERENCE_CODE_ALPHABET, storedFileRefSchema } from './deposits.js';
 import { cursorQuerySchema, pagedListSchema, pageQuerySchema } from './lists.js';
 import { CURRENCY_SCALE, usdCentsSchema } from './money.js';
+import { priceKindSchema } from './price-kinds.js';
 import {
   fieldMapSchema,
   optionMapSchema,
@@ -1855,9 +1856,12 @@ export const createAdminOrderSchema = createOrderSchema
 
 export type CreateAdminOrder = z.input<typeof createAdminOrderSchema>;
 
-/** `GET /api/admin/orders/purchase-context`. */
+/**
+ * `GET /api/admin/orders/purchase-context`; S20 PO4: `gameId` reads the customer's list prices of
+ * that game.
+ */
 export const adminPurchaseContextQuerySchema = z
-  .object({ customerId: z.uuid().optional() })
+  .object({ customerId: z.uuid().optional(), gameId: z.uuid().optional() })
   .meta({ id: 'AdminPurchaseContextQuery' });
 
 export type AdminPurchaseContextQuery = z.infer<typeof adminPurchaseContextQuerySchema>;
@@ -1878,6 +1882,17 @@ export const adminPurchaseContextSchema = z
         frozen: z.boolean(),
         balanceUsdUnits: z.int().nonnegative(),
         purchaseCapLeftUsdUnits: z.int().nonnegative().nullable(),
+        /** S20 AT4: what the customer pays. */
+        priceKind: priceKindSchema,
+        /** S20 MT2: a merchant who has not accepted the merchant terms cannot be charged. */
+        merchantTermsRequired: z.boolean(),
+        /**
+         * S20 PO4: the game's packs at the customer's list (null price: unavailable on it); null
+         * when the customer pays retail or no game is chosen.
+         */
+        listPrices: z
+          .array(z.object({ productId: z.uuid(), priceUsdUnits: z.int().positive().nullable() }))
+          .nullable(),
         savedPlayers: z.array(
           z.object({
             id: z.uuid(),

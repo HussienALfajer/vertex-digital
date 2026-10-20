@@ -124,6 +124,21 @@ export function notificationText(notification: CustomerNotification): string {
     // S20 AT4: the kind of price only, never the list.
     case 'price_list_changed':
       return t(`notifications.events.price_list_changed_${notification.params.priceKind}`);
+    // S20 MA4–MA7: the admin's message is written to this customer; a revocation's reason is not.
+    case 'merchant_info_requested':
+      return t('notifications.events.merchant_info_requested', {
+        message: notification.params.message,
+      });
+    case 'merchant_approved':
+      return t('notifications.events.merchant_approved');
+    case 'merchant_rejected':
+      return t('notifications.events.merchant_rejected', {
+        reason: notification.params.reason,
+      });
+    case 'merchant_application_expired':
+      return t('notifications.events.merchant_application_expired');
+    case 'merchant_revoked':
+      return t('notifications.events.merchant_revoked');
   }
 }
 
@@ -142,6 +157,13 @@ export function notificationHref(notification: CustomerNotification): string {
       return `/support/${notification.params.ticketId}`;
     case 'price_list_changed':
       return '/';
+    case 'merchant_info_requested':
+    case 'merchant_rejected':
+    case 'merchant_application_expired':
+      return '/account/merchant';
+    case 'merchant_approved':
+    case 'merchant_revoked':
+      return '/account';
     default:
       return `/orders/${notification.params.orderId}`;
   }

@@ -34,6 +34,7 @@ export function statusChips(status: CustomerStatus, isTest: boolean): CustomerCh
 export const LIMIT_SOURCE_KEYS = {
   default_new: 'customers.limits.sources.default_new',
   default_established: 'customers.limits.sources.default_established',
+  default_merchant: 'customers.limits.sources.default_merchant',
   custom: 'customers.limits.sources.custom',
   none: 'customers.limits.sources.none',
 } as const satisfies Record<CustomerLimitSource, string>;

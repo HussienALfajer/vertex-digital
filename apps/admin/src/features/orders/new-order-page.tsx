@@ -64,6 +64,26 @@ const FIELD_OF: Partial<Record<string, FieldKey>> = {
   fields: 'fields',
 };
 
+/**
+ * S20 PO4: the game with its packs at the customer's list prices, for an order the customer pays
+ * on another list than retail (a null price: unavailable on that list); as it is otherwise.
+ */
+function atListPrices(
+  game: GameDetail | undefined,
+  listPrices: { productId: string; priceUsdUnits: number | null }[] | null | undefined,
+): GameDetail | undefined {
+  if (!game || !listPrices) return game;
+  const prices = new Map(listPrices.map((row) => [row.productId, row.priceUsdUnits]));
+  return {
+    ...game,
+    products: game.products.map((item) => ({
+      ...item,
+      priceUsdUnits: prices.get(item.id) ?? null,
+      priceSypUnits: null,
+    })),
+  };
+}
+
 /** A pack the mode may buy (rule AP5): available, or paused by the admin for an owner-funded one. */
 function packChoice(product: Product, ownerFunded: boolean): 'buyable' | 'trial' | 'unavailable' {
   if (product.archivedAt !== null || product.priceUsdUnits === null) return 'unavailable';
@@ -101,13 +121,18 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
   const shape = purpose ? adminOrderShape(purpose) : null;
   const ownerFunded = shape?.payer === 'owner';
   const context = useQuery({
-    ...purchaseContextQuery(shape?.hasCustomer ? (customerId ?? undefined) : undefined),
+    ...purchaseContextQuery(
+      shape?.hasCustomer ? (customerId ?? undefined) : undefined,
+      // S20 PO4: an order the customer pays is charged at the customer's list.
+      shape?.payer === 'customer' ? (gameId ?? undefined) : undefined,
+    ),
     enabled: shape !== null && (!shape.hasCustomer || customerId !== null),
   });
   const games = useQuery(allGamesQuery);
-  const game = useQuery({ ...gameQuery(gameId ?? ''), enabled: gameId !== null });
-  const product = game.data?.products.find((item) => item.id === productId) ?? null;
-  const hasFields = (game.data?.fields ?? []).some((field) => field.archivedAt === null);
+  const loaded = useQuery({ ...gameQuery(gameId ?? ''), enabled: gameId !== null });
+  const gameData = atListPrices(loaded.data, context.data?.customer?.listPrices);
+  const product = gameData?.products.find((item) => item.id === productId) ?? null;
+  const hasFields = (gameData?.fields ?? []).some((field) => field.archivedAt === null);
   const units = /^\d{1,2}$/.test(quantity) ? Number(quantity) : 0;
   const total =
     product?.priceUsdUnits && units > 0 ? orderTotal(product.priceUsdUnits, units) : null;
@@ -171,7 +196,8 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
     if (!(error instanceof ApiError)) return errorMessage(t, error);
     const details = (error.details ?? {}) as Record<string, unknown>;
     if (error.code === 'PRICE_CHANGED') {
-      void game.refetch();
+      void loaded.refetch();
+      void context.refetch();
       return t('orders.buy.priceChanged', {
         price: ltr(formatUsd(Number(details.unitPriceUsdUnits ?? 0))),
       });
@@ -278,11 +304,11 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
                 </SelectContent>
               </Select>
             </Field>
-            {game.isPending && gameId && <Skeleton className="h-32 w-full" aria-hidden="true" />}
-            {game.isError && <FormAlert>{errorMessage(t, game.error)}</FormAlert>}
-            {game.data && (
+            {loaded.isPending && gameId && <Skeleton className="h-32 w-full" aria-hidden="true" />}
+            {loaded.isError && <FormAlert>{errorMessage(t, loaded.error)}</FormAlert>}
+            {gameData && (
               <Packs
-                game={game.data}
+                game={gameData}
                 ownerFunded={ownerFunded}
                 productId={productId}
                 invalid={!!errors.productId}
@@ -314,17 +340,17 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
           </Step>
         )}
 
-        {product && game.data && (product.kind === 'direct' || hasFields) && (
+        {product && gameData && (product.kind === 'direct' || hasFields) && (
           <Step title={t('orders.buy.steps.account')}>
             <AccountFields
-              game={game.data}
+              game={gameData}
               values={fields}
               invalid={!!errors.fields}
               // Saved IDs and the player check are a top-up's (S10 SP1, S16 AP8).
               saved={
                 product.kind === 'direct'
                   ? (context.data?.customer?.savedPlayers ?? []).filter(
-                      (player) => player.gameId === game.data.id,
+                      (player) => player.gameId === gameData.id,
                     )
                   : []
               }
@@ -471,6 +497,12 @@ function CustomerPicker({
               {context.isTest && <Badge tone="info">{t('wallets.testBadge')}</Badge>}
               {context.frozen && <Badge tone="danger">{t('orders.buy.frozen')}</Badge>}
               {!context.emailVerified && <Badge tone="warning">{t('orders.buy.unverified')}</Badge>}
+              {context.priceKind !== 'retail' && (
+                <Badge tone="gold">{t(`customers.pricing.kinds.${context.priceKind}`)}</Badge>
+              )}
+              {context.merchantTermsRequired && (
+                <Badge tone="warning">{t('merchants.flags.termsPending')}</Badge>
+              )}
             </span>
             <span dir="ltr" className="text-end text-sm text-muted-foreground">
               {context.email}

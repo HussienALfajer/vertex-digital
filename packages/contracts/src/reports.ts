@@ -26,7 +26,8 @@ export const reportKindSchema = z.enum(REPORT_KINDS).meta({ id: 'ReportKind' });
 
 export type ReportKind = z.infer<typeof reportKindSchema>;
 
-export const REPORT_BREAKDOWNS = ['game', 'product', 'supplier'] as const;
+/** S20: `price_list` by the list orders were charged at, `merchant` by merchant account. */
+export const REPORT_BREAKDOWNS = ['game', 'product', 'supplier', 'price_list', 'merchant'] as const;
 
 export const reportBreakdownSchema = z.enum(REPORT_BREAKDOWNS).meta({ id: 'ReportBreakdown' });
 
@@ -121,7 +122,7 @@ export const breakdownReportSchema = z
     by: reportBreakdownSchema,
     rows: z.array(
       z.object({
-        /** A game or product id, or a supplier code. */
+        /** A game, product, price list or customer id, or a supplier code. */
         key: z.string(),
         nameAr: z.string(),
         /** `product` only: its game. */

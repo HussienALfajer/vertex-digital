@@ -21,6 +21,7 @@ import {
   type Database,
   deposits,
   lockActiveCustomer,
+  merchantDepositTier,
   newId,
   OrderError,
   type Transaction,
@@ -210,7 +211,7 @@ export async function checkNotFrozen(tx: Transaction, customerId: string): Promi
 
 /**
  * Rule SC3: new or established, and what the last 24 hours used; S12 LM2: the customer's
- * overrides replace the tier's per-deposit and daily values.
+ * overrides replace the tier's per-deposit and daily values; S20 MD1: a merchant's tier first.
  */
 export async function limitsOf(
   db: Database | Transaction,
@@ -220,6 +221,7 @@ export async function limitsOf(
   const settings = effectiveDepositLimitSettings(
     tierSettings,
     await customerLimitOverrides(db, customerId),
+    await merchantDepositTier(db, customerId),
   );
   const [row] = await db
     .select({

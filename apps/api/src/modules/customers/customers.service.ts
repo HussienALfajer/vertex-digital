@@ -39,6 +39,8 @@ import {
   findCustomer,
   freezeCustomer,
   lockCustomer,
+  merchantDepositTier,
+  merchantProfileOf,
   recordAudit,
   revokeCustomerSessions,
   setCustomerLimits,
@@ -71,6 +73,9 @@ const STATUS = {
   CUSTOMER_NOT_ARCHIVABLE: 409,
   PRICE_LIST_ARCHIVED: 409,
   PRICE_LIST_NOT_READY: 409,
+  ALREADY_MERCHANT: 409,
+  NOT_MERCHANT: 409,
+  APPLICATION_STATE_INVALID: 409,
 } as const;
 
 /** A `CustomerError` as the API answers it; anything else is rethrown as is. */
@@ -145,13 +150,14 @@ export class CustomersService {
   async profile(id: string): Promise<AdminCustomer> {
     const customer = isUuid(id) ? await findCustomer(this.db, id) : null;
     if (!customer) throw notFound();
-    const [facts, signals, overrides, pinned, accepted, pricing] = await Promise.all([
+    const [facts, signals, overrides, pinned, accepted, pricing, merchant] = await Promise.all([
       customerProfileFacts(this.db, customer),
       customerSignals(this.db, customer.id),
       customerLimitOverrides(this.db, customer.id),
       this.pinnedNote(customer.id),
       customerAcceptedVersions(this.db, customer.id),
       accountPriceList(this.db, customer.id),
+      merchantProfileOf(this.db, customer.id),
     ]);
     return {
       id: customer.id,
@@ -167,8 +173,14 @@ export class CustomersService {
         reason: facts.statusChange.reason,
         at: facts.statusChange.at.toISOString(),
       },
-      limits: await this.limitsView(facts.established, overrides),
+      limits: await this.limitsView(customer.id, facts.established, overrides),
       pricing: pricing as AccountPriceList,
+      merchant: merchant && {
+        ...merchant,
+        termsVersion: merchant.termsVersion ?? null,
+        grantedAt: merchant.grantedAt.toISOString(),
+        revokedAt: merchant.revokedAt?.toISOString() ?? null,
+      },
       pinnedNote: pinned && noteOf(pinned),
       balanceUnits: facts.balanceUnits,
       counts: facts.counts,
@@ -178,13 +190,19 @@ export class CustomersService {
     };
   }
 
-  /** Rule LM3: the overrides and the limits in force with their source. */
+  /** Rule LM3: the overrides and the limits in force with their source (S20 MD2: the tier). */
   private async limitsView(
+    customerId: string,
     established: boolean,
     overrides: CustomerLimitOverrides,
   ): Promise<CustomerLimits> {
     const settings = (await this.depositSettings.current()) ?? DEPOSIT_SETTINGS_DEFAULTS;
-    return customerLimitsOf(settings, established, overrides);
+    return customerLimitsOf(
+      settings,
+      established,
+      overrides,
+      await merchantDepositTier(this.db, customerId),
+    );
   }
 
   /** `GET …/sign-ins`: the sign-in log, newest first (CS4). */

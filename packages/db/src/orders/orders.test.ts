@@ -20,6 +20,7 @@ import {
   archiveCustomer,
   CustomerError,
   freezeCustomer,
+  lockCustomer,
   setCustomerLimits,
   unarchiveCustomer,
   unfreezeCustomer,
@@ -29,6 +30,14 @@ import { accountBalance } from '../ledger/balance.js';
 import { ensureCustomerWallet, ensureSystemAccount, findCustomerWallet } from '../ledger/index.js';
 import { postJournal } from '../ledger/post-journal.js';
 import { walletTimeline } from '../ledger/wallet.js';
+import {
+  type GrantInput,
+  grantMerchant,
+  merchantDepositTier,
+  orderRate,
+  revokeMerchant,
+} from '../merchants/accounts.js';
+import { accountMerchant, merchantProfileOf } from '../merchants/reads.js';
 import { repriceProducts, supplierDeliveryMedians } from '../pricing/index.js';
 import { type CheckResult, internalChecks, runInternalChecks } from '../reconciliation/index.js';
 import {
@@ -3750,5 +3759,188 @@ describe('price lists (S20 PO2–PO4)', () => {
     expect(released).toBeGreaterThanOrEqual(1);
     expect((await accountPriceList(db, buyer))?.assignedListId).toBeNull();
     expect(await accountsOnList(db, cost)).toBe((await assignedAccountCounts(db)).get(cost) ?? 0);
+  });
+});
+
+describe('merchant accounts (S20 MA5–MA7, MT2)', () => {
+  const { retail, wholesale, cost } = ROOT_PRICE_LIST_IDS;
+  const admin = { adminId: newId(), ipAddress: null, userAgent: null };
+  const grantInput = (values: Partial<GrantInput> = {}): GrantInput => ({
+    tradeName: 'محل النور',
+    governorate: 'aleppo',
+    city: 'اعزاز',
+    applicationId: null,
+    termsVersionId: null,
+    priceListId: null,
+    reason: 'تاجر معروف لدينا',
+    actor: admin,
+    ...values,
+  });
+  const grant = (customerId: string, values: Partial<GrantInput> = {}) =>
+    db.transaction(async (tx) =>
+      grantMerchant(tx, context(), await lockCustomer(tx, customerId), grantInput(values)),
+    );
+  const revoke = (customerId: string) =>
+    db.transaction(async (tx) =>
+      revokeMerchant(tx, context(), await lockCustomer(tx, customerId), {
+        reason: 'لم يعد تاجراً',
+        actor: admin,
+      }),
+    );
+  const terms = async () => {
+    const id = newId();
+    await pool.query(
+      `insert into content_page_versions (id, page, version, title, body, draft_revision, admin_id)
+       values ($1, 'merchant_terms', 1000 + floor(random() * 1e9)::int, 'شروط التاجر', 'النص', 1, $2)`,
+      [id, newId()],
+    );
+    return id;
+  };
+
+  it('grants on wholesale by default, cancels reservations and tells the customer (MA5, AT3)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(0.1) });
+    const { order } = await buy(request(buyer, item, { whenBalanceShort: 'reserve' }));
+    const result = await grant(buyer, { priceListId: wholesale });
+    expect(result).toEqual({ effectiveListId: wholesale, cancelledOrderIds: [order.id] });
+    expect(await accountPriceList(db, buyer)).toMatchObject({
+      accountType: 'merchant',
+      assignedListId: null,
+      priceKind: 'wholesale',
+    });
+    expect(await accountMerchant(db, buyer)).toEqual({
+      tradeName: 'محل النور',
+      termsAccepted: false,
+    });
+    const { rows } = await pool.query(
+      `select event, params from customer_notifications where customer_id = $1 order by event`,
+      [buyer],
+    );
+    // Ordered by the enum: the reservation's cancel, then the grant.
+    expect(rows).toEqual([
+      expect.objectContaining({ event: 'order_cancelled' }),
+      { event: 'merchant_approved', params: { priceKind: 'wholesale' } },
+    ]);
+    const { rows: audits } = await pool.query(
+      `select details from audit_entries where entity_id = $1 and action = 'customer.merchant_granted'`,
+      [buyer],
+    );
+    expect(audits[0]?.details).toMatchObject({ priceListId: null, cancelledOrderIds: [order.id] });
+  });
+
+  it('refuses a merchant, a frozen customer and an archived list', async () => {
+    const buyer = await customer({ funds: 0 });
+    await grant(buyer, { priceListId: cost });
+    expect((await accountPriceList(db, buyer))?.effectiveList.id).toBe(cost);
+    expect(await refusal(grant(buyer))).toMatchObject({ code: 'ALREADY_MERCHANT' });
+    const frozen = await customer({ funds: 0 });
+    await pool.query('update customers set frozen_at = now() where id = $1', [frozen]);
+    expect(await refusal(grant(frozen))).toMatchObject({ code: 'CUSTOMER_STATE_INVALID' });
+    const other = await customer({ funds: 0 });
+    expect(await refusal(grant(other, { priceListId: newId() }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('asks a directly granted merchant to accept the terms before buying (MT2)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(10) });
+    await grant(buyer);
+    expect(await refusal(buy(request(buyer, item)))).toMatchObject({
+      code: 'MERCHANT_TERMS_REQUIRED',
+    });
+    await pool.query('update merchant_profiles set terms_version_id = $2 where customer_id = $1', [
+      buyer,
+      await terms(),
+    ]);
+    const [row] = await db
+      .select()
+      .from(productPrices)
+      .where(and(eq(productPrices.productId, item.id), eq(productPrices.priceListId, wholesale)))
+      .orderBy(desc(productPrices.createdAt))
+      .limit(1);
+    const { order } = await buy(
+      request(buyer, item, { expectedUnitPriceUsdUnits: row?.priceUsdUnits as number }),
+    );
+    expect(order.priceListId).toBe(wholesale);
+  });
+
+  it('revokes back to retail, keeping the profile with its date (MA7)', async () => {
+    const buyer = await customer({ funds: 0 });
+    expect(await refusal(revoke(buyer))).toMatchObject({ code: 'NOT_MERCHANT' });
+    await grant(buyer, { priceListId: cost });
+    expect(await revoke(buyer)).toEqual({ cancelledOrderIds: [] });
+    expect(await accountPriceList(db, buyer)).toMatchObject({
+      accountType: 'customer',
+      assignedListId: null,
+      effectiveList: { id: retail },
+    });
+    expect(await accountMerchant(db, buyer)).toBeNull();
+    expect((await merchantProfileOf(db, buyer))?.revokedAt).toBeInstanceOf(Date);
+    await grant(buyer, { tradeName: 'محل جديد' });
+    expect((await merchantProfileOf(db, buyer))?.revokedAt).toBeNull();
+  });
+
+  it('gives a merchant the merchant tier and rate (MD1, PO5)', async () => {
+    const buyer = await customer({ funds: 0 });
+    expect(await merchantDepositTier(db, buyer)).toBeNull();
+    expect(await orderRate(db, buyer)).toEqual({ merchant: false, perTenMinutes: 10 });
+    await grant(buyer);
+    expect(await merchantDepositTier(db, buyer)).toEqual({
+      perDepositUsdUnits: usd(2000),
+      dailyDepositUsdUnits: usd(5000),
+    });
+    expect(await orderRate(db, buyer)).toEqual({ merchant: true, perTenMinutes: 60 });
+  });
+
+  it('cancels reservations on every grant and revocation, whatever the list (AT3, decision 11)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(0.1) });
+    // Retail kept across the grant (the retail list chosen): the type change still cancels.
+    const { order } = await buy(request(buyer, item, { whenBalanceShort: 'reserve' }));
+    expect(await grant(buyer, { priceListId: retail })).toMatchObject({
+      cancelledOrderIds: [order.id],
+    });
+    await pool.query('update merchant_profiles set terms_version_id = $2 where customer_id = $1', [
+      buyer,
+      await terms(),
+    ]);
+    const { order: second } = await buy(request(buyer, item, { whenBalanceShort: 'reserve' }));
+    expect(await revoke(buyer)).toEqual({ cancelledOrderIds: [second.id] });
+  });
+
+  it('keeps a reservation waiting while the merchant terms are not accepted (MT2)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(0.1) });
+    const { order } = await buy(request(buyer, item, { whenBalanceShort: 'reserve' }));
+    // A profile without terms on an account whose reservation outlived the grant.
+    await pool.query(
+      `insert into merchant_profiles (customer_id, trade_name, governorate, city, granted_at)
+       values ($1, 'محل', 'damascus', 'دمشق', now())`,
+      [buyer],
+    );
+    await pool.query("update customers set account_type = 'merchant' where id = $1", [buyer]);
+    const run = await payWaitingOrders(
+      db,
+      { ...context(), now: () => new Date(), fakeEnabled: true },
+      buyer,
+    );
+    expect(run.outcomes).toEqual([{ orderId: order.id, outcome: 'skipped_terms' }]);
+  });
+
+  it('serializes a grant with a purchase: the purchase sees one list (AT3)', async () => {
+    const item = await product({ cost: usd(1) });
+    const buyer = await customer({ funds: usd(10) });
+    const [purchase, granted] = await Promise.allSettled([
+      buy(request(buyer, item)),
+      grant(buyer, { priceListId: cost }),
+    ]);
+    expect(granted.status).toBe('fulfilled');
+    if (purchase.status === 'fulfilled') {
+      expect(purchase.value.order).toMatchObject({ priceListId: retail });
+    } else {
+      // After the grant the account is a merchant without accepted terms (MT2).
+      expect(purchase.reason).toMatchObject({ code: 'MERCHANT_TERMS_REQUIRED' });
+    }
   });
 });

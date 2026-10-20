@@ -101,7 +101,10 @@ function usePublishedPaths(): ReadonlySet<string> | null {
   const pages = useQuery(pagesQuery);
   const faq = useQuery(faqQuery(false));
   if (!pages.data || !faq.data) return null;
-  const paths = pages.data.filter((page) => page.latestVersion).map((page) => `/${page.page}`);
+  // A page's path is its name with hyphens (S20: `merchant_terms` is `/merchant-terms`).
+  const paths = pages.data
+    .filter((page) => page.latestVersion)
+    .map((page) => `/${page.page.replaceAll('_', '-')}`);
   if ((faq.data.publication?.items ?? 0) > 0) paths.push('/faq');
   return new Set(paths);
 }

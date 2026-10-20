@@ -5,9 +5,12 @@ import {
   type AdminPurchaseContext,
   type createAdminOrderSchema,
   ownerCapRemaining,
+  ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
 import {
   accountBalance,
+  accountMerchant,
+  accountPriceList,
   adminOrder,
   adminPurchaseOrder,
   currentOrderPolicy,
@@ -15,6 +18,7 @@ import {
   customerSavedPlayers,
   type Database,
   findCustomerWallet,
+  gameListPrices,
   ownerSpentToday,
   purchasedLastDay,
   type Transaction,
@@ -22,6 +26,7 @@ import {
 } from '@vertex-digital/db';
 import type { z } from 'zod';
 import { ENV, type Env } from '../../core/config/env.js';
+import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { AuthService } from '../auth/index.js';
@@ -115,8 +120,14 @@ export class AdminPurchasesService {
     }
   }
 
-  /** `GET /api/admin/orders/purchase-context` (rules AP4, AP7, AP8). */
-  async context(customerId: string | undefined): Promise<AdminPurchaseContext> {
+  /**
+   * `GET /api/admin/orders/purchase-context` (rules AP4, AP7, AP8); S20 PO4, MT2: the customer's
+   * price kind, terms state and, with a game, its packs at the customer's list.
+   */
+  async context(
+    customerId: string | undefined,
+    gameId?: string | undefined,
+  ): Promise<AdminPurchaseContext> {
     const [policy, spent] = await Promise.all([
       currentOrderPolicy(this.db),
       ownerSpentToday(this.db),
@@ -129,13 +140,20 @@ export class AdminPurchasesService {
     if (customerId === undefined) return { customer: null, owner };
     const row = await this.customers.purchaseCustomer(customerId);
     if (!row || row.archived) throw orderRefusals.notFound();
-    const [wallet, overrides, used, saved] = await Promise.all([
+    const [wallet, overrides, used, saved, pricing, merchant] = await Promise.all([
       findCustomerWallet(this.db, customerId),
       customerLimitOverrides(this.db, customerId),
       purchasedLastDay(this.db, customerId),
       customerSavedPlayers(this.db, customerId),
+      accountPriceList(this.db, customerId),
+      accountMerchant(this.db, customerId),
     ]);
     const cap = overrides.dailyPurchaseUsdUnits;
+    const listId = pricing?.effectiveList.id ?? ROOT_PRICE_LIST_IDS.retail;
+    const listPrices =
+      gameId === undefined || listId === ROOT_PRICE_LIST_IDS.retail
+        ? null
+        : await gameListPrices(this.db, gameId, listId, routingContext(this.env));
     return {
       customer: {
         id: row.id,
@@ -146,6 +164,9 @@ export class AdminPurchasesService {
         frozen: row.frozen,
         balanceUsdUnits: wallet ? await accountBalance(this.db, wallet) : 0,
         purchaseCapLeftUsdUnits: cap === null ? null : Math.max(0, cap - used),
+        priceKind: pricing?.priceKind ?? 'retail',
+        merchantTermsRequired: merchant !== null && !merchant.termsAccepted,
+        listPrices,
         savedPlayers: saved.map((player) => ({
           id: player.id,
           gameId: player.gameId,
