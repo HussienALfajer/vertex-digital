@@ -1,6 +1,6 @@
 # Vertex Digital — V1 Scope
 
-Status: Approved by the owner on 2026-10-06 (drafted from the brief, revised after the owner's review: code products, partial delivery, validation guard, store switches, customer notifications), and on 2026-10-07 to one admin account without staff or roles (ADR 0016) and to notify customers of wallet adjustments (S02), and on 2026-10-08 to detect USDT transfers automatically besides the TXID (S04, ADR 0018), and on 2026-10-12 to add purchases from the panel and the supplier catalog browser and import (S16, ADR 0030), and on 2026-10-20 to add merchants, price lists and the store growth features (Phase M, F28–F43), moved forward from Phase 4. Changes to this file need the owner's approval.
+Status: Approved by the owner on 2026-10-06 (drafted from the brief, revised after the owner's review: code products, partial delivery, validation guard, store switches, customer notifications), and on 2026-10-07 to one admin account without staff or roles (ADR 0016) and to notify customers of wallet adjustments (S02), and on 2026-10-08 to detect USDT transfers automatically besides the TXID (S04, ADR 0018), and on 2026-10-12 to add purchases from the panel and the supplier catalog browser and import (S16, ADR 0030), and on 2026-10-20 to add merchants, price lists and the store growth features (Phase M, F28–F42), moved forward from Phase 4. Changes to this file need the owner's approval.
 
 ## 1. Business context
 
@@ -247,10 +247,7 @@ Added by the owner on 2026-10-20, moved forward from Phase 4 and started before 
 #### F39 — Merchant volume levels
 - Levels by monthly purchases (for example bronze, silver, gold), each with its own price list, upgraded automatically; thresholds and lists set in the panel.
 
-#### F40 — Merchant mini-store
-- A storefront for a merchant's own customers, run by Vertex Digital (catalog, payment, fulfilment), with the merchant's prices; branding (logo, colors) only for merchants the admin enables. Its model is open: Q23 and Q24.
-
-#### F41 — Quick buy
+#### F40 — Quick buy
 - "Top up again" row on the home page: each saved player ID with its last pack, bought with one slide.
 - Direct buy links (for example `/q/<pack>`), choosing the customer's saved ID, for ads, WhatsApp and shop QR codes.
 - "Top up the gap": when the balance is short, the exact missing amount in USD and SYP, and the deposit form filled with it.
@@ -258,10 +255,10 @@ Added by the owner on 2026-10-20, moved forward from Phase 4 and started before 
 - Passkey sign-in (fingerprint or face on the phone) besides the password.
 - Commands in search: "660 لأخي" opens the purchase ready, with the pack and the saved ID.
 
-#### F42 — Order problem buttons
+#### F41 — Order problem buttons
 - On an order: ready buttons ("لم يصل"، "المعرّف خاطئ"…) that open a support ticket (F23) linked to the order with its details.
 
-#### F43 — Availability and price-drop alerts
+#### F42 — Availability and price-drop alerts
 - "Notify me when available" and "when the price drops" per pack, by web push and in the notification center.
 
 ## 5. Automations (fixed rules in V1)
@@ -292,7 +289,7 @@ Added by the owner on 2026-10-20, moved forward from Phase 4 and started before 
 |---|---|
 | Wallet withdrawals | Funds are for purchases; withdrawals invite fraud and money laundering. Exceptional cash refunds are done by the owner, recorded in the ledger (ADR 0003) |
 | English UI | Arabic-only at launch; i18n from day one keeps English cheap later (Phase 4) |
-| Reseller API and merchant staff (cashier) accounts | Declined for now (owner, 2026-10-20) |
+| Reseller API, merchant staff (cashier) accounts and the merchant mini-store | Declined for now (owner, 2026-10-20) |
 | Merchant credit lines; merchants as cash-in points and prepaid wallet vouchers | Later, after the merchant features (owner, 2026-10-20): ledger transfers between accounts need their own anti-fraud and anti-money-laundering design |
 | Telegram purchase bot (customers) | Phase 4; the admin bot (F07) is in V1 |
 | Loyalty points, cashback and referrals | Declined (owner, 2026-10-20) |
@@ -314,7 +311,7 @@ Added by the owner on 2026-10-20, moved forward from Phase 4 and started before 
 | 1. Money core | F01–F07, F26, F27 | Test customers can sign up and fund wallets; the admin can review deposits safely; registration stays closed |
 | 2. Selling | F08–F16 | Test customers buy and receive top-ups automatically; registration still closed |
 | 3. Operations | F17–F25 | The admin runs the store from the panel; nightly reconciliation; PWA |
-| M. Merchants and store growth | F28–F43 (owner, 2026-10-20: started before the pilot) | Merchants apply and buy at their lists; shops get counter, bulk and print tools; quicker retail buying |
+| M. Merchants and store growth | F28–F42 (owner, 2026-10-20: started before the pilot) | Merchants apply and buy at their lists; shops get counter, bulk and print tools; quicker retail buying |
 | Pilot | Registration opened (F26), quiet launch with low limits | Real orders, real suppliers, limits raised as confidence grows |
 | 4. Growth | Telegram purchase bot, mobile credit, Sham Cash automation, English UI | — |
 
