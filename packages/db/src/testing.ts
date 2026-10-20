@@ -6,6 +6,7 @@ import { createDatabase } from './client.js';
 import { loadRootEnv } from './env.js';
 import { ensureSystemAccount } from './ledger/wallet.js';
 import { runMigrations } from './migrate.js';
+import { seedRootListRules } from './pricing/lists.js';
 
 function requireEnv(key: string): string {
   loadRootEnv();
@@ -85,6 +86,8 @@ export async function prepareTestDatabase(ownerUrl: string, url: string): Promis
     for (const account of SHARED_ACCOUNTS) {
       await connection.db.transaction((tx) => ensureSystemAccount(tx, account));
     }
+    // S20: the wholesale and cost rules, as `pricing:reprice-lists` adds them after a deploy.
+    await seedRootListRules(connection.db);
   } finally {
     await connection.close();
   }

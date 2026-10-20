@@ -717,6 +717,32 @@ describe('price lists (S20 RP1, RP2, LP1–LP4)', () => {
     );
   });
 
+  it('prices no list whose root has no global rule yet (seedRootListRules after a deploy)', async () => {
+    const p = await product();
+    await route(p.id, 'fake', await offer('fake', usd(1)));
+    const rollback = new Error('rollback');
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.execute(
+          sql`update margin_rules set archived_at = now()
+              where scope = 'global' and price_list_id <> ${retail} and archived_at is null`,
+        );
+        const result = await repriceProducts(tx, {
+          productIds: [p.id],
+          cause: 'route_change',
+          context: context(),
+        });
+        expect(result).toEqual({ repriced: 1, reviewsOpened: 0, listRowsAppended: 0 });
+        const lists = await tx
+          .selectDistinct({ id: productPrices.priceListId })
+          .from(productPrices)
+          .where(eq(productPrices.productId, p.id));
+        expect(lists).toEqual([{ id: retail }]);
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+  });
+
   it('holds every list while a review is open (RP2, decision 4)', async () => {
     const p = await product();
     const offerId = await offer('fake', usd(1));

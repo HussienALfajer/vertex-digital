@@ -1,15 +1,7 @@
--- S20 (ADR 0035): the seeded lists' global rules, the list guards and `orders_guard` again.
+-- S20 (ADR 0035): the list guards and `orders_guard` again. The wholesale and cost global rules
+-- are not seeded here: the release before reads every live rule (`seedRootListRules`).
 -- Hand-written; never edit once applied.
 
--- Decision 2 (owner, 2026-10-20): wholesale 5%, $0 fixed, $0.05 minimum; cost 1%, $0 fixed,
--- $0.01 minimum. Fixed ids, so every database holds the same rows. Rules before S20 are retail's
--- (the column's default filled them).
-INSERT INTO margin_rules (id, price_list_id, scope, target_id, percent_bp, fixed_usd_units, min_margin_usd_units)
-VALUES
-  ('01a15a8c-b312-75f3-92d2-6da2e25d2df8', '01a15a8c-b312-75f3-92d2-65b29d838051', 'global', NULL, 500, 0, 50000),
-  ('01a15a8c-b312-75f3-92d2-72570354506e', '01a15a8c-b312-75f3-92d2-691f7e3bf413', 'global', NULL, 100, 0, 10000)
-ON CONFLICT DO NOTHING;
---> statement-breakpoint
 -- LS1: root lists are never archived.
 ALTER TABLE price_lists ADD CONSTRAINT price_lists_root_live_check
   CHECK (kind = 'custom' OR archived_at IS NULL);

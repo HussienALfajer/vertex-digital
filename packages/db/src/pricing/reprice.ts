@@ -175,8 +175,20 @@ export async function repriceListsAfterRetail(
           desc(productPrices.id),
         ),
   ]);
-  const others = lists.filter((list) => list.id !== ROOT_PRICE_LIST_IDS.retail);
-  const chains = new Map(others.map((list) => [list.id, listChain(lists, list.id)]));
+  const chains = new Map(
+    lists
+      .filter((list) => list.id !== ROOT_PRICE_LIST_IDS.retail)
+      .map((list) => [list.id, listChain(lists, list.id)]),
+  );
+  // Lists whose root has no global rule yet are not priced (`seedRootListRules`): until then the
+  // database holds retail rows only, which the release before S20 reads correctly.
+  const others = lists.filter((list) => {
+    const root = chains.get(list.id)?.at(-1);
+    return (
+      root !== undefined &&
+      rules.some((rule) => rule.priceListId === root && rule.scope === 'global')
+    );
+  });
   const currentOf = new Map(currentRows.map((row) => [`${row.productId}:${row.priceListId}`, row]));
   const rows: (typeof productPrices.$inferInsert)[] = [];
   for (const { state, retailRow } of priced) {

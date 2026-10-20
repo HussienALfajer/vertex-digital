@@ -1,6 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { type Database, newId, repriceProducts, type Transaction } from '@vertex-digital/db';
+import {
+  type Database,
+  newId,
+  repriceProducts,
+  seedRootListRules,
+  type Transaction,
+} from '@vertex-digital/db';
 import { type FakeSupplierState, fakeSupplierStateSchema } from '@vertex-digital/suppliers';
 import { sql } from 'drizzle-orm';
 
@@ -187,6 +193,8 @@ export async function loadCatalog(
 /** Reprices every product once the fake supplier is configured (its routes are then usable). */
 export async function repriceCatalog(db: Database, now: Date): Promise<number> {
   return db.transaction(async (tx) => {
+    // S20: the wholesale and cost rules, as `pricing:reprice-lists` adds them after a deploy.
+    await seedRootListRules(tx);
     const ids = (
       await tx.execute<{ id: string }>(
         sql`SELECT id FROM catalog_products WHERE archived_at IS NULL ORDER BY id`,

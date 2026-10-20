@@ -8,6 +8,7 @@ import {
 import {
   applyOutcome,
   catalogCategories,
+  catalogGames,
   customers,
   ensureCustomerWallet,
   ensureSystemAccount,
@@ -446,6 +447,24 @@ describe('POST /api/orders (rules O1–O6)', () => {
       .from(orders)
       .where(eq(orders.id, order.id));
     expect(row?.priceListId).toBe(ROOT_PRICE_LIST_IDS.wholesale);
+
+    // The public catalog carries retail only, whoever asks (abuse table: the public cache).
+    const [game] = await test.db
+      .select({ slug: catalogGames.slug })
+      .from(catalogGames)
+      .where(eq(catalogGames.id, ids.gameId));
+    const read = async (cookie?: string) =>
+      Promise.all(
+        [
+          `/api/catalog/games/${game?.slug}`,
+          '/api/catalog/storefront',
+          '/api/catalog/search-index',
+        ].map(async (path) => json<unknown>(await client.get(path, cookie ? { cookie } : {}), 200)),
+      );
+    const [anonymous, asMerchant] = await Promise.all([read(), read(merchant.cookie)]);
+    expect(asMerchant).toEqual(anonymous);
+    expect(JSON.stringify(anonymous[0])).toContain(String(item.price));
+    expect(JSON.stringify(anonymous[0])).not.toContain(`:${wholesale},`);
   });
 
   it('refuses a stopped store, a changed price, an unavailable product and bad fields', async () => {

@@ -3116,6 +3116,36 @@ describe('admin purchases (S16 AP1–AP15, AM1–AM3)', () => {
 
   const drawings = () => db.transaction(async (tx) => accountBalance(tx, await ownerDrawings(tx)));
 
+  it('charges a merchant on behalf at their list; owner-funded orders take retail (S20 PO4)', async () => {
+    const item = await product({ cost: usd(1) });
+    const merchant = await customer({ funds: usd(10) });
+    await db.update(customers).set({ accountType: 'merchant' }).where(eq(customers.id, merchant));
+    expect(
+      await refusal(adminBuy(adminInput(item, { purpose: 'on_behalf', customerId: merchant }))),
+    ).toMatchObject({ code: 'PRICE_CHANGED', details: { unitPriceUsdUnits: usd(1.05) } });
+    const onBehalf = await adminBuy(
+      adminInput({ id: item.id, price: usd(1.05) }, { purpose: 'on_behalf', customerId: merchant }),
+    );
+    expect(onBehalf.order).toMatchObject({
+      priceListId: ROOT_PRICE_LIST_IDS.wholesale,
+      unitPriceUsdUnits: usd(1.05),
+      payer: 'customer',
+    });
+    expect(await balance(merchant)).toBe(usd(10) - usd(1.05));
+    for (const purpose of ['gift', 'compensation'] as const) {
+      const { order } = await adminBuy(
+        adminInput(item, { purpose, customerId: merchant, reason: 'A gift from the owner' }),
+      );
+      expect(order).toMatchObject({
+        priceListId: ROOT_PRICE_LIST_IDS.retail,
+        unitPriceUsdUnits: item.price,
+        payer: 'owner',
+      });
+    }
+    const walkIn = await adminBuy(adminInput(item));
+    expect(walkIn.order.priceListId).toBe(ROOT_PRICE_LIST_IDS.retail);
+  });
+
   it('pays a walk-in order from owner drawings, without a customer or a notice (AP1, AM2, AP12, AP13)', async () => {
     const item = await product();
     const before = await drawings();

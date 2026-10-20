@@ -1,3 +1,4 @@
+export { seedRootListRules } from './lists.js';
 export {
   appendProductPrice,
   lockProductsForPricing,
