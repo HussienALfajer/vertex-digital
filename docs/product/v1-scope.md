@@ -206,7 +206,7 @@ Added by the owner on 2026-10-20, moved forward from Phase 4 and started before 
   - Acceptance of the merchant terms (a versioned content page, F21), and "how did you hear about us" (optional).
 - The application's state is always shown: under review, more information requested (the customer edits and resubmits), approved, or rejected with the reason; reapplying after a rejection waits a cooling-off period set in the spec.
 - **Approval only by the admin**, in the panel (applications queue beside the customer's history and fraud signals), with a Telegram notice. Approval switches the account type, the price list and the merchant deposit limits in one transaction, audited, and notifies the customer. The admin can also revoke merchant status (back to retail, balance untouched) with a reason.
-- **Merchant deposit limits:** a merchant limits tier, editable in the panel, default $2,000 (whether per deposit, per 24 hours or both is confirmed in the spec interview); per-customer overrides (S12) still apply.
+- **Merchant deposit limits:** a merchant limits tier, editable in the panel, default $2,000 per deposit and $5,000 per 24 hours (owner, 2026-10-20, S20); per-customer overrides (S12) still apply.
 
 #### F29 — Price lists
 - Four kinds of price: **retail** (every customer, the current pricing), **wholesale** (merchants; default 5%, owner 2026-10-20), **cost** (accounts the admin chooses, never requested; default cost + 1%, owner 2026-10-20; shown to the customer as "special price", never as "cost"), and **custom**: named lists the admin creates and assigns to one or many accounts (owner, 2026-10-20), inheriting from a parent list and overriding only what they change.

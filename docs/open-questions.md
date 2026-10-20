@@ -16,7 +16,8 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Default wholesale margin | 5% | 2026-10-20 |
 | Cost price list | Cost + 1% (the minimum margin of every rule stays at least $0.01, ADR 0020) | 2026-10-20 |
 | Custom pricing | Named lists, each assignable to one or many accounts | 2026-10-20 |
-| Merchant deposit limits | A merchant tier set in the panel, default $2,000 (per deposit, per 24 hours or both: S20 interview) | 2026-10-20 |
+| Merchant deposit limits | A merchant tier set in the panel: $2,000 per deposit and $5,000 per 24 hours; S12 overrides still apply (S20) | 2026-10-20 |
+| Price list rules (S20) | Wholesale minimum margin $0.05; no list above retail; one review holds every list; a custom list's own entries win over its parent's; a fixed price below cost + minimum falls back to the rule with a warning; reapply 7 days after a rejection, information requests expire after 7 days; merchants 60 orders per 10 minutes; private prices shown with their label only; direct grant from the panel; list changes cancel reservations (S20, ADR 0035) | 2026-10-20 |
 | Merchant credit lines; cash-in points and wallet vouchers | Later, after the merchant features | 2026-10-20 |
 | Merchant features | Accepted: T1–T9, T11 (F30–F39); declined: staff accounts, reseller API, the merchant mini-store (T13, withdrawn by the owner on 2026-10-20), credit lines (for now) | 2026-10-20 |
 | Store growth features | Accepted: quick buy (F40), receipt verification QR (F35), order problem buttons (F41), availability and price alerts (F42); the others proposed on 2026-10-20 declined (`v1-scope.md` §6) | 2026-10-20 |
