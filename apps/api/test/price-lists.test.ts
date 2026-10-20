@@ -5,6 +5,7 @@ import {
   customers,
   ensureCustomerWallet,
   ensureSystemAccount,
+  marginRules,
   newId,
   postJournal,
   priceLists,
@@ -464,6 +465,39 @@ describe('rules and fixed prices per list (S20 LS2, LS4, LP1)', () => {
       409,
     );
     expect(refused.code).toBe('GLOBAL_RULE_REQUIRED');
+  });
+
+  it('refuses a rule on a list whose root has no global rule yet (RP4)', async () => {
+    const [global] = await test.db
+      .update(marginRules)
+      .set({ archivedAt: new Date() })
+      .where(
+        and(
+          eq(marginRules.priceListId, cost),
+          eq(marginRules.scope, 'global'),
+          isNull(marginRules.archivedAt),
+        ),
+      )
+      .returning({ id: marginRules.id });
+    try {
+      const refused = await json<{ code: string }>(
+        await adminSend('PUT', '/api/admin/pricing/rules', {
+          priceListId: cost,
+          scope: 'category',
+          targetId: ids.categoryId,
+          percentBp: 100,
+          fixedUsdUnits: 0,
+          minMarginUsdUnits: usd(0.01),
+        }),
+        409,
+      );
+      expect(refused.code).toBe('PRICE_LIST_NOT_READY');
+    } finally {
+      await test.db
+        .update(marginRules)
+        .set({ archivedAt: null })
+        .where(eq(marginRules.id, global?.id as string));
+    }
   });
 
   it('sets a fixed price, falls back below the minimum margin, and archives it', async () => {

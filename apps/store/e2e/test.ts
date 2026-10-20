@@ -102,6 +102,21 @@ export class MockApi {
     ],
     // Push not configured (S15): no push control shows unless a test serves a key.
     ['GET /api/push/config', { status: 200, body: { publicKey: null } }],
+    // A retail account (S20 AT4): the search reads the price kind on open once signed in.
+    [
+      'GET /api/account',
+      {
+        status: 200,
+        body: {
+          id: '0199e000-0000-7000-8000-0000000000aa',
+          name: 'سارة الأحمد',
+          email: 'sara@example.com',
+          phone: '+963944123456',
+          createdAt: '2026-10-01T09:00:00.000Z',
+          priceKind: 'retail',
+        },
+      },
+    ],
     // No saved player ID: the buy box reads them once signed in (S10 rule SP3).
     ['GET /api/saved-players', { status: 200, body: { items: [] } }],
     // No unread notification: the header's bell opens the stream once signed in (S05 NT6).

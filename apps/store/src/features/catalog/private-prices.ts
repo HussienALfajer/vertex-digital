@@ -22,7 +22,7 @@ export type PrivatePrices =
 
 const HINT_ATTRIBUTE = 'data-private-prices-hint';
 
-function rememberPrivatePrices(on: boolean) {
+export function rememberPrivatePrices(on: boolean) {
   try {
     if (on) localStorage.setItem(PRIVATE_PRICES_HINT_KEY, '1');
     else localStorage.removeItem(PRIVATE_PRICES_HINT_KEY);
@@ -64,13 +64,17 @@ export function usePrivatePrices(
       });
       return;
     }
-    if (customer.status === 'signedOut') {
+    // An unverified account cannot read its prices (EMAIL_NOT_VERIFIED) nor buy: retail's show.
+    if (customer.status === 'signedOut' || !customer.verified) {
       rememberPrivatePrices(false);
       setState({ status: 'retail' });
       return;
     }
     let live = true;
-    setState({ status: 'loading', hinted: document.documentElement.hasAttribute(HINT_ATTRIBUTE) });
+    // Until the account's prices answer, the cached figures stay under their skeletons and no
+    // pack can be chosen, hint or not (decision 9: never the retail figure for another list).
+    document.documentElement.setAttribute(HINT_ATTRIBUTE, '');
+    setState({ status: 'loading', hinted: true });
     void apiRequest<CustomerPrices>(`/api/catalog/games/${encodeURIComponent(slug)}/prices`).then(
       (result) => {
         if (!live) return;

@@ -89,6 +89,17 @@ test.describe('private prices', () => {
     await expect(page.getByText(ar.game.privatePrices.kinds.wholesale)).toHaveCount(0);
   });
 
+  test('an unverified account keeps retail and can choose a pack', async ({ page, api }) => {
+    api.on('GET /api/auth/get-session', 200, {
+      user: { name: 'محل النور', email: 'shop@example.com', emailVerified: false },
+      session: { token: 'this-device' },
+    });
+    await page.goto('/games/pubg-mobile');
+    await expect(packButton(page, '60 UC')).toBeEnabled();
+    await expect(packButton(page, '60 UC')).toContainText(formatUsd(p60.priceUsdUnits ?? 0));
+    expect(api.last('GET /api/catalog/games/pubg-mobile/prices')).toBeUndefined();
+  });
+
   for (const theme of ['dark', 'light'] as const) {
     test(`the merchant's game page (${theme})`, async ({ page, api }, testInfo) => {
       signedIn(api).on('GET /api/catalog/games/pubg-mobile/prices', 200, merchantPrices());

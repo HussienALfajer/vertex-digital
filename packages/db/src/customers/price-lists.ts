@@ -210,3 +210,17 @@ export async function releaseArchivedAccounts(
   }
   return rows.length;
 }
+
+/**
+ * LS5's first lock: every account assigned to the list, archived or not, `FOR NO KEY UPDATE` in
+ * id order, before the list itself (the order assignments take). An unarchive or an assignment
+ * running alongside then finishes first, and the archive counts what it left.
+ */
+export async function lockAccountsOnList(tx: Transaction, priceListId: string): Promise<void> {
+  await tx
+    .select({ id: customers.id })
+    .from(customers)
+    .where(eq(customers.priceListId, priceListId))
+    .orderBy(asc(customers.id))
+    .for('no key update');
+}

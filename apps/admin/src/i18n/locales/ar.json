@@ -2195,7 +2195,8 @@
       "customer": "العميل (بريد، هاتف أو اسم)",
       "customerRequired": "اختر عميلاً من النتائج.",
       "reason": "السبب",
-      "reasonInvalid": "سبب من 5 إلى 500 حرف."
+      "reasonInvalid": "سبب من 5 إلى 500 حرف.",
+      "notReady": "القائمة غير مسعّرة بعد: تُضاف قواعدها وأسعارها بعد تشغيل pricing:reprice-lists على الخادم."
     },
     "fixed": {
       "title": "سعر ثابت",

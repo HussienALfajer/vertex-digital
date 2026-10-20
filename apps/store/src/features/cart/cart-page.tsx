@@ -103,7 +103,9 @@ async function loadPrices(signedIn: boolean): Promise<Prices> {
     ),
   );
   for (const result of own) {
-    if (!result.ok || result.data.priceKind === 'retail') continue;
+    // Never the retail figure in place of the account's own: a failed read offers the retry.
+    if (!result.ok) return { status: 'failed' };
+    if (result.data.priceKind === 'retail') continue;
     for (const row of result.data.products) {
       const product = products.get(row.id);
       if (product) products.set(row.id, { ...product, ...row });

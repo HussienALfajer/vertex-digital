@@ -23,6 +23,7 @@ export {
   accountsOnList,
   assignedAccountCounts,
   assignedAccounts,
+  lockAccountsOnList,
   releaseArchivedAccounts,
   setCustomerPriceList,
 } from './price-lists.js';

@@ -22,6 +22,7 @@ import {
   listFixedPrices,
   listIsPriced,
   listPricingFacts,
+  lockAccountsOnList,
   marginRules,
   newId,
   type PriceRow,
@@ -200,6 +201,7 @@ export class PriceListsService {
    */
   async archive(actor: Actor, id: string): Promise<PriceList> {
     await this.db.transaction(async (tx) => {
+      await lockAccountsOnList(tx, id);
       const list = await this.lockForChange(tx, id);
       if (list.kind !== 'custom') {
         throw new CodedException(400, 'VALIDATION_FAILED', 'A root list is never archived', {

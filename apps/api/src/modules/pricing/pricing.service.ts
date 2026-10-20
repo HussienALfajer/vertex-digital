@@ -178,6 +178,14 @@ export class PricingService {
     const priceListId = input.priceListId ?? ROOT_PRICE_LIST_IDS.retail;
     await tx.execute(ruleLock(priceListId, input.scope, targetId));
     await this.lockLiveList(tx, priceListId);
+    // RP4: a list not priced yet gets no rule (its rows would reach the release before S20).
+    if (priceListId !== ROOT_PRICE_LIST_IDS.retail) {
+      const facts = await listPricingFacts(tx, []);
+      const chain = facts.lists.find((list) => list.id === priceListId)?.chain ?? [priceListId];
+      if (!listIsPriced(facts, chain)) {
+        throw new CodedException(409, 'PRICE_LIST_NOT_READY', 'The price list is not priced yet');
+      }
+    }
     const [current] = await tx
       .select()
       .from(marginRules)

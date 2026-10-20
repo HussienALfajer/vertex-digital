@@ -4,6 +4,7 @@ import { type FixedPrice, formatUsd } from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
+  Callout,
   Card,
   CardDescription,
   CardHeader,
@@ -88,13 +89,14 @@ export function PriceListPage({ id }: { id: string }) {
         }
       />
       <div className="flex flex-col gap-8">
-        {live && <ListRules chain={chain} />}
+        {live && list.ready && <ListRules chain={chain} />}
+        {live && !list.ready && <Callout tone="warning" title={t('pricing.list.notReady')} />}
         <section className="flex flex-col gap-3" aria-labelledby="fixed-prices">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 id="fixed-prices" className="text-lg font-bold">
               {t('pricing.list.fixedTitle')}
             </h2>
-            {live && (
+            {live && list.ready && (
               <Button variant="outline" disabled={!rulesReady} onClick={() => setEditing('new')}>
                 {t('pricing.list.addFixed')}
               </Button>
