@@ -11371,7 +11371,8 @@
                       "expired",
                       "price_rose",
                       "product_changed",
-                      "frozen"
+                      "frozen",
+                      "price_list_changed"
                     ]
                   }
                 },
@@ -23908,7 +23909,8 @@
           "route_change",
           "rule_change",
           "review_accepted",
-          "margin_adjusted"
+          "margin_adjusted",
+          "list_change"
         ]
       },
       "SupplierSummary": {
@@ -27841,7 +27843,8 @@
           "customer",
           "price_rose",
           "product_changed",
-          "frozen"
+          "frozen",
+          "price_list_changed"
         ]
       },
       "DeliveryStats": {

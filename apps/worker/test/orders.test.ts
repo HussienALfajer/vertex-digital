@@ -4,6 +4,7 @@ import {
   CURRENCY_SCALE,
   ORDER_POLICY_DEFAULTS,
   QUEUES,
+  ROOT_PRICE_LIST_IDS,
   STORE_SWITCH_DEFAULTS,
 } from '@vertex-digital/contracts';
 import {
@@ -325,7 +326,12 @@ async function product(
   const [price] = await tx
     .select({ units: productPrices.priceUsdUnits })
     .from(productPrices)
-    .where(eq(productPrices.productId, id))
+    .where(
+      and(
+        eq(productPrices.productId, id),
+        eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
+      ),
+    )
     .orderBy(desc(productPrices.createdAt), desc(productPrices.id))
     .limit(1);
   return { id, code, price: price?.units as number, fakeRoute, manualRoute };
@@ -1105,7 +1111,12 @@ describe('two routes of one supplier (S17 WR8, WR9)', () => {
     const [price] = await tx
       .select({ units: productPrices.priceUsdUnits, routeId: productPrices.routeId })
       .from(productPrices)
-      .where(eq(productPrices.productId, item.id))
+      .where(
+        and(
+          eq(productPrices.productId, item.id),
+          eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
+        ),
+      )
       .orderBy(desc(productPrices.createdAt), desc(productPrices.id))
       .limit(1);
     expect(price?.routeId).toBe(auto);
@@ -1852,7 +1863,12 @@ describe('paying reservations (S09 rules RS4–RS6, A02)', () => {
       const [current] = await tx
         .select()
         .from(productPrices)
-        .where(eq(productPrices.productId, item.id))
+        .where(
+          and(
+            eq(productPrices.productId, item.id),
+            eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
+          ),
+        )
         .orderBy(desc(productPrices.createdAt), desc(productPrices.id))
         .limit(1);
       expect(current?.priceUsdUnits).toBeLessThan(item.price);

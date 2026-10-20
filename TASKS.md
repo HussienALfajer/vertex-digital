@@ -8,7 +8,7 @@ Spec `docs/specs/S20-merchant-accounts-and-price-lists.md`, ADR 0035. Three PRs 
 - [x] DB write paths: `repriceProducts` prices every unarchived list (RP1, retail first, Q21 per list), the review hold for all lists and accept reprices all (RP2), causes (RP3); the effective list of a customer; `prepareLine` and checkout at the effective list's row, `orders.price_list_id` stored (PO2); reservations paid on the order's list or cancelled with `price_list_changed` (PO3); availability per list (PO1); admin orders by mode (PO4); concurrency tests (a sync and a list change in parallel, purchase vs reprice)
 - [x] API: catalog, pricing reviews and orders read the retail list where they read "the price"; `pnpm --filter @vertex-digital/api pricing:reprice-lists` (RP4, idempotent); seed-local; tests (purchase at the effective list, `PRICE_CHANGED`, PO3, public catalog unchanged)
 - [x] Worker: sync and health read retail's rows and reprice every list through `repriceProducts`; the cancel-reason email label. RP5's `fixed_price_fallback` notice moves to PR 2 with the fixed-price writer (nothing sets a fixed price before it)
-- [ ] Bridge: OpenAPI export and admin client if shapes changed; E2E mocks adapted
+- [x] Bridge: OpenAPI export and admin client (the two enum additions); E2E mocks need no change
 - [x] AGENTS.md commands table: the reprice command
 - [ ] Wiring checklist, checks, reviewer, acceptance, PR with auto-merge
 

@@ -5,6 +5,7 @@ import {
   HEALTH_PROBE_REASON,
   priceFromCost,
   QUEUES,
+  ROOT_PRICE_LIST_IDS,
   SUPPLIER_POLICY_DEFAULTS,
   TELEGRAM_MESSAGE_PARAMS,
   type TelegramMessageKind,
@@ -349,7 +350,12 @@ const latestPrice = async (tx: Transaction, productId: string) =>
     await tx
       .select()
       .from(productPrices)
-      .where(eq(productPrices.productId, productId))
+      .where(
+        and(
+          eq(productPrices.productId, productId),
+          eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
+        ),
+      )
       .orderBy(desc(productPrices.createdAt), desc(productPrices.id))
       .limit(1)
   )[0];
