@@ -1,7 +1,7 @@
 import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
 import { z } from 'zod';
 import { COMMON_PASSWORDS } from './common-passwords.data.js';
-import { priceKindSchema } from './pricing.js';
+import { priceKindSchema } from './price-kinds.js';
 
 /*
  * Account forms (ADR 0007, S01), owned by the api `auth` (customers) and `admin` modules. Better

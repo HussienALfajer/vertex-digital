@@ -8,7 +8,7 @@ import {
   refundReasonSchema,
   STORE_PLACED_PURPOSES,
 } from './orders.js';
-import { priceKindSchema } from './pricing.js';
+import { priceKindSchema } from './price-kinds.js';
 import { adjustmentCategorySchema, adjustmentDirectionSchema } from './wallet.js';
 
 /*

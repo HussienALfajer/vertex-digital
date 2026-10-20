@@ -12,6 +12,7 @@ import {
   USD_CENT,
   usdCentsSchema,
 } from './money.js';
+import { type PriceKind, priceKindSchema } from './price-kinds.js';
 import { supplierCodeSchema } from './suppliers.js';
 
 /*
@@ -444,12 +445,7 @@ export const PRICE_LISTS_MAX_CUSTOM = 20;
 /** S20 LS3: a list and its parents, at most this many. */
 export const PRICE_LIST_MAX_DEPTH = 5;
 
-/** What a customer is told about their prices (S20 AT4): never a list's name, rule or cost. */
-export const PRICE_KINDS = ['retail', 'wholesale', 'special'] as const;
-
-export const priceKindSchema = z.enum(PRICE_KINDS).meta({ id: 'PriceKind' });
-
-export type PriceKind = z.infer<typeof priceKindSchema>;
+export { PRICE_KINDS, type PriceKind, priceKindSchema } from './price-kinds.js';
 
 /** S20 AT4: the cost list and custom lists read "سعر خاص". */
 export function priceKindOf(kind: PriceListKind): PriceKind {

@@ -3650,7 +3650,7 @@ describe('price lists (S20 PO2–PO4)', () => {
     const { rows: notices } = await pool.query(
       `select n.event, n.params, (select count(*) from email_outbox e
          where e.customer_id = n.customer_id and e.template = 'customer_order_cancelled')::int as emails
-       from customer_notifications n where n.customer_id = $1 order by n.created_at`,
+       from customer_notifications n where n.customer_id = $1 order by n.event`,
       [buyer],
     );
     expect(notices.map((row) => [row.event, row.params])).toEqual([

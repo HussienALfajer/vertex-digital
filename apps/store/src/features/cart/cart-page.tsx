@@ -3,7 +3,6 @@
 import {
   type CheckoutLineRefusal,
   type CheckoutRequest,
-  type CustomerPrices,
   checkoutTotal,
   displaySypTotal,
   formatSyp,
@@ -34,13 +33,14 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { savePendingEmail } from '@/features/auth/pending-email';
+import { readCustomerPrices } from '@/features/catalog/customer-prices';
 import { centsParam } from '@/features/deposits/amounts';
 import { sendAttempt } from '@/features/purchase/attempt';
 import { useBalance, usePurchasesStopped } from '@/features/purchase/customer';
 import { purchaseRefusalText } from '@/features/purchase/refusals';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { getSearchIndex } from '@/features/search/requests';
-import { apiRequest, type Failure } from '@/lib/api';
+import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
@@ -97,16 +97,12 @@ async function loadPrices(signedIn: boolean): Promise<Prices> {
   if (!index.ok) return { status: 'failed' };
   const products = new Map(index.data.products.map((item) => [item.id, item]));
   const slugs = signedIn ? [...new Set((readCart() ?? []).map((line) => line.gameSlug))] : [];
-  const own = await Promise.all(
-    slugs.map((slug) =>
-      apiRequest<CustomerPrices>(`/api/catalog/games/${encodeURIComponent(slug)}/prices`),
-    ),
-  );
+  const own = await Promise.all(slugs.map((slug) => readCustomerPrices(slug)));
   for (const result of own) {
     // Never the retail figure in place of the account's own: a failed read offers the retry.
-    if (!result.ok) return { status: 'failed' };
-    if (result.data.priceKind === 'retail') continue;
-    for (const row of result.data.products) {
+    if (!result) return { status: 'failed' };
+    if (result.priceKind === 'retail') continue;
+    for (const row of result.products) {
       const product = products.get(row.id);
       if (product) products.set(row.id, { ...product, ...row });
     }

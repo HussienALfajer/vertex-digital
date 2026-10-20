@@ -3,8 +3,8 @@
 import type { CustomerPrices, PriceKind, StoreProduct } from '@vertex-digital/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import type { Customer } from '@/features/purchase/session';
-import { apiRequest } from '@/lib/api';
 import { PRIVATE_PRICES_HINT_KEY } from '@/lib/session';
+import { readCustomerPrices } from './customer-prices';
 
 /*
  * S20 AT4: the signed-in account's own prices for a game page. The page is the cached retail one;
@@ -75,23 +75,21 @@ export function usePrivatePrices(
     // pack can be chosen, hint or not (decision 9: never the retail figure for another list).
     document.documentElement.setAttribute(HINT_ATTRIBUTE, '');
     setState({ status: 'loading', hinted: true });
-    void apiRequest<CustomerPrices>(`/api/catalog/games/${encodeURIComponent(slug)}/prices`).then(
-      (result) => {
-        if (!live) return;
-        if (!result.ok) return setState({ status: 'failed', retry });
-        const { priceKind } = result.data;
-        rememberPrivatePrices(priceKind !== 'retail');
-        setState(
-          priceKind === 'retail'
-            ? { status: 'retail' }
-            : {
-                status: 'ready',
-                kind: priceKind,
-                products: withPrivatePrices(products, result.data),
-              },
-        );
-      },
-    );
+    void readCustomerPrices(slug).then((result) => {
+      if (!live) return;
+      if (!result) return setState({ status: 'failed', retry });
+      const { priceKind } = result;
+      rememberPrivatePrices(priceKind !== 'retail');
+      setState(
+        priceKind === 'retail'
+          ? { status: 'retail' }
+          : {
+              status: 'ready',
+              kind: priceKind,
+              products: withPrivatePrices(products, result),
+            },
+      );
+    });
     return () => {
       live = false;
     };

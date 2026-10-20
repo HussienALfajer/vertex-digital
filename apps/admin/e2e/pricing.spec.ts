@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
 import ar from '../src/i18n/locales/ar.json' with { type: 'json' };
 import { type AdminApi, expect, PASSWORD, screenshot, TOTP_CODE, test } from './test';
 
@@ -96,6 +97,7 @@ test.describe('pricing', () => {
     await reauthenticate(page);
     await expect(page.getByRole('dialog')).toHaveCount(0);
     expect(admin.lastBody('PUT /api/admin/pricing/rules')).toEqual({
+      priceListId: ROOT_PRICE_LIST_IDS.retail,
       scope: 'category',
       targetId: admin.catalog.categories[0]?.id,
       percentBp: 1200,
