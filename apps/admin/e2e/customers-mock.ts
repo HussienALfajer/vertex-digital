@@ -213,7 +213,7 @@ export class CustomersMock {
         },
         {
           id: id(402),
-          ipAddress: '31.9.48.7',
+          ipAddress: '203.0.113.48',
           userAgent: SAFARI_IPHONE,
           createdAt: at(72),
           lastActiveAt: at(20),
@@ -221,7 +221,7 @@ export class CustomersMock {
       ],
       signIns: [
         { id: id(411), ipAddress: '5.0.0.1', userAgent: CHROME_WINDOWS, createdAt: at(30) },
-        { id: id(412), ipAddress: '31.9.48.7', userAgent: SAFARI_IPHONE, createdAt: at(72) },
+        { id: id(412), ipAddress: '203.0.113.48', userAgent: SAFARI_IPHONE, createdAt: at(72) },
       ],
     }),
     customer('layla', {
