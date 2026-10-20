@@ -1,5 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { priceFromCost, SUPPLIER_POLICY_DEFAULTS } from '@vertex-digital/contracts';
+import {
+  priceFromCost,
+  ROOT_PRICE_LIST_IDS,
+  SUPPLIER_POLICY_DEFAULTS,
+} from '@vertex-digital/contracts';
 import {
   appendProductPrice,
   catalogCategories,
@@ -1196,7 +1200,11 @@ describe('reviews (rules P3, P4, P5)', () => {
   });
 
   it('holds a sync change above 10% for review; the guard pauses the held price', async () => {
-    expect(await syncCost('review', 1.1, [productId])).toEqual({ repriced: 0, reviewsOpened: 1 });
+    expect(await syncCost('review', 1.1, [productId])).toEqual({
+      repriced: 0,
+      reviewsOpened: 1,
+      listRowsAppended: 0,
+    });
     const state = await routing(productId);
     expect(state).toMatchObject({
       currentPrice: { priceUsdUnits: price(0.92) },
@@ -1256,13 +1264,28 @@ describe('reviews (rules P3, P4, P5)', () => {
       200,
     );
     expect(accepted.results).toEqual([{ reviewId, result: 'accepted' }]);
-    const [latest] = await test.db
+    const rows = await test.db
       .select()
       .from(productPrices)
       .where(eq(productPrices.productId, productId))
-      .orderBy(desc(productPrices.createdAt))
-      .limit(1);
-    expect(latest).toMatchObject({ priceUsdUnits: proposed, cause: 'review_accepted', reviewId });
+      .orderBy(desc(productPrices.createdAt));
+    const newest = (listId: string) => rows.find((row) => row.priceListId === listId);
+    expect(newest(ROOT_PRICE_LIST_IDS.retail)).toMatchObject({
+      priceUsdUnits: proposed,
+      cause: 'review_accepted',
+      reviewId,
+    });
+    // S20 RP2: the review held every list; accepting reprices them all with its cause.
+    expect(newest(ROOT_PRICE_LIST_IDS.wholesale)).toMatchObject({
+      priceUsdUnits: priceFromCost(usd(1.1), {
+        percentBp: 500,
+        fixedUsdUnits: 0,
+        minMarginUsdUnits: usd(0.05),
+      }),
+      costUsdUnits: usd(1.1),
+      cause: 'review_accepted',
+      reviewId,
+    });
     expect((await routing(productId)).availability).toBe('available');
     expect(
       (await json<{ results: unknown[] }>(await decide([{ reviewId, action: 'pause' }]), 200))

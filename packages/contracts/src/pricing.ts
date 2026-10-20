@@ -186,6 +186,16 @@ export function resolveMarginRule<Rule extends { scope: MarginScope; targetId: s
   rules: readonly Rule[],
   path: PricingPath,
 ): Rule {
+  const rule = mostSpecificRule(rules, path);
+  if (!rule) throw new Error('No global margin rule: it always exists (rule PR2)');
+  return rule;
+}
+
+/** The first rule among the path's product, game, category, then global; none when absent. */
+function mostSpecificRule<Rule extends { scope: MarginScope; targetId: string | null }>(
+  rules: readonly Rule[],
+  path: PricingPath,
+): Rule | undefined {
   const targets: Record<MarginScope, string | null | undefined> = {
     product: path.productId,
     game: path.gameId,
@@ -198,7 +208,7 @@ export function resolveMarginRule<Rule extends { scope: MarginScope; targetId: s
     const rule = rules.find((candidate) => candidate.scope === scope && candidate.targetId === id);
     if (rule) return rule;
   }
-  throw new Error('No global margin rule: it always exists (rule PR2)');
+  return undefined;
 }
 
 /**
@@ -242,6 +252,8 @@ export const PRICE_CHANGE_CAUSES = [
   'rule_change',
   'review_accepted',
   'margin_adjusted',
+  /** S20 RP3: a list created or archived, a fixed price set or archived, the backfill. */
+  'list_change',
 ] as const;
 
 export const priceChangeCauseSchema = z.enum(PRICE_CHANGE_CAUSES).meta({ id: 'PriceChangeCause' });
@@ -388,3 +400,185 @@ export const decideReviewsResultSchema = z
   .meta({ id: 'DecideReviewsResult' });
 
 export type DecideReviewsResult = z.infer<typeof decideReviewsResultSchema>;
+
+// Price lists (S20, F29; ADR 0035) ---------------------------------------------------------------
+
+/** A list's kind (S20 LS1): three seeded roots and the admin's custom lists. */
+export const PRICE_LIST_KINDS = ['retail', 'wholesale', 'cost', 'custom'] as const;
+
+export const priceListKindSchema = z.enum(PRICE_LIST_KINDS).meta({ id: 'PriceListKind' });
+
+export type PriceListKind = z.infer<typeof priceListKindSchema>;
+
+/**
+ * The seeded root lists' fixed ids (S20 data, migration 0076): one live list per root kind, never
+ * archived, so these ids hold for good.
+ */
+export const ROOT_PRICE_LIST_IDS = {
+  retail: '01a15a8c-b310-7513-8c14-09e5262ac878',
+  wholesale: '01a15a8c-b312-75f3-92d2-65b29d838051',
+  cost: '01a15a8c-b312-75f3-92d2-691f7e3bf413',
+} as const satisfies Record<Exclude<PriceListKind, 'custom'>, string>;
+
+/** S20 LS1: unarchived custom lists at most. */
+export const PRICE_LISTS_MAX_CUSTOM = 20;
+
+/** S20 LS3: a list and its parents, at most this many. */
+export const PRICE_LIST_MAX_DEPTH = 5;
+
+/** What a customer is told about their prices (S20 AT4): never a list's name, rule or cost. */
+export const PRICE_KINDS = ['retail', 'wholesale', 'special'] as const;
+
+export const priceKindSchema = z.enum(PRICE_KINDS).meta({ id: 'PriceKind' });
+
+export type PriceKind = z.infer<typeof priceKindSchema>;
+
+/** S20 AT4: the cost list and custom lists read "سعر خاص". */
+export function priceKindOf(kind: PriceListKind): PriceKind {
+  return kind === 'cost' || kind === 'custom' ? 'special' : kind;
+}
+
+/** Where a list's price comes from (S20 LP1, LP2). */
+export const PRICE_SOURCES = ['rule', 'fixed', 'fixed_fallback', 'retail_cap'] as const;
+
+export const priceSourceSchema = z.enum(PRICE_SOURCES).meta({ id: 'PriceSource' });
+
+export type PriceSource = z.infer<typeof priceSourceSchema>;
+
+/** An account's type (S20 AT1): what the person sees and the limits tier. */
+export const ACCOUNT_TYPES = ['customer', 'merchant'] as const;
+
+export const accountTypeSchema = z.enum(ACCOUNT_TYPES).meta({ id: 'AccountType' });
+
+export type AccountType = z.infer<typeof accountTypeSchema>;
+
+/**
+ * S20 AT1: the list an account pays, its assigned list, else retail for a customer and wholesale
+ * for a merchant.
+ */
+export function effectivePriceListId(account: {
+  accountType: AccountType;
+  priceListId: string | null;
+}): string {
+  if (account.priceListId !== null) return account.priceListId;
+  return account.accountType === 'merchant'
+    ? ROOT_PRICE_LIST_IDS.wholesale
+    : ROOT_PRICE_LIST_IDS.retail;
+}
+
+/**
+ * S20 LS3: the list, then its parents up to its root, as ids. Throws on an unknown list or a chain
+ * deeper than `PRICE_LIST_MAX_DEPTH` (parents are fixed at creation, so neither can happen).
+ */
+export function listChain(
+  lists: readonly { id: string; parentListId: string | null }[],
+  listId: string,
+): string[] {
+  const chain: string[] = [];
+  let id: string | null = listId;
+  while (id !== null) {
+    const found = lists.find((list) => list.id === id);
+    if (!found) throw new Error(`Unknown price list ${id}`);
+    if (chain.length === PRICE_LIST_MAX_DEPTH) {
+      throw new Error(`Price list ${listId} is deeper than ${PRICE_LIST_MAX_DEPTH}`);
+    }
+    chain.push(found.id);
+    id = found.parentListId;
+  }
+  return chain;
+}
+
+/** What `resolveListEntry` found for a product on a list. */
+export interface ListEntry<Rule, Fixed> {
+  /** The list's own fixed price or its nearest parent's; null when a rule applies. */
+  fixed: Fixed | null;
+  /** The rule that applies, or with a fixed price its guarding rule. */
+  rule: Rule;
+  /** The list in the chain that supplied the entry (the fixed price's, or the rule's). */
+  listId: string;
+}
+
+/**
+ * S20 LS4 (decision 5): walking the chain from the list itself, the first list with a live fixed
+ * price for the product, or else a product, game, category or global rule, supplies the entry.
+ * Within a list a fixed price beats its rules; across lists the nearer list wins whatever its
+ * specificity. A fixed price's guarding rule is the rule the same walk finds from its list onward
+ * with fixed prices skipped. Throws when the chain's root has no global rule (it always has, LS2).
+ */
+export function resolveListEntry<
+  Rule extends { priceListId: string; scope: MarginScope; targetId: string | null },
+  Fixed extends { priceListId: string; productId: string },
+>(
+  chain: readonly string[],
+  entries: { rules: readonly Rule[]; fixedPrices: readonly Fixed[] },
+  path: PricingPath & { productId: string },
+): ListEntry<Rule, Fixed> {
+  const ruleFrom = (start: number): Rule => {
+    for (const listId of chain.slice(start)) {
+      const rule = mostSpecificRule(
+        entries.rules.filter((candidate) => candidate.priceListId === listId),
+        path,
+      );
+      if (rule) return rule;
+    }
+    throw new Error('No global margin rule on the root list (S20 LS2)');
+  };
+  for (const [index, listId] of chain.entries()) {
+    const fixed = entries.fixedPrices.find(
+      (candidate) => candidate.priceListId === listId && candidate.productId === path.productId,
+    );
+    if (fixed) return { fixed, rule: ruleFrom(index), listId };
+    const rule = mostSpecificRule(
+      entries.rules.filter((candidate) => candidate.priceListId === listId),
+      path,
+    );
+    if (rule) return { fixed: null, rule, listId };
+  }
+  throw new Error('No global margin rule on the root list (S20 LS2)');
+}
+
+/** A list's price for a cost (S20 LP1–LP4). */
+export interface ListPrice {
+  priceUsdUnits: number;
+  source: PriceSource;
+  /** The minimum margin guarding the price: the rule's, or retail's when capped. */
+  minMarginUsdUnits: number;
+}
+
+/**
+ * S20 LP1–LP4 for one list and product at the basis cost:
+ * - a rule: `priceFromCost` (PR3), source `rule`;
+ * - a fixed price covering cost plus its guarding rule's minimum margin: the fixed price, source
+ *   `fixed`; otherwise the guarding rule's price, source `fixed_fallback` (decision 6);
+ * - every list but retail (`retail` given): above the retail price, the retail price, source
+ *   `retail_cap`, guarded by retail's minimum margin (decision 3).
+ */
+export function listPrice(
+  costUsdUnits: number,
+  entry: { fixedPriceUsdUnits: number | null; rule: MarginRuleValues },
+  retail: { priceUsdUnits: number; minMarginUsdUnits: number } | null,
+): ListPrice {
+  let own: ListPrice;
+  if (entry.fixedPriceUsdUnits === null) {
+    own = {
+      priceUsdUnits: priceFromCost(costUsdUnits, entry.rule),
+      source: 'rule',
+      minMarginUsdUnits: entry.rule.minMarginUsdUnits,
+    };
+  } else {
+    const covered = isProfitable(entry.fixedPriceUsdUnits, costUsdUnits, entry.rule);
+    own = {
+      priceUsdUnits: covered ? entry.fixedPriceUsdUnits : priceFromCost(costUsdUnits, entry.rule),
+      source: covered ? 'fixed' : 'fixed_fallback',
+      minMarginUsdUnits: entry.rule.minMarginUsdUnits,
+    };
+  }
+  if (retail && own.priceUsdUnits > retail.priceUsdUnits) {
+    return {
+      priceUsdUnits: retail.priceUsdUnits,
+      source: 'retail_cap',
+      minMarginUsdUnits: retail.minMarginUsdUnits,
+    };
+  }
+  return own;
+}

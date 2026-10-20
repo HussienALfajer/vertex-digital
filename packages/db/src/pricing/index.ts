@@ -2,8 +2,10 @@ export {
   appendProductPrice,
   lockProductsForPricing,
   type RepriceResult,
+  repriceListsAfterRetail,
   repriceProducts,
   routedProducts,
+  type SettledRetail,
 } from './reprice.js';
 export {
   priceReviewPage,
@@ -15,6 +17,7 @@ export {
   cheapestAvailablePrice,
   currentSupplierPolicy,
   forgetDeliveryMeasure,
+  newestListPrices,
   type PriceRow,
   type ProductRoutingState,
   productRoutingStates,
@@ -22,6 +25,7 @@ export {
   type RouteState,
   type RoutingContext,
   routedProductIds,
+  ruleValues,
   type SupplierState,
   supplierDeliveryMedians,
   supplierStates,

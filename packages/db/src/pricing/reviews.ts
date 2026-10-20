@@ -1,4 +1,9 @@
-import type { PriceReviewStatus, ProductPrice, SupplierCode } from '@vertex-digital/contracts';
+import {
+  type PriceReviewStatus,
+  type ProductPrice,
+  ROOT_PRICE_LIST_IDS,
+  type SupplierCode,
+} from '@vertex-digital/contracts';
 import { and, count, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import { type Database, readAll, type Transaction } from '../client.js';
 import {
@@ -82,6 +87,13 @@ export function priceReviewsById(db: Executor, ids: readonly string[]): Promise<
   return reviewsQuery(db, inArray(priceReviews.id, [...ids]));
 }
 
+/** S20: the history pages show retail's rows (the lists' arrive with their own screens). */
+const retailRowsOf = (productId: string) =>
+  and(
+    eq(productPrices.productId, productId),
+    eq(productPrices.priceListId, ROOT_PRICE_LIST_IDS.retail),
+  );
+
 /** A page of a product's stored prices, newest first, with each basis route's supplier. */
 export async function productPricePage(
   db: Executor,
@@ -95,15 +107,11 @@ export async function productPricePage(
         .from(productPrices)
         .innerJoin(productRoutes, eq(productRoutes.id, productPrices.routeId))
         .innerJoin(suppliers, eq(suppliers.id, productRoutes.supplierId))
-        .where(eq(productPrices.productId, productId))
+        .where(retailRowsOf(productId))
         .orderBy(desc(productPrices.createdAt), desc(productPrices.id))
         .limit(page.pageSize)
         .offset((page.page - 1) * page.pageSize),
-    () =>
-      db
-        .select({ total: count() })
-        .from(productPrices)
-        .where(eq(productPrices.productId, productId)),
+    () => db.select({ total: count() }).from(productPrices).where(retailRowsOf(productId)),
   ]);
   return {
     items: rows.map(({ price, supplierCode }) => ({

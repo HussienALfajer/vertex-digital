@@ -16,7 +16,8 @@
     "telegram:fake-update": "node dist/cli/telegram-fake-update.js",
     "order:place": "node dist/cli/place-order.js",
     "seed:local": "node dist/cli/seed-local.js",
-    "checkout:place": "node dist/cli/place-checkout.js"
+    "checkout:place": "node dist/cli/place-checkout.js",
+    "pricing:reprice-lists": "node dist/cli/reprice-lists.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",

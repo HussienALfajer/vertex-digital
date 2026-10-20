@@ -2,13 +2,20 @@ import { describe, expect, it } from 'vitest';
 import {
   costChangeBasisPoints,
   decideReviewsSchema,
+  effectivePriceListId,
   isProfitable,
+  listChain,
+  listPrice,
   type MarginRuleValues,
   marginBasisPoints,
   needsReview,
+  PRICE_LIST_MAX_DEPTH,
   priceFromCost,
+  priceKindOf,
   priceReviewListQuerySchema,
   pricingPreviewRequestSchema,
+  ROOT_PRICE_LIST_IDS,
+  resolveListEntry,
   resolveMarginRule,
   savings,
   savingsWarning,
@@ -234,5 +241,205 @@ describe('review schemas (rule P4)', () => {
     expect(decideReviewsSchema.safeParse({ decisions: [decision] }).success).toBe(true);
     expect(decideReviewsSchema.safeParse({ decisions: [] }).success).toBe(false);
     expect(decideReviewsSchema.safeParse({ decisions: [decision, decision] }).success).toBe(false);
+  });
+});
+
+describe('priceKindOf (S20 AT4)', () => {
+  it('names retail and wholesale, and every other list special', () => {
+    expect(priceKindOf('retail')).toBe('retail');
+    expect(priceKindOf('wholesale')).toBe('wholesale');
+    expect(priceKindOf('cost')).toBe('special');
+    expect(priceKindOf('custom')).toBe('special');
+  });
+});
+
+describe('effectivePriceListId (S20 AT1)', () => {
+  it('takes the assigned list, else the type default', () => {
+    expect(effectivePriceListId({ accountType: 'customer', priceListId: null })).toBe(
+      ROOT_PRICE_LIST_IDS.retail,
+    );
+    expect(effectivePriceListId({ accountType: 'merchant', priceListId: null })).toBe(
+      ROOT_PRICE_LIST_IDS.wholesale,
+    );
+    expect(effectivePriceListId({ accountType: 'customer', priceListId: 'vip' })).toBe('vip');
+    expect(effectivePriceListId({ accountType: 'merchant', priceListId: 'vip' })).toBe('vip');
+  });
+});
+
+describe('listChain (S20 LS3)', () => {
+  const lists = [
+    { id: 'retail', parentListId: null },
+    { id: 'wholesale', parentListId: null },
+    { id: 'vip', parentListId: 'wholesale' },
+    { id: 'gold', parentListId: 'vip' },
+  ];
+
+  it('walks from the list to its root', () => {
+    expect(listChain(lists, 'retail')).toEqual(['retail']);
+    expect(listChain(lists, 'gold')).toEqual(['gold', 'vip', 'wholesale']);
+  });
+
+  it('refuses an unknown list, a missing parent and a chain past the depth', () => {
+    expect(() => listChain(lists, 'nope')).toThrow(/Unknown/);
+    expect(() => listChain([{ id: 'a', parentListId: 'gone' }], 'a')).toThrow(/Unknown/);
+    const deep = Array.from({ length: PRICE_LIST_MAX_DEPTH + 1 }, (_, index) => ({
+      id: `l${index}`,
+      parentListId: index === 0 ? null : `l${index - 1}`,
+    }));
+    expect(listChain(deep, `l${PRICE_LIST_MAX_DEPTH - 1}`)).toHaveLength(PRICE_LIST_MAX_DEPTH);
+    expect(() => listChain(deep, `l${PRICE_LIST_MAX_DEPTH}`)).toThrow(/deeper/);
+    // A cycle can never form (parents are fixed), but it still ends.
+    const cycle = [
+      { id: 'x', parentListId: 'y' },
+      { id: 'y', parentListId: 'x' },
+    ];
+    expect(() => listChain(cycle, 'x')).toThrow(/deeper/);
+  });
+});
+
+describe('resolveListEntry (S20 LS4)', () => {
+  const path = { productId: 'p1', gameId: 'g1', categoryId: 'c1' };
+  const rule = (priceListId: string, scope: 'global' | 'category' | 'game' | 'product') => ({
+    priceListId,
+    scope,
+    targetId:
+      scope === 'global' ? null : ({ category: 'c1', game: 'g1', product: 'p1' } as const)[scope],
+    name: `${priceListId}:${scope}`,
+  });
+  const fixed = (priceListId: string, productId = 'p1') => ({
+    priceListId,
+    productId,
+    name: `${priceListId}:fixed`,
+  });
+  const chain = ['vip', 'wholesale'];
+
+  it('takes the own most specific rule of the list', () => {
+    const found = resolveListEntry(
+      chain,
+      {
+        rules: [rule('vip', 'global'), rule('vip', 'game'), rule('wholesale', 'product')],
+        fixedPrices: [],
+      },
+      path,
+    );
+    expect(found).toEqual({ fixed: null, rule: rule('vip', 'game'), listId: 'vip' });
+  });
+
+  it('falls to the parent only where the list has no entry', () => {
+    const found = resolveListEntry(
+      chain,
+      { rules: [rule('wholesale', 'global'), rule('wholesale', 'category')], fixedPrices: [] },
+      path,
+    );
+    expect(found.rule.name).toBe('wholesale:category');
+    expect(found.listId).toBe('wholesale');
+  });
+
+  it('puts a fixed price before the rules of its list, with the guarding rule', () => {
+    const found = resolveListEntry(
+      chain,
+      {
+        rules: [rule('vip', 'product'), rule('wholesale', 'global')],
+        fixedPrices: [fixed('vip'), fixed('vip', 'p2')],
+      },
+      path,
+    );
+    expect(found).toEqual({ fixed: fixed('vip'), rule: rule('vip', 'product'), listId: 'vip' });
+  });
+
+  it('guards a fixed price with the rule of the parent when its list has none', () => {
+    const found = resolveListEntry(
+      chain,
+      { rules: [rule('wholesale', 'global')], fixedPrices: [fixed('vip')] },
+      path,
+    );
+    expect(found.fixed?.name).toBe('vip:fixed');
+    expect(found.rule.name).toBe('wholesale:global');
+  });
+
+  it('lets a nearer rule beat a fixed price of the parent, which applies otherwise', () => {
+    expect(
+      resolveListEntry(
+        chain,
+        {
+          rules: [rule('vip', 'global'), rule('wholesale', 'global')],
+          fixedPrices: [fixed('wholesale')],
+        },
+        path,
+      ).rule.name,
+    ).toBe('vip:global');
+    const inherited = resolveListEntry(
+      chain,
+      { rules: [rule('wholesale', 'global')], fixedPrices: [fixed('wholesale')] },
+      path,
+    );
+    expect(inherited).toMatchObject({ listId: 'wholesale', fixed: { name: 'wholesale:fixed' } });
+  });
+
+  it('throws without a global rule on the root', () => {
+    expect(() => resolveListEntry(chain, { rules: [], fixedPrices: [] }, path)).toThrow(/global/);
+    expect(() => resolveListEntry(chain, { rules: [], fixedPrices: [fixed('vip')] }, path)).toThrow(
+      /global/,
+    );
+  });
+});
+
+describe('listPrice (S20 LP1–LP4)', () => {
+  /** The wholesale rule seeded by S20 (decision 2): 5%, $0 fixed, $0.05 minimum. */
+  const wholesale: MarginRuleValues = {
+    percentBp: 500,
+    fixedUsdUnits: 0,
+    minMarginUsdUnits: 50_000,
+  };
+  const retail = { priceUsdUnits: usd(1.1), minMarginUsdUnits: 100_000 };
+
+  it('prices by the rule, rounded up to the cent', () => {
+    expect(listPrice(usd(1), { fixedPriceUsdUnits: null, rule: wholesale }, null)).toEqual({
+      priceUsdUnits: usd(1.05),
+      source: 'rule',
+      minMarginUsdUnits: 50_000,
+    });
+    // $0.333 + 5% = $0.34965, below the $0.05 minimum: $0.383 rounded up to $0.39.
+    expect(
+      listPrice(333_000, { fixedPriceUsdUnits: null, rule: wholesale }, null).priceUsdUnits,
+    ).toBe(usd(0.39));
+  });
+
+  it('keeps a fixed price covering the minimum margin, exactly too', () => {
+    expect(listPrice(usd(1), { fixedPriceUsdUnits: usd(1.05), rule: wholesale }, retail)).toEqual({
+      priceUsdUnits: usd(1.05),
+      source: 'fixed',
+      minMarginUsdUnits: 50_000,
+    });
+  });
+
+  it('falls back to the guarding rule below the minimum margin (decision 6)', () => {
+    expect(listPrice(usd(1), { fixedPriceUsdUnits: usd(1.04), rule: wholesale }, retail)).toEqual({
+      priceUsdUnits: usd(1.05),
+      source: 'fixed_fallback',
+      minMarginUsdUnits: 50_000,
+    });
+  });
+
+  it('caps every list but retail at the retail price (decision 3, edge cases 5 and 6)', () => {
+    const capped = { priceUsdUnits: usd(0.99), minMarginUsdUnits: 10_000 };
+    expect(listPrice(usd(0.95), { fixedPriceUsdUnits: null, rule: wholesale }, capped)).toEqual({
+      priceUsdUnits: usd(0.99),
+      source: 'retail_cap',
+      minMarginUsdUnits: 10_000,
+    });
+    expect(
+      listPrice(
+        usd(1),
+        { fixedPriceUsdUnits: null, rule: wholesale },
+        {
+          priceUsdUnits: usd(1.05),
+          minMarginUsdUnits: 100_000,
+        },
+      ).source,
+    ).toBe('rule');
+    expect(
+      listPrice(usd(1), { fixedPriceUsdUnits: usd(2), rule: wholesale }, retail),
+    ).toMatchObject({ priceUsdUnits: usd(1.1), source: 'retail_cap' });
   });
 });

@@ -167,7 +167,9 @@ export type PayOutcome =
   /** S12 LM4: the payment would pass the daily purchase cap; tried again until it fits or expires. */
   | 'skipped_cap'
   | 'cancelled_price_rose'
-  | 'cancelled_product_changed';
+  | 'cancelled_product_changed'
+  /** S20 PO3: the customer's list is no longer the order's. */
+  | 'cancelled_price_list_changed';
 
 /** Thrown inside one order's transaction to roll it back and go on with the next (RS4 step 6). */
 class ShortBalance extends Error {}
@@ -246,7 +248,12 @@ async function payOne(
     .from(catalogProducts)
     .where(eq(catalogProducts.id, order.productId))
     .for('share');
-  const usable = await routingNow(tx, order.productId, now, context.fakeEnabled);
+  // S20 PO3: a reservation is paid on its own list, never on one the account no longer has.
+  if (customer.priceListId !== order.priceListId) {
+    await cancelReservation(tx, context, order, 'price_list_changed', { kind: 'system' });
+    return 'cancelled_price_list_changed';
+  }
+  const usable = await routingNow(tx, order.productId, now, context.fakeEnabled, order.priceListId);
   const current = usable?.current;
   if (!usable || !current || availabilityNow(usable, customer.isTest) !== 'available') {
     return 'skipped_unavailable';
@@ -259,7 +266,7 @@ async function payOne(
 
   const charge = reservationCharge(order.unitPriceUsdUnits, current.priceUsdUnits);
   let priceId = order.priceId;
-  let minMarginUsdUnits = usable.rule.values.minMarginUsdUnits;
+  let minMarginUsdUnits = usable.currentMinMarginUsdUnits;
   if (charge.source === 'current') {
     priceId = current.id;
     minMarginUsdUnits = current.minMarginUsdUnits;

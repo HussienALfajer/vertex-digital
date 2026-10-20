@@ -2542,7 +2542,8 @@
         "route_change": "تغيّر المسار",
         "rule_change": "تغيّر قاعدة الهامش",
         "review_accepted": "قبول مراجعة",
-        "margin_adjusted": "تعديل الهامش من مراجعة"
+        "margin_adjusted": "تعديل الهامش من مراجعة",
+        "list_change": "تغيّر قائمة أسعار"
       }
     },
     "healthTab": {
@@ -2997,7 +2998,8 @@
       "customer": "ألغاه العميل",
       "price_rose": "ارتفع السعر",
       "product_changed": "تغيّرت بيانات الباقة",
-      "frozen": "جُمّد الحساب"
+      "frozen": "جُمّد الحساب",
+      "price_list_changed": "تغيّرت قائمة أسعار الحساب"
     },
     "playerChecks": {
       "valid": "تم التحقق: {{name}}",

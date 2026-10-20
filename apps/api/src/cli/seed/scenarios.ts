@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createECDH, randomBytes, randomUUID } from 'node:crypto';
 import type { INestApplicationContext } from '@nestjs/common';
-import { USD_CENT } from '@vertex-digital/contracts';
+import { ROOT_PRICE_LIST_IDS, USD_CENT } from '@vertex-digital/contracts';
 import type { Database } from '@vertex-digital/db';
 import { sql } from 'drizzle-orm';
 import type { RequestMeta } from '../../core/http/request-meta.js';
@@ -787,7 +787,7 @@ export class Scenarios {
             LIMIT 1) AS manual
         FROM catalog_products p
         JOIN catalog_games g ON g.id = p.game_id
-        JOIN LATERAL (SELECT price_usd_units FROM product_prices WHERE product_id = p.id ORDER BY created_at DESC LIMIT 1) pp ON true
+        JOIN LATERAL (SELECT price_usd_units FROM product_prices WHERE product_id = p.id AND price_list_id = '${ROOT_PRICE_LIST_IDS.retail}' ORDER BY created_at DESC LIMIT 1) pp ON true
         WHERE p.status = 'active' AND p.archived_at IS NULL AND g.status = 'active' AND g.archived_at IS NULL
         ORDER BY pp.price_usd_units`)
     ).rows;

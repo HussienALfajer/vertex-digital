@@ -526,6 +526,34 @@
       "when": 1792451048669,
       "tag": "0074_s19_player_check_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792520660510,
+      "tag": "0075_curvy_ma_gnuci",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1792520667625,
+      "tag": "0076_s20_price_list_seeds",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1792520731363,
+      "tag": "0077_unusual_sleeper",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1792520763921,
+      "tag": "0078_s20_price_list_guards",
+      "breakpoints": true
     }
   ]
 }

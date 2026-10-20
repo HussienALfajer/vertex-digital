@@ -171,12 +171,14 @@ export const RESERVATIONS_MAX = 3;
 
 /** Why an order was cancelled (rules RS7–RS9); set only on `cancelled` orders. */
 /** `frozen` (S12 CF1): the admin froze the customer. */
+/** `price_list_changed` (S20 AT3, PO3): the account's type or price list changed. */
 export const CANCEL_REASONS = [
   'expired',
   'customer',
   'price_rose',
   'product_changed',
   'frozen',
+  'price_list_changed',
 ] as const;
 
 export const cancelReasonSchema = z.enum(CANCEL_REASONS).meta({ id: 'CancelReason' });
