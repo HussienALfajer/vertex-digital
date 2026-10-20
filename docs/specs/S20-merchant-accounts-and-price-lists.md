@@ -1,6 +1,6 @@
 # S20 — Merchant accounts and price lists (F28, F29)
 
-Status: Draft · Date: 2026-10-20 · Scope: `docs/product/v1-scope.md` §F28, §F29 (Phase M) · ADRs: 0003, 0004, 0006, 0007, 0016, 0020, 0021, 0023, 0024, 0026, 0027, 0028, 0030, 0034, 0035 (new)
+Status: Approved · Date: 2026-10-20 · Scope: `docs/product/v1-scope.md` §F28, §F29 (Phase M) · ADRs: 0003, 0004, 0006, 0007, 0016, 0020, 0021, 0023, 0024, 0026, 0027, 0028, 0030, 0034, 0035 (new)
 
 ## Summary
 Vertex Digital sells retail only: every account pays the one stored price of a product. The business goal is to sell wholesale to shops across Syria as well. S20 adds **account types** (customer, merchant), the **merchant application** with its review in the panel (approval only by the admin), a **merchant limits tier** (deposits and purchase rate), and **price lists**: retail (today's prices), wholesale (merchants, 5%), cost (accounts the admin chooses, cost + 1%, shown as "سعر خاص") and named **custom lists** that inherit from a parent list. Every list is a set of margin rules with optional fixed prices per product, repriced on every cost and rule change, guarded per list, capped at the retail price, and private to the accounts it is assigned to. Orders record the list they were charged at; reports split sales and profit by list and by merchant.
