@@ -45,7 +45,7 @@ Ordered by dependency: access and its audit trail first, then money in, then wha
 | 9 | Suppliers | F09 | Sync, health, balance, routes, supplier catalog browser, stock | Accepted 2026-10-18 |
 | 10 | Store home, game pages and search | F12, F15 | The customer's way to a product | Accepted 2026-10-18 |
 | 11 | Purchase, fulfilment and live tracking | F13, F11 | The core sale: success, manual route, unknown outcome, failure and refund, reservation | Accepted 2026-10-20 |
-| 12 | Saved player IDs and one-tap recharge | F14 | Builds on a successful purchase | — |
+| 12 | Saved player IDs and one-tap recharge | F14 | Builds on a successful purchase | Steps written 2026-10-20 |
 | 13 | Cart, gift top-up and shareable receipt | F16 | Multi-line checkout and gifts on top of purchases | — |
 | 14 | Admin purchases | S16 (F11) | Walk-in, on behalf, gift and compensation, owner drawings cap | — |
 | 15 | Live orders room and dashboard | F17, F18 | Needs the orders made in 11–14 | — |
@@ -207,6 +207,8 @@ The owner's decision (2026-10-17): once all 22 features are accepted, and before
 | F11-3 | 11 | 11.5 step 1 | The step expected "معرّف اللاعب" before "المنطقة", but A's fields are ordered region (sort 2) then player ID (sort 3), and the buy box follows that order. The store is right; the step was not | minor (steps) | 11.5 step 1 names the fixture's order | Fixed (steps) |
 | F11-2 | 11 | 11.4 step 2 | "Activate B" was refused with "ينقصها: صورة الغلاف": B was created on 2026-10-17 without a cover and never activated (audit log, read-only), so the step could not run as written. The panel was right (CT: a cover is required before activation) | minor (steps) | Step 2 now uploads a non-personal cover to B before activating it | Fixed (steps) |
 | F11-1 | 11 | 11.1 | The steps used the store's words for the panel: an order "تم التسليم" (the panel says "مُسلّم") and an attempt resolved by "المورد" (the panel names how: "إشعار المورد" for a webhook, "السؤال الدوري" for a poll) | minor (steps) | 11.1, 11.6 and 11.14 name the panel's words | Fixed (steps) |
+| F12-1 | 12 | Writing the steps (source inspection; not yet reproduced on production) | A saved ID's chip (`saved-chips.tsx`, `mainValue`) and its "معرّفاتي" row (`players-page.tsx`, `mainValue`) show the masked value of the game's **first** field that has a value, in field order. On a game whose first field is a short select, such as test game A ("المنطقة" sort 2 before "معرّف اللاعب" sort 3, F11-3), the chip reads "••••" (the masked `asia`, under 6 characters) instead of the player ID's last four, so two IDs saved with the same region look alike apart from their labels | minor | — | Open (to confirm in 12.4) |
+| F12-2 | 12 | Writing the steps (source inspection; not yet reproduced on production) | S19 PC9 says saved IDs show the region beside the name, but `saved_players` stores no region and `savedPlayerSchema` has none, so a chip, "معرّفاتي" and the slide step opened from a chip show the last checked name without its region | minor | — | Open (to confirm in 12.9 and 12.10) |
 
 Severity: **blocker** (money, security or a broken flow; fixed before the feature is accepted), **major** (wrong behaviour with a workaround; fixed before the pilot), **minor** (text, layout; may become a follow-up).
 
@@ -2729,3 +2731,211 @@ Step 4 ✅ read-only production SQL at 2026-10-20 15:56:06 Damascus (snapshot `1
 | Checked read-only while writing (2026-10-18) | Production SQL at 20:53:37 and 20:55:06 Damascus (`vertex_digital`, `REPEATABLE READ READ ONLY`, `transaction_read_only = on`, `ROLLBACK`; snapshots `1431525:1431525:` and `1431654:1431654:`), deployed `d1f70f3`; public game reads at 20:56:58. 2 orders, 31 deposits (19 + 12), 20 journals, 52 postings, 0 player checks, 0 checkouts, 0 `validate_player` calls; TC1 $28.98, TC2 and TC3 $0.00, the owner's account $4.50; rate 140 (step 1 ل.س); only the global 10%/$0/$0.10 rule; the policy seed (hard limit 30 minutes, manual reminder 15 minutes); WDGZone healthy at $6.124; no product can be player-checked; no S17 timing on any route; fixtures archived with A's status active, B without a route. Expected prices computed with `priceFromCost`. No production change, supplier call or customer identifier read out; the manual run, its results and the post-run counts remain unconfirmed |
 | Accepted by the owner on | 2026-10-20 |
 | PR | the steps and the run (#149, with the F11-4 to F11-8 and F11-10 fixes, deployed `6412ef4` on 2026-10-19); day 2, the cleanup and the acceptance (this record) |
+
+## Feature 12 — Saved player IDs and one-tap recharge (F14)
+
+**What it covers:** S10's saved IDs and one-tap repeat (SP1–SP7, OT1–OT3, edge cases 10, 11 and 20), with S19 PC9's name beside a saved ID: the state as it stands; on test game A, saving an ID with a purchase (the box, its label and its refusals, hidden signed out), "معرّفاتي" and its "اشحن", one tap from a chip with "آخر استخدام" moving (SP4), "معرّف جديد", "اشترِ مجدداً" on a delivered order and where it does not show, refunds that do not mark an ID rejected, a game field tightened (an incomplete chip and repeat, then back); on a real game with the owner's own account, an ID saved with its **checked in-game name** through a reservation cancelled at once, then one tap, "اشحن" and the repeat of O4, each **stopped at the slide**; rename; another customer's IDs; the audit entries and the books; phone and desktop quality; cleanup with a paused game in "معرّفاتي" and the delete dialog.
+
+**How to read a case:** as in features 8 to 11: **What this checks** first, then the numbered steps; a line starting with "Expected" is what you must see. Every result below is blank until the owner runs it. Writing these steps does not accept feature 12.
+
+**Real money in this feature: none.** No real purchase: the owner's own account reserves PUBG Mobile "325 شدة" ($4.82, more than its $3.52, so nothing is debited) only to save the ID with its checked name, and cancels it in the same minute; every real-pack step stops at the slider. **Never slide on a real pack in this feature**, and do not deposit to your own account while R5 is open (a credit would pay it: $4.82 to WDGZone). The only outside call is FazerCards' free player check on your own PUBG ID (`validate-id`, within its 1,000 daily quota; a cached answer of the last 24 hours makes none). TC1 spends nothing in the end: two $1.10 orders on test game A, both refunded ($25.68 → $23.48 → **$25.68**). Test orders use only the `manual` route (S08 R4), so nothing reaches a supplier from them. Never press "تنفيذ يدوي", "تأكّدت: فشل" or the reroute action on an order that is not this feature's, and never change a real pack, its route, its price or a real game's fields.
+
+**Worked numbers used below:** read-only **production SQL** at **16:03:27 and 16:04:17 Damascus, 2026-10-20** (`vertex_digital`, `REPEATABLE READ READ ONLY`, `transaction_read_only = on`, 10-second statement timeout, 2-second lock timeout, ending with `ROLLBACK`; snapshots `1622765:1622765:` and `1622822:1622822:`), deployed `current/REVISION` **`70d72b1`**, then public `GET /api/catalog/games/pubg-mobile` at about 16:06. No production data changed and no supplier was called. No customer identifier, player ID or secret was read out.
+
+- **Saved IDs and S10's other tables:** **0** saved IDs, 0 share links, 0 checkouts. Orders **10** (4 delivered), journals **31**, postings **74** (feature 11's end). `player_checks`: 2 rows, both `valid`, made by the admin through FazerCards at 04:02 and 04:03 on 2026-10-20 (S19's setup), each kept 24 hours.
+- **Customers:** TC1 **$25.68**, TC2 and TC3 **$0.00**, three other test customers at $0.00 (untouched here); your own account (non-test, verified) **$3.52**. Registration closed; `wdgzone_paused` and `manual_paused` off; `purchases_stopped` never set.
+- **Delivered orders used here:** yours, **O4 = `VO-2Z298D`**, PUBG Mobile "60 شدة" × 1 for your own player ID (11.14). TC1's, **O1 = `VO-6QBGE3`**, A `60 UC` × 1, `5123456789`, "المنطقة" آسيا (11.6); TC1's O2 `VO-EM9HFM` is refunded and O3 `VO-ZVZP5W` is on B (archived, stays archived).
+- **Player check (S19):** PUBG Mobile and Free Fire have an **enabled FazerCards check provider** (field `player_id`, no allowed-region list, so no region is refused); the public PUBG packs carry `playerCheck: true`. FazerCards: plan "trial", active, ending **2026-10-25 00:33** Damascus; balance $0.00 (a check needs none). A **test customer** is never checked by a real provider (S19 PC8), so TC1's IDs are saved **without a name**; only your own account can show one (12.9).
+- **Suppliers:** WDGZone healthy, balance **$4.852** (read 16:00, below its $5.00 threshold; nothing in this feature spends it). Manual available.
+- **PUBG Mobile:** field `player_id` "معرّف اللاعب", digits **8–12** (S19 ID4), required, the only field. "60 شدة" **$0.98** ≈ 138 ل.س (WDGZone `235203` $0.875, manual $0.95), maximum 1; "325 شدة" **$4.82** ≈ 675 ل.س (WDGZone `235204` $4.38), maximum 1. With $3.52 your shortfall on "325 شدة" is **$1.30**.
+- **Test fixtures:** "اختبار النظام" and A "لعبة اختبار 7" archived (11.18), A **paused** (it was paused before its archive, so a restore brings it back paused). A `60 UC` manual $1.00 → **$1.10** ≈ 154 ل.س, maximum 1; `660 UC` manual $8.50 → $9.35; `325 UC` paused; the two WDGZone routes archived. Fields in order: `server` "المنطقة" (sort 2, optional select أوروبا `eu` / آسيا `asia`), then `player_id` "معرّف اللاعب" (sort 3, digits **5–15**, required). B and C stay archived.
+
+Balances through the feature (if a case ends on another figure, stop and record it):
+
+| After | TC1 | Your account |
+|---|---|---|
+| Start | $25.68 | $3.52 |
+| 12.3: O5 paid | $24.58 | |
+| 12.5: O6 paid | $23.48 | |
+| 12.7: O5 and O6 refunded | **$25.68** | |
+| 12.9: R5 reserved, then cancelled | | **$3.52** (nothing debited) |
+
+**Before you start**
+
+- The panel signed in on the PC, the Telegram chat linked, TC1 in a second browser, TC3 in a private window (12.12), a signed-out private window, your own store account (12.9–12.10), TC1's inbox and your phone. One sitting of about 1 hour 15 minutes. O5 and O6 stay open while 12.5 and 12.6 run: one "⏰ الطلب اليدوي … ما زال بانتظارك" reminder each after 15 minutes is expected.
+- Re-authentication lasts 5 minutes: the two failure decisions of 12.7 go in one sitting.
+- A is public while the sitting runs (only existing accounts can buy); 12.15 pauses and archives it.
+- On test game A use the test ID `5123456789` only. On PUBG Mobile use **your own** player ID only, the one of O4; it is never written here or in a screenshot committed to the repository.
+
+**Not tested on production (by design):** a saved ID marked rejected after a supplier refusal, its warning "رفض المورد هذا المعرّف في طلب سابق. راجعه قبل الدفع.", the check it goes through instead of the jump, and the mark cleared by a later delivery (SP6: only a real `input_rejected` refusal sets it; S10 API tests); the limits of 10 IDs per game and 50 per account and the save box hidden at a limit (edge case 24; ten purchases per game; API tests); the same ID saved twice keeping its first label (edge case 9: the box is hidden for a saved ID; API tests); a name refreshed by a later `valid` order (SP2; a second checked order on your account adds nothing to 12.9); "اشترِ مجدداً" on a pack now unavailable or above its maximum quantity (OT2's other notices; every fixture pack in use has maximum 1 and B stays archived); a region refused by the check (S19 PC3; no allowed-region list is set; S19's own acceptance); saving an ID in a cart checkout and the gift option (feature 13); admin purchases (feature 14).
+
+### 12.1 Saved IDs and repeat as they stand
+
+**What this checks:** with nothing saved, the customer sees an honest empty state, the save option appears only for a signed-in customer, and "اشترِ مجدداً" shows only on a delivered order of a game on sale.
+
+Read only: **press nothing** in this case but links and tabs.
+
+1. As TC1 open the account menu → **"معرّفاتي"** (`/account/players`). Expected: "معرّفاتي", "معرّفات اللاعبين التي حفظتها عند الشراء، للشحن بخطوة واحدة.", then "لم تحفظ أي معرّف بعد", "احفظه عند الشراء القادم من صفحة اللعبة." and "تصفح الألعاب".
+2. As TC1 open PUBG Mobile and select "60 شدة". Expected: no "معرّفاتك المحفوظة" row; under the field an unticked **"احفظ هذا المعرّف"**. Tick it: "اسم المعرّف" prefilled **"حسابي"**. Untick it and close the buy box (TC1 cannot buy a real pack, 11.3).
+3. In the signed-out window open the same pack. Expected: no save box and no chips ("سجّل الدخول للشراء" as in 11.3). Open `/account/players`: the sign-in page.
+4. TC1's "طلباتي". Expected: **no** "اشترِ مجدداً" on any card: O1's game A is archived, O2 is refunded, O3's game B is archived.
+
+Result:
+
+### 12.2 Setup: test game A back
+
+**What this checks:** the fixture comes back as recorded, so the cases rely on known prices and fields, and nothing real is touched.
+
+1. In the panel restore "اختبار النظام", then A "لعبة اختبار 7". Expected: A comes back **paused** (its status before 11.18's archive). Do not restore B, C or the archived duplicate `660 UC`.
+2. Confirm A's packs and fields: `60 UC` active at **$1.10** (manual $1.00, enabled), `660 UC` at **$9.35** (manual $8.50), `325 UC` paused, the WDGZone routes archived; "المنطقة" optional (أوروبا, آسيا) before "معرّف اللاعب" digits **5–15**, required. Then **activate A** (its cover exists).
+3. Store (allow up to a minute): home shows "اختبار النظام" with A only, "أبطأ من المعتاد". Audit log: the category restore, A's restore and A's activation.
+
+Result:
+
+### 12.3 Saving an ID with a purchase (O5)
+
+**What this checks:** the ID is saved in the purchase itself, under a label the customer chose, and a wrong label never reaches the server.
+
+1. As TC1 open A and select `60 UC`. Expected: no chips yet; "المنطقة (اختياري)", "معرّف اللاعب", the unticked "احفظ هذا المعرّف", $1.10 ≈ 154 ل.س, "رصيدك بعد الشراء: $24.58".
+2. Choose "آسيا", type `5123456789`, tick "احفظ هذا المعرّف" and **clear** the label; press "متابعة". Expected: **"اكتب اسمًا من 1 إلى 30 حرفًا."** under "اسم المعرّف" and no slide step. Type 31 characters (for example `حسابي حسابي حسابي حسابي حسابي1`). Expected: the same refusal.
+3. Set the label to **"حسابي"**, "متابعة". Expected: the slide step with "آسيا", `5123456789`, $1.10 and the balance after. Slide. Expected: the order page; note it as **O5**; TC1 **$24.58**.
+4. Back on A `60 UC` (reload). Expected: **"معرّفاتك المحفوظة"** with a chip "حسابي" and "معرّف جديد"; the save box is **hidden** while the fields hold the saved ID, and shows again when "معرّف جديد" empties them.
+
+Result:
+
+### 12.4 "معرّفاتي" and "اشحن"
+
+**What this checks:** the customer can see what is saved, masked, and start a top-up from it.
+
+1. TC1's "معرّفاتي". Expected: one group "لعبة اختبار 7" with its cover; the row "حسابي", the masked main value **`••••6789`** (the player ID's last four; "••••" alone is F12-1), no name (a test customer is never checked, PC8), "آخر استخدام" a few minutes ago, and "اشحن", "إعادة تسمية", "حذف". The chip on A's buy box shows the same masked value.
+2. Press **"اشحن"**. Expected: `/games/system-test-7?player=<id>`; select `60 UC`: the chip "حسابي" is pressed, "آسيا" and `5123456789` are filled, and the buy box **stays on the fields** (no jump from this link). Press "متابعة". Expected: the slide step with **"المعرّف المحفوظ" حسابي**, "آسيا" and `5123456789`. **Do not slide**; "رجوع".
+
+Result:
+
+### 12.5 One tap from a chip (O6)
+
+**What this checks:** a saved ID buys again in one step, still with a deliberate slide, and the ID's last use moves.
+
+1. As TC1 on A select `60 UC` and tap the chip **"حسابي"**. Expected: the **slide step at once** (no "متابعة"), with "المعرّف المحفوظ" حسابي, "آسيا", `5123456789` in large LTR digits, $1.10 ≈ 154 ل.س, "رصيدك بعد الشراء: $23.48"; no name row (TC1 has none). Optional Network check: no request to `/api/player-checks`.
+2. Slide. Expected: the order page; note it as **O6**; TC1 **$23.48**. O6's page shows the same "المنطقة" آسيا and "معرّف اللاعب" `5123456789` as O5.
+3. "معرّفاتي". Expected: still **one** row "حسابي" (the same ID is not saved twice), "آخر استخدام" now O6's time (SP4).
+4. On A `60 UC` press **"معرّف جديد"**. Expected: empty fields, no chip pressed, the save box back; type nothing and close the buy box.
+
+Result:
+
+### 12.6 "اشترِ مجدداً" on a delivered order
+
+**What this checks:** a delivered order can be bought again in one step at today's price, and the button shows only where it can work.
+
+1. TC1's "طلباتي". Expected: **"اشترِ مجدداً"** on O1 only (delivered, A on sale again); none on O2 (refunded), O3 (B archived), O5 and O6 (not delivered).
+2. Press it on O1. Expected: `/games/system-test-7?pack=<60 UC>&repeat=<O1 id>` opens on **the slide step**: `60 UC`, "المنطقة" **آسيا**, "معرّف اللاعب" `5123456789`, quantity 1, **today's** price $1.10, "رصيدك بعد الشراء: $22.38". **Do not slide**; "رجوع": the fields stay filled.
+3. Open O1's own page. Expected: "اشترِ مجدداً" there too, opening the same slide step. **Do not slide.**
+
+Result:
+
+### 12.7 Refunds keep the saved ID usable
+
+**What this checks:** an order no route could fulfil returns its money and does not mark the customer's ID as refused: only a supplier's refusal of the ID does (SP6).
+
+1. In the panel open O5: "يدوي بانتظارك", "تجريبي", one manual attempt, the fields "المنطقة" and "معرّف اللاعب". Press **"تأكّدت: فشل"**, write a reason ("اختبار الميزة 12: إلغاء طلب تجريبي"), re-authenticate, "تأكيد الفشل". Expected: "مُسترد", "فشلت كل المسارات", $1.10 refunded. Do the same on **O6** within the same re-authentication.
+2. TC1. Expected: both orders "مُسترد" with "لا يتوفّر مورد لهذه الباقة الآن"; their notifications and emails "أُعيد $1.10 إلى رصيدك عن طلبك 60 UC (O5): لا يتوفّر مورد لهذه الباقة الآن." and the same for O6; wallet −$1.10 and +$1.10 for each; balance **$25.68**.
+3. On A `60 UC` the chip "حسابي" shows **no** warning, and a tap still opens the slide step at once. **Do not slide**; "رجوع".
+
+Result:
+
+### 12.8 A game field tightened: incomplete chip and repeat
+
+**What this checks:** when a game's fields change, a saved ID or an old order never sends values the game no longer accepts; the customer is told and completes them (SP7, OT2).
+
+1. In the panel, on A's field "معرّف اللاعب", set the digits from **11** to 15 (the saved `5123456789` has 10) and save. Expected: saved at once, with its audit entry.
+2. TC1 (reload A, allow up to a minute): select `60 UC` and tap "حسابي". Expected: **no** jump; "آسيا" and `5123456789` filled, the field error "أرقام فقط، من 11 إلى 15 خانة" and **"تغيّرت بيانات اللعبة. أكمل الحقول الناقصة ثم تابع."** "معرّفاتي" still lists the row.
+3. "اشترِ مجدداً" on O1. Expected: the buy box on the fields (no slide step) with the same field error and **"تغيّرت بيانات اللعبة منذ طلبك السابق. أكمل الحقول ثم تابع."**
+4. Set the digits back to **5**–15 and save. Expected: after a reload the chip opens the slide step at once again. **Do not slide**; "رجوع".
+
+Result:
+
+### 12.9 The checked name on a real game (your account, R5, no money)
+
+**What this checks:** an ID saved on a game with a real player check keeps the in-game name the check returned, and saving works with a reservation, which moves no money.
+
+1. Sign in to the store with **your own account** ($3.52). Open PUBG Mobile and select **"325 شدة"**. Expected: $4.82 ≈ 675 ل.س, "رصيدك $3.52، ينقصك $1.30" with "احجز الطلب واشحن رصيدك" and "اشحن رصيدك"; no chips; the unticked "احفظ هذا المعرّف".
+2. Type **your own** player ID (O4's) and leave the field. Expected: "نتحقق من المعرّف…", then **"الاسم في اللعبة: <your name>"**, with "المنطقة: <region>" when FazerCards returns one; no warning and no "أنا متأكد من المعرّف" (a `valid` answer needs no confirmation).
+3. Tick "احفظ هذا المعرّف" with **"حسابي"** and press "احجز الطلب واشحن رصيدك". Expected: the confirmation with your ID large, "الاسم في اللعبة" (and "المنطقة" if any), "لن يُخصم شيء الآن…" and "اسحب لحجز الطلب". Slide **this reservation slider only**. Expected: the order page "بانتظار رصيدك"; note it as **R5**; balance still **$3.52**.
+4. **At once** press "إلغاء الطلب" → "إلغاء الطلب المحجوز؟" → "إلغاء الطلب". Expected: "ملغى", "ألغيته أنت", no notification, no wallet entry.
+5. "معرّفاتي". Expected: a group "ببجي موبايل" with its cover; "حسابي", `••••` and your ID's last four, **your in-game name**, "آخر استخدام" now. The region beside the name is S19 PC9's expectation; its absence is F12-2.
+6. Claude confirms read-only: R5 `cancelled` (`customer`) with `player_check = valid` and no journal; your saved row has the name and `name_checked_at`; at most one new `validate_player` call to FazerCards (none if the answer came from the 24-hour cache).
+
+Result:
+
+### 12.10 One tap, "اشحن" and repeat on the real pack, stopped at the slide
+
+**What this checks:** on a real pack the one-tap path shows the customer exactly whose account the top-up goes to, without a new check, and never pays by itself.
+
+**Do not slide in this case.** Each step ends with "رجوع".
+
+1. Your account, PUBG Mobile "60 شدة": tap **"حسابي"** (the chip reads `••••` and your last four, then your name). Expected: the slide step at once with "المعرّف المحفوظ" حسابي, "معرّف اللاعب" your ID, **"آخر اسم تحققنا منه"** your name, $0.98 ≈ 138 ل.س, "رصيدك بعد الشراء: $2.54", "اسحب للدفع". Optional Network check: no request to `/api/player-checks`. "رجوع".
+2. "325 شدة" and tap "حسابي". Expected: the ID filled but **no** jump: the shortfall "ينقصك $1.30" stays, with its two buttons. Press neither.
+3. "معرّفاتي" → "اشحن" on "حسابي", then "60 شدة". Expected: the chip pressed, the ID filled, no save box; "متابعة" opens the slide step with "آخر اسم تحققنا منه". "رجوع".
+4. "طلباتي" → **"اشترِ مجدداً"** on O4. Expected: the slide step with "60 شدة", your ID, quantity 1, $0.98 (today's price), "رصيدك بعد الشراء: $2.54". "رجوع". Your balance is still **$3.52**, and "طلباتي" holds O4 and the cancelled R5 only (no "اشترِ مجدداً" on R5).
+
+Result:
+
+### 12.11 Rename
+
+**What this checks:** the customer names their saved IDs, and a wrong name is refused on the page.
+
+1. TC1's "معرّفاتي" → "إعادة تسمية" on "حسابي". Expected: an inline field "اسم المعرّف" with "حفظ" and "إلغاء". Clear it and press "حفظ": "اكتب اسمًا من 1 إلى 30 حرفًا." and nothing saved; "إلغاء" keeps "حسابي".
+2. Rename to **"أخي"** and "حفظ". Expected: the row reads "أخي" at once and after a reload; on A `60 UC` the chip reads "أخي". "آخر استخدام" does not change.
+3. Press "حذف" on "أخي". Expected: **"حذف «أخي»؟"** with "يُحذف المعرّف من قائمتك فقط، وتبقى طلباتك السابقة كما هي."; press **"إبقاء"**: the row stays (it is deleted in 12.15).
+
+Result:
+
+### 12.12 Only the customer sees their saved IDs
+
+**What this checks:** saved IDs are private to their customer, read and changed only through the customer's own session.
+
+1. As TC3 open "معرّفاتي". Expected: the empty state, nothing of TC1's or yours. On A `60 UC` TC3 sees no chips.
+2. Claude, in TC3's tab (the id of TC1's row read from TC1's own `GET /api/saved-players` first): `GET /api/saved-players` answers `{ "items": [] }`; `PATCH /api/saved-players/<TC1's row>` with `{ "label": "تجربة" }` answers **`404 NOT_FOUND`**; `DELETE` on it answers **`404 NOT_FOUND`**. TC1's row still reads "أخي". Signed out, `GET /api/saved-players` answers `401`.
+
+Result:
+
+### 12.13 The audit log and the books
+
+**What this checks:** every money step of this feature is recorded once, saving an ID moves no money, and the customers' own preferences stay out of the audit log by design.
+
+1. Audit log for this sitting. Expected order entries: "شراء طلب" ×2 (O5, O6 by TC1); "حجز طلب" ×1 and "إلغاء طلب محجوز" ×1 (R5, by your account); "حسم محاولة تنفيذ" ×2 and "استرداد طلب" ×2 (O5, O6). Catalog: the category restore, A's restore, A's activation, the field change and its reversal, then 12.15's pause and archives. **No** entry for saving, renaming or deleting an ID (S10: a customer's own preference, not a money or admin action).
+2. Wallets: TC1 **$25.68**, your account **$3.52**, TC2 and TC3 $0.00, each the sum of its timeline.
+3. Claude confirms with a read-only query after the run: orders **10 + 3 = 13** (O5 and O6 refunded, R5 cancelled); journals **31 + 4 = 35** (two purchases, two refunds), postings **74 + 8 = 82**; 0 checkouts; `place_order` still **3**; saved IDs **2** before 12.15 (TC1's "أخي" with no name, yours with the name), **0** after. These counts are expectations, not results.
+
+Result:
+
+### 12.14 Screens quality on desktop and phone
+
+**What this checks:** the saved-ID and repeat screens stay clear in Arabic RTL on a phone and a PC.
+
+1. At about 360 px and a desktop width, dark and light: the buy box with the chips ("معرّفاتك المحفوظة", a pressed chip, "معرّف جديد"), the save box with its label and error, the incomplete notice of 12.8, the slide step opened from a chip and from "اشترِ مجدداً", "معرّفاتي" (rows, the inline rename, the delete dialog, the empty state) and "اشترِ مجدداً" on a "طلباتي" card. Expected: RTL, Latin digits, masked values and IDs LTR, labels and names never cut or overlapping, touch targets of at least 44 px, no horizontal scroll.
+2. Screenshots of the chips, the slide step from a chip and "معرّفاتي", at phone and desktop widths, with TC1's test ID; no real player ID or in-game name in a screenshot committed to the repository.
+
+Result:
+
+### 12.15 Cleanup
+
+**What this checks:** the test leaves the real catalog unchanged, the fixtures archived and no saved ID behind, and a saved ID of a game off sale stays listed but cannot be used.
+
+1. Pause A. TC1's "معرّفاتي" (after a refresh). Expected: the group "لعبة اختبار 7" with **"غير متوفرة حاليًا"** and "اشحن" disabled (edge case 11).
+2. Delete TC1's "أخي" ("حذف" → "حذف"): the empty state again. Delete your account's "حسابي" the same way (or keep it and say so; the production reset wipes it).
+3. Archive A, then "اختبار النظام". Never touch B, C or the archived duplicate `660 UC`.
+4. Store after a refresh: the six real categories and 57 games (or the independently recorded real change), no `system-test` game on home, in search or in the sitemap; PUBG Mobile "60 شدة" $0.98 and "325 شدة" $4.82 (apart from sync changes, recorded, not undone).
+5. Claude confirms with a read-only query: A and the category archived and paused, 0 saved IDs (or 1 if you kept yours), the counts of 12.13 and the wallets.
+
+Result:
+
+### Feature 12 sign-off
+
+| Item | Value |
+|---|---|
+| Cases passed | — |
+| Findings | F12-1 and F12-2 found by source inspection while writing the steps; open until 12.4, 12.9 and 12.10 confirm them |
+| Checked read-only while writing (2026-10-20) | Production SQL at 16:03:27 and 16:04:17 Damascus (`vertex_digital`, `REPEATABLE READ READ ONLY`, `transaction_read_only = on`, `ROLLBACK`; snapshots `1622765:1622765:` and `1622822:1622822:`), deployed `70d72b1`; public PUBG Mobile read at about 16:06. 0 saved IDs, share links and checkouts; 10 orders, 31 journals, 74 postings; TC1 $25.68, TC2 and TC3 $0.00, your account $3.52; PUBG Mobile and Free Fire checked by FazerCards (trial active until 2026-10-25); PUBG `player_id` digits 8–12; "60 شدة" $0.98, "325 شدة" $4.82; A archived and paused with its manual routes. No production change, supplier call or customer identifier read out; the manual run, its results and the post-run counts remain unconfirmed |
+| Accepted by the owner on | — |
+| PR | — |
