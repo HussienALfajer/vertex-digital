@@ -11,6 +11,7 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 
 | Question | Answer | Date |
 |---|---|---|
+| Merchant tools (S21) | Own selling prices as a markup plus per-product SYP or USD prices; volume levels by calendar month with immediate upgrade and recomputation on the 1st, none seeded, an assigned list wins; alerts for followed products batched hourly (center and push, optional daily email) and an immediate low-balance alert; statements on demand (print and Excel) with an email on the 1st; bulk orders of 50 lines paid at once with live checks under a merchant quota of 100 an hour; up to 50 codes per order for merchants with print, copy and Excel logged; branded receipts with shop name, optional WhatsApp and logo, and the selling price; a verification QR on every receipt, never hidden, the shop first on merchant orders; documents through browser print and server PNG; the last 20 IDs per game and 50/300 saved IDs for merchants (S21, ADR 0036) | 2026-10-21 |
 | Merchants, tiers and price lists (moved from Phase 4) | Started now, before the pilot opens; Phase M in `v1-scope.md` (F28–F42) | 2026-10-20 |
 | Merchant approval and form | Approval only by the admin in the panel; the form in F28 | 2026-10-20 |
 | Default wholesale margin | 5% | 2026-10-20 |
