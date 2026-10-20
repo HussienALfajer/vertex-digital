@@ -99,10 +99,14 @@ test.describe('wallet', () => {
     await expect(rows.nth(1)).toContainText(`${ar.wallet.balanceAfter} $275.00`);
 
     api.on('GET /api/wallet/entries', 200, { items: [FIRST_ENTRY], nextCursor: null });
+    // Counted, not the last request: the header's balance chip may read `/api/wallet` meanwhile.
+    const pages = () =>
+      api.requests.filter((request) => request.key === 'GET /api/wallet/entries').length;
+    const before = pages();
     await page.getByRole('button', { name: ar.wallet.loadMore }).click();
     await expect(rows).toHaveCount(3);
     await expect(rows.nth(2)).toContainText(ar.wallet.categories.test_funds);
-    expect(api.requests.at(-1)?.key).toBe('GET /api/wallet/entries');
+    expect(pages()).toBe(before + 1);
     await expect(page.getByRole('button', { name: ar.wallet.loadMore })).toHaveCount(0);
   });
 
