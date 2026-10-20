@@ -40,4 +40,4 @@ Spec `docs/specs/S20-merchant-accounts-and-price-lists.md`, ADR 0035. Three PRs 
 - [x] Owner acceptance (2026-10-21), PR with auto-merge; `docs/ROADMAP.md` S20 done
 
 ## Follow-up after the Phase M production deploy (own small PR)
-- [ ] Contract step for PR 1's defaults (moved out of PR 3, owner 2026-10-21): drop the retail `DEFAULT` of `margin_rules`, `product_prices` and `orders.price_list_id` once S20 runs in production, since the release before S20 still inserts without `price_list_id` while the migrations run
+- [x] Contract step for PR 1's defaults (moved out of PR 3, owner 2026-10-21): drop the retail `DEFAULT` of `margin_rules`, `product_prices` and `orders.price_list_id` once S20 runs in production, since the release before S20 still inserts without `price_list_id` while the migrations run (migration 0082, branch `chore/s20-drop-retail-defaults`)

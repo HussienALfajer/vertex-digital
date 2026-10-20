@@ -98,9 +98,16 @@ async function product() {
     [id, game, `باقة ${unique()}`],
   );
   await pool.query(
-    `insert into margin_rules (id, scope, target_id, percent_bp, fixed_usd_units,
-       min_margin_usd_units) values ($1, 'product', $2, $3, $4, $5)`,
-    [newId(), id, rule.percentBp, rule.fixedUsdUnits, rule.minMarginUsdUnits],
+    `insert into margin_rules (id, price_list_id, scope, target_id, percent_bp, fixed_usd_units,
+       min_margin_usd_units) values ($1, $2, 'product', $3, $4, $5, $6)`,
+    [
+      newId(),
+      ROOT_PRICE_LIST_IDS.retail,
+      id,
+      rule.percentBp,
+      rule.fixedUsdUnits,
+      rule.minMarginUsdUnits,
+    ],
   );
   return { id, game };
 }

@@ -3,7 +3,6 @@ import {
   PRICE_CHANGE_CAUSES,
   PRICE_REVIEW_STATUSES,
   PRICE_SOURCES,
-  ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
 import { isNull, sql } from 'drizzle-orm';
 import {
@@ -36,10 +35,8 @@ export const marginRules = pgTable(
   'margin_rules',
   {
     id: id(),
-    /** S20: the retail default keeps the release before it working; the code always names one. */
     priceListId: uuid('price_list_id')
       .notNull()
-      .default(ROOT_PRICE_LIST_IDS.retail)
       .references(() => priceLists.id),
     scope: marginScopeEnum('scope').notNull(),
     targetId: uuid('target_id'),
@@ -168,10 +165,8 @@ export const productPrices = pgTable(
     productId: uuid('product_id')
       .notNull()
       .references(() => catalogProducts.id),
-    /** S20: the retail default keeps the release before it working; the code always names one. */
     priceListId: uuid('price_list_id')
       .notNull()
-      .default(ROOT_PRICE_LIST_IDS.retail)
       .references(() => priceLists.id),
     source: priceSourceEnum('source').notNull().default('rule'),
     fixedPriceId: uuid('fixed_price_id').references(() => priceListFixedPrices.id),

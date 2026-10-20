@@ -1,4 +1,4 @@
-import { SUPPLIER_POLICY_DEFAULTS } from '@vertex-digital/contracts';
+import { ROOT_PRICE_LIST_IDS, SUPPLIER_POLICY_DEFAULTS } from '@vertex-digital/contracts';
 import type pg from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDatabase } from './client.js';
@@ -296,8 +296,8 @@ describe('sync runs', () => {
 
 describe('stored prices and reviews', () => {
   const price = `insert into product_prices (id, product_id, price_usd_units, cost_usd_units,
-    route_id, rule_id, percent_bp, fixed_usd_units, min_margin_usd_units, cause)
-    values ($1, $2, $3, $4, $5, $6, 1000, 0, 100000, 'route_change')`;
+    route_id, rule_id, percent_bp, fixed_usd_units, min_margin_usd_units, cause, price_list_id)
+    values ($1, $2, $3, $4, $5, $6, 1000, 0, 100000, 'route_change', '${ROOT_PRICE_LIST_IDS.retail}')`;
 
   it('keep prices in whole cents and above the cost (rule P8)', () =>
     rolledBack(async (client) => {

@@ -575,6 +575,13 @@
       "when": 1792531719917,
       "tag": "0081_s20_merchant_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1792537765457,
+      "tag": "0082_sweet_white_queen",
+      "breakpoints": true
     }
   ]
 }

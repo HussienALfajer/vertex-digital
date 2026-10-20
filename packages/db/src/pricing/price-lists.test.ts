@@ -102,7 +102,8 @@ describe('seeds and backfill', () => {
       rules: 0,
       prices: 0,
       orders: 0,
-      order_default: `'${retail}'::uuid`,
+      // 0082 dropped the retail default once S20 ran in production: every insert names its list.
+      order_default: null,
       account_default: `'customer'::account_type`,
     });
   });

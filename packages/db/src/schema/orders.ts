@@ -14,7 +14,6 @@ import {
   PLAYER_CHECK_STATES,
   RECEIPT_PLAYER_DISPLAYS,
   REFUND_REASONS,
-  ROOT_PRICE_LIST_IDS,
   type RouteCandidate,
   SHARE_KINDS,
   SHARE_REVOKERS,
@@ -121,7 +120,6 @@ export const orders = pgTable(
     /** S20 PO2: the list charged (walk-in and owner-funded orders: retail, PO4). */
     priceListId: uuid('price_list_id')
       .notNull()
-      .default(ROOT_PRICE_LIST_IDS.retail)
       .references(() => priceLists.id),
     /** Input field key → value, trimmed (rule O5). */
     fields: jsonb('fields').$type<Record<string, string>>().notNull(),

@@ -280,8 +280,8 @@ async function product(
   await tx.execute(sql`insert into catalog_products (id, game_id, kind, name_ar, max_quantity,
     sort_order) values (${id}, ${game}, ${code ? 'code' : 'direct'}, ${`باقة ${unique()}`},
     ${code ? 10 : 1}, 1)`);
-  await tx.execute(sql`insert into margin_rules (id, scope, target_id, percent_bp, fixed_usd_units,
-    min_margin_usd_units) values (${newId()}, 'product', ${id}, ${RULE.percentBp},
+  await tx.execute(sql`insert into margin_rules (id, price_list_id, scope, target_id, percent_bp,
+    fixed_usd_units, min_margin_usd_units) values (${newId()}, ${ROOT_PRICE_LIST_IDS.retail}, 'product', ${id}, ${RULE.percentBp},
     ${RULE.fixedUsdUnits}, ${RULE.minMarginUsdUnits})`);
   let fakeRoute: string | null = null;
   if (options.fake !== null) {
