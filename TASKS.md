@@ -23,7 +23,8 @@ Spec `docs/specs/S20-merchant-accounts-and-price-lists.md`, ADR 0035. Three PRs 
 - [x] Admin: `/pricing/lists`, `/pricing/lists/$id` (rules with the parent's shown, game and product rules added by a picker, fixed prices with the price they give at today's cost, assigned accounts and assignment by search), `/pricing/matrix` (lists chosen, warnings-only, a cell opens its fixed price), the profile's pricing card with "تغيير قائمة الأسعار"; navigation, i18n, states
 - [x] Store: game page overlay (hint before paint, skeleton, label, retry, no buy until read), cart lines checked against private prices, receipt option hidden for a private price, search without prices for a private-price account
 - [x] E2E flows and RTL screenshots (admin `price-lists.spec.ts` light and dark; store `private-prices.spec.ts` phone and desktop, dark and light)
-- [ ] Wiring checklist, checks, reviewer, acceptance, PR with auto-merge
+- [x] Wiring checklist, checks (typecheck, test, build, lint, drift, full E2E; store budgets kept by moving the price kinds to `contracts/price-kinds.ts`), reviewer (4 blocking findings fixed: no rule on a list not priced yet; a list archive locks its accounts first; unverified accounts keep retail; a signed-in account waits for its own prices in the game page, cart and search)
+- [ ] Owner acceptance, PR with auto-merge
 
 ## PR 3 — merchants: server and screens (branch `feat/s20-merchants`)
 - [ ] Admin order form (S16) reads the chosen customer's list prices (spec API note; found in PR 2's review: today an on-behalf order for an assigned account shows retail and the server answers `PRICE_CHANGED` with the right price)
