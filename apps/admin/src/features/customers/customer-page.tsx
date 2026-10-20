@@ -36,7 +36,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { errorMessage } from '../../lib/errors';
 import { formatDate, formatDateTime } from '../../lib/format';
-import { LimitsDialog, StateChangeDialog } from './customer-dialogs';
+import { LimitsDialog, PriceListDialog, StateChangeDialog } from './customer-dialogs';
 import { CHIP_TONES, type CustomerChip, statusChips } from './customer-labels';
 import { NotesSection } from './customer-notes';
 import { CUSTOMER_TABS, type CustomerTab } from './customer-search';
@@ -51,7 +51,7 @@ import {
 } from './customer-sections';
 import { type CustomerStateAction, customerQuery } from './customers.queries';
 
-type Dialogs = CustomerStateAction | 'limits';
+type Dialogs = CustomerStateAction | 'limits' | 'priceList';
 
 /**
  * One customer (S12 CS3–CS5): the header with the chips, the balance and the actions (CF, LM,
@@ -144,6 +144,7 @@ export function CustomerPage({
         <SummarySection
           customer={data}
           onEditLimits={archived ? undefined : () => setDialog('limits')}
+          onChangePriceList={archived ? undefined : () => setDialog('priceList')}
         />
       )}
       {tab === 'wallet' && <WalletSection customer={data} />}
@@ -155,7 +156,10 @@ export function CustomerPage({
       {tab === 'history' && <HistorySection customerId={data.id} />}
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
         {dialog === 'limits' && <LimitsDialog customer={data} onDone={() => setDialog(null)} />}
-        {dialog !== null && dialog !== 'limits' && (
+        {dialog === 'priceList' && (
+          <PriceListDialog customer={data} onDone={() => setDialog(null)} />
+        )}
+        {dialog !== null && dialog !== 'limits' && dialog !== 'priceList' && (
           <StateChangeDialog customer={data} action={dialog} onDone={() => setDialog(null)} />
         )}
       </Dialog>

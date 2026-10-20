@@ -25,6 +25,7 @@ import {
   orderNumberSchema,
   orderTimeline,
   type PublicShare,
+  ROOT_PRICE_LIST_IDS,
   type RouteCandidate,
   type SavedPlayer,
   type ShareLink,
@@ -383,6 +384,7 @@ export async function customerOrder(
     isGift: order.isGift,
     gift: giftOf(order),
     shareLinks,
+    privatePrice: order.priceListId !== ROOT_PRICE_LIST_IDS.retail,
     repeatable: repeatable(order.status, row.shown),
     createdAt: order.createdAt.toISOString(),
   };
@@ -1017,9 +1019,13 @@ export async function publicShare(
       stage: stage.stage,
       paidAt: order.paidAt.toISOString(),
       finishedAt: iso(order.finishedAt),
-      // S16 AP11: a gift or a compensation from the store never shows its price.
+      // S16 AP11: a gift or a compensation from the store never shows its price; S20: nor an
+      // order charged on a list other than retail.
       price:
-        link.kind === 'receipt' && link.showPrice && !placedByStore(order).hidesPrice
+        link.kind === 'receipt' &&
+        link.showPrice &&
+        !placedByStore(order).hidesPrice &&
+        order.priceListId === ROOT_PRICE_LIST_IDS.retail
           ? { totalUsdUnits: order.totalUsdUnits, refundedUsdUnits: order.refundedUsdUnits }
           : null,
       fields: Object.entries(order.fields)

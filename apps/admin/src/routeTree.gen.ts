@@ -37,6 +37,7 @@ import { Route as AppOrdersLiveRouteImport } from './routes/_app/orders.live'
 import { Route as AppOrdersNewRouteImport } from './routes/_app/orders.new'
 import { Route as AppOrdersPolicyRouteImport } from './routes/_app/orders.policy'
 import { Route as AppPricingIndexRouteImport } from './routes/_app/pricing.index'
+import { Route as AppPricingMatrixRouteImport } from './routes/_app/pricing.matrix'
 import { Route as AppPricingReviewsRouteImport } from './routes/_app/pricing.reviews'
 import { Route as AppReconciliationIndexRouteImport } from './routes/_app/reconciliation.index'
 import { Route as AppSettingsDepositsRouteImport } from './routes/_app/settings.deposits'
@@ -55,6 +56,8 @@ import { Route as AppCatalogGamesIdRouteImport } from './routes/_app/catalog.gam
 import { Route as AppCatalogGamesNewRouteImport } from './routes/_app/catalog.games.new'
 import { Route as AppContentPagesIndexRouteImport } from './routes/_app/content.pages.index'
 import { Route as AppContentPagesPageRouteImport } from './routes/_app/content.pages.$page'
+import { Route as AppPricingListsIndexRouteImport } from './routes/_app/pricing.lists.index'
+import { Route as AppPricingListsIdRouteImport } from './routes/_app/pricing.lists.$id'
 import { Route as AppReconciliationRunsIdRouteImport } from './routes/_app/reconciliation.runs.$id'
 import { Route as AppSuppliersCodeCategoriesCategoryIdRouteImport } from './routes/_app/suppliers.$code_.categories.$categoryId'
 
@@ -197,6 +200,11 @@ const AppPricingIndexRoute = AppPricingIndexRouteImport.update({
   path: '/pricing/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPricingMatrixRoute = AppPricingMatrixRouteImport.update({
+  id: '/pricing/matrix',
+  path: '/pricing/matrix',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPricingReviewsRoute = AppPricingReviewsRouteImport.update({
   id: '/pricing/reviews',
   path: '/pricing/reviews',
@@ -287,6 +295,16 @@ const AppContentPagesPageRoute = AppContentPagesPageRouteImport.update({
   path: '/pages/$page',
   getParentRoute: () => AppContentRoute,
 } as any)
+const AppPricingListsIndexRoute = AppPricingListsIndexRouteImport.update({
+  id: '/pricing/lists/',
+  path: '/pricing/lists/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPricingListsIdRoute = AppPricingListsIdRouteImport.update({
+  id: '/pricing/lists/$id',
+  path: '/pricing/lists/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppReconciliationRunsIdRoute = AppReconciliationRunsIdRouteImport.update({
   id: '/reconciliation/runs/$id',
   path: '/reconciliation/runs/$id',
@@ -321,6 +339,7 @@ export interface FileRoutesByFullPath {
   '/orders/live': typeof AppOrdersLiveRoute
   '/orders/new': typeof AppOrdersNewRoute
   '/orders/policy': typeof AppOrdersPolicyRoute
+  '/pricing/matrix': typeof AppPricingMatrixRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
   '/settings/support': typeof AppSettingsSupportRoute
@@ -344,8 +363,10 @@ export interface FileRoutesByFullPath {
   '/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/catalog/games/new': typeof AppCatalogGamesNewRoute
   '/content/pages/$page': typeof AppContentPagesPageRoute
+  '/pricing/lists/$id': typeof AppPricingListsIdRoute
   '/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/content/pages/': typeof AppContentPagesIndexRoute
+  '/pricing/lists/': typeof AppPricingListsIndexRoute
   '/suppliers/$code/categories/$categoryId': typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
 export interface FileRoutesByTo {
@@ -369,6 +390,7 @@ export interface FileRoutesByTo {
   '/orders/live': typeof AppOrdersLiveRoute
   '/orders/new': typeof AppOrdersNewRoute
   '/orders/policy': typeof AppOrdersPolicyRoute
+  '/pricing/matrix': typeof AppPricingMatrixRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
   '/settings/support': typeof AppSettingsSupportRoute
@@ -392,8 +414,10 @@ export interface FileRoutesByTo {
   '/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/catalog/games/new': typeof AppCatalogGamesNewRoute
   '/content/pages/$page': typeof AppContentPagesPageRoute
+  '/pricing/lists/$id': typeof AppPricingListsIdRoute
   '/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/content/pages': typeof AppContentPagesIndexRoute
+  '/pricing/lists': typeof AppPricingListsIndexRoute
   '/suppliers/$code/categories/$categoryId': typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
 export interface FileRoutesById {
@@ -420,6 +444,7 @@ export interface FileRoutesById {
   '/_app/orders/live': typeof AppOrdersLiveRoute
   '/_app/orders/new': typeof AppOrdersNewRoute
   '/_app/orders/policy': typeof AppOrdersPolicyRoute
+  '/_app/pricing/matrix': typeof AppPricingMatrixRoute
   '/_app/pricing/reviews': typeof AppPricingReviewsRoute
   '/_app/settings/deposits': typeof AppSettingsDepositsRoute
   '/_app/settings/support': typeof AppSettingsSupportRoute
@@ -443,8 +468,10 @@ export interface FileRoutesById {
   '/_app/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/_app/catalog/games/new': typeof AppCatalogGamesNewRoute
   '/_app/content/pages/$page': typeof AppContentPagesPageRoute
+  '/_app/pricing/lists/$id': typeof AppPricingListsIdRoute
   '/_app/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/_app/content/pages/': typeof AppContentPagesIndexRoute
+  '/_app/pricing/lists/': typeof AppPricingListsIndexRoute
   '/_app/suppliers/$code_/categories/$categoryId': typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
 export interface FileRouteTypes {
@@ -471,6 +498,7 @@ export interface FileRouteTypes {
     | '/orders/live'
     | '/orders/new'
     | '/orders/policy'
+    | '/pricing/matrix'
     | '/pricing/reviews'
     | '/settings/deposits'
     | '/settings/support'
@@ -494,8 +522,10 @@ export interface FileRouteTypes {
     | '/catalog/games/$id'
     | '/catalog/games/new'
     | '/content/pages/$page'
+    | '/pricing/lists/$id'
     | '/reconciliation/runs/$id'
     | '/content/pages/'
+    | '/pricing/lists/'
     | '/suppliers/$code/categories/$categoryId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -519,6 +549,7 @@ export interface FileRouteTypes {
     | '/orders/live'
     | '/orders/new'
     | '/orders/policy'
+    | '/pricing/matrix'
     | '/pricing/reviews'
     | '/settings/deposits'
     | '/settings/support'
@@ -542,8 +573,10 @@ export interface FileRouteTypes {
     | '/catalog/games/$id'
     | '/catalog/games/new'
     | '/content/pages/$page'
+    | '/pricing/lists/$id'
     | '/reconciliation/runs/$id'
     | '/content/pages'
+    | '/pricing/lists'
     | '/suppliers/$code/categories/$categoryId'
   id:
     | '__root__'
@@ -569,6 +602,7 @@ export interface FileRouteTypes {
     | '/_app/orders/live'
     | '/_app/orders/new'
     | '/_app/orders/policy'
+    | '/_app/pricing/matrix'
     | '/_app/pricing/reviews'
     | '/_app/settings/deposits'
     | '/_app/settings/support'
@@ -592,8 +626,10 @@ export interface FileRouteTypes {
     | '/_app/catalog/games/$id'
     | '/_app/catalog/games/new'
     | '/_app/content/pages/$page'
+    | '/_app/pricing/lists/$id'
     | '/_app/reconciliation/runs/$id'
     | '/_app/content/pages/'
+    | '/_app/pricing/lists/'
     | '/_app/suppliers/$code_/categories/$categoryId'
   fileRoutesById: FileRoutesById
 }
@@ -802,6 +838,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPricingIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/pricing/matrix': {
+      id: '/_app/pricing/matrix'
+      path: '/pricing/matrix'
+      fullPath: '/pricing/matrix'
+      preLoaderRoute: typeof AppPricingMatrixRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/pricing/reviews': {
       id: '/_app/pricing/reviews'
       path: '/pricing/reviews'
@@ -928,6 +971,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppContentPagesPageRouteImport
       parentRoute: typeof AppContentRoute
     }
+    '/_app/pricing/lists/': {
+      id: '/_app/pricing/lists/'
+      path: '/pricing/lists'
+      fullPath: '/pricing/lists/'
+      preLoaderRoute: typeof AppPricingListsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/pricing/lists/$id': {
+      id: '/_app/pricing/lists/$id'
+      path: '/pricing/lists/$id'
+      fullPath: '/pricing/lists/$id'
+      preLoaderRoute: typeof AppPricingListsIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/reconciliation/runs/$id': {
       id: '/_app/reconciliation/runs/$id'
       path: '/reconciliation/runs/$id'
@@ -984,6 +1041,7 @@ interface AppRouteChildren {
   AppOrdersLiveRoute: typeof AppOrdersLiveRoute
   AppOrdersNewRoute: typeof AppOrdersNewRoute
   AppOrdersPolicyRoute: typeof AppOrdersPolicyRoute
+  AppPricingMatrixRoute: typeof AppPricingMatrixRoute
   AppPricingReviewsRoute: typeof AppPricingReviewsRoute
   AppSettingsDepositsRoute: typeof AppSettingsDepositsRoute
   AppSettingsSupportRoute: typeof AppSettingsSupportRoute
@@ -1005,7 +1063,9 @@ interface AppRouteChildren {
   AppWalletsIndexRoute: typeof AppWalletsIndexRoute
   AppCatalogGamesIdRoute: typeof AppCatalogGamesIdRoute
   AppCatalogGamesNewRoute: typeof AppCatalogGamesNewRoute
+  AppPricingListsIdRoute: typeof AppPricingListsIdRoute
   AppReconciliationRunsIdRoute: typeof AppReconciliationRunsIdRoute
+  AppPricingListsIndexRoute: typeof AppPricingListsIndexRoute
   AppSuppliersCodeCategoriesCategoryIdRoute: typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
 
@@ -1024,6 +1084,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppOrdersLiveRoute: AppOrdersLiveRoute,
   AppOrdersNewRoute: AppOrdersNewRoute,
   AppOrdersPolicyRoute: AppOrdersPolicyRoute,
+  AppPricingMatrixRoute: AppPricingMatrixRoute,
   AppPricingReviewsRoute: AppPricingReviewsRoute,
   AppSettingsDepositsRoute: AppSettingsDepositsRoute,
   AppSettingsSupportRoute: AppSettingsSupportRoute,
@@ -1045,7 +1106,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppWalletsIndexRoute: AppWalletsIndexRoute,
   AppCatalogGamesIdRoute: AppCatalogGamesIdRoute,
   AppCatalogGamesNewRoute: AppCatalogGamesNewRoute,
+  AppPricingListsIdRoute: AppPricingListsIdRoute,
   AppReconciliationRunsIdRoute: AppReconciliationRunsIdRoute,
+  AppPricingListsIndexRoute: AppPricingListsIndexRoute,
   AppSuppliersCodeCategoriesCategoryIdRoute:
     AppSuppliersCodeCategoriesCategoryIdRoute,
 }

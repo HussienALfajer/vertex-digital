@@ -8,6 +8,7 @@ import {
 } from '@vertex-digital/contracts';
 import {
   acceptedVersionsNow,
+  accountPriceList,
   customerAccounts,
   customerSessions,
   customers,
@@ -494,7 +495,13 @@ export class AuthAccountService {
       .from(customers)
       .where(eq(customers.id, customerId));
     if (!customer) throw new CodedException(404, 'NOT_FOUND', 'No such customer');
-    return { ...customer, createdAt: customer.createdAt.toISOString() };
+    const pricing = await accountPriceList(this.db, customerId);
+    return {
+      ...customer,
+      createdAt: customer.createdAt.toISOString(),
+      // S20 AT4: the kind only, never the list.
+      priceKind: pricing?.priceKind ?? 'retail',
+    };
   }
 
   /** Rule C13: name and phone, audited with before and after of what changed. */

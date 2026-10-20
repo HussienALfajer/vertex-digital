@@ -17,7 +17,9 @@ import {
   customerStateChangeSchema,
   DEPOSIT_SETTINGS_DEFAULTS,
   NO_LIMIT_OVERRIDES,
+  ROOT_PRICE_LIST_IDS,
   type SupportSettings,
+  setCustomerPriceListSchema,
   supportSettingsSchema,
   type TicketCategory,
   type TicketMessage,
@@ -29,6 +31,7 @@ import {
 } from '@vertex-digital/contracts';
 import type { Answer } from './catalog-mock';
 import { ORDER_CUSTOMER_ID } from './orders-mock';
+import type { PriceListsMock } from './price-lists-mock';
 
 /*
  * The customers and support API of S12 as the panel sees it: five customers (two sharing a phone
@@ -332,6 +335,9 @@ export class CustomersMock {
   history: AuditEntry[] = [];
   private readonly ticketKeys = new Map<string, { body: string; ticketId: string }>();
 
+  /** S20: the accounts' lists, set by the price lists mock. */
+  priceLists: Pick<PriceListsMock, 'pricing' | 'assign'> | null = null;
+
   constructor(
     private readonly reauthenticationRequired: () => boolean,
     private readonly orders: () => AdminOrder[],
@@ -475,6 +481,12 @@ export class CustomersMock {
       established: row.established,
       statusChange: this.status(row) === 'active' ? null : row.statusChange,
       limits: customerLimits(DEPOSIT_SETTINGS_DEFAULTS, row.established, row.overrides),
+      pricing: this.priceLists?.pricing(row.id) ?? {
+        accountType: 'customer',
+        assignedListId: null,
+        effectiveList: { id: ROOT_PRICE_LIST_IDS.retail, kind: 'retail', name: 'التجزئة' },
+        priceKind: 'retail',
+      },
       pinnedNote: pinned && {
         id: pinned.id,
         body: pinned.body,
@@ -854,6 +866,20 @@ export class CustomersMock {
       this.record(actions[noteAction[2] as keyof typeof actions], 'customer_note', note.id, row.id);
       const { customerId: _owner, ...shown } = note;
       return ok(shown);
+    }
+
+    if (method === 'PUT' && rest === '/price-list') {
+      const refused = sensitive();
+      if (refused) return refused;
+      const parsed = setCustomerPriceListSchema.safeParse(body);
+      if (!parsed.success) return error(400, 'VALIDATION_FAILED');
+      if (this.status(row) === 'archived') {
+        return error(409, 'CUSTOMER_STATE_INVALID', { status: 'archived' });
+      }
+      const failed = this.priceLists?.assign(row.id, parsed.data.priceListId);
+      if (failed) return failed;
+      this.record('customer.price_list_changed', 'customer', row.id, row.id, parsed.data.reason);
+      return ok(this.profile(row));
     }
 
     if (method === 'PUT' && rest === '/limits') {

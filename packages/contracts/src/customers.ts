@@ -6,6 +6,7 @@ import { type DepositLimitSettings, referenceCodeSchema } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { amountUnitsSchema, isWholeCents, USD_CENT } from './money.js';
 import { orderNumberSchema } from './orders.js';
+import { accountTypeSchema, priceKindSchema, priceListKindSchema } from './pricing.js';
 import { ticketNumberSchema } from './support.js';
 
 /*
@@ -423,6 +424,14 @@ export const adminCustomerSchema = z
     /** The last freeze or archive while the customer is in that state, from the audit log. */
     statusChange: z.object({ reason: z.string().nullable(), at: z.iso.datetime() }).nullable(),
     limits: customerLimitsSchema,
+    /** S20 AT1: the account type and the list it pays, with where it comes from. */
+    pricing: z.object({
+      accountType: accountTypeSchema,
+      /** The assigned list; null is the type's default. */
+      assignedListId: z.uuid().nullable(),
+      effectiveList: z.object({ id: z.uuid(), kind: priceListKindSchema, name: z.string() }),
+      priceKind: priceKindSchema,
+    }),
     pinnedNote: customerNoteSchema.nullable(),
     balanceUnits: amountUnitsSchema,
     counts: z.object({
@@ -446,3 +455,10 @@ export const adminCustomerSchema = z
   .meta({ id: 'AdminCustomer' });
 
 export type AdminCustomer = z.infer<typeof adminCustomerSchema>;
+
+/** `PUT /api/admin/customers/:id/price-list` (S20 AT2): null returns to the type's default. */
+export const setCustomerPriceListSchema = z
+  .object({ priceListId: z.uuid().nullable(), reason: customerChangeReasonSchema })
+  .meta({ id: 'SetCustomerPriceList' });
+
+export type SetCustomerPriceList = z.infer<typeof setCustomerPriceListSchema>;

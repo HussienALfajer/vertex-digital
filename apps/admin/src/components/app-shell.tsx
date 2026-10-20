@@ -91,11 +91,13 @@ interface NavChild {
     | 'nav.supportSettings'
     | 'nav.pricingRules'
     | 'nav.priceReviews'
+    | 'nav.priceLists'
+    | 'nav.priceMatrix'
     | 'nav.rates'
     | 'nav.switches'
     | 'nav.telegram';
-  /** A sub-page with its own navigation item, where this one is not active. */
-  except?: string;
+  /** Sub-pages with their own navigation items, where this one is not active. */
+  except?: readonly string[];
 }
 
 /** Each feature adds its section here. One admin, full access: no permission checks (ADR 0016). */
@@ -106,7 +108,7 @@ const navItems: NavItem[] = [
     label: 'nav.orders',
     icon: ShoppingBagIcon,
     children: [
-      { to: '/orders', label: 'nav.allOrders', except: '/orders/live' },
+      { to: '/orders', label: 'nav.allOrders', except: ['/orders/live'] },
       { to: '/orders/live', label: 'nav.liveOrders' },
     ],
   },
@@ -115,7 +117,7 @@ const navItems: NavItem[] = [
     label: 'nav.deposits',
     icon: ArrowDownToLineIcon,
     children: [
-      { to: '/deposits', label: 'nav.depositRequests', except: '/deposits/transfers' },
+      { to: '/deposits', label: 'nav.depositRequests', except: ['/deposits/transfers'] },
       { to: '/deposits/transfers', label: 'nav.usdtTransfers' },
       { to: '/settings/deposits', label: 'nav.depositSettings' },
     ],
@@ -139,7 +141,13 @@ const navItems: NavItem[] = [
     label: 'nav.pricing',
     icon: PercentIcon,
     children: [
-      { to: '/pricing', label: 'nav.pricingRules', except: '/pricing/reviews' },
+      {
+        to: '/pricing',
+        label: 'nav.pricingRules',
+        except: ['/pricing/reviews', '/pricing/lists', '/pricing/matrix'],
+      },
+      { to: '/pricing/lists', label: 'nav.priceLists' },
+      { to: '/pricing/matrix', label: 'nav.priceMatrix' },
       { to: '/pricing/reviews', label: 'nav.priceReviews' },
       { to: '/rates', label: 'nav.rates' },
     ],
@@ -256,7 +264,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         to={child.to}
                         onClick={onNavigate}
                         activeOptions={{
-                          exact: child.except ? pathname.startsWith(child.except) : false,
+                          exact: child.except?.some((path) => pathname.startsWith(path)) ?? false,
                           includeSearch: false,
                         }}
                         className={cn(navLink, 'h-8 gap-3 ps-11 pe-3 text-sm')}

@@ -180,6 +180,7 @@ function order(orderId: string, number: string): Order {
     isGift: false,
     gift: null,
     shareLinks: [],
+    privatePrice: false,
     repeatable: false,
     createdAt: daysAgo(40),
   };

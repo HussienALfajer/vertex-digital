@@ -1,6 +1,7 @@
 import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
 import { z } from 'zod';
 import { COMMON_PASSWORDS } from './common-passwords.data.js';
+import { priceKindSchema } from './price-kinds.js';
 
 /*
  * Account forms (ADR 0007, S01), owned by the api `auth` (customers) and `admin` modules. Better
@@ -140,6 +141,8 @@ export const customerProfileSchema = z
     email: z.email(),
     phone: z.string(),
     createdAt: z.iso.datetime(),
+    /** S20 AT4: what the account's prices are called; never the list's name. */
+    priceKind: priceKindSchema,
   })
   .meta({ id: 'CustomerProfile' });
 

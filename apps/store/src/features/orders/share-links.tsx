@@ -259,14 +259,18 @@ export function ReceiptSheet({
   onChange: () => Promise<void>;
 }) {
   const link = order.shareLinks.find((item) => item.kind === 'receipt') ?? null;
-  const [showPrice, setShowPrice] = useState(link?.showPrice ?? true);
+  // S20: a price charged off retail is never shown on a receipt; the option is not offered.
+  const [showPrice, setShowPrice] = useState(!order.privatePrice && (link?.showPrice ?? true));
   const [playerDisplay, setPlayerDisplay] = useState<ReceiptPlayerDisplay>(
     link?.playerDisplay ?? 'masked',
   );
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   const priceId = useId();
-  const changed = !link || link.showPrice !== showPrice || link.playerDisplay !== playerDisplay;
+  const changed =
+    !link ||
+    (!order.privatePrice && link.showPrice !== showPrice) ||
+    link.playerDisplay !== playerDisplay;
 
   async function save() {
     setFailure(null);
@@ -281,10 +285,12 @@ export function ReceiptSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="mx-auto w-full max-w-2xl gap-4 bg-surface p-5 pb-8">
         <SheetTitle className="text-lg font-bold">{t('orders.receipt.title')}</SheetTitle>
-        <label htmlFor={priceId} className="flex min-h-11 items-center justify-between gap-3">
-          <span className="text-base">{t('orders.receipt.showPrice')}</span>
-          <Switch id={priceId} checked={showPrice} onCheckedChange={setShowPrice} />
-        </label>
+        {!order.privatePrice && (
+          <label htmlFor={priceId} className="flex min-h-11 items-center justify-between gap-3">
+            <span className="text-base">{t('orders.receipt.showPrice')}</span>
+            <Switch id={priceId} checked={showPrice} onCheckedChange={setShowPrice} />
+          </label>
+        )}
         {order.fields.some((field) => field.value) && (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-base">{t('orders.receipt.player')}</span>

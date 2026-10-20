@@ -13,11 +13,14 @@ import {
   type MarginScope,
   marginBasisPoints,
   missingForActivation,
+  type PricingPath,
   type Product,
   type ProductAvailability,
   type ProductKind,
   priceFromCost,
   productAvailability,
+  ROOT_PRICE_LIST_IDS,
+  resolveListEntry,
   resolveMarginRule,
   savings,
   searchTermsSchema,
@@ -75,6 +78,8 @@ export interface ProductPricing {
 
 type StoredRule = MarginRuleValues & {
   id: string;
+  /** S20: the list the rule belongs to. */
+  priceListId: string;
   scope: MarginScope;
   targetId: string | null;
   updatedAt: string;
@@ -112,17 +117,38 @@ export class CatalogMock {
   fields: Row<InputField>[] = [];
   products: Row<Product>[] = [];
   images = new Map<string, CatalogImage>();
+  /** S06's global rule, and S20's wholesale and cost rules (`seedRootListRules`). */
   rules: StoredRule[] = [
-    {
-      id: nextId(),
-      scope: 'global',
-      targetId: null,
-      percentBp: 1000,
-      fixedUsdUnits: 0,
-      minMarginUsdUnits: 100_000,
-      updatedAt: NOW,
-    },
-  ];
+    [ROOT_PRICE_LIST_IDS.retail, 1000, 100_000],
+    [ROOT_PRICE_LIST_IDS.wholesale, 500, 50_000],
+    [ROOT_PRICE_LIST_IDS.cost, 100, 10_000],
+  ].map(([priceListId, percentBp, minMarginUsdUnits]) => ({
+    id: nextId(),
+    priceListId: priceListId as string,
+    scope: 'global' as const,
+    targetId: null,
+    percentBp: percentBp as number,
+    fixedUsdUnits: 0,
+    minMarginUsdUnits: minMarginUsdUnits as number,
+    updatedAt: NOW,
+  }));
+
+  /** S20: a list's chain (LS3), from the price lists mock; a root list is its own chain. */
+  chainOf: (priceListId: string) => string[] = (priceListId) => [priceListId];
+
+  /** S20 LS4 with fixed prices aside: the rule that applies to a path on a list. */
+  ruleFor(priceListId: string, path: PricingPath): StoredRule {
+    return resolveListEntry(
+      this.chainOf(priceListId),
+      { rules: this.rules, fixedPrices: [] },
+      { ...path, productId: path.productId ?? '' },
+    ).rule;
+  }
+
+  /** The retail list's rules. */
+  private get retailRules() {
+    return this.rules.filter((rule) => rule.priceListId === ROOT_PRICE_LIST_IDS.retail);
+  }
 
   /**
    * S07: a product's stored price and what its availability reads (rules P2, P6), from the
@@ -258,11 +284,14 @@ export class CatalogMock {
 
   /** A product's own margin rule, created or replaced (S07 rule P4's margin adjustment). */
   setProductRule(productId: string, values: MarginRuleValues): void {
-    const row = this.rules.find((item) => item.scope === 'product' && item.targetId === productId);
+    const row = this.retailRules.find(
+      (item) => item.scope === 'product' && item.targetId === productId,
+    );
     if (row) Object.assign(row, values, { updatedAt: new Date().toISOString() });
     else {
       this.rules.push({
         id: nextId(),
+        priceListId: ROOT_PRICE_LIST_IDS.retail,
         scope: 'product',
         targetId: productId,
         ...values,
@@ -273,7 +302,7 @@ export class CatalogMock {
 
   /** The rule that governs a product (rule PR2). */
   ruleOf(productId: string): MarginRuleValues & { id: string } {
-    return resolveMarginRule(this.rules, this.target('product', productId)?.path ?? {});
+    return resolveMarginRule(this.retailRules, this.target('product', productId)?.path ?? {});
   }
 
   private product(row: Row<Product>): Product {
@@ -346,7 +375,7 @@ export class CatalogMock {
   }
 
   /** The pricing path of a target, or null when it is missing or archived. */
-  private target(scope: MarginScope, id: string | null) {
+  target(scope: MarginScope, id: string | null) {
     if (scope === 'global') return { path: {}, name: null, official: null, archived: false };
     if (scope === 'category') {
       const category = this.categories.find((item) => item.id === id);
@@ -387,7 +416,7 @@ export class CatalogMock {
     const governed = this.products.filter((product) => {
       if (product.archivedAt) return false;
       const path = this.target('product', product.id)?.path ?? {};
-      return resolveMarginRule(this.rules, path).id === row.id;
+      return this.ruleFor(row.priceListId, path).id === row.id;
     });
     return {
       ...row,
@@ -662,7 +691,11 @@ export class CatalogMock {
 
     // Pricing -------------------------------------------------------------------------------------
     if (key === 'GET /api/admin/pricing/rules') {
-      return { status: 200, json: this.rules.map((row) => this.rule(row)) };
+      const listId = url.searchParams.get('priceListId') ?? ROOT_PRICE_LIST_IDS.retail;
+      return {
+        status: 200,
+        json: this.rules.filter((row) => row.priceListId === listId).map((row) => this.rule(row)),
+      };
     }
     if (key === 'PUT /api/admin/pricing/rules') {
       if (this.reauthenticationRequired()) return error(403, 'REAUTHENTICATION_REQUIRED');
@@ -675,10 +708,21 @@ export class CatalogMock {
         fixedUsdUnits: Number(body?.fixedUsdUnits),
         minMarginUsdUnits: Number(body?.minMarginUsdUnits),
       };
-      let row = this.rules.find((item) => item.scope === scope && item.targetId === targetId);
+      const priceListId = (body?.priceListId as string | undefined) ?? ROOT_PRICE_LIST_IDS.retail;
+      let row = this.rules.find(
+        (item) =>
+          item.priceListId === priceListId && item.scope === scope && item.targetId === targetId,
+      );
       if (row) Object.assign(row, values, { updatedAt: new Date().toISOString() });
       else {
-        row = { id: nextId(), scope, targetId, ...values, updatedAt: new Date().toISOString() };
+        row = {
+          id: nextId(),
+          priceListId,
+          scope,
+          targetId,
+          ...values,
+          updatedAt: new Date().toISOString(),
+        };
         this.rules.push(row);
       }
       this.onRulesChanged();
@@ -689,7 +733,9 @@ export class CatalogMock {
       if (this.reauthenticationRequired()) return error(403, 'REAUTHENTICATION_REQUIRED');
       const row = this.rules.find((item) => item.id === ruleId);
       if (!row) return notFound();
-      if (row.scope === 'global') return error(409, 'GLOBAL_RULE_REQUIRED');
+      // S20 LS2: a root list keeps its global rule; a custom list's may go.
+      const root = (Object.values(ROOT_PRICE_LIST_IDS) as string[]).includes(row.priceListId);
+      if (row.scope === 'global' && root) return error(409, 'GLOBAL_RULE_REQUIRED');
       this.rules = this.rules.filter((item) => item.id !== ruleId);
       this.onRulesChanged();
       return { status: 204 };
@@ -699,10 +745,13 @@ export class CatalogMock {
         target: { scope: MarginScope; targetId?: string | null };
         costUsdUnits: number;
         values?: MarginRuleValues;
+        priceListId?: string;
       };
       const target = this.target(request.target.scope, request.target.targetId ?? null);
       if (!target) return notFound();
-      const found = request.values ? null : resolveMarginRule(this.rules, target.path);
+      const found = request.values
+        ? null
+        : this.ruleFor(request.priceListId ?? ROOT_PRICE_LIST_IDS.retail, target.path);
       const rule = request.values ?? (found as StoredRule);
       const price = priceFromCost(request.costUsdUnits, rule);
       const rate = this.rate();

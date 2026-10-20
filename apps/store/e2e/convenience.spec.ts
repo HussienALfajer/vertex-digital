@@ -123,6 +123,7 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     isGift: false,
     gift: null,
     shareLinks: [],
+    privatePrice: false,
     repeatable: true,
     createdAt: '2026-10-09T10:00:00.000Z',
     ...changes,

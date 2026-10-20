@@ -18,7 +18,9 @@ import {
   type DecideReviews,
   decideReviewsResultSchema,
   decideReviewsSchema,
+  type MarginRuleListQuery,
   type MarginRuleValues,
+  marginRuleListQuerySchema,
   marginRuleSchema,
   marginRuleValuesSchema,
   type PriceReviewListQuery,
@@ -52,16 +54,16 @@ export class PricingAdminController {
   @Get('rules')
   @AdminRoute()
   @Header('cache-control', 'no-store')
+  @ApiQueryOf(marginRuleListQuerySchema)
   @SerializeOptions({ schema: marginRuleSchema })
-  @ApiOkResponse({ description: 'Live rules', standardSchema: marginRuleSchema.array() })
-  rules() {
-    return this.pricing.rules();
+  @ApiOkResponse({ description: 'A list’s live rules', standardSchema: marginRuleSchema.array() })
+  rules(@Query({ schema: marginRuleListQuerySchema }) query: MarginRuleListQuery) {
+    return this.pricing.rules(query.priceListId);
   }
 
-  /** Rule PR9. */
+  /** Rule PR9; S20: on a list. The service refreshes the store for retail changes only. */
   @Put('rules')
   @AdminRoute()
-  @UseInterceptors(StoreRevalidateInterceptor)
   @Sensitive()
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: marginRuleSchema })
@@ -76,7 +78,6 @@ export class PricingAdminController {
 
   @Post('rules/:id/archive')
   @AdminRoute()
-  @UseInterceptors(StoreRevalidateInterceptor)
   @Sensitive()
   @HttpCode(204)
   @Header('cache-control', 'no-store')

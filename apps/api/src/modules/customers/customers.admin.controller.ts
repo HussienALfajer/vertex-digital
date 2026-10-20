@@ -31,6 +31,8 @@ import {
   customerSessionSchema,
   customerSignInPageSchema,
   customerStateChangeSchema,
+  type SetCustomerPriceList,
+  setCustomerPriceListSchema,
   type UpdateCustomerLimits,
   updateCustomerLimitsSchema,
 } from '@vertex-digital/contracts';
@@ -257,6 +259,24 @@ export class CustomersAdminController {
     @Req() request: Request,
   ) {
     return this.customers.changeNote(id, noteId, 'archive', admin.id, requestMeta(request));
+  }
+
+  /** S20 AT2, AT3. */
+  @Put(':id/price-list')
+  @AdminRoute()
+  @Sensitive()
+  @SerializeOptions({ schema: adminCustomerSchema })
+  @ApiOkResponse({
+    description: 'The profile with its new list (AT2)',
+    standardSchema: adminCustomerSchema,
+  })
+  priceList(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id') id: string,
+    @Body({ schema: setCustomerPriceListSchema }) body: SetCustomerPriceList,
+    @Req() request: Request,
+  ) {
+    return this.customers.setPriceList(id, body, admin.id, requestMeta(request));
   }
 
   private change(

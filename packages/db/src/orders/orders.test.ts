@@ -10,6 +10,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Transaction } from '../client.js';
 import { purchasedLastDay } from '../customers/guard.js';
 import {
+  accountPriceList,
+  accountsOnList,
+  assignedAccountCounts,
+  releaseArchivedAccounts,
+  setCustomerPriceList,
+} from '../customers/price-lists.js';
+import {
   archiveCustomer,
   CustomerError,
   freezeCustomer,
@@ -62,6 +69,7 @@ import {
   customerOrder,
   customerOrderPage,
   productDeliveryStats,
+  publicShare,
   revealCode,
 } from './reads.js';
 import {
@@ -72,6 +80,7 @@ import {
 } from './reservations.js';
 import { savedPlayerHash } from './saved-players.js';
 import { decryptSecret } from './secrets.js';
+import { createShareLink } from './share-links.js';
 import { attemptSupplierFacts, supplierOrderMatches } from './supplier-matches.js';
 import { lockOrder, type OrderContext, type OrderRow, transitionOrder } from './transition.js';
 
@@ -3534,6 +3543,12 @@ describe('price lists (S20 PO2–PO4)', () => {
       minMarginUsdUnits: usd(0.05),
     });
     expect(await balance(merchant)).toBe(usd(10) - usd(1.05));
+    // No share link shows a price charged off retail, whatever the owner chose (S20 privacy).
+    expect((await customerOrder(db, merchant, order.id))?.privatePrice).toBe(true);
+    const link = await db.transaction((tx) =>
+      createShareLink(tx, { orderId: order.id, kind: 'receipt', showPrice: true }),
+    );
+    expect((await publicShare(db, link.token))?.share.price).toBeNull();
 
     // An assigned list wins over the type's default; a customer stays on retail.
     await setAccount(merchant, { priceListId: cost });
@@ -3601,5 +3616,139 @@ describe('price lists (S20 PO2–PO4)', () => {
       cancelReason: 'price_list_changed',
     });
     expect(await balance(buyer)).toBe(usd(10.1));
+  });
+
+  const admin = { adminId: newId(), ipAddress: null, userAgent: null };
+  const reason = 'حساب تاجر جملة';
+  const assign = (customerId: string, priceListId: string | null) =>
+    db.transaction((tx) =>
+      setCustomerPriceList(tx, context(), { customerId, priceListId, reason, actor: admin }),
+    );
+  const assignRefusal = async (promise: Promise<unknown>) => {
+    try {
+      await promise;
+    } catch (error) {
+      if (error instanceof CustomerError) return error.code;
+      throw error;
+    }
+    throw new Error('Expected a refusal');
+  };
+
+  it('assigns a list, cancels reservations and tells the customer, center only (AT2, AT3)', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(0.1) });
+    const { order } = await buy(request(buyer, item, { whenBalanceShort: 'reserve' }));
+    const result = await assign(buyer, cost);
+    expect(result).toEqual({ cancelledOrderIds: [order.id] });
+    expect(await orderRow(order.id)).toMatchObject({ cancelReason: 'price_list_changed' });
+    expect(await accountPriceList(db, buyer)).toEqual({
+      accountType: 'customer',
+      assignedListId: cost,
+      effectiveList: { id: cost, kind: 'cost', name: 'سعر التكلفة' },
+      priceKind: 'special',
+    });
+    const { rows: notices } = await pool.query(
+      `select n.event, n.params, (select count(*) from email_outbox e
+         where e.customer_id = n.customer_id and e.template = 'customer_order_cancelled')::int as emails
+       from customer_notifications n where n.customer_id = $1 order by n.event`,
+      [buyer],
+    );
+    expect(notices.map((row) => [row.event, row.params])).toEqual([
+      ['order_cancelled', expect.objectContaining({ reason: 'price_list_changed' })],
+      ['price_list_changed', { priceKind: 'special' }],
+    ]);
+    // The reservation's cancel email only (S09); the list change has none.
+    expect(notices[0]?.emails).toBe(1);
+    const { rows: audits } = await pool.query(
+      `select details, reason from audit_entries where entity_id = $1
+         and action = 'customer.price_list_changed'`,
+      [buyer],
+    );
+    expect(audits).toEqual([
+      {
+        reason,
+        details: {
+          before: { priceListId: null, effectiveListId: retail },
+          after: { priceListId: cost, effectiveListId: cost },
+          cancelledOrderIds: [order.id],
+        },
+      },
+    ]);
+    // Back to the type's default: a merchant's is wholesale.
+    await setAccount(buyer, { accountType: 'merchant' });
+    expect(await assign(buyer, null)).toEqual({ cancelledOrderIds: [] });
+    expect((await accountPriceList(db, buyer))?.effectiveList.id).toBe(wholesale);
+    // The same effective list again tells nobody.
+    await assign(buyer, wholesale);
+    const { rows } = await pool.query(
+      `select count(*)::int as count from customer_notifications
+       where customer_id = $1 and event = 'price_list_changed'`,
+      [buyer],
+    );
+    expect(rows[0]?.count).toBe(2);
+  });
+
+  it('refuses an archived account, an archived list and a list not priced yet', async () => {
+    const buyer = await customer({ funds: 0 });
+    const listId = newId();
+    await pool.query(
+      `insert into price_lists (id, kind, name, parent_list_id, archived_at)
+       values ($1, 'custom', $2, $3, now())`,
+      [listId, `قائمة ${unique()}`, wholesale],
+    );
+    expect(await assignRefusal(assign(buyer, listId))).toBe('PRICE_LIST_ARCHIVED');
+    expect(await assignRefusal(assign(buyer, newId()))).toBe('NOT_FOUND');
+    await db
+      .transaction(async (tx) => {
+        await tx.execute(
+          sql`update margin_rules set archived_at = now() where price_list_id = ${cost}`,
+        );
+        expect(
+          await assignRefusal(
+            setCustomerPriceList(tx, context(), {
+              customerId: buyer,
+              priceListId: cost,
+              reason,
+              actor: admin,
+            }),
+          ),
+        ).toBe('PRICE_LIST_NOT_READY');
+        throw new Error('rollback');
+      })
+      .catch((error: Error) => expect(error.message).toBe('rollback'));
+    await pool.query('update customers set archived_at = now() where id = $1', [buyer]);
+    expect(await assignRefusal(assign(buyer, cost))).toBe('CUSTOMER_STATE_INVALID');
+  });
+
+  it('serializes an assignment with a purchase: the purchase sees one list (AT3)', async () => {
+    const item = await product({ cost: usd(1) });
+    const buyer = await customer({ funds: usd(10) });
+    const results = await Promise.allSettled([buy(request(buyer, item)), assign(buyer, cost)]);
+    const [purchase, assigned] = results;
+    expect(assigned.status).toBe('fulfilled');
+    // Either the purchase ran first at retail, or after the change and was refused at cost.
+    if (purchase.status === 'fulfilled') {
+      expect(purchase.value.order).toMatchObject({
+        priceListId: retail,
+        unitPriceUsdUnits: usd(1.1),
+      });
+    } else {
+      expect(purchase.reason).toMatchObject({
+        code: 'PRICE_CHANGED',
+        details: { unitPriceUsdUnits: usd(1.01) },
+      });
+    }
+  });
+
+  it('releases archived accounts from a list being archived (LS5)', async () => {
+    const buyer = await customer({ funds: 0 });
+    await setAccount(buyer, { priceListId: cost });
+    await pool.query('update customers set archived_at = now() where id = $1', [buyer]);
+    const released = await db.transaction((tx) =>
+      releaseArchivedAccounts(tx, { priceListId: cost, reason, actor: admin }),
+    );
+    expect(released).toBeGreaterThanOrEqual(1);
+    expect((await accountPriceList(db, buyer))?.assignedListId).toBeNull();
+    expect(await accountsOnList(db, cost)).toBe((await assignedAccountCounts(db)).get(cost) ?? 0);
   });
 });

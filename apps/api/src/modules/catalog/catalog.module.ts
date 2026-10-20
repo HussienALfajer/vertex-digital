@@ -7,6 +7,7 @@ import { CatalogController } from './catalog.controller.js';
 import { CatalogService } from './catalog.service.js';
 import { CatalogItemsAdminController } from './catalog-items.admin.controller.js';
 import { CatalogItemsService } from './catalog-items.service.js';
+import { CatalogPricesController } from './catalog-prices.controller.js';
 import { CatalogStoreService } from './catalog-store.service.js';
 
 /**
@@ -17,7 +18,12 @@ import { CatalogStoreService } from './catalog-store.service.js';
  */
 @Module({
   imports: [AdminModule, FilesModule, RatesModule],
-  controllers: [CatalogController, CatalogAdminController, CatalogItemsAdminController],
+  controllers: [
+    CatalogController,
+    CatalogPricesController,
+    CatalogAdminController,
+    CatalogItemsAdminController,
+  ],
   providers: [CatalogService, CatalogItemsService, CatalogStoreService],
   exports: [CatalogService, CatalogItemsService],
 })

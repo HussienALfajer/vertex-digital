@@ -60,6 +60,7 @@ function invalidFields(texts: Record<RuleField, string>): RuleField[] {
  * review's "تعديل الهامش" (S07 rule P4) saves through `onSave` instead, from the review's cost.
  */
 export function RuleDialog({
+  priceListId,
   scope,
   targetId,
   targetName,
@@ -68,6 +69,8 @@ export function RuleDialog({
   onSave,
   onDone,
 }: {
+  /** S20: the list the rule belongs to; retail when absent. */
+  priceListId?: string;
   scope: MarginScope;
   targetId: string | null;
   /** The category, game or product's name; null for the global rule. */
@@ -92,14 +95,16 @@ export function RuleDialog({
   const values = valuesOf(texts);
   const cost = parseCostUsd(costText);
   const request =
-    values && cost ? { target: { scope, targetId }, costUsdUnits: cost, values } : null;
+    values && cost
+      ? { target: { scope, targetId }, costUsdUnits: cost, values, priceListId }
+      : null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFailure(null);
     const invalid = invalidFields(texts);
     setErrors(invalid);
-    const parsed = setMarginRuleSchema.safeParse({ ...values, scope, targetId });
+    const parsed = setMarginRuleSchema.safeParse({ ...values, scope, targetId, priceListId });
     if (invalid.length > 0 || !parsed.success) return focusInvalid();
     setSaving(true);
     try {

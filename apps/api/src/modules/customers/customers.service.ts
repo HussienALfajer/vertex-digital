@@ -16,11 +16,14 @@ import {
   customerLimits as customerLimitsOf,
   customerStatus,
   DEPOSIT_SETTINGS_DEFAULTS,
+  type SetCustomerPriceList,
   type UpdateCustomerLimits,
 } from '@vertex-digital/contracts';
 import {
   type AcceptedVersion,
+  type AccountPriceList,
   type AdminActor,
+  accountPriceList,
   archiveCustomer,
   CustomerError,
   customerAcceptedVersions,
@@ -39,6 +42,7 @@ import {
   recordAudit,
   revokeCustomerSessions,
   setCustomerLimits,
+  setCustomerPriceList,
   type Transaction,
   unarchiveCustomer,
   unfreezeCustomer,
@@ -65,6 +69,8 @@ const STATUS = {
   NOT_FOUND: 404,
   CUSTOMER_STATE_INVALID: 409,
   CUSTOMER_NOT_ARCHIVABLE: 409,
+  PRICE_LIST_ARCHIVED: 409,
+  PRICE_LIST_NOT_READY: 409,
 } as const;
 
 /** A `CustomerError` as the API answers it; anything else is rethrown as is. */
@@ -139,12 +145,13 @@ export class CustomersService {
   async profile(id: string): Promise<AdminCustomer> {
     const customer = isUuid(id) ? await findCustomer(this.db, id) : null;
     if (!customer) throw notFound();
-    const [facts, signals, overrides, pinned, accepted] = await Promise.all([
+    const [facts, signals, overrides, pinned, accepted, pricing] = await Promise.all([
       customerProfileFacts(this.db, customer),
       customerSignals(this.db, customer.id),
       customerLimitOverrides(this.db, customer.id),
       this.pinnedNote(customer.id),
       customerAcceptedVersions(this.db, customer.id),
+      accountPriceList(this.db, customer.id),
     ]);
     return {
       id: customer.id,
@@ -161,6 +168,7 @@ export class CustomersService {
         at: facts.statusChange.at.toISOString(),
       },
       limits: await this.limitsView(facts.established, overrides),
+      pricing: pricing as AccountPriceList,
       pinnedNote: pinned && noteOf(pinned),
       balanceUnits: facts.balanceUnits,
       counts: facts.counts,
@@ -234,6 +242,36 @@ export class CustomersService {
       .limit(query.limit + 1);
     const page = pageOf(rows, query.limit, (row) => ({ at: row.cursorAt, id: row.note.id }));
     return { items: page.items.map((row) => noteOf(row.note)), nextCursor: page.nextCursor };
+  }
+
+  /**
+   * S20 AT2, AT3: the account's list (null: its type's default), in one transaction with its
+   * audit entry, the reservations it cancels and the customer's notice.
+   */
+  async setPriceList(
+    id: string,
+    input: SetCustomerPriceList,
+    adminId: string,
+    meta: RequestMeta,
+  ): Promise<AdminCustomer> {
+    if (!isUuid(id)) throw notFound();
+    try {
+      await this.db.transaction((tx) =>
+        setCustomerPriceList(
+          tx,
+          { jobs: this.jobs },
+          {
+            customerId: id,
+            priceListId: input.priceListId,
+            reason: input.reason,
+            actor: this.actor(adminId, meta),
+          },
+        ),
+      );
+    } catch (error) {
+      throw coded(error);
+    }
+    return this.profile(id);
   }
 
   /** CF1, CF6, AR1–AR3, SN1: each in one transaction with its audit entry. */

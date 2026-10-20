@@ -17,8 +17,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type KeyboardEvent, useEffect, useId, useMemo, useState } from 'react';
 import { CatalogPicture } from '@/features/catalog/catalog-picture';
+import { rememberPrivatePrices } from '@/features/catalog/private-prices';
+import { apiRequest } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
+import { readSession } from '@/lib/session';
 import { clearRecentSearches, readRecentSearches, rememberSearch } from './recent';
 import { getSearchIndex } from './requests';
 
@@ -63,6 +66,18 @@ export function SearchDialog({
   const [query, setQuery] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
   const [active, setActive] = useState(0);
+
+  // S20 AT4: the index is retail; an account with its own prices sees none here. Its kind is read
+  // on each open, prices hidden meanwhile.
+  useEffect(() => {
+    if (!open) return;
+    void readSession().then(async (session) => {
+      if (!session || session.user.emailVerified === false) return;
+      document.documentElement.setAttribute('data-private-prices-hint', '');
+      const account = await apiRequest<{ priceKind: string }>('/api/account');
+      rememberPrivatePrices(!account.ok || account.data.priceKind !== 'retail');
+    });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -307,7 +322,8 @@ function OptionRow({ option }: { option: Option }) {
         <span className="truncate text-xs text-muted-foreground">{gameName}</span>
       </span>
       {product.available && product.priceUsdUnits !== null ? (
-        <span className="flex shrink-0 flex-col items-end">
+        // S20 AT4: the index carries retail only; an account with its own prices sees none here.
+        <span className="flex shrink-0 flex-col items-end [[data-private-prices-hint]_&]:hidden">
           <bdi dir="ltr" className="font-bold tabular-nums">
             {formatUsd(product.priceUsdUnits)}
           </bdi>

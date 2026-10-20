@@ -33,6 +33,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { savePendingEmail } from '@/features/auth/pending-email';
+import { readCustomerPrices } from '@/features/catalog/customer-prices';
 import { centsParam } from '@/features/deposits/amounts';
 import { sendAttempt } from '@/features/purchase/attempt';
 import { useBalance, usePurchasesStopped } from '@/features/purchase/customer';
@@ -86,12 +87,27 @@ type Sending =
   | { status: 'sending' }
   | { status: 'failed'; message: string; retry: boolean };
 
-/** The search index's products by id (rule CT4): public, cached by the browser for 30 seconds. */
-async function loadPrices(): Promise<Prices> {
+/**
+ * The search index's products by id (rule CT4): public, cached by the browser for 30 seconds. S20
+ * AT4: a signed-in account reads its own prices of the lines' games too, which replace the index's
+ * retail ones when it pays another list.
+ */
+async function loadPrices(signedIn: boolean): Promise<Prices> {
   const index = await getSearchIndex();
-  return index.ok
-    ? { status: 'ready', products: new Map(index.data.products.map((item) => [item.id, item])) }
-    : { status: 'failed' };
+  if (!index.ok) return { status: 'failed' };
+  const products = new Map(index.data.products.map((item) => [item.id, item]));
+  const slugs = signedIn ? [...new Set((readCart() ?? []).map((line) => line.gameSlug))] : [];
+  const own = await Promise.all(slugs.map((slug) => readCustomerPrices(slug)));
+  for (const result of own) {
+    // Never the retail figure in place of the account's own: a failed read offers the retry.
+    if (!result) return { status: 'failed' };
+    if (result.priceKind === 'retail') continue;
+    for (const row of result.products) {
+      const product = products.get(row.id);
+      if (product) products.set(row.id, { ...product, ...row });
+    }
+  }
+  return { status: 'ready', products };
 }
 
 /** Today's price of a line, or null when its pack is not on sale now (rule CT4). */
@@ -123,12 +139,12 @@ export function CartPage() {
   const lastBody = useRef<CheckoutRequest | null>(null);
 
   const readPrices = useCallback(async () => {
-    setPrices(await loadPrices());
-  }, []);
+    setPrices(await loadPrices(signedIn));
+  }, [signedIn]);
 
   useEffect(() => {
-    void readPrices();
-  }, [readPrices]);
+    if (customer.status !== 'loading') void readPrices();
+  }, [readPrices, customer.status]);
 
   /** A line moves to a new price; the old one stays shown struck through (CT4, CT6). */
   const movePrice = useCallback((line: CartLine, price: number) => {

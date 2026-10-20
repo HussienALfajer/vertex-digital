@@ -27,7 +27,7 @@ import {
   refundReasonSchema,
   shareKindSchema,
 } from './orders.js';
-import { marginRuleValuesSchema, marginScopeSchema } from './pricing.js';
+import { marginRuleValuesSchema, marginScopeSchema, priceListKindSchema } from './pricing.js';
 import { displayStepSchema } from './rates.js';
 import {
   outsideCategorySchema,
@@ -79,6 +79,7 @@ export const AUDIT_ENTITY_TYPES = [
   'catalog_input_field',
   'catalog_product',
   'margin_rule',
+  'price_list',
   'supplier',
   'supplier_policy',
   'supplier_offer',
@@ -205,7 +206,12 @@ const reordered = <Shape extends z.ZodRawShape>(parent: Shape) =>
   z.strictObject({ ...parent, ids: z.array(z.uuid()) });
 const named = <Shape extends z.ZodRawShape>(parent: Shape) =>
   z.strictObject({ ...parent, nameAr: z.string() });
-const marginTarget = { scope: marginScopeSchema, targetId: z.uuid().nullable() };
+/** S20: a rule names its list. */
+const marginTarget = {
+  priceListId: z.uuid(),
+  scope: marginScopeSchema,
+  targetId: z.uuid().nullable(),
+};
 const marginValues = marginRuleValuesSchema.strict();
 /** Supplier values in audit details (S07): never a credential, only field names and hints. */
 const supplier = { supplier: supplierCodeSchema };
@@ -331,6 +337,15 @@ export const AUDIT_DETAILS = {
   /** S12 CF1: the reason is the entry's `reason`; the reservations it cancelled. */
   'customer.frozen': z.strictObject({ cancelledOrderIds: z.array(z.uuid()) }),
   'customer.unfrozen': none,
+  /**
+   * S20 AT2, AT3: the reason is the entry's `reason`; null is the type's default. The lists are
+   * the effective ones before and after, and the reservations cancelled.
+   */
+  'customer.price_list_changed': z.strictObject({
+    before: z.strictObject({ priceListId: z.uuid().nullable(), effectiveListId: z.uuid() }),
+    after: z.strictObject({ priceListId: z.uuid().nullable(), effectiveListId: z.uuid() }),
+    cancelledOrderIds: z.array(z.uuid()),
+  }),
   /** S12 LM5. */
   'customer.limits_changed': z.strictObject({
     before: customerLimitValues,
@@ -511,6 +526,28 @@ export const AUDIT_DETAILS = {
     after: marginValues,
   }),
   'margin_rule.archived': z.strictObject({ ...marginTarget, values: marginValues }),
+  /** S20 LS6. */
+  'price_list.created': z.strictObject({
+    kind: priceListKindSchema,
+    name: z.string(),
+    parentListId: z.uuid().nullable(),
+  }),
+  'price_list.renamed': changed({ name: z.string() }),
+  'price_list.archived': z.strictObject({
+    name: z.string(),
+    rulesArchived: z.int().nonnegative(),
+    fixedPricesArchived: z.int().nonnegative(),
+  }),
+  /** S20 LS6: `before` is null for a new fixed price. */
+  'price_list.fixed_price_set': z.strictObject({
+    productId: z.uuid(),
+    beforeUsdUnits: z.int().positive().nullable(),
+    afterUsdUnits: z.int().positive(),
+  }),
+  'price_list.fixed_price_archived': z.strictObject({
+    productId: z.uuid(),
+    priceUsdUnits: z.int().positive(),
+  }),
   /** S07 rule SP2: the field names and their last 4 characters, never the values. */
   'supplier.credentials_set': z.strictObject({
     ...supplier,

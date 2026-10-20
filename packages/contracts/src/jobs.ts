@@ -58,6 +58,8 @@ export const QUEUES = {
   reconciliationRecheck: 'reconciliation.recheck',
   /** Sends one customer notification to the customer's push devices (S15 PD1–PD5). */
   pushSend: 'push.send',
+  /** Tells the admin of fixed prices that fell back to their rule, every 10 minutes (S20 RP5). */
+  pricingFallbackNotices: 'pricing.fallback-notices',
 } as const;
 
 /**

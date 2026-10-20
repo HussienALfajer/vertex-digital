@@ -182,10 +182,12 @@ describe('access', () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
       expect(refreshes()).toBe(0);
       await reauthenticate();
-      await json(await setRule({ scope: 'global', ...GLOBAL }), 200);
+      // S20: a retail change refreshes it (the service queues it with the change).
+      await json(await setRule({ scope: 'global', ...GLOBAL, percentBp: 1100 }), 200);
       await expect.poll(refreshes).toBe(1);
     } finally {
       send.mockRestore();
+      await json(await setRule({ scope: 'global', ...GLOBAL }), 200);
     }
   });
 

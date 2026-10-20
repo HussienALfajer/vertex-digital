@@ -5,6 +5,7 @@ import { createDatabase } from '../client.js';
 import { newId } from '../id.js';
 import { priceReviews, productPrices } from '../schema/index.js';
 import { mappedStockOffers, markOfferOutOfStock } from '../suppliers/index.js';
+import { priceMatrix } from './matrix.js';
 import { repriceProducts } from './reprice.js';
 import { productRoutingStates } from './routing.js';
 
@@ -784,5 +785,63 @@ describe('price lists (S20 RP1, RP2, LP1–LP4)', () => {
       current: null,
       availability: 'out_of_stock',
     });
+  });
+
+  it('shows each list’s price, source, margin, target while held and warnings (matrix)', async () => {
+    const p = await product();
+    const offerId = await offer('fake', usd(1));
+    await route(p.id, 'fake', offerId);
+    const vip = await customList(wholesale);
+    await listRule(vip, 'global', null, { percentBp: 300, minMarginUsdUnits: usd(0.02) });
+    // Below cost + VIP's $0.02 minimum: falls back to VIP's rule (decision 6).
+    await fixedPrice(vip, p.id, usd(1.01));
+    const fresh = await customList(retail);
+    await repriceAll([p.id], 'route_change');
+    // A list created after the repricing has no row yet (RP4).
+    const late = await customList(retail);
+    const read = (query: Parameters<typeof priceMatrix>[1]) => priceMatrix(db, query, context());
+    const matrix = await read({ gameId: p.game, listIds: [vip, wholesale, fresh, late] });
+    expect(matrix.lists.map((list) => list.id)).toEqual([retail, vip, wholesale, fresh, late]);
+    const [row] = matrix.rows;
+    expect(row).toMatchObject({ productId: p.id, costUsdUnits: usd(1), held: false });
+    const cell = (id: string) => row?.cells.find((candidate) => candidate.priceListId === id);
+    expect(cell(retail)).toMatchObject({
+      priceUsdUnits: usd(1.1),
+      source: 'rule',
+      marginUsdUnits: usd(0.1),
+      marginBp: 909,
+      availability: 'available',
+      warnings: [],
+    });
+    expect(cell(vip)).toMatchObject({
+      priceUsdUnits: usd(1.03),
+      source: 'fixed_fallback',
+      fixedPriceUsdUnits: usd(1.01),
+      warnings: ['fallback'],
+    });
+    expect(cell(fresh)).toMatchObject({ priceUsdUnits: usd(1.1), warnings: [] });
+    expect(cell(late)).toMatchObject({
+      priceUsdUnits: null,
+      availability: 'out_of_stock',
+      warnings: ['no_row'],
+    });
+
+    // A held product keeps every list and shows the price each would take now (RP2).
+    await setCost(offerId, usd(1.2));
+    await repriceAll([p.id], 'cost_sync');
+    const held = (await read({ gameId: p.game, listIds: [wholesale] })).rows[0];
+    expect(held?.held).toBe(true);
+    // Both held prices sell below the new cost: the margin guard pauses them (P6, PO1).
+    expect(held?.cells.map((c) => [c.priceUsdUnits, c.targetPriceUsdUnits, c.warnings])).toEqual([
+      [usd(1.1), usd(1.32), ['held', 'unavailable']],
+      [usd(1.05), usd(1.26), ['held', 'unavailable']],
+    ]);
+    // A search finds the product by name; the warnings filter keeps rows with one.
+    const [named] = await pool
+      .query<{ name_ar: string }>('select name_ar from catalog_products where id = $1', [p.id])
+      .then((result) => result.rows);
+    const found = await read({ q: named?.name_ar as string, warnings: true });
+    expect(found.rows.map((r) => r.productId)).toEqual([p.id]);
+    expect(found.lists.map((list) => list.id)).toEqual([retail, wholesale, cost]);
   });
 });

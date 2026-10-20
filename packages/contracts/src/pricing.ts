@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { productAvailabilitySchema, SAVINGS_WARNING_PERCENT } from './catalog.js';
+import {
+  productAvailabilitySchema,
+  SAVINGS_WARNING_PERCENT,
+  storeProductSchema,
+} from './catalog.js';
 import { pagedListSchema, pageQuerySchema } from './lists.js';
 import {
   CURRENCY_SCALE,
@@ -8,6 +12,7 @@ import {
   USD_CENT,
   usdCentsSchema,
 } from './money.js';
+import { type PriceKind, priceKindSchema } from './price-kinds.js';
 import { supplierCodeSchema } from './suppliers.js';
 
 /*
@@ -58,13 +63,15 @@ const targetMessage = {
 export const marginRuleSchema = marginRuleValuesSchema
   .extend({
     id: z.uuid(),
+    /** S20: the list the rule belongs to. */
+    priceListId: z.uuid(),
     scope: marginScopeSchema,
     targetId: z.uuid().nullable(),
     /** The target's Arabic name; null for the global rule. */
     targetName: z.string().nullable(),
     /** The target is archived: the rule applies again on restore (edge case 3). */
     targetArchived: z.boolean(),
-    /** Unarchived products this rule governs (rule PR2). */
+    /** Unarchived products this rule governs on its list (rule PR2, S20 LS4). */
     productCount: z.int().nonnegative(),
     updatedAt: z.iso.datetime(),
   })
@@ -72,9 +79,19 @@ export const marginRuleSchema = marginRuleValuesSchema
 
 export type MarginRule = z.infer<typeof marginRuleSchema>;
 
-/** `PUT /api/admin/pricing/rules` (rule PR9): the live rule of the target, created or replaced. */
+/** `GET /api/admin/pricing/rules` (S20): one list's rules, retail by default. */
+export const marginRuleListQuerySchema = z
+  .object({ priceListId: z.uuid().optional() })
+  .meta({ id: 'MarginRuleListQuery' });
+
+export type MarginRuleListQuery = z.infer<typeof marginRuleListQuerySchema>;
+
+/**
+ * `PUT /api/admin/pricing/rules` (rule PR9): the live rule of the target, created or replaced;
+ * S20: on a list, retail by default.
+ */
 export const setMarginRuleSchema = marginRuleValuesSchema
-  .extend(target)
+  .extend({ ...target, priceListId: z.uuid().optional() })
   .refine(targetMatchesScope, targetMessage)
   .meta({ id: 'SetMarginRule' });
 
@@ -87,6 +104,8 @@ export const pricingPreviewRequestSchema = z
     costUsdUnits: z.int().min(1).max(PREVIEW_MAX_COST_USD_UNITS),
     /** Draft values from the rule form; without them the rule that applies to the target. */
     values: marginRuleValuesSchema.optional(),
+    /** S20: the list whose rules apply (LS4, fixed prices aside), retail by default. */
+    priceListId: z.uuid().optional(),
   })
   .meta({ id: 'PricingPreviewRequest' });
 
@@ -426,12 +445,7 @@ export const PRICE_LISTS_MAX_CUSTOM = 20;
 /** S20 LS3: a list and its parents, at most this many. */
 export const PRICE_LIST_MAX_DEPTH = 5;
 
-/** What a customer is told about their prices (S20 AT4): never a list's name, rule or cost. */
-export const PRICE_KINDS = ['retail', 'wholesale', 'special'] as const;
-
-export const priceKindSchema = z.enum(PRICE_KINDS).meta({ id: 'PriceKind' });
-
-export type PriceKind = z.infer<typeof priceKindSchema>;
+export { PRICE_KINDS, type PriceKind, priceKindSchema } from './price-kinds.js';
 
 /** S20 AT4: the cost list and custom lists read "سعر خاص". */
 export function priceKindOf(kind: PriceListKind): PriceKind {
@@ -582,3 +596,241 @@ export function listPrice(
   }
   return own;
 }
+
+// Lists, fixed prices and the matrix in the panel (S20 PR 2) ------------------------------------
+
+/** S20: a list's name, 2–60 characters after trimming. */
+export const priceListNameSchema = z.string().trim().min(2).max(60);
+
+/** A list as `/pricing/lists` shows it. */
+export const priceListSchema = z
+  .object({
+    id: z.uuid(),
+    kind: priceListKindSchema,
+    name: z.string(),
+    parentListId: z.uuid().nullable(),
+    /** The list, then its parents up to the root (LS3), as ids. */
+    chain: z.array(z.uuid()),
+    /** Accounts assigned to the list (AT2); a type's default is not an assignment. */
+    accounts: z.int().nonnegative(),
+    rules: z.int().nonnegative(),
+    fixedPrices: z.int().nonnegative(),
+    /** Products whose current price on the list fell back from its fixed price (LP1). */
+    fallbackCells: z.int().nonnegative(),
+    /** RP4: the root has its global rule, so the list is priced. */
+    ready: z.boolean(),
+    archivedAt: z.iso.datetime().nullable(),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: 'PriceList' });
+
+export type PriceList = z.infer<typeof priceListSchema>;
+
+/** `POST /api/admin/pricing/lists` (LS1). */
+export const createPriceListSchema = z
+  .object({ name: priceListNameSchema, parentListId: z.uuid() })
+  .meta({ id: 'CreatePriceList' });
+
+export type CreatePriceList = z.infer<typeof createPriceListSchema>;
+
+/** `PATCH /api/admin/pricing/lists/:id`. */
+export const renamePriceListSchema = z
+  .object({ name: priceListNameSchema })
+  .meta({ id: 'RenamePriceList' });
+
+export type RenamePriceList = z.infer<typeof renamePriceListSchema>;
+
+/** S20 data: a fixed price is whole cents, above zero, at most $10,000. */
+export const FIXED_PRICE_MAX_USD_UNITS = 10_000 * CURRENCY_SCALE.USD;
+
+/** `PUT /api/admin/pricing/lists/:id/fixed-prices/:productId`. */
+export const setFixedPriceSchema = z
+  .object({ priceUsdUnits: usdCentsSchema.min(USD_CENT).max(FIXED_PRICE_MAX_USD_UNITS) })
+  .meta({ id: 'SetFixedPrice' });
+
+export type SetFixedPrice = z.infer<typeof setFixedPriceSchema>;
+
+/** A list's current price for a product, as the panel shows it (LP1, LP2). */
+export const listPriceCellSchema = z
+  .object({
+    /** Null without a row on the list (RP4: the product is unavailable there). */
+    priceUsdUnits: z.int().positive().nullable(),
+    source: priceSourceSchema.nullable(),
+    /** Over the basis cost now; null without a row or a usable route. */
+    marginUsdUnits: z.int().nullable(),
+    marginBp: z.int().nullable(),
+  })
+  .meta({ id: 'ListPriceCell' });
+
+export type ListPriceCell = z.infer<typeof listPriceCellSchema>;
+
+/** A live fixed price with its product and the list's resulting price. */
+export const fixedPriceSchema = z
+  .object({
+    id: z.uuid(),
+    priceListId: z.uuid(),
+    productId: z.uuid(),
+    productNameAr: z.string(),
+    gameId: z.uuid(),
+    gameNameAr: z.string(),
+    priceUsdUnits: z.int().positive(),
+    result: listPriceCellSchema,
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: 'FixedPrice' });
+
+export type FixedPrice = z.infer<typeof fixedPriceSchema>;
+
+/** An account assigned to a list (AT2). */
+export const priceListAccountSchema = z
+  .object({ id: z.uuid(), name: z.string(), email: z.string(), accountType: accountTypeSchema })
+  .meta({ id: 'PriceListAccount' });
+
+/** `GET /api/admin/pricing/lists/:id`: the list page (its rules come from the rules route). */
+export const priceListDetailSchema = z
+  .object({
+    list: priceListSchema,
+    /** The lists of its chain, the list first, for the parents' rules. */
+    chain: z.array(z.object({ id: z.uuid(), kind: priceListKindSchema, name: z.string() })),
+    fixedPrices: z.array(fixedPriceSchema),
+    /** The first 100 assigned accounts by name; `list.accounts` counts them all. */
+    accounts: z.array(priceListAccountSchema),
+  })
+  .meta({ id: 'PriceListDetail' });
+
+export type PriceListDetail = z.infer<typeof priceListDetailSchema>;
+
+/** The matrix's columns at most, retail included (S20 API). */
+export const PRICE_MATRIX_MAX_LISTS = 8;
+
+/** The matrix's rows at most for a search. */
+export const PRICE_MATRIX_MAX_PRODUCTS = 200;
+
+const listIdsSchema = z.preprocess(
+  (value) =>
+    typeof value === 'string' ? value.split(',').filter((part) => part.length > 0) : value,
+  z.array(z.uuid()).min(1).max(PRICE_MATRIX_MAX_LISTS),
+);
+
+/** `GET /api/admin/pricing/matrix`: a game's products or a search, on the chosen lists. */
+export const priceMatrixQuerySchema = z
+  .object({
+    gameId: z.uuid().optional(),
+    q: z.string().trim().min(1).max(100).optional(),
+    /** Comma-separated; retail is always the first column. Default: retail, wholesale, cost. */
+    listIds: listIdsSchema.optional(),
+    /** Only rows with a warning. */
+    warnings: z
+      .enum(['true', 'false'])
+      .transform((value) => value === 'true')
+      .optional(),
+  })
+  .refine((value) => (value.gameId === undefined) !== (value.q === undefined), {
+    message: 'Expected a gameId or a q',
+    path: ['gameId'],
+  })
+  .meta({ id: 'PriceMatrixQuery' });
+
+export type PriceMatrixQuery = z.output<typeof priceMatrixQuerySchema>;
+
+/** A matrix cell's warnings (S20 API, screens). */
+export const PRICE_MATRIX_WARNINGS = [
+  'fallback',
+  'capped',
+  'above_parent',
+  'held',
+  'unavailable',
+  'no_row',
+] as const;
+
+export const priceMatrixWarningSchema = z
+  .enum(PRICE_MATRIX_WARNINGS)
+  .meta({ id: 'PriceMatrixWarning' });
+
+export type PriceMatrixWarning = z.infer<typeof priceMatrixWarningSchema>;
+
+export const priceMatrixCellSchema = listPriceCellSchema
+  .extend({
+    priceListId: z.uuid(),
+    availability: productAvailabilitySchema,
+    /** While the product is held (RP2): the price the list would take now; else null. */
+    targetPriceUsdUnits: z.int().positive().nullable(),
+    /** The list's own fixed price for the product, when it has one. */
+    fixedPriceUsdUnits: z.int().positive().nullable(),
+    warnings: z.array(priceMatrixWarningSchema),
+  })
+  .meta({ id: 'PriceMatrixCell' });
+
+export type PriceMatrixCell = z.infer<typeof priceMatrixCellSchema>;
+
+export const priceMatrixSchema = z
+  .object({
+    lists: z.array(z.object({ id: z.uuid(), kind: priceListKindSchema, name: z.string() })),
+    rows: z.array(
+      z.object({
+        productId: z.uuid(),
+        productNameAr: z.string(),
+        gameId: z.uuid(),
+        gameNameAr: z.string(),
+        /** The basis route's cost (S07 P1); null with no usable route. */
+        costUsdUnits: z.int().positive().nullable(),
+        supplierCode: supplierCodeSchema.nullable(),
+        /** An open review holds every list (RP2). */
+        held: z.boolean(),
+        cells: z.array(priceMatrixCellSchema),
+      }),
+    ),
+  })
+  .meta({ id: 'PriceMatrix' });
+
+export type PriceMatrix = z.infer<typeof priceMatrixSchema>;
+
+/**
+ * The warnings of a list's cell (S20 screens): `fallback` and `capped` by source, `above_parent`
+ * when the price is above the parent list's, `held` under a review, `unavailable` when the list's
+ * accounts cannot buy it, `no_row` without a price on the list.
+ */
+export function matrixCellWarnings(cell: {
+  source: PriceSource | null;
+  priceUsdUnits: number | null;
+  parentPriceUsdUnits: number | null;
+  held: boolean;
+  available: boolean;
+}): PriceMatrixWarning[] {
+  const warnings: PriceMatrixWarning[] = [];
+  if (cell.source === 'fixed_fallback') warnings.push('fallback');
+  if (cell.source === 'retail_cap') warnings.push('capped');
+  if (
+    cell.priceUsdUnits !== null &&
+    cell.parentPriceUsdUnits !== null &&
+    cell.priceUsdUnits > cell.parentPriceUsdUnits
+  ) {
+    warnings.push('above_parent');
+  }
+  if (cell.held) warnings.push('held');
+  if (cell.priceUsdUnits === null) warnings.push('no_row');
+  else if (!cell.available) warnings.push('unavailable');
+  return warnings;
+}
+
+/**
+ * `GET /api/catalog/games/:slug/prices` (S20 AT4, store): the signed-in account's prices for a
+ * game's packs, never cached; the kind only, never the list's name, rule or cost.
+ */
+export const customerPricesSchema = z
+  .object({
+    priceKind: priceKindSchema,
+    products: z.array(
+      storeProductSchema.pick({
+        id: true,
+        available: true,
+        priceUsdUnits: true,
+        priceSypUnits: true,
+        savings: true,
+      }),
+    ),
+    rateId: z.uuid().nullable(),
+  })
+  .meta({ id: 'CustomerPrices' });
+
+export type CustomerPrices = z.infer<typeof customerPricesSchema>;

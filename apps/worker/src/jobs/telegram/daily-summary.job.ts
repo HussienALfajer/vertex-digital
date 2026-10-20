@@ -16,6 +16,7 @@ import {
   type Database,
   depositSettings,
   deposits,
+  fixedPriceFallbacks,
   fulfilmentAttempts,
   ledgerSummary,
   lowStockCounts,
@@ -431,7 +432,7 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       context,
     );
     const inUse = states.filter((state) => state.available && state.code !== 'manual');
-    const [newPacks, stock] = await readAll(db, [
+    const [newPacks, stock, fallbacks] = await readAll(db, [
       () =>
         newOfferCounts(
           db,
@@ -442,6 +443,7 @@ export class DailySummaryJob implements OnApplicationBootstrap {
           db,
           inUse.map((state) => state.id),
         ),
+      () => fixedPriceFallbacks(db),
     ]);
     const stockLow = { low: 0, out: 0 };
     for (const count of stock.values()) {
@@ -455,6 +457,8 @@ export class DailySummaryJob implements OnApplicationBootstrap {
         return count > 0 ? [{ supplierNameAr: state.nameAr, count }] : [];
       }),
       stockLow,
+      // S20 RP5.
+      fixedPriceFallbacks: fallbacks.length,
       openReviews: open.length,
       marginGuarded: [...routing.values()].filter(
         (state) => state.availability === 'paused_by_margin_guard',

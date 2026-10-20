@@ -109,9 +109,12 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 export function SummarySection({
   customer,
   onEditLimits,
+  onChangePriceList,
 }: {
   customer: AdminCustomer;
   onEditLimits?: () => void;
+  /** S20 AT2: absent for an archived customer. */
+  onChangePriceList?: () => void;
 }) {
   const { t } = useTranslation();
   const { counts, limits } = customer;
@@ -196,6 +199,41 @@ export function SummarySection({
               </dd>
             </div>
           ))}
+        </dl>
+      </Card>
+      <Card className="gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle>{t('customers.pricing.title')}</CardTitle>
+          {onChangePriceList && (
+            <Button variant="outline" size="sm" onClick={onChangePriceList}>
+              <PencilIcon />
+              {t('customers.pricing.change')}
+            </Button>
+          )}
+        </div>
+        <dl className="grid grid-cols-2 gap-4">
+          <Fact label={t('customers.pricing.accountType')}>
+            {t(`customers.pricing.accountTypes.${customer.pricing.accountType}`)}
+          </Fact>
+          <Fact label={t('customers.pricing.list')}>
+            <span className="flex flex-wrap items-center gap-2">
+              <Link
+                to="/pricing/lists/$id"
+                params={{ id: customer.pricing.effectiveList.id }}
+                className="underline-offset-4 hover:underline"
+              >
+                {customer.pricing.effectiveList.name}
+              </Link>
+              <Badge tone={customer.pricing.assignedListId ? 'gold' : 'neutral'}>
+                {customer.pricing.assignedListId
+                  ? t('customers.pricing.assigned')
+                  : t('customers.pricing.default')}
+              </Badge>
+            </span>
+          </Fact>
+          <Fact label={t('customers.pricing.kind')}>
+            {t(`customers.pricing.kinds.${customer.pricing.priceKind}`)}
+          </Fact>
         </dl>
       </Card>
       <Card className="gap-4">

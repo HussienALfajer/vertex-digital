@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   type CatalogImageWidth,
+  type CustomerPrices,
   gameServiceStatus,
   type SearchIndex,
   type Storefront,
@@ -12,6 +13,7 @@ import {
   sypDisplayPrice,
 } from '@vertex-digital/contracts';
 import {
+  accountPriceList,
   catalogCategories,
   catalogGames,
   catalogInputFields,
@@ -147,6 +149,48 @@ export class CatalogStoreService {
         options: field.options,
       })),
       products: storeProducts,
+      rateId: rate?.id ?? null,
+    };
+  }
+
+  /**
+   * `GET /api/catalog/games/:slug/prices` (S20 AT4, PO1): the signed-in account's prices for the
+   * game's packs on its effective list, each available only with a row on that list. Never cached
+   * and never a list's name; the public reads above stay retail for everyone.
+   */
+  async customerPrices(customerId: string, slug: string): Promise<CustomerPrices> {
+    const [found] = (await this.shownGames()).filter(({ game }) => game.slug === slug);
+    if (!found) throw refusals.notFound('game');
+    const [products, rate, pricing] = await Promise.all([
+      this.liveProducts([found.game.id]),
+      this.rates.current(),
+      accountPriceList(this.db, customerId),
+    ]);
+    if (!pricing) throw refusals.notFound('customer');
+    const states = await productRoutingStates(
+      this.db,
+      products.map((product) => product.id),
+      routingContext(this.env),
+      pricing.effectiveList.id,
+    );
+    return {
+      priceKind: pricing.priceKind,
+      products: products.map((row) => {
+        const state = states.get(row.id);
+        const price =
+          state?.availability === 'available' ? (state.current?.priceUsdUnits ?? null) : null;
+        const saving = price !== null ? savings(price, row.officialPriceUsdUnits) : null;
+        return {
+          id: row.id,
+          available: price !== null,
+          priceUsdUnits: price,
+          priceSypUnits:
+            price !== null && rate
+              ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
+              : null,
+          savings: saving && { amountUsdUnits: saving.amountUsdUnits, percent: saving.percent },
+        };
+      }),
       rateId: rate?.id ?? null,
     };
   }

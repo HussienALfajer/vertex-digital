@@ -17,6 +17,8 @@ import { formatPercentBp } from './pricing-format';
 
 /** The rule form's target: what it sets and the values it starts from. */
 export interface RuleTarget {
+  /** S20: the list the rule belongs to; retail when absent. */
+  priceListId?: string;
   scope: MarginScope;
   targetId: string | null;
   targetName: string | null;
@@ -80,7 +82,7 @@ export function ArchiveRuleDialog({
       onClose={onClose}
       title={t('pricing.archive.title')}
       body={t('pricing.archive.body', {
-        target: rule?.targetName ?? '',
+        target: rule?.targetName ?? t('pricing.global.title'),
         parent: rule ? t(`pricing.archive.parents.${rule.scope}`) : '',
       })}
       action={t('pricing.archive.action')}

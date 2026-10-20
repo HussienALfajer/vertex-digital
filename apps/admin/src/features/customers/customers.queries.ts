@@ -9,6 +9,7 @@ import type {
   CreateCustomerNote,
   CreateTestCustomer,
   CustomerStateChange,
+  SetCustomerPriceList,
   UpdateCustomerLimits,
 } from '@vertex-digital/contracts';
 import { api, call } from '../../lib/api/client';
@@ -171,7 +172,7 @@ function useCustomersMutation<Input, Output>(request: (input: Input) => Promise<
     mutationFn: (input: Input) => withReauthentication(() => request(input)),
     onSettled: () =>
       Promise.all(
-        ['customers', 'orders', 'deposits', 'support', 'wallet', 'audit'].map((key) =>
+        ['customers', 'orders', 'deposits', 'support', 'wallet', 'audit', 'pricing'].map((key) =>
           queryClient.invalidateQueries({ queryKey: [key] }),
         ),
       ),
@@ -206,6 +207,15 @@ export const useCustomerStateChange = (id: string) =>
           return call(api.POST('/api/admin/customers/{id}/sessions/revoke', params));
       }
     },
+  );
+
+/**
+ * S20 AT2, AT3: the account's list; null returns it to its type's default. Its reservations are
+ * cancelled, so the orders are read again too.
+ */
+export const useSetCustomerPriceList = (id: string) =>
+  useCustomersMutation((body: SetCustomerPriceList) =>
+    call(api.PUT('/api/admin/customers/{id}/price-list', { params: { path: { id } }, body })),
   );
 
 /** Rule LM5: null clears an override. */

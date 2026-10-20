@@ -24,6 +24,7 @@ import { ContentMock } from './content-mock';
 import { CustomersMock } from './customers-mock';
 import { quietDashboard } from './dashboard-mock';
 import { OrdersMock } from './orders-mock';
+import { PriceListsMock } from './price-lists-mock';
 import { ReconciliationMock } from './reconciliation-mock';
 import { SupplierCatalogMock } from './supplier-catalog-mock';
 import { SuppliersMock } from './suppliers-mock';
@@ -297,6 +298,12 @@ export class AdminApi {
       this.switches().switches.find((item) => item.switch === `${code}_paused`)?.value ?? false,
     () => this.reauthenticationRequired,
   );
+  /** S20: the price lists, fixed prices, the matrix and the accounts' lists. */
+  readonly priceLists = new PriceListsMock(
+    this.catalog,
+    () => this.reauthenticationRequired,
+    (id) => this.customers.customers.find((row) => row.id === id) ?? null,
+  );
   /** S16: the supplier catalog panel (tree, imports, links, statement, platform status). */
   readonly supplierCatalog = new SupplierCatalogMock(this.suppliers, this.catalog);
   /** S08: the orders, their decisions, code reveals and the policy. */
@@ -327,12 +334,15 @@ export class AdminApi {
     },
   });
   /** S12: the customers, their profiles and changes, the support tickets and settings. */
-  readonly customers: CustomersMock = new CustomersMock(
-    () => this.reauthenticationRequired,
-    () => this.orders.orders,
-    (entry) => {
-      this.auditEntries = [entry, ...this.auditEntries];
-    },
+  readonly customers: CustomersMock = Object.assign(
+    new CustomersMock(
+      () => this.reauthenticationRequired,
+      () => this.orders.orders,
+      (entry) => {
+        this.auditEntries = [entry, ...this.auditEntries];
+      },
+    ),
+    { priceLists: this.priceLists },
   );
   /** S13: the books, the treasury and the reports; no run yet by default. */
   readonly reconciliation = new ReconciliationMock(() => this.reauthenticationRequired);
@@ -1008,6 +1018,11 @@ export class AdminApi {
         return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       }
       if (answer && 'json' in answer) return json(answer.status, answer.json);
+    }
+    if (path.startsWith('/api/admin/pricing/lists') || path === '/api/admin/pricing/matrix') {
+      const answer = this.priceLists.answer(request.method(), url, body);
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
+      if (answer) return route.fulfill({ status: answer.status });
     }
     if (path.startsWith('/api/admin/customers') || path.startsWith('/api/admin/support')) {
       const headers = request.headers();

@@ -20,6 +20,7 @@ import {
   ReceiptTextIcon,
   ShoppingCartIcon,
   SlidersHorizontalIcon,
+  TagIcon,
   Undo2Icon,
   WalletIcon,
 } from 'lucide-react';
@@ -54,6 +55,7 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   order_cancelled: CircleSlashIcon,
   checkout_finished: ShoppingCartIcon,
   order_placed_for_you: GiftIcon,
+  price_list_changed: TagIcon,
 };
 
 /** Marks everything up to the newest shown as read and tells the bell (rule NT5). */

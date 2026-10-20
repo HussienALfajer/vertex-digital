@@ -121,6 +121,9 @@ export function notificationText(notification: CustomerNotification): string {
       return t('notifications.events.ticket_replied', {
         number: reference(notification.params.number),
       });
+    // S20 AT4: the kind of price only, never the list.
+    case 'price_list_changed':
+      return t(`notifications.events.price_list_changed_${notification.params.priceKind}`);
   }
 }
 
@@ -137,6 +140,8 @@ export function notificationHref(notification: CustomerNotification): string {
       return `/orders?checkout=${notification.params.checkoutId}`;
     case 'ticket_replied':
       return `/support/${notification.params.ticketId}`;
+    case 'price_list_changed':
+      return '/';
     default:
       return `/orders/${notification.params.orderId}`;
   }

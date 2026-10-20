@@ -1402,6 +1402,8 @@ export const orderSchema = z
       .object({ senderName: z.string().nullable(), message: z.string().nullable() })
       .nullable(),
     shareLinks: z.array(shareLinkSchema),
+    /** S20: charged on a list other than retail, so no share link ever shows its price. */
+    privatePrice: z.boolean(),
     repeatable: z.boolean(),
     createdAt: z.iso.datetime(),
   })

@@ -19,6 +19,7 @@ import { OrdersPayWaitingJob } from './jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from './jobs/orders/poll.job.js';
 import { OrdersSweepJob } from './jobs/orders/sweep.job.js';
 import { OrdersWaitingSweepJob } from './jobs/orders/waiting-sweep.job.js';
+import { FallbackNoticesJob } from './jobs/pricing/fallback-notices.job.js';
 import { SendPushJob } from './jobs/push/send.job.js';
 import { ReconciliationRecheckJob } from './jobs/reconciliation/recheck.job.js';
 import { ReconciliationRunner } from './jobs/reconciliation/reconciliation-runner.js';
@@ -107,6 +108,7 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     DepositCardJob,
     ReviewReminderJob,
     DailySummaryJob,
+    FallbackNoticesJob,
     SupplierRegistry,
     SupplierSyncJob,
     SupplierSyncScheduleJob,
