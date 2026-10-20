@@ -23,6 +23,7 @@ import { CatalogMock } from './catalog-mock';
 import { ContentMock } from './content-mock';
 import { CustomersMock } from './customers-mock';
 import { quietDashboard } from './dashboard-mock';
+import { MerchantsMock } from './merchants-mock';
 import { OrdersMock } from './orders-mock';
 import { PriceListsMock } from './price-lists-mock';
 import { ReconciliationMock } from './reconciliation-mock';
@@ -333,6 +334,16 @@ export class AdminApi {
       if (row) row.balanceUnits -= units;
     },
   });
+  /** S20 PR 3: applications, merchants, grants and revocations, the merchant settings. */
+  readonly merchants: MerchantsMock = new MerchantsMock(
+    () => this.reauthenticationRequired,
+    (id) => this.customers.find(id) ?? null,
+    this.priceLists,
+    (id) => {
+      const row = this.customers.find(id);
+      return row ? this.customers.profile(row) : null;
+    },
+  );
   /** S12: the customers, their profiles and changes, the support tickets and settings. */
   readonly customers: CustomersMock = Object.assign(
     new CustomersMock(
@@ -342,7 +353,7 @@ export class AdminApi {
         this.auditEntries = [entry, ...this.auditEntries];
       },
     ),
-    { priceLists: this.priceLists },
+    { priceLists: this.priceLists, merchants: this.merchants },
   );
   /** S13: the books, the treasury and the reports; no run yet by default. */
   readonly reconciliation = new ReconciliationMock(() => this.reauthenticationRequired);
@@ -1023,6 +1034,16 @@ export class AdminApi {
       const answer = this.priceLists.answer(request.method(), url, body);
       if (answer && 'json' in answer) return json(answer.status, answer.json);
       if (answer) return route.fulfill({ status: answer.status });
+    }
+    if (
+      path.startsWith('/api/admin/merchant') ||
+      /^\/api\/admin\/customers\/[^/]+\/merchant/.test(path)
+    ) {
+      const answer = this.merchants.answer(request.method(), url, body);
+      if (answer && 'image' in answer) {
+        return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+      }
+      if (answer && 'json' in answer) return json(answer.status, answer.json);
     }
     if (path.startsWith('/api/admin/customers') || path.startsWith('/api/admin/support')) {
       const headers = request.headers();

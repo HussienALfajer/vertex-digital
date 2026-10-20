@@ -81,6 +81,14 @@ const OUTPUT = {
     maxInputPixels: UPLOAD_MAX_INPUT_PIXELS,
     invalidCode: 'IMAGE_INVALID',
   },
+  /** S20 MA3: a merchant application's shop photo, re-encoded like a receipt. */
+  merchant_shop_photo: {
+    format: 'webp',
+    contentType: 'image/webp',
+    maxDimension: RECEIPT_MAX_DIMENSION,
+    maxInputPixels: UPLOAD_MAX_INPUT_PIXELS,
+    invalidCode: 'IMAGE_INVALID',
+  },
 } as const satisfies Record<StoredFileKind, unknown>;
 
 /** Formats accepted by their content, whatever the file name or declared type says (rule SC8). */

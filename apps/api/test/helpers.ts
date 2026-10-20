@@ -18,6 +18,9 @@ import {
   deposits,
   emailOutbox,
   ledgerAccounts,
+  merchantApplications,
+  merchantProfiles,
+  merchantShopPhotos,
   newId,
   notificationPreferences,
   playerChecks,
@@ -141,6 +144,25 @@ const withoutWallet = (db: Database) =>
         .select({ id: supportTickets.id })
         .from(supportTickets)
         .where(eq(supportTickets.customerId, customers.id)),
+    ),
+    // S20: applications, profiles and shop photos are never deleted.
+    notExists(
+      db
+        .select({ id: merchantApplications.id })
+        .from(merchantApplications)
+        .where(eq(merchantApplications.customerId, customers.id)),
+    ),
+    notExists(
+      db
+        .select({ id: merchantProfiles.customerId })
+        .from(merchantProfiles)
+        .where(eq(merchantProfiles.customerId, customers.id)),
+    ),
+    notExists(
+      db
+        .select({ id: merchantShopPhotos.fileId })
+        .from(merchantShopPhotos)
+        .where(eq(merchantShopPhotos.customerId, customers.id)),
     ),
   );
 

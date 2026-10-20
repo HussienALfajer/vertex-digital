@@ -6,7 +6,7 @@ import {
 import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Transaction } from '../client.js';
-import { checkPurchaseCap, lockActiveCustomer } from '../customers/guard.js';
+import { checkPurchaseCap, lockActiveCustomer, requireMerchantTerms } from '../customers/guard.js';
 import { newId } from '../id.js';
 import { LedgerError, lockCustomerWallet, postJournal } from '../ledger/index.js';
 import { catalogProducts, checkouts, orders } from '../schema/index.js';
@@ -91,6 +91,7 @@ export async function checkoutOrders(
 
   // S12 CF2: the customer `FOR SHARE` before any write; a frozen customer is refused as a whole.
   const customer = await lockActiveCustomer(tx, input.customerId);
+  requireMerchantTerms(customer);
   const productIds = [...new Set(input.lines.map((line) => line.productId))];
   const products = await tx
     .select()

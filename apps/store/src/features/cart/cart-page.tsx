@@ -28,6 +28,7 @@ import {
   Trash2Icon,
   UserRoundCheckIcon,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
@@ -48,6 +49,10 @@ import { type CartLine, clearCart, readCart, removeLine, updateLine } from './ca
 import { checkoutLine, lineRefusals, payCart } from './requests';
 import { useCart } from './use-cart';
 
+const TermsSheet = dynamic(() =>
+  import('@/features/merchant/terms-sheet').then((module) => module.TermsSheet),
+);
+
 /** The attempt key's slot in session storage: one cart, one attempt at a time (rule CT5). */
 const ATTEMPT = 'cart';
 
@@ -61,6 +66,7 @@ const REFUSED_AFTER_LOOKUP: ReadonlySet<Failure> = new Set<Failure>([
   'INSUFFICIENT_BALANCE',
   'PURCHASES_STOPPED',
   'IDEMPOTENCY_KEY_REUSED',
+  'MERCHANT_TERMS_REQUIRED',
 ]);
 
 /** Refusals answered before the key is looked up (the body's schema, the access guard). */
@@ -135,6 +141,7 @@ export function CartPage() {
   const [refusals, setRefusals] = useState<Map<string, CheckoutLineRefusal>>(new Map());
   const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState<Sending>({ status: 'idle' });
+  const [termsOpen, setTermsOpen] = useState(false);
   const [slide, setSlide] = useState(0);
   const lastBody = useRef<CheckoutRequest | null>(null);
 
@@ -269,6 +276,11 @@ export function CartPage() {
         again();
         setSending({ status: 'idle' });
         return setNotice(purchaseRefusalText(reason, details));
+      case 'MERCHANT_TERMS_REQUIRED':
+        // S20 MT2: the terms in a sheet, then the customer slides again.
+        setTermsOpen(true);
+        again();
+        return setSending({ status: 'idle' });
       case 'UNAUTHORIZED':
         router.push(`/sign-in?next=${encodeURIComponent('/cart')}`);
         return;
@@ -365,6 +377,9 @@ export function CartPage() {
           onPay={() => void send(body)}
         />
       </Card>
+      {termsOpen && (
+        <TermsSheet open={termsOpen} onOpenChange={setTermsOpen} onAccepted={() => {}} />
+      )}
     </div>
   );
 }

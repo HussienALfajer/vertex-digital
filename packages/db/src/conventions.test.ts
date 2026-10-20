@@ -96,6 +96,13 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   content_page_versions: 'Append-only (S14 PG5): a publication is a new version, never changed',
   faq_publications: 'Append-only (S14 FQ6): a publication is a new snapshot, never changed',
   content_settings: 'One row of settings (S14 LA6, FQ6), changes audited',
+  merchant_shop_photos: "Append-only (S20 MA3): a photo's uploader, never changed",
+  merchant_applications:
+    'Never archived (S20 MA4): an application ends in a final status, which is its record',
+  merchant_application_events: "Append-only (S20 MA4): an application's timeline",
+  merchant_profiles:
+    "A merchant's profile (S20 MA5–MA7): updated in place, a revocation sets revoked_at, audited",
+  merchant_settings: 'Append-only (S20): a save is a new version, the newest is in force',
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -112,6 +119,8 @@ const NATURAL_KEYS: Record<string, string> = {
   support_settings: 'One row, id 1 (S12 SC1)',
   content_page_drafts: 'Keyed by its page: one draft per fixed page (S14 PG1)',
   content_settings: 'One row, id 1 (S14)',
+  merchant_shop_photos: 'Keyed by its stored file: one uploader per photo (S20 MA3)',
+  merchant_profiles: 'Keyed by its customer: one merchant profile per customer (S20 MA5)',
 };
 
 /**
@@ -150,6 +159,9 @@ const APPEND_ONLY_TABLES = [
   'reconciliation_settings',
   'content_page_versions',
   'faq_publications',
+  'merchant_shop_photos',
+  'merchant_application_events',
+  'merchant_settings',
 ];
 
 /** The column of every unique index or constraint that has exactly one column. */

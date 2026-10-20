@@ -211,6 +211,7 @@ describe('module boundaries', () => {
     customers: 'customers',
     deposits: 'deposits',
     files: 'files',
+    merchants: 'merchants',
     notifications: 'notifications',
     orders: 'orders',
     'price-lists': 'pricing',

@@ -8,6 +8,7 @@ import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { CircleAlertIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { MerchantCard } from '@/features/merchant/merchant-card';
 import { NotificationPreferencesCard } from '@/features/notifications/preferences-card';
 import { t } from '@/lib/i18n';
 import { PasswordCard } from './password-card';
@@ -26,8 +27,8 @@ type State =
     };
 
 /**
- * The customer's account (S01 screens): profile, password, signed-in devices and the email
- * choices of S05 (rule NT8). Read in the browser, never cached; without a session the customer
+ * The customer's account (S01 screens): profile, the merchant card (S20), password, signed-in
+ * devices and the email choices of S05 (rule NT8). Read in the browser, never cached; without a session the customer
  * signs in and comes back here.
  */
 export function AccountPage() {
@@ -80,6 +81,12 @@ export function AccountPage() {
   return (
     <div className="flex flex-col gap-6">
       <ProfileCard profile={state.profile} onSaved={(profile) => update({ profile })} />
+      <MerchantCard
+        profile={state.profile}
+        onTermsAccepted={() =>
+          void getProfile().then((profile) => profile.ok && update({ profile: profile.data }))
+        }
+      />
       <PasswordCard
         onChanged={() => {
           // Other sessions were signed out (rule C11): the list shows only this one now.

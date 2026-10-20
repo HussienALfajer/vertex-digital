@@ -1,0 +1,204 @@
+import {
+  type MerchantApplicationStatus,
+  NEW_ACCOUNT_DAYS,
+  type PriceListKind,
+  ROOT_PRICE_LIST_IDS,
+} from '@vertex-digital/contracts';
+import { type AnyColumn, and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
+import type { Executor } from '../client.js';
+import {
+  contentPageVersions,
+  customers,
+  merchantApplications,
+  merchantProfiles,
+  orders,
+  priceLists,
+} from '../schema/index.js';
+
+/*
+ * Merchant reads that join the customers (S20 screens): the panel's queue and merchants list, the
+ * applicant beside an application, and the merchant part of the account and of the admin profile.
+ */
+
+export interface KeysetAt {
+  at: string;
+  id: string;
+}
+
+/** Rows strictly after `at` in the list's order (`time` ascending or descending, then id). */
+function afterKey(time: AnyColumn, id: AnyColumn, at: KeysetAt, ascending: boolean) {
+  const comparison = ascending ? sql`>` : sql`<`;
+  return or(
+    sql`${time} ${comparison} ${at.at}::timestamptz`,
+    and(sql`${time} = ${at.at}::timestamptz`, sql`${id} ${comparison} ${at.id}`),
+  );
+}
+
+/**
+ * MA8: the panel's queue. `under_review` lists the oldest submission first; any other status, and
+ * every application, the newest first. One extra row tells the caller there is a next page.
+ */
+export async function applicationQueue(
+  db: Executor,
+  input: { status: MerchantApplicationStatus | null; after: KeysetAt | null; limit: number },
+) {
+  const ascending = input.status === 'under_review';
+  const sharedPhone = sql<number>`(select count(*)::int from ${customers} as other
+    where other.phone = ${customers.phone} and other.id <> ${customers.id})`;
+  return db
+    .select({
+      id: merchantApplications.id,
+      status: merchantApplications.status,
+      tradeName: merchantApplications.tradeName,
+      governorate: merchantApplications.governorate,
+      activity: merchantApplications.activity,
+      monthlyVolume: merchantApplications.monthlyVolume,
+      submittedAt: merchantApplications.submittedAt,
+      cursorAt: sql<string>`${merchantApplications.submittedAt}::text`,
+      customerId: customers.id,
+      name: customers.name,
+      email: customers.email,
+      frozen: sql<boolean>`${customers.frozenAt} is not null`,
+      sharedPhone,
+      newAccount: sql<boolean>`${customers.createdAt} > now() - make_interval(days => ${NEW_ACCOUNT_DAYS})`,
+    })
+    .from(merchantApplications)
+    .innerJoin(customers, eq(customers.id, merchantApplications.customerId))
+    .where(
+      and(
+        input.status ? eq(merchantApplications.status, input.status) : undefined,
+        input.after
+          ? afterKey(
+              merchantApplications.submittedAt,
+              merchantApplications.id,
+              input.after,
+              ascending,
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(
+      ascending ? asc(merchantApplications.submittedAt) : desc(merchantApplications.submittedAt),
+      ascending ? asc(merchantApplications.id) : desc(merchantApplications.id),
+    )
+    .limit(input.limit + 1);
+}
+
+/** The applicant's identity beside an application (the panel). */
+export async function applicantOf(db: Executor, customerId: string) {
+  const [row] = await db
+    .select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+    })
+    .from(customers)
+    .where(eq(customers.id, customerId));
+  if (!row) throw new Error(`Customer ${customerId} does not exist`);
+  return row;
+}
+
+/** The merchant part of `GET /api/account`; null for a customer. */
+export async function accountMerchant(
+  db: Executor,
+  customerId: string,
+): Promise<{ tradeName: string; termsAccepted: boolean } | null> {
+  const [row] = await db
+    .select({
+      tradeName: merchantProfiles.tradeName,
+      termsVersionId: merchantProfiles.termsVersionId,
+    })
+    .from(merchantProfiles)
+    .innerJoin(customers, eq(customers.id, merchantProfiles.customerId))
+    .where(and(eq(merchantProfiles.customerId, customerId), eq(customers.accountType, 'merchant')));
+  return row ? { tradeName: row.tradeName, termsAccepted: row.termsVersionId !== null } : null;
+}
+
+/** The merchant profile on the admin's customer profile; null for an account never a merchant. */
+export async function merchantProfileOf(db: Executor, customerId: string) {
+  const [row] = await db
+    .select({
+      tradeName: merchantProfiles.tradeName,
+      governorate: merchantProfiles.governorate,
+      city: merchantProfiles.city,
+      applicationId: merchantProfiles.applicationId,
+      termsVersion: contentPageVersions.version,
+      grantedAt: merchantProfiles.grantedAt,
+      revokedAt: merchantProfiles.revokedAt,
+    })
+    .from(merchantProfiles)
+    .leftJoin(contentPageVersions, eq(contentPageVersions.id, merchantProfiles.termsVersionId))
+    .where(eq(merchantProfiles.customerId, customerId));
+  return row ?? null;
+}
+
+/**
+ * `GET /api/admin/merchants`: current merchants, newest grant first, searched by trade name, name
+ * or email and filtered by their effective list, with 30 days of delivered sales net of refunds.
+ */
+export async function merchantPage(
+  db: Executor,
+  input: { q: string | null; listId: string | null; after: KeysetAt | null; limit: number },
+) {
+  const effectiveList = sql<string>`coalesce(${customers.priceListId}, ${ROOT_PRICE_LIST_IDS.wholesale}::uuid)`;
+  const pattern = input.q
+    ? `%${input.q.replace(/[\\%_]/g, (character) => `\\${character}`)}%`
+    : null;
+  const rows = await db
+    .select({
+      customerId: customers.id,
+      name: customers.name,
+      email: customers.email,
+      frozen: sql<boolean>`${customers.frozenAt} is not null`,
+      tradeName: merchantProfiles.tradeName,
+      governorate: merchantProfiles.governorate,
+      city: merchantProfiles.city,
+      termsAccepted: sql<boolean>`${merchantProfiles.termsVersionId} is not null`,
+      grantedAt: merchantProfiles.grantedAt,
+      cursorAt: sql<string>`${merchantProfiles.grantedAt}::text`,
+      listId: priceLists.id,
+      listName: priceLists.name,
+      listKind: sql<PriceListKind>`${priceLists.kind}`,
+      sales30d: sql<string>`coalesce((select sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits})
+        from ${orders} where ${orders.customerId} = ${customers.id}
+          and ${orders.status} in ('delivered', 'partially_refunded')
+          and ${orders.finishedAt} > now() - interval '30 days'), 0)::text`,
+    })
+    .from(merchantProfiles)
+    .innerJoin(customers, eq(customers.id, merchantProfiles.customerId))
+    .innerJoin(priceLists, eq(priceLists.id, effectiveList))
+    .where(
+      and(
+        eq(customers.accountType, 'merchant'),
+        isNull(merchantProfiles.revokedAt),
+        input.listId ? eq(priceLists.id, input.listId) : undefined,
+        pattern
+          ? or(
+              ilike(merchantProfiles.tradeName, pattern),
+              ilike(customers.name, pattern),
+              ilike(customers.email, pattern),
+            )
+          : undefined,
+        input.after
+          ? afterKey(merchantProfiles.grantedAt, customers.id, input.after, false)
+          : undefined,
+      ),
+    )
+    .orderBy(desc(merchantProfiles.grantedAt), desc(customers.id))
+    .limit(input.limit + 1);
+  return rows.map((row) => ({ ...row, sales30d: Number(row.sales30d) }));
+}
+
+/** The list an approval chose, by name, beside the application in the panel. */
+export async function approvedListOf(
+  db: Executor,
+  priceListId: string | null,
+): Promise<{ id: string; name: string } | null> {
+  if (priceListId === null) return null;
+  const [row] = await db
+    .select({ id: priceLists.id, name: priceLists.name })
+    .from(priceLists)
+    .where(eq(priceLists.id, priceListId));
+  return row ?? null;
+}

@@ -40,6 +40,7 @@ import {
   ScanSearchIcon,
   SendIcon,
   ShieldAlertIcon,
+  StoreIcon,
   ToggleRightIcon,
   TriangleAlertIcon,
   TruckIcon,
@@ -77,6 +78,7 @@ const ATTENTION_ICONS: Record<AttentionKind, LucideIcon> = {
   order_conflicts: TriangleAlertIcon,
   telegram_unlinked: SendIcon,
   tickets_waiting: LifeBuoyIcon,
+  merchant_applications_waiting: StoreIcon,
 };
 
 const HEALTH_TONES = { healthy: 'success', degraded: 'warning', down: 'danger' } as const;

@@ -108,6 +108,8 @@ export const TELEGRAM_MESSAGE_KINDS = [
   'supplier_subscription',
   /** S20 RP5: a fixed price fell back to its rule (once per list, product and Damascus day). */
   'fixed_price_fallback',
+  /** S20: a merchant application submitted or resubmitted, waiting for review. */
+  'merchant_application',
 ] as const;
 
 export const telegramMessageKindSchema = z
@@ -322,6 +324,8 @@ export const TELEGRAM_MESSAGE_PARAMS = {
       .default(null),
     /** S20 RP5: list prices falling back from a fixed price to its rule now. */
     fixedPriceFallbacks: z.int().nonnegative().default(0),
+    /** S20: merchant applications waiting for review now. */
+    merchantApplicationsWaiting: z.int().nonnegative().default(0),
   }),
   bot_reply: telegramBotReplySchema,
   /** To the previous chat when another chat was linked (rule TG3). */
@@ -372,6 +376,15 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     costUsdUnits: z.int().positive(),
     fixedPriceUsdUnits: z.int().positive(),
     priceUsdUnits: z.int().positive(),
+  }),
+  /**
+   * S20 (Jobs): no personal data, only the application for the panel link, whether it was a
+   * resubmission and how many wait.
+   */
+  merchant_application: z.object({
+    applicationId: z.uuid(),
+    resubmitted: z.boolean(),
+    waiting: z.int().positive(),
   }),
   /** S07: syncs failing in a row, then once when costs go stale and products become unavailable. */
   supplier_sync_failing: z.discriminatedUnion('reason', [

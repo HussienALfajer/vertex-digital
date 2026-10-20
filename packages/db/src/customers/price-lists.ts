@@ -97,41 +97,16 @@ export async function setCustomerPriceList(
   if (status === 'archived') {
     throw new CustomerError('CUSTOMER_STATE_INVALID', 'The customer is archived', { status });
   }
-  const after = { ...customer, priceListId: input.priceListId };
-  const afterListId = effectivePriceListId(after);
-  const [list] = await tx
-    .select()
-    .from(priceLists)
-    .where(eq(priceLists.id, afterListId))
-    .for('share');
-  if (!list) throw new CustomerError('NOT_FOUND', 'No such price list');
-  if (list.archivedAt !== null) {
-    throw new CustomerError('PRICE_LIST_ARCHIVED', 'The price list is archived');
-  }
-  const facts = await listPricingFacts(tx, []);
-  const chain = facts.lists.find((candidate) => candidate.id === list.id)?.chain ?? [list.id];
-  if (!listIsPriced(facts, chain)) {
-    throw new CustomerError('PRICE_LIST_NOT_READY', 'The price list is not priced yet');
-  }
+  const afterListId = effectivePriceListId({ ...customer, priceListId: input.priceListId });
+  const list = await usableList(tx, afterListId);
   const beforeListId = effectivePriceListId(customer);
   await tx
     .update(customers)
     .set({ priceListId: input.priceListId })
     .where(eq(customers.id, customer.id));
-  const cancelledOrderIds: string[] = [];
+  let cancelledOrderIds: string[] = [];
   if (afterListId !== beforeListId) {
-    const reserved = await tx
-      .select()
-      .from(orders)
-      .where(and(eq(orders.customerId, customer.id), eq(orders.status, 'awaiting_balance')))
-      .orderBy(asc(orders.id))
-      .for('update');
-    for (const order of reserved) {
-      const cancelled = await cancelReservation(tx, context, order, 'price_list_changed', {
-        kind: 'system',
-      });
-      if (cancelled) cancelledOrderIds.push(cancelled.id);
-    }
+    cancelledOrderIds = await cancelAccountReservations(tx, context, customer.id);
     await notifyCustomer(
       tx,
       context.jobs,
@@ -160,6 +135,53 @@ export async function setCustomerPriceList(
     },
   });
   return { cancelledOrderIds };
+}
+
+/**
+ * AT2: the list an account is moved to, `FOR SHARE` against an archive (LS5): unarchived
+ * (`PRICE_LIST_ARCHIVED`) and priced (`PRICE_LIST_NOT_READY`, RP6).
+ */
+export async function usableList(tx: Transaction, priceListId: string) {
+  const [list] = await tx
+    .select()
+    .from(priceLists)
+    .where(eq(priceLists.id, priceListId))
+    .for('share');
+  if (!list) throw new CustomerError('NOT_FOUND', 'No such price list');
+  if (list.archivedAt !== null) {
+    throw new CustomerError('PRICE_LIST_ARCHIVED', 'The price list is archived');
+  }
+  const facts = await listPricingFacts(tx, []);
+  const chain = facts.lists.find((candidate) => candidate.id === list.id)?.chain ?? [list.id];
+  if (!listIsPriced(facts, chain)) {
+    throw new CustomerError('PRICE_LIST_NOT_READY', 'The price list is not priced yet');
+  }
+  return list;
+}
+
+/**
+ * AT3 (decision 11): cancels the account's reservations with `price_list_changed` (S09's email),
+ * the orders `FOR UPDATE` in id order; the customer is locked by the caller.
+ */
+export async function cancelAccountReservations(
+  tx: Transaction,
+  context: { jobs: JobSender },
+  customerId: string,
+): Promise<string[]> {
+  const reserved = await tx
+    .select()
+    .from(orders)
+    .where(and(eq(orders.customerId, customerId), eq(orders.status, 'awaiting_balance')))
+    .orderBy(asc(orders.id))
+    .for('update');
+  const cancelledOrderIds: string[] = [];
+  for (const order of reserved) {
+    const cancelled = await cancelReservation(tx, context, order, 'price_list_changed', {
+      kind: 'system',
+    });
+    if (cancelled) cancelledOrderIds.push(cancelled.id);
+  }
+  return cancelledOrderIds;
 }
 
 /** Unarchived accounts on a list's id, for LS5's refusal (assigned, never a type's default). */

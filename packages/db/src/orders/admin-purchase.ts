@@ -4,13 +4,14 @@ import {
   ownerCapRemaining,
   ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Database, Transaction } from '../client.js';
-import { checkPurchaseCap, lockActiveCustomer } from '../customers/guard.js';
+import { checkPurchaseCap, lockActiveCustomer, requireMerchantTerms } from '../customers/guard.js';
 import { newId } from '../id.js';
 import { lockCustomerWallet, postJournal } from '../ledger/index.js';
 import { notifyCustomer } from '../notifications/index.js';
+import { productRoutingStates, type RoutingContext } from '../pricing/routing.js';
 import {
   catalogGames,
   catalogProducts,
@@ -140,6 +141,8 @@ export async function adminPurchaseOrder(
       throw new OrderError('EMAIL_NOT_VERIFIED', "The customer's email is not verified");
     }
     customer = await lockActiveCustomer(tx, input.customerId);
+    // S20 MT2, edge case 15: an order the customer pays needs their merchant terms.
+    if (shape.payer === 'customer') requireMerchantTerms(customer);
   }
   const isTest = customer?.isTest ?? false;
   const [product] = await tx
@@ -279,4 +282,34 @@ export async function adminPurchaseOrder(
     },
   });
   return { order, created: true };
+}
+
+/**
+ * S20 PO4: the purchase dialog's prices of a game's packs at a customer's list, for an order the
+ * customer pays; null price where the pack is unavailable on that list (PO1).
+ */
+export async function gameListPrices(
+  db: Database,
+  gameId: string,
+  priceListId: string,
+  context: RoutingContext,
+): Promise<{ productId: string; priceUsdUnits: number | null }[]> {
+  const products = await db
+    .select({ id: catalogProducts.id })
+    .from(catalogProducts)
+    .where(and(eq(catalogProducts.gameId, gameId), isNull(catalogProducts.archivedAt)));
+  const states = await productRoutingStates(
+    db,
+    products.map((product) => product.id),
+    context,
+    priceListId,
+  );
+  return products.map(({ id }) => {
+    const state = states.get(id);
+    return {
+      productId: id,
+      priceUsdUnits:
+        state?.availability === 'available' ? (state.current?.priceUsdUnits ?? null) : null,
+    };
+  });
 }

@@ -395,9 +395,15 @@ describe('access (S14 "Access")', () => {
 });
 
 describe('pages (PG1–PG6)', () => {
-  it('lists the four pages and keeps an unpublished page off the store', async () => {
+  it('lists the five pages and keeps an unpublished page off the store', async () => {
     const pages = await json<{ page: string }[]>(await adminGet('/api/admin/content/pages'), 200);
-    expect(pages.map((page) => page.page)).toEqual(['terms', 'privacy', 'refund', 'about']);
+    expect(pages.map((page) => page.page)).toEqual([
+      'terms',
+      'privacy',
+      'refund',
+      'about',
+      'merchant_terms',
+    ]);
     expect(await code(await client.get('/api/content/pages/about'), 404)).toBe('NOT_FOUND');
     expect(await code(await client.get('/api/content/pages/nope'), 404)).toBe('NOT_FOUND');
     expect(await code(await adminGet('/api/admin/content/pages/nope'), 404)).toBe('NOT_FOUND');

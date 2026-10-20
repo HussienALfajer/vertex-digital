@@ -43,8 +43,8 @@ test.describe('pages (PG1–PG6)', () => {
     await open(page, admin, '/content');
     await expect(page).toHaveURL('/content/pages');
     const rows = page.getByRole('row').filter({ has: page.getByRole('cell') });
-    await expect(rows).toHaveCount(4);
-    await expect(rows.filter({ hasText: c.pages.unpublished })).toHaveCount(4);
+    await expect(rows).toHaveCount(5);
+    await expect(rows.filter({ hasText: c.pages.unpublished })).toHaveCount(5);
 
     await rows
       .filter({ hasText: 'الشروط والأحكام' })
@@ -346,7 +346,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test('content screens', async ({ page, admin }, testInfo) => {
       admin.content.seedPublished('terms', GOOD_BODY);
       await open(page, admin, '/content/pages');
-      await expect(page.getByRole('row')).toHaveCount(5);
+      await expect(page.getByRole('row')).toHaveCount(6);
       await screenshot(page, testInfo, `content-pages-${colorScheme}`);
 
       await page.goto('/content/pages/privacy');

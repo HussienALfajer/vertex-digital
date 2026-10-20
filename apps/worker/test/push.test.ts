@@ -119,6 +119,14 @@ const SAMPLE: { [Event in PushNotificationEvent]: NotificationParams<Event> } = 
     purpose: 'gift',
     message: 'عيد سعيد',
   },
+  merchant_info_requested: { applicationId: newId(), message: 'أرسل صورة المحل' },
+  merchant_approved: { priceKind: 'wholesale' },
+  merchant_rejected: {
+    applicationId: newId(),
+    reason: 'لم نتحقق من المحل',
+    availableAt: '2026-10-28T10:00:00.000Z',
+  },
+  merchant_revoked: {},
 };
 
 describe('lock-screen texts (PT1–PT3)', () => {
@@ -199,6 +207,17 @@ describe('lock-screen texts (PT1–PT3)', () => {
       url: `/support/${SAMPLE.ticket_replied.ticketId}`,
       tag: `ticket-${SAMPLE.ticket_replied.ticketId}`,
     });
+  });
+});
+
+describe('merchant pushes (S20)', () => {
+  it('never carry the admin’s message or reason (PT2)', () => {
+    for (const event of ['merchant_info_requested', 'merchant_rejected'] as const) {
+      const payload = renderPush(event, SAMPLE[event]);
+      expect(JSON.stringify(payload)).not.toContain('أرسل صورة المحل');
+      expect(JSON.stringify(payload)).not.toContain('لم نتحقق من المحل');
+      expect(payload).toMatchObject({ url: '/account/merchant', tag: 'merchant' });
+    }
   });
 });
 

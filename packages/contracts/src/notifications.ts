@@ -54,6 +54,14 @@ export const EMAIL_TEMPLATES = [
   'customer_ticket_replied',
   /** The store placed an order for the customer (S16 AP11): the mode and the note, no fields. */
   'customer_order_placed_for_you',
+  /** S20 MA4: the admin asked for more information about a merchant application. */
+  'customer_merchant_info_requested',
+  /** S20 MA5, MA6: the account became a merchant. */
+  'customer_merchant_approved',
+  /** S20 MA4: the application was rejected, with the reason and the first day to reapply. */
+  'customer_merchant_rejected',
+  /** S20 MA7: the merchant status was withdrawn (never the reason). */
+  'customer_merchant_revoked',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -93,6 +101,12 @@ export const NOTIFICATION_EVENTS = [
   'order_placed_for_you',
   /** S20 AT3: the account's price list changed (center only, never the list's name). */
   'price_list_changed',
+  /** S20 MA4–MA7: the merchant application and status. */
+  'merchant_info_requested',
+  'merchant_approved',
+  'merchant_rejected',
+  'merchant_application_expired',
+  'merchant_revoked',
 ] as const;
 
 export const notificationEventSchema = z
@@ -189,6 +203,16 @@ export const NOTIFICATION_PARAMS = {
   }),
   // S20 AT3, AT4: the price kind the account now pays, never a list's name or rule.
   price_list_changed: z.object({ priceKind: priceKindSchema }),
+  // S20 MA4–MA7: the admin's message is written to this customer; a revocation's reason is not.
+  merchant_info_requested: z.object({ applicationId: z.uuid(), message: z.string() }),
+  merchant_approved: z.object({ priceKind: priceKindSchema }),
+  merchant_rejected: z.object({
+    applicationId: z.uuid(),
+    reason: z.string(),
+    availableAt: z.iso.datetime(),
+  }),
+  merchant_application_expired: z.object({ applicationId: z.uuid() }),
+  merchant_revoked: z.object({}),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
@@ -219,6 +243,10 @@ export const EMAIL_PARAMS = {
   customer_checkout_finished: NOTIFICATION_PARAMS.checkout_finished.extend(at.shape),
   customer_ticket_replied: NOTIFICATION_PARAMS.ticket_replied,
   customer_order_placed_for_you: NOTIFICATION_PARAMS.order_placed_for_you.extend(at.shape),
+  customer_merchant_info_requested: NOTIFICATION_PARAMS.merchant_info_requested,
+  customer_merchant_approved: NOTIFICATION_PARAMS.merchant_approved,
+  customer_merchant_rejected: NOTIFICATION_PARAMS.merchant_rejected,
+  customer_merchant_revoked: NOTIFICATION_PARAMS.merchant_revoked.extend(at.shape),
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
@@ -256,6 +284,11 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   ticket_replied: 'customer_ticket_replied',
   order_placed_for_you: 'customer_order_placed_for_you',
   price_list_changed: null,
+  merchant_info_requested: 'customer_merchant_info_requested',
+  merchant_approved: 'customer_merchant_approved',
+  merchant_rejected: 'customer_merchant_rejected',
+  merchant_application_expired: null,
+  merchant_revoked: 'customer_merchant_revoked',
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -307,6 +340,11 @@ export const customerNotificationSchema = z
     notification('ticket_replied'),
     notification('order_placed_for_you'),
     notification('price_list_changed'),
+    notification('merchant_info_requested'),
+    notification('merchant_approved'),
+    notification('merchant_rejected'),
+    notification('merchant_application_expired'),
+    notification('merchant_revoked'),
   ])
   .meta({ id: 'CustomerNotification' });
 

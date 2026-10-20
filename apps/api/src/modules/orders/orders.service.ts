@@ -19,6 +19,7 @@ import {
   customerSavedPlayers,
   type Database,
   orderCodesKey,
+  orderRate,
   type PlayerCheckLookup,
   productRoutingStates,
   purchaseOrder,
@@ -209,11 +210,20 @@ export class OrdersService {
     }
   }
 
-  /** S08 rule O1's limits: 10 purchases per 10 minutes per customer, 30 per address. */
+  /**
+   * S08 rule O1's limits: 10 purchases per 10 minutes per customer, 30 per address. S20 PO5: a
+   * merchant's rate is the merchant settings', per customer and per address alike (a shop's
+   * counter shares one address).
+   */
   private async purchaseLimits(customerId: string, meta: RequestMeta) {
+    const rate = await orderRate(this.db, customerId);
     const allowed = await withinLimits(this.db, [
-      { key: `order:customer:${customerId}`, max: 10, windowMs: TEN_MINUTES },
-      { key: `order:ip:${meta.ipAddress ?? 'unknown'}`, max: 30, windowMs: TEN_MINUTES },
+      { key: `order:customer:${customerId}`, max: rate.perTenMinutes, windowMs: TEN_MINUTES },
+      {
+        key: `order:ip:${meta.ipAddress ?? 'unknown'}`,
+        max: rate.merchant ? rate.perTenMinutes : 30,
+        windowMs: TEN_MINUTES,
+      },
     ]);
     if (!allowed) throw orderRefusals.rateLimited();
   }

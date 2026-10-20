@@ -130,7 +130,7 @@ export class OrdersAdminController {
   purchaseContext(
     @Query({ schema: adminPurchaseContextQuerySchema }) query: AdminPurchaseContextQuery,
   ) {
-    return this.purchases.context(query.customerId);
+    return this.purchases.context(query.customerId, query.gameId);
   }
 
   /** S10 rule AD1: removes exposure only, so no re-authentication; audited with the reason. */

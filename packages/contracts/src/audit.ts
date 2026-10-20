@@ -16,6 +16,7 @@ import {
   usdtTxidSourceSchema,
 } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
+import { merchantSettingsInputSchema } from './merchants.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
 import { notificationEventSchema } from './notifications.js';
 import {
@@ -80,6 +81,8 @@ export const AUDIT_ENTITY_TYPES = [
   'catalog_product',
   'margin_rule',
   'price_list',
+  'merchant_application',
+  'merchant_settings',
   'supplier',
   'supplier_policy',
   'supplier_offer',
@@ -346,6 +349,24 @@ export const AUDIT_DETAILS = {
     after: z.strictObject({ priceListId: z.uuid().nullable(), effectiveListId: z.uuid() }),
     cancelledOrderIds: z.array(z.uuid()),
   }),
+  /**
+   * S20 MA5, MA6: the reason is the entry's `reason` on a direct grant; the application (null for a
+   * direct grant), the assigned list (null is wholesale, the merchant default) and the reservations
+   * cancelled (AT3).
+   */
+  'customer.merchant_granted': z.strictObject({
+    applicationId: z.uuid().nullable(),
+    tradeName: z.string(),
+    priceListId: z.uuid().nullable(),
+    cancelledOrderIds: z.array(z.uuid()),
+  }),
+  /** S20 MA7: the reason is the entry's `reason`; the list assigned before. */
+  'customer.merchant_revoked': z.strictObject({
+    priceListIdBefore: z.uuid().nullable(),
+    cancelledOrderIds: z.array(z.uuid()),
+  }),
+  /** S20 MT2: the `merchant_terms` version accepted. */
+  'merchant.terms_accepted': z.strictObject({ termsVersion: z.int().positive() }),
   /** S12 LM5. */
   'customer.limits_changed': z.strictObject({
     before: customerLimitValues,
@@ -547,6 +568,31 @@ export const AUDIT_DETAILS = {
   'price_list.fixed_price_archived': z.strictObject({
     productId: z.uuid(),
     priceUsdUnits: z.int().positive(),
+  }),
+  /**
+   * S20 MA4: the admin's message or reason is the entry's `reason`; a resubmission names the form
+   * fields that changed (never their values).
+   */
+  'merchant_application.submitted': z.strictObject({
+    customerId: z.uuid(),
+    termsVersion: z.int().positive(),
+  }),
+  'merchant_application.resubmitted': z.strictObject({
+    customerId: z.uuid(),
+    termsVersion: z.int().positive(),
+    fields: z.array(z.string()),
+  }),
+  'merchant_application.info_requested': z.strictObject({ customerId: z.uuid() }),
+  'merchant_application.approved': z.strictObject({
+    customerId: z.uuid(),
+    priceListId: z.uuid(),
+  }),
+  'merchant_application.rejected': z.strictObject({ customerId: z.uuid() }),
+  'merchant_application.expired': z.strictObject({ customerId: z.uuid() }),
+  'merchant_application.withdrawn': z.strictObject({ customerId: z.uuid() }),
+  'merchant_settings.changed': z.strictObject({
+    before: z.strictObject(merchantSettingsInputSchema.shape),
+    after: z.strictObject(merchantSettingsInputSchema.shape),
   }),
   /** S07 rule SP2: the field names and their last 4 characters, never the values. */
   'supplier.credentials_set': z.strictObject({

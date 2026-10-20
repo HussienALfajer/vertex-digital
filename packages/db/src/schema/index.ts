@@ -7,6 +7,7 @@ export * from './content.js';
 export * from './customers.js';
 export * from './deposits.js';
 export * from './files.js';
+export * from './merchants.js';
 export * from './notifications.js';
 export * from './orders.js';
 export * from './price-lists.js';

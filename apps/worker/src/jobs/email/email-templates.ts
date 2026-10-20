@@ -93,6 +93,9 @@ const PLACED_FOR_YOU_LINES: Record<StorePlacedPurpose, string> = {
   compensation: 'أنشأ المتجر لك تعويضاً، من دون أن يُخصم من رصيدك شيء: الطلب',
 };
 
+/** S20: the merchant application page. */
+const MERCHANT_PAGE = { label: 'عرض الطلب', path: '/account/merchant' };
+
 /** The customer-facing words of the refund reasons (S08 rule O13). */
 const REFUND_REASON_LABELS: Record<RefundReason, string> = {
   no_route: 'لا يتوفّر مورد لهذه الباقة الآن',
@@ -329,6 +332,36 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     subject: `ردّ فريق الدعم على تذكرتك ${latin(number)}`,
     lines: [`ردّ فريق Vertex Digital على تذكرتك ${latin(number)}. افتح التذكرة لقراءة الرد.`],
     link: { label: 'عرض التذكرة', path: `/support/${ticketId}` },
+  }),
+  // S20 MA4–MA7: the admin's words stay in the notification center and the application page.
+  customer_merchant_info_requested: () => ({
+    subject: 'نحتاج معلومات إضافية لطلب حساب التاجر',
+    lines: [
+      'راجعنا طلب حساب التاجر ونحتاج بعض المعلومات الإضافية.',
+      'افتح الطلب لقراءة المطلوب، ثم عدّل البيانات وأعد الإرسال.',
+    ],
+    link: MERCHANT_PAGE,
+  }),
+  customer_merchant_approved: () => ({
+    subject: 'تمت الموافقة على حساب التاجر',
+    lines: ['وافقنا على حساب التاجر الخاص بك، وأصبحت أسعار التاجر تظهر لك في صفحات الألعاب.'],
+    link: { label: 'عرض حسابي', path: '/account' },
+  }),
+  customer_merchant_rejected: ({ availableAt }) => ({
+    subject: 'لم تتم الموافقة على طلب حساب التاجر',
+    lines: [
+      'راجعنا طلب حساب التاجر ولم نتمكن من الموافقة عليه حالياً. السبب في صفحة الطلب.',
+      `يمكنك التقديم من جديد ابتداءً من ${formatTime(availableAt)}.`,
+    ],
+    link: MERCHANT_PAGE,
+  }),
+  customer_merchant_revoked: ({ at }) => ({
+    subject: 'تغيّر نوع حسابك',
+    lines: [
+      `أصبح حسابك حساب عميل عادي بتاريخ ${formatTime(at)}، وتظهر لك أسعار التجزئة من الآن.`,
+      'رصيدك وطلباتك كما هي. للاستفسار تواصل مع الدعم.',
+    ],
+    link: { label: 'عرض حسابي', path: '/account' },
   }),
 };
 

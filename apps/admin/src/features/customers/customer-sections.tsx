@@ -235,6 +235,7 @@ export function SummarySection({
             {t(`customers.pricing.kinds.${customer.pricing.priceKind}`)}
           </Fact>
         </dl>
+        {customer.merchant && <MerchantFacts merchant={customer.merchant} />}
       </Card>
       <Card className="gap-4">
         <CardTitle>{t('customers.summary.pinned')}</CardTitle>
@@ -559,5 +560,48 @@ export function HistorySection({ customerId }: { customerId: string }) {
       <LoadMore list={list} />
       <AuditDetailSheet entry={open} onClose={() => setOpen(null)} />
     </>
+  );
+}
+
+/** S20: the merchant profile under the pricing card: name, place, since, source and terms. */
+function MerchantFacts({ merchant }: { merchant: NonNullable<AdminCustomer['merchant']> }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-3 border-t border-border pt-4">
+      <h3 className="font-medium">{t('merchants.profile.title')}</h3>
+      <dl className="grid grid-cols-2 gap-4">
+        <Fact label={t('merchants.profile.tradeName')}>{merchant.tradeName}</Fact>
+        <Fact label={t('merchants.profile.place')}>
+          {t(`merchants.governorates.${merchant.governorate}`)} · {merchant.city}
+        </Fact>
+        <Fact
+          label={
+            merchant.revokedAt ? t('merchants.profile.revokedAt') : t('merchants.profile.grantedAt')
+          }
+        >
+          {formatDate(merchant.revokedAt ?? merchant.grantedAt)}
+        </Fact>
+        <Fact label={t('merchants.profile.source')}>
+          {merchant.applicationId ? (
+            <Link
+              to="/merchants/applications/$id"
+              params={{ id: merchant.applicationId }}
+              className="underline-offset-4 hover:underline"
+            >
+              {t('merchants.profile.fromApplication')}
+            </Link>
+          ) : (
+            t('merchants.profile.direct')
+          )}
+        </Fact>
+        <Fact label={t('merchants.profile.terms')}>
+          {merchant.termsVersion === null ? (
+            <Badge tone="warning">{t('merchants.profile.termsPending')}</Badge>
+          ) : (
+            t('merchants.profile.termsAccepted', { version: merchant.termsVersion })
+          )}
+        </Fact>
+      </dl>
+    </div>
   );
 }

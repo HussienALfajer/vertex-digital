@@ -27,14 +27,17 @@ Spec `docs/specs/S20-merchant-accounts-and-price-lists.md`, ADR 0035. Three PRs 
 - [x] Owner acceptance (2026-10-20), PR with auto-merge
 
 ## PR 3 — merchants: server and screens (branch `feat/s20-merchants`)
-- [ ] Admin order form (S16) reads the chosen customer's list prices (spec API note; found in PR 2's review: today an on-behalf order for an assigned account shows retail and the server answers `PRICE_CHANGED` with the right price)
-- [ ] Contract step for PR 1's defaults (moved from PR 2): drop the retail `DEFAULT` of `margin_rules`, `product_prices` and `orders.price_list_id`, once PR 1 is deployed and no deployed code relies on it
-- [ ] Contracts: `merchants.ts` (form enums, application schemas, `applicationTransition`, `merchantSettingsSchema`), `ACCOUNT_TYPES`, `effectiveDepositLimitSettings` merchant tier (MD1), `merchant_terms` page, `merchant_shop_photo` file kind, errors, audit actions, notifications, Telegram `merchant_application`; unit tests
-- [ ] DB (`/db-migration`): `merchant_profiles`, `merchant_applications` with its guard, `merchant_application_events`, `merchant_settings` (seeded); drift
-- [ ] API `merchants` module: application (create idempotent, resubmit, withdraw, photo), terms acceptance (MT2), admin queue, decisions (MA4–MA7), merchants list, settings; deposit tier (MD1–MD3), order rate (PO5), `MERCHANT_TERMS_REQUIRED` on purchase, checkout, reservation and on-behalf orders; reports breakdown by list and merchant; dashboard attention item; tests
-- [ ] Worker: `merchants.expire-applications` (every 15 minutes), Telegram notices and daily summary lines; tests
-- [ ] Bridge: OpenAPI export and admin client
-- [ ] Store: account merchant card, `/account/merchant` four-step form with states and timeline, `/merchant-terms`, terms acceptance sheet
-- [ ] Admin: applications queue and page, merchants list, profile merchant actions, `/settings/merchants`, report labels
-- [ ] E2E flows and RTL screenshots
-- [ ] Wiring checklist, checks, reviewer, acceptance, PR with auto-merge; `docs/ROADMAP.md` S20 done
+- [x] Admin order form (S16) reads the chosen customer's list prices (server: `purchase-context` gains `gameId`, the customer's `priceKind`, `merchantTermsRequired` and `listPrices`; the form follows in the admin layer) (spec API note; found in PR 2's review: today an on-behalf order for an assigned account shows retail and the server answers `PRICE_CHANGED` with the right price)
+- [x] Contracts: `merchants.ts` (form enums, application schemas, `applicationTransition`, `merchantSettingsSchema`), `ACCOUNT_TYPES`, `effectiveDepositLimitSettings` merchant tier (MD1), `merchant_terms` page, `merchant_shop_photo` file kind, errors, audit actions, notifications, Telegram `merchant_application`; unit tests
+- [x] DB (`/db-migration`, 0080–0081): `merchant_profiles`, `merchant_applications` with its guard, `merchant_application_events`, `merchant_settings` (seeded), `merchant_shop_photos` (MA3's owner of a photo), `content_page` recreated for the `merchant_terms` draft; write paths `packages/db/src/merchants` (grant, revoke, moves, expiry, reads), MT2 in `lockActiveCustomer`; drift
+- [x] API `merchants` module: application (create idempotent, resubmit, withdraw, photo), terms acceptance (MT2), admin queue, decisions (MA4–MA7), merchants list, settings; deposit tier (MD1–MD3), order rate (PO5), `MERCHANT_TERMS_REQUIRED` on purchase, checkout, reservation and on-behalf orders; reports breakdown by list and merchant; dashboard attention item; tests
+- [x] Worker: `merchants.expire-applications` (every 15 minutes), Telegram notices and daily summary lines; tests
+- [x] Bridge: OpenAPI export and admin client
+- [x] Store: account merchant card, `/account/merchant` four-step form with states and timeline, `/merchant-terms`, terms acceptance sheet
+- [x] Admin: applications queue and page, merchants list, profile merchant actions, `/settings/merchants`, report labels
+- [x] E2E flows and RTL screenshots (store `merchant.spec.ts` phone and desktop, dark and light; admin `merchants.spec.ts` light and dark)
+- [x] Wiring checklist, checks (lint, typecheck, test, build, drift, OpenAPI, changed E2E; store budgets raised for the merchant strings: home and content 218, game 238, share 220, cart 390), reviewer (2 blocking findings fixed: every grant and revocation cancels reservations and a reservation waits for the merchant terms; resubmit, withdraw and the photo refuse a frozen account, the photo a merchant)
+- [x] Owner acceptance (2026-10-21), PR with auto-merge; `docs/ROADMAP.md` S20 done
+
+## Follow-up after the Phase M production deploy (own small PR)
+- [ ] Contract step for PR 1's defaults (moved out of PR 3, owner 2026-10-21): drop the retail `DEFAULT` of `margin_rules`, `product_prices` and `orders.price_list_id` once S20 runs in production, since the release before S20 still inserts without `price_list_id` while the migrations run

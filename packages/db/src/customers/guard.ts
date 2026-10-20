@@ -8,7 +8,7 @@ import {
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { Database, Transaction } from '../client.js';
 import { OrderError } from '../orders/errors.js';
-import { customerLimits, customers, orders } from '../schema/index.js';
+import { customerLimits, customers, merchantProfiles, orders } from '../schema/index.js';
 
 /*
  * The customer's side of every purchase and deposit (S12 CF2, LM4): the customer row read
@@ -25,6 +25,8 @@ export interface PurchasingCustomer {
   priceListId: string;
   /** The daily purchase cap (LM4), or null for none. */
   capUnits: number | null;
+  /** S20 MT2: a merchant who has not accepted the merchant terms yet (a direct grant). */
+  merchantTermsRequired: boolean;
 }
 
 /** The customer's overrides; a missing row is all null (S12 data). */
@@ -68,12 +70,29 @@ export async function lockActiveCustomer(
     throw new OrderError('ACCOUNT_FROZEN', 'The account is frozen');
   }
   const overrides = await customerLimitOverrides(tx, customerId);
+  let merchantTermsRequired = false;
+  if (customer.accountType === 'merchant') {
+    const [profile] = await tx
+      .select({ termsVersionId: merchantProfiles.termsVersionId })
+      .from(merchantProfiles)
+      .where(eq(merchantProfiles.customerId, customerId));
+    // A direct grant writes the profile without a version (MT2); every grant writes a profile.
+    merchantTermsRequired = profile !== undefined && profile.termsVersionId === null;
+  }
   return {
     id: customerId,
     isTest: customer.isTest,
     priceListId: effectivePriceListId(customer),
     capUnits: overrides.dailyPurchaseUsdUnits,
+    merchantTermsRequired,
   };
+}
+
+/** S20 MT2: purchases, checkouts and reservations wait for a merchant's terms acceptance. */
+export function requireMerchantTerms(customer: PurchasingCustomer): void {
+  if (customer.merchantTermsRequired) {
+    throw new OrderError('MERCHANT_TERMS_REQUIRED', 'The merchant terms are not accepted yet');
+  }
 }
 
 /**

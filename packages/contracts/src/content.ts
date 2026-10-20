@@ -7,7 +7,8 @@ import { slugSchema } from './catalog.js';
  * and one announcement bar, each scheduled; and the feed of recent real deliveries.
  */
 
-export const CONTENT_PAGES = ['terms', 'privacy', 'refund', 'about'] as const;
+/** S20 MT1: `merchant_terms`, accepted by merchants (shown at `/merchant-terms`). */
+export const CONTENT_PAGES = ['terms', 'privacy', 'refund', 'about', 'merchant_terms'] as const;
 
 export const contentPageSchema = z.enum(CONTENT_PAGES).meta({ id: 'ContentPage' });
 

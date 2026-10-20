@@ -31,6 +31,7 @@ import { Route as AppCustomersIdRouteImport } from './routes/_app/customers.$id'
 import { Route as AppDepositsIndexRouteImport } from './routes/_app/deposits.index'
 import { Route as AppDepositsIdRouteImport } from './routes/_app/deposits.$id'
 import { Route as AppDepositsTransfersRouteImport } from './routes/_app/deposits.transfers'
+import { Route as AppMerchantsIndexRouteImport } from './routes/_app/merchants.index'
 import { Route as AppOrdersIndexRouteImport } from './routes/_app/orders.index'
 import { Route as AppOrdersIdRouteImport } from './routes/_app/orders.$id'
 import { Route as AppOrdersLiveRouteImport } from './routes/_app/orders.live'
@@ -41,6 +42,7 @@ import { Route as AppPricingMatrixRouteImport } from './routes/_app/pricing.matr
 import { Route as AppPricingReviewsRouteImport } from './routes/_app/pricing.reviews'
 import { Route as AppReconciliationIndexRouteImport } from './routes/_app/reconciliation.index'
 import { Route as AppSettingsDepositsRouteImport } from './routes/_app/settings.deposits'
+import { Route as AppSettingsMerchantsRouteImport } from './routes/_app/settings.merchants'
 import { Route as AppSettingsSupportRouteImport } from './routes/_app/settings.support'
 import { Route as AppSettingsSwitchesRouteImport } from './routes/_app/settings.switches'
 import { Route as AppSettingsTelegramRouteImport } from './routes/_app/settings.telegram'
@@ -56,6 +58,8 @@ import { Route as AppCatalogGamesIdRouteImport } from './routes/_app/catalog.gam
 import { Route as AppCatalogGamesNewRouteImport } from './routes/_app/catalog.games.new'
 import { Route as AppContentPagesIndexRouteImport } from './routes/_app/content.pages.index'
 import { Route as AppContentPagesPageRouteImport } from './routes/_app/content.pages.$page'
+import { Route as AppMerchantsApplicationsIndexRouteImport } from './routes/_app/merchants.applications.index'
+import { Route as AppMerchantsApplicationsIdRouteImport } from './routes/_app/merchants.applications.$id'
 import { Route as AppPricingListsIndexRouteImport } from './routes/_app/pricing.lists.index'
 import { Route as AppPricingListsIdRouteImport } from './routes/_app/pricing.lists.$id'
 import { Route as AppReconciliationRunsIdRouteImport } from './routes/_app/reconciliation.runs.$id'
@@ -170,6 +174,11 @@ const AppDepositsTransfersRoute = AppDepositsTransfersRouteImport.update({
   path: '/deposits/transfers',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMerchantsIndexRoute = AppMerchantsIndexRouteImport.update({
+  id: '/merchants/',
+  path: '/merchants/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrdersIndexRoute = AppOrdersIndexRouteImport.update({
   id: '/orders/',
   path: '/orders/',
@@ -218,6 +227,11 @@ const AppReconciliationIndexRoute = AppReconciliationIndexRouteImport.update({
 const AppSettingsDepositsRoute = AppSettingsDepositsRouteImport.update({
   id: '/settings/deposits',
   path: '/settings/deposits',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsMerchantsRoute = AppSettingsMerchantsRouteImport.update({
+  id: '/settings/merchants',
+  path: '/settings/merchants',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSettingsSupportRoute = AppSettingsSupportRouteImport.update({
@@ -295,6 +309,18 @@ const AppContentPagesPageRoute = AppContentPagesPageRouteImport.update({
   path: '/pages/$page',
   getParentRoute: () => AppContentRoute,
 } as any)
+const AppMerchantsApplicationsIndexRoute =
+  AppMerchantsApplicationsIndexRouteImport.update({
+    id: '/merchants/applications/',
+    path: '/merchants/applications/',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppMerchantsApplicationsIdRoute =
+  AppMerchantsApplicationsIdRouteImport.update({
+    id: '/merchants/applications/$id',
+    path: '/merchants/applications/$id',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppPricingListsIndexRoute = AppPricingListsIndexRouteImport.update({
   id: '/pricing/lists/',
   path: '/pricing/lists/',
@@ -342,6 +368,7 @@ export interface FileRoutesByFullPath {
   '/pricing/matrix': typeof AppPricingMatrixRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
+  '/settings/merchants': typeof AppSettingsMerchantsRoute
   '/settings/support': typeof AppSettingsSupportRoute
   '/settings/switches': typeof AppSettingsSwitchesRoute
   '/settings/telegram': typeof AppSettingsTelegramRoute
@@ -354,6 +381,7 @@ export interface FileRoutesByFullPath {
   '/content/': typeof AppContentIndexRoute
   '/customers/': typeof AppCustomersIndexRoute
   '/deposits/': typeof AppDepositsIndexRoute
+  '/merchants/': typeof AppMerchantsIndexRoute
   '/orders/': typeof AppOrdersIndexRoute
   '/pricing/': typeof AppPricingIndexRoute
   '/reconciliation/': typeof AppReconciliationIndexRoute
@@ -363,9 +391,11 @@ export interface FileRoutesByFullPath {
   '/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/catalog/games/new': typeof AppCatalogGamesNewRoute
   '/content/pages/$page': typeof AppContentPagesPageRoute
+  '/merchants/applications/$id': typeof AppMerchantsApplicationsIdRoute
   '/pricing/lists/$id': typeof AppPricingListsIdRoute
   '/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/content/pages/': typeof AppContentPagesIndexRoute
+  '/merchants/applications/': typeof AppMerchantsApplicationsIndexRoute
   '/pricing/lists/': typeof AppPricingListsIndexRoute
   '/suppliers/$code/categories/$categoryId': typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
@@ -393,6 +423,7 @@ export interface FileRoutesByTo {
   '/pricing/matrix': typeof AppPricingMatrixRoute
   '/pricing/reviews': typeof AppPricingReviewsRoute
   '/settings/deposits': typeof AppSettingsDepositsRoute
+  '/settings/merchants': typeof AppSettingsMerchantsRoute
   '/settings/support': typeof AppSettingsSupportRoute
   '/settings/switches': typeof AppSettingsSwitchesRoute
   '/settings/telegram': typeof AppSettingsTelegramRoute
@@ -405,6 +436,7 @@ export interface FileRoutesByTo {
   '/content': typeof AppContentIndexRoute
   '/customers': typeof AppCustomersIndexRoute
   '/deposits': typeof AppDepositsIndexRoute
+  '/merchants': typeof AppMerchantsIndexRoute
   '/orders': typeof AppOrdersIndexRoute
   '/pricing': typeof AppPricingIndexRoute
   '/reconciliation': typeof AppReconciliationIndexRoute
@@ -414,9 +446,11 @@ export interface FileRoutesByTo {
   '/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/catalog/games/new': typeof AppCatalogGamesNewRoute
   '/content/pages/$page': typeof AppContentPagesPageRoute
+  '/merchants/applications/$id': typeof AppMerchantsApplicationsIdRoute
   '/pricing/lists/$id': typeof AppPricingListsIdRoute
   '/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/content/pages': typeof AppContentPagesIndexRoute
+  '/merchants/applications': typeof AppMerchantsApplicationsIndexRoute
   '/pricing/lists': typeof AppPricingListsIndexRoute
   '/suppliers/$code/categories/$categoryId': typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
@@ -447,6 +481,7 @@ export interface FileRoutesById {
   '/_app/pricing/matrix': typeof AppPricingMatrixRoute
   '/_app/pricing/reviews': typeof AppPricingReviewsRoute
   '/_app/settings/deposits': typeof AppSettingsDepositsRoute
+  '/_app/settings/merchants': typeof AppSettingsMerchantsRoute
   '/_app/settings/support': typeof AppSettingsSupportRoute
   '/_app/settings/switches': typeof AppSettingsSwitchesRoute
   '/_app/settings/telegram': typeof AppSettingsTelegramRoute
@@ -459,6 +494,7 @@ export interface FileRoutesById {
   '/_app/content/': typeof AppContentIndexRoute
   '/_app/customers/': typeof AppCustomersIndexRoute
   '/_app/deposits/': typeof AppDepositsIndexRoute
+  '/_app/merchants/': typeof AppMerchantsIndexRoute
   '/_app/orders/': typeof AppOrdersIndexRoute
   '/_app/pricing/': typeof AppPricingIndexRoute
   '/_app/reconciliation/': typeof AppReconciliationIndexRoute
@@ -468,9 +504,11 @@ export interface FileRoutesById {
   '/_app/catalog/games/$id': typeof AppCatalogGamesIdRoute
   '/_app/catalog/games/new': typeof AppCatalogGamesNewRoute
   '/_app/content/pages/$page': typeof AppContentPagesPageRoute
+  '/_app/merchants/applications/$id': typeof AppMerchantsApplicationsIdRoute
   '/_app/pricing/lists/$id': typeof AppPricingListsIdRoute
   '/_app/reconciliation/runs/$id': typeof AppReconciliationRunsIdRoute
   '/_app/content/pages/': typeof AppContentPagesIndexRoute
+  '/_app/merchants/applications/': typeof AppMerchantsApplicationsIndexRoute
   '/_app/pricing/lists/': typeof AppPricingListsIndexRoute
   '/_app/suppliers/$code_/categories/$categoryId': typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
@@ -501,6 +539,7 @@ export interface FileRouteTypes {
     | '/pricing/matrix'
     | '/pricing/reviews'
     | '/settings/deposits'
+    | '/settings/merchants'
     | '/settings/support'
     | '/settings/switches'
     | '/settings/telegram'
@@ -513,6 +552,7 @@ export interface FileRouteTypes {
     | '/content/'
     | '/customers/'
     | '/deposits/'
+    | '/merchants/'
     | '/orders/'
     | '/pricing/'
     | '/reconciliation/'
@@ -522,9 +562,11 @@ export interface FileRouteTypes {
     | '/catalog/games/$id'
     | '/catalog/games/new'
     | '/content/pages/$page'
+    | '/merchants/applications/$id'
     | '/pricing/lists/$id'
     | '/reconciliation/runs/$id'
     | '/content/pages/'
+    | '/merchants/applications/'
     | '/pricing/lists/'
     | '/suppliers/$code/categories/$categoryId'
   fileRoutesByTo: FileRoutesByTo
@@ -552,6 +594,7 @@ export interface FileRouteTypes {
     | '/pricing/matrix'
     | '/pricing/reviews'
     | '/settings/deposits'
+    | '/settings/merchants'
     | '/settings/support'
     | '/settings/switches'
     | '/settings/telegram'
@@ -564,6 +607,7 @@ export interface FileRouteTypes {
     | '/content'
     | '/customers'
     | '/deposits'
+    | '/merchants'
     | '/orders'
     | '/pricing'
     | '/reconciliation'
@@ -573,9 +617,11 @@ export interface FileRouteTypes {
     | '/catalog/games/$id'
     | '/catalog/games/new'
     | '/content/pages/$page'
+    | '/merchants/applications/$id'
     | '/pricing/lists/$id'
     | '/reconciliation/runs/$id'
     | '/content/pages'
+    | '/merchants/applications'
     | '/pricing/lists'
     | '/suppliers/$code/categories/$categoryId'
   id:
@@ -605,6 +651,7 @@ export interface FileRouteTypes {
     | '/_app/pricing/matrix'
     | '/_app/pricing/reviews'
     | '/_app/settings/deposits'
+    | '/_app/settings/merchants'
     | '/_app/settings/support'
     | '/_app/settings/switches'
     | '/_app/settings/telegram'
@@ -617,6 +664,7 @@ export interface FileRouteTypes {
     | '/_app/content/'
     | '/_app/customers/'
     | '/_app/deposits/'
+    | '/_app/merchants/'
     | '/_app/orders/'
     | '/_app/pricing/'
     | '/_app/reconciliation/'
@@ -626,9 +674,11 @@ export interface FileRouteTypes {
     | '/_app/catalog/games/$id'
     | '/_app/catalog/games/new'
     | '/_app/content/pages/$page'
+    | '/_app/merchants/applications/$id'
     | '/_app/pricing/lists/$id'
     | '/_app/reconciliation/runs/$id'
     | '/_app/content/pages/'
+    | '/_app/merchants/applications/'
     | '/_app/pricing/lists/'
     | '/_app/suppliers/$code_/categories/$categoryId'
   fileRoutesById: FileRoutesById
@@ -796,6 +846,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDepositsTransfersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/merchants/': {
+      id: '/_app/merchants/'
+      path: '/merchants'
+      fullPath: '/merchants/'
+      preLoaderRoute: typeof AppMerchantsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/orders/': {
       id: '/_app/orders/'
       path: '/orders'
@@ -864,6 +921,13 @@ declare module '@tanstack/react-router' {
       path: '/settings/deposits'
       fullPath: '/settings/deposits'
       preLoaderRoute: typeof AppSettingsDepositsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings/merchants': {
+      id: '/_app/settings/merchants'
+      path: '/settings/merchants'
+      fullPath: '/settings/merchants'
+      preLoaderRoute: typeof AppSettingsMerchantsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/settings/support': {
@@ -971,6 +1035,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppContentPagesPageRouteImport
       parentRoute: typeof AppContentRoute
     }
+    '/_app/merchants/applications/': {
+      id: '/_app/merchants/applications/'
+      path: '/merchants/applications'
+      fullPath: '/merchants/applications/'
+      preLoaderRoute: typeof AppMerchantsApplicationsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/merchants/applications/$id': {
+      id: '/_app/merchants/applications/$id'
+      path: '/merchants/applications/$id'
+      fullPath: '/merchants/applications/$id'
+      preLoaderRoute: typeof AppMerchantsApplicationsIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/pricing/lists/': {
       id: '/_app/pricing/lists/'
       path: '/pricing/lists'
@@ -1044,6 +1122,7 @@ interface AppRouteChildren {
   AppPricingMatrixRoute: typeof AppPricingMatrixRoute
   AppPricingReviewsRoute: typeof AppPricingReviewsRoute
   AppSettingsDepositsRoute: typeof AppSettingsDepositsRoute
+  AppSettingsMerchantsRoute: typeof AppSettingsMerchantsRoute
   AppSettingsSupportRoute: typeof AppSettingsSupportRoute
   AppSettingsSwitchesRoute: typeof AppSettingsSwitchesRoute
   AppSettingsTelegramRoute: typeof AppSettingsTelegramRoute
@@ -1055,6 +1134,7 @@ interface AppRouteChildren {
   AppCatalogIndexRoute: typeof AppCatalogIndexRoute
   AppCustomersIndexRoute: typeof AppCustomersIndexRoute
   AppDepositsIndexRoute: typeof AppDepositsIndexRoute
+  AppMerchantsIndexRoute: typeof AppMerchantsIndexRoute
   AppOrdersIndexRoute: typeof AppOrdersIndexRoute
   AppPricingIndexRoute: typeof AppPricingIndexRoute
   AppReconciliationIndexRoute: typeof AppReconciliationIndexRoute
@@ -1063,8 +1143,10 @@ interface AppRouteChildren {
   AppWalletsIndexRoute: typeof AppWalletsIndexRoute
   AppCatalogGamesIdRoute: typeof AppCatalogGamesIdRoute
   AppCatalogGamesNewRoute: typeof AppCatalogGamesNewRoute
+  AppMerchantsApplicationsIdRoute: typeof AppMerchantsApplicationsIdRoute
   AppPricingListsIdRoute: typeof AppPricingListsIdRoute
   AppReconciliationRunsIdRoute: typeof AppReconciliationRunsIdRoute
+  AppMerchantsApplicationsIndexRoute: typeof AppMerchantsApplicationsIndexRoute
   AppPricingListsIndexRoute: typeof AppPricingListsIndexRoute
   AppSuppliersCodeCategoriesCategoryIdRoute: typeof AppSuppliersCodeCategoriesCategoryIdRoute
 }
@@ -1087,6 +1169,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPricingMatrixRoute: AppPricingMatrixRoute,
   AppPricingReviewsRoute: AppPricingReviewsRoute,
   AppSettingsDepositsRoute: AppSettingsDepositsRoute,
+  AppSettingsMerchantsRoute: AppSettingsMerchantsRoute,
   AppSettingsSupportRoute: AppSettingsSupportRoute,
   AppSettingsSwitchesRoute: AppSettingsSwitchesRoute,
   AppSettingsTelegramRoute: AppSettingsTelegramRoute,
@@ -1098,6 +1181,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCatalogIndexRoute: AppCatalogIndexRoute,
   AppCustomersIndexRoute: AppCustomersIndexRoute,
   AppDepositsIndexRoute: AppDepositsIndexRoute,
+  AppMerchantsIndexRoute: AppMerchantsIndexRoute,
   AppOrdersIndexRoute: AppOrdersIndexRoute,
   AppPricingIndexRoute: AppPricingIndexRoute,
   AppReconciliationIndexRoute: AppReconciliationIndexRoute,
@@ -1106,8 +1190,10 @@ const AppRouteChildren: AppRouteChildren = {
   AppWalletsIndexRoute: AppWalletsIndexRoute,
   AppCatalogGamesIdRoute: AppCatalogGamesIdRoute,
   AppCatalogGamesNewRoute: AppCatalogGamesNewRoute,
+  AppMerchantsApplicationsIdRoute: AppMerchantsApplicationsIdRoute,
   AppPricingListsIdRoute: AppPricingListsIdRoute,
   AppReconciliationRunsIdRoute: AppReconciliationRunsIdRoute,
+  AppMerchantsApplicationsIndexRoute: AppMerchantsApplicationsIndexRoute,
   AppPricingListsIndexRoute: AppPricingListsIndexRoute,
   AppSuppliersCodeCategoriesCategoryIdRoute:
     AppSuppliersCodeCategoriesCategoryIdRoute,

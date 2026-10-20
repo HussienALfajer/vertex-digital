@@ -52,6 +52,11 @@ const ALL_ON = Object.fromEntries(
     'order_cancelled',
     'checkout_finished',
     'ticket_replied',
+    'order_placed_for_you',
+    'merchant_info_requested',
+    'merchant_approved',
+    'merchant_rejected',
+    'merchant_revoked',
   ].map((event) => [event, true]),
 );
 
@@ -114,7 +119,17 @@ export class MockApi {
           phone: '+963944123456',
           createdAt: '2026-10-01T09:00:00.000Z',
           priceKind: 'retail',
+          accountType: 'customer',
+          merchant: null,
         },
+      },
+    ],
+    // S20: no merchant terms published and no application: the account page's card says "soon".
+    [
+      'GET /api/merchant/application',
+      {
+        status: 200,
+        body: { application: null, canApply: false, availableAt: null, termsVersionId: null },
       },
     ],
     // No saved player ID: the buy box reads them once signed in (S10 rule SP3).

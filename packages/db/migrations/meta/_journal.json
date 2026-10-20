@@ -561,6 +561,20 @@
       "when": 1792523484012,
       "tag": "0079_shocking_corsair",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1792531687504,
+      "tag": "0080_mean_firelord",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1792531719917,
+      "tag": "0081_s20_merchant_guards",
+      "breakpoints": true
     }
   ]
 }
