@@ -13,3 +13,13 @@
     inline-size: 100%;
   }
 }
+
+/* S21 PR1: a print page (a receipt, codes) shows no header, banner or footer, on screen or paper. */
+body:has([data-print-page]) > :not(main) {
+  display: none;
+}
+html:has([data-print-page]),
+body:has([data-print-page]) {
+  background: var(--color-white);
+  color-scheme: light;
+}

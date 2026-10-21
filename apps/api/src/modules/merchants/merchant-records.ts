@@ -114,6 +114,8 @@ export function settingsView(
     ordersPerTenMinutes: row.ordersPerTenMinutes,
     reapplyWaitDays: row.reapplyWaitDays,
     infoExpiryDays: row.infoExpiryDays,
+    playerChecksPerHour: row.playerChecksPerHour,
+    playerChecksPerDay: row.playerChecksPerDay,
     minDepositUsdUnits,
     updatedAt: row.createdAt.toISOString(),
   };

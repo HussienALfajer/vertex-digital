@@ -124,6 +124,9 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     gift: null,
     shareLinks: [],
     privatePrice: false,
+    verificationCode: 'VrfyCode0123456789abcd',
+    sale: null,
+    codeReleases: [],
     repeatable: true,
     createdAt: '2026-10-09T10:00:00.000Z',
     ...changes,
@@ -551,6 +554,7 @@ test.describe('gift and receipt links (GF4, GF5, RC1–RC3, SH5, SH6)', () => {
     url: 'http://127.0.0.1:4001/g/G1ftT0kenAAAAAAAAAAAAA',
     showPrice: false,
     playerDisplay: 'masked' as const,
+    branded: false,
     createdAt: '2026-10-09T10:00:00.000Z',
   };
   const RECEIPT_LINK = {
@@ -629,6 +633,7 @@ test.describe('gift and receipt links (GF4, GF5, RC1–RC3, SH5, SH6)', () => {
     expect(api.last(`PUT /api/orders/${ORDER_ID}/receipt-link`)?.body).toEqual({
       showPrice: false,
       playerDisplay: 'full',
+      branded: false,
     });
   });
 
@@ -758,6 +763,7 @@ for (const theme of ['dark', 'light'] as const) {
             url: 'http://127.0.0.1:4001/g/G1ftT0kenAAAAAAAAAAAAA',
             showPrice: false,
             playerDisplay: 'masked',
+            branded: false,
             createdAt: '2026-10-09T10:00:00.000Z',
           },
         ],

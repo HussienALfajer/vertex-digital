@@ -1,8 +1,10 @@
-import { formatUsd, type PublicShare } from '@vertex-digital/contracts';
+import { formatSyp, formatUsd, type PublicShare } from '@vertex-digital/contracts';
 import { VertexMark } from '@vertex-digital/ui/brand/logo';
 import { Badge } from '@vertex-digital/ui/components/badge';
 import type { ReactNode } from 'react';
 import { accentStyle } from '@/features/catalog/game-card';
+import { tm } from '@/features/merchant-tools/i18n';
+import { LazyVerificationQr } from '@/features/orders/verification-qr-lazy';
 import { t } from '@/lib/i18n';
 import { LocalTime } from './local-time';
 
@@ -30,9 +32,24 @@ export function shareStageText(
  * previews it: the brand frame with the game's accent, then only what the owner chose. Every value
  * is rendered as text (ADR 0015); IDs read left to right inside the Arabic text. A server
  * component, so the public pages ship no money code; only the times render in the browser.
+ * S21 BR1: a merchant's branded receipt carries the shop's name, its WhatsApp and logo, and its
+ * selling price; VF1: every receipt carries the verification QR.
  */
-export function ShareCard({ share, verifyUrl }: { share: PublicShare; verifyUrl?: string }) {
+export function ShareCard({
+  share,
+  verifyUrl,
+  logoUrl,
+  origin,
+}: {
+  share: PublicShare;
+  verifyUrl?: string;
+  /** The branded receipt's logo, when the shop has one. */
+  logoUrl?: string;
+  /** The store's origin, for the QR (the browser's own when omitted). */
+  origin?: string;
+}) {
   const gift = share.kind === 'gift';
+  const branding = share.branding;
   return (
     <article
       style={accentStyle(share.game.accentColor)}
@@ -41,12 +58,30 @@ export function ShareCard({ share, verifyUrl }: { share: PublicShare; verifyUrl?
       <div aria-hidden="true" className="h-2 bg-(--game-accent)" />
       <div className="flex flex-col gap-5 p-5">
         <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2 text-accent-text">
-            <VertexMark className="w-7" />
-            <span className="text-sm font-bold text-foreground" dir="ltr">
-              {t('app.name')}
+          {branding ? (
+            <span className="flex min-w-0 items-center gap-2">
+              {branding.hasLogo && logoUrl && (
+                // biome-ignore lint/performance/noImgElement: the logo is re-encoded and served by the API (S21 BR3).
+                <img
+                  src={logoUrl}
+                  alt=""
+                  width={36}
+                  height={36}
+                  className="size-9 shrink-0 rounded-md bg-white object-contain grayscale"
+                />
+              )}
+              <span className="text-base font-bold break-words">
+                <bdi>{branding.tradeName}</bdi>
+              </span>
             </span>
-          </span>
+          ) : (
+            <span className="flex items-center gap-2 text-accent-text">
+              <VertexMark className="w-7" />
+              <span className="text-sm font-bold text-foreground" dir="ltr">
+                {t('app.name')}
+              </span>
+            </span>
+          )}
           <Badge tone={STAGE_TONES[share.stage]}>{shareStageText(share)}</Badge>
         </div>
         <h2 className="text-2xl font-bold">
@@ -113,6 +148,25 @@ export function ShareCard({ share, verifyUrl }: { share: PublicShare; verifyUrl?
               </bdi>
             </Line>
           )}
+          {share.sellingPrice && (
+            <Line label={tm('share.price')}>
+              <bdi
+                dir={share.sellingPrice.currency === 'syp' ? undefined : 'ltr'}
+                className="font-bold tabular-nums"
+              >
+                {share.sellingPrice.currency === 'syp'
+                  ? tm('common.syp', {
+                      amount: formatSyp(share.sellingPrice.totalAmountUnits),
+                    })
+                  : formatUsd(share.sellingPrice.totalAmountUnits)}
+              </bdi>
+            </Line>
+          )}
+          {branding?.whatsapp && (
+            <Line label={tm('share.whatsapp')}>
+              <bdi dir="ltr">{branding.whatsapp}</bdi>
+            </Line>
+          )}
           {share.price && share.price.refundedUsdUnits > 0 && (
             <Line label={t('share.receipt.refunded')}>
               <bdi dir="ltr" className="tabular-nums">
@@ -121,6 +175,20 @@ export function ShareCard({ share, verifyUrl }: { share: PublicShare; verifyUrl?
             </Line>
           )}
         </dl>
+        {share.verificationCode && (
+          <div className="flex items-center gap-3 rounded-lg bg-white p-2 text-neutral-900">
+            <LazyVerificationQr
+              code={share.verificationCode}
+              origin={origin}
+              size={96}
+              label={tm('share.qr')}
+            />
+            <span className="flex flex-col gap-1 text-xs">
+              <span>{tm('share.qr')}</span>
+              {branding && <span className="text-neutral-600">{tm('share.verifiedBy')}</span>}
+            </span>
+          </div>
+        )}
         {!gift && verifyUrl && (
           <p className="text-xs text-muted-foreground break-all">
             {t('share.receipt.verify')} <bdi dir="ltr">{verifyUrl.replace(/^https?:\/\//, '')}</bdi>

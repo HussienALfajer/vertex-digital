@@ -31,7 +31,7 @@ import { accountBalance } from '../ledger/balance.js';
 import { ensureCustomerWallet, ensureSystemAccount, findCustomerWallet } from '../ledger/index.js';
 import { postJournal } from '../ledger/post-journal.js';
 import { walletTimeline } from '../ledger/wallet.js';
-import { dashboardFacts } from '../merchant-tools/reads.js';
+import { dashboardFacts, recentPlayers } from '../merchant-tools/reads.js';
 import { compareMerchantWatches } from '../merchant-tools/watch-alerts.js';
 import {
   type GrantInput,
@@ -85,6 +85,7 @@ import {
   publicShare,
   revealCode,
 } from './reads.js';
+import { orderPrint, publicVerification, type ReleaseInput, releaseCodes } from './receipts.js';
 import {
   cancelOwnReservation,
   expireReservations,
@@ -4402,5 +4403,177 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
     await expect(
       pool.query('delete from merchant_alert_events where id = $1', [rows[0]?.id]),
     ).rejects.toThrow(/kept 90 days/);
+  });
+
+  it('lets a merchant buy 50 codes and 50 checkout lines; customers keep their limits (QT1, BK3)', async () => {
+    const codes = await product({ kind: 'code', cost: usd(1) });
+    const price = await wholesalePrice(codes.id);
+    const shop = await merchant(usd(500));
+    const buyer = await customer({ funds: usd(500) });
+    // The pack's own limit is 10: a customer stays under it, a merchant takes up to 50.
+    expect(await refusal(buy(request(buyer, codes, { quantity: 11, fields: {} })))).toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+    const { order } = await buy(
+      request(shop, { id: codes.id, price }, { quantity: 30, fields: {} }),
+    );
+    expect(order.quantity).toBe(30);
+    expect(
+      await refusal(buy(request(shop, { id: codes.id, price }, { quantity: 51, fields: {} }))),
+    ).toMatchObject({ code: 'VALIDATION_FAILED' });
+
+    const direct = await product({ cost: usd(1) });
+    const line = (unit: number) => ({
+      productId: direct.id,
+      quantity: 1,
+      fields: { player_id: '5123456789' },
+      expectedUnitPriceUsdUnits: unit,
+      confirmPlayer: false,
+    });
+    const checkout = (customerId: string, count: number, unit: number) =>
+      db.transaction((tx) =>
+        checkoutOrders(tx, context(), {
+          customerId,
+          idempotencyKey: newId(),
+          requestHash: hash({ checkout: newId() }),
+          fakeEnabled: true,
+          purchasesStopped: false,
+          channel: 'store',
+          playerCheck: async () => null,
+          source: 'bulk',
+          lines: Array.from({ length: count }, () => line(unit)),
+        }),
+      );
+    expect(await refusal(checkout(buyer, 11, direct.price))).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      details: { lines: { max: 10 } },
+    });
+    const bulk = await checkout(shop, 12, await wholesalePrice(direct.id));
+    expect(bulk.orders).toHaveLength(12);
+    expect(bulk.checkout.source).toBe('bulk');
+    expect(bulk.checkout.lineCount).toBe(12);
+  });
+
+  it('releases delivered codes with one log row per code, and shows the log (CR1, CR4)', async () => {
+    const item = await product({ kind: 'code', cost: usd(1) });
+    const shop = await merchant(usd(100));
+    const { order } = await buy(
+      request(
+        shop,
+        { id: item.id, price: await wholesalePrice(item.id) },
+        { quantity: 3, fields: {} },
+      ),
+    );
+    const release = (input: Partial<ReleaseInput> = {}) =>
+      db.transaction((tx) =>
+        releaseCodes(tx, codesKey, {
+          orderId: order.id,
+          customerId: shop,
+          purpose: 'print',
+          ipAddress: '203.0.113.9',
+          userAgent: 'Printer',
+          ...input,
+        }),
+      );
+    expect(await refusal(release())).toMatchObject({ code: 'CODES_NOT_DELIVERED' });
+    const attemptId = await send(order, item);
+    await apply(attemptId, {
+      status: 'delivered',
+      quantity: 3,
+      codes: ['AAAA-1', 'BBBB-2', 'CCCC-3'],
+    });
+
+    expect(await release({ customerId: await customer() })).toBeNull();
+    const all = await release();
+    expect(all?.codes.map((code) => [code.position, code.code])).toEqual([
+      [1, 'AAAA-1'],
+      [2, 'BBBB-2'],
+      [3, 'CCCC-3'],
+    ]);
+    const second = all?.codes[1]?.id as string;
+    expect((await release({ purpose: 'copy', codeIds: [second] }))?.codes).toHaveLength(1);
+    expect(await refusal(release({ codeIds: [second, newId()] }))).toMatchObject({
+      code: 'CODES_NOT_DELIVERED',
+    });
+    const view = await customerOrder(db, shop, order.id);
+    expect(view?.codeReleases.map((entry) => [entry.purpose, entry.positions])).toEqual([
+      ['copy', [2]],
+      ['print', [1, 2, 3]],
+    ]);
+    const admin = await adminOrder(db, order.id);
+    expect(admin?.codes[0]?.reveals).toEqual([
+      expect.objectContaining({ purpose: 'print', ipAddress: '203.0.113.9' }),
+    ]);
+  });
+
+  it('gives every order a fixed verification code, and shows no price or identity (VF1–VF3)', async () => {
+    const item = await product({ cost: usd(1) });
+    const shop = await merchant(usd(50));
+    await pool.query(
+      'insert into merchant_selling_prices (customer_id, product_id, currency, amount_units) values ($1, $2, $3, $4)',
+      [shop, item.id, 'syp', 15_000_00],
+    );
+    const { order } = await buy(
+      request(shop, { id: item.id, price: await wholesalePrice(item.id) }),
+    );
+    expect(order.verificationCode).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    const buyer = await customer({ funds: usd(10) });
+    const retailOrder = (await buy(request(buyer, item))).order;
+    expect(retailOrder.verificationCode).not.toBe(order.verificationCode);
+    await expect(
+      pool.query("update orders set verification_code = 'x' where id = $1", [order.id]),
+    ).rejects.toThrow(/fixed/);
+
+    const page = await publicVerification(db, order.verificationCode);
+    expect(page).toMatchObject({
+      issuer: { kind: 'merchant', tradeName: 'محل النور' },
+      orderNumber: order.number,
+      stage: 'processing',
+      deliveredAt: null,
+      fields: [{ value: '••••6789' }],
+    });
+    expect(JSON.stringify(page)).not.toMatch(/5123456789|Units|email/);
+    expect((await publicVerification(db, retailOrder.verificationCode))?.issuer).toEqual({
+      kind: 'store',
+    });
+    expect(await publicVerification(db, 'A'.repeat(22))).toBeNull();
+
+    // The printed receipt: the shop's selling price, never the price paid (BR1); the retail price
+    // on a customer's order; nothing for another customer.
+    expect((await orderPrint(db, shop, order.id))?.price).toEqual({
+      kind: 'selling',
+      currency: 'syp',
+      unitAmountUnits: 15_000_00,
+      totalAmountUnits: 15_000_00,
+    });
+    expect((await orderPrint(db, buyer, retailOrder.id))?.price).toMatchObject({
+      kind: 'retail',
+      unitAmountUnits: item.price,
+    });
+    expect(await orderPrint(db, buyer, order.id)).toBeNull();
+  });
+
+  it('lists the 20 newest distinct ids of a game with their checked name (PS2)', async () => {
+    const item = await product({ cost: usd(1) });
+    const price = await wholesalePrice(item.id);
+    const shop = await merchant(usd(50));
+    await buy(request(shop, { id: item.id, price }, { fields: { player_id: '5100000001' } }));
+    await buy(
+      request(
+        shop,
+        { id: item.id, price },
+        {
+          fields: { player_id: '5100000002' },
+          playerCheck: async () => ({ result: 'valid', playerName: 'Nour', region: null }),
+        },
+      ),
+    );
+    await buy(request(shop, { id: item.id, price }, { fields: { player_id: '5100000001' } }));
+    const recent = await recentPlayers(db, shop, item.game);
+    expect(recent.map((row) => [row.fields.player_id, row.playerName])).toEqual([
+      ['5100000001', null],
+      ['5100000002', 'Nour'],
+    ]);
+    expect(await recentPlayers(db, await customer(), item.game)).toEqual([]);
   });
 });

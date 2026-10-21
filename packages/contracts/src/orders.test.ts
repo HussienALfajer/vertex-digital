@@ -328,6 +328,7 @@ describe('routing candidates (rules R2, R4)', () => {
     priority: 1,
     unusableReason: null,
     balanceUsdUnits: null,
+    offerMaxQuantity: null,
     ...overrides,
   });
   const order: CandidateOrder = {
@@ -378,6 +379,12 @@ describe('routing candidates (rules R2, R4)', () => {
       ['3', 'test_customer'],
     ]);
     expect(orderCandidates([], order)).toEqual([]);
+    // S21 QT3: an offer that allows fewer units per order than the order still needs.
+    const limited = [route('1', { offerMaxQuantity: 1 }), route('2', { offerMaxQuantity: 2 })];
+    expect(orderCandidates(limited, order).map((c) => c.skipReason)).toEqual([
+      null,
+      'quantity_above_offer',
+    ]);
   });
 
   it("computes a test customer's availability over the test routes only (rule O3)", () => {

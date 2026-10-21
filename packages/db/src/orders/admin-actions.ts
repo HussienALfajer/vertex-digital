@@ -188,6 +188,7 @@ function candidateRoute(route: RouteState): CandidateRoute {
     unusableReason: route.unusableReason,
     balanceUsdUnits:
       route.supplier.balance?.currency === 'USD' ? route.supplier.balance.amountUnits : null,
+    offerMaxQuantity: route.offer.maxQuantity,
   };
 }
 

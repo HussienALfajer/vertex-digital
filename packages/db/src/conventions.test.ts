@@ -114,6 +114,7 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   merchant_alert_events:
     'A notification log (S21 AL2): never changed, deleted after 90 days, not a business record',
   merchant_alert_settings: "The merchant's own preferences (S21 AL4–AL6)",
+  merchant_receipt_settings: "The merchant's own preferences (S21 BR3)",
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -137,6 +138,7 @@ const NATURAL_KEYS: Record<string, string> = {
   merchant_order_sales: 'Keyed by its order: one sale row per merchant order (S21 SP4)',
   merchant_watch_states: 'Keyed by customer and product: the last state told (S21 AL2)',
   merchant_alert_settings: 'Keyed by its customer: one row of alert settings (S21 AL4)',
+  merchant_receipt_settings: 'Keyed by its customer: one row of receipt settings (S21 BR3)',
 };
 
 /**

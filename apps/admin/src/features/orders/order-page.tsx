@@ -383,6 +383,10 @@ function Codes({ order }: { order: AdminOrder }) {
                       {t(`orders.codes.revealedBy.${item.actor}`, {
                         date: formatDateTime(item.createdAt),
                       })}
+                      {/* S21 CR4: a merchant's release to print, copy or export. */}
+                      {item.purpose !== 'reveal' && (
+                        <> · {t(`orders.codes.purposes.${item.purpose}`)}</>
+                      )}
                       {item.ipAddress && (
                         <>
                           {' · '}

@@ -26,7 +26,6 @@ import {
 import {
   accountBalance,
   alertEvents,
-  applicant,
   type Database,
   dashboardFacts,
   findCustomerWallet,
@@ -55,16 +54,9 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import { decodeCursor, encodeCursor } from '../../core/lists/cursor.js';
 import { RatesService } from '../rates/index.js';
+import { refusals, requireMerchant } from './merchant-access.js';
 
 const isUuid = (value: string) => z.uuid().safeParse(value).success;
-
-const refusals = {
-  notMerchant: () => new CodedException(403, 'NOT_MERCHANT', 'The account is not a merchant'),
-  frozen: () => new CodedException(403, 'ACCOUNT_FROZEN', 'The account is frozen'),
-  notFound: (what: string) => new CodedException(404, 'NOT_FOUND', `No such ${what}`),
-  invalid: (path: string, message: string) =>
-    new CodedException(400, 'VALIDATION_FAILED', message, [{ path: [path], message }]),
-};
 
 /**
  * The merchant area (S21 F30, F31, F37; MA1, MA2): the dashboard, the merchant's own selling
@@ -81,12 +73,8 @@ export class MerchantToolsService {
   ) {}
 
   /** MA1: a merchant's account; `write` refuses a frozen one. */
-  private async merchant(customerId: string, write = false): Promise<void> {
-    const person = await applicant(this.db, customerId);
-    if (person?.accountType !== 'merchant') throw refusals.notMerchant();
-    if (write && (person.frozenAt !== null || person.archivedAt !== null)) {
-      throw refusals.frozen();
-    }
+  private merchant(customerId: string, write = false): Promise<void> {
+    return requireMerchant(this.db, customerId, write);
   }
 
   /** `GET /api/merchant/dashboard` (DB1–DB6), read live. */

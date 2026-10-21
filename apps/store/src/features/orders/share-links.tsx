@@ -3,6 +3,7 @@
 import {
   maskFieldValue,
   type Order,
+  orderTotal,
   type PublicShare,
   type ReceiptPlayerDisplay,
   type ShareLink,
@@ -24,6 +25,8 @@ import { DownloadIcon, GiftIcon, LinkIcon, Share2Icon } from 'lucide-react';
 import { useId, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { CopyButton } from '@/features/deposits/copy-button';
+import { tm } from '@/features/merchant-tools/i18n';
+import { useCustomer } from '@/features/purchase/session';
 import { ShareCard } from '@/features/shares/share-card';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
@@ -63,7 +66,10 @@ export function receiptPreview(
   order: Order,
   showPrice: boolean,
   playerDisplay: ReceiptPlayerDisplay,
+  /** S21 BR1: a merchant's branded receipt, with the shop's name as the page will show it. */
+  branding: PublicShare['branding'] = null,
 ): PublicShare {
+  const units = order.quantity - order.refundedQuantity;
   const finished = ['delivered', 'partially_refunded', 'refunded'].includes(order.stage);
   return {
     kind: 'receipt',
@@ -76,7 +82,7 @@ export function receiptPreview(
     paidAt: order.timeline.find((entry) => entry.step === 'paid')?.at ?? order.createdAt,
     finishedAt: finished ? (order.timeline.at(-1)?.at ?? null) : null,
     price:
-      showPrice && order.totalUsdUnits !== null && order.refundedUsdUnits !== null
+      !branding && showPrice && order.totalUsdUnits !== null && order.refundedUsdUnits !== null
         ? { totalUsdUnits: order.totalUsdUnits, refundedUsdUnits: order.refundedUsdUnits }
         : null,
     fields: order.fields
@@ -89,6 +95,17 @@ export function receiptPreview(
           (playerDisplay === 'full' ? field.value : maskFieldValue(field.value)),
       })),
     gift: null,
+    branding,
+    // BR1: the selling price only, for the units not refunded; never the price paid.
+    sellingPrice:
+      branding && showPrice && order.sale && units > 0
+        ? {
+            currency: order.sale.currency,
+            unitAmountUnits: order.sale.unitAmountUnits,
+            totalAmountUnits: orderTotal(order.sale.unitAmountUnits, units),
+          }
+        : null,
+    verificationCode: order.verificationCode,
   };
 }
 
@@ -259,8 +276,18 @@ export function ReceiptSheet({
   onChange: () => Promise<void>;
 }) {
   const link = order.shareLinks.find((item) => item.kind === 'receipt') ?? null;
-  // S20: a price charged off retail is never shown on a receipt; the option is not offered.
-  const [showPrice, setShowPrice] = useState(!order.privatePrice && (link?.showPrice ?? true));
+  const customer = useCustomer();
+  const merchant = customer.status === 'signedIn' && customer.merchant;
+  // S21 BR2: a merchant's receipt is in the shop's name unless they turn it off.
+  const [branded, setBranded] = useState(link?.branded ?? true);
+  const brandedNow = merchant && branded;
+  // S20: a price charged off retail is never shown on a receipt; the option is not offered. S21
+  // BR1: a branded receipt offers the selling price instead, when the order has one.
+  const priceOffered = brandedNow ? order.sale !== null : !order.privatePrice;
+  const [showPrice, setShowPrice] = useState(
+    (link?.showPrice ?? true) && (!order.privatePrice || order.sale !== null),
+  );
+  const brandedId = useId();
   const [playerDisplay, setPlayerDisplay] = useState<ReceiptPlayerDisplay>(
     link?.playerDisplay ?? 'masked',
   );
@@ -269,13 +296,18 @@ export function ReceiptSheet({
   const priceId = useId();
   const changed =
     !link ||
-    (!order.privatePrice && link.showPrice !== showPrice) ||
-    link.playerDisplay !== playerDisplay;
+    (priceOffered && link.showPrice !== showPrice) ||
+    link.playerDisplay !== playerDisplay ||
+    (merchant && link.branded !== branded);
 
   async function save() {
     setFailure(null);
     setBusy(true);
-    const result = await saveReceiptLink(order.id, { showPrice, playerDisplay });
+    const result = await saveReceiptLink(order.id, {
+      showPrice: priceOffered && showPrice,
+      playerDisplay,
+      branded: brandedNow,
+    });
     setBusy(false);
     if (!result.ok) return setFailure(result.reason);
     await onChange();
@@ -285,7 +317,16 @@ export function ReceiptSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="mx-auto w-full max-w-2xl gap-4 bg-surface p-5 pb-8">
         <SheetTitle className="text-lg font-bold">{t('orders.receipt.title')}</SheetTitle>
-        {!order.privatePrice && (
+        {merchant && (
+          <label htmlFor={brandedId} className="flex min-h-11 items-center justify-between gap-3">
+            <span className="flex flex-col">
+              <span className="text-base">{tm('share.branded')}</span>
+              <span className="text-xs text-muted-foreground">{tm('share.brandedHint')}</span>
+            </span>
+            <Switch id={brandedId} checked={branded} onCheckedChange={setBranded} />
+          </label>
+        )}
+        {priceOffered && (
           <label htmlFor={priceId} className="flex min-h-11 items-center justify-between gap-3">
             <span className="text-base">{t('orders.receipt.showPrice')}</span>
             <Switch id={priceId} checked={showPrice} onCheckedChange={setShowPrice} />
@@ -312,7 +353,16 @@ export function ReceiptSheet({
         )}
         <div className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">{t('orders.receipt.preview')}</p>
-          <ShareCard share={receiptPreview(order, showPrice, playerDisplay)} />
+          <ShareCard
+            share={receiptPreview(
+              order,
+              priceOffered && showPrice,
+              playerDisplay,
+              brandedNow
+                ? { tradeName: tm('share.branded'), whatsapp: null, hasLogo: false }
+                : null,
+            )}
+          />
         </div>
         {(changed || !link) && (
           <Button size="xl" disabled={busy} onClick={() => void save()}>

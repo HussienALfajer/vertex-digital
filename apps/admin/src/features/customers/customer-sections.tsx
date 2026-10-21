@@ -38,6 +38,7 @@ import { formatDate, formatDateTime, formatSince, ltr } from '../../lib/format';
 import { AuditDetailSheet } from '../audit/audit-detail-sheet';
 import { actorLabel } from '../audit/audit-labels';
 import { DepositTable } from '../deposits/deposits-page';
+import { MerchantBranding } from '../merchants/merchant-branding';
 import { OrderTable } from '../orders/orders-page';
 import { ticketListQuery } from '../support/support.queries';
 import { TicketTable } from '../support/support-page';
@@ -235,7 +236,9 @@ export function SummarySection({
             {t(`customers.pricing.kinds.${customer.pricing.priceKind}`)}
           </Fact>
         </dl>
-        {customer.merchant && <MerchantFacts merchant={customer.merchant} />}
+        {customer.merchant && (
+          <MerchantFacts customerId={customer.id} merchant={customer.merchant} />
+        )}
       </Card>
       <Card className="gap-4">
         <CardTitle>{t('customers.summary.pinned')}</CardTitle>
@@ -565,9 +568,16 @@ export function HistorySection({ customerId }: { customerId: string }) {
 
 /**
  * S20: the merchant profile under the pricing card: name, place, since, source and terms; S21: the
- * volume level and since when, the two months' net purchases and the follows count.
+ * volume level and since when, the two months' net purchases and the follows count; S21 BR3: the
+ * receipt branding with the logo's removal.
  */
-function MerchantFacts({ merchant }: { merchant: NonNullable<AdminCustomer['merchant']> }) {
+function MerchantFacts({
+  customerId,
+  merchant,
+}: {
+  customerId: string;
+  merchant: NonNullable<AdminCustomer['merchant']>;
+}) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-4">
@@ -634,6 +644,7 @@ function MerchantFacts({ merchant }: { merchant: NonNullable<AdminCustomer['merc
           </bdi>
         </Fact>
       </dl>
+      <MerchantBranding customerId={customerId} branding={merchant.branding} />
     </div>
   );
 }

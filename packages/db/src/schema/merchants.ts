@@ -252,6 +252,9 @@ export const merchantSettings = pgTable(
     ordersPerTenMinutes: integer('orders_per_ten_minutes').notNull(),
     reapplyWaitDays: integer('reapply_wait_days').notNull(),
     infoExpiryDays: integer('info_expiry_days').notNull(),
+    /** S21 BK4: a merchant's player checks an hour and a day (defaults for older versions). */
+    playerChecksPerHour: integer('player_checks_per_hour').notNull().default(100),
+    playerChecksPerDay: integer('player_checks_per_day').notNull().default(300),
     /** Null for the seed. */
     adminId: uuid('admin_id'),
     createdAt: stampedAt(),
@@ -267,7 +270,9 @@ export const merchantSettings = pgTable(
         and ${table.perDepositUsdUnits} <= ${table.dailyDepositUsdUnits}
         and ${table.ordersPerTenMinutes} between 10 and 500
         and ${table.reapplyWaitDays} between 0 and 365
-        and ${table.infoExpiryDays} between 1 and 60`,
+        and ${table.infoExpiryDays} between 1 and 60
+        and ${table.playerChecksPerHour} between 10 and 1000
+        and ${table.playerChecksPerDay} between 30 and 5000`,
     ),
   ],
 );

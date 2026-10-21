@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   HttpCode,
@@ -12,7 +13,7 @@ import {
   Res,
   SerializeOptions,
 } from '@nestjs/common';
-import { ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger';
+import { ApiNoContentResponse, ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger';
 import {
   type ApproveApplication,
   adminCustomerSchema,
@@ -30,9 +31,11 @@ import {
   merchantSettingsInputSchema,
   merchantSettingsSchema,
   type RejectApplication,
+  type RemoveMerchantLogo,
   type RequestApplicationInfo,
   type RevokeMerchant,
   rejectApplicationSchema,
+  removeMerchantLogoSchema,
   requestApplicationInfoSchema,
   revokeMerchantSchema,
 } from '@vertex-digital/contracts';
@@ -190,6 +193,33 @@ export class MerchantsAdminController {
     @Req() request: Request,
   ) {
     return this.merchants.revoke(id, body.reason, {
+      adminId: admin.id,
+      meta: requestMeta(request),
+    });
+  }
+
+  /** S21 BR3: the merchant's receipt logo, for the profile. */
+  @Get('customers/:id/merchant/logo')
+  @AdminRoute()
+  @ApiProduces('image/webp')
+  @ApiOkResponse({ description: 'The merchant’s receipt logo' })
+  async logo(@Param('id') id: string, @Res({ passthrough: true }) response: Response) {
+    return sendImage(response, await this.merchants.logo(id), 'no-store');
+  }
+
+  /** S21 BR3: removes the merchant's logo, with a reason, audited. */
+  @Delete('customers/:id/merchant/logo')
+  @AdminRoute()
+  @Sensitive()
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'The receipts carry no logo from now on' })
+  async removeLogo(
+    @CurrentAdmin() admin: AdminIdentity,
+    @Param('id') id: string,
+    @Body({ schema: removeMerchantLogoSchema }) body: RemoveMerchantLogo,
+    @Req() request: Request,
+  ) {
+    await this.merchants.removeLogo(id, body.reason, {
       adminId: admin.id,
       meta: requestMeta(request),
     });

@@ -9,6 +9,7 @@ import type { Response } from 'express';
 import { Public } from '../../core/access/index.js';
 import { ApiQueryOf } from '../../core/http/api-query.js';
 import { RateLimit } from '../../core/rate-limit/rate-limit.js';
+import { sendImage } from '../files/index.js';
 import { ShareLinksService } from './share-links.service.js';
 
 /**
@@ -29,6 +30,16 @@ export class SharesController {
   @ApiOkResponse({ description: 'What the owner chose to show', standardSchema: publicShareSchema })
   share(@Param('token') token: string) {
     return this.shareLinks.publicShare(token);
+  }
+
+  /** S21 BR1: the shop's logo on a branded receipt link. */
+  @Get(':token/logo')
+  @Public()
+  @ApiProduces('image/webp')
+  @ApiOkResponse({ description: 'The merchant’s logo, WebP' })
+  async logo(@Param('token') token: string, @Res({ passthrough: true }) response: Response) {
+    response.setHeader('x-robots-tag', 'noindex');
+    return sendImage(response, await this.shareLinks.logo(token), 'public, max-age=300');
   }
 
   @Get(':token/image')

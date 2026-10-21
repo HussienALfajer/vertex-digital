@@ -31,6 +31,8 @@ const STATUS: Partial<Record<ErrorCode, 400 | 403 | 404 | 409>> = {
   OWNER_DAILY_CAP_EXCEEDED: 409,
   // S20 MT2.
   MERCHANT_TERMS_REQUIRED: 409,
+  // S21 CR1.
+  CODES_NOT_DELIVERED: 409,
 };
 
 /** An `OrderError` or `LedgerError` as the API answers it; anything else is rethrown as is. */

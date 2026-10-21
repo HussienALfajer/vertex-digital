@@ -12,7 +12,9 @@ import {
   createShareLink,
   type Database,
   lockOrder,
+  merchantBranding,
   orderShareLinks,
+  orders,
   publicShare,
   recordAudit,
   type ShareLinkRow,
@@ -57,14 +59,18 @@ export class ShareLinksService {
     options: Required<ReceiptOptions>,
   ): Promise<ShareLink> {
     await this.limit(customerId);
+    // S21 BR2: a merchant's order is branded by default; any other order never is.
+    const facts =
+      options.branded && isUuid(orderId) ? await this.orderFacts(customerId, orderId) : null;
+    const branded = facts !== null && (await merchantBranding(this.db, facts)) !== null;
     const link = await this.db.transaction(async (tx) => {
       await this.ownShareableOrder(tx, customerId, orderId);
       const [live] = await tx
         .update(orderShareLinks)
-        .set({ showPrice: options.showPrice, playerDisplay: options.playerDisplay })
+        .set({ showPrice: options.showPrice, playerDisplay: options.playerDisplay, branded })
         .where(this.liveLink(orderId, 'receipt'))
         .returning();
-      return live ?? createShareLink(tx, { orderId, kind: 'receipt', ...options });
+      return live ?? createShareLink(tx, { orderId, kind: 'receipt', ...options, branded });
     });
     return this.view(link);
   }
@@ -195,7 +201,43 @@ export class ShareLinksService {
       url: `${this.env.STORE_URL}${sharePath(link.kind, link.token)}`,
       showPrice: link.showPrice,
       playerDisplay: link.playerDisplay,
+      branded: link.branded,
       createdAt: link.createdAt.toISOString(),
     };
+  }
+
+  /** The order's customer and time, for its branding; null when it is not the customer's. */
+  private async orderFacts(customerId: string, orderId: string) {
+    const [row] = await this.db
+      .select({ customerId: orders.customerId, createdAt: orders.createdAt })
+      .from(orders)
+      .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)));
+    return row ?? null;
+  }
+
+  /**
+   * S21 BR1: the logo of a live branded receipt link (`GET /api/shares/:token/logo`), read with
+   * the merchant's branding now; not found otherwise.
+   */
+  async logo(token: string) {
+    if (!shareTokenSchema.safeParse(token).success) throw orderRefusals.notFound();
+    const [row] = await this.db
+      .select({ customerId: orders.customerId, createdAt: orders.createdAt })
+      .from(orderShareLinks)
+      .innerJoin(orders, eq(orders.id, orderShareLinks.orderId))
+      .where(
+        and(
+          eq(orderShareLinks.token, token),
+          eq(orderShareLinks.kind, 'receipt'),
+          eq(orderShareLinks.branded, true),
+          isNull(orderShareLinks.revokedAt),
+        ),
+      );
+    const branding = row ? await merchantBranding(this.db, row) : null;
+    const file = branding?.logoFileId
+      ? await this.files.serve(branding.logoFileId, 'merchant_logo')
+      : null;
+    if (!file) throw orderRefusals.notFound();
+    return file;
   }
 }

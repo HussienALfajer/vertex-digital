@@ -9,6 +9,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  text,
   timestamp,
   uniqueIndex,
   uuid,
@@ -16,6 +17,7 @@ import {
 import { customers } from './auth.js';
 import { catalogGames, catalogProducts } from './catalog.js';
 import { amountUnits, id } from './columns.js';
+import { storedFiles } from './files.js';
 import { orders } from './orders.js';
 import { exchangeRates } from './rates.js';
 
@@ -214,6 +216,31 @@ export const merchantAlertSettings = pgTable(
       'merchant_alert_settings_threshold_check',
       sql`${table.lowBalanceUsdUnits} is null or (${table.lowBalanceUsdUnits} between 1000000 and 10000000000
         and ${table.lowBalanceUsdUnits} % 10000 = 0)`,
+    ),
+  ],
+);
+
+/**
+ * BR1–BR3: the branding of a merchant's receipts: the WhatsApp number and whether it is shown,
+ * and the logo (a `merchant_logo` file). The trade name is the admin-approved profile's.
+ */
+export const merchantReceiptSettings = pgTable(
+  'merchant_receipt_settings',
+  {
+    customerId: uuid('customer_id')
+      .primaryKey()
+      .references(() => customers.id),
+    showWhatsapp: boolean('show_whatsapp').notNull().default(false),
+    whatsapp: text('whatsapp'),
+    logoFileId: uuid('logo_file_id').references(() => storedFiles.id),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index('merchant_receipt_settings_logo_file_id_idx').on(table.logoFileId),
+    check(
+      'merchant_receipt_settings_whatsapp_check',
+      sql`(${table.whatsapp} is null or ${table.whatsapp} ~ '^[+][1-9][0-9]{6,14}$')
+        and (not ${table.showWhatsapp} or ${table.whatsapp} is not null)`,
     ),
   ],
 );

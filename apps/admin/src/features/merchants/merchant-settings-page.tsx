@@ -36,11 +36,15 @@ const FIELDS: { name: SettingsField; money: boolean }[] = [
   { name: 'ordersPerTenMinutes', money: false },
   { name: 'reapplyWaitDays', money: false },
   { name: 'infoExpiryDays', money: false },
+  // S21 BK4: a merchant's player checks.
+  { name: 'playerChecksPerHour', money: false },
+  { name: 'playerChecksPerDay', money: false },
 ];
 
 /**
  * "إعدادات التجّار" (S20 MD1, PO5, MA1, MA4): the merchant tier's deposit limits, the order rate,
- * the reapply wait and the information expiry, with their bounds; saving asks for
+ * the reapply wait and the information expiry, and (S21 BK4) the player-check quota, with their
+ * bounds; saving asks for
  * re-authentication and keeps the earlier version in the audit log.
  */
 export function MerchantSettingsPage() {
@@ -78,6 +82,8 @@ function SettingsForm({ saved }: { saved: MerchantSettings }) {
     ordersPerTenMinutes: String(saved.ordersPerTenMinutes),
     reapplyWaitDays: String(saved.reapplyWaitDays),
     infoExpiryDays: String(saved.infoExpiryDays),
+    playerChecksPerHour: String(saved.playerChecksPerHour),
+    playerChecksPerDay: String(saved.playerChecksPerDay),
   }));
   const [invalid, setInvalid] = useState<Set<SettingsField>>(new Set());
   const [failure, setFailure] = useState<string | null>(null);

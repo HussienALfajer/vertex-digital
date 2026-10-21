@@ -163,6 +163,8 @@ export async function adminPurchaseOrder(
       // S20 PO4: on behalf charges the customer's list; walk-in and owner-funded take retail.
       priceListId:
         customer && shape.payer === 'customer' ? customer.priceListId : ROOT_PRICE_LIST_IDS.retail,
+      // S21 QT1: a merchant's own limits on their behalf; the store's otherwise.
+      accountType: customer && shape.payer === 'customer' ? customer.accountType : 'customer',
     },
     { ...input, savePlayer: undefined, gift: undefined },
     product,

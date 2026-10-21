@@ -15,7 +15,6 @@ import {
   type FulfilmentAttempt,
   isOpenAttempt,
   maskCode,
-  maskFieldValue,
   type Order,
   type OrderStatus,
   type OrderSummary,
@@ -61,6 +60,7 @@ import {
   fulfilmentAttempts,
   ledgerJournals,
   ledgerPostings,
+  merchantOrderSales,
   orderCodeReveals,
   orderCodes,
   orderEvents,
@@ -72,6 +72,7 @@ import {
   suppliers,
   supplierWebhookEvents,
 } from '../schema/index.js';
+import { codeReleaseLog, merchantBranding, sellingPriceOf, shownFields } from './receipts.js';
 import { decryptSecret } from './secrets.js';
 import type { OrderRow } from './transition.js';
 
@@ -297,6 +298,7 @@ async function liveShareLinks(db: Executor, orderId: string, storeUrl: string) {
       url: `${storeUrl}${sharePath(link.kind, link.token)}`,
       showPrice: link.showPrice,
       playerDisplay: link.playerDisplay,
+      branded: link.branded,
       createdAt: link.createdAt.toISOString(),
     }),
   );
@@ -320,7 +322,7 @@ export async function customerOrder(
   if (!row) return null;
   const { order, product, game } = row;
   const store = placedByStore(order);
-  const [fields, statusEvents, codes, images, stats, shareLinks, open] = await readAll(db, [
+  const [fields, statusEvents, codes, images, stats, shareLinks, open, sale] = await readAll(db, [
     () => fieldsWithLabels(db, order),
     () =>
       db
@@ -333,7 +335,14 @@ export async function customerOrder(
     () => productDeliveryStats(db, [product.id]),
     () => liveShareLinks(db, order.id, storeUrl),
     () => openAttempt(db, order.id),
+    () => db.select().from(merchantOrderSales).where(eq(merchantOrderSales.orderId, order.id)),
   ]);
+  const codeReleases = await codeReleaseLog(
+    db,
+    order.id,
+    new Map(codes.map((code) => [code.id, code.index])),
+  );
+  const [saleRow] = sale;
   const stage = orderCustomerStage(order.status);
   return {
     id: order.id,
@@ -386,6 +395,16 @@ export async function customerOrder(
     shareLinks,
     privatePrice: order.priceListId !== ROOT_PRICE_LIST_IDS.retail,
     repeatable: repeatable(order.status, row.shown),
+    verificationCode: order.verificationCode,
+    sale: saleRow
+      ? {
+          currency: saleRow.currency,
+          unitAmountUnits: saleRow.unitAmountUnits,
+          unitUsdUnits: saleRow.unitUsdUnits,
+          source: saleRow.source,
+        }
+      : null,
+    codeReleases,
     createdAt: order.createdAt.toISOString(),
   };
 }
@@ -809,6 +828,7 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
         .filter((reveal) => reveal.codeId === code.id)
         .map((reveal) => ({
           actor: reveal.actor,
+          purpose: reveal.purpose,
           ipAddress: reveal.ip,
           userAgent: reveal.userAgent,
           createdAt: reveal.createdAt.toISOString(),
@@ -821,6 +841,7 @@ export async function adminOrder(db: Executor, orderId: string): Promise<AdminOr
       kind: link.kind,
       showPrice: link.showPrice,
       playerDisplay: link.playerDisplay,
+      branded: link.branded,
       createdAt: link.createdAt.toISOString(),
       revokedAt: iso(link.revokedAt),
       revokedBy: link.revokedBy,
@@ -994,14 +1015,16 @@ export async function publicShare(
   const { link, order, product, game } = row;
   const stage = shareStage(order.status, order.deliveredQuantity, order.quantity);
   if (!stage || !order.paidAt) return null;
-  const rules = await db
-    .select()
-    .from(catalogInputFields)
-    .where(eq(catalogInputFields.gameId, order.gameId))
-    .orderBy(asc(catalogInputFields.sortOrder));
   const full = link.kind === 'receipt' && link.playerDisplay === 'full';
-  const keys = rules.map((rule) => rule.key);
-  const [cover] = (await covers(db, [game.coverFileId])).values();
+  // S21 BR1: a branded receipt shows the shop, and with `showPrice` its selling price only.
+  const branded = link.kind === 'receipt' && link.branded;
+  const [fields, coverMap, branding, sellingPrice] = await readAll(db, [
+    () => shownFields(db, order, full),
+    () => covers(db, [game.coverFileId]),
+    async () => (branded ? merchantBranding(db, order) : null),
+    async () => (branded && link.showPrice ? sellingPriceOf(db, order) : null),
+  ]);
+  const [cover] = coverMap.values();
   return {
     coverFileId: game.coverFileId,
     share: {
@@ -1024,25 +1047,23 @@ export async function publicShare(
       price:
         link.kind === 'receipt' &&
         link.showPrice &&
+        !branding &&
         !placedByStore(order).hidesPrice &&
         order.priceListId === ROOT_PRICE_LIST_IDS.retail
           ? { totalUsdUnits: order.totalUsdUnits, refundedUsdUnits: order.refundedUsdUnits }
           : null,
-      fields: Object.entries(order.fields)
-        .sort(([a], [b]) => keys.indexOf(a) - keys.indexOf(b))
-        .map(([key, value]) => {
-          const rule = rules.find((candidate) => candidate.key === key);
-          const option =
-            rule?.type === 'select' ? rule.options?.find((o) => o.value === value) : null;
-          return {
-            label: rule?.labelAr ?? key,
-            value: option ? option.labelAr : full ? value : maskFieldValue(value),
-          };
-        }),
+      fields: fields.map((field) => ({ label: field.labelAr, value: field.value })),
       gift:
         link.kind === 'gift'
           ? { senderName: order.giftSenderName, message: order.giftMessage }
           : null,
+      branding: branding && {
+        tradeName: branding.tradeName,
+        whatsapp: branding.whatsapp,
+        hasLogo: branding.logoFileId !== null,
+      },
+      sellingPrice: branding ? sellingPrice : null,
+      verificationCode: link.kind === 'receipt' ? order.verificationCode : null,
     },
   };
 }

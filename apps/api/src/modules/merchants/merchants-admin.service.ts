@@ -31,7 +31,9 @@ import {
   merchantSettings,
   moveApplication,
   newId,
+  receiptSettingsOf,
   recordAudit,
+  removeMerchantLogo,
   revokeMerchant,
   termsVersionNumber,
 } from '@vertex-digital/db';
@@ -155,6 +157,36 @@ export class MerchantsAdminService {
       : null;
     if (!file) throw refusals.notFound('photo');
     return file;
+  }
+
+  /** S21 BR3: a merchant's receipt logo, for the profile's preview. */
+  async logo(customerId: string): Promise<ServedFile> {
+    const settings = isUuid(customerId) ? await receiptSettingsOf(this.db, customerId) : null;
+    const file = settings?.logoFileId
+      ? await this.files.serve(settings.logoFileId, 'merchant_logo')
+      : null;
+    if (!file) throw refusals.notFound('logo');
+    return file;
+  }
+
+  /** S21 BR3: the admin removes a merchant's logo with a reason, audited in the same transaction. */
+  async removeLogo(customerId: string, reason: string, actor: MerchantActor): Promise<void> {
+    if (!isUuid(customerId)) throw refusals.notFound('customer');
+    await this.db.transaction(async (tx) => {
+      const fileId = await removeMerchantLogo(tx, customerId);
+      if (fileId === null) throw refusals.notFound('logo');
+      await recordAudit(tx, {
+        action: 'merchant.logo_removed',
+        actorKind: 'admin',
+        actorId: actor.adminId,
+        channel: 'admin',
+        entityType: 'customer',
+        entityId: customerId,
+        ipAddress: actor.meta.ipAddress,
+        userAgent: actor.meta.userAgent,
+        details: { fileId, reason },
+      });
+    });
   }
 
   /** MA4: request information or reject, the application locked. */
@@ -336,6 +368,8 @@ export class MerchantsAdminService {
             ordersPerTenMinutes: before.ordersPerTenMinutes,
             reapplyWaitDays: before.reapplyWaitDays,
             infoExpiryDays: before.infoExpiryDays,
+            playerChecksPerHour: before.playerChecksPerHour,
+            playerChecksPerDay: before.playerChecksPerDay,
           },
           after: input,
         },

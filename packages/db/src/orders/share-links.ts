@@ -25,6 +25,8 @@ export async function createShareLink(
     kind: ShareKind;
     showPrice?: boolean;
     playerDisplay?: ReceiptPlayerDisplay;
+    /** S21 BR2: a merchant's receipt in the shop's name. */
+    branded?: boolean;
   },
 ): Promise<ShareLinkRow> {
   const gift = input.kind === 'gift';
@@ -37,6 +39,7 @@ export async function createShareLink(
       token: shareToken(),
       showPrice: gift ? false : (input.showPrice ?? true),
       playerDisplay: gift ? 'masked' : (input.playerDisplay ?? 'masked'),
+      branded: !gift && (input.branded ?? false),
     })
     .returning();
   if (!row) throw new Error(`The share link of order ${input.orderId} was not written`);

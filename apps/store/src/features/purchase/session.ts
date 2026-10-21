@@ -12,7 +12,14 @@ import { isFrozen, readSession } from '@/lib/session';
 export type Customer =
   | { status: 'loading' }
   | { status: 'signedOut' }
-  | { status: 'signedIn'; email: string; verified: boolean; frozen: boolean };
+  | {
+      status: 'signedIn';
+      email: string;
+      verified: boolean;
+      frozen: boolean;
+      /** S21: a merchant's account (the order page's counter tools, the branded receipt). */
+      merchant: boolean;
+    };
 
 export function useCustomer(): Customer {
   const [customer, setCustomer] = useState<Customer>({ status: 'loading' });
@@ -27,6 +34,7 @@ export function useCustomer(): Customer {
               email: session.user.email,
               verified: session.user.emailVerified !== false,
               frozen: isFrozen(session),
+              merchant: session.user.accountType === 'merchant',
             }
           : { status: 'signedOut' },
       );

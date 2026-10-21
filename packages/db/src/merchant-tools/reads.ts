@@ -3,6 +3,8 @@ import {
   type AlertKind,
   orderTotal,
   type ProductAvailability,
+  RECENT_PLAYERS_DAYS,
+  RECENT_PLAYERS_PER_GAME,
   saleProfit,
   WATCH_SUGGESTION_DAYS,
 } from '@vertex-digital/contracts';
@@ -339,4 +341,40 @@ export async function liveGames(db: Executor, ids: readonly string[]) {
     .select({ id: catalogGames.id })
     .from(catalogGames)
     .where(and(inArray(catalogGames.id, [...ids]), isNull(catalogGames.archivedAt)));
+}
+
+/**
+ * PS2: the last 20 distinct field sets of the merchant's orders for the game in the last 90 days,
+ * newest first, each with the name of its newest validated order. Computed on read, never stored.
+ */
+export async function recentPlayers(
+  db: Executor,
+  customerId: string,
+  gameId: string,
+): Promise<{ fields: Record<string, string>; playerName: string | null; lastUsedAt: Date }[]> {
+  const result = await db.execute<{
+    fields: Record<string, string>;
+    player_name: string | null;
+    last_used_at: string;
+  }>(sql`
+    select used.fields, used.last_used_at,
+      (select named.player_name from ${orders} as named
+        where named.customer_id = ${customerId} and named.game_id = ${gameId}
+          and named.fields = used.fields and named.player_check = 'valid'
+          and named.player_name is not null
+        order by named.created_at desc limit 1) as player_name
+    from (
+      select ${orders.fields} as fields, max(${orders.createdAt}) as last_used_at
+      from ${orders}
+      where ${orders.customerId} = ${customerId} and ${orders.gameId} = ${gameId}
+        and ${orders.createdAt} > now() - make_interval(days => ${RECENT_PLAYERS_DAYS})
+      group by ${orders.fields}
+    ) as used
+    order by used.last_used_at desc
+    limit ${RECENT_PLAYERS_PER_GAME}`);
+  return result.rows.map((row) => ({
+    fields: row.fields,
+    playerName: row.player_name,
+    lastUsedAt: new Date(row.last_used_at),
+  }));
 }

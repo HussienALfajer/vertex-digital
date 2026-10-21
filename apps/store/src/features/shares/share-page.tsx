@@ -42,7 +42,12 @@ export async function SharePage({
   }
   return (
     <div className="flex flex-col gap-5">
-      <ShareCard share={share} verifyUrl={`${storeUrl()}/${SHARE_PATHS[kind]}/${token}`} />
+      <ShareCard
+        share={share}
+        verifyUrl={`${storeUrl()}/${SHARE_PATHS[kind]}/${token}`}
+        logoUrl={`/api/shares/${token}/logo`}
+        origin={storeUrl()}
+      />
       <ShareActions
         token={token}
         fileName={kind === 'gift' ? 'vertex-gift.png' : `${share.orderNumber ?? 'receipt'}.png`}

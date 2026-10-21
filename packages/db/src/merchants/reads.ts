@@ -6,6 +6,7 @@ import {
 } from '@vertex-digital/contracts';
 import { type AnyColumn, and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import type { Executor } from '../client.js';
+import { receiptSettingsOf } from '../merchant-tools/counter.js';
 import {
   contentPageVersions,
   customers,
@@ -118,6 +119,15 @@ export async function accountMerchant(
   return row ? { tradeName: row.tradeName, termsAccepted: row.termsVersionId !== null } : null;
 }
 
+async function brandingOf(db: Executor, customerId: string) {
+  const settings = await receiptSettingsOf(db, customerId);
+  return {
+    showWhatsapp: settings?.showWhatsapp ?? false,
+    whatsapp: settings?.whatsapp ?? null,
+    logoFileId: settings?.logoFileId ?? null,
+  };
+}
+
 /** The merchant profile on the admin's customer profile; null for an account never a merchant. */
 export async function merchantProfileOf(db: Executor, customerId: string) {
   const [row] = await db
@@ -146,6 +156,8 @@ export async function merchantProfileOf(db: Executor, customerId: string) {
     // S21 LV4: the level and the months' purchases that decide it.
     level: levelId !== null && levelNameAr !== null ? { id: levelId, nameAr: levelNameAr } : null,
     ...(await monthsPurchases(db, customerId, new Date())),
+    // S21 BR3: the receipt branding (a profile always has its settings, saved or default).
+    branding: await brandingOf(db, customerId),
   };
 }
 

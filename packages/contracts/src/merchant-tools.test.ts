@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   alertCounts,
   alertSettingsSchema,
+  bulkCheckRequestSchema,
+  bulkNeedsConfirmation,
+  checkoutLinesMax,
   damascusMonth,
   levelFor,
   lowBalanceDue,
@@ -11,13 +14,17 @@ import {
   monthRange,
   monthSchema,
   nextLevel,
+  orderQuantityMax,
+  parseBulkLines,
   previousMonth,
   saleProfit,
   saleUnitUsd,
+  savedPlayerLimits,
   sellingPrice,
   sellingPriceInputSchema,
   sellingPriceTooHigh,
   sellingSettingsSchema,
+  updateReceiptSettingsSchema,
   updateWatchesSchema,
   watchChanges,
 } from './merchant-tools.js';
@@ -227,5 +234,92 @@ describe('alerts (AL1–AL6)', () => {
     expect(parse({ gameIds: [ID], productIds: [OTHER] })).toBe(true);
     expect(parse({ gameIds: [ID, ID], productIds: [] })).toBe(false);
     expect(parse({ gameIds: [], productIds: [OTHER, OTHER] })).toBe(false);
+  });
+});
+
+describe('counter limits (QT1, QT2, decision 10, BK3)', () => {
+  it('lets a merchant buy 50 codes, keeps the pack limit otherwise', () => {
+    expect(orderQuantityMax({ kind: 'code', maxQuantity: 5 }, 'merchant')).toBe(50);
+    expect(orderQuantityMax({ kind: 'code', maxQuantity: 5 }, 'customer')).toBe(5);
+    expect(orderQuantityMax({ kind: 'direct', maxQuantity: 3 }, 'merchant')).toBe(3);
+  });
+
+  it('raises saved ids and checkout lines for merchants only', () => {
+    expect(savedPlayerLimits('merchant')).toEqual({ perGame: 50, total: 300 });
+    expect(savedPlayerLimits('customer')).toEqual({ perGame: 10, total: 50 });
+    expect(checkoutLinesMax('merchant')).toBe(50);
+    expect(checkoutLinesMax('customer')).toBe(10);
+  });
+});
+
+describe('parseBulkLines (BK1)', () => {
+  const game = {
+    fieldKeys: ['player_id'],
+    packs: [
+      { id: ID, nameAr: '60 شدة', gameAmount: 60 },
+      { id: OTHER, nameAr: '325 شدة', gameAmount: 325 },
+    ],
+  };
+
+  it('reads commas, tabs and semicolons, a quantity, Arabic digits and the pack name', () => {
+    const text = '﻿# player_id, pack, quantity\n5123,60\r\n5124\t325\t۳\n\n٥١٢٥;325 شدة;٢';
+    expect(parseBulkLines(text, game)).toEqual([
+      { line: 2, fields: { player_id: '5123' }, productId: ID, quantity: 1, errors: [] },
+      { line: 3, fields: { player_id: '5124' }, productId: OTHER, quantity: 3, errors: [] },
+      { line: 5, fields: { player_id: '٥١٢٥' }, productId: OTHER, quantity: 2, errors: [] },
+    ]);
+  });
+
+  it('reads quoted cells, with doubled quotes and separators inside', () => {
+    const twoFields = { fieldKeys: ['id', 'server'], packs: game.packs };
+    const [line] = parseBulkLines('"51,23"," a ""b"" ",60', twoFields);
+    expect(line).toMatchObject({ fields: { id: '51,23', server: 'a "b"' }, productId: ID });
+  });
+
+  it('reports columns, unknown and ambiguous packs and bad quantities per line', () => {
+    const twins = {
+      fieldKeys: ['player_id'],
+      packs: [...game.packs, { id: OTHER, nameAr: 'أخرى', gameAmount: 60 }],
+    };
+    expect(
+      parseBulkLines('1\n1,2,3,4\n1,999\n1,60,0\n1,60,x\n1,60,51', game).map((l) => l.errors),
+    ).toEqual([
+      ['columns'],
+      ['columns'],
+      ['pack_unknown'],
+      ['quantity_invalid'],
+      ['quantity_invalid'],
+      ['quantity_invalid'],
+    ]);
+    expect(parseBulkLines('1,60', twins)[0]?.errors).toEqual(['pack_ambiguous']);
+  });
+
+  it('takes 1–100 KB of text', () => {
+    expect(bulkCheckRequestSchema.safeParse({ gameId: ID, text: 'a' }).success).toBe(true);
+    expect(bulkCheckRequestSchema.safeParse({ gameId: ID, text: '' }).success).toBe(false);
+    const big = 'ش'.repeat(51 * 1024);
+    expect(bulkCheckRequestSchema.safeParse({ gameId: ID, text: big }).success).toBe(false);
+  });
+
+  it('asks a confirmation unless the id is known valid or never checked (BK3)', () => {
+    expect(bulkNeedsConfirmation(null)).toBe(false);
+    expect(bulkNeedsConfirmation({ result: 'valid', playerName: null, region: null })).toBe(false);
+    expect(bulkNeedsConfirmation({ result: 'not_supported' })).toBe(false);
+    expect(bulkNeedsConfirmation({ result: 'invalid' })).toBe(true);
+    expect(bulkNeedsConfirmation({ result: 'unavailable', reason: 'quota' })).toBe(true);
+  });
+});
+
+describe('receipt settings (BR3)', () => {
+  it('needs a number to show and normalizes it', () => {
+    const shown = { showWhatsapp: true, logoFileId: null };
+    expect(updateReceiptSettingsSchema.safeParse({ ...shown, whatsapp: null }).success).toBe(false);
+    expect(updateReceiptSettingsSchema.parse({ ...shown, whatsapp: '0933 123 456' }).whatsapp).toBe(
+      '+963933123456',
+    );
+    expect(
+      updateReceiptSettingsSchema.safeParse({ showWhatsapp: false, whatsapp: null, logoFileId: ID })
+        .success,
+    ).toBe(true);
   });
 });

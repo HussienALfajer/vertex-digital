@@ -621,6 +621,33 @@ describe('routing and sending (rules R1–R6, F1)', () => {
     });
   });
 
+  it('skips an offer that allows fewer units than the order needs, then refunds (S21 QT3)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, { code: true });
+      const order = await buy(tx, item, { quantity: 3 });
+      // The offer now takes at most 2 units an order (the pack's own limit with it): the route
+      // stays usable for the pack, but not for this order's 3 units.
+      const [route] = await tx
+        .select({ offerId: productRoutes.offerId })
+        .from(productRoutes)
+        .where(eq(productRoutes.id, item.fakeRoute as string));
+      await tx
+        .update(supplierOffers)
+        .set({ maxQuantity: 2 })
+        .where(eq(supplierOffers.id, route?.offerId as string));
+      await tx
+        .update(catalogProducts)
+        .set({ maxQuantity: 2 })
+        .where(eq(catalogProducts.id, item.id));
+      expect((await fulfil.fulfil(order.id, tx)).kind).toBe('refunded');
+      expect(await orderOf(tx, order.id)).toMatchObject({
+        status: 'refunded',
+        refundReason: 'no_route',
+      });
+      expect(await attemptsOf(tx, order.id)).toHaveLength(0);
+    });
+  });
+
   it('refunds at once when the account is refused, without another route (rule F1)', async () => {
     await isolated(async (tx) => {
       const item = await product(tx, { manualCost: usd(0.9) });
@@ -1758,6 +1785,8 @@ async function pastReservation(tx: Transaction, reservation: { id: string }): Pr
     id,
     number,
     idempotency_key: newId(),
+    // S21 VF1: every order has its own verification code.
+    verification_code: randomBytes(16).toString('base64url'),
     reserved_at: reservedAt.toISOString(),
     expires_at: new Date(reservedAt.getTime() + 24 * 3_600_000).toISOString(),
     created_at: reservedAt.toISOString(),
