@@ -23,7 +23,7 @@ Customers need an account they trust: sign-up with email, password, name and pho
   - Wallet ledger account per customer: S02 (F03).
   - Staff accounts, roles, permissions, a second admin: not in V1 (ADR 0016).
   - Customer self-deletion: never in V1 (the account holds a wallet and its history); a customer asks support, the admin archives (F19).
-  - Phone OTP, social sign-in, passkeys, customer 2FA, "trust this device" for the admin, admin password reset by email or from the panel: not in V1.
+  - Phone OTP, social sign-in, passkeys (added by S22, ADR 0037), customer 2FA, "trust this device" for the admin, admin password reset by email or from the panel: not in V1.
   - Audit log export: not in V1.
 
 ## Access
