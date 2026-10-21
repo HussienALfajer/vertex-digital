@@ -192,6 +192,13 @@ beforeAll(async () => {
   });
   expect(reauth.status).toBe(200);
   await setSwitches(test.db);
+  // A rate of our own: the SYP selling prices are checked against $10,000 at the rate in force,
+  // and files of one worker share the rate.
+  const rate = await client.post('/api/admin/rates', {
+    cookie: admin.cookie,
+    body: { sypPerUsd: '13000', displayStepSypUnits: 500, rateConfirmation: '13000' },
+  });
+  expect(rate.status).toBe(201);
   vi.spyOn(SupplierAdaptersService.prototype, 'recordCall').mockImplementation(async () => {});
   const [fake] = await test.db.select().from(suppliers).where(eq(suppliers.code, 'fake'));
   ids.fake = fake?.id as string;
