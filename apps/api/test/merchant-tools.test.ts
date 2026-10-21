@@ -110,25 +110,20 @@ async function merchant(funds = usd(100)) {
     .update(customers)
     .set({ accountType: 'merchant' })
     .where(eq(customers.id, person.id));
-  const [terms] = (
-    await test.db.execute<{ id: string }>(
-      sql`select id from content_page_versions where page = 'merchant_terms' limit 1`,
-    )
-  ).rows;
+  // A merchant terms version of its own, accepted (MT2): purchases need one.
+  const termsVersionId = newId();
+  await test.db.execute(sql`insert into content_page_versions
+    (id, page, version, title, body, draft_revision, admin_id)
+    values (${termsVersionId}, 'merchant_terms', 1000 + floor(random() * 1e9)::int, 'شروط التاجر',
+      'النص', 1, ${newId()})`);
   await test.db.insert(merchantProfiles).values({
     customerId: person.id,
     tradeName: 'محل النور',
     governorate: 'aleppo',
     city: 'اعزاز',
     grantedAt: new Date(),
-    termsVersionId: terms?.id ?? null,
+    termsVersionId,
   });
-  if (!terms) {
-    // No published terms in this database: purchases need none to be required (MT2).
-    await test.db.execute(
-      sql`update merchant_profiles set terms_version_id = null where customer_id = ${person.id}`,
-    );
-  }
   if (funds > 0) {
     await test.db.transaction(async (tx) => {
       await postJournal(tx, {
