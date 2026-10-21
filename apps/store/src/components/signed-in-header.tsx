@@ -9,7 +9,16 @@ import { AccountMenu } from './account-menu';
  * The header's entries for a signed-in customer: the wallet balance (S02 rule W8), the
  * notification bell (S05) and the account menu. One chunk, loaded only once a session is known.
  */
-export function SignedInHeader({ name, email }: { name: string; email: string }) {
+export function SignedInHeader({
+  name,
+  email,
+  merchant,
+}: {
+  name: string;
+  email: string;
+  /** S21 MA1: the menu links "أدوات التاجر". */
+  merchant: boolean;
+}) {
   // S15 PS6, PS7: a device that allowed push re-registers its subscription with this session.
   // Its own chunk, fetched only where push was allowed.
   useEffect(() => {
@@ -21,7 +30,7 @@ export function SignedInHeader({ name, email }: { name: string; email: string })
     <div data-signed-in="" className="flex items-center sm:gap-1">
       <BalanceChip />
       <NotificationBell />
-      <AccountMenu name={name} email={email} />
+      <AccountMenu name={name} email={email} merchant={merchant} />
     </div>
   );
 }

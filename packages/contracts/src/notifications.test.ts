@@ -52,6 +52,7 @@ describe('notifications (S05 F27)', () => {
       'order_paid',
       'price_list_changed',
       'merchant_application_expired',
+      'merchant_watch_digest',
     ]);
   });
 
@@ -121,8 +122,12 @@ describe('notifications (S05 F27)', () => {
     expect(parse({ event: 'order_delivered' })).toBe(false);
   });
 
-  it('push exactly the events that email (PD1)', () => {
-    expect(PUSH_NOTIFICATION_EVENTS).toEqual(EMAIL_NOTIFICATION_EVENTS);
+  it('push the events that email and the follow digest (PD1, S21 AL3)', () => {
+    expect(PUSH_NOTIFICATION_EVENTS).toEqual([
+      ...EMAIL_NOTIFICATION_EVENTS,
+      'merchant_watch_digest',
+    ]);
+    expect(isPushNotificationEvent('merchant_watch_digest')).toBe(true);
     expect(isPushNotificationEvent('checkout_finished')).toBe(true);
     expect(isPushNotificationEvent('order_delayed')).toBe(false);
   });

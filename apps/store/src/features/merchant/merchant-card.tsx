@@ -43,6 +43,14 @@ export function MerchantCard({
         <CardDescription>
           {t('merchant.card.priceKind', { kind: t(`merchant.priceKinds.${profile.priceKind}`) })}
         </CardDescription>
+        <Button
+          variant="outline"
+          size="xl"
+          className="self-start"
+          render={<Link href="/merchant" prefetch={false} />}
+        >
+          {t('header.merchantTools')}
+        </Button>
         {!merchant.termsAccepted && (
           <>
             <Callout

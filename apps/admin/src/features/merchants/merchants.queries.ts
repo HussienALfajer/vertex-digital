@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query';
 import type {
   GrantMerchant,
+  MerchantLevelInput,
   MerchantSettingsInput,
   RevokeMerchant,
 } from '@vertex-digital/contracts';
@@ -52,13 +53,26 @@ export const merchantsQuery = (search: MerchantsSearch) =>
     queryFn: ({ pageParam }) =>
       call(
         api.GET('/api/admin/merchants', {
-          params: { query: { q: search.q, listId: search.listId, cursor: pageParam } as never },
+          params: {
+            query: {
+              q: search.q,
+              listId: search.listId,
+              levelId: search.levelId,
+              cursor: pageParam,
+            } as never,
+          },
         }),
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
+
+/** S21 LV1: the levels with their merchants, live first by threshold. */
+export const merchantLevelsQuery = queryOptions({
+  queryKey: ['merchants', 'levels'],
+  queryFn: () => call(api.GET('/api/admin/merchant-levels')),
+});
 
 export const merchantSettingsQuery = queryOptions({
   queryKey: ['merchants', 'settings'],
@@ -136,6 +150,22 @@ export const useRevokeMerchant = (customerId: string) =>
         body,
       }),
     ),
+  );
+
+/** S21 LV1, LV6: a level's change requeues every merchant; re-authenticated. */
+export const useCreateMerchantLevel = () =>
+  useMerchantsMutation((body: MerchantLevelInput) =>
+    call(api.POST('/api/admin/merchant-levels', { body })),
+  );
+
+export const useUpdateMerchantLevel = (id: string) =>
+  useMerchantsMutation((body: MerchantLevelInput) =>
+    call(api.PATCH('/api/admin/merchant-levels/{id}', { params: { path: { id } }, body })),
+  );
+
+export const useArchiveMerchantLevel = () =>
+  useMerchantsMutation((id: string) =>
+    call(api.POST('/api/admin/merchant-levels/{id}/archive', { params: { path: { id } } })),
   );
 
 export const useSaveMerchantSettings = () =>

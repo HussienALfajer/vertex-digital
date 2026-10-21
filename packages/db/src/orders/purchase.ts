@@ -30,6 +30,8 @@ import {
   lockCustomerWallet,
   postJournal,
 } from '../ledger/index.js';
+import { afterMerchantPurchase } from '../merchant-tools/alerts.js';
+import { recordMerchantSale } from '../merchant-tools/sales.js';
 import { type ProductRoutingState, productRoutingStates } from '../pricing/index.js';
 import { catalogInputFields, catalogProducts, exchangeRates, orders } from '../schema/index.js';
 import { OrderError } from './errors.js';
@@ -491,6 +493,8 @@ export async function purchaseOrder(
     { from: null, to: order.status },
   );
   const savedPlayer = await touchSavedPlayer(tx, order, line.savePlayer);
+  // S21 SP4: a merchant's order keeps its selling price (a reservation too, paid at this price).
+  if (customer.accountType === 'merchant') await recordMerchantSale(tx, order);
   if (reserve) {
     await recordAudit(tx, {
       ...audit,
@@ -520,6 +524,8 @@ export async function purchaseOrder(
     });
     if (order.isGift) await createShareLink(tx, { orderId: order.id, kind: 'gift' });
     await queueFulfil(tx, context.jobs, order.id);
+    // S21 LV4, AL5: the level recomputed and the low-balance alert after the debit.
+    await afterMerchantPurchase(tx, context.jobs, customer);
   }
   return { order, created: true, savedPlayer };
 }

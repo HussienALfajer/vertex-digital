@@ -210,6 +210,8 @@ export function createCustomerAuth(
         archivedAt: { type: 'date', required: false, input: false },
         /** S12 CF5: the store shows the frozen banner and disables buying and depositing. */
         frozenAt: { type: 'date', required: false, input: false },
+        /** S21 MA1: the store shows "أدوات التاجر" to merchants. */
+        accountType: { type: 'string', required: false, input: false },
       },
     },
     emailAndPassword: {

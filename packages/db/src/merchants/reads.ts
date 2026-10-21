@@ -10,10 +10,13 @@ import {
   contentPageVersions,
   customers,
   merchantApplications,
+  merchantLevels,
   merchantProfiles,
+  merchantWatches,
   orders,
   priceLists,
 } from '../schema/index.js';
+import { monthsPurchases } from './levels.js';
 
 /*
  * Merchant reads that join the customers (S20 screens): the panel's queue and merchants list, the
@@ -126,11 +129,24 @@ export async function merchantProfileOf(db: Executor, customerId: string) {
       termsVersion: contentPageVersions.version,
       grantedAt: merchantProfiles.grantedAt,
       revokedAt: merchantProfiles.revokedAt,
+      levelId: merchantLevels.id,
+      levelNameAr: merchantLevels.nameAr,
+      levelChangedAt: merchantProfiles.levelChangedAt,
+      watchCount: sql<number>`(select count(*)::int from ${merchantWatches}
+        where ${merchantWatches.customerId} = ${merchantProfiles.customerId})`,
     })
     .from(merchantProfiles)
     .leftJoin(contentPageVersions, eq(contentPageVersions.id, merchantProfiles.termsVersionId))
+    .leftJoin(merchantLevels, eq(merchantLevels.id, merchantProfiles.levelId))
     .where(eq(merchantProfiles.customerId, customerId));
-  return row ?? null;
+  if (!row) return null;
+  const { levelId, levelNameAr, ...profile } = row;
+  return {
+    ...profile,
+    // S21 LV4: the level and the months' purchases that decide it.
+    level: levelId !== null && levelNameAr !== null ? { id: levelId, nameAr: levelNameAr } : null,
+    ...(await monthsPurchases(db, customerId, new Date())),
+  };
 }
 
 /**
@@ -139,9 +155,19 @@ export async function merchantProfileOf(db: Executor, customerId: string) {
  */
 export async function merchantPage(
   db: Executor,
-  input: { q: string | null; listId: string | null; after: KeysetAt | null; limit: number },
+  input: {
+    q: string | null;
+    listId: string | null;
+    /** S21: a level's merchants, or `none`. */
+    levelId: string | null;
+    after: KeysetAt | null;
+    limit: number;
+  },
 ) {
-  const effectiveList = sql<string>`coalesce(${customers.priceListId}, ${ROOT_PRICE_LIST_IDS.wholesale}::uuid)`;
+  // S21 LV5: the assigned list, else the live level's, else wholesale.
+  const effectiveList = sql<string>`coalesce(${customers.priceListId},
+    case when ${merchantLevels.archivedAt} is null then ${merchantLevels.priceListId} end,
+    ${ROOT_PRICE_LIST_IDS.wholesale}::uuid)`;
   const pattern = input.q
     ? `%${input.q.replace(/[\\%_]/g, (character) => `\\${character}`)}%`
     : null;
@@ -160,6 +186,8 @@ export async function merchantPage(
       listId: priceLists.id,
       listName: priceLists.name,
       listKind: sql<PriceListKind>`${priceLists.kind}`,
+      levelId: merchantLevels.id,
+      levelNameAr: merchantLevels.nameAr,
       sales30d: sql<string>`coalesce((select sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits})
         from ${orders} where ${orders.customerId} = ${customers.id}
           and ${orders.status} in ('delivered', 'partially_refunded')
@@ -167,12 +195,18 @@ export async function merchantPage(
     })
     .from(merchantProfiles)
     .innerJoin(customers, eq(customers.id, merchantProfiles.customerId))
+    .leftJoin(merchantLevels, eq(merchantLevels.id, merchantProfiles.levelId))
     .innerJoin(priceLists, eq(priceLists.id, effectiveList))
     .where(
       and(
         eq(customers.accountType, 'merchant'),
         isNull(merchantProfiles.revokedAt),
         input.listId ? eq(priceLists.id, input.listId) : undefined,
+        input.levelId === 'none'
+          ? isNull(merchantProfiles.levelId)
+          : input.levelId
+            ? eq(merchantProfiles.levelId, input.levelId)
+            : undefined,
         pattern
           ? or(
               ilike(merchantProfiles.tradeName, pattern),
@@ -187,7 +221,11 @@ export async function merchantPage(
     )
     .orderBy(desc(merchantProfiles.grantedAt), desc(customers.id))
     .limit(input.limit + 1);
-  return rows.map((row) => ({ ...row, sales30d: Number(row.sales30d) }));
+  return rows.map(({ levelId, levelNameAr, ...row }) => ({
+    ...row,
+    level: levelId !== null && levelNameAr !== null ? { id: levelId, nameAr: levelNameAr } : null,
+    sales30d: Number(row.sales30d),
+  }));
 }
 
 /** The list an approval chose, by name, beside the application in the panel. */

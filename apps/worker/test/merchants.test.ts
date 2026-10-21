@@ -1,8 +1,12 @@
 import { createDatabase, customers, merchantApplications, newId } from '@vertex-digital/db';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
+import type { Env } from '../src/core/config/env.js';
 import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
+import { renderEmail } from '../src/jobs/email/email-templates.js';
 import { ExpireApplicationsJob } from '../src/jobs/merchants/expire-applications.job.js';
+import { MerchantLevelJob } from '../src/jobs/merchants/level.job.js';
+import { MerchantWatchAlertsJob } from '../src/jobs/merchants/watch-alerts.job.js';
 import { renderTelegramMessage } from '../src/telegram/messages.js';
 
 /*
@@ -100,5 +104,131 @@ describe('the merchant application notice (Jobs)', () => {
         LINKS,
       ).text,
     ).toContain('أُعيد إرساله');
+  });
+});
+
+/** A merchant of their own, with alert settings. */
+async function merchant(settings: { dailyEmail?: boolean } = {}): Promise<string> {
+  const customerId = newId();
+  await db.insert(customers).values({
+    id: customerId,
+    name: 'Shop',
+    email: `${customerId}@test.vertex-digital.local`,
+    phone: '+963900000000',
+    emailVerified: true,
+    accountType: 'merchant',
+  });
+  await db.execute(sql`insert into merchant_profiles (customer_id, trade_name, governorate, city, granted_at)
+    values (${customerId}, 'محل النور', 'aleppo', 'اعزاز', now())`);
+  if (settings.dailyEmail) {
+    await db.execute(sql`insert into merchant_alert_settings (customer_id, daily_email)
+      values (${customerId}, true)`);
+  }
+  return customerId;
+}
+
+/** A product of a hidden test game, for alert events. */
+async function product(): Promise<string> {
+  const [category, game, id] = [newId(), newId(), newId()];
+  const tag = newId().slice(-12);
+  await db.execute(sql`insert into catalog_categories (id, slug, name_ar, sort_order, archived_at)
+    values (${category}, ${`mc-${tag}`}, ${`فئة ${tag}`}, 99, now())`);
+  await db.execute(sql`insert into catalog_games (id, category_id, slug, name_ar, name_en, sort_order)
+    values (${game}, ${category}, ${`mg-${tag}`}, ${`لعبة ${tag}`}, 'Game', 1)`);
+  await db.execute(sql`insert into catalog_products (id, game_id, kind, name_ar, max_quantity, sort_order)
+    values (${id}, ${game}, 'direct', ${`باقة ${tag}`}, 1, 1)`);
+  return id;
+}
+
+describe('merchant tools jobs (S21 LV4, AL2, AL4)', () => {
+  const env = { SUPPLIER_FAKE_ENABLED: true } as Env;
+
+  it('recomputes a level twice to the same state', async () => {
+    const job = new MerchantLevelJob(pgBoss, db);
+    const shop = await merchant();
+    const first = await job.recompute(shop, new Date());
+    expect(await job.recompute(shop, new Date())).toEqual({ changed: false });
+    expect(first.changed === false || first.levelIdAfter !== undefined).toBe(true);
+  });
+
+  it('compares follows and sends the daily email once a day', async () => {
+    const job = new MerchantWatchAlertsJob(pgBoss, db, env);
+    expect(await job.compareAll(new Date())).toBeGreaterThanOrEqual(0);
+    const shop = await merchant({ dailyEmail: true });
+    const productId = await product();
+    await db.execute(sql`insert into merchant_alert_events (id, customer_id, product_id, kind,
+      old_price_usd_units, new_price_usd_units)
+      values (${newId()}, ${shop}, ${productId}, 'price_down', 1500000, 1200000)`);
+    const quiet = await merchant({ dailyEmail: true });
+    await job.digestAll(new Date());
+    await job.digestAll(new Date());
+    const sent = async (customerId: string) =>
+      (
+        await db.execute<{ params: { total: number } }>(
+          sql`select params from email_outbox where customer_id = ${customerId}
+            and template = 'customer_merchant_daily_digest'`,
+        )
+      ).rows;
+    expect(await sent(shop)).toEqual([
+      {
+        params: expect.objectContaining({
+          total: 1,
+          lines: [expect.objectContaining({ kind: 'price_down' })],
+        }),
+      },
+    ]);
+    expect(await sent(quiet)).toEqual([]);
+  });
+});
+
+describe('the merchant tools emails (S21)', () => {
+  const store = 'https://digital.example';
+
+  it('names the level and the price kind, never a list', () => {
+    const email = renderEmail(
+      'customer_merchant_level_changed',
+      { levelNameAr: 'فضي', priceKind: 'special', direction: 'up' },
+      store,
+    );
+    expect(email.text).toContain('أسعار خاصة');
+    expect(email.text).toContain('https://digital.example/merchant');
+    expect(
+      renderEmail(
+        'customer_merchant_level_changed',
+        { levelNameAr: null, priceKind: 'wholesale', direction: 'down' },
+        store,
+      ).text,
+    ).toContain('لم يعد حسابك ضمن أي مستوى');
+  });
+
+  it('gives the balance and the threshold, and lists a day of changes', () => {
+    const low = renderEmail(
+      'customer_merchant_low_balance',
+      { balanceUsdUnits: 4_500_000, thresholdUsdUnits: 10_000_000, at: '2026-10-21T09:00:00.000Z' },
+      store,
+    );
+    expect(low.text).toContain('$4.50');
+    expect(low.text).toContain('$10.00');
+    const line = {
+      productId: newId(),
+      gameNameAr: 'ببجي',
+      productNameAr: '660 شدة',
+      oldPriceUsdUnits: null,
+      newPriceUsdUnits: null,
+    };
+    const digest = renderEmail(
+      'customer_merchant_daily_digest',
+      {
+        total: 3,
+        lines: [
+          { ...line, kind: 'price_up', oldPriceUsdUnits: 1_000_000, newPriceUsdUnits: 1_100_000 },
+          { ...line, kind: 'out_of_stock' },
+        ],
+      },
+      store,
+    );
+    expect(digest.text).toContain('ارتفع سعر');
+    expect(digest.text).toContain('نفدت');
+    expect(digest.text).toContain('تغيّرات أخرى');
   });
 });

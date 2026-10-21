@@ -16,6 +16,7 @@ import { recordAudit } from '../audit/index.js';
 import type { Transaction } from '../client.js';
 import { newId } from '../id.js';
 import { ensureCustomerWallet, ensureSystemAccount, postJournal } from '../ledger/index.js';
+import { queueMerchantLevelIfMerchant } from '../merchants/levels.js';
 import { notifyCustomer } from '../notifications/index.js';
 import {
   catalogProducts,
@@ -463,6 +464,10 @@ export async function refundRemaining(
       },
     ],
   });
+  // S21 LV4: a refund to a merchant's wallet lowers this month's purchases.
+  if (order.customerId !== null && order.payer === 'customer') {
+    await queueMerchantLevelIfMerchant(tx, context.jobs, order.customerId);
+  }
   const productNameAr = await productName(tx, order.productId);
   // S10 rule CT8: a checkout's orders tell the center only; its summary is the one email.
   const email = { email: order.checkoutId === null };

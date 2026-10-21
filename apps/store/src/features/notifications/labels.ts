@@ -139,6 +139,30 @@ export function notificationText(notification: CustomerNotification): string {
       return t('notifications.events.merchant_application_expired');
     case 'merchant_revoked':
       return t('notifications.events.merchant_revoked');
+    // S21: the level's name and the price kind, never a list's name.
+    case 'merchant_level_changed': {
+      const { params } = notification;
+      const kind = t(`merchant.priceKinds.${params.priceKind}`);
+      return params.levelNameAr === null
+        ? t('notifications.events.merchant_level_none', { kind })
+        : t(`notifications.events.merchant_level_${params.direction}`, {
+            level: params.levelNameAr,
+            kind,
+          });
+    }
+    case 'merchant_watch_digest': {
+      const { params } = notification;
+      return t('notifications.events.merchant_watch_digest', {
+        prices: params.priceDown + params.priceUp,
+        back: params.backInStock,
+        out: params.outOfStock,
+      });
+    }
+    case 'merchant_low_balance':
+      return t('notifications.events.merchant_low_balance', {
+        balance: ltr(formatUsd(notification.params.balanceUsdUnits)),
+        threshold: ltr(formatUsd(notification.params.thresholdUsdUnits)),
+      });
   }
 }
 
@@ -164,6 +188,12 @@ export function notificationHref(notification: CustomerNotification): string {
     case 'merchant_approved':
     case 'merchant_revoked':
       return '/account';
+    case 'merchant_level_changed':
+      return '/merchant';
+    case 'merchant_watch_digest':
+      return '/merchant/alerts';
+    case 'merchant_low_balance':
+      return '/wallet';
     default:
       return `/orders/${notification.params.orderId}`;
   }

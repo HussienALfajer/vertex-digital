@@ -62,6 +62,14 @@ export const QUEUES = {
   pricingFallbackNotices: 'pricing.fallback-notices',
   /** Expires merchant applications left without an answer, every 15 minutes (S20 MA4). */
   merchantsExpireApplications: 'merchants.expire-applications',
+  /** Recomputes one merchant's volume level (S21 LV4); `singletonKey` is the customer id. */
+  merchantsLevel: 'merchants.level',
+  /** Queues `merchants.level` for every merchant, the 1st at 00:10 `Asia/Damascus` (S21 LV4). */
+  merchantsLevelSchedule: 'merchants.level-schedule',
+  /** Compares followed products with what each merchant was told, at :05 every hour (S21 AL2). */
+  merchantsWatchAlerts: 'merchants.watch-alerts',
+  /** The daily alert email at 09:00 `Asia/Damascus` (S21 AL4). */
+  merchantsDailyDigest: 'merchants.daily-digest',
 } as const;
 
 /**
@@ -84,6 +92,7 @@ export const QUEUE_POLICIES: Readonly<Record<string, 'stately' | 'singleton'>> =
   [QUEUES.storeRevalidate]: 'singleton',
   [QUEUES.reconciliationRun]: 'singleton',
   [QUEUES.reconciliationRecheck]: 'stately',
+  [QUEUES.merchantsLevel]: 'stately',
 };
 
 /** A store refresh is queued at most once per this many seconds (S09 rule SF4). */
@@ -183,3 +192,8 @@ export const pushSendPayloadSchema = z.object({
 });
 
 export type PushSendPayload = z.infer<typeof pushSendPayloadSchema>;
+
+/** `singletonKey` is the customer id: one level recomputation queued and one active (S21 LV4). */
+export const merchantsLevelPayloadSchema = z.object({ customerId: z.uuid() });
+
+export type MerchantsLevelPayload = z.infer<typeof merchantsLevelPayloadSchema>;

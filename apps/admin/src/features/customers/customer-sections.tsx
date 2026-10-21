@@ -563,7 +563,10 @@ export function HistorySection({ customerId }: { customerId: string }) {
   );
 }
 
-/** S20: the merchant profile under the pricing card: name, place, since, source and terms. */
+/**
+ * S20: the merchant profile under the pricing card: name, place, since, source and terms; S21: the
+ * volume level and since when, the two months' net purchases and the follows count.
+ */
 function MerchantFacts({ merchant }: { merchant: NonNullable<AdminCustomer['merchant']> }) {
   const { t } = useTranslation();
   return (
@@ -600,6 +603,35 @@ function MerchantFacts({ merchant }: { merchant: NonNullable<AdminCustomer['merc
           ) : (
             t('merchants.profile.termsAccepted', { version: merchant.termsVersion })
           )}
+        </Fact>
+        <Fact label={t('merchants.profile.level')}>
+          {merchant.level ? (
+            <span className="flex flex-col gap-0.5">
+              <Link to="/merchants/levels" className="underline-offset-4 hover:underline">
+                {merchant.level.nameAr}
+              </Link>
+              {merchant.levelChangedAt && (
+                <span className="text-muted-foreground text-xs">
+                  {t('merchants.profile.levelSince', { date: formatDate(merchant.levelChangedAt) })}
+                </span>
+              )}
+            </span>
+          ) : (
+            t('merchants.profile.noLevel')
+          )}
+        </Fact>
+        <Fact label={t('merchants.profile.watches')}>
+          <span className="tabular-nums">{merchant.watchCount}</span>
+        </Fact>
+        <Fact label={t('merchants.profile.thisMonth')}>
+          <bdi dir="ltr" className="tabular-nums">
+            {formatUsd(merchant.thisMonthUsdUnits)}
+          </bdi>
+        </Fact>
+        <Fact label={t('merchants.profile.previousMonth')}>
+          <bdi dir="ltr" className="tabular-nums">
+            {formatUsd(merchant.previousMonthUsdUnits)}
+          </bdi>
         </Fact>
       </dl>
     </div>

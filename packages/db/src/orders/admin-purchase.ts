@@ -10,6 +10,8 @@ import type { Database, Transaction } from '../client.js';
 import { checkPurchaseCap, lockActiveCustomer, requireMerchantTerms } from '../customers/guard.js';
 import { newId } from '../id.js';
 import { lockCustomerWallet, postJournal } from '../ledger/index.js';
+import { afterMerchantPurchase } from '../merchant-tools/alerts.js';
+import { recordMerchantSale } from '../merchant-tools/sales.js';
 import { notifyCustomer } from '../notifications/index.js';
 import { productRoutingStates, type RoutingContext } from '../pricing/routing.js';
 import {
@@ -249,6 +251,11 @@ export async function adminPurchaseOrder(
     },
   });
   await queueFulfil(tx, context.jobs, order.id);
+  // S21 SP4, LV4, AL5: an order a merchant pays from the panel is theirs like their own.
+  if (customer && shape.payer === 'customer') {
+    if (customer.accountType === 'merchant') await recordMerchantSale(tx, order);
+    await afterMerchantPurchase(tx, context.jobs, customer);
+  }
 
   const [game] = await tx
     .select({ nameAr: catalogGames.nameAr })

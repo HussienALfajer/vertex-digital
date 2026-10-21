@@ -995,6 +995,7 @@
                 "customer.merchant_granted",
                 "customer.merchant_revoked",
                 "merchant.terms_accepted",
+                "merchant.level_changed",
                 "customer.limits_changed",
                 "customer.archived",
                 "customer.unarchived",
@@ -1061,6 +1062,9 @@
                 "merchant_application.rejected",
                 "merchant_application.expired",
                 "merchant_application.withdrawn",
+                "merchant_level.created",
+                "merchant_level.updated",
+                "merchant_level.archived",
                 "merchant_settings.changed",
                 "supplier.credentials_set",
                 "supplier.updated",
@@ -1166,6 +1170,7 @@
                 "price_list",
                 "merchant_application",
                 "merchant_settings",
+                "merchant_level",
                 "supplier",
                 "supplier_policy",
                 "supplier_offer",
@@ -3778,6 +3783,24 @@
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             }
+          },
+          {
+            "name": "levelId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                {
+                  "type": "string",
+                  "const": "none"
+                }
+              ]
+            }
           }
         ],
         "responses": {
@@ -3924,6 +3947,475 @@
         },
         "tags": [
           "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-levels": {
+      "get": {
+        "operationId": "MerchantLevelsAdminController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The levels with their merchants",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantLevelList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      },
+      "post": {
+        "operationId": "MerchantLevelsAdminController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MerchantLevelInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new level",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantLevel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-levels/{id}": {
+      "patch": {
+        "operationId": "MerchantLevelsAdminController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MerchantLevelInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The level",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantLevel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/admin/merchant-levels/{id}/archive": {
+      "post": {
+        "operationId": "MerchantLevelsAdminController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The archived level",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantLevel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchants"
+        ]
+      }
+    },
+    "/api/merchant/dashboard": {
+      "get": {
+        "operationId": "MerchantToolsController_dashboard",
+        "parameters": [
+          {
+            "name": "period",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "today",
+              "type": "string",
+              "enum": [
+                "today",
+                "month"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Today or this month (DB1–DB5)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantDashboard"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      }
+    },
+    "/api/merchant/games": {
+      "get": {
+        "operationId": "MerchantToolsController_games",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The store’s games",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantGames"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      }
+    },
+    "/api/merchant/selling-settings": {
+      "get": {
+        "operationId": "MerchantToolsController_sellingSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The markup and SYP step (SP1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellingSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      },
+      "put": {
+        "operationId": "MerchantToolsController_saveSellingSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellingSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellingSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      }
+    },
+    "/api/merchant/selling-prices": {
+      "get": {
+        "operationId": "MerchantToolsController_sellingPrices",
+        "parameters": [
+          {
+            "name": "gameId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A game’s packs (SP3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellingPrices"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      }
+    },
+    "/api/merchant/selling-prices/{productId}": {
+      "put": {
+        "operationId": "MerchantToolsController_setSellingPrice",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellingPriceInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The pack with its price (SP2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellingPriceRow"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      },
+      "delete": {
+        "operationId": "MerchantToolsController_clearSellingPrice",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The pack back on the markup",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellingPriceRow"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      }
+    },
+    "/api/merchant/watches": {
+      "get": {
+        "operationId": "MerchantToolsController_watches",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Follows and suggestions (AL1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Watches"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      },
+      "put": {
+        "operationId": "MerchantToolsController_saveWatches",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWatches"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved follows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Watches"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      }
+    },
+    "/api/merchant/alerts": {
+      "get": {
+        "operationId": "MerchantToolsController_alerts",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The last 90 days of alerts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantAlertPage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      }
+    },
+    "/api/merchant/alert-settings": {
+      "get": {
+        "operationId": "MerchantToolsController_alertSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The alert settings (AL4, AL5)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
+        ]
+      },
+      "put": {
+        "operationId": "MerchantToolsController_saveAlertSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "merchant-tools"
         ]
       }
     },
@@ -12936,6 +13428,234 @@
               "params"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "merchant_level_changed"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "levelNameAr": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "priceKind": {
+                    "$ref": "#/components/schemas/PriceKind"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "up",
+                      "down"
+                    ]
+                  }
+                },
+                "required": [
+                  "levelNameAr",
+                  "priceKind",
+                  "direction"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "merchant_watch_digest"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "priceDown": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "priceUp": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "backInStock": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "outOfStock": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "lines": {
+                    "maxItems": 5,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "gameNameAr": {
+                          "type": "string"
+                        },
+                        "productNameAr": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "$ref": "#/components/schemas/MerchantAlertKind"
+                        },
+                        "oldPriceUsdUnits": {
+                          "nullable": true,
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "newPriceUsdUnits": {
+                          "nullable": true,
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "gameNameAr",
+                        "productNameAr",
+                        "kind",
+                        "oldPriceUsdUnits",
+                        "newPriceUsdUnits"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "priceDown",
+                  "priceUp",
+                  "backInStock",
+                  "outOfStock",
+                  "lines"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "merchant_low_balance"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "balanceUsdUnits": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "thresholdUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "balanceUsdUnits",
+                  "thresholdUsdUnits"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -12984,6 +13704,15 @@
           "retail",
           "wholesale",
           "special"
+        ]
+      },
+      "MerchantAlertKind": {
+        "type": "string",
+        "enum": [
+          "price_down",
+          "price_up",
+          "back_in_stock",
+          "out_of_stock"
         ]
       },
       "MarkNotificationsRead": {
@@ -13040,7 +13769,10 @@
               "merchant_approved",
               "merchant_rejected",
               "merchant_application_expired",
-              "merchant_revoked"
+              "merchant_revoked",
+              "merchant_level_changed",
+              "merchant_watch_digest",
+              "merchant_low_balance"
             ]
           },
           "push": {
@@ -13067,7 +13799,10 @@
               "merchant_approved",
               "merchant_rejected",
               "merchant_application_expired",
-              "merchant_revoked"
+              "merchant_revoked",
+              "merchant_level_changed",
+              "merchant_watch_digest",
+              "merchant_low_balance"
             ]
           }
         },
@@ -13138,7 +13873,10 @@
           "merchant_approved",
           "merchant_rejected",
           "merchant_application_expired",
-          "merchant_revoked"
+          "merchant_revoked",
+          "merchant_level_changed",
+          "merchant_watch_digest",
+          "merchant_low_balance"
         ]
       },
       "PushConfig": {
@@ -13989,6 +14727,7 @@
           "customer.merchant_granted",
           "customer.merchant_revoked",
           "merchant.terms_accepted",
+          "merchant.level_changed",
           "customer.limits_changed",
           "customer.archived",
           "customer.unarchived",
@@ -14055,6 +14794,9 @@
           "merchant_application.rejected",
           "merchant_application.expired",
           "merchant_application.withdrawn",
+          "merchant_level.created",
+          "merchant_level.updated",
+          "merchant_level.archived",
           "merchant_settings.changed",
           "supplier.credentials_set",
           "supplier.updated",
@@ -14155,6 +14897,7 @@
           "price_list",
           "merchant_application",
           "merchant_settings",
+          "merchant_level",
           "supplier",
           "supplier_policy",
           "supplier_offer",
@@ -18105,6 +18848,35 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "level": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MerchantLevelRef"
+              }
+            ]
+          },
+          "levelChangedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "thisMonthUsdUnits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "previousMonthUsdUnits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "watchCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -18114,7 +18886,12 @@
           "applicationId",
           "termsVersion",
           "grantedAt",
-          "revokedAt"
+          "revokedAt",
+          "level",
+          "levelChangedAt",
+          "thisMonthUsdUnits",
+          "previousMonthUsdUnits",
+          "watchCount"
         ],
         "additionalProperties": false
       },
@@ -18137,6 +18914,24 @@
           "quneitra",
           "outside_syria"
         ]
+      },
+      "MerchantLevelRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "nameAr": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nameAr"
+        ],
+        "additionalProperties": false
       },
       "CustomerNote": {
         "type": "object",
@@ -19316,6 +20111,21 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "levelId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "none"
+                ]
+              }
+            ]
           }
         }
       },
@@ -19383,6 +20193,14 @@
           "priceKind": {
             "$ref": "#/components/schemas/PriceKind"
           },
+          "level": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MerchantLevelRef"
+              }
+            ]
+          },
           "termsAccepted": {
             "type": "boolean"
           },
@@ -19409,6 +20227,7 @@
           "city",
           "priceList",
           "priceKind",
+          "level",
           "termsAccepted",
           "frozen",
           "grantedAt",
@@ -19553,6 +20372,759 @@
           "reapplyWaitDays",
           "infoExpiryDays"
         ]
+      },
+      "MerchantLevelList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MerchantLevel"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantLevel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "monthlyThresholdUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "priceList": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "priceKind": {
+                "$ref": "#/components/schemas/PriceKind"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "priceKind"
+            ],
+            "additionalProperties": false
+          },
+          "merchantCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "archivedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "nameAr",
+          "monthlyThresholdUsdUnits",
+          "priceList",
+          "merchantCount",
+          "createdAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantLevelInput": {
+        "type": "object",
+        "properties": {
+          "nameAr": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 30
+          },
+          "monthlyThresholdUsdUnits": {
+            "type": "integer",
+            "minimum": 1000000,
+            "maximum": 9007199254740991
+          },
+          "priceListId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "nameAr",
+          "monthlyThresholdUsdUnits",
+          "priceListId"
+        ]
+      },
+      "MerchantDashboardQuery": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "default": "today",
+            "type": "string",
+            "enum": [
+              "today",
+              "month"
+            ]
+          }
+        }
+      },
+      "MerchantDashboard": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "type": "string",
+            "enum": [
+              "today",
+              "month"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "salesUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "salesSypUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "spendingUsdUnits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "profitUsdUnits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "ordersWithoutSale": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "balanceUsdUnits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "topProducts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "gameNameAr": {
+                  "type": "string"
+                },
+                "nameAr": {
+                  "type": "string"
+                },
+                "units": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "salesUsdUnits": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "productId",
+                "gameNameAr",
+                "nameAr",
+                "units",
+                "salesUsdUnits"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "level": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "current": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MerchantLevelRef"
+                  }
+                ]
+              },
+              "thisMonthUsdUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "next": {
+                "nullable": true,
+                "type": "object",
+                "properties": {
+                  "nameAr": {
+                    "type": "string"
+                  },
+                  "monthlyThresholdUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "missingUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "nameAr",
+                  "monthlyThresholdUsdUnits",
+                  "missingUsdUnits"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "current",
+              "thisMonthUsdUnits",
+              "next"
+            ],
+            "additionalProperties": false
+          },
+          "sellingConfigured": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "period",
+          "from",
+          "salesUsdUnits",
+          "salesSypUnits",
+          "spendingUsdUnits",
+          "profitUsdUnits",
+          "ordersWithoutSale",
+          "balanceUsdUnits",
+          "topProducts",
+          "level",
+          "sellingConfigured"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantGames": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MerchantGame"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantGame": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "nameAr"
+        ],
+        "additionalProperties": false
+      },
+      "SellingSettings": {
+        "type": "object",
+        "properties": {
+          "markupBp": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "sypStepUnits": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SypStep"
+              }
+            ]
+          }
+        },
+        "required": [
+          "markupBp",
+          "sypStepUnits"
+        ],
+        "additionalProperties": false
+      },
+      "SypStep": {
+        "type": "number",
+        "enum": [
+          500,
+          1000,
+          5000,
+          10000,
+          50000,
+          100000
+        ]
+      },
+      "SellingPriceQuery": {
+        "type": "object",
+        "properties": {
+          "gameId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "gameId"
+        ]
+      },
+      "SellingPrices": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/SellingSettings"
+          },
+          "storeStepUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SellingPriceRow"
+            }
+          }
+        },
+        "required": [
+          "settings",
+          "storeStepUnits",
+          "products"
+        ],
+        "additionalProperties": false
+      },
+      "SellingPriceRow": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "purchaseUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "ownPrice": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SellingPriceInput"
+              }
+            ]
+          },
+          "sellingUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sellingSypUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "product",
+              "markup",
+              "none"
+            ]
+          },
+          "belowCost": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "productId",
+          "nameAr",
+          "available",
+          "purchaseUsdUnits",
+          "ownPrice",
+          "sellingUsdUnits",
+          "sellingSypUnits",
+          "source",
+          "belowCost"
+        ],
+        "additionalProperties": false
+      },
+      "SellingPriceInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "usd"
+                ]
+              },
+              "amountUnits": {
+                "type": "integer",
+                "minimum": 10000,
+                "maximum": 10000000000
+              }
+            },
+            "required": [
+              "currency",
+              "amountUnits"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "syp"
+                ]
+              },
+              "amountUnits": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "currency",
+              "amountUnits"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Watches": {
+        "type": "object",
+        "properties": {
+          "games": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "gameId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "nameAr": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "gameId",
+                "nameAr"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "gameId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "gameNameAr": {
+                  "type": "string"
+                },
+                "nameAr": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "gameId",
+                "gameNameAr",
+                "nameAr"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "suggestions": {
+            "type": "object",
+            "properties": {
+              "games": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "gameId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "nameAr": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "gameId",
+                    "nameAr"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "products": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "productId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "gameId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "gameNameAr": {
+                      "type": "string"
+                    },
+                    "nameAr": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "productId",
+                    "gameId",
+                    "gameNameAr",
+                    "nameAr"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "games",
+              "products"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "games",
+          "products",
+          "suggestions"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateWatches": {
+        "type": "object",
+        "properties": {
+          "gameIds": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "productIds": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
+        "required": [
+          "gameIds",
+          "productIds"
+        ]
+      },
+      "MerchantAlertQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        }
+      },
+      "MerchantAlertPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MerchantAlert"
+            }
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "MerchantAlert": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "gameNameAr": {
+            "type": "string"
+          },
+          "productNameAr": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MerchantAlertKind"
+          },
+          "oldPriceUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "newPriceUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "productId",
+          "gameNameAr",
+          "productNameAr",
+          "kind",
+          "oldPriceUsdUnits",
+          "newPriceUsdUnits",
+          "id",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "AlertSettings": {
+        "type": "object",
+        "properties": {
+          "lowBalanceUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 1000000,
+            "maximum": 10000000000
+          },
+          "dailyEmail": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "lowBalanceUsdUnits",
+          "dailyEmail"
+        ],
+        "additionalProperties": false
       },
       "SupportChannels": {
         "type": "object",

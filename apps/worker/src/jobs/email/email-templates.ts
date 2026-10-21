@@ -1,11 +1,13 @@
 import { fileURLToPath } from 'node:url';
 import {
   type AdjustmentCategory,
+  type AlertLine,
   type CancelReason,
   type DepositRejectReason,
   type EmailParams,
   type EmailTemplate,
   formatUsd,
+  type PriceKind,
   type RefundReason,
   type StorePlacedPurpose,
 } from '@vertex-digital/contracts';
@@ -95,6 +97,27 @@ const PLACED_FOR_YOU_LINES: Record<StorePlacedPurpose, string> = {
 
 /** S20: the merchant application page. */
 const MERCHANT_PAGE = { label: 'عرض الطلب', path: '/account/merchant' };
+
+/** S21: the prices an account pays, by kind (never a list's name). */
+const PRICE_KIND_LABELS: Record<PriceKind, string> = {
+  retail: 'أسعار التجزئة',
+  wholesale: 'أسعار الجملة',
+  special: 'أسعار خاصة',
+};
+
+/** S21 AL4: one alert event in words. */
+function alertLine(line: AlertLine): string {
+  const pack = `${named(line.productNameAr)} (${named(line.gameNameAr)})`;
+  switch (line.kind) {
+    case 'price_down':
+    case 'price_up':
+      return `${line.kind === 'price_down' ? 'انخفض' : 'ارتفع'} سعر ${pack} من ${usd(line.oldPriceUsdUnits ?? 0)} إلى ${usd(line.newPriceUsdUnits ?? 0)}`;
+    case 'back_in_stock':
+      return `عادت ${pack} للتوفر`;
+    case 'out_of_stock':
+      return `نفدت ${pack}`;
+  }
+}
 
 /** The customer-facing words of the refund reasons (S08 rule O13). */
 const REFUND_REASON_LABELS: Record<RefundReason, string> = {
@@ -362,6 +385,37 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
       'رصيدك وطلباتك كما هي. للاستفسار تواصل مع الدعم.',
     ],
     link: { label: 'عرض حسابي', path: '/account' },
+  }),
+  customer_merchant_level_changed: ({ levelNameAr, priceKind, direction }) => ({
+    subject: levelNameAr === null ? 'تغيّر مستوى حساب التاجر' : `مستواك الآن: ${named(levelNameAr)}`,
+    lines: [
+      levelNameAr === null
+        ? 'لم يعد حسابك ضمن أي مستوى لهذا الشهر.'
+        : direction === 'up'
+          ? `بلغت مشترياتك مستوى ${named(levelNameAr)}.`
+          : `أصبح مستوى حسابك ${named(levelNameAr)} بحسب مشتريات الشهر الماضي.`,
+      `تظهر لك ${PRICE_KIND_LABELS[priceKind]} في صفحات الألعاب من الآن.`,
+    ],
+    link: { label: 'لوحة التاجر', path: '/merchant' },
+  }),
+  customer_merchant_low_balance: ({ balanceUsdUnits, thresholdUsdUnits, at }) => ({
+    subject: 'رصيدك أقل من الحد الذي حددته',
+    lines: [
+      `أصبح رصيدك ${usd(balanceUsdUnits)} بتاريخ ${formatTime(at)}، وهو أقل من ${usd(thresholdUsdUnits)}.`,
+      'اشحن رصيدك لتتابع البيع دون انقطاع.',
+    ],
+    link: { label: 'شحن الرصيد', path: '/wallet' },
+  }),
+  customer_merchant_daily_digest: ({ total, lines }) => ({
+    subject: 'ملخص تغيّرات الباقات التي تتابعها',
+    lines: [
+      `تغيّرات آخر 24 ساعة على الباقات التي تتابعها (${latin(String(total))}):`,
+      ...lines.map(alertLine),
+      ...(total > lines.length
+        ? [`و${latin(String(total - lines.length))} تغيّرات أخرى في صفحة التنبيهات.`]
+        : []),
+    ],
+    link: { label: 'التنبيهات', path: '/merchant/alerts' },
   }),
 };
 

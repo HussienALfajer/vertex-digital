@@ -15,6 +15,8 @@ import { UsdtVerifyJob } from './jobs/deposits/usdt-verify.job.js';
 import { PurgeCodesJob } from './jobs/email/purge-codes.job.js';
 import { SendEmailJob } from './jobs/email/send-email.job.js';
 import { ExpireApplicationsJob } from './jobs/merchants/expire-applications.job.js';
+import { MerchantLevelJob } from './jobs/merchants/level.job.js';
+import { MerchantWatchAlertsJob } from './jobs/merchants/watch-alerts.job.js';
 import { OrdersFulfilJob } from './jobs/orders/fulfil.job.js';
 import { OrdersPayWaitingJob } from './jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from './jobs/orders/poll.job.js';
@@ -111,6 +113,8 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     DailySummaryJob,
     FallbackNoticesJob,
     ExpireApplicationsJob,
+    MerchantLevelJob,
+    MerchantWatchAlertsJob,
     SupplierRegistry,
     SupplierSyncJob,
     SupplierSyncScheduleJob,

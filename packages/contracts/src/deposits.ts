@@ -490,6 +490,17 @@ export function zoneDayStart(at: Date, daysBack = 0): Date {
   return zoneInstant(clock.year, clock.month, clock.day - daysBack, 0);
 }
 
+/** The review zone's calendar month of `at` (S21): its year and month (1–12). */
+export function zoneYearMonth(at: Date): { year: number; month: number } {
+  const clock = zoneClock(at);
+  return { year: clock.year, month: clock.month };
+}
+
+/** The start of a calendar month in the review zone (S21); `month` may run past 12. */
+export function zoneMonthStart(year: number, month: number): Date {
+  return zoneInstant(year, month, 1, 0);
+}
+
 /** True when `at` falls within the review hours, start included, end excluded. */
 export function isWithinReviewHours(at: Date, hours: ReviewHours): boolean {
   const { minutes } = zoneClock(at);

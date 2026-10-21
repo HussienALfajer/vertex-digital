@@ -11,6 +11,8 @@ export type SessionUser = {
   emailVerified?: boolean;
   /** S12 CF5: set while the admin has frozen the account; the reason is never sent. */
   frozenAt?: string | null;
+  /** S21 MA1: `merchant` opens "أدوات التاجر". */
+  accountType?: 'customer' | 'merchant';
 };
 
 export type Session = { user: SessionUser; session?: { token?: string } } | null;

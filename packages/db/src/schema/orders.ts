@@ -197,6 +197,10 @@ export const orders = pgTable(
       .on(table.expiresAt)
       .where(sql`${table.status} = 'awaiting_balance'`),
     /** S11: orders finished in a period (the live room's last hour, the dashboard's days). */
+    // S21 DB6: a merchant's delivered orders of a period.
+    index('orders_customer_id_finished_at_idx')
+      .on(table.customerId, table.finishedAt)
+      .where(sql`${table.finishedAt} is not null`),
     index('orders_finished_at_idx')
       .on(table.finishedAt)
       .where(sql`${table.finishedAt} is not null`),

@@ -22,6 +22,21 @@ export {
   termsVersionNumber,
 } from './applications.js';
 export {
+  type LevelChange,
+  levelListId,
+  levelRows,
+  liveLevels,
+  liveLevelsOnList,
+  type MerchantLevelRow,
+  merchantLevelOf,
+  monthsPurchases,
+  netPurchases,
+  queueAllMerchantLevels,
+  queueMerchantLevel,
+  queueMerchantLevelIfMerchant,
+  recomputeMerchantLevel,
+} from './levels.js';
+export {
   accountMerchant,
   applicantOf,
   applicationQueue,

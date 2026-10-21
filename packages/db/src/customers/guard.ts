@@ -1,4 +1,5 @@
 import {
+  type AccountType,
   type CustomerLimitOverrides,
   effectivePriceListId,
   NO_LIMIT_OVERRIDES,
@@ -7,6 +8,7 @@ import {
 } from '@vertex-digital/contracts';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { Database, Transaction } from '../client.js';
+import { levelListId } from '../merchants/levels.js';
 import { OrderError } from '../orders/errors.js';
 import { customerLimits, customers, merchantProfiles, orders } from '../schema/index.js';
 
@@ -21,8 +23,10 @@ import { customerLimits, customers, merchantProfiles, orders } from '../schema/i
 export interface PurchasingCustomer {
   id: string;
   isTest: boolean;
-  /** S20 AT1: the list the customer pays (`effectivePriceListId`), read under the lock (AT3). */
+  /** S20 AT1, S21 LV5: the list the customer pays (`effectivePriceListId`), read under the lock (AT3). */
   priceListId: string;
+  /** S21: a merchant's purchase writes a sale row and may send the low-balance alert. */
+  accountType: AccountType;
   /** The daily purchase cap (LM4), or null for none. */
   capUnits: number | null;
   /** S20 MT2: a merchant who has not accepted the merchant terms yet (a direct grant). */
@@ -71,7 +75,9 @@ export async function lockActiveCustomer(
   }
   const overrides = await customerLimitOverrides(tx, customerId);
   let merchantTermsRequired = false;
+  let merchantLevelListId: string | null = null;
   if (customer.accountType === 'merchant') {
+    merchantLevelListId = await levelListId(tx, customerId);
     const [profile] = await tx
       .select({ termsVersionId: merchantProfiles.termsVersionId })
       .from(merchantProfiles)
@@ -82,7 +88,8 @@ export async function lockActiveCustomer(
   return {
     id: customerId,
     isTest: customer.isTest,
-    priceListId: effectivePriceListId(customer),
+    priceListId: effectivePriceListId({ ...customer, levelListId: merchantLevelListId }),
+    accountType: customer.accountType,
     capUnits: overrides.dailyPurchaseUsdUnits,
     merchantTermsRequired,
   };

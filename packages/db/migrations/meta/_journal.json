@@ -582,6 +582,27 @@
       "when": 1792537765457,
       "tag": "0082_sweet_white_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1792540817793,
+      "tag": "0083_rainy_randall",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1792540834298,
+      "tag": "0084_s21_merchant_tools_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1792544315583,
+      "tag": "0085_spotty_loa",
+      "breakpoints": true
     }
   ]
 }

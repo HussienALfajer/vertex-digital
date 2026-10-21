@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type AdminMerchantRow, formatUsd } from '@vertex-digital/contracts';
 import {
@@ -26,7 +26,7 @@ import { errorMessage } from '../../lib/errors';
 import { formatDate } from '../../lib/format';
 import { Picker } from '../pricing/picker';
 import { RevokeMerchantDialog, useListItems } from './merchant-dialogs';
-import { merchantsQuery } from './merchants.queries';
+import { merchantLevelsQuery, merchantsQuery } from './merchants.queries';
 import type { MerchantsSearch } from './merchants-search';
 
 const ALL = 'all';
@@ -45,6 +45,15 @@ export function MerchantsPage({
   const { t } = useTranslation();
   const list = useInfiniteQuery(merchantsQuery(search));
   const lists = [{ value: ALL, label: t('merchants.list.allLists') }, ...useListItems()];
+  // S21: the live levels, and the merchants without one.
+  const levels = useQuery(merchantLevelsQuery);
+  const levelItems = [
+    { value: ALL, label: t('merchants.list.allLevels') },
+    { value: 'none', label: t('merchants.list.noLevel') },
+    ...(levels.data?.items ?? [])
+      .filter((level) => level.archivedAt === null)
+      .map((level) => ({ value: level.id, label: level.nameAr })),
+  ];
   const rows = list.data?.pages.flatMap((page) => page.items) ?? [];
   const [revoking, setRevoking] = useState<AdminMerchantRow | null>(null);
 
@@ -71,6 +80,17 @@ export function MerchantsPage({
             onChange={(value) => onSearch({ ...search, listId: value === ALL ? undefined : value })}
           />
         </Field>
+        <Field className="w-52">
+          <FieldLabel render={<span />}>{t('merchants.list.levelFilter')}</FieldLabel>
+          <Picker
+            label={t('merchants.list.levelFilter')}
+            items={levelItems}
+            value={search.levelId ?? ALL}
+            onChange={(value) =>
+              onSearch({ ...search, levelId: value === ALL ? undefined : value })
+            }
+          />
+        </Field>
       </div>
       {list.isPending && (
         <div className="flex flex-col gap-2" aria-hidden="true">
@@ -91,7 +111,7 @@ export function MerchantsPage({
         <EmptyState
           icon={<InboxIcon />}
           title={
-            search.q || search.listId
+            search.q || search.listId || search.levelId
               ? t('merchants.list.emptyFiltered')
               : t('merchants.list.empty')
           }
@@ -105,6 +125,7 @@ export function MerchantsPage({
               <TableHead>{t('merchants.columns.customer')}</TableHead>
               <TableHead>{t('merchants.columns.governorate')}</TableHead>
               <TableHead>{t('merchants.columns.list')}</TableHead>
+              <TableHead>{t('merchants.columns.level')}</TableHead>
               <TableHead>{t('merchants.columns.since')}</TableHead>
               <TableHead>{t('merchants.columns.sales30d')}</TableHead>
               <TableHead>
@@ -144,6 +165,13 @@ export function MerchantsPage({
                   >
                     {row.priceList.name}
                   </Link>
+                </TableCell>
+                <TableCell>
+                  {row.level ? (
+                    <Badge tone="neutral">{row.level.nameAr}</Badge>
+                  ) : (
+                    <span className="text-muted-foreground">{t('merchants.list.noLevel')}</span>
+                  )}
                 </TableCell>
                 <TableCell>{formatDate(row.grantedAt)}</TableCell>
                 <TableCell className="tabular-nums">

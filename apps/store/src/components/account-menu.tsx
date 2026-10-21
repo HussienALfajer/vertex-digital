@@ -15,6 +15,7 @@ import {
   LogOutIcon,
   MoonIcon,
   ShoppingBagIcon,
+  StoreIcon,
   SunIcon,
   UserRoundIcon,
 } from 'lucide-react';
@@ -29,10 +30,18 @@ import { useTheme } from '@/lib/theme';
 
 /**
  * The signed-in customer's menu in the header: the account page, the orders (S08), the saved
- * player IDs (S10 rule SP5), "ثبّت التطبيق" when possible (S15 IN1), sign-out, which also clears
+ * player IDs (S10 rule SP5), "أدوات التاجر" for a merchant (S21 MA1), "ثبّت التطبيق" when possible (S15 IN1), sign-out, which also clears
  * the cart (S10 rule CT1) and makes the browser forget its push subscription (S15 PS5).
  */
-export function AccountMenu({ name, email }: { name: string; email: string }) {
+export function AccountMenu({
+  name,
+  email,
+  merchant,
+}: {
+  name: string;
+  email: string;
+  merchant: boolean;
+}) {
   const { theme, toggle } = useTheme();
   const install = useInstall();
   const [signOutFailed, setSignOutFailed] = useState(false);
@@ -78,6 +87,15 @@ export function AccountMenu({ name, email }: { name: string; email: string }) {
             <UserRoundIcon />
             {t('header.account')}
           </DropdownMenuItem>
+          {merchant && (
+            <DropdownMenuItem
+              className="min-h-11"
+              render={<Link href="/merchant" prefetch={false} />}
+            >
+              <StoreIcon />
+              {t('header.merchantTools')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem className="min-h-11" render={<Link href="/orders" />}>
             <ShoppingBagIcon />
             {t('header.orders')}

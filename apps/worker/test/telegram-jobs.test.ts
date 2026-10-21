@@ -553,6 +553,7 @@ describe('the messages of PR 4', () => {
       stockLow: { low: 2, out: 1 },
       fixedPriceFallbacks: 2,
       merchantApplicationsWaiting: 3,
+      merchantLevelsChanged: 2,
     };
     const text = renderTelegramMessage('daily_summary', summary, LINKS).text;
     for (const line of [
@@ -576,6 +577,7 @@ describe('the messages of PR 4', () => {
       '📉 مخزون الباقات المربوطة: 2 منخفض، 1 نافد',
       '🏷️ أسعار ثابتة تحت الهامش تُباع بسعر القاعدة: 2',
       '🏪 طلبات تاجر بانتظار المراجعة: 3',
+      '🏅 مستويات التجار: 2 تغيّرت اليوم',
       'المطابقة الليلية 2029-12-31: 2 فروقات · مفتوحة الآن: 3',
       'طلبات من مال المالك اليوم: 2 بقيمة $12.50 من سقف $100.00',
     ]) {

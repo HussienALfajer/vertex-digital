@@ -22,6 +22,7 @@ import {
   listFixedPrices,
   listIsPriced,
   listPricingFacts,
+  liveLevelsOnList,
   lockAccountsOnList,
   marginRules,
   newId,
@@ -213,10 +214,13 @@ export class PriceListsService {
         .from(priceLists)
         .where(and(eq(priceLists.parentListId, id), isNull(priceLists.archivedAt)));
       const accounts = await accountsOnList(tx, id);
-      if (accounts > 0 || (children?.count ?? 0) > 0) {
+      // S21 LV6: a live volume level's list (a level takes the list `FOR SHARE`).
+      const levels = await liveLevelsOnList(tx, id);
+      if (accounts > 0 || (children?.count ?? 0) > 0 || levels > 0) {
         throw new CodedException(409, 'PRICE_LIST_IN_USE', 'The list is in use', {
           accounts,
           children: children?.count ?? 0,
+          levels,
         });
       }
       await releaseArchivedAccounts(tx, {

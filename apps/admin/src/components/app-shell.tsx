@@ -100,6 +100,7 @@ interface NavChild {
     | 'nav.telegram'
     | 'nav.merchantApplications'
     | 'nav.merchantsList'
+    | 'nav.merchantLevels'
     | 'nav.merchantSettings';
   /** Sub-pages with their own navigation items, where this one is not active. */
   except?: readonly string[];
@@ -135,7 +136,12 @@ const navItems: NavItem[] = [
     icon: StoreIcon,
     children: [
       { to: '/merchants/applications', label: 'nav.merchantApplications' },
-      { to: '/merchants', label: 'nav.merchantsList', except: ['/merchants/applications'] },
+      {
+        to: '/merchants',
+        label: 'nav.merchantsList',
+        except: ['/merchants/applications', '/merchants/levels'],
+      },
+      { to: '/merchants/levels', label: 'nav.merchantLevels' },
       { to: '/settings/merchants', label: 'nav.merchantSettings' },
     ],
   },

@@ -53,12 +53,13 @@ export async function notifyCustomer<Event extends NotificationEvent>(
     .returning({ id: customerNotifications.id, createdAt: customerNotifications.createdAt });
   if (!row) throw new Error('The notification was not written');
   await tx.execute(sql`select pg_notify(${CUSTOMER_NOTIFICATIONS_CHANNEL}, ${row.id})`);
-  // An event of the center only (`order_delayed`, S08) sends no email.
-  const template: EmailTemplate | null = NOTIFICATION_EMAIL_TEMPLATE[input.event];
-  if (template === null || options.email === false)
-    return { notificationId: row.id, emailId: null };
-
+  // A center-only call (S10 CT8) sends neither email nor push.
+  if (options.email === false) return { notificationId: row.id, emailId: null };
   if (isPushNotificationEvent(input.event)) await queuePush(tx, jobs, input.customerId, row.id);
+  // An event of the center only (`order_delayed`, S08) sends no email; S21's follow digest
+  // (`merchant_watch_digest`) sends a push without one.
+  const template: EmailTemplate | null = NOTIFICATION_EMAIL_TEMPLATE[input.event];
+  if (template === null) return { notificationId: row.id, emailId: null };
 
   const [customer] = await tx
     .select({ email: customers.email, emailOn: notificationPreferences.email })

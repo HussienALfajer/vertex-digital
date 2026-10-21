@@ -471,17 +471,18 @@ export {
 } from './price-kinds.js';
 
 /**
- * S20 AT1: the list an account pays, its assigned list, else retail for a customer and wholesale
- * for a merchant.
+ * S20 AT1, amended by S21 LV5 (ADR 0036): the list an account pays, its assigned list, else the
+ * list of a merchant's volume level, else retail for a customer and wholesale for a merchant.
  */
 export function effectivePriceListId(account: {
   accountType: AccountType;
   priceListId: string | null;
+  /** The live level's list of a merchant with a level; null or missing for none. */
+  levelListId?: string | null;
 }): string {
   if (account.priceListId !== null) return account.priceListId;
-  return account.accountType === 'merchant'
-    ? ROOT_PRICE_LIST_IDS.wholesale
-    : ROOT_PRICE_LIST_IDS.retail;
+  if (account.accountType !== 'merchant') return ROOT_PRICE_LIST_IDS.retail;
+  return account.levelListId ?? ROOT_PRICE_LIST_IDS.wholesale;
 }
 
 /**

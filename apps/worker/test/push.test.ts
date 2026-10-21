@@ -127,6 +127,15 @@ const SAMPLE: { [Event in PushNotificationEvent]: NotificationParams<Event> } = 
     availableAt: '2026-10-28T10:00:00.000Z',
   },
   merchant_revoked: {},
+  merchant_level_changed: { levelNameAr: 'فضي', priceKind: 'special', direction: 'up' },
+  merchant_low_balance: { balanceUsdUnits: 4_500_000, thresholdUsdUnits: 10_000_000 },
+  merchant_watch_digest: {
+    priceDown: 2,
+    priceUp: 0,
+    backInStock: 1,
+    outOfStock: 0,
+    lines: [],
+  },
 };
 
 describe('lock-screen texts (PT1–PT3)', () => {

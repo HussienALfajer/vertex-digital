@@ -1,0 +1,1 @@
+ALTER TABLE "merchant_alert_settings" ADD COLUMN "low_balance_alerted_position" bigint;

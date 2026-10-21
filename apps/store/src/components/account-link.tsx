@@ -60,7 +60,15 @@ export function AccountLink() {
     };
   }, []);
 
-  if (session) return <SignedInHeader name={session.user.name} email={session.user.email} />;
+  if (session) {
+    return (
+      <SignedInHeader
+        name={session.user.name}
+        email={session.user.email}
+        merchant={session.user.accountType === 'merchant'}
+      />
+    );
+  }
 
   const signedOut = (
     <div

@@ -8,6 +8,7 @@ import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import {
   ArrowDownToLineIcon,
   BellIcon,
+  BellRingIcon,
   CircleAlertIcon,
   CircleSlashIcon,
   CircleXIcon,
@@ -15,6 +16,7 @@ import {
   GiftIcon,
   LifeBuoyIcon,
   type LucideIcon,
+  MedalIcon,
   PackageCheckIcon,
   PackageMinusIcon,
   ReceiptTextIcon,
@@ -24,6 +26,7 @@ import {
   TagIcon,
   Undo2Icon,
   WalletIcon,
+  WalletMinimalIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -62,6 +65,9 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   merchant_rejected: StoreIcon,
   merchant_application_expired: StoreIcon,
   merchant_revoked: StoreIcon,
+  merchant_level_changed: MedalIcon,
+  merchant_watch_digest: BellRingIcon,
+  merchant_low_balance: WalletMinimalIcon,
 };
 
 /** Marks everything up to the newest shown as read and tells the bell (rule NT5). */

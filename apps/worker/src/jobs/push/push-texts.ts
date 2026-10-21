@@ -123,6 +123,25 @@ const RENDERERS: Renderers = {
     url: '/account',
     tag: 'merchant',
   }),
+  // S21: the level's name, never the list's; no amount (PT2).
+  merchant_level_changed: (params) => ({
+    body:
+      params.levelNameAr === null
+        ? 'تغيّر مستوى حساب التاجر'
+        : `مستوى حسابك الآن: ${params.levelNameAr}`,
+    url: '/merchant',
+    tag: 'merchant-level',
+  }),
+  merchant_low_balance: () => ({
+    body: 'رصيدك أقل من الحد الذي حددته. اشحن رصيدك لتتابع البيع',
+    url: '/wallet',
+    tag: 'merchant-low-balance',
+  }),
+  merchant_watch_digest: (params) => ({
+    body: `تغيّرت ${params.priceDown + params.priceUp + params.backInStock + params.outOfStock} باقات تتابعها`,
+    url: '/merchant/alerts',
+    tag: 'merchant-alerts',
+  }),
 };
 
 /** PT1: the payload of a push event's notification, its stored params checked again. */

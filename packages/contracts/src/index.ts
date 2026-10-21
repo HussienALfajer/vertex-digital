@@ -10,6 +10,7 @@ export * from './deposits.js';
 export * from './errors.js';
 export * from './jobs.js';
 export * from './lists.js';
+export * from './merchant-tools.js';
 export * from './merchants.js';
 export * from './money.js';
 export * from './notifications.js';
