@@ -3,9 +3,9 @@
 import {
   EMAIL_NOTIFICATION_EVENTS,
   isPushNotificationEvent,
-  PUSH_NOTIFICATION_EVENTS,
   type NotificationEvent,
   type NotificationPreferences,
+  PUSH_NOTIFICATION_EVENTS,
   type PushNotificationEvent,
 } from '@vertex-digital/contracts';
 import { Card, CardDescription, CardHeader, CardTitle } from '@vertex-digital/ui/components/card';
@@ -90,7 +90,9 @@ export function NotificationPreferencesCard() {
           )}
           {(pushConfigured ? PREFERENCE_EVENTS : EMAIL_NOTIFICATION_EVENTS).map((event) => {
             const label = t(`account.notifications.events.${event}`);
-            const email = (EMAIL_NOTIFICATION_EVENTS as readonly NotificationEvent[]).includes(event);
+            const email = (EMAIL_NOTIFICATION_EVENTS as readonly NotificationEvent[]).includes(
+              event,
+            );
             const channels: ('email' | 'push')[] = [
               ...(email ? (['email'] as const) : []),
               ...(pushConfigured && isPushNotificationEvent(event) ? (['push'] as const) : []),

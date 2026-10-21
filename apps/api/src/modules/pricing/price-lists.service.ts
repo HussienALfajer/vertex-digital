@@ -15,7 +15,6 @@ import {
 } from '@vertex-digital/contracts';
 import {
   accountsOnList,
-  liveLevelsOnList,
   assignedAccountCounts,
   assignedAccounts,
   type Database,
@@ -23,6 +22,7 @@ import {
   listFixedPrices,
   listIsPriced,
   listPricingFacts,
+  liveLevelsOnList,
   lockAccountsOnList,
   marginRules,
   newId,

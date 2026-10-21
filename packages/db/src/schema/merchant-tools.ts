@@ -1,6 +1,7 @@
 import { ALERT_KINDS, SALE_CURRENCIES, SALE_SOURCES } from '@vertex-digital/contracts';
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   check,
   index,
@@ -204,6 +205,8 @@ export const merchantAlertSettings = pgTable(
     lowBalanceUsdUnits: amountUnits('low_balance_usd_units'),
     dailyEmail: boolean('daily_email').notNull().default(false),
     lowBalanceAlertedAt: timestamp('low_balance_alerted_at', { withTimezone: true }),
+    /** The wallet's last posting position when the alert was sent: "back above" is read after it. */
+    lowBalanceAlertedPosition: bigint('low_balance_alerted_position', { mode: 'number' }),
     updatedAt: updatedAt(),
   },
   (table) => [

@@ -7,19 +7,20 @@ import {
   priceKindOf,
   QUEUES,
 } from '@vertex-digital/contracts';
-import { and, asc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Executor, Transaction } from '../client.js';
-import { cancelAccountReservations } from '../customers/price-lists.js';
 import { lockCustomer } from '../customers/state.js';
 import { findCustomerWallet } from '../ledger/wallet.js';
 import { type JobSender, notifyCustomer } from '../notifications/index.js';
+import { cancelReservation } from '../orders/reservations.js';
 import {
   customers,
   ledgerJournals,
   ledgerPostings,
   merchantLevels,
   merchantProfiles,
+  orders,
   priceLists,
 } from '../schema/index.js';
 
@@ -149,8 +150,9 @@ export type LevelChange =
  * LV3, LV4: recomputes one merchant's level in the caller's transaction. The customer is locked
  * `FOR NO KEY UPDATE`; a customer who is not a merchant, or a revoked profile, has no level. When
  * the level differs: the profile's level and time, the audit entry (system actor) and the
- * `merchant_level_changed` notification; when the effective list changes too, S20 AT3 (the
- * reservations cancelled). The same state twice writes nothing.
+ * `merchant_level_changed` notification. Every run cancels the reservations on a list the account
+ * no longer pays (S20 AT3), so an archived level or a level's new list moves them too (LV6). The
+ * same state twice writes nothing.
  */
 export async function recomputeMerchantLevel(
   tx: Transaction,
@@ -170,8 +172,15 @@ export async function recomputeMerchantLevel(
     ? levelFor(levels, months.previousMonthUsdUnits, months.thisMonthUsdUnits)
     : null;
   const levelIdAfter = level?.id ?? null;
-  // An archived level still named by the profile counts as none for the list (`levelListId`).
-  const before = levels.find((candidate) => candidate.id === profile.levelId) ?? null;
+  // The profile's level as it was, archived or not: its list and threshold are what changes.
+  const [before] =
+    profile.levelId === null
+      ? []
+      : await tx.select().from(merchantLevels).where(eq(merchantLevels.id, profile.levelId));
+  const listAfter = effectivePriceListId({ ...customer, levelListId: level?.priceListId });
+  // AT3: a reservation is never left on a list the account no longer pays, whether the level
+  // changed or the level's list did (LV6: an archive, an edit of the list).
+  const cancelledOrderIds = await cancelReservationsOffList(tx, context, customerId, listAfter);
   if (levelIdAfter === profile.levelId) return { changed: false };
 
   await tx
@@ -179,11 +188,7 @@ export async function recomputeMerchantLevel(
     .set({ levelId: levelIdAfter, levelChangedAt: context.now })
     .where(eq(merchantProfiles.customerId, customerId));
   const listBefore = effectivePriceListId({ ...customer, levelListId: before?.priceListId });
-  const listAfter = effectivePriceListId({ ...customer, levelListId: level?.priceListId });
   const listChanged = listBefore !== listAfter;
-  const cancelledOrderIds = listChanged
-    ? await cancelAccountReservations(tx, context, customerId)
-    : [];
   await recordAudit(tx, {
     action: 'merchant.level_changed',
     actorKind: 'system',
@@ -227,6 +232,35 @@ export async function recomputeMerchantLevel(
     listChanged,
     cancelledOrderIds,
   };
+}
+
+/** AT3: the account's reservations on any list but `priceListId`, cancelled in id order. */
+async function cancelReservationsOffList(
+  tx: Transaction,
+  context: { jobs: JobSender },
+  customerId: string,
+  priceListId: string,
+): Promise<string[]> {
+  const reserved = await tx
+    .select()
+    .from(orders)
+    .where(
+      and(
+        eq(orders.customerId, customerId),
+        eq(orders.status, 'awaiting_balance'),
+        ne(orders.priceListId, priceListId),
+      ),
+    )
+    .orderBy(asc(orders.id))
+    .for('update');
+  const cancelled: string[] = [];
+  for (const order of reserved) {
+    const done = await cancelReservation(tx, context, order, 'price_list_changed', {
+      kind: 'system',
+    });
+    if (done) cancelled.push(done.id);
+  }
+  return cancelled;
 }
 
 /** S20 LS5 extended (S21 LV6): the live levels naming a list, which keep it from an archive. */

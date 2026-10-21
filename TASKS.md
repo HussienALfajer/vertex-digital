@@ -10,10 +10,11 @@ Spec `docs/specs/S21-merchant-tools.md`, ADR 0036 (amends 0035, 0022, 0024). Thr
 - [x] API `merchants`: admin levels (list, create, edit, archive under an advisory lock, re-authentication, audit, requeue all, LV6); level in the admin customer profile and merchants list (column and filter)
 - [x] Worker: `merchants.level` (singleton per merchant) and `merchants.level-schedule` (1st 00:10 Damascus), `merchants.watch-alerts` (hourly :05; AL2, AL3, AL6, archived products dropped), `merchants.daily-digest` (09:00; area `merchants`: the contracts' `<area>.<action>` test refuses a hyphen), sweep of alert events older than 90 days; email templates and push; daily summary line; tests (twice is a no-op)
 - [x] Bridge: OpenAPI export and admin client
-- [ ] Store: account menu "أدوات التاجر", `/merchant` shell and dashboard (period switch, cards, top products, level card, empty state), `/merchant/prices`, `/merchant/alerts`; i18n, states, phone width
-- [ ] Admin: `/merchants/levels`, merchants list level column and filter, profile merchant card (level, months' purchases, follows count); i18n, states
-- [ ] E2E flows and RTL screenshots (store dashboard, prices, alerts: phone and desktop, dark and light; admin levels and profile card: light and dark)
-- [ ] Wiring checklist, checks, reviewer, owner acceptance (spec steps 1, 5, 6, 7), PR with auto-merge
+- [x] Store: account menu "أدوات التاجر", `/merchant` shell and dashboard (period switch, cards, top products, level card, empty state), `/merchant/prices`, `/merchant/alerts`; i18n, states, phone width
+- [x] Admin: `/merchants/levels`, merchants list level column and filter, profile merchant card (level, months' purchases, follows count); i18n, states
+- [x] E2E flows and RTL screenshots (store dashboard, prices, alerts: phone and desktop, dark and light; admin levels and profile card: light and dark)
+- [x] Wiring checklist, checks (lint, typecheck, test, build, drift, OpenAPI, changed E2E; store budgets kept: the merchant pages read their own catalog), reviewer (2 blocking findings fixed: the level recomputation reads an archived level and cancels reservations off the effective list on every run; the low-balance re-arm reads the posting position, migration 0085; re-review clean)
+- [x] Owner acceptance (2026-10-21), PR with auto-merge
 
 ## PR 2 — counter tools: POS, bulk, codes, verification, branded receipt (branch `feat/s21-counter-tools`)
 - [ ] Contracts: `parseBulkLines`, bulk check schemas, `codeReleaseRequestSchema`, `orderPrintSchema`, `publicVerificationSchema`, `receiptSettingsSchema`, `CODE_RELEASE_PURPOSES`, `merchant_logo` file kind, merchant player-check settings, constants (QT1, bulk 50, recent and saved IDs), errors `BULK_LINES_INVALID`, `PLAYER_CHECK_QUOTA_EXCEEDED`, `CODES_NOT_DELIVERED`, audit `merchant.logo_removed`; unit tests

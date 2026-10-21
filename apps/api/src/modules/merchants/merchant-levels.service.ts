@@ -8,8 +8,8 @@ import {
 } from '@vertex-digital/contracts';
 import {
   type Database,
-  type MerchantLevelRow,
   levelRows,
+  type MerchantLevelRow,
   merchantLevels,
   queueAllMerchantLevels,
   recordAudit,

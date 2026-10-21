@@ -359,7 +359,10 @@ export class MerchantToolsService {
     const values = {
       lowBalanceUsdUnits: input.lowBalanceUsdUnits,
       dailyEmail: input.dailyEmail,
-      ...(before.lowBalanceUsdUnits !== input.lowBalanceUsdUnits && { lowBalanceAlertedAt: null }),
+      ...(before.lowBalanceUsdUnits !== input.lowBalanceUsdUnits && {
+        lowBalanceAlertedAt: null,
+        lowBalanceAlertedPosition: null,
+      }),
     };
     await this.db
       .insert(merchantAlertSettings)

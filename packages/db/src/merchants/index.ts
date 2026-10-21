@@ -24,11 +24,11 @@ export {
 export {
   type LevelChange,
   levelListId,
-  liveLevels,
   levelRows,
+  liveLevels,
   liveLevelsOnList,
-  merchantLevelOf,
   type MerchantLevelRow,
+  merchantLevelOf,
   monthsPurchases,
   netPurchases,
   queueAllMerchantLevels,

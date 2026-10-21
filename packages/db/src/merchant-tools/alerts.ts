@@ -10,24 +10,40 @@ import { merchantAlertSettings } from '../schema/index.js';
 /*
  * The low-balance alert (S21 AL5, AL6): sent once in the transaction of the merchant's purchase
  * that takes the balance below their threshold, and again only after the balance was back at or
- * above it. "Back above" is read from the wallet's running balance since the alert, so a deposit,
- * a refund or an adjustment clears it whatever path posted it; the hourly job also clears it.
+ * above it. "Back above" is read from the wallet's running balance after the alert's posting
+ * position, so a deposit, a refund or an adjustment clears it whatever path posted it; the hourly
+ * job also clears it.
  */
 
-/** The highest running balance of the wallet after `since` (null without a posting since). */
-async function highestBalanceSince(
+/**
+ * The highest balance the wallet reached after the posting at `position` (write order, never the
+ * journal's `created_at`: a credit whose transaction began before the alert may post after it),
+ * or null without a posting since.
+ */
+async function highestBalanceAfter(
   db: Executor,
   walletId: string,
-  since: Date,
+  position: number,
 ): Promise<number | null> {
   const result = await db.execute<{ highest: string | null }>(sql`
-    select max(running)::text as highest from (
-      select j.created_at, sum(p.amount_units) over (order by p.position) as running
-      from ledger_postings p join ledger_journals j on j.id = p.journal_id
-      where p.account_id = ${walletId}
-    ) t where t.created_at > ${since}`);
+    select (
+      (select coalesce(sum(amount_units), 0) from ledger_postings
+        where account_id = ${walletId} and position <= ${position})
+      + max(running))::text as highest
+    from (
+      select sum(amount_units) over (order by position) as running
+      from ledger_postings where account_id = ${walletId} and position > ${position}
+    ) t`);
   const highest = result.rows[0]?.highest ?? null;
   return highest === null ? null : Number(highest);
+}
+
+/** The position of the wallet's newest posting (this transaction's included). */
+async function lastPosition(db: Executor, walletId: string): Promise<number> {
+  const result = await db.execute<{ position: string | null }>(
+    sql`select max(position)::text as position from ledger_postings where account_id = ${walletId}`,
+  );
+  return Number(result.rows[0]?.position ?? 0);
 }
 
 /**
@@ -50,8 +66,11 @@ export async function checkLowBalance(
   if (wallet === null) return false;
   const threshold = settings.lowBalanceUsdUnits;
   let alerted = settings.lowBalanceAlertedAt !== null;
-  if (settings.lowBalanceAlertedAt !== null) {
-    const highest = await highestBalanceSince(tx, wallet, settings.lowBalanceAlertedAt);
+  if (alerted) {
+    const highest =
+      settings.lowBalanceAlertedPosition === null
+        ? null
+        : await highestBalanceAfter(tx, wallet, settings.lowBalanceAlertedPosition);
     if (highest !== null && highest >= threshold) alerted = false;
   }
   const balance = await accountBalance(tx, wallet);
@@ -66,7 +85,14 @@ export async function checkLowBalance(
   if (due || alerted !== (settings.lowBalanceAlertedAt !== null)) {
     await tx
       .update(merchantAlertSettings)
-      .set({ lowBalanceAlertedAt: due ? sql`now()` : null })
+      .set(
+        due
+          ? {
+              lowBalanceAlertedAt: sql`now()`,
+              lowBalanceAlertedPosition: await lastPosition(tx, wallet),
+            }
+          : { lowBalanceAlertedAt: null, lowBalanceAlertedPosition: null },
+      )
       .where(eq(merchantAlertSettings.customerId, customerId));
   }
   return due;
@@ -85,7 +111,7 @@ export async function clearLowBalanceIfAbove(tx: Transaction, customerId: string
   if (balance < settings.lowBalanceUsdUnits) return;
   await tx
     .update(merchantAlertSettings)
-    .set({ lowBalanceAlertedAt: null })
+    .set({ lowBalanceAlertedAt: null, lowBalanceAlertedPosition: null })
     .where(eq(merchantAlertSettings.customerId, customerId));
 }
 

@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   CURRENCY_SCALE,
+  markupPrice,
   priceFromCost,
   QUEUES,
   ROOT_PRICE_LIST_IDS,
@@ -30,6 +31,7 @@ import { accountBalance } from '../ledger/balance.js';
 import { ensureCustomerWallet, ensureSystemAccount, findCustomerWallet } from '../ledger/index.js';
 import { postJournal } from '../ledger/post-journal.js';
 import { walletTimeline } from '../ledger/wallet.js';
+import { dashboardFacts } from '../merchant-tools/reads.js';
 import { compareMerchantWatches } from '../merchant-tools/watch-alerts.js';
 import {
   type GrantInput,
@@ -38,7 +40,7 @@ import {
   orderRate,
   revokeMerchant,
 } from '../merchants/accounts.js';
-import { recomputeMerchantLevel } from '../merchants/levels.js';
+import { netPurchases, recomputeMerchantLevel } from '../merchants/levels.js';
 import { accountMerchant, merchantProfileOf } from '../merchants/reads.js';
 import { repriceProducts, supplierDeliveryMedians } from '../pricing/index.js';
 import { type CheckResult, internalChecks, runInternalChecks } from '../reconciliation/index.js';
@@ -4091,6 +4093,36 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
     ).rejects.toThrow(/not an order of its customer/);
   });
 
+  it('counts delivered sales, profit and orders without a sale on the dashboard (DB2, DB4)', async () => {
+    const item = await product({ cost: usd(1) });
+    const price = await wholesalePrice(item.id);
+    const shop = await merchant(usd(20));
+    await pool.query(
+      'insert into merchant_selling_settings (customer_id, markup_bp) values ($1, 2000)',
+      [shop],
+    );
+    const sold = (await buy(request(shop, { id: item.id, price }))).order;
+    await pool.query('delete from merchant_selling_settings where customer_id = $1', [shop]);
+    const unpriced = (await buy(request(shop, { id: item.id, price }))).order;
+    for (const order of [sold, unpriced]) {
+      await apply(await send(order, item), {
+        status: 'delivered',
+        quantity: 1,
+        supplierOrderId: `f-${newId()}`,
+      });
+    }
+    const from = new Date(Date.now() - 60_000);
+    const facts = await dashboardFacts(db, shop, from, new Date(Date.now() + 60_000), 5);
+    const unit = markupPrice(price, 2000);
+    expect(facts).toEqual({
+      salesUsdUnits: unit,
+      profitUsdUnits: unit - price,
+      ordersWithoutSale: 1,
+      topProducts: [expect.objectContaining({ productId: item.id, units: 2, salesUsdUnits: unit })],
+    });
+    expect(await netPurchases(db, shop, from, new Date(Date.now() + 60_000))).toBe(price * 2);
+  });
+
   it('moves a merchant to the level their month reached, below an assigned list (LV3–LV5)', async () => {
     await archiveLevels();
     const item = await product({ cost: usd(1) });
@@ -4183,6 +4215,72 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
     }
   });
 
+  it('cancels reservations off the list when a level is archived or its list changes (LV6, AT3)', async () => {
+    await archiveLevels();
+    const item = await product({ cost: usd(1) });
+    const shop = await merchant(usd(20));
+    try {
+      await buy(request(shop, { id: item.id, price: await wholesalePrice(item.id) }));
+      const silver = await level(usd(1), cost);
+      expect(await recompute(shop)).toMatchObject({ changed: true, levelIdAfter: silver });
+      const reserve = async () => {
+        const listed = (
+          await db
+            .select({ price: productPrices.priceUsdUnits })
+            .from(productPrices)
+            .where(and(eq(productPrices.productId, item.id), eq(productPrices.priceListId, cost)))
+            .orderBy(desc(productPrices.createdAt))
+            .limit(1)
+        )[0]?.price as number;
+        return (
+          await buy(
+            request(
+              shop,
+              { id: item.id, price: listed },
+              { whenBalanceShort: 'reserve', quantity: 1 },
+            ),
+          )
+        ).order;
+      };
+      // A reservation the balance cannot pay yet, on the level's list.
+      await pool.query(`update merchant_profiles set level_id = $2 where customer_id = $1`, [
+        shop,
+        silver,
+      ]);
+      const drain = await balance(shop);
+      await credit(shop, -drain);
+      const held = await reserve();
+      expect(held).toMatchObject({ status: 'awaiting_balance', priceListId: cost });
+
+      // The level's list changes: the level is the same, the reservation is cancelled.
+      await pool.query('update merchant_levels set price_list_id = $2 where id = $1', [
+        silver,
+        wholesale,
+      ]);
+      expect(await recompute(shop)).toEqual({ changed: false });
+      expect((await orderRow(held.id)).status).toBe('cancelled');
+
+      // Archived with a reservation on its list: cancelled, and told as a move down.
+      await pool.query('update merchant_levels set price_list_id = $2 where id = $1', [
+        silver,
+        cost,
+      ]);
+      const again = await reserve();
+      await pool.query('update merchant_levels set archived_at = now() where id = $1', [silver]);
+      expect(await recompute(shop)).toMatchObject({
+        changed: true,
+        levelIdAfter: null,
+        listChanged: true,
+        cancelledOrderIds: [again.id],
+      });
+      expect((await notifications(shop, 'merchant_level_changed')).at(-1)).toMatchObject({
+        direction: 'down',
+      });
+    } finally {
+      await archiveLevels();
+    }
+  });
+
   it('clears the level on a revocation (LV7)', async () => {
     await archiveLevels();
     const shop = await merchant(usd(20));
@@ -4222,6 +4320,41 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
     await credit(shop, usd(1.5));
     await buy(request(shop, { id: item.id, price }));
     expect(await notifications(shop, 'merchant_low_balance')).toHaveLength(2);
+
+    // A credit whose transaction began before the next alert, posted after it, re-arms it too
+    // (the running balance follows the posting position, never the journal's start time).
+    await credit(shop, usd(1.7));
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const late = db.transaction(async (tx) => {
+      await tx.execute(sql`select 1`);
+      await gate;
+      await postJournal(tx, {
+        idempotencyKey: `test:${newId()}`,
+        kind: 'adjustment',
+        postings: [
+          { accountId: await ensureCustomerWallet(tx, shop), amountUnits: usd(3) },
+          {
+            accountId: await ensureSystemAccount(tx, {
+              code: 'adjustments:test_funds',
+              kind: 'adjustments',
+              currency: 'USD',
+            }),
+            amountUnits: -usd(3),
+          },
+        ],
+      });
+    });
+    await buy(request(shop, { id: item.id, price }));
+    await buy(request(shop, { id: item.id, price }));
+    expect(await notifications(shop, 'merchant_low_balance')).toHaveLength(3);
+    release();
+    await late;
+    await buy(request(shop, { id: item.id, price }));
+    await buy(request(shop, { id: item.id, price }));
+    expect(await notifications(shop, 'merchant_low_balance')).toHaveLength(4);
   });
 
   it('tells a follower of a change once (AL2, AL3)', async () => {

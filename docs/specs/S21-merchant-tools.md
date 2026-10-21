@@ -69,14 +69,14 @@ Money is USD units (micro-dollars) or SYP units with the rate used (ADR 0003). A
   - `sellingPrice(purchaseUsdUnits, settings, ownPrice, rate)`: the selling price in USD units and SYP units and its source (`product`, `markup`, `none`); USD rounds up to whole cents, SYP up to the merchant's step.
   - `saleProfit(order, sale)`: delivered units × (selling unit price in USD − unit price paid); null without a sale.
   - `levelFor(levels, previousMonthUsdUnits, thisMonthUsdUnits)`: the highest live level whose threshold is at most the larger of the two, or null.
-  - `effectiveListId(customer, levelListId)`: assigned list, else the level's list (merchants), else the type default (amends S20 AT1).
+  - `effectivePriceListId({ accountType, priceListId, levelListId })` (S20's function, extended; PR 1): assigned list, else the level's list (merchants), else the type default (amends S20 AT1).
   - `parseBulkLines(text, game)`: lines of the bulk text or CSV into `{ fields, pack, quantity }` with per-line errors.
   - `damascusMonth(instant)` and `monthRange(month)`.
 - Schemas: `sellingSettingsSchema`, `sellingPriceInputSchema`, `merchantDashboardSchema`, `bulkCheckRequestSchema`, `bulkCheckResultSchema`, `codeReleaseRequestSchema` (`purpose`: `print`, `copy`, `export`; `codeIds?`), `orderPrintSchema`, `publicVerificationSchema`, `receiptSettingsSchema`, `watchesSchema`, `alertSettingsSchema`, `priceListQuerySchema`, `statementSchema`, `merchantLevelSchema`, `merchantLevelInputSchema`.
 - Constants: `MERCHANT_CODE_QUANTITY_MAX = 50`, `BULK_LINES_MAX = 50`, `RECENT_PLAYERS_PER_GAME = 20`, `MERCHANT_SAVED_PLAYERS_PER_GAME = 50`, `MERCHANT_SAVED_PLAYERS_MAX = 300`, `MERCHANT_LEVELS_MAX = 10`, `WATCHES_MAX = 200`, `SYP_STEPS` (500, 1,000, 5,000, 10,000, 50,000, 100,000 SYP units).
 - `CODE_RELEASE_PURPOSES` (`reveal`, `print`, `copy`, `export`); `STORED_FILE_KINDS` gains `merchant_logo`.
 - Notification events: `merchant_level_changed` (center, email, push), `merchant_watch_digest` (center, push; no email), `merchant_daily_digest` (email only, when the merchant turned it on), `merchant_low_balance` (center, email, push), `merchant_statement_ready` (center, email).
-- Error codes, each with its Arabic text: `NOT_MERCHANT` (exists), `BULK_LINES_INVALID` (422, `details.lines`), `PLAYER_CHECK_QUOTA_EXCEEDED` (429, `details.retryAt`), `CODES_NOT_DELIVERED` (409), `MERCHANT_LEVELS_LIMIT_REACHED` (409), `MERCHANT_LEVEL_THRESHOLD_TAKEN` (409), `WATCHES_LIMIT_REACHED` (409), `STATEMENT_MONTH_INVALID` (422); existing `CHECKOUT_REFUSED`, `PRICE_CHANGED`, `PLAYER_NOT_CONFIRMED`, `ACCOUNT_FROZEN`, `MERCHANT_TERMS_REQUIRED`, `RATE_LIMITED`, `NOT_FOUND`, `IMAGE_INVALID`, `PAYLOAD_TOO_LARGE`, `REAUTHENTICATION_REQUIRED`, `PRICE_LIST_ARCHIVED`, `PRICE_LIST_IN_USE`, `VALIDATION_FAILED`.
+- Error codes, each with its Arabic text: `NOT_MERCHANT` (exists), `BULK_LINES_INVALID` (422, `details.lines`), `PLAYER_CHECK_QUOTA_EXCEEDED` (429, `details.retryAt`), `CODES_NOT_DELIVERED` (409), `MERCHANT_LEVELS_LIMIT_REACHED` (409), `MERCHANT_LEVEL_THRESHOLD_TAKEN` (409), `MERCHANT_LEVEL_NAME_TAKEN` (409, PR 1: a live level's name), `WATCHES_LIMIT_REACHED` (409), `STATEMENT_MONTH_INVALID` (422); existing `CHECKOUT_REFUSED`, `PRICE_CHANGED`, `PLAYER_NOT_CONFIRMED`, `ACCOUNT_FROZEN`, `MERCHANT_TERMS_REQUIRED`, `RATE_LIMITED`, `NOT_FOUND`, `IMAGE_INVALID`, `PAYLOAD_TOO_LARGE`, `REAUTHENTICATION_REQUIRED`, `PRICE_LIST_ARCHIVED`, `PRICE_LIST_IN_USE`, `VALIDATION_FAILED`.
 
 ### `merchant_selling_settings` (new; the merchant's own preferences, keyed by customer)
 - `customer_id` → `customers` (primary key), `markup_bp` (integer 0–10,000, nullable: null means no markup, so products without their own price have no selling price), `syp_step_units` (one of `SYP_STEPS`, nullable: null means the store's display step), `updated_at`.
@@ -141,7 +141,7 @@ Money is USD units (micro-dollars) or SYP units with the rate used (ADR 0003). A
 - SP2. **Per product:** the merchant may set a price in USD (whole cents) or SYP (a whole number of SYP); clearing it returns to the markup. A SYP price stays fixed whatever the rate (decision 1).
 - SP3. **Selling price of a product** (`sellingPrice`): the product's own price when set; else, with a markup, `purchase × (1 + markup)` rounded up to whole cents; else none. The SYP figure is the SYP price as set, or the USD figure × the current rate rounded up to the merchant's step. A selling price below the merchant's purchase price is allowed and marked "أقل من سعر شرائك" in red.
 - SP4. **Snapshot:** a merchant's order (POS, buy box, cart, bulk; and a panel order on their behalf) gets a `merchant_order_sales` row in the purchase transaction when its product has a selling price: the currency, unit amount, the rate in force and its USD equivalent, source `product` or `markup`. The POS confirmation may override the unit selling price for that sale (source `manual`).
-- SP5. **Edit:** the merchant may set or change an order's selling price later (`PUT /api/orders/:id/sale`), source `manual`; the rate stays the order's (the rate of the snapshot, or the rate in force at the order's creation when there was none). No money moves; no audit (the merchant's own bookkeeping).
+- SP5. **Edit:** the merchant may set or change an order's selling price later (`PUT /api/orders/:id/sale`, with the order page in PR 2; the write path `setOrderSale` in PR 1), source `manual`; the rate stays the order's (the rate of the snapshot, or the rate in force at the order's creation when there was none). No money moves; no audit (the merchant's own bookkeeping).
 - SP6. **Profit of an order** (`saleProfit`): `delivered_quantity × (unit_usd_units − unit_price_usd_units)`; refunded units count neither as a sale nor as a cost. Without a sale row, the order has no profit and is counted as "بلا سعر بيع".
 
 ### Dashboard (F30)
@@ -195,18 +195,18 @@ Money is USD units (micro-dollars) or SYP units with the rate used (ADR 0003). A
 
 ### Alerts (F37)
 - AL1. **Follows:** games or products, at most 200; the follows page suggests the products the merchant bought in the last 30 days and the games of their followed products.
-- AL2. **Hourly job** (`merchant-tools.watch-alerts`, at minute 5 of each hour): for every merchant with follows, for each followed product (a followed game means all its active products), reads the merchant's current list price and availability, compares with `merchant_watch_states`, and for each difference writes a `merchant_alert_events` row: `price_down` or `price_up` (any change in USD units), `back_in_stock`, `out_of_stock` (availability `available` against anything else; hidden products are ignored). First sight of a product writes the state without an event.
+- AL2. **Hourly job** (`merchants.watch-alerts`, at minute 5 of each hour): for every merchant with follows, for each followed product (a followed game means all its active products), reads the merchant's current list price and availability, compares with `merchant_watch_states`, and for each difference writes a `merchant_alert_events` row: `price_down` or `price_up` (any change in USD units), `back_in_stock`, `out_of_stock` (availability `available` against anything else; hidden products are ignored). First sight of a product writes the state without an event.
 - AL3. One `merchant_watch_digest` notification per merchant per run when there are events (center and push, decision 11): "تغيّرت أسعار 3 باقات وعادت باقتان للتوفر" with up to five lines in the center; dedupe key `watch-digest:<customer>:<hour>`.
-- AL4. **Daily email** (`merchant-tools.daily-digest`, 09:00 Damascus) for merchants with `daily_email` on and events in the last 24 hours: the list of events. Off by default.
+- AL4. **Daily email** (`merchants.daily-digest`, 09:00 Damascus) for merchants with `daily_email` on and events in the last 24 hours: the list of events. Off by default.
 - AL5. **Low balance:** after a merchant's purchase or checkout commits, when the balance is below `low_balance_usd_units` and `low_balance_alerted_at` is null, send `merchant_low_balance` (center, email, push) with the balance and set `low_balance_alerted_at`, in the same transaction as the purchase (the notification outbox of S15/F27).
-- AL6. `low_balance_alerted_at` is cleared when a deposit is credited or a refund or adjustment posts and leaves the balance at or above the threshold, and by the hourly job when it finds the balance at or above it; changing the threshold clears it.
+- AL6. `low_balance_alerted_at` is cleared when a deposit is credited or a refund or adjustment posts and leaves the balance at or above the threshold, and by the hourly job when it finds the balance at or above it; changing the threshold clears it. PR 1: the next purchase reads the wallet's running balance after its posting position at the alert (`low_balance_alerted_position`, migration 0085), so a credit that reached the threshold re-arms the alert whichever path posted it (`checkLowBalance`), and the hourly job clears it as well.
 - AL7. Store revalidation and the retail customers' F42 alerts are not affected.
 
 ### Statement (F38)
 - ST1. `/merchant/statements`: the months from the account's creation to this month; any past month and this month to date (decision 4). Months are `Asia/Damascus` calendar months.
 - ST2. **Content:** the shop name, the account email, the month, the opening balance (the wallet balance at the start of the month), every wallet entry of the month in time order (deposits with method, reference, SYP amount and rate; purchases with order number, pack, quantity and the full player ID; checkouts with their orders; refunds with their order; adjustments with their customer-visible note), totals per kind, and the closing balance. Opening + the sum of entries = closing (checked; a mismatch fails the request and alerts the admin, A13).
 - ST3. Outputs: the page with print (A4, PR1) and an `.xlsx` (sheets "الملخص" and "الحركات"; RTL; amounts in USD with two decimals; cells as text or numbers, never formulas); the file name carries the month only.
-- ST4. **Monthly email** (`merchant-tools.statement-emails`, the 1st at 08:00 Damascus): `merchant_statement_ready` with a link to last month's statement, for merchants with at least one entry that month; dedupe key `statement:<customer>:<month>`; respects the preference switch.
+- ST4. **Monthly email** (`merchants.statement-emails`, the 1st at 08:00 Damascus): `merchant_statement_ready` with a link to last month's statement, for merchants with at least one entry that month; dedupe key `statement:<customer>:<month>`; respects the preference switch.
 
 ### Volume levels (F39)
 - LV1. Levels are set in the panel: name, monthly threshold (whole dollars), price list (wholesale or a custom list). None exist until the admin creates one (decision 8); at most 10 live, thresholds distinct.
@@ -225,9 +225,10 @@ None new. A POS or buy-box purchase posts S08 M1; a bulk payment is an S10 check
 |---|---|---|---|---|
 | `GET /api/merchant/dashboard` | Merchant | `period` (`today`, `month`) | `merchantDashboardSchema` | `NOT_MERCHANT` |
 | `GET /api/merchant/selling-settings` · `PUT` | Merchant · not frozen | — · `sellingSettingsSchema` | the settings | `NOT_MERCHANT`, `ACCOUNT_FROZEN`, `VALIDATION_FAILED` |
+| `GET /api/merchant/games` (PR 1) | Merchant | — | the store's games for the merchant pickers | `NOT_MERCHANT` |
 | `GET /api/merchant/selling-prices` | Merchant | `gameId` | per product: purchase price, availability, own price, selling price USD and SYP, source, below-cost flag | `NOT_MERCHANT`, `NOT_FOUND` |
 | `PUT /api/merchant/selling-prices/:productId` · `DELETE` | Merchant, not frozen | `sellingPriceInputSchema` · — | the product's row | `NOT_FOUND`, `VALIDATION_FAILED` |
-| `PUT /api/orders/:id/sale` | Merchant (own order) | `{ currency, unitAmountUnits }` | the sale | `NOT_FOUND`, `NOT_MERCHANT`, `VALIDATION_FAILED` |
+| `PUT /api/orders/:id/sale` (PR 2) | Merchant (own order) | `sellingPriceInputSchema` (`{ currency, amountUnits }`) | the sale | `NOT_FOUND`, `NOT_MERCHANT`, `VALIDATION_FAILED` |
 | `GET /api/merchant/recent-players` | Merchant | `gameId` | up to 20 `{ fields, playerName?, lastUsedAt }` | `NOT_MERCHANT` |
 | `POST /api/merchant/bulk/check` | Merchant, not frozen, terms; 30 / hour | `bulkCheckRequestSchema` (`gameId`, `text` or parsed lines) | `bulkCheckResultSchema` | `BULK_LINES_INVALID`, `PLAYER_CHECK_QUOTA_EXCEEDED`, `MERCHANT_TERMS_REQUIRED`, `ACCOUNT_FROZEN` |
 | `POST /api/checkouts` (S10, extended) | Customer, `Idempotency-Key` | adds `source`; 50 lines for merchants | as S10 | as S10 |
@@ -253,10 +254,10 @@ None new. A POS or buy-box purchase posts S08 M1; a bulk payment is an S10 check
 S20's `GET /api/admin/customers/:id` and `GET /api/admin/merchants` gain the level; the admin order view (S16) gains releases with purposes.
 
 ## Jobs and integrations
-- `merchants.level` (queued per merchant, singleton key; cron the 1st 00:10 Damascus for all; after level changes): LV4. Idempotent by comparison.
-- `merchant-tools.watch-alerts` (hourly at :05): AL2, AL3, AL6; per merchant in its own transaction with `FOR UPDATE SKIP LOCKED` on the merchant's alert settings row; a second run in the same hour finds no difference.
-- `merchant-tools.daily-digest` (09:00 Damascus): AL4; dedupe key `daily-digest:<customer>:<date>`.
-- `merchant-tools.statement-emails` (the 1st, 08:00 Damascus): ST4.
+- `merchants.level` (queued per merchant, singleton key; after level changes) and `merchants.level-schedule` (the 1st 00:10 Damascus, queues every merchant): LV4. Idempotent by comparison.
+- `merchants.watch-alerts` (hourly at :05; queues are `<area>.<action>` without a hyphen): AL2, AL3, AL6; per merchant in its own transaction under a per-merchant advisory lock taken without waiting (a merchant held by another run is skipped); a second run in the same hour finds no difference.
+- `merchants.daily-digest` (09:00 Damascus): AL4; at most one a day per merchant (a digest queued in the last 20 hours, under the merchant's advisory lock).
+- `merchants.statement-emails` (the 1st, 08:00 Damascus): ST4.
 - `orders.sweep` (S08) gains: delete `merchant_alert_events` older than 90 days.
 - Email templates for `merchant_level_changed`, `merchant_daily_digest`, `merchant_low_balance`, `merchant_statement_ready`; push per S15 for the emailed events and `merchant_watch_digest`.
 - Image rendering: the price list PNG with sharp and Pango in the api (as the share image). No PDF library; QR codes are drawn in the browser (`qrcode.react`, already a store dependency).
@@ -265,6 +266,7 @@ S20's `GET /api/admin/customers/:id` and `GET /api/admin/merchants` gain the lev
 ## Screens
 
 ### Store (RTL; the counter screens are tablet and desktop first, every page also works at phone width)
+- PR 1: the merchant pages read their strings from their own catalog (`features/merchant-tools/messages.ar.json`), so the catalog every store page ships stays within its budget; the session's user carries `accountType` (a Better Auth field) so the account menu shows "أدوات التاجر" without another read; the notification preferences list the push-only `merchant_watch_digest`.
 - **Merchant area** (`/merchant`): the dashboard (DB1–DB5) with a period switch, cards for sales, spending, estimated profit and balance, top products, the level card, and shortcuts to the tools. Empty state for a new merchant: "ابدأ بتحديد نسبة ربحك" linking to selling prices. The account menu gains "أدوات التاجر".
 - **Selling prices** (`/merchant/prices`): the markup and SYP step at the top; per game, a table of packs with the purchase price, the selling price (editable inline in SYP or USD), its source and the below-cost warning.
 - **Point of sale** (`/merchant/pos`): PS1–PS5; the confirmation sheet is a modal on wide screens and a bottom sheet on phones; loading skeletons for the grid; offline or error banner "تعذّر الاتصال" with retry and no buy action.
