@@ -192,7 +192,8 @@
         "merchant_revoked": "عند تغيّر نوع حسابك",
         "merchant_level_changed": "عند تغيّر مستوى حساب التاجر",
         "merchant_low_balance": "عند انخفاض الرصيد عن الحد الذي حددته",
-        "merchant_watch_digest": "تغيّرات الباقات التي تتابعها"
+        "merchant_watch_digest": "تغيّرات الباقات التي تتابعها",
+        "merchant_statement_ready": "كشف الحساب الشهري"
       },
       "emailLabel": "البريد: {event}",
       "pushLabel": "الهاتف: {event}",
@@ -528,7 +529,8 @@
       "merchant_level_down": "أصبح مستوى حسابك {level} بحسب مشتريات الشهر الماضي، وتظهر لك {kind}.",
       "merchant_level_none": "لم يعد حسابك ضمن أي مستوى، وتظهر لك {kind}.",
       "merchant_watch_digest": "تغيّرات على باقات تتابعها: أسعار {prices}، عادت للتوفر {back}، نفدت {out}.",
-      "merchant_low_balance": "أصبح رصيدك {balance}، أقل من الحد الذي حددته ({threshold}). اشحن رصيدك لتتابع البيع."
+      "merchant_low_balance": "أصبح رصيدك {balance}، أقل من الحد الذي حددته ({threshold}). اشحن رصيدك لتتابع البيع.",
+      "merchant_statement_ready": "كشف حساب شهر {month} جاهز."
     }
   },
   "errors": {

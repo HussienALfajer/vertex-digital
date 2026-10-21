@@ -234,8 +234,8 @@ export async function walletTimeline(
   const journalIds = pageRows.map((row) => row.journalId);
   const [balance, adjustments, depositsByJournal, ordersByJournal] = await readAll(db, [
     () => walletBalanceAfter(db, accountId, first.journalId),
-    () => adjustmentsOf(db, journalIds),
-    () => depositsOf(db, journalIds),
+    () => timelineAdjustments(db, journalIds),
+    () => timelineDeposits(db, journalIds),
     () => ordersOf(db, journalIds),
   ]);
   let balanceAfter = balance;
@@ -259,7 +259,8 @@ export async function walletTimeline(
   return { entries, more };
 }
 
-async function adjustmentsOf(
+/** Each journal's adjustment, by journal id (rule W5). */
+export async function timelineAdjustments(
   db: Executor,
   journalIds: string[],
 ): Promise<Map<string, TimelineAdjustment>> {
@@ -328,7 +329,8 @@ async function ordersOf(
   return { orders: byJournal, checkouts };
 }
 
-async function depositsOf(
+/** Each journal's credited deposit, by journal id (rule W5, S03). */
+export async function timelineDeposits(
   db: Executor,
   journalIds: string[],
 ): Promise<Map<string, TimelineDeposit>> {

@@ -166,8 +166,10 @@ test('the game page stays within its performance budget', async ({ page, api: _a
  * Raised to 217 on 2026-10-19: the header's signed-in placeholder (no "sign in" flash on reload)
  * took it from 215 to 216 KB in a full run. S20 PR 3: the merchant strings in the catalog every
  * page ships took the share page to 219 (raised to 220) and the cart to 389 (raised to 390).
+ * S21 PR 3: the statement notification (its event, label and preference strings) took the cart
+ * to 391 (raised to 392); its pages' own strings stay in the merchant catalog.
  */
-const CART_BUDGET_KB = { script: 390, stylesheet: 20 };
+const CART_BUDGET_KB = { script: 392, stylesheet: 20 };
 const SHARE_BUDGET_KB = { script: 220, stylesheet: 20 };
 
 test('the cart stays within its performance budget', async ({ page, api }) => {

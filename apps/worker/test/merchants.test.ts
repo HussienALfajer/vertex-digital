@@ -1,4 +1,13 @@
-import { createDatabase, customers, merchantApplications, newId } from '@vertex-digital/db';
+import { damascusMonth, monthRange } from '@vertex-digital/contracts';
+import {
+  createDatabase,
+  customers,
+  ensureCustomerWallet,
+  ensureSystemAccount,
+  merchantApplications,
+  newId,
+  postJournal,
+} from '@vertex-digital/db';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { Env } from '../src/core/config/env.js';
@@ -6,6 +15,7 @@ import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { renderEmail } from '../src/jobs/email/email-templates.js';
 import { ExpireApplicationsJob } from '../src/jobs/merchants/expire-applications.job.js';
 import { MerchantLevelJob } from '../src/jobs/merchants/level.job.js';
+import { MerchantStatementEmailsJob } from '../src/jobs/merchants/statement-emails.job.js';
 import { MerchantWatchAlertsJob } from '../src/jobs/merchants/watch-alerts.job.js';
 import { renderTelegramMessage } from '../src/telegram/messages.js';
 
@@ -181,6 +191,50 @@ describe('merchant tools jobs (S21 LV4, AL2, AL4)', () => {
   });
 });
 
+describe('merchants.statement-emails (S21 ST4)', () => {
+  it('tells a merchant with entries of the month once, and no one without', async () => {
+    const job = new MerchantStatementEmailsJob(pgBoss, db);
+    const active = await merchant();
+    const quiet = await merchant();
+    await db.transaction(async (tx) => {
+      await postJournal(tx, {
+        idempotencyKey: `test:${newId()}`,
+        kind: 'adjustment',
+        postings: [
+          { accountId: await ensureCustomerWallet(tx, active), amountUnits: 1_000_000 },
+          {
+            accountId: await ensureSystemAccount(tx, {
+              code: 'adjustments:test_funds',
+              kind: 'adjustments',
+              currency: 'USD',
+            }),
+            amountUnits: -1_000_000,
+          },
+        ],
+      });
+    });
+    // On the 1st of next month, this month is the last one.
+    const month = damascusMonth(new Date());
+    const nextFirst = new Date(monthRange(month).end.getTime() + 8 * 60 * 60 * 1000);
+    expect(await job.sendAll(nextFirst)).toBeGreaterThanOrEqual(1);
+    await job.sendAll(nextFirst);
+    const told = async (customerId: string) =>
+      (
+        await db.execute<{ params: { month: string } }>(
+          sql`select params from customer_notifications where customer_id = ${customerId}
+            and event = 'merchant_statement_ready'`,
+        )
+      ).rows;
+    expect(await told(active)).toEqual([{ params: { month } }]);
+    expect(await told(quiet)).toEqual([]);
+    const emails = await db.execute(
+      sql`select 1 from email_outbox where customer_id = ${active}
+        and template = 'customer_merchant_statement_ready'`,
+    );
+    expect(emails.rows).toHaveLength(1);
+  });
+});
+
 describe('the merchant tools emails (S21)', () => {
   const store = 'https://digital.example';
 
@@ -230,5 +284,11 @@ describe('the merchant tools emails (S21)', () => {
     expect(digest.text).toContain('ارتفع سعر');
     expect(digest.text).toContain('نفدت');
     expect(digest.text).toContain('تغيّرات أخرى');
+  });
+
+  it("links last month's statement by the month's name", () => {
+    const email = renderEmail('customer_merchant_statement_ready', { month: '2026-09' }, store);
+    expect(email.subject).toContain('2026');
+    expect(email.text).toContain('https://digital.example/merchant/statements/2026-09');
   });
 });

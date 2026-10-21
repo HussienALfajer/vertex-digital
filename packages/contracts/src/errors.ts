@@ -284,6 +284,8 @@ export const ERROR_CODES = [
   'PLAYER_CHECK_QUOTA_EXCEEDED',
   /** S21 CR1: the order has no delivered code to release. */
   'CODES_NOT_DELIVERED',
+  /** S21 ST1: not a `YYYY-MM` month from the account's creation to this month. */
+  'STATEMENT_MONTH_INVALID',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

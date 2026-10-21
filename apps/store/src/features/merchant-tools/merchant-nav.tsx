@@ -9,18 +9,30 @@ const LINKS = [
   { href: '/merchant/pos', label: 'nav.pos' },
   { href: '/merchant/bulk', label: 'nav.bulk' },
   { href: '/merchant/prices', label: 'nav.prices' },
+  { href: '/merchant/price-list', label: 'nav.priceList' },
+  { href: '/merchant/statements', label: 'nav.statements' },
   { href: '/merchant/alerts', label: 'nav.alerts' },
   { href: '/merchant/receipt', label: 'nav.receipt' },
 ] as const;
 
 /** The merchant area's sections (S21 screens), scrolled sideways on a phone. */
 export function MerchantNav() {
-  const pathname = usePathname();
+  return <MerchantNavLinks pathname={usePathname()} />;
+}
+
+/**
+ * The sections with the current one marked; `pathname` null before the URL is known (the
+ * layout's `<Suspense>` fallback on a dynamic page, the statement of a month).
+ */
+export function MerchantNavLinks({ pathname }: { pathname: string | null }) {
   return (
     <nav aria-label={tm('title')} className="-mx-4 overflow-x-auto px-4">
       <ul className="flex min-w-max gap-1 border-b border-border">
         {LINKS.map((link) => {
-          const current = pathname === link.href;
+          const current =
+            pathname !== null &&
+            (pathname === link.href ||
+              (link.href !== '/merchant' && pathname.startsWith(`${link.href}/`)));
           return (
             <li key={link.href}>
               <Link

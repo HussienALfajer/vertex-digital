@@ -1780,6 +1780,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/merchant/price-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantDocumentsController_priceList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/price-list.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantDocumentsController_priceListImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/statements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantDocumentsController_statements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/statements/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantDocumentsController_statement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/statements/{month}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantDocumentsController_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/player-checks": {
         parameters: {
             query?: never;
@@ -5106,6 +5186,18 @@ export interface components {
                 balanceUsdUnits: number;
                 thresholdUsdUnits: number;
             };
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "merchant_statement_ready";
+            params: {
+                month: components["schemas"]["Month"];
+            };
         };
         /** @enum {string} */
         DepositRejectReason: "not_received" | "receipt_invalid" | "receipt_used" | "reference_other_customer" | "wrong_account" | "wrong_network" | "transfer_other_customer" | "other";
@@ -5119,6 +5211,7 @@ export interface components {
         PriceKind: "retail" | "wholesale" | "special";
         /** @enum {string} */
         MerchantAlertKind: "price_down" | "price_up" | "back_in_stock" | "out_of_stock";
+        Month: string;
         MarkNotificationsRead: {
             /** Format: uuid */
             upToId: string;
@@ -5142,7 +5235,7 @@ export interface components {
             push: boolean;
         };
         /** @enum {string} */
-        NotificationEvent: "deposit_credited" | "deposit_rejected" | "deposit_receipt_requested" | "wallet_adjusted" | "order_delivered" | "order_partially_refunded" | "order_refunded" | "order_delayed" | "order_paid" | "order_cancelled" | "checkout_finished" | "ticket_replied" | "order_placed_for_you" | "price_list_changed" | "merchant_info_requested" | "merchant_approved" | "merchant_rejected" | "merchant_application_expired" | "merchant_revoked" | "merchant_level_changed" | "merchant_watch_digest" | "merchant_low_balance";
+        NotificationEvent: "deposit_credited" | "deposit_rejected" | "deposit_receipt_requested" | "wallet_adjusted" | "order_delivered" | "order_partially_refunded" | "order_refunded" | "order_delayed" | "order_paid" | "order_cancelled" | "checkout_finished" | "ticket_replied" | "order_placed_for_you" | "price_list_changed" | "merchant_info_requested" | "merchant_approved" | "merchant_rejected" | "merchant_application_expired" | "merchant_revoked" | "merchant_level_changed" | "merchant_watch_digest" | "merchant_low_balance" | "merchant_statement_ready";
         PushConfig: {
             publicKey: string | null;
         };
@@ -6863,6 +6956,112 @@ export interface components {
         SaleCurrency: "usd" | "syp";
         /** @enum {string} */
         SaleSource: "product" | "markup" | "manual";
+        MerchantPriceListQuery: {
+            gameIds?: string[];
+            /**
+             * @default selling
+             * @enum {string}
+             */
+            mode: "selling" | "purchase";
+            /**
+             * @default syp
+             * @enum {string}
+             */
+            currency: "syp" | "usd" | "both";
+            unavailable?: string;
+            /** @default 1 */
+            page: number;
+        };
+        MerchantPriceList: {
+            tradeName: string;
+            /** Format: uuid */
+            logoFileId: string | null;
+            /** Format: date-time */
+            generatedAt: string;
+            /** @enum {string} */
+            mode: "selling" | "purchase";
+            /** @enum {string} */
+            currency: "syp" | "usd" | "both";
+            gameIds: string[];
+            games: components["schemas"]["MerchantPriceListGame"][];
+            omittedCount: number;
+            imagePages: number;
+        };
+        MerchantPriceListGame: {
+            /** Format: uuid */
+            gameId: string;
+            nameAr: string;
+            rows: components["schemas"]["MerchantPriceListRow"][];
+        };
+        MerchantPriceListRow: {
+            /** Format: uuid */
+            productId: string;
+            nameAr: string;
+            available: boolean;
+            usdUnits: number | null;
+            sypUnits: number | null;
+        };
+        StatementMonths: {
+            items: {
+                month: components["schemas"]["Month"];
+                current: boolean;
+            }[];
+        };
+        Statement: {
+            month: components["schemas"]["Month"];
+            current: boolean;
+            /** Format: date-time */
+            generatedAt: string;
+            tradeName: string;
+            email: string;
+            openingUsdUnits: number;
+            closingUsdUnits: number;
+            entries: components["schemas"]["StatementEntry"][];
+            totals: components["schemas"]["StatementTotal"][];
+        };
+        StatementEntry: {
+            /** Format: date-time */
+            occurredAt: string;
+            kind: components["schemas"]["JournalKind"];
+            amountUnits: number;
+            balanceAfterUnits: number;
+            deposit: {
+                method: components["schemas"]["DepositMethod"];
+                referenceCode: string;
+                syp: {
+                    amountUnits: number;
+                    rate: components["schemas"]["ExchangeRate"];
+                } | null;
+            } | null;
+            adjustment: {
+                category: components["schemas"]["AdjustmentCategory"];
+                customerNote: string | null;
+                reversal: boolean;
+            } | null;
+            order: components["schemas"]["StatementOrder"] | null;
+            checkout: {
+                /** Format: uuid */
+                id: string;
+                orders: components["schemas"]["StatementOrder"][];
+            } | null;
+        };
+        StatementOrder: {
+            /** Format: uuid */
+            id: string;
+            number: string;
+            gameNameAr: string;
+            productNameAr: string;
+            quantity: number;
+            fields: {
+                labelAr: string;
+                value: string;
+            }[];
+        };
+        StatementTotal: {
+            kind: components["schemas"]["JournalKind"];
+            count: number;
+            amountUnits: number;
+        };
         PlayerCheckRequest: {
             /** Format: uuid */
             productId: string;
@@ -13479,6 +13678,118 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OrderSale"];
                 };
+            };
+        };
+    };
+    MerchantDocumentsController_priceList: {
+        parameters: {
+            query?: {
+                gameIds?: string[];
+                mode?: "selling" | "purchase";
+                currency?: "syp" | "usd" | "both";
+                unavailable?: string;
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The price list to print (PL1, PL2) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantPriceList"];
+                };
+            };
+        };
+    };
+    MerchantDocumentsController_priceListImage: {
+        parameters: {
+            query?: {
+                gameIds?: string[];
+                mode?: "selling" | "purchase";
+                currency?: "syp" | "usd" | "both";
+                unavailable?: string;
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 1080 px wide, PNG */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MerchantDocumentsController_statements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The months available (ST1) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementMonths"];
+                };
+            };
+        };
+    };
+    MerchantDocumentsController_statement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month’s statement (ST2) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Statement"];
+                };
+            };
+        };
+    };
+    MerchantDocumentsController_export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The statement as an .xlsx file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

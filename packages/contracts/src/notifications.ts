@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { otpCodeSchema } from './auth.js';
 import { depositRejectReasonSchema } from './deposits.js';
 import { cursorQuerySchema } from './lists.js';
-import { alertLineSchema, WATCH_DIGEST_LINES } from './merchant-tools.js';
+import { alertLineSchema, monthSchema, WATCH_DIGEST_LINES } from './merchant-tools.js';
 import {
   ADMIN_ORDER_NOTE_MAX_LENGTH,
   cancelReasonSchema,
@@ -69,6 +69,8 @@ export const EMAIL_TEMPLATES = [
   'customer_merchant_low_balance',
   /** S21 AL4: the day's alert events, when the merchant turned the email on (no center row). */
   'customer_merchant_daily_digest',
+  /** S21 ST4: last month's statement is ready, with its link. */
+  'customer_merchant_statement_ready',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -118,6 +120,8 @@ export const NOTIFICATION_EVENTS = [
   'merchant_level_changed',
   'merchant_watch_digest',
   'merchant_low_balance',
+  /** S21 ST4: last month's statement. */
+  'merchant_statement_ready',
 ] as const;
 
 export const notificationEventSchema = z
@@ -243,6 +247,8 @@ export const NOTIFICATION_PARAMS = {
     balanceUsdUnits: z.int(),
     thresholdUsdUnits: z.int().positive(),
   }),
+  // S21 ST4: the month, `YYYY-MM`.
+  merchant_statement_ready: z.object({ month: monthSchema }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
@@ -286,6 +292,7 @@ export const EMAIL_PARAMS = {
     total: z.int().positive(),
     lines: z.array(alertLineSchema).max(MERCHANT_DAILY_DIGEST_LINES),
   }),
+  customer_merchant_statement_ready: NOTIFICATION_PARAMS.merchant_statement_ready,
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
@@ -331,6 +338,7 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   merchant_level_changed: 'customer_merchant_level_changed',
   merchant_watch_digest: null,
   merchant_low_balance: 'customer_merchant_low_balance',
+  merchant_statement_ready: 'customer_merchant_statement_ready',
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -393,6 +401,7 @@ export const customerNotificationSchema = z
     notification('merchant_level_changed'),
     notification('merchant_watch_digest'),
     notification('merchant_low_balance'),
+    notification('merchant_statement_ready'),
   ])
   .meta({ id: 'CustomerNotification' });
 

@@ -7,6 +7,7 @@ import {
   type EmailParams,
   type EmailTemplate,
   formatUsd,
+  monthRange,
   type PriceKind,
   type RefundReason,
   type StorePlacedPurpose,
@@ -44,6 +45,14 @@ const formatTime = (iso: string) =>
     dateStyle: 'long',
     timeStyle: 'short',
   }).format(new Date(iso));
+
+/** S21 ST4: a Damascus month by name, `تشرين الأول 2026`. */
+const formatMonth = (month: string) =>
+  new Intl.DateTimeFormat('ar-SY-u-nu-latn', {
+    timeZone: 'Asia/Damascus',
+    year: 'numeric',
+    month: 'long',
+  }).format(monthRange(month).start);
 
 /*
  * F11-8: a Latin value inside an Arabic sentence is a Unicode isolate, so the sentence's order
@@ -405,6 +414,14 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
       'اشحن رصيدك لتتابع البيع دون انقطاع.',
     ],
     link: { label: 'شحن الرصيد', path: '/wallet' },
+  }),
+  customer_merchant_statement_ready: ({ month }) => ({
+    subject: `كشف حسابك لشهر ${formatMonth(month)} جاهز`,
+    lines: [
+      `كشف حساب محفظتك لشهر ${formatMonth(month)} جاهز: الرصيد الافتتاحي وكل الحركات والرصيد الختامي.`,
+      'يمكنك طباعته أو حفظه PDF أو تنزيله ملف Excel.',
+    ],
+    link: { label: 'عرض كشف الحساب', path: `/merchant/statements/${month}` },
   }),
   customer_merchant_daily_digest: ({ total, lines }) => ({
     subject: 'ملخص تغيّرات الباقات التي تتابعها',

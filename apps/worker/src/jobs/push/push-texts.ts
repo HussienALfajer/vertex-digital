@@ -137,6 +137,11 @@ const RENDERERS: Renderers = {
     url: '/wallet',
     tag: 'merchant-low-balance',
   }),
+  merchant_statement_ready: (params) => ({
+    body: 'كشف حساب الشهر الماضي جاهز',
+    url: `/merchant/statements/${params.month}`,
+    tag: 'merchant-statement',
+  }),
   merchant_watch_digest: (params) => ({
     body: `تغيّرت ${params.priceDown + params.priceUp + params.backInStock + params.outOfStock} باقات تتابعها`,
     url: '/merchant/alerts',

@@ -88,8 +88,23 @@ export async function shownFields(
     .from(catalogInputFields)
     .where(eq(catalogInputFields.gameId, order.gameId))
     .orderBy(asc(catalogInputFields.sortOrder));
+  return fieldLines(rules, order.fields, full);
+}
+
+/**
+ * The fields in the game's order with their labels, a select's value by its option's label; the
+ * others masked unless `full` (S21 ST2: the merchant's own statement).
+ */
+export function fieldLines(
+  rules: readonly Pick<
+    typeof catalogInputFields.$inferSelect,
+    'key' | 'labelAr' | 'type' | 'options'
+  >[],
+  fields: Record<string, string>,
+  full: boolean,
+): { labelAr: string; value: string }[] {
   const keys = rules.map((rule) => rule.key);
-  return Object.entries(order.fields)
+  return Object.entries(fields)
     .sort(([a], [b]) => keys.indexOf(a) - keys.indexOf(b))
     .map(([key, value]) => {
       const rule = rules.find((candidate) => candidate.key === key);

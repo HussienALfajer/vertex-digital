@@ -13,6 +13,7 @@ import {
   CircleSlashIcon,
   CircleXIcon,
   ClockAlertIcon,
+  FileSpreadsheetIcon,
   GiftIcon,
   LifeBuoyIcon,
   type LucideIcon,
@@ -68,6 +69,7 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   merchant_level_changed: MedalIcon,
   merchant_watch_digest: BellRingIcon,
   merchant_low_balance: WalletMinimalIcon,
+  merchant_statement_ready: FileSpreadsheetIcon,
 };
 
 /** Marks everything up to the newest shown as read and tells the bell (rule NT5). */

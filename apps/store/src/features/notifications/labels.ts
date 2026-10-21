@@ -163,6 +163,10 @@ export function notificationText(notification: CustomerNotification): string {
         balance: ltr(formatUsd(notification.params.balanceUsdUnits)),
         threshold: ltr(formatUsd(notification.params.thresholdUsdUnits)),
       });
+    case 'merchant_statement_ready':
+      return t('notifications.events.merchant_statement_ready', {
+        month: ltr(notification.params.month),
+      });
   }
 }
 
@@ -194,6 +198,8 @@ export function notificationHref(notification: CustomerNotification): string {
       return '/merchant/alerts';
     case 'merchant_low_balance':
       return '/wallet';
+    case 'merchant_statement_ready':
+      return `/merchant/statements/${notification.params.month}`;
     default:
       return `/orders/${notification.params.orderId}`;
   }
