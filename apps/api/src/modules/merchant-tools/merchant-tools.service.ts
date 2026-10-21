@@ -166,7 +166,25 @@ export class MerchantToolsService {
     gameId: string,
     only?: string,
   ): Promise<SellingPrices> {
-    const products = (await gameProducts(this.db, [gameId])).filter(
+    const { settings, storeStepUnits, rows } = await this.sellingRows(customerId, [gameId], only);
+    return { settings, storeStepUnits, products: rows.map(({ gameId: _, ...row }) => row) };
+  }
+
+  /**
+   * SP3: the selling price rows of the games' unarchived packs, in the store's order, on the
+   * merchant's effective list (MA2); also the price list's source (PL1).
+   */
+  async sellingRows(
+    customerId: string,
+    gameIds: readonly string[],
+    only?: string,
+  ): Promise<{
+    settings: SellingSettings;
+    storeStepUnits: number;
+    rate: string | null;
+    rows: (SellingPriceRow & { gameId: string })[];
+  }> {
+    const products = (await gameProducts(this.db, gameIds)).filter(
       (product) => only === undefined || product.id === only,
     );
     const ids = products.map((product) => product.id);
@@ -191,7 +209,8 @@ export class MerchantToolsService {
     return {
       settings,
       storeStepUnits,
-      products: products.map((product): SellingPriceRow => {
+      rate: rate?.sypPerUsd ?? null,
+      rows: products.map((product) => {
         const purchase = prices.get(product.id)?.priceUsdUnits ?? null;
         const ownRow = ownOf.get(product.id);
         const ownPrice: SellingPriceInput | null = ownRow
@@ -205,6 +224,7 @@ export class MerchantToolsService {
           storeStepUnits,
         );
         return {
+          gameId: product.gameId,
           productId: product.id,
           nameAr: product.nameAr,
           available: purchase !== null,

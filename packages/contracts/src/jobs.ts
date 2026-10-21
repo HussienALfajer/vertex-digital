@@ -70,6 +70,8 @@ export const QUEUES = {
   merchantsWatchAlerts: 'merchants.watch-alerts',
   /** The daily alert email at 09:00 `Asia/Damascus` (S21 AL4). */
   merchantsDailyDigest: 'merchants.daily-digest',
+  /** Tells merchants last month's statement is ready, the 1st at 08:00 `Asia/Damascus` (S21 ST4). */
+  merchantsStatementEmails: 'merchants.statement-emails',
 } as const;
 
 /**

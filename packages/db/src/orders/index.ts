@@ -62,6 +62,7 @@ export {
 } from './reads.js';
 export {
   codeReleaseLog,
+  fieldLines,
   type MerchantBranding,
   merchantBranding,
   orderPrint,

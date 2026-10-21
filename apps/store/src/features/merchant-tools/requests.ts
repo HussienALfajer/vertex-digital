@@ -8,6 +8,7 @@ import {
   type MerchantAlertPage,
   type MerchantDashboard,
   type MerchantGames,
+  type MerchantPriceList,
   type OrderPrint,
   type OrderSale,
   type ReceiptSettings,
@@ -18,6 +19,8 @@ import {
   type SellingPriceRow,
   type SellingPrices,
   type SellingSettings,
+  type Statement,
+  type StatementMonths,
   type UpdateReceiptSettings,
   type UpdateWatches,
   type UploadedLogo,
@@ -151,25 +154,38 @@ export function releaseCodes(
   });
 }
 
+type FileResult = { ok: true; blob: Blob; fileName: string } | { ok: false; reason: Failure };
+
 /** CR2: the codes' `.xlsx`, read as a file; null when the API refused (its code in `reason`). */
-export async function exportCodes(
-  orderId: string,
-  fetcher: Fetcher = fetch,
-): Promise<{ ok: true; blob: Blob; fileName: string } | { ok: false; reason: Failure }> {
-  try {
-    const response = await fetcher(`/api/orders/${encodeURIComponent(orderId)}/codes/release`, {
+export function exportCodes(orderId: string, fetcher: Fetcher = fetch): Promise<FileResult> {
+  return readFile(
+    `/api/orders/${encodeURIComponent(orderId)}/codes/release`,
+    {
       method: 'POST',
-      credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ purpose: 'export' }),
-    });
+    },
+    'codes.xlsx',
+    fetcher,
+  );
+}
+
+/** A file the API answers (an `.xlsx`, a PNG), with its name; a refusal by its code. */
+async function readFile(
+  path: string,
+  init: RequestInit,
+  fallbackName: string,
+  fetcher: Fetcher,
+): Promise<FileResult> {
+  try {
+    const response = await fetcher(path, { ...init, credentials: 'same-origin' });
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { code?: string } | null;
       const known = (ERROR_CODES as readonly string[]).includes(body?.code ?? '');
       return { ok: false, reason: known ? (body?.code as ErrorCode) : 'UNKNOWN' };
     }
     const disposition = response.headers.get('content-disposition') ?? '';
-    const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'codes.xlsx';
+    const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackName;
     return { ok: true, blob: await response.blob(), fileName };
   } catch {
     return { ok: false, reason: 'NETWORK' };
@@ -200,3 +216,60 @@ export function uploadLogo(file: File, fetcher: Fetcher = fetch) {
 
 /** The merchant's own logo, for the receipt preview and the printed receipt. */
 export const logoPath = (fileId: string) => `/api/merchant/logo/${encodeURIComponent(fileId)}`;
+
+/* Documents (S21 F36, F38, PR 3) */
+
+export interface PriceListOptions {
+  /** Empty: the followed games, else all (PL1). */
+  gameIds: string[];
+  mode: MerchantPriceList['mode'];
+  currency: MerchantPriceList['currency'];
+  unavailable: boolean;
+}
+
+/** The query of the price list and its image, in the same order everywhere. */
+export function priceListQuery(options: PriceListOptions, page?: number): string {
+  const query = new URLSearchParams();
+  if (options.gameIds.length > 0) query.set('gameIds', options.gameIds.join(','));
+  query.set('mode', options.mode);
+  query.set('currency', options.currency);
+  query.set('unavailable', String(options.unavailable));
+  if (page !== undefined) query.set('page', String(page));
+  return query.toString();
+}
+
+export function getPriceList(options: PriceListOptions, fetcher: Fetcher = fetch) {
+  return apiRequest<MerchantPriceList>(`/api/merchant/price-list?${priceListQuery(options)}`, {
+    fetcher,
+  });
+}
+
+/** PL3: one image of the list, 60 packs a page. */
+export function priceListImage(options: PriceListOptions, page: number, fetcher: Fetcher = fetch) {
+  return readFile(
+    `/api/merchant/price-list.png?${priceListQuery(options, page)}`,
+    {},
+    `price-list-${page}.png`,
+    fetcher,
+  );
+}
+
+export function getStatements(fetcher: Fetcher = fetch) {
+  return apiRequest<StatementMonths>('/api/merchant/statements', { fetcher });
+}
+
+export function getStatement(month: string, fetcher: Fetcher = fetch) {
+  return apiRequest<Statement>(`/api/merchant/statements/${encodeURIComponent(month)}`, {
+    fetcher,
+  });
+}
+
+/** ST3: the month's `.xlsx`. */
+export function exportStatement(month: string, fetcher: Fetcher = fetch) {
+  return readFile(
+    `/api/merchant/statements/${encodeURIComponent(month)}/export`,
+    {},
+    `statement-${month}.xlsx`,
+    fetcher,
+  );
+}

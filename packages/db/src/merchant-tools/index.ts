@@ -36,6 +36,13 @@ export {
   setOrderSale,
 } from './sales.js';
 export {
+  type StatementFacts,
+  sendStatementReady,
+  statementAccount,
+  statementEmailMerchants,
+  statementFacts,
+} from './statements.js';
+export {
   compareMerchantWatches,
   dailyDigestMerchants,
   deleteOldAlertEvents,

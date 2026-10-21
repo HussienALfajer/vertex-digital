@@ -1,10 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   CURRENCY_SCALE,
+  damascusMonth,
   markupPrice,
+  previousMonth,
   priceFromCost,
   QUEUES,
   ROOT_PRICE_LIST_IDS,
+  statementBalances,
 } from '@vertex-digital/contracts';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -32,6 +35,11 @@ import { ensureCustomerWallet, ensureSystemAccount, findCustomerWallet } from '.
 import { postJournal } from '../ledger/post-journal.js';
 import { walletTimeline } from '../ledger/wallet.js';
 import { dashboardFacts, recentPlayers } from '../merchant-tools/reads.js';
+import {
+  sendStatementReady,
+  statementEmailMerchants,
+  statementFacts,
+} from '../merchant-tools/statements.js';
 import { compareMerchantWatches } from '../merchant-tools/watch-alerts.js';
 import {
   type GrantInput,
@@ -4575,5 +4583,92 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
       ['5100000002', 'Nour'],
     ]);
     expect(await recentPlayers(db, await customer(), item.game)).toEqual([]);
+  });
+
+  it("reads a month's statement in write order, its balance equation and one email (ST2, ST4)", async () => {
+    const item = await product({ cost: usd(1) });
+    const price = await wholesalePrice(item.id);
+    const shop = await merchant(usd(10));
+    const month = damascusMonth(new Date());
+    const { order: single } = await buy(
+      request(shop, { id: item.id, price }, { fields: { player_id: '5100000009' } }),
+    );
+    await credit(shop, usd(2));
+    const line = (playerId: string) => ({
+      productId: item.id,
+      quantity: 1,
+      fields: { player_id: playerId },
+      expectedUnitPriceUsdUnits: price,
+      confirmPlayer: false,
+    });
+    const paid = await db.transaction((tx) =>
+      checkoutOrders(tx, context(), {
+        customerId: shop,
+        idempotencyKey: newId(),
+        requestHash: hash({ checkout: newId() }),
+        fakeEnabled: true,
+        purchasesStopped: false,
+        channel: 'store',
+        playerCheck: async () => null,
+        source: 'bulk',
+        lines: [line('5100000011'), line('5100000012')],
+      }),
+    );
+    await db.transaction(async (tx: Transaction) =>
+      refundRemaining(tx, context(), (await lockOrder(tx, single.id)) as OrderRow, 'no_route', {
+        actor: 'system',
+        actorId: null,
+      }),
+    );
+    const facts = await statementFacts(db, shop, month);
+    expect(facts.entries.map((entry) => entry.kind)).toEqual([
+      'adjustment',
+      'purchase',
+      'adjustment',
+      'purchase',
+      'refund',
+    ]);
+    expect(facts.openingUsdUnits).toBe(0);
+    expect(facts.closingUsdUnits).toBe(usd(12) - 2 * price);
+    expect(facts.closingUsdUnits).toBe(await balance(shop));
+    // A checkout's orders in line order, each with its full player ID; the refund names its order.
+    expect(facts.entries[3]?.checkout).toMatchObject({
+      id: paid.checkout.id,
+      orders: [
+        { id: paid.orders[0]?.id, fields: [{ value: '5100000011' }] },
+        { id: paid.orders[1]?.id, fields: [{ value: '5100000012' }] },
+      ],
+    });
+    expect(facts.entries[4]?.order).toMatchObject({ id: single.id, number: single.number });
+    expect(statementBalances(facts.openingUsdUnits, facts.entries, facts.closingUsdUnits)).toBe(
+      true,
+    );
+    expect(facts.entries.at(-1)?.balanceAfterUnits).toBe(facts.closingUsdUnits);
+    // The merchant's own statement shows the full player ID (ST2).
+    expect(facts.entries[1]?.order).toMatchObject({
+      quantity: 1,
+      fields: [{ value: '5100000009' }],
+    });
+    // A month before any entry opens and closes at zero.
+    expect(await statementFacts(db, shop, previousMonth(month))).toEqual({
+      openingUsdUnits: 0,
+      closingUsdUnits: 0,
+      entries: [],
+    });
+    expect(await statementFacts(db, await customer(), month)).toMatchObject({ entries: [] });
+    // A later month opens and closes at the balance, with no entries (edge case 19).
+    const later = damascusMonth(new Date(Date.now() + 40 * 24 * 60 * 60 * 1000));
+    expect(await statementFacts(db, shop, later)).toEqual({
+      openingUsdUnits: facts.closingUsdUnits,
+      closingUsdUnits: facts.closingUsdUnits,
+      entries: [],
+    });
+
+    expect(await statementEmailMerchants(db, month)).toContain(shop);
+    expect(await statementEmailMerchants(db, previousMonth(month))).not.toContain(shop);
+    const send = () => db.transaction((tx) => sendStatementReady(tx, context().jobs, shop, month));
+    expect(await Promise.all([send(), send()])).toEqual(expect.arrayContaining([true, false]));
+    expect(await send()).toBe(false);
+    expect(await notifications(shop, 'merchant_statement_ready')).toEqual([{ month }]);
   });
 });

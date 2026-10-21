@@ -27,10 +27,11 @@ Spec `docs/specs/S21-merchant-tools.md`, ADR 0036 (amends 0035, 0022, 0024). Thr
 - [x] Wiring checklist, checks (lint, typecheck, test, build, drift, OpenAPI, changed E2E), reviewer (3 blocking findings fixed: missing release, export, verification-limit, logo and QT3 tests; one 20-per-10-minutes limit for a merchant's reveals and releases; a branded link never shows the price paid), owner acceptance (2026-10-21), PR with auto-merge
 
 ## PR 3 — documents: price list and statement (branch `feat/s21-documents`)
-- [ ] Contracts: `priceListQuerySchema`, `statementSchema`, `merchant_statement_ready`, `STATEMENT_MONTH_INVALID`; tests
-- [ ] API: price list rows and PNG (sharp and Pango, 60 rows, 20 / hour), statements list, month (balance equation, A13 alert) and `.xlsx`; tests
-- [ ] Worker: `merchant-tools.statement-emails` (1st 08:00 Damascus) and its template; tests
-- [ ] Bridge: OpenAPI export and admin client
-- [ ] Store: `/merchant/price-list` with print page and PNG download, `/merchant/statements` and the month page with print and Excel
-- [ ] E2E flows and RTL screenshots
-- [ ] Wiring checklist, checks, reviewer, owner acceptance (spec step 8), PR with auto-merge; `docs/ROADMAP.md` S21 done
+- [x] Contracts: `merchant-documents.ts` (apart from `merchant-tools.ts`, so the notifications' importers ship neither these schemas nor the wallet's): `merchantPriceListQuerySchema`, `priceListLine` (PL1, PL2), `priceListPage`/`priceListPages` (PL3), `merchantPriceListSchema`, `statementMonths` (ST1), `statementSchema`, `statementTotals`, `statementBalances` (ST2); notification `merchant_statement_ready` and its email template, error `STATEMENT_MONTH_INVALID`, queue `merchants.statement-emails`; tests at 100%
+- [x] DB: migration 0089 (the new enum values, generated); `merchant-tools/statements.ts` (`statementFacts` in one `REPEATABLE READ` read-only snapshot, `statementAccount`, `statementEmailMerchants`, `sendStatementReady` once per month); `fieldLines` shared with `shownFields`; `timelineAdjustments`/`timelineDeposits` exported; tests
+- [x] API: `merchant-documents.service.ts` and `.controller.ts`: price list rows (`MerchantToolsService.sellingRows`) and PNG (`price-list-image.ts`, the Pango helpers moved to `core/images/pango-text.ts` with the share image; 60 packs per image, 20 / hour, 10 s render limit), statements list, month (balance equation, A13 as an unhandled error) and `.xlsx` (`statement-workbook.ts`, 20 / hour); `test/merchant-documents.test.ts`
+- [x] Worker: `merchants.statement-emails` (1st 08:00 Damascus, `jobs/merchants/statement-emails.job.ts`), its email template and push text; tests (twice is one notification)
+- [x] Bridge: OpenAPI export and admin client
+- [x] Store: `/merchant/price-list` with the A4 print page and PNG download, `/merchant/statements` and the month page with print and Excel; the merchant routes moved into the `(area)` and `(print)` groups so the print pages have no area frame; the notification's label, link, icon and preference
+- [x] E2E flows and RTL screenshots (`merchant-documents.spec.ts`: price list, its print page, statements, a month, its print page; phone and desktop, dark and light); `/cart` budget 390 → 392 (measured 391)
+- [x] Wiring checklist, checks (lint, typecheck, test, build, drift, OpenAPI, changed E2E), reviewer (4 blocking findings fixed: the month cut in write order with the closing read on its own; checkout, refund and later-month statement tests; Excel text escaped; `STATEMENT_MONTH_INVALID` 422), owner acceptance (2026-10-21), PR with auto-merge; `docs/ROADMAP.md` S21 done

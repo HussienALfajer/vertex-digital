@@ -4,6 +4,8 @@ import { OrdersModule } from '../orders/index.js';
 import { RatesModule } from '../rates/index.js';
 import { MerchantCounterController } from './merchant-counter.controller.js';
 import { MerchantCounterService } from './merchant-counter.service.js';
+import { MerchantDocumentsController } from './merchant-documents.controller.js';
+import { MerchantDocumentsService } from './merchant-documents.service.js';
 import { MerchantToolsController } from './merchant-tools.controller.js';
 import { MerchantToolsService } from './merchant-tools.service.js';
 
@@ -14,11 +16,13 @@ import { MerchantToolsService } from './merchant-tools.service.js';
  * written by the order write path in `packages/db` (in the purchase's transaction), the alerts by
  * the worker; levels belong to `merchants`. PR 2: the counter tools (`merchant-counter.service.ts`:
  * recent ids, the bulk check through `PlayerChecksService`, receipt settings and logo, an order's
- * sale). Above `rates`, `files` and `orders`.
+ * sale). PR 3: the documents (`merchant-documents.service.ts`: the price list and its image in
+ * `price-list-image.ts`, the monthly statement and its `.xlsx` in `statement-workbook.ts`).
+ * Above `rates`, `files` and `orders`.
  */
 @Module({
   imports: [FilesModule, OrdersModule, RatesModule],
-  controllers: [MerchantToolsController, MerchantCounterController],
-  providers: [MerchantToolsService, MerchantCounterService],
+  controllers: [MerchantToolsController, MerchantCounterController, MerchantDocumentsController],
+  providers: [MerchantToolsService, MerchantCounterService, MerchantDocumentsService],
 })
 export class MerchantToolsModule {}

@@ -129,6 +129,7 @@ const SAMPLE: { [Event in PushNotificationEvent]: NotificationParams<Event> } = 
   merchant_revoked: {},
   merchant_level_changed: { levelNameAr: 'فضي', priceKind: 'special', direction: 'up' },
   merchant_low_balance: { balanceUsdUnits: 4_500_000, thresholdUsdUnits: 10_000_000 },
+  merchant_statement_ready: { month: '2026-09' },
   merchant_watch_digest: {
     priceDown: 2,
     priceUp: 0,

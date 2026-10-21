@@ -7,7 +7,9 @@
     "bulk": "طلبات بالجملة",
     "prices": "أسعار البيع",
     "alerts": "التنبيهات",
-    "receipt": "الإيصال"
+    "receipt": "الإيصال",
+    "priceList": "قائمة الأسعار",
+    "statements": "كشف الحساب"
   },
   "common": {
     "loadFailed": "تعذّر تحميل الصفحة. تحقّق من اتصالك وأعد المحاولة.",
@@ -329,5 +331,88 @@
     "verifiedBy": "تم التحقق عبر VERTEX DIGITAL",
     "branded": "باسم محلّي",
     "brandedHint": "يظهر اسم محلّك وشعارك، وسعر بيعك إن حدّدته، بدل سعر شرائك."
+  },
+  "priceList": {
+    "games": "الألعاب",
+    "gamesHint": "بلا اختيار: الألعاب التي تتابعها، أو كل الألعاب.",
+    "allGames": "كل الألعاب",
+    "followed": "الألعاب التي أتابعها",
+    "prices": "الأسعار",
+    "modes": {
+      "selling": "أسعار البيع",
+      "purchase": "أسعار الشراء"
+    },
+    "purchaseNote": "هذه أسعار شرائك. لا تشاركها مع زبائنك.",
+    "currency": "العملة",
+    "currencies": {
+      "syp": "ليرة سورية",
+      "usd": "دولار",
+      "both": "الاثنتان"
+    },
+    "unavailable": "اعرض الباقات غير المتوفرة",
+    "preview": "معاينة",
+    "print": "طباعة / حفظ PDF",
+    "image": "تنزيل صورة",
+    "imagePage": "تنزيل صورة {page} من {pages}",
+    "imageFailed": "تعذّر إنشاء الصورة. أعد المحاولة بعد قليل.",
+    "omitted": "لم تظهر {count} باقة لأنها بلا سعر بيع. حدّد نسبة ربحك أو أسعار هذه الباقات.",
+    "setPrices": "أسعار البيع",
+    "empty": "لا توجد باقات بأسعار لعرضها.",
+    "emptyHint": "حدّد نسبة ربحك من صفحة أسعار البيع، أو اختر أسعار الشراء.",
+    "title": "قائمة الأسعار",
+    "changeable": "الأسعار قابلة للتغيير",
+    "unavailableLine": "غير متوفر",
+    "back": "العودة إلى قائمة الأسعار"
+  },
+  "statements": {
+    "months": "الأشهر",
+    "current": "حتى تاريخه",
+    "open": "عرض الكشف",
+    "title": "كشف حساب",
+    "month": "الشهر",
+    "shop": "المتجر",
+    "email": "البريد الإلكتروني",
+    "generatedAt": "أُنشئ في {time}",
+    "opening": "الرصيد الافتتاحي",
+    "closing": "الرصيد الختامي",
+    "closingToDate": "الرصيد حتى الآن",
+    "totals": "المجاميع",
+    "entries": "الحركات",
+    "entriesEmpty": "لا حركات في هذا الشهر.",
+    "date": "التاريخ",
+    "kind": "النوع",
+    "details": "التفاصيل",
+    "amount": "المبلغ",
+    "balanceAfter": "الرصيد بعدها",
+    "kinds": {
+      "deposit": "إيداع",
+      "purchase": "شراء",
+      "refund": "استرداد",
+      "cost_of_goods": "تكلفة",
+      "adjustment": "تعديل",
+      "treasury": "خزينة"
+    },
+    "methods": {
+      "sham_cash": "شام كاش",
+      "usdt_trc20": "USDT (TRC20)",
+      "usdt_bep20": "USDT (BEP20)"
+    },
+    "categories": {
+      "compensation": "تعويض",
+      "correction": "تصحيح",
+      "cash_refund": "استرداد نقدي",
+      "manual_deposit": "إيداع يدوي",
+      "test_funds": "رصيد تجريبي"
+    },
+    "reference": "المرجع",
+    "pounds": "{amount} ل.س بسعر {rate}",
+    "reversal": "عكس تعديل سابق",
+    "orderLine": "طلب",
+    "print": "طباعة / حفظ PDF",
+    "excel": "تنزيل Excel",
+    "excelFailed": "تعذّر تنزيل الملف. أعد المحاولة بعد قليل.",
+    "back": "العودة إلى الكشوف",
+    "backToMonth": "العودة إلى الكشف",
+    "invalid": "لا يوجد كشف حساب لهذا الشهر."
   }
 }

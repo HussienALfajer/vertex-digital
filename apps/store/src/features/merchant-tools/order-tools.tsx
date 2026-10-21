@@ -19,6 +19,7 @@ import { FormAlert } from '@/components/form-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
+import { saveBlob } from './download';
 import { parseSellingPrice } from './form';
 import { tm } from './i18n';
 import { exportCodes, releaseCodes, setOrderSale } from './requests';
@@ -64,12 +65,7 @@ export function OrderTools({ order, onChange }: { order: Order; onChange: () => 
     const result = await exportCodes(order.id);
     setBusy(false);
     if (!result.ok) return setFailure(result.reason);
-    const url = URL.createObjectURL(result.blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = result.fileName;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    saveBlob(result.blob, result.fileName);
     await onChange();
   }
 
