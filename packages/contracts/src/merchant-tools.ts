@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { phoneSchema } from './auth.js';
+import type { ProductKind } from './catalog.js';
 import { zoneMonthStart, zoneYearMonth } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
 import { merchantLevelRefSchema } from './merchants.js';
@@ -12,7 +14,16 @@ import {
   USD_CENT,
   usdToSyp,
 } from './money.js';
-import { priceKindSchema } from './price-kinds.js';
+import {
+  CART_LINES_MAX,
+  CHECKOUT_LINES_MAX,
+  type PlayerCheck,
+  playerCheckSchema,
+  SAVED_PLAYERS_MAX,
+  SAVED_PLAYERS_PER_GAME,
+  type SaleCurrency,
+} from './orders.js';
+import { type AccountType, priceKindSchema } from './price-kinds.js';
 
 /*
  * The merchant area (S21, F30–F39, ADR 0036), owned by the api `merchant-tools` module; the volume
@@ -32,23 +43,10 @@ export const sypStepSchema = z.literal(SYP_STEPS).meta({ id: 'SypStep' });
 /** SP2: a selling price is at most $10,000, or its SYP equivalent at the time of saving. */
 export const SELLING_PRICE_MAX_USD_UNITS = 10_000 * CURRENCY_SCALE.USD;
 
-export const SALE_CURRENCIES = ['usd', 'syp'] as const;
-
-export const saleCurrencySchema = z.enum(SALE_CURRENCIES).meta({ id: 'SaleCurrency' });
-
-export type SaleCurrency = z.infer<typeof saleCurrencySchema>;
-
 /** Where a selling price comes from (SP3, SP4): the product's own price, the markup, or none. */
 export const SELLING_PRICE_SOURCES = ['product', 'markup', 'none'] as const;
 
 export type SellingPriceSource = (typeof SELLING_PRICE_SOURCES)[number];
-
-/** Where an order's sale row comes from (SP4, SP5). */
-export const SALE_SOURCES = ['product', 'markup', 'manual'] as const;
-
-export const saleSourceSchema = z.enum(SALE_SOURCES).meta({ id: 'SaleSource' });
-
-export type SaleSource = z.infer<typeof saleSourceSchema>;
 
 /** `GET` and `PUT /api/merchant/selling-settings` (SP1): null markup is none, null step the store's. */
 export const sellingSettingsSchema = z
@@ -536,3 +534,298 @@ export function alertCounts(kinds: readonly AlertKind[]): Record<AlertKind, numb
   for (const kind of kinds) counts[kind] += 1;
   return counts;
 }
+
+/* Counter tools (F32–F35, PR 2) -------------------------------------------------------------- */
+
+/** QT1: a merchant's order of a code pack may carry up to 50 units, whatever the pack's limit. */
+export const MERCHANT_CODE_QUANTITY_MAX = 50;
+
+/** BK1, BK3: a bulk list (and a merchant's checkout) holds at most 50 lines. */
+export const BULK_LINES_MAX = CHECKOUT_LINES_MAX;
+
+/** BK1: a pasted list or CSV file is at most 100 KB. */
+export const BULK_TEXT_MAX_BYTES = 100 * 1024;
+
+/** PS2: the last 20 distinct ids per game, from the merchant's orders of the last 90 days. */
+export const RECENT_PLAYERS_PER_GAME = 20;
+export const RECENT_PLAYERS_DAYS = 90;
+
+/** Decision 10: a merchant saves 50 ids per game and 300 per account. */
+export const MERCHANT_SAVED_PLAYERS_PER_GAME = 50;
+export const MERCHANT_SAVED_PLAYERS_MAX = 300;
+
+/** CR3: a merchant's code releases (and single reveals) per 10 minutes. */
+export const MERCHANT_CODE_RELEASES_PER_TEN_MINUTES = 20;
+
+/** `GET /api/merchant/recent-players?gameId` (PS2). */
+export const recentPlayersQuerySchema = z
+  .object({ gameId: z.uuid() })
+  .meta({ id: 'RecentPlayersQuery' });
+
+export type RecentPlayersQuery = z.infer<typeof recentPlayersQuerySchema>;
+
+export const recentPlayersSchema = z
+  .object({
+    items: z.array(
+      z.object({
+        fields: z.record(z.string(), z.string()),
+        /** The name of the newest validated order with these fields. */
+        playerName: z.string().nullable(),
+        lastUsedAt: z.iso.datetime(),
+      }),
+    ),
+  })
+  .meta({ id: 'RecentPlayers' });
+
+export type RecentPlayers = z.infer<typeof recentPlayersSchema>;
+
+/* Bulk orders (F33, BK1–BK5) ----------------------------------------------------------------- */
+
+/** Why a bulk line cannot be paid as parsed (BK1, BK2). */
+export const BULK_LINE_ERRORS = [
+  /** Not the game's fields, then the pack, then an optional quantity. */
+  'columns',
+  'pack_unknown',
+  /** Two packs of the game share this amount: name the pack instead. */
+  'pack_ambiguous',
+  'quantity_invalid',
+  /** Above the pack's limit for this account (QT1). */
+  'quantity_above_max',
+  /** The pack is not available on the merchant's list now. */
+  'pack_unavailable',
+  /** A field fails the game's rules (S06 CT7); the field's key is in `field`. */
+  'field_invalid',
+] as const;
+
+export const bulkLineErrorSchema = z.enum(BULK_LINE_ERRORS).meta({ id: 'BulkLineError' });
+
+export type BulkLineError = z.infer<typeof bulkLineErrorSchema>;
+
+/** What `parseBulkLines` needs of a game: its field keys in order and its packs. */
+export interface BulkGame {
+  fieldKeys: readonly string[];
+  packs: readonly { id: string; nameAr: string; gameAmount: number | null }[];
+}
+
+export interface ParsedBulkLine {
+  /** The line's number in the text, from 1. */
+  line: number;
+  fields: Record<string, string>;
+  productId: string | null;
+  quantity: number | null;
+  errors: BulkLineError[];
+}
+
+const ARABIC_DIGITS = /[٠-٩۰-۹]/g;
+
+function latinDigits(text: string): string {
+  return text.replace(ARABIC_DIGITS, (digit) => {
+    const code = digit.charCodeAt(0);
+    return String(code - (code >= 0x06f0 ? 0x06f0 : 0x0660));
+  });
+}
+
+/** One CSV-like line into cells: the separator is a tab, else `;`, else `,`; `"` quotes a cell. */
+function splitCells(line: string): string[] {
+  const separator = line.includes('\t') ? '\t' : line.includes(';') ? ';' : ',';
+  const cells: string[] = [];
+  let cell = '';
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line.charAt(index);
+    if (quoted) {
+      if (character !== '"') cell += character;
+      else if (line.charAt(index + 1) === '"') {
+        cell += '"';
+        index += 1;
+      } else quoted = false;
+    } else if (character === '"' && cell.trim() === '') {
+      cell = '';
+      quoted = true;
+    } else if (character === separator) {
+      cells.push(cell.trim());
+      cell = '';
+    } else cell += character;
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+function matchPack(
+  cell: string,
+  packs: BulkGame['packs'],
+): { productId: string } | { error: 'pack_unknown' | 'pack_ambiguous' } {
+  const typed = latinDigits(cell).normalize('NFKC').trim();
+  if (/^\d+$/.test(typed)) {
+    const amount = Number(typed);
+    const matches = packs.filter((pack) => pack.gameAmount === amount);
+    if (matches.length > 1) return { error: 'pack_ambiguous' };
+    const [match] = matches;
+    if (match) return { productId: match.id };
+  }
+  const named = packs.find((pack) => pack.nameAr.normalize('NFKC').trim() === typed);
+  return named ? { productId: named.id } : { error: 'pack_unknown' };
+}
+
+/**
+ * BK1: the lines of a pasted list or CSV, each the game's fields in order, then the pack (its
+ * `game_amount` or its exact Arabic name), then an optional quantity (default 1). Empty lines,
+ * and lines starting with `#` (the template's header), are skipped. Field values are checked
+ * against the game's rules by the API, not here.
+ */
+export function parseBulkLines(text: string, game: BulkGame): ParsedBulkLine[] {
+  const lines: ParsedBulkLine[] = [];
+  const rows = text.replace(/^﻿/, '').split(/\r\n|\r|\n/);
+  for (const [index, row] of rows.entries()) {
+    if (row.trim() === '' || row.trimStart().startsWith('#')) continue;
+    const cells = splitCells(row);
+    const count = game.fieldKeys.length;
+    const parsed: ParsedBulkLine = {
+      line: index + 1,
+      fields: {},
+      productId: null,
+      quantity: null,
+      errors: [],
+    };
+    lines.push(parsed);
+    if (cells.length !== count + 1 && cells.length !== count + 2) {
+      parsed.errors.push('columns');
+      continue;
+    }
+    for (const [position, key] of game.fieldKeys.entries()) {
+      // The column count was checked: every field has its cell.
+      parsed.fields[key] = String(cells[position]);
+    }
+    const pack = matchPack(String(cells[count]), game.packs);
+    if ('productId' in pack) parsed.productId = pack.productId;
+    else parsed.errors.push(pack.error);
+    const quantityCell = latinDigits(cells[count + 1] ?? '1');
+    const quantity = /^\d{1,3}$/.test(quantityCell) ? Number(quantityCell) : 0;
+    if (quantity >= 1 && quantity <= MERCHANT_CODE_QUANTITY_MAX) parsed.quantity = quantity;
+    else parsed.errors.push('quantity_invalid');
+  }
+  return lines;
+}
+
+/** `POST /api/merchant/bulk/check` (BK2): the game and the pasted text or the CSV's content. */
+export const bulkCheckRequestSchema = z
+  .object({
+    gameId: z.uuid(),
+    text: z
+      .string()
+      .min(1)
+      .refine(
+        (text) => new TextEncoder().encode(text).byteLength <= BULK_TEXT_MAX_BYTES,
+        'Expected at most 100 KB',
+      ),
+  })
+  .meta({ id: 'BulkCheckRequest' });
+
+export type BulkCheckRequest = z.infer<typeof bulkCheckRequestSchema>;
+
+/**
+ * QT1, QT2: the most units one order (or cart line) of a pack may carry: 50 for a merchant's code
+ * pack, the pack's own limit otherwise (direct top-ups, and every pack for customers).
+ */
+export function orderQuantityMax(
+  product: { kind: ProductKind; maxQuantity: number },
+  accountType: AccountType,
+): number {
+  return accountType === 'merchant' && product.kind === 'code'
+    ? MERCHANT_CODE_QUANTITY_MAX
+    : product.maxQuantity;
+}
+
+/** Decision 10, S10 SP1: the saved-id limits of an account type. */
+export function savedPlayerLimits(accountType: AccountType): { perGame: number; total: number } {
+  return accountType === 'merchant'
+    ? { perGame: MERCHANT_SAVED_PLAYERS_PER_GAME, total: MERCHANT_SAVED_PLAYERS_MAX }
+    : { perGame: SAVED_PLAYERS_PER_GAME, total: SAVED_PLAYERS_MAX };
+}
+
+/** BK3, edge case 21: 50 checkout lines for a merchant, 10 for a customer. */
+export function checkoutLinesMax(accountType: AccountType): number {
+  return accountType === 'merchant' ? BULK_LINES_MAX : CART_LINES_MAX;
+}
+
+/**
+ * BK2: a checked line. `check` is the player check of its fields (null when the line has errors
+ * or the game checks no ids); `needsConfirmation` asks the merchant's tick before paying (BK3).
+ */
+export const bulkCheckLineSchema = z
+  .object({
+    line: z.int().positive(),
+    fields: z.record(z.string(), z.string()),
+    product: z.object({ id: z.uuid(), nameAr: z.string() }).nullable(),
+    quantity: z.int().positive().nullable(),
+    unitPriceUsdUnits: amountUnitsSchema.nullable(),
+    totalUsdUnits: amountUnitsSchema.nullable(),
+    check: playerCheckSchema.nullable(),
+    needsConfirmation: z.boolean(),
+    errors: z.array(z.object({ code: bulkLineErrorSchema, field: z.string().nullable() })),
+  })
+  .meta({ id: 'BulkCheckLine' });
+
+export type BulkCheckLine = z.infer<typeof bulkCheckLineSchema>;
+
+export const bulkCheckResultSchema = z
+  .object({
+    lines: z.array(bulkCheckLineSchema),
+    /** The lines without errors, in USD units. */
+    totalUsdUnits: amountUnitsSchema,
+    balanceUsdUnits: z.int(),
+  })
+  .meta({ id: 'BulkCheckResult' });
+
+export type BulkCheckResult = z.infer<typeof bulkCheckResultSchema>;
+
+/** BK3, S09 PV8: a line needs the merchant's confirmation unless its id is known valid. */
+export function bulkNeedsConfirmation(check: PlayerCheck | null): boolean {
+  return check !== null && check.result !== 'valid' && check.result !== 'not_supported';
+}
+
+/* Receipt settings and branding (F35, BR1–BR3) ----------------------------------------------- */
+
+/** The logo of a merchant's receipts: PNG, JPEG or WebP up to 1 MB, kept as a 512 px WebP. */
+export const MERCHANT_LOGO_MAX_BYTES = 1024 * 1024;
+export const MERCHANT_LOGO_SIZE = 512;
+
+/** `GET /api/merchant/receipt-settings` (BR3): the trade name is the admin-approved one. */
+export const receiptSettingsSchema = z
+  .object({
+    tradeName: z.string(),
+    showWhatsapp: z.boolean(),
+    /** E.164; the merchant application's number until the merchant changes it. */
+    whatsapp: z.string().nullable(),
+    logoFileId: z.uuid().nullable(),
+  })
+  .meta({ id: 'ReceiptSettings' });
+
+export type ReceiptSettings = z.infer<typeof receiptSettingsSchema>;
+
+/** `PUT /api/merchant/receipt-settings`: a shown number must exist; a logo of the merchant's own. */
+export const updateReceiptSettingsSchema = z
+  .object({
+    showWhatsapp: z.boolean(),
+    whatsapp: phoneSchema.nullable(),
+    logoFileId: z.uuid().nullable(),
+  })
+  .refine((value) => !value.showWhatsapp || value.whatsapp !== null, {
+    path: ['whatsapp'],
+    message: 'A shown WhatsApp number is required',
+  })
+  .meta({ id: 'UpdateReceiptSettings' });
+
+export type UpdateReceiptSettings = z.infer<typeof updateReceiptSettingsSchema>;
+
+/** `POST /api/merchant/logo`. */
+export const uploadedLogoSchema = z.object({ fileId: z.uuid() }).meta({ id: 'UploadedLogo' });
+
+export type UploadedLogo = z.infer<typeof uploadedLogoSchema>;
+
+/** `DELETE /api/admin/customers/:id/merchant/logo` (BR3). */
+export const removeMerchantLogoSchema = z
+  .object({ reason: z.string().trim().min(3).max(500) })
+  .meta({ id: 'RemoveMerchantLogo' });
+
+export type RemoveMerchantLogo = z.infer<typeof removeMerchantLogoSchema>;

@@ -381,6 +381,8 @@ export const AUDIT_DETAILS = {
     listChanged: z.boolean(),
     cancelledOrderIds: z.array(z.uuid()),
   }),
+  /** S21 BR3: the admin removed a merchant's receipt logo, with the reason. */
+  'merchant.logo_removed': z.strictObject({ fileId: z.uuid(), reason: z.string() }),
   /** S12 LM5. */
   'customer.limits_changed': z.strictObject({
     before: customerLimitValues,

@@ -4,6 +4,8 @@ import {
   ATTEMPT_RESOLVERS,
   ATTEMPT_STATUSES,
   CANCEL_REASONS,
+  CHECKOUT_SOURCES,
+  CODE_RELEASE_PURPOSES,
   CODE_REVEAL_ACTORS,
   ORDER_EVENT_ACTORS,
   ORDER_EVENT_KINDS,
@@ -66,6 +68,10 @@ export const refundReasonEnum = pgEnum('refund_reason', REFUND_REASONS);
 
 export const codeRevealActorEnum = pgEnum('code_reveal_actor', CODE_REVEAL_ACTORS);
 
+export const codeReleasePurposeEnum = pgEnum('code_release_purpose', CODE_RELEASE_PURPOSES);
+
+export const checkoutSourceEnum = pgEnum('checkout_source', CHECKOUT_SOURCES);
+
 export const orderCancelReasonEnum = pgEnum('order_cancel_reason', CANCEL_REASONS);
 
 export const orderPlayerCheckEnum = pgEnum('order_player_check', PLAYER_CHECK_STATES);
@@ -123,6 +129,14 @@ export const orders = pgTable(
       .references(() => priceLists.id),
     /** Input field key → value, trimmed (rule O5). */
     fields: jsonb('fields').$type<Record<string, string>>().notNull(),
+    /**
+     * S21 VF1: the code of the verification page, 22 base64url characters, written at insert by
+     * `order_verification_code()` (migration 0086); fixed by `orders_guard`.
+     */
+    verificationCode: text('verification_code')
+      .notNull()
+      .unique()
+      .default(sql`order_verification_code()`),
     /** The pounds shown at purchase (rule O6): display only, no SYP moves. */
     displayRateId: uuid('display_rate_id').references(() => exchangeRates.id),
     totalSypUnits: amountUnits('total_syp_units'),
@@ -303,7 +317,7 @@ export const orders = pgTable(
     check(
       'orders_checkout_check',
       sql`(${table.checkoutId} is null) = (${table.checkoutLine} is null)
-        and ${table.checkoutLine} between 1 and 10
+        and ${table.checkoutLine} between 1 and 50
         and (${table.checkoutId} is null or ${table.reservedAt} is null)`,
     ),
     check(
@@ -333,6 +347,8 @@ export const checkouts = pgTable(
     idempotencyKey: uuid('idempotency_key').notNull().unique(),
     requestHash: text('request_hash').notNull(),
     lineCount: integer('line_count').notNull(),
+    /** S21 BK3: the cart or a merchant's bulk list. */
+    source: checkoutSourceEnum('source').notNull().default('cart'),
     totalUsdUnits: amountUnits('total_usd_units').notNull(),
     /** The pounds shown (rule O6): display only. */
     displayRateId: uuid('display_rate_id').references(() => exchangeRates.id),
@@ -348,7 +364,7 @@ export const checkouts = pgTable(
   (table) => [
     index('checkouts_customer_id_created_at_idx').on(table.customerId, table.createdAt.desc()),
     index('checkouts_display_rate_id_idx').on(table.displayRateId),
-    check('checkouts_line_count_check', sql`${table.lineCount} between 1 and 10`),
+    check('checkouts_line_count_check', sql`${table.lineCount} between 1 and 50`),
     check(
       'checkouts_total_check',
       sql`${table.totalUsdUnits} > 0 and ${table.totalUsdUnits} % 10000 = 0`,
@@ -429,6 +445,8 @@ export const orderShareLinks = pgTable(
     showPrice: boolean('show_price').notNull(),
     /** Always `masked` for a gift. */
     playerDisplay: receiptPlayerDisplayEnum('player_display').notNull().default('masked'),
+    /** S21 BR1, BR2: a merchant's receipt in the shop's name (false for every other link). */
+    branded: boolean('branded').notNull().default(false),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     revokedBy: shareRevokerEnum('revoked_by'),
     /** The admin's reason (rule AD1); a customer gives none. */
@@ -690,6 +708,10 @@ export const orderCodeReveals = pgTable(
       .references(() => orders.id),
     actor: codeRevealActorEnum('actor').notNull(),
     actorId: uuid('actor_id').notNull(),
+    /** S21 CR1: a single reveal, or a merchant's release to print, copy or export. */
+    purpose: codeReleasePurposeEnum('purpose').notNull().default('reveal'),
+    /** S21 CR4: the rows of one release share it (null for a single reveal). */
+    releaseId: uuid('release_id'),
     ip: inet('ip'),
     userAgent: text('user_agent'),
     createdAt: insertedAt(),

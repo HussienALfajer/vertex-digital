@@ -23,6 +23,10 @@ const content = JSON.parse(
   readFileSync(new URL('./content-fixtures.json', import.meta.url), 'utf8'),
 );
 const shares = JSON.parse(readFileSync(new URL('./share-fixtures.json', import.meta.url), 'utf8'));
+// S21 VF2: the verification pages' orders, by their codes.
+const verifications = JSON.parse(
+  readFileSync(new URL('./verify-fixtures.json', import.meta.url), 'utf8'),
+);
 const port = Number(process.argv[2] ?? 4002);
 /** Share token → the `X-Forwarded-For` values its reads carried. */
 const forwardedFor = new Map();
@@ -80,6 +84,13 @@ createServer((request, response) => {
     seen.add(request.headers['x-forwarded-for'] ?? null);
     forwardedFor.set(share[1], seen);
     if (shares[share[1]]) return json(response, 200, shares[share[1]]);
+  }
+  const verification = /^\/api\/verify\/([A-Za-z0-9_-]{22})$/.exec(path);
+  if (verification) {
+    const seen = forwardedFor.get(verification[1]) ?? new Set();
+    seen.add(request.headers['x-forwarded-for'] ?? null);
+    forwardedFor.set(verification[1], seen);
+    if (verifications[verification[1]]) return json(response, 200, verifications[verification[1]]);
   }
   const game = /^\/api\/catalog\/games\/([a-z0-9-]+)$/.exec(path);
   if (game && !empty && games[game[1]]) return json(response, 200, games[game[1]]);

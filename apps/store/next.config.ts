@@ -45,11 +45,12 @@ const config: NextConfig = {
         : './src/app/no-madani.css',
     },
   },
-  // S10 rule SH5: share links are never indexed (the pages also say so in their metadata).
+  // S10 rule SH5: share links are never indexed (the pages also say so in their metadata); nor
+  // are S21's verification pages (VF2).
   async headers() {
     return [
       {
-        source: '/:kind(g|r)/:token',
+        source: '/:kind(g|r|v)/:token',
         headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
       },
     ];

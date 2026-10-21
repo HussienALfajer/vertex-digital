@@ -117,6 +117,15 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # Receipt verification data (S21 VF2, VF3), public: on top of the API's 60 a minute per
+    # address. The API sets the cache headers and reads no cookie.
+    location ~* ^/api/verify/ {
+        limit_req zone=vdverify burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Code reveals (S08 rule C2), on top of the API's per-customer counter.
     location ~* "^/api/orders/[0-9a-f-]{36}/codes/[0-9a-f-]{36}/reveal/?$" {
         limit_req zone=vdreveal burst=10 nodelay;
@@ -148,6 +157,16 @@ server {
     # Receipt uploads (S03 rule SC8): images up to 5 MB, the only large bodies the store takes.
     location ~* "^/api/deposits/[0-9a-f-]{36}/receipt/?$" {
         client_max_body_size 6m;
+        client_body_timeout 60s;
+        limit_req zone=vdupload burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # A merchant's receipt logo (S21 BR3): one image of 1 MB with its multipart wrapping.
+    location ~* ^/api/merchant/logo/?$ {
+        client_max_body_size 2m;
         client_body_timeout 60s;
         limit_req zone=vdupload burst=5 nodelay;
         limit_req_status 429;
@@ -230,6 +249,15 @@ server {
     # `<meta name="referrer" content="no-referrer">` and the store adds `X-Robots-Tag: noindex`.
     location ~ ^/(?:g|r)/ {
         limit_req zone=vdshare burst=20 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3061;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # The public verification page of a receipt's QR (S21 VF2): rendered per request by the
+    # store, which reads /api/verify/ with the visitor's address; `noindex`.
+    location ~ ^/v/ {
+        limit_req zone=vdverify burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3061;
         include snippets/vertexdigital-proxy.conf;

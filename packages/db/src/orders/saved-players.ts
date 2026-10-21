@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import {
+  type AccountType,
   canonicalFields,
   type PlayerCheckState,
-  SAVED_PLAYERS_MAX,
-  SAVED_PLAYERS_PER_GAME,
+  savedPlayerLimits,
 } from '@vertex-digital/contracts';
 import { and, count, eq, sql } from 'drizzle-orm';
 import type { Transaction } from '../client.js';
@@ -61,6 +61,8 @@ export async function touchSavedPlayer(
     playerName: string | null;
   },
   save: { label: string } | null,
+  /** S21 decision 10: a merchant saves 50 ids per game and 300 in all. */
+  accountType: AccountType,
 ): Promise<SavedPlayerRow | null> {
   // A walk-in order (S16 AP1) has no customer to save ids for.
   const customerId = order.customerId;
@@ -90,7 +92,8 @@ export async function touchSavedPlayer(
     })
     .from(savedPlayers)
     .where(eq(savedPlayers.customerId, customerId));
-  if ((counts?.all ?? 0) >= SAVED_PLAYERS_MAX || (counts?.game ?? 0) >= SAVED_PLAYERS_PER_GAME) {
+  const limits = savedPlayerLimits(accountType);
+  if ((counts?.all ?? 0) >= limits.total || (counts?.game ?? 0) >= limits.perGame) {
     return null;
   }
   const [inserted] = await tx

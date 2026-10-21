@@ -1,16 +1,18 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import type {
-  Checkout,
-  CreatedOrder,
+import {
+  type Checkout,
+  type CreatedOrder,
   checkoutRequestSchema,
   createOrderSchema,
-  Order,
-  OrderListQuery,
-  OrderPage,
-  RevealedCode,
+  MERCHANT_CODE_RELEASES_PER_TEN_MINUTES,
+  type Order,
+  type OrderListQuery,
+  type OrderPage,
+  type RevealedCode,
 } from '@vertex-digital/contracts';
 import {
+  applicant,
   cancelOwnReservation,
   checkoutOrders,
   customerCheckout,
@@ -182,6 +184,7 @@ export class OrdersService {
           {
             customerId,
             lines: body.lines,
+            source: body.source,
             playerCheck: this.playerCheck,
             idempotencyKey,
             requestHash: checkoutHash(body),
@@ -307,7 +310,7 @@ export class OrdersService {
     const { checkout } = await this.checkout(
       customerId,
       randomUUID(),
-      { lines },
+      { lines, source: 'cart' },
       { ipAddress: null, userAgent: 'checkout:place' },
       'cli',
     );
@@ -362,8 +365,14 @@ export class OrdersService {
     meta: RequestMeta,
   ): Promise<RevealedCode> {
     if (!isUuid(orderId) || !isUuid(codeId)) throw orderRefusals.notFound();
+    // S21 CR3: a merchant's reveals count with their releases, 20 per 10 minutes in all.
+    const merchant = (await applicant(this.db, customerId))?.accountType === 'merchant';
     const allowed = await withinLimits(this.db, [
-      { key: `reveal:customer:${customerId}`, max: 30, windowMs: TEN_MINUTES },
+      {
+        key: `reveal:customer:${customerId}`,
+        max: merchant ? MERCHANT_CODE_RELEASES_PER_TEN_MINUTES : 30,
+        windowMs: TEN_MINUTES,
+      },
     ]);
     if (!allowed) throw orderRefusals.rateLimited();
     const revealed = await this.db.transaction((tx) =>

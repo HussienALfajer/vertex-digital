@@ -13,6 +13,7 @@ import { id } from './columns.js';
  * `delivery_proof` (S11 rule MF2): a manual delivery's screenshot, re-encoded like a receipt.
  * `ticket_attachment` (S12 TK11): an image of a support message, re-encoded like a receipt.
  * `merchant_shop_photo` (S20 MA3): a merchant application's shop photo, re-encoded like a receipt.
+ * `merchant_logo` (S21 BR3): a merchant's receipt logo, a square WebP of at most 512 px.
  */
 export const STORED_FILE_KINDS = [
   'deposit_receipt',
@@ -21,6 +22,7 @@ export const STORED_FILE_KINDS = [
   'delivery_proof',
   'ticket_attachment',
   'merchant_shop_photo',
+  'merchant_logo',
 ] as const;
 
 export const storedFileKindEnum = pgEnum('stored_file_kind', STORED_FILE_KINDS);

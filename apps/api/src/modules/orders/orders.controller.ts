@@ -14,21 +14,31 @@ import {
   Res,
   SerializeOptions,
 } from '@nestjs/common';
-import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import {
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiProduces,
+  ApiTags,
+} from '@nestjs/swagger';
+import {
+  type CodeReleaseRequest,
   checkoutRequestSchema,
   checkoutSchema,
+  codeReleaseRequestSchema,
   createdOrderSchema,
   createOrderSchema,
   type OrderListQuery,
   orderListQuerySchema,
   orderPageSchema,
+  orderPrintSchema,
   orderSchema,
   type PlayerCheckRequest,
   playerCheckRequestSchema,
   playerCheckSchema,
   type ReceiptOptions,
   receiptOptionsSchema,
+  releasedCodesSchema,
   revealedCodeSchema,
   type SavedPlayerListQuery,
   savedPlayerListQuerySchema,
@@ -44,6 +54,7 @@ import { ApiQueryOf } from '../../core/http/api-query.js';
 import { ApiIdempotencyKey, IdempotencyKey } from '../../core/http/idempotency-key.js';
 import { requestMeta } from '../../core/http/request-meta.js';
 import type { CustomerIdentity } from '../auth/index.js';
+import { OrderReceiptsService } from './order-receipts.service.js';
 import { type CheckoutBody, OrdersService, type PurchaseBody } from './orders.service.js';
 import { PlayerChecksService } from './player-checks.service.js';
 import { SavedPlayersService } from './saved-players.service.js';
@@ -61,6 +72,7 @@ export class OrdersController {
     private readonly playerChecks: PlayerChecksService,
     private readonly savedPlayers: SavedPlayersService,
     private readonly shareLinks: ShareLinksService,
+    private readonly receipts: OrderReceiptsService,
   ) {}
 
   /** S09 rules PV1–PV7: limited per customer and address for the calls that reach a supplier. */
@@ -206,6 +218,53 @@ export class OrdersController {
     @Req() request: Request,
   ) {
     return this.orders.cancel(customer.id, id, requestMeta(request));
+  }
+
+  /** S21 PR2, BR1: what the printed receipt shows; never the price a merchant paid. */
+  @Get('orders/:id/print')
+  @CustomerRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: orderPrintSchema })
+  @ApiOkResponse({ description: 'The receipt to print', standardSchema: orderPrintSchema })
+  print(@CurrentCustomer() customer: CustomerIdentity, @Param('id') id: string) {
+    return this.receipts.print(customer.id, id);
+  }
+
+  /**
+   * S21 CR1–CR3: the merchant's delivered codes in clear to print or copy, or an `.xlsx` to
+   * export; each code's release is logged. 20 releases per 10 minutes.
+   */
+  @Post('orders/:id/codes/release')
+  @CustomerRoute()
+  @HttpCode(200)
+  @ApiProduces(
+    'application/json',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  @ApiOkResponse({
+    description: 'The codes (`print`, `copy`) or the `.xlsx` file (`export`)',
+    standardSchema: releasedCodesSchema,
+  })
+  async release(
+    @CurrentCustomer() customer: CustomerIdentity,
+    @Param('id') id: string,
+    @Body({ schema: codeReleaseRequestSchema }) body: CodeReleaseRequest,
+    @Req() request: Request,
+    @Res() response: Response,
+  ) {
+    const release = await this.receipts.release(customer.id, id, body, requestMeta(request));
+    response.status(200).setHeader('cache-control', 'no-store');
+    if (release.kind === 'codes') {
+      response.json(releasedCodesSchema.parse(release.codes));
+      return;
+    }
+    response
+      .setHeader(
+        'content-type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      .setHeader('content-disposition', `attachment; filename="${release.fileName}"`)
+      .send(release.body);
   }
 
   /** S10 rule RC1: creates the receipt link, or changes the live one's choices. */

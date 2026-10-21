@@ -629,6 +629,10 @@ describe('gifts and share links (S10 rules GF1–GF5, RC1–RC3, SH1–SH5)', ()
       price: null,
       fields: [{ label: 'معرّف اللاعب', value: '••••4568' }],
       gift: { senderName: 'أحمد', message: 'كل عام وأنت بخير' },
+      // S21: a gift is never branded and carries no verification code.
+      branding: null,
+      sellingPrice: null,
+      verificationCode: null,
     });
     expect(JSON.stringify(share)).not.toContain(customer.email);
 

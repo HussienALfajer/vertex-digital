@@ -307,10 +307,26 @@ export type GamePlayerCheckState = z.infer<typeof gamePlayerCheckStateSchema>;
 
 // Convenience (S10): saved player ids, gifts, the cart, share links ------------------------------
 
+/** S21 SP4, SP5: a merchant's selling price, in USD or SYP (owner `merchant-tools`). */
+export const SALE_CURRENCIES = ['usd', 'syp'] as const;
+
+export const saleCurrencySchema = z.enum(SALE_CURRENCIES).meta({ id: 'SaleCurrency' });
+
+export type SaleCurrency = z.infer<typeof saleCurrencySchema>;
+
+/** Where an order's sale row comes from (S21 SP4, SP5). */
+export const SALE_SOURCES = ['product', 'markup', 'manual'] as const;
+
+export const saleSourceSchema = z.enum(SALE_SOURCES).meta({ id: 'SaleSource' });
+
+export type SaleSource = z.infer<typeof saleSourceSchema>;
+
 /** Rule SP1: at most 10 saved ids per game and 50 per account; rule CT2: at most 10 cart lines. */
 export const SAVED_PLAYERS_PER_GAME = 10;
 export const SAVED_PLAYERS_MAX = 50;
 export const CART_LINES_MAX = 10;
+/** S21 BK3: a merchant's checkout (a bulk list) holds up to 50 lines; customers keep 10. */
+export const CHECKOUT_LINES_MAX = 50;
 
 /** A saved id's label ("حسابي"): 1–30 printable characters, trimmed, no bidi or format controls. */
 export const savedPlayerLabelSchema = z
@@ -453,6 +469,8 @@ export const receiptOptionsSchema = z
   .object({
     showPrice: z.boolean().default(true),
     playerDisplay: receiptPlayerDisplaySchema.default('masked'),
+    /** S21 BR2: a merchant's receipt in the shop's name (ignored for customers). */
+    branded: z.boolean().default(true),
   })
   .meta({ id: 'ReceiptOptions' });
 
@@ -467,6 +485,9 @@ export type ShareKind = z.infer<typeof shareKindSchema>;
 /** A share link's token: 22 base64url characters (16 CSPRNG bytes). */
 export const shareTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 
+/** S21 VF1: an order's verification code, 22 base64url characters (16 CSPRNG bytes). */
+export const verificationCodeSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
+
 /** Who revoked a share link. */
 export const SHARE_REVOKERS = ['customer', 'admin'] as const;
 
@@ -480,6 +501,8 @@ export const shareLinkSchema = z
     url: z.string(),
     showPrice: z.boolean(),
     playerDisplay: receiptPlayerDisplaySchema,
+    /** S21 BR2: a merchant's receipt in the shop's name. */
+    branded: z.boolean(),
     createdAt: z.iso.datetime(),
   })
   .meta({ id: 'ShareLink' });
@@ -517,6 +540,20 @@ export const publicShareSchema = z
     gift: z
       .object({ senderName: z.string().nullable(), message: z.string().nullable() })
       .nullable(),
+    /** S21 BR1: a merchant's branded receipt: the shop's name, its WhatsApp when shown, a logo. */
+    branding: z
+      .object({ tradeName: z.string(), whatsapp: z.string().nullable(), hasLogo: z.boolean() })
+      .nullable(),
+    /** S21 BR1: a branded receipt's selling price (with `showPrice`); never the price paid. */
+    sellingPrice: z
+      .object({
+        currency: saleCurrencySchema,
+        unitAmountUnits: z.int().positive(),
+        totalAmountUnits: z.int().positive(),
+      })
+      .nullable(),
+    /** S21 VF1: receipts only, for the verification QR. */
+    verificationCode: verificationCodeSchema.nullable(),
   })
   .meta({ id: 'PublicShare' });
 
@@ -598,6 +635,8 @@ export const ROUTE_SKIP_REASONS = [
   'already_tried',
   'unprofitable',
   'balance_below_order',
+  /** S21 QT3: the offer allows fewer units per order than the order still needs. */
+  'quantity_above_offer',
 ] as const;
 
 export const routeSkipReasonSchema = z.enum(ROUTE_SKIP_REASONS).meta({ id: 'RouteSkipReason' });
@@ -608,6 +647,20 @@ export type RouteSkipReason = z.infer<typeof routeSkipReasonSchema>;
 export const CODE_REVEAL_ACTORS = ['customer', 'admin'] as const;
 
 export const codeRevealActorSchema = z.enum(CODE_REVEAL_ACTORS).meta({ id: 'CodeRevealActor' });
+
+/** S21 CR1: why a code was shown: a single reveal, or a merchant's release to print, copy, export. */
+export const CODE_RELEASE_PURPOSES = ['reveal', 'print', 'copy', 'export'] as const;
+
+export const codeReleasePurposeSchema = z
+  .enum(CODE_RELEASE_PURPOSES)
+  .meta({ id: 'CodeReleasePurpose' });
+
+export type CodeReleasePurpose = z.infer<typeof codeReleasePurposeSchema>;
+
+/** S21 VF1: the path of an order's verification page, which every receipt's QR carries. */
+export function verificationPath(code: string): string {
+  return `/v/${code}`;
+}
 
 // Money (M1–M3) ---------------------------------------------------------------------------------
 
@@ -699,6 +752,8 @@ export interface CandidateRoute {
   unusableReason: RouteUnusableReason | null;
   /** The supplier's newest balance in USD units; null when it reports none in USD. */
   balanceUsdUnits: number | null;
+  /** S21 QT3: the offer's most units per order; null without a limit. */
+  offerMaxQuantity: number | null;
 }
 
 /** What the router knows of the order (rule R1). */
@@ -734,6 +789,9 @@ function skipReason(route: CandidateRoute, order: CandidateOrder): RouteSkipReas
   const cost = route.costUsdUnits as number;
   if (!routeProfitable(order.unitPriceUsdUnits, cost, order.minMarginUsdUnits)) {
     return 'unprofitable';
+  }
+  if (route.offerMaxQuantity !== null && route.offerMaxQuantity < order.remainingUnits) {
+    return 'quantity_above_offer';
   }
   if (
     route.balanceUsdUnits !== null &&
@@ -1345,6 +1403,29 @@ const orderFieldValue = z.object({
   valueLabelAr: z.string().nullable(),
 });
 
+/** S21 SP4, SP5: an order's selling price, as the merchant set it, with its USD value then. */
+export const orderSaleSchema = z
+  .object({
+    currency: saleCurrencySchema,
+    unitAmountUnits: z.int().positive(),
+    unitUsdUnits: z.int().positive(),
+    source: saleSourceSchema,
+  })
+  .meta({ id: 'OrderSale' });
+
+export type OrderSale = z.infer<typeof orderSaleSchema>;
+
+/** S21 CR4: one reveal or release of an order's codes ("سجل الكشف والطباعة"). */
+export const codeReleaseLogSchema = z
+  .object({
+    purpose: codeReleasePurposeSchema,
+    positions: z.array(z.int().positive()),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: 'CodeReleaseLog' });
+
+export type CodeReleaseLog = z.infer<typeof codeReleaseLogSchema>;
+
 /** A code of a code product, masked: its value only comes from the reveal route (rule C2). */
 export const orderCodeSchema = z
   .object({
@@ -1406,6 +1487,12 @@ export const orderSchema = z
     /** S20: charged on a list other than retail, so no share link ever shows its price. */
     privatePrice: z.boolean(),
     repeatable: z.boolean(),
+    /** S21 VF1: the code of the verification QR. */
+    verificationCode: verificationCodeSchema,
+    /** S21 SP4, SP5: a merchant's selling price for this order; null without one. */
+    sale: orderSaleSchema.nullable(),
+    /** S21 CR4: the reveals and releases of the order's codes, newest first. */
+    codeReleases: z.array(codeReleaseLogSchema),
     createdAt: z.iso.datetime(),
   })
   .meta({ id: 'Order' });
@@ -1426,9 +1513,22 @@ export const checkoutLineSchema = createOrderSchema
 
 export type CheckoutLine = z.input<typeof checkoutLineSchema>;
 
-/** `POST /api/checkouts` (rule CT5): 1–10 lines, all or nothing. */
+/** Where a checkout comes from: the cart, or a merchant's bulk list (S21 BK3). */
+export const CHECKOUT_SOURCES = ['cart', 'bulk'] as const;
+
+export const checkoutSourceSchema = z.enum(CHECKOUT_SOURCES).meta({ id: 'CheckoutSource' });
+
+export type CheckoutSource = z.infer<typeof checkoutSourceSchema>;
+
+/**
+ * `POST /api/checkouts` (rule CT5): all or nothing; 1–10 lines for a customer, up to 50 for a
+ * merchant (S21 BK3, checked by the API).
+ */
 export const checkoutRequestSchema = z
-  .object({ lines: z.array(checkoutLineSchema).min(1).max(CART_LINES_MAX) })
+  .object({
+    lines: z.array(checkoutLineSchema).min(1).max(CHECKOUT_LINES_MAX),
+    source: checkoutSourceSchema.default('cart'),
+  })
   .meta({ id: 'CheckoutRequest' });
 
 export type CheckoutRequest = z.input<typeof checkoutRequestSchema>;
@@ -1473,6 +1573,136 @@ export const revealedCodeSchema = z
   .meta({ id: 'RevealedCode' });
 
 export type RevealedCode = z.infer<typeof revealedCodeSchema>;
+
+/** `POST /api/orders/:id/codes/release` (S21 CR1): all delivered codes unless `codeIds`. */
+export const codeReleaseRequestSchema = z
+  .object({
+    purpose: codeReleasePurposeSchema.exclude(['reveal']),
+    codeIds: z.array(z.uuid()).min(1).max(MAX_QUANTITY_LIMIT).optional(),
+  })
+  .meta({ id: 'CodeReleaseRequest' });
+
+export type CodeReleaseRequest = z.infer<typeof codeReleaseRequestSchema>;
+
+/** S21 CR1: the released codes in clear, in position order (`print` and `copy`). */
+export const releasedCodesSchema = z
+  .object({
+    codes: z.array(z.object({ id: z.uuid(), position: z.int().positive(), code: z.string() })),
+  })
+  .meta({ id: 'ReleasedCodes' });
+
+export type ReleasedCodes = z.infer<typeof releasedCodesSchema>;
+
+// Verification and printing (S21 F35, VF1–VF3, PR1–PR3) -----------------------------------------
+
+/** S21 VF2: the state a verification page shows in plain words. */
+export const VERIFICATION_STAGES = [
+  'processing',
+  'delivered',
+  'partially_delivered',
+  'not_delivered',
+  'refunded',
+] as const;
+
+export const verificationStageSchema = z
+  .enum(VERIFICATION_STAGES)
+  .meta({ id: 'VerificationStage' });
+
+export type VerificationStage = z.infer<typeof verificationStageSchema>;
+
+const VERIFICATION_STAGE_OF: Readonly<Record<OrderStatus, VerificationStage>> = {
+  awaiting_balance: 'not_delivered',
+  cancelled: 'not_delivered',
+  paid: 'processing',
+  sent_to_supplier: 'processing',
+  failed: 'processing',
+  needs_review: 'processing',
+  delivered: 'delivered',
+  partially_refunded: 'partially_delivered',
+  refunded: 'refunded',
+};
+
+/** S21 VF2: "تم التسليم، تم تسليم جزء، قيد التنفيذ، لم يتم، مسترد". */
+export function verificationStage(status: OrderStatus): VerificationStage {
+  return VERIFICATION_STAGE_OF[status];
+}
+
+/** S21 VF2, decision 12: who issued the receipt: the shop (a merchant's order) or the store. */
+export const receiptIssuerSchema = z
+  .discriminatedUnion('kind', [
+    z.object({ kind: z.literal('store') }),
+    z.object({ kind: z.literal('merchant'), tradeName: z.string() }),
+  ])
+  .meta({ id: 'ReceiptIssuer' });
+
+export type ReceiptIssuer = z.infer<typeof receiptIssuerSchema>;
+
+/**
+ * `GET /api/verify/:code` (S21 VF2): the order's facts only; never a price, a code, a name, an
+ * email, a phone, gift text or the customer's identity. Fields are masked (rule SH3).
+ */
+export const publicVerificationSchema = z
+  .object({
+    issuer: receiptIssuerSchema,
+    orderNumber: z.string(),
+    game: z.object({ nameAr: z.string() }),
+    product: z.object({ nameAr: z.string() }),
+    quantity: z.int().positive(),
+    deliveredQuantity: z.int().nonnegative(),
+    stage: verificationStageSchema,
+    createdAt: z.iso.datetime(),
+    /** When delivery finished; null while open or when nothing was delivered. */
+    deliveredAt: z.iso.datetime().nullable(),
+    fields: z.array(z.object({ labelAr: z.string(), value: z.string() })),
+  })
+  .meta({ id: 'PublicVerification' });
+
+export type PublicVerification = z.infer<typeof publicVerificationSchema>;
+
+/** S21 PR1: the papers a print page fits. */
+export const PRINT_PAPERS = ['58', '80', 'a4'] as const;
+
+export const printPaperSchema = z.enum(PRINT_PAPERS).meta({ id: 'PrintPaper' });
+
+export type PrintPaper = z.infer<typeof printPaperSchema>;
+
+/**
+ * `GET /api/orders/:id/print` (S21 PR2, BR1): what a printed receipt shows. `price` is the
+ * selling price of a merchant's order (in the sale's currency) or the retail price of a retail
+ * order, for the units not refunded; never the price a merchant paid.
+ */
+export const orderPrintSchema = z
+  .object({
+    orderId: z.uuid(),
+    orderNumber: z.string(),
+    stage: verificationStageSchema,
+    createdAt: z.iso.datetime(),
+    game: z.object({ nameAr: z.string() }),
+    product: z.object({
+      nameAr: z.string(),
+      kind: productKindSchema,
+      redemptionAr: z.string().nullable(),
+    }),
+    quantity: z.int().positive(),
+    deliveredQuantity: z.int().nonnegative(),
+    fields: z.array(z.object({ labelAr: z.string(), value: z.string() })),
+    issuer: receiptIssuerSchema,
+    /** Shown on a merchant's receipt when the merchant chose to (BR3). */
+    whatsapp: z.string().nullable(),
+    logoFileId: z.uuid().nullable(),
+    price: z
+      .object({
+        kind: z.enum(['selling', 'retail']),
+        currency: saleCurrencySchema,
+        unitAmountUnits: z.int().positive(),
+        totalAmountUnits: z.int().positive(),
+      })
+      .nullable(),
+    verificationCode: verificationCodeSchema,
+  })
+  .meta({ id: 'OrderPrint' });
+
+export type OrderPrint = z.infer<typeof orderPrintSchema>;
 
 // Admin routes ----------------------------------------------------------------------------------
 
@@ -1669,6 +1899,8 @@ export const adminOrderCodeSchema = z
     reveals: z.array(
       z.object({
         actor: codeRevealActorSchema,
+        /** S21 CR4. */
+        purpose: codeReleasePurposeSchema,
         ipAddress: z.string().nullable(),
         userAgent: z.string().nullable(),
         createdAt: z.iso.datetime(),

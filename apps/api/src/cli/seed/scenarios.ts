@@ -1080,7 +1080,7 @@ export class Scenarios {
       return this.get(OrdersService).checkout(
         this.person('mohammad'),
         randomUUID(),
-        { lines },
+        { lines, source: 'cart' },
         this.meta('mohammad'),
         'cli',
       );
@@ -1237,6 +1237,7 @@ export class Scenarios {
         shares.receiptLink(ahmad, delivered[0]?.id as string, {
           showPrice: true,
           playerDisplay: 'masked',
+          branded: true,
         }),
       );
     }
@@ -1245,6 +1246,7 @@ export class Scenarios {
         const link = await shares.receiptLink(ahmad, delivered[1]?.id as string, {
           showPrice: false,
           playerDisplay: 'masked',
+          branded: true,
         });
         await shares.revoke(ahmad, delivered[1]?.id as string, link.id);
         return link;

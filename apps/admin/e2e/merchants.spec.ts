@@ -9,8 +9,25 @@ import { type AdminApi, expect, PASSWORD, screenshot, TOTP_CODE, test } from './
  * application's decisions (request information, then approval with re-authentication; a
  * rejection with its reason), the direct grant and the revocation from the customer's profile,
  * the merchants list, the settings refused below the deposit minimum, with RTL screenshots in
- * both themes.
+ * both themes. S21 PR 2: the player-check quota in the settings, and the receipt branding on the
+ * profile with the logo's removal (BR3).
  */
+
+const LOGO = '0199e300-0000-7000-8000-0000000000f1';
+
+/** An approved merchant with a logo and a shown WhatsApp number. */
+async function brandedMerchant(page: Page, admin: AdminApi) {
+  const application = seed(admin);
+  await page.goto(`/merchants/applications/${application.id}`);
+  await page.getByRole('button', { name: m.decisions.approve }).click();
+  await page.getByRole('dialog').getByRole('button', { name: m.decisions.approve }).click();
+  await expect(page.getByText(m.statuses.approved).first()).toBeVisible();
+  admin.merchants.setBranding(CUSTOMER_IDS.sara, {
+    showWhatsapp: true,
+    whatsapp: '+963933123456',
+    logoFileId: LOGO,
+  });
+}
 
 const m = ar.merchants;
 
@@ -110,6 +127,38 @@ test.describe('merchants', () => {
     expect(admin.merchants.isMerchant(CUSTOMER_IDS.layla)).toBe(false);
   });
 
+  test('removes a merchant’s logo with a reason and re-authentication (S21 BR3)', async ({
+    page,
+    admin,
+  }) => {
+    await brandedMerchant(page, admin);
+    admin.reauthenticationRequired = true;
+    await page.goto(`/customers/${CUSTOMER_IDS.sara}`);
+    await expect(page.getByRole('img', { name: m.profile.logoAlt })).toBeVisible();
+    await expect(page.getByText(m.profile.whatsappShown)).toBeVisible();
+    await page.getByRole('button', { name: m.profile.removeLogo }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: m.profile.removeSubmit }).click();
+    await expect(dialog.getByText(m.validation.reason)).toBeVisible();
+    await dialog.getByLabel(m.fields.reason, { exact: true }).fill('شعار مضلل للعملاء');
+    await dialog.getByRole('button', { name: m.profile.removeSubmit }).click();
+    await reauthenticate(page);
+    await expect(page.getByText(m.profile.noLogo)).toBeVisible();
+  });
+
+  test('saves the merchants’ player-check quota (S21 BK4)', async ({ page, admin }) => {
+    admin.signedIn = true;
+    await page.goto('/settings/merchants');
+    await expect(field(page, m.settings.fields.playerChecksPerHour)).toHaveValue('100');
+    await field(page, m.settings.fields.playerChecksPerHour).fill('5');
+    await page.getByRole('button', { name: m.settings.save }).click();
+    await expect(field(page, m.settings.fields.playerChecksPerHour)).toBeFocused();
+    await field(page, m.settings.fields.playerChecksPerHour).fill('150');
+    await page.getByRole('button', { name: m.settings.save }).click();
+    await expect(page.getByText(m.settings.saved)).toBeVisible();
+    expect(admin.merchants.settings.playerChecksPerHour).toBe(150);
+  });
+
   test('refuses merchant limits below the deposit minimum', async ({ page, admin }) => {
     admin.signedIn = true;
     await page.goto('/settings/merchants');
@@ -156,13 +205,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
       page,
       admin,
     }, testInfo) => {
-      const application = seed(admin);
-      await page.goto(`/merchants/applications/${application.id}`);
-      await page.getByRole('button', { name: m.decisions.approve }).click();
-      await page.getByRole('dialog').getByRole('button', { name: m.decisions.approve }).click();
-      await expect(page.getByText(m.statuses.approved).first()).toBeVisible();
+      await brandedMerchant(page, admin);
+      const application = admin.merchants.applications[0] as { tradeName: string };
       await page.goto(`/customers/${CUSTOMER_IDS.sara}`);
       await expect(page.getByText(m.profile.title)).toBeVisible();
+      await expect(page.getByRole('img', { name: m.profile.logoAlt })).toBeVisible();
       await screenshot(page, testInfo, `merchant-profile-${colorScheme}`, { fullPage: true });
       await page.goto('/merchants');
       await expect(page.getByRole('cell', { name: application.tradeName })).toBeVisible();

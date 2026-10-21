@@ -17,6 +17,7 @@ import {
   merchantSettingsInputSchema,
   priceKindOf,
   ROOT_PRICE_LIST_IDS,
+  removeMerchantLogoSchema,
   revokeMerchantSchema,
 } from '@vertex-digital/contracts';
 import { type Answer, nextId } from './catalog-mock';
@@ -64,6 +65,8 @@ interface StoredProfile {
   thisMonthUsdUnits: number;
   previousMonthUsdUnits: number;
   watchCount: number;
+  /** S21 BR3: the receipt branding; a test sets a logo with `setBranding`. */
+  branding: { showWhatsapp: boolean; whatsapp: string | null; logoFileId: string | null };
 }
 
 const EVENTS: Record<ApplicationAction, MerchantApplicationEventKind> = {
@@ -93,6 +96,12 @@ export class MerchantsMock {
     private readonly priceLists: PriceListsMock,
     private readonly profile: (customerId: string) => AdminCustomer | null,
   ) {}
+
+  /** S21 BR3: the merchant's receipt branding, for a test. */
+  setBranding(customerId: string, branding: Partial<StoredProfile['branding']>): void {
+    const profile = this.profiles.get(customerId);
+    if (profile) profile.branding = { ...profile.branding, ...branding };
+  }
 
   /** A merchant now (MA5–MA7). */
   isMerchant(customerId: string): boolean {
@@ -225,6 +234,22 @@ export class MerchantsMock {
         .filter((row) => !q || row.tradeName.includes(q) || row.name.includes(q));
       return { status: 200, json: { items: rows, nextCursor: null } };
     }
+    // S21 BR3: the logo's preview and its removal (a reason, re-authentication).
+    const logo = path.match(/^\/api\/admin\/customers\/([^/]+)\/merchant\/logo$/);
+    if (logo) {
+      const profile = this.profiles.get(logo[1] as string);
+      if (!profile?.branding.logoFileId) return error(404, 'NOT_FOUND');
+      if (method === 'GET') return { status: 200, image: true };
+      if (method === 'DELETE') {
+        const refused = sensitive();
+        if (refused) return refused;
+        if (!removeMerchantLogoSchema.safeParse(body).success) {
+          return error(400, 'VALIDATION_FAILED');
+        }
+        profile.branding = { ...profile.branding, logoFileId: null };
+        return { status: 204 };
+      }
+    }
     const grant = path.match(/^\/api\/admin\/customers\/([^/]+)\/merchant(\/revoke)?$/);
     if (grant && method === 'POST') {
       const refused = sensitive();
@@ -309,6 +334,7 @@ export class MerchantsMock {
       thisMonthUsdUnits: 180 * USD,
       previousMonthUsdUnits: 95 * USD,
       watchCount: 0,
+      branding: { showWhatsapp: false, whatsapp: null, logoFileId: null },
     });
     this.priceLists.assign(
       customerId,

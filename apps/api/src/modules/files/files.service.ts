@@ -6,6 +6,7 @@ import {
   DHASH_HEIGHT,
   DHASH_WIDTH,
   dHash,
+  MERCHANT_LOGO_SIZE,
   QR_MAX_DIMENSION,
   RECEIPT_MAX_DIMENSION,
   UPLOAD_MAX_INPUT_PIXELS,
@@ -86,6 +87,14 @@ const OUTPUT = {
     format: 'webp',
     contentType: 'image/webp',
     maxDimension: RECEIPT_MAX_DIMENSION,
+    maxInputPixels: UPLOAD_MAX_INPUT_PIXELS,
+    invalidCode: 'IMAGE_INVALID',
+  },
+  /** S21 BR3: a merchant's receipt logo, a WebP of at most 512 px. */
+  merchant_logo: {
+    format: 'webp',
+    contentType: 'image/webp',
+    maxDimension: MERCHANT_LOGO_SIZE,
     maxInputPixels: UPLOAD_MAX_INPUT_PIXELS,
     invalidCode: 'IMAGE_INVALID',
   },

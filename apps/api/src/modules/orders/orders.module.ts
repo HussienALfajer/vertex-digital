@@ -10,6 +10,7 @@ import { GamePlayerChecksAdminController } from './game-player-checks.admin.cont
 import { GamePlayerChecksService } from './game-player-checks.service.js';
 import { OrderActionsService } from './order-actions.service.js';
 import { OrderDecisionsService } from './order-decisions.service.js';
+import { OrderReceiptsService } from './order-receipts.service.js';
 import { OrdersAdminController } from './orders.admin.controller.js';
 import { OrdersController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
@@ -18,6 +19,7 @@ import { PlayerChecksService } from './player-checks.service.js';
 import { SavedPlayersService } from './saved-players.service.js';
 import { ShareLinksService } from './share-links.service.js';
 import { SharesController } from './shares.controller.js';
+import { VerifyController } from './verify.controller.js';
 
 /**
  * Orders (S08, F11): `orders`, their events, fulfilment attempts, codes and reveals, and the
@@ -28,6 +30,9 @@ import { SharesController } from './shares.controller.js';
  * live room and the admin's reroute, delivery proof and manual fulfil (`order-actions.service.ts`).
  * S16: purchases from the panel and the admin's player checks (`admin-purchases.service.ts`).
  * S19: a game's player-check provider (`game_player_checks`, `game-player-checks.service.ts`).
+ * S21: code releases, printed receipts and the public verification page
+ * (`order-receipts.service.ts`, `verify.controller.ts`); merchants' bulk lists check their ids
+ * through `PlayerChecksService.checkLine`.
  */
 @Module({
   imports: [AdminModule, AuthModule, CatalogModule, FilesModule, SettingsModule, SuppliersModule],
@@ -37,6 +42,7 @@ import { SharesController } from './shares.controller.js';
     PlayerChecksAdminController,
     GamePlayerChecksAdminController,
     SharesController,
+    VerifyController,
   ],
   providers: [
     OrdersService,
@@ -47,7 +53,8 @@ import { SharesController } from './shares.controller.js';
     GamePlayerChecksService,
     SavedPlayersService,
     ShareLinksService,
+    OrderReceiptsService,
   ],
-  exports: [OrdersService, OrderActionsService],
+  exports: [OrdersService, OrderActionsService, PlayerChecksService],
 })
 export class OrdersModule {}

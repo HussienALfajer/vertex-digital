@@ -13,15 +13,30 @@
       },
       "accentColor": "#F2A900"
     },
-    "product": { "nameAr": "325 UC", "kind": "direct", "gameAmount": 325 },
+    "product": {
+      "nameAr": "325 UC",
+      "kind": "direct",
+      "gameAmount": 325
+    },
     "quantity": 1,
     "deliveredQuantity": 1,
     "stage": "delivered",
     "paidAt": "2026-10-09T10:00:00.000Z",
     "finishedAt": "2026-10-09T10:00:12.000Z",
     "price": null,
-    "fields": [{ "label": "معرّف اللاعب (ID)", "value": "••••4568" }],
-    "gift": { "senderName": "أحمد", "message": "كل عام وأنت بخير" }
+    "fields": [
+      {
+        "label": "معرّف اللاعب (ID)",
+        "value": "••••4568"
+      }
+    ],
+    "gift": {
+      "senderName": "أحمد",
+      "message": "كل عام وأنت بخير"
+    },
+    "branding": null,
+    "sellingPrice": null,
+    "verificationCode": null
   },
   "R3ceiptT0kenAAAAAAAAAA": {
     "kind": "receipt",
@@ -32,14 +47,68 @@
       "cover": null,
       "accentColor": "#F2A900"
     },
-    "product": { "nameAr": "60 UC", "kind": "direct", "gameAmount": 60 },
+    "product": {
+      "nameAr": "60 UC",
+      "kind": "direct",
+      "gameAmount": 60
+    },
     "quantity": 2,
     "deliveredQuantity": 1,
     "stage": "partially_delivered",
     "paidAt": "2026-10-09T10:00:00.000Z",
     "finishedAt": "2026-10-09T10:05:00.000Z",
-    "price": { "totalUsdUnits": 1980000, "refundedUsdUnits": 990000 },
-    "fields": [{ "label": "معرّف اللاعب (ID)", "value": "51234567" }],
-    "gift": null
+    "price": {
+      "totalUsdUnits": 1980000,
+      "refundedUsdUnits": 990000
+    },
+    "fields": [
+      {
+        "label": "معرّف اللاعب (ID)",
+        "value": "51234567"
+      }
+    ],
+    "gift": null,
+    "branding": null,
+    "sellingPrice": null,
+    "verificationCode": "VrfyRcpt0123456789abcd"
+  },
+  "Br4ndedT0kenAAAAAAAAAA": {
+    "kind": "receipt",
+    "orderNumber": "VO-SHOP23",
+    "game": {
+      "nameAr": "ببجي موبايل",
+      "nameEn": "PUBG Mobile",
+      "cover": null,
+      "accentColor": "#F2A900"
+    },
+    "product": {
+      "nameAr": "60 UC",
+      "kind": "direct",
+      "gameAmount": 60
+    },
+    "quantity": 1,
+    "deliveredQuantity": 1,
+    "stage": "delivered",
+    "paidAt": "2026-10-09T10:00:00.000Z",
+    "finishedAt": "2026-10-09T10:05:00.000Z",
+    "price": null,
+    "fields": [
+      {
+        "label": "معرّف اللاعب (ID)",
+        "value": "51234567"
+      }
+    ],
+    "gift": null,
+    "branding": {
+      "tradeName": "محل النور للاتصالات",
+      "whatsapp": "+963933123456",
+      "hasLogo": false
+    },
+    "sellingPrice": {
+      "currency": "syp",
+      "unitAmountUnits": 1500000,
+      "totalAmountUnits": 1500000
+    },
+    "verificationCode": "VrfyShop0123456789abcd"
   }
 }

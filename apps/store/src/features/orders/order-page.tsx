@@ -26,6 +26,7 @@ import {
   ShoppingCartIcon,
   UserRoundCheckIcon,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -35,8 +36,10 @@ import { centsParam } from '@/features/deposits/amounts';
 import { CopyButton } from '@/features/deposits/copy-button';
 import { Line } from '@/features/deposits/panel';
 import { formatClock, useTimeLeft } from '@/features/deposits/use-time-left';
+import { tm } from '@/features/merchant-tools/i18n';
 import { useNotificationEvents, useVisibleAgain } from '@/features/notifications/live';
 import { useBalance } from '@/features/purchase/customer';
+import { useCustomer } from '@/features/purchase/session';
 import { PushCard } from '@/features/push/push-card';
 import { HelpButton } from '@/features/support/help-button';
 import type { Failure } from '@/lib/api';
@@ -47,6 +50,12 @@ import { GameCover, repeatHref } from './orders-list';
 import { cancelOrder, getOrder, revealCode } from './requests';
 import { GiftSection, ReceiptSheet, shareable } from './share-links';
 import { STAGE_TONES, stageSentence, stageText, stepText, timelineEntries } from './stages';
+import { LazyVerificationQr } from './verification-qr-lazy';
+
+/** S21: a merchant's counter tools on the order, loaded only for a merchant. */
+const OrderTools = dynamic(() =>
+  import('@/features/merchant-tools/order-tools').then((module) => module.OrderTools),
+);
 
 type State =
   | { status: 'loading' }
@@ -69,6 +78,8 @@ export function OrderPage() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<State>({ status: 'loading' });
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const customer = useCustomer();
+  const merchant = customer.status === 'signedIn' && customer.merchant;
 
   const load = useCallback(async () => {
     const result = await getOrder(id);
@@ -270,6 +281,8 @@ export function OrderPage() {
         </dl>
       </Card>
 
+      {merchant && <OrderTools order={order} onChange={load} />}
+
       {order.isGift && <GiftSection order={order} onChange={load} />}
 
       {order.codes.length > 0 && (
@@ -296,6 +309,16 @@ export function OrderPage() {
           )}
         </Card>
       )}
+      {/* S21 VF1: every order's verification QR. */}
+      <Card className="flex-row items-center gap-4">
+        <span className="rounded-lg bg-white p-1">
+          <LazyVerificationQr code={order.verificationCode} size={96} label={tm('qr.title')} />
+        </span>
+        <div className="flex flex-col gap-1">
+          <h2 className="font-bold">{tm('qr.title')}</h2>
+          <p className="text-sm text-muted-foreground">{tm('qr.hint')}</p>
+        </div>
+      </Card>
       <HelpButton link={{ orderId: order.id }} />
     </div>
   );

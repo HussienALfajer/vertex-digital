@@ -181,6 +181,9 @@ function order(orderId: string, number: string): Order {
     gift: null,
     shareLinks: [],
     privatePrice: false,
+    verificationCode: 'VrfyCode0123456789abcd',
+    sale: null,
+    codeReleases: [],
     repeatable: false,
     createdAt: daysAgo(40),
   };

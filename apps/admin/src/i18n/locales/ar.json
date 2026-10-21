@@ -352,7 +352,10 @@
       "MERCHANT_LEVELS_LIMIT_REACHED": "بلغت 10 مستويات غير مؤرشفة. أرشف مستوى أولاً.",
       "MERCHANT_LEVEL_THRESHOLD_TAKEN": "لمستوى آخر الحدّ الشهري نفسه.",
       "MERCHANT_LEVEL_NAME_TAKEN": "لمستوى آخر هذا الاسم.",
-      "WATCHES_LIMIT_REACHED": "لا يمكن متابعة أكثر من 200 لعبة وباقة."
+      "WATCHES_LIMIT_REACHED": "لا يمكن متابعة أكثر من 200 لعبة وباقة.",
+      "BULK_LINES_INVALID": "قائمة الطلبات فارغة أو تتجاوز 50 سطراً.",
+      "PLAYER_CHECK_QUOTA_EXCEEDED": "استُنفدت فحوص المعرّفات المسموحة حالياً. حاول لاحقاً.",
+      "CODES_NOT_DELIVERED": "لا توجد أكواد مسلّمة في هذا الطلب."
     }
   },
   "changePassword": {
@@ -796,6 +799,7 @@
       "customer.merchant_revoked": "سحب صفة التاجر",
       "merchant.terms_accepted": "موافقة التاجر على الشروط",
       "merchant.level_changed": "تغيّر مستوى تاجر",
+      "merchant.logo_removed": "حذف شعار تاجر",
       "merchant_application.submitted": "تقديم طلب تاجر",
       "merchant_application.resubmitted": "إعادة إرسال طلب تاجر",
       "merchant_application.info_requested": "طلب معلومات من مقدّم طلب تاجر",
@@ -3187,7 +3191,8 @@
       "test_customer": "عميل تجريبي: هذا المورد ممنوع",
       "already_tried": "جُرّب لهذا الطلب",
       "unprofitable": "دون الهامش الأدنى للسعر المدفوع",
-      "balance_below_order": "رصيد المورد أقل من الطلب"
+      "balance_below_order": "رصيد المورد أقل من الطلب",
+      "quantity_above_offer": "كمية الطلب أكبر من حد العرض"
     },
     "webhookResults": {
       "applied": "طُبّق",
@@ -3263,6 +3268,12 @@
       "revealedBy": {
         "customer": "كشفه العميل في {{date}}",
         "admin": "كشفته الإدارة في {{date}}"
+      },
+      "purposes": {
+        "reveal": "كشف",
+        "print": "طباعة",
+        "copy": "نسخ",
+        "export": "تصدير Excel"
       }
     },
     "attempts": {
@@ -4876,7 +4887,18 @@
       "noLevel": "بلا مستوى (أسعار الجملة)",
       "watches": "المتابعات",
       "thisMonth": "مشتريات هذا الشهر",
-      "previousMonth": "مشتريات الشهر الماضي"
+      "previousMonth": "مشتريات الشهر الماضي",
+      "branding": "هوية الإيصال",
+      "logoAlt": "شعار المحل",
+      "noLogo": "بلا شعار",
+      "whatsapp": "واتساب:",
+      "noWhatsapp": "لا رقم",
+      "whatsappShown": "يظهر على الإيصال",
+      "whatsappHidden": "لا يظهر على الإيصال",
+      "removeLogo": "حذف الشعار",
+      "removeTitle": "حذف شعار المحل",
+      "removeDescription": "تُطبع إيصالات التاجر وروابطها بلا شعار من الآن. يُسجَّل السبب في السجل.",
+      "removeSubmit": "حذف الشعار"
     },
     "list": {
       "title": "التجّار",
@@ -4943,21 +4965,27 @@
         "dailyDepositUsdUnits": "حد الإيداع خلال 24 ساعة ($)",
         "ordersPerTenMinutes": "الطلبات خلال 10 دقائق",
         "reapplyWaitDays": "أيام الانتظار بعد الرفض",
-        "infoExpiryDays": "مهلة الرد على طلب المعلومات (أيام)"
+        "infoExpiryDays": "مهلة الرد على طلب المعلومات (أيام)",
+        "playerChecksPerHour": "فحوص المعرّفات في الساعة",
+        "playerChecksPerDay": "فحوص المعرّفات في اليوم"
       },
       "hints": {
         "perDepositUsdUnits": "لا يقل عن أدنى إيداع ({{minimum}}) ولا يزيد على حد الـ24 ساعة. تحل محله الحدود الخاصة بالعميل إن وُجدت.",
         "dailyDepositUsdUnits": "حتى $100,000.",
         "ordersPerTenMinutes": "من 10 إلى 500. العميل العادي: 10.",
         "reapplyWaitDays": "من 0 إلى 365.",
-        "infoExpiryDays": "من 1 إلى 60."
+        "infoExpiryDays": "من 1 إلى 60.",
+        "playerChecksPerHour": "من 10 إلى 1000. العميل العادي: 10. يسري على كل فحص للتاجر وعلى عنوانه.",
+        "playerChecksPerDay": "من 30 إلى 5000. العميل العادي: 30."
       },
       "errors": {
         "perDepositUsdUnits": "اكتب مبلغاً بالسنت لا يقل عن {{minimum}} ولا يتجاوز حد الـ24 ساعة.",
         "dailyDepositUsdUnits": "اكتب مبلغاً بالسنت لا يقل عن {{minimum}} ولا يتجاوز $100,000.",
         "ordersPerTenMinutes": "اكتب عدداً من 10 إلى 500.",
         "reapplyWaitDays": "اكتب عدداً من 0 إلى 365.",
-        "infoExpiryDays": "اكتب عدداً من 1 إلى 60."
+        "infoExpiryDays": "اكتب عدداً من 1 إلى 60.",
+        "playerChecksPerHour": "اكتب عدداً من 10 إلى 1000.",
+        "playerChecksPerDay": "اكتب عدداً من 30 إلى 5000."
       }
     }
   }

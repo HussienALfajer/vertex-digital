@@ -17,14 +17,14 @@ Spec `docs/specs/S21-merchant-tools.md`, ADR 0036 (amends 0035, 0022, 0024). Thr
 - [x] Owner acceptance (2026-10-21), PR with auto-merge
 
 ## PR 2 — counter tools: POS, bulk, codes, verification, branded receipt (branch `feat/s21-counter-tools`)
-- [ ] Contracts: `parseBulkLines`, bulk check schemas, `codeReleaseRequestSchema`, `orderPrintSchema`, `publicVerificationSchema`, `receiptSettingsSchema`, `CODE_RELEASE_PURPOSES`, `merchant_logo` file kind, merchant player-check settings, constants (QT1, bulk 50, recent and saved IDs), errors `BULK_LINES_INVALID`, `PLAYER_CHECK_QUOTA_EXCEEDED`, `CODES_NOT_DELIVERED`, audit `merchant.logo_removed`; unit tests
-- [ ] DB (`/db-migration`): `orders.verification_code` (backfilled, unique, guarded), `order_code_reveals.purpose`, `checkouts.line_count` 1–50 and `source`, `merchant_receipt_settings`, `merchant_settings` quota columns; QT1 and QT3 in `packages/db/src/orders`; tests
-- [ ] API: recent players, merchant saved-ID limits, bulk check with the merchant quota (BK4), 50-line checkouts for merchants, code releases and `.xlsx` export (CR1–CR3), print data, public verification (rate limit, nginx zone), receipt settings, logo upload and admin removal, branded receipt link (BR1, BR2); tests
-- [ ] Bridge: OpenAPI export and admin client
-- [ ] Store: `/merchant/pos`, `/merchant/bulk`, order page print and release actions, `/orders/[id]/print`, `/v/[code]`, `/merchant/receipt`, QR on receipts
-- [ ] Admin: merchant settings quota, order code releases, profile branding with "حذف الشعار"
-- [ ] E2E flows and RTL screenshots
-- [ ] Wiring checklist, checks, reviewer, owner acceptance (spec steps 2, 3, 4), PR with auto-merge
+- [x] Contracts: `parseBulkLines`, bulk check schemas, `codeReleaseRequestSchema`, `orderPrintSchema`, `publicVerificationSchema`, `receiptSettingsSchema`, `CODE_RELEASE_PURPOSES`, `merchant_logo` file kind, merchant player-check settings, constants (QT1, bulk 50, recent and saved IDs), errors `BULK_LINES_INVALID`, `PLAYER_CHECK_QUOTA_EXCEEDED`, `CODES_NOT_DELIVERED`, audit `merchant.logo_removed`; unit tests
+- [x] DB (`/db-migration`): `orders.verification_code` (backfilled, unique, guarded), `order_code_reveals.purpose`, `checkouts.line_count` 1–50 and `source`, `merchant_receipt_settings`, `merchant_settings` quota columns; QT1 and QT3 in `packages/db/src/orders`; tests; migrations 0086 (the verification-code function), 0087 (generated), 0088 (`orders_guard`); also `orders_checkout_check` 1–50, `order_code_reveals.release_id`, `order_share_links.branded`, QT3 as the contracts' `quantity_above_offer` skip reason
+- [x] API: recent players, merchant saved-ID limits, bulk check with the merchant quota (BK4), 50-line checkouts for merchants, code releases and `.xlsx` export (CR1–CR3), print data, public verification (rate limit, nginx zone), receipt settings, logo upload and admin removal, branded receipt link (BR1, BR2); tests
+- [x] Bridge: OpenAPI export and admin client
+- [x] Store: `/merchant/pos`, `/merchant/bulk`, order page print and release actions, `/orders/[id]/print`, `/v/[code]`, `/merchant/receipt`, QR on receipts
+- [x] Admin: merchant settings quota, order code releases, profile branding with "حذف الشعار"
+- [x] E2E flows and RTL screenshots (store `merchant-counter.spec.ts`: POS, bulk, order tools, print 58/80/A4, verification, branded receipt link, receipt settings; admin `merchants.spec.ts`: logo removal, quota, profile branding; the store budgets kept by moving the receipt strings into the merchant catalog)
+- [x] Wiring checklist, checks (lint, typecheck, test, build, drift, OpenAPI, changed E2E), reviewer (3 blocking findings fixed: missing release, export, verification-limit, logo and QT3 tests; one 20-per-10-minutes limit for a merchant's reveals and releases; a branded link never shows the price paid), owner acceptance (2026-10-21), PR with auto-merge
 
 ## PR 3 — documents: price list and statement (branch `feat/s21-documents`)
 - [ ] Contracts: `priceListQuerySchema`, `statementSchema`, `merchant_statement_ready`, `STATEMENT_MONTH_INVALID`; tests

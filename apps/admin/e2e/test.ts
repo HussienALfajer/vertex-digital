@@ -1044,6 +1044,7 @@ export class AdminApi {
         return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       }
       if (answer && 'json' in answer) return json(answer.status, answer.json);
+      if (answer) return route.fulfill({ status: answer.status });
     }
     if (path.startsWith('/api/admin/customers') || path.startsWith('/api/admin/support')) {
       const headers = request.headers();

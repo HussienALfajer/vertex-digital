@@ -1,11 +1,13 @@
 import { randomInt } from 'node:crypto';
 import {
+  type AccountType,
   type AuditChannel,
   availabilityForCustomer,
   ORDER_NUMBER_ALPHABET,
   ORDER_NUMBER_LENGTH,
   ORDER_NUMBER_PREFIX,
   orderFieldValuesSchema,
+  orderQuantityMax,
   orderTotal,
   type PlayerCheckState,
   RESERVATION_HOURS,
@@ -253,6 +255,8 @@ export async function prepareLine(
     priceListId: string;
     /** S16 rule AP5: an owner-funded admin order may buy a paused pack. */
     allowPaused?: boolean;
+    /** S21 QT1: a merchant buys up to 50 codes of a code pack. */
+    accountType: AccountType;
   },
   line: LineInput,
   product: ProductRow,
@@ -277,7 +281,7 @@ export async function prepareLine(
       unitPriceUsdUnits: current.priceUsdUnits,
     });
   }
-  if (line.quantity > product.maxQuantity) {
+  if (line.quantity > orderQuantityMax(product, common.accountType)) {
     throw new OrderError('VALIDATION_FAILED', 'Quantity above the product maximum', {
       fields: { quantity: 'too_big' },
     });
@@ -431,7 +435,12 @@ export async function purchaseOrder(
   const line = await prepareLine(
     tx,
     context,
-    { ...input, isTest: customer.isTest, priceListId: customer.priceListId },
+    {
+      ...input,
+      isTest: customer.isTest,
+      priceListId: customer.priceListId,
+      accountType: customer.accountType,
+    },
     input,
     product,
   );
@@ -492,7 +501,7 @@ export async function purchaseOrder(
     { actor: 'customer', actorId: input.customerId },
     { from: null, to: order.status },
   );
-  const savedPlayer = await touchSavedPlayer(tx, order, line.savePlayer);
+  const savedPlayer = await touchSavedPlayer(tx, order, line.savePlayer, customer.accountType);
   // S21 SP4: a merchant's order keeps its selling price (a reservation too, paid at this price).
   if (customer.accountType === 'merchant') await recordMerchantSale(tx, order);
   if (reserve) {

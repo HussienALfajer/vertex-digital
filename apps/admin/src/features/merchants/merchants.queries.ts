@@ -9,6 +9,7 @@ import type {
   GrantMerchant,
   MerchantLevelInput,
   MerchantSettingsInput,
+  RemoveMerchantLogo,
   RevokeMerchant,
 } from '@vertex-digital/contracts';
 import { api, call } from '../../lib/api/client';
@@ -142,6 +143,17 @@ export const useGrantMerchant = (customerId: string) =>
   );
 
 /** MA7: the revocation, re-authenticated. */
+/** S21 BR3: removes a merchant's receipt logo, with a reason (re-authenticated, audited). */
+export const useRemoveMerchantLogo = (customerId: string) =>
+  useMerchantsMutation((body: RemoveMerchantLogo) =>
+    call(
+      api.DELETE('/api/admin/customers/{id}/merchant/logo', {
+        params: { path: { id: customerId } },
+        body,
+      }),
+    ),
+  );
+
 export const useRevokeMerchant = (customerId: string) =>
   useMerchantsMutation((body: RevokeMerchant) =>
     call(

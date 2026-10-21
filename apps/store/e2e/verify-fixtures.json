@@ -1,0 +1,49 @@
+{
+  "VrfyShop0123456789abcd": {
+    "issuer": {
+      "kind": "merchant",
+      "tradeName": "محل النور للاتصالات"
+    },
+    "orderNumber": "VO-SHOP23",
+    "game": {
+      "nameAr": "ببجي موبايل"
+    },
+    "product": {
+      "nameAr": "60 UC"
+    },
+    "quantity": 1,
+    "deliveredQuantity": 1,
+    "stage": "delivered",
+    "createdAt": "2026-10-21T09:30:00.000Z",
+    "deliveredAt": "2026-10-21T09:30:12.000Z",
+    "fields": [
+      {
+        "labelAr": "معرّف اللاعب (ID)",
+        "value": "••••6789"
+      }
+    ]
+  },
+  "VrfyRcpt0123456789abcd": {
+    "issuer": {
+      "kind": "store"
+    },
+    "orderNumber": "VO-RCPT23",
+    "game": {
+      "nameAr": "ببجي موبايل"
+    },
+    "product": {
+      "nameAr": "60 UC"
+    },
+    "quantity": 2,
+    "deliveredQuantity": 1,
+    "stage": "partially_delivered",
+    "createdAt": "2026-10-09T10:00:00.000Z",
+    "deliveredAt": "2026-10-09T10:05:00.000Z",
+    "fields": [
+      {
+        "labelAr": "معرّف اللاعب (ID)",
+        "value": "••••4568"
+      }
+    ]
+  }
+}

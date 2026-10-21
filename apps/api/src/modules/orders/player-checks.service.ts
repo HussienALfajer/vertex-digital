@@ -14,7 +14,9 @@ import {
   supplierServesCustomer,
 } from '@vertex-digital/contracts';
 import {
+  applicant,
   checkOrderFields,
+  currentMerchantSettings,
   type Database,
   damascusDate,
   lockActiveCustomer,
@@ -106,6 +108,29 @@ export class PlayerChecksService {
   /** `POST /api/player-checks`. */
   check(customerId: string, request: PlayerCheckRequest, meta: RequestMeta): Promise<PlayerCheck> {
     return this.run({ kind: 'customer', id: customerId }, request, meta);
+  }
+
+  /**
+   * S21 BK2, BK4: one line of a merchant's bulk list, checked as the store's check does; a quota
+   * used up (the merchant's, or the address's) answers `unavailable` (`quota`), "لم يُفحص", so the
+   * line can still be paid with the merchant's confirmation.
+   */
+  async checkLine(
+    customerId: string,
+    request: PlayerCheckRequest,
+    meta: RequestMeta,
+  ): Promise<PlayerCheck> {
+    try {
+      return await this.check(customerId, request, meta);
+    } catch (error) {
+      if (
+        error instanceof CodedException &&
+        (error.code === 'PLAYER_CHECK_QUOTA_EXCEEDED' || error.code === 'RATE_LIMITED')
+      ) {
+        return { result: 'unavailable', reason: 'quota' };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -283,6 +308,16 @@ export class PlayerChecksService {
       : { kind: 'targets', targets, allowedRegions: [] };
   }
 
+  /** S21 BK4: a merchant's player checks an hour and a day; null for a customer. */
+  private async merchantQuota(
+    customerId: string,
+  ): Promise<{ perHour: number; perDay: number } | null> {
+    const person = await applicant(this.db, customerId);
+    if (person?.accountType !== 'merchant') return null;
+    const settings = await currentMerchantSettings(this.db);
+    return { perHour: settings.playerChecksPerHour, perDay: settings.playerChecksPerDay };
+  }
+
   /** Rule BB2: the game's unarchived fields, the same schema the purchase uses. */
   private async parsedFields(
     gameId: string,
@@ -357,16 +392,39 @@ export class PlayerChecksService {
     );
     if (!sendable) return { result: 'not_supported' };
     // Rule PV4: only a request that is about to call a supplier counts (S16 AP8: the admin's own).
+    // S21 BK4: a merchant's hour and day come from the merchant settings, and so does the
+    // address's hour.
+    const quota = requester.kind === 'customer' ? await this.merchantQuota(requester.id) : null;
     const allowed = await withinLimits(
       this.db,
       requester.kind === 'admin'
         ? [{ key: `player-check:admin:${requester.id}`, max: 30, windowMs: 10 * 60 * 1000 }]
         : [
-            { key: `player-check:customer:${requester.id}`, max: 10, windowMs: HOUR },
-            { key: `player-check:customer-day:${requester.id}`, max: 30, windowMs: 24 * HOUR },
-            { key: `player-check:ip:${meta?.ipAddress ?? 'unknown'}`, max: 30, windowMs: HOUR },
+            {
+              key: `player-check:customer:${requester.id}`,
+              max: quota?.perHour ?? 10,
+              windowMs: HOUR,
+            },
+            {
+              key: `player-check:customer-day:${requester.id}`,
+              max: quota?.perDay ?? 30,
+              windowMs: 24 * HOUR,
+            },
+            {
+              key: `player-check:ip:${meta?.ipAddress ?? 'unknown'}`,
+              max: quota?.perHour ?? 30,
+              windowMs: HOUR,
+            },
           ],
     );
+    if (!allowed && quota) {
+      throw new CodedException(
+        429,
+        'PLAYER_CHECK_QUOTA_EXCEEDED',
+        "The merchant's player checks are used for now",
+        { retryAt: new Date(Date.now() + HOUR).toISOString() },
+      );
+    }
     if (!allowed) throw orderRefusals.rateLimited();
     const started = performance.now();
     let answer: PlayerValidation | null = null;

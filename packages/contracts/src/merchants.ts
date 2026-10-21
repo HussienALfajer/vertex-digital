@@ -525,6 +525,12 @@ export const adminMerchantProfileSchema = z
     previousMonthUsdUnits: z.int(),
     /** S21 AL1: the follows. */
     watchCount: z.int().nonnegative(),
+    /** S21 BR3: the receipt branding the merchant set (the admin may remove the logo). */
+    branding: z.object({
+      showWhatsapp: z.boolean(),
+      whatsapp: z.string().nullable(),
+      logoFileId: z.uuid().nullable(),
+    }),
   })
   .meta({ id: 'AdminMerchantProfile' });
 
@@ -581,6 +587,8 @@ export const MERCHANT_SETTINGS_DEFAULTS = {
   ordersPerTenMinutes: 60,
   reapplyWaitDays: 7,
   infoExpiryDays: 7,
+  playerChecksPerHour: 100,
+  playerChecksPerDay: 300,
 } as const;
 
 /** A customer's order rate (PO5): orders and checkouts per 10 minutes. */
@@ -603,6 +611,9 @@ export const merchantSettingsInputSchema = z
     ordersPerTenMinutes: z.int().min(10).max(500),
     reapplyWaitDays: z.int().min(0).max(365),
     infoExpiryDays: z.int().min(1).max(60),
+    /** S21 BK4: a merchant's player checks, replacing S09's 10 an hour and 30 a day. */
+    playerChecksPerHour: z.int().min(10).max(1_000),
+    playerChecksPerDay: z.int().min(30).max(5_000),
   })
   .refine((value) => value.perDepositUsdUnits <= value.dailyDepositUsdUnits, {
     path: ['perDepositUsdUnits'],
@@ -620,6 +631,8 @@ export const merchantSettingsSchema = z
     ordersPerTenMinutes: z.int(),
     reapplyWaitDays: z.int(),
     infoExpiryDays: z.int(),
+    playerChecksPerHour: z.int(),
+    playerChecksPerDay: z.int(),
     /** The highest deposit minimum (Sham Cash, USDT): both limits must reach it. */
     minDepositUsdUnits: amountUnitsSchema,
     updatedAt: z.iso.datetime(),

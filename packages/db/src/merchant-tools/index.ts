@@ -1,5 +1,14 @@
 export { afterMerchantPurchase, checkLowBalance, clearLowBalanceIfAbove } from './alerts.js';
 export {
+  type BulkPack,
+  bulkGame,
+  ownOrderForSale,
+  type ReceiptSettingsRow,
+  receiptSettingsOf,
+  removeMerchantLogo,
+  saveReceiptSettings,
+} from './counter.js';
+export {
   type AlertEventRow,
   alertEvents,
   type DashboardFacts,
@@ -10,6 +19,7 @@ export {
   type MerchantListPrice,
   merchantListPrices,
   merchantWatchRows,
+  recentPlayers,
   shownGames,
   type WatchedRows,
   watchedProductIds,

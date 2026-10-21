@@ -301,9 +301,18 @@ function seed(): AdminOrder[] {
           reveals: [
             {
               actor: 'customer',
+              purpose: 'reveal',
               ipAddress: '203.0.113.7',
               userAgent: 'Chrome على Android',
               createdAt: at(40),
+            },
+            // S21 CR4: a merchant's release to print.
+            {
+              actor: 'customer',
+              purpose: 'print',
+              ipAddress: '203.0.113.9',
+              userAgent: 'Chrome على Windows',
+              createdAt: at(35),
             },
           ],
         },
@@ -992,6 +1001,7 @@ export class OrdersMock {
                   ...code.reveals,
                   {
                     actor: 'admin',
+                    purpose: 'reveal',
                     ipAddress: '127.0.0.1',
                     userAgent: 'Chrome',
                     createdAt: new Date().toISOString(),

@@ -1,6 +1,8 @@
 import {
   CHECKOUT_LINE_REFUSALS,
   type CheckoutLineRefusal,
+  type CheckoutSource,
+  checkoutLinesMax,
   checkoutTotal,
 } from '@vertex-digital/contracts';
 import { asc, eq, inArray, sql } from 'drizzle-orm';
@@ -38,6 +40,8 @@ export type CheckoutRow = typeof checkouts.$inferSelect;
 
 export interface CheckoutInput extends PurchaseCommon {
   lines: LineInput[];
+  /** S21 BK3: the cart or a merchant's bulk list. */
+  source?: CheckoutSource;
 }
 
 export interface CheckoutResult {
@@ -94,6 +98,12 @@ export async function checkoutOrders(
   // S12 CF2: the customer `FOR SHARE` before any write; a frozen customer is refused as a whole.
   const customer = await lockActiveCustomer(tx, input.customerId);
   requireMerchantTerms(customer);
+  // S21 BK3, edge case 21: up to 50 lines for a merchant, 10 for a customer.
+  if (input.lines.length > checkoutLinesMax(customer.accountType)) {
+    throw new OrderError('VALIDATION_FAILED', 'Too many checkout lines', {
+      lines: { max: checkoutLinesMax(customer.accountType) },
+    });
+  }
   const productIds = [...new Set(input.lines.map((line) => line.productId))];
   const products = await tx
     .select()
@@ -113,7 +123,12 @@ export async function checkoutOrders(
         await prepareLine(
           tx,
           context,
-          { ...input, isTest: customer.isTest, priceListId: customer.priceListId },
+          {
+            ...input,
+            isTest: customer.isTest,
+            priceListId: customer.priceListId,
+            accountType: customer.accountType,
+          },
           line,
           product,
         ),
@@ -179,6 +194,7 @@ export async function checkoutOrders(
       idempotencyKey: input.idempotencyKey,
       requestHash: input.requestHash,
       lineCount: prepared.length,
+      source: input.source ?? 'cart',
       totalUsdUnits: total,
       ...(await displayTotal(tx, total)),
       purchaseJournalId: journalId,
@@ -223,7 +239,7 @@ export async function checkoutOrders(
         ...(order.isGift && { gift: true }),
       },
     });
-    await touchSavedPlayer(tx, order, line.savePlayer);
+    await touchSavedPlayer(tx, order, line.savePlayer, customer.accountType);
     if (customer.accountType === 'merchant') await recordMerchantSale(tx, order);
     if (order.isGift) await createShareLink(tx, { orderId: order.id, kind: 'gift' });
     await queueFulfil(tx, context.jobs, order.id);

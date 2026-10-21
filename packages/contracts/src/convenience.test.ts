@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   CART_LINES_MAX,
+  CHECKOUT_LINES_MAX,
   canonicalFields,
   cartLineKey,
   checkoutRequestSchema,
   checkoutTotal,
+  codeReleaseRequestSchema,
   createOrderSchema,
   giftSchema,
   giftTextAllowed,
@@ -17,6 +19,9 @@ import {
   shareImageQuerySchema,
   shareStage,
   shareTokenSchema,
+  verificationCodeSchema,
+  verificationPath,
+  verificationStage,
 } from './orders.js';
 
 /* S10: saved player ids, gifts, the cart and share links (`orders.ts`). */
@@ -194,14 +199,20 @@ describe('checkout (rules CT5, M1)', () => {
     ).toThrow(RangeError);
   });
 
-  it('takes 1 to 10 lines without the reservation choice', () => {
+  it('takes 1 to 50 lines (10 for customers, by the API) without the reservation choice', () => {
     expect(checkoutRequestSchema.safeParse({ lines: [] }).success).toBe(false);
-    expect(checkoutRequestSchema.safeParse({ lines: [line] }).success).toBe(true);
-    expect(
-      checkoutRequestSchema.safeParse({ lines: Array(CART_LINES_MAX).fill(line) }).success,
-    ).toBe(true);
+    expect(checkoutRequestSchema.parse({ lines: [line] }).source).toBe('cart');
     expect(
       checkoutRequestSchema.safeParse({ lines: Array(CART_LINES_MAX + 1).fill(line) }).success,
+    ).toBe(true);
+    expect(
+      checkoutRequestSchema.safeParse({
+        lines: Array(CHECKOUT_LINES_MAX).fill(line),
+        source: 'bulk',
+      }).success,
+    ).toBe(true);
+    expect(
+      checkoutRequestSchema.safeParse({ lines: Array(CHECKOUT_LINES_MAX + 1).fill(line) }).success,
     ).toBe(false);
     const parsed = checkoutRequestSchema.parse({
       lines: [{ ...line, whenBalanceShort: 'reserve' }],
@@ -211,12 +222,47 @@ describe('checkout (rules CT5, M1)', () => {
   });
 });
 
+describe('verification and code releases (S21 VF1, VF2, CR1)', () => {
+  it('names a state for every status', () => {
+    expect(ORDER_STATUSES.map(verificationStage)).toEqual([
+      'not_delivered',
+      'processing',
+      'processing',
+      'processing',
+      'processing',
+      'delivered',
+      'partially_delivered',
+      'refunded',
+      'not_delivered',
+    ]);
+  });
+
+  it('takes a 22-character code and builds its path', () => {
+    expect(verificationCodeSchema.safeParse('A'.repeat(22)).success).toBe(true);
+    expect(verificationCodeSchema.safeParse('A'.repeat(21)).success).toBe(false);
+    expect(verificationPath('abc')).toBe('/v/abc');
+  });
+
+  it('releases to print, copy or export, never as a reveal', () => {
+    expect(codeReleaseRequestSchema.safeParse({ purpose: 'print' }).success).toBe(true);
+    expect(codeReleaseRequestSchema.safeParse({ purpose: 'reveal' }).success).toBe(false);
+    expect(codeReleaseRequestSchema.safeParse({ purpose: 'copy', codeIds: [] }).success).toBe(
+      false,
+    );
+  });
+});
+
 describe('share links (rules RC1, SH1, SH2, AD1)', () => {
   it('defaults the receipt options to the price shown and the id masked', () => {
-    expect(receiptOptionsSchema.parse({})).toEqual({ showPrice: true, playerDisplay: 'masked' });
+    expect(receiptOptionsSchema.parse({})).toEqual({
+      showPrice: true,
+      playerDisplay: 'masked',
+      branded: true,
+    });
     expect(receiptOptionsSchema.parse({ showPrice: false, playerDisplay: 'full' })).toEqual({
       showPrice: false,
       playerDisplay: 'full',
+      branded: true,
     });
     expect(receiptOptionsSchema.safeParse({ playerDisplay: 'half' }).success).toBe(false);
   });
