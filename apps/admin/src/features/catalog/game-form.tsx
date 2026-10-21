@@ -256,7 +256,10 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
       </Card>
       <div className="flex flex-col gap-6">
         {game ? (
-          <StatusCard game={game} />
+          <>
+            <StatusCard game={game} />
+            <BestValueCard game={game} />
+          </>
         ) : (
           <Card>
             <p className="text-sm text-muted-foreground">{t('catalog.game.startsPaused')}</p>
@@ -392,6 +395,41 @@ function StatusCard({ game }: { game: GameDetail }) {
       <p className="text-sm text-muted-foreground">
         {game.status === 'active' ? t('catalog.game.activeHint') : t('catalog.game.pausedHint')}
       </p>
+      {failure && <FormAlert>{failure}</FormAlert>}
+    </Card>
+  );
+}
+
+/** S22 BV1: "شارة أفضل قيمة" and the per-100 prices on the game page; takes effect at once. */
+function BestValueCard({ game }: { game: GameDetail }) {
+  const { t } = useTranslation();
+  const update = useUpdateGame(game.id);
+  const switchId = useId();
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function change(bestValueEnabled: boolean) {
+    setFailure(null);
+    try {
+      await update.mutateAsync({ bestValueEnabled });
+    } catch (error) {
+      setFailure(catalogFailure(t, error));
+    }
+  }
+
+  return (
+    <Card className="gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <label htmlFor={switchId} className="text-base font-medium">
+          {t('catalog.game.bestValue')}
+        </label>
+        <Switch
+          id={switchId}
+          checked={game.bestValueEnabled}
+          disabled={update.isPending || game.archivedAt !== null}
+          onCheckedChange={(checked) => void change(checked)}
+        />
+      </div>
+      <p className="text-sm text-muted-foreground">{t('catalog.game.bestValueHint')}</p>
       {failure && <FormAlert>{failure}</FormAlert>}
     </Card>
   );

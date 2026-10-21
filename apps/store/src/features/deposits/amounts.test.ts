@@ -5,9 +5,9 @@ import {
   amountFromCentsParam,
   amountText,
   centsParam,
+  gapFill,
   limitText,
   parseDepositAmount,
-  prefillText,
   presetUnits,
   previewUsd,
   splitPayAmount,
@@ -68,7 +68,7 @@ describe('the deposit amounts', () => {
   });
 });
 
-describe('the ?amount= of the wizard (S09 rule BB8)', () => {
+describe('the ?gap= of the wizard (S22 BG2)', () => {
   it('writes whole cents as digits and reads them back', () => {
     expect(centsParam(12_050_000)).toBe('1205');
     expect(centsParam(5_000_000)).toBe('500');
@@ -84,11 +84,41 @@ describe('the ?amount= of the wizard (S09 rule BB8)', () => {
   });
 });
 
-describe('prefillText (S09 rule BB8)', () => {
-  it('takes the larger of the shortfall and the minimum', () => {
-    expect(prefillText(null, 5_000_000)).toBe('');
-    expect(prefillText(3_500_000, 5_000_000)).toBe('5');
-    expect(prefillText(12_050_000, 5_000_000)).toBe('12.05');
-    expect(prefillText(12_050_000, undefined)).toBe('12.05');
+describe('gapFill (S22 BG3)', () => {
+  const limits = {
+    established: true,
+    minUnits: 5_000_000,
+    perDepositUnits: 500_000_000,
+    dailyUnits: 1_000_000_000,
+    remainingTodayUnits: 1_000_000_000,
+  };
+  const rate = { sypPerUsd: '14650', displayStepSypUnits: 500 };
+
+  it('raises a gap to the minimum, in dollars or in pounds on the step', () => {
+    expect(gapFill(400_000, 'USD', limits, rate)).toEqual({
+      text: '5',
+      raisedToMinimum: true,
+      short: false,
+    });
+    expect(gapFill(13_700_000, 'USD', limits, rate)).toEqual({
+      text: '13.70',
+      raisedToMinimum: false,
+      short: false,
+    });
+    // $13.71 × 14,650 = 200,851.5 SYP, up to the 5-pound step.
+    expect(gapFill(13_710_000, 'SYP', limits, rate).text).toBe('200855');
+  });
+
+  it('holds the cap and says the rest needs another deposit', () => {
+    expect(gapFill(800_000_000, 'USD', limits, rate)).toEqual({
+      text: '500',
+      raisedToMinimum: false,
+      short: true,
+    });
+  });
+
+  it('works without limits, and leaves pounds empty without a rate', () => {
+    expect(gapFill(1_370_000, 'USD', null, null).text).toBe('1.37');
+    expect(gapFill(1_370_000, 'SYP', null, null).text).toBe('');
   });
 });

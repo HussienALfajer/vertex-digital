@@ -15,6 +15,7 @@ import {
   type Database,
   findCustomerWallet,
   ledgerSummary,
+  reservedUsdUnits,
   walletAdjustments,
   walletTimeline,
 } from '@vertex-digital/db';
@@ -58,9 +59,10 @@ export class WalletService {
 
   /** Rule W9, S03 rules FX8 and FX9: the SYP value at the rate in force, null before any rate. */
   async wallet(customerId: string): Promise<Wallet> {
-    const [accountId, rate] = await Promise.all([
+    const [accountId, rate, reserved] = await Promise.all([
       findCustomerWallet(this.db, customerId),
       this.rates.current(),
+      reservedUsdUnits(this.db, customerId),
     ]);
     const balanceUnits = accountId ? await accountBalance(this.db, accountId) : 0;
     return {
@@ -68,7 +70,9 @@ export class WalletService {
       syp: rate && {
         valueUnits: walletSypValue(balanceUnits, rate.sypPerUsd, rate.displayStepSypUnits),
         rate: rate.sypPerUsd,
+        displayStepSypUnits: rate.displayStepSypUnits,
       },
+      reservedUsdUnits: reserved,
     };
   }
 

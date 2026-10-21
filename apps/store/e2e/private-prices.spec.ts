@@ -22,7 +22,7 @@ function signedIn(api: MockApi): MockApi {
       user: { name: 'محل النور', email: 'shop@example.com', emailVerified: true },
       session: { token: 'this-device' },
     })
-    .on('GET /api/wallet', 200, { balanceUnits: 50 * USD, syp: null });
+    .on('GET /api/wallet', 200, { balanceUnits: 50 * USD, syp: null, reservedUsdUnits: 0 });
 }
 
 const merchantPrices = (): CustomerPrices => ({
@@ -34,6 +34,9 @@ const merchantPrices = (): CustomerPrices => ({
       product.id === p60.id ? PRIVATE_60 : product.priceUsdUnits && product.priceUsdUnits - 10_000,
     priceSypUnits: null,
     savings: null,
+    // S22 BV3: the badge over the account's own prices.
+    perHundredUsdUnits: product.gameAmount && product.available ? 1_000_000 : null,
+    bestValue: product.nameAr === '660 UC',
   })),
   rateId: PUBG.rateId,
 });
@@ -51,6 +54,9 @@ test.describe('private prices', () => {
     await expect(page.getByText(ar.game.privatePrices.kinds.wholesale)).toBeVisible();
     await expect(packButton(page, '60 UC')).toContainText(formatUsd(PRIVATE_60));
     await expect(packButton(page, '60 UC')).not.toContainText(formatUsd(p60.priceUsdUnits ?? 0));
+    // S22 BV3: the best value follows the account's prices, not the cached retail ones.
+    await expect(packButton(page, '660 UC').getByText(ar.catalog.price.bestValue)).toBeVisible();
+    await expect(packButton(page, '60 UC').getByText(ar.catalog.price.bestValue)).toHaveCount(0);
     // The browser remembers it, so the next game page hides retail before paint.
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem('vd-private-prices')))

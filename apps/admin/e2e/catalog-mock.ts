@@ -19,6 +19,7 @@ import {
   type ProductKind,
   priceFromCost,
   productAvailability,
+  type QuickLinkStats,
   ROOT_PRICE_LIST_IDS,
   resolveListEntry,
   resolveMarginRule,
@@ -56,6 +57,19 @@ type Row<T> = Omit<
   | 'reviewOpen'
   | 'deliveryStats'
 >;
+
+const QUICK_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
+/** A distinct 6-character code for the `index`th product. */
+function quickCodeOf(index: number): string {
+  let value = index * 387_420_489 + 104_729;
+  let code = '';
+  for (let position = 0; position < 6; position += 1) {
+    code = (QUICK_ALPHABET[value % 31] as string) + code;
+    value = Math.floor(value / 31);
+  }
+  return code;
+}
 
 type StoredGame = Omit<Row<Game>, 'cover' | 'idGuide'> & {
   coverFileId: string | null;
@@ -156,6 +170,10 @@ export class CatalogMock {
    */
   pricing: ((productId: string) => ProductPricing) | null = null;
 
+  /** S22 DL5: what `GET /api/admin/quick-links` answers, and the ranges it was asked for. */
+  quickLinks: QuickLinkStats['items'] = [];
+  quickLinkQueries: { from: string; to: string }[] = [];
+
   /** S07 rule P5: a rule change reprices what it governs. */
   onRulesChanged: () => void = () => {};
 
@@ -189,6 +207,7 @@ export class CatalogMock {
       idGuideFileId: null,
       accentColor: null,
       regionNotesAr: null,
+      bestValueEnabled: true,
       sortOrder: this.games.filter((item) => item.categoryId === category.id).length + 1,
       archivedAt: null,
       createdAt: NOW,
@@ -200,10 +219,14 @@ export class CatalogMock {
 
   addProduct(gameId: string, values: Partial<Row<Product>> & { nameAr: string }): Row<Product> {
     const kind = values.kind ?? 'direct';
+    // S22 DL1: a code of the order-number alphabet per product, as `catalog_quick_code()` draws.
+    const quickCode = quickCodeOf(this.products.length);
     const product: Row<Product> = {
       id: nextId(),
       gameId,
       kind,
+      quickCode,
+      quickLinkUrl: `https://digital.vertexmedia.pro/q/${quickCode}`,
       gameAmount: null,
       officialPriceUsdUnits: null,
       maxQuantity: DEFAULT_MAX_QUANTITY[kind],
@@ -648,6 +671,8 @@ export class CatalogMock {
         }
         Object.assign(row, this.gameValues(body));
         if (body?.status) row.status = body.status as StoredGame['status'];
+        if (typeof body?.bestValueEnabled === 'boolean')
+          row.bestValueEnabled = body.bestValueEnabled;
         const missing = this.missing(row.id);
         if (row.status === 'active' && missing.length > 0) {
           Object.assign(row, before);
@@ -687,6 +712,19 @@ export class CatalogMock {
         ).length;
       } else Object.assign(row, body);
       return { status: 200, json: this.product(row) };
+    }
+
+    // S22 DL5: the direct links' counts, as a test sets them.
+    if (key === 'GET /api/admin/quick-links') {
+      const productId = url.searchParams.get('productId');
+      this.quickLinkQueries.push({
+        from: url.searchParams.get('from') ?? '',
+        to: url.searchParams.get('to') ?? '',
+      });
+      return {
+        status: 200,
+        json: { items: this.quickLinks.filter((row) => !productId || row.productId === productId) },
+      };
     }
 
     // Pricing -------------------------------------------------------------------------------------

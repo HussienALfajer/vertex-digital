@@ -382,7 +382,7 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
                 variant="outline"
                 size="xl"
                 render={
-                  <Link href={`/wallet/deposit?amount=${centsParam(shortfall)}`} prefetch={false} />
+                  <Link href={`/wallet/deposit?gap=${centsParam(shortfall)}`} prefetch={false} />
                 }
               >
                 <WalletIcon aria-hidden="true" />

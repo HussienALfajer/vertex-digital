@@ -23,6 +23,15 @@ export function renameSavedPlayer(id: string, label: string, fetcher: Fetcher = 
   });
 }
 
+/** S22 QB5: shown on or hidden from the home page's "اشحن مجدداً". */
+export function setQuickBuyHidden(id: string, hidden: boolean, fetcher: Fetcher = fetch) {
+  return apiRequest<SavedPlayer>(`/api/saved-players/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: { quickBuyHidden: hidden },
+    fetcher,
+  });
+}
+
 export function deleteSavedPlayer(id: string, fetcher: Fetcher = fetch) {
   return apiRequest<null>(`/api/saved-players/${encodeURIComponent(id)}`, {
     method: 'DELETE',

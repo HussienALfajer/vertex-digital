@@ -274,7 +274,7 @@ test.describe('merchant accounts', () => {
   test('a refused buy without the merchant terms opens the sheet (MT2)', async ({ page, api }) => {
     const p60 = pack(PUBG, '60 UC');
     signedIn(api)
-      .on('GET /api/wallet', 200, { balanceUnits: 50_000_000, syp: null })
+      .on('GET /api/wallet', 200, { balanceUnits: 50_000_000, syp: null, reservedUsdUnits: 0 })
       .on('POST /api/player-checks', 200, { result: 'not_supported' })
       .on('POST /api/orders', 409, { code: 'MERCHANT_TERMS_REQUIRED' })
       .on('GET /api/merchant/application', 200, open({ canApply: false }));

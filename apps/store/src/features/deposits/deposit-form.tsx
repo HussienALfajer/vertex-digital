@@ -6,6 +6,7 @@ import {
   depositLimitBreach,
   formatAmountInput,
   formatRate,
+  orderNumberSchema,
   QUOTE_LOCK_MINUTES,
   type ShamCashOptions,
   USDT_METHODS,
@@ -33,14 +34,15 @@ import { useSearchParam } from '@/lib/use-search-param';
 import {
   amountFromCentsParam,
   amountText,
+  gapFill,
   limitText,
   PRESETS_USD,
   parseDepositAmount,
-  prefillText,
   presetUnits,
   previewUsd,
   usdText,
 } from './amounts';
+import { GapLines, GapStrip } from './gap';
 import { createShamCashDeposit, getShamCashOptions, getUsdtOptions } from './requests';
 import { UsdtForm } from './usdt-form';
 
@@ -80,10 +82,13 @@ function unavailableReason(
  */
 export function DepositFormPage() {
   const router = useRouter();
-  // Opened from a reservation (S09 rule BB8): the shortfall to prefill and the way back.
-  const prefill = amountFromCentsParam(useSearchParam('amount'));
+  // S22 BG2, BG3: what the customer lacks, for a reservation (its number and the way back) or
+  // for a purchase still to make.
+  const gap = amountFromCentsParam(useSearchParam('gap'));
   const orderParam = useSearchParam('order');
   const orderId = orderParam && UUID.test(orderParam) ? orderParam : null;
+  const numberParam = orderNumberSchema.safeParse(useSearchParam('number') ?? '');
+  const orderNumber = numberParam.success ? numberParam.data : null;
   const [state, setState] = useState<State>({ status: 'loading' });
   // S12 CF5: a frozen customer cannot create a deposit (one created before still opens).
   const frozen = isFrozenCustomer(useCustomer());
@@ -174,7 +179,8 @@ export function DepositFormPage() {
           {t('deposits.form.backToReservation')}
         </Button>
       )}
-      <MethodPicker key={prefill ?? 'none'} shamCash={shamCash} usdt={usdt} prefill={prefill} />
+      {gap !== null && <GapStrip gapUnits={gap} orderNumber={orderNumber} />}
+      <MethodPicker key={gap ?? 'none'} shamCash={shamCash} usdt={usdt} gap={gap} />
     </div>
   );
 }
@@ -184,20 +190,16 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function MethodPicker({
   shamCash,
   usdt,
-  prefill,
+  gap,
 }: {
   shamCash: ShamCashOptions;
   usdt: UsdtOptions;
-  prefill: number | null;
+  gap: number | null;
 }) {
   const [method, setMethod] = useState<DepositMethod>(
     () => METHODS.find((item) => !unavailableReason(item, shamCash, usdt)) ?? 'sham_cash',
   );
-  // A shortfall is in dollars: the dollar form when it is open (S09 rule BB8).
-  const firstCurrency =
-    prefill !== null && shamCash.currencies.USD.available
-      ? 'USD'
-      : CURRENCY_ORDER.find((currency) => shamCash.currencies[currency].available);
+  const firstCurrency = CURRENCY_ORDER.find((currency) => shamCash.currencies[currency].available);
   return (
     <div className="flex flex-col gap-6">
       <Field>
@@ -230,14 +232,10 @@ function MethodPicker({
       </Field>
       {method === 'sham_cash' ? (
         firstCurrency && (
-          <ShamCashForm
-            options={shamCash}
-            initialCurrency={firstCurrency}
-            prefillUnits={firstCurrency === 'USD' ? prefill : null}
-          />
+          <ShamCashForm options={shamCash} initialCurrency={firstCurrency} gap={gap} />
         )
       ) : (
-        <UsdtForm key={method} options={usdt} method={method} prefillUnits={prefill} />
+        <UsdtForm key={method} options={usdt} method={method} gap={gap} />
       )}
     </div>
   );
@@ -246,15 +244,18 @@ function MethodPicker({
 function ShamCashForm({
   options,
   initialCurrency,
-  prefillUnits,
+  gap,
 }: {
   options: ShamCashOptions;
   initialCurrency: Currency;
-  prefillUnits: number | null;
+  gap: number | null;
 }) {
   const router = useRouter();
   const [currency, setCurrency] = useState<Currency>(initialCurrency);
-  const [text, setText] = useState(() => prefillText(prefillUnits, options.limits?.minUnits));
+  // S22 BG3: the gap in this currency, with Sham Cash's limits (pounds on the display step).
+  const fill = (next: Currency) =>
+    gap === null ? null : gapFill(gap, next, options.limits, options.rate);
+  const [text, setText] = useState(() => fill(initialCurrency)?.text ?? '');
   const [error, setError] = useState<string | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
   const [submitting, setSubmitting] = useState(false);
@@ -276,9 +277,10 @@ function ShamCashForm({
 
   function changeCurrency(next: Currency) {
     setCurrency(next);
-    setText('');
+    setText(fill(next)?.text ?? '');
     setError(null);
   }
+  const gapLines = fill(currency);
 
   /** Every refusal here is about the amount: shown under it, with the focus moved there. */
   function refuse(message: string | null) {
@@ -364,6 +366,7 @@ function ShamCashForm({
             }}
           />
           <FieldError match={!!error}>{error}</FieldError>
+          {gapLines && <GapLines fill={gapLines} limits={options.limits} />}
         </Field>
         <div className="flex flex-wrap gap-2">
           {PRESETS_USD.map((usd) => {

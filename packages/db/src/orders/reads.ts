@@ -991,6 +991,7 @@ export async function customerSavedPlayers(
       rejected: saved.rejectedAt !== null,
       complete: orderFieldValuesSchema(rules).safeParse(saved.fields).success,
       lastUsedAt: iso(saved.lastUsedAt),
+      quickBuyHidden: saved.quickBuyHidden,
     };
   });
 }

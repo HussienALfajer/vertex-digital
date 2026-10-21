@@ -286,6 +286,8 @@ export const ERROR_CODES = [
   'CODES_NOT_DELIVERED',
   /** S21 ST1: not a `YYYY-MM` month from the account's creation to this month. */
   'STATEMENT_MONTH_INVALID',
+  /** S22 DL2: no product has this direct-link code. */
+  'QUICK_LINK_NOT_FOUND',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

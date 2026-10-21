@@ -36,6 +36,7 @@ import {
   type PlayerCheckRequest,
   playerCheckRequestSchema,
   playerCheckSchema,
+  quickBuySchema,
   type ReceiptOptions,
   receiptOptionsSchema,
   releasedCodesSchema,
@@ -57,6 +58,7 @@ import type { CustomerIdentity } from '../auth/index.js';
 import { OrderReceiptsService } from './order-receipts.service.js';
 import { type CheckoutBody, OrdersService, type PurchaseBody } from './orders.service.js';
 import { PlayerChecksService } from './player-checks.service.js';
+import { QuickBuyService } from './quick-buy.service.js';
 import { SavedPlayersService } from './saved-players.service.js';
 import { ShareLinksService } from './share-links.service.js';
 
@@ -73,6 +75,7 @@ export class OrdersController {
     private readonly savedPlayers: SavedPlayersService,
     private readonly shareLinks: ShareLinksService,
     private readonly receipts: OrderReceiptsService,
+    private readonly quickBuy: QuickBuyService,
   ) {}
 
   /** S09 rules PV1–PV7: limited per customer and address for the calls that reach a supplier. */
@@ -147,6 +150,16 @@ export class OrdersController {
     return checkout;
   }
 
+  /** S22 QB1–QB3: the home page's "اشحن مجدداً" cards, at most 6. */
+  @Get('quick-buy')
+  @CustomerRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: quickBuySchema })
+  @ApiOkResponse({ description: 'Newest-used saved ids first', standardSchema: quickBuySchema })
+  quickBuyCards(@CurrentCustomer() customer: CustomerIdentity) {
+    return this.quickBuy.cards(customer.id);
+  }
+
   /** S10 rules SP3, SP5: the customer's saved ids, newest used first. */
   @Get('saved-players')
   @CustomerRoute()
@@ -165,13 +178,13 @@ export class OrdersController {
   @CustomerRoute()
   @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: savedPlayerSchema })
-  @ApiOkResponse({ description: 'The renamed id', standardSchema: savedPlayerSchema })
-  renameSavedPlayer(
+  @ApiOkResponse({ description: 'The changed id', standardSchema: savedPlayerSchema })
+  updateSavedPlayer(
     @CurrentCustomer() customer: CustomerIdentity,
     @Param('id') id: string,
     @Body({ schema: updateSavedPlayerSchema }) body: UpdateSavedPlayer,
   ) {
-    return this.savedPlayers.rename(customer.id, id, body.label);
+    return this.savedPlayers.update(customer.id, id, body);
   }
 
   @Delete('saved-players/:id')

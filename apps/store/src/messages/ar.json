@@ -601,7 +601,8 @@
     "BULK_LINES_INVALID": "القائمة فارغة أو فيها أكثر من 50 سطراً. قسّمها إلى قوائم أصغر.",
     "PLAYER_CHECK_QUOTA_EXCEEDED": "استخدمت كل فحوص المعرّفات المتاحة الآن. يمكنك الدفع بعد تأكيد المعرّفات، أو الفحص لاحقاً.",
     "CODES_NOT_DELIVERED": "لم تُسلَّم أكواد هذا الطلب بعد.",
-    "APPLICATION_STATE_INVALID": "تغيّرت حالة طلبك. حدّث الصفحة."
+    "APPLICATION_STATE_INVALID": "تغيّرت حالة طلبك. حدّث الصفحة.",
+    "QUICK_LINK_NOT_FOUND": "هذا الرابط غير صالح. تصفّح الألعاب للعثور على الباقة."
   },
   "notFound": {
     "title": "الصفحة غير موجودة",
@@ -811,7 +812,9 @@
     "amount": "الكمية: {amount}",
     "price": {
       "syp": "≈ {amount} ل.س",
-      "savings": "وفّر {percent}"
+      "savings": "وفّر {percent}",
+      "bestValue": "أفضل قيمة",
+      "perHundred": "{amount} لكل 100"
     }
   },
   "search": {
@@ -860,9 +863,6 @@
     "verify": "أكّد بريدك الإلكتروني للشراء",
     "stopped": "الشراء متوقف مؤقتًا. رصيدك وطلباتك بأمان، حاول بعد قليل.",
     "balanceAfterLine": "رصيدك بعد الشراء: {balance}",
-    "shortfall": "رصيدك {balance}، ينقصك {missing}",
-    "reserve": "احجز الطلب واشحن رصيدك",
-    "deposit": "اشحن رصيدك",
     "continue": "متابعة",
     "playerName": "الاسم في اللعبة",
     "balanceAfter": "رصيدك بعد الشراء",
@@ -977,8 +977,6 @@
     "pricesFailed": "تعذّر التحقق من الأسعار الآن. أعد المحاولة.",
     "retry": "إعادة المحاولة",
     "removeUnavailable": "احذف البنود غير المتوفرة ثم ادفع.",
-    "shortfall": "رصيدك {balance}، ينقصك {missing}",
-    "deposit": "اشحن رصيدك",
     "paying": "ندفع سلتك…",
     "slide": "اسحب لدفع {total}",
     "gift": "هدية",

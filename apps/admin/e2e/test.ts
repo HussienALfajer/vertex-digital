@@ -1074,6 +1074,7 @@ export class AdminApi {
     }
     if (
       path.startsWith('/api/admin/catalog') ||
+      path === '/api/admin/quick-links' ||
       path.startsWith('/api/admin/pricing') ||
       path.startsWith('/api/catalog/')
     ) {

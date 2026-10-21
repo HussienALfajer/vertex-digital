@@ -21,6 +21,7 @@ import { Route as AppRatesRouteImport } from './routes/_app/rates'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppTestCustomersRouteImport } from './routes/_app/test-customers'
 import { Route as AppCatalogIndexRouteImport } from './routes/_app/catalog.index'
+import { Route as AppCatalogQuickLinksRouteImport } from './routes/_app/catalog.quick-links'
 import { Route as AppContentIndexRouteImport } from './routes/_app/content.index'
 import { Route as AppContentActivityRouteImport } from './routes/_app/content.activity'
 import { Route as AppContentAnnouncementsRouteImport } from './routes/_app/content.announcements'
@@ -123,6 +124,11 @@ const AppTestCustomersRoute = AppTestCustomersRouteImport.update({
 const AppCatalogIndexRoute = AppCatalogIndexRouteImport.update({
   id: '/catalog/',
   path: '/catalog/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCatalogQuickLinksRoute = AppCatalogQuickLinksRouteImport.update({
+  id: '/catalog/quick-links',
+  path: '/catalog/quick-links',
   getParentRoute: () => AppRoute,
 } as any)
 const AppContentIndexRoute = AppContentIndexRouteImport.update({
@@ -360,6 +366,7 @@ export interface FileRoutesByFullPath {
   '/rates': typeof AppRatesRoute
   '/reports': typeof AppReportsRoute
   '/test-customers': typeof AppTestCustomersRoute
+  '/catalog/quick-links': typeof AppCatalogQuickLinksRoute
   '/content/activity': typeof AppContentActivityRoute
   '/content/announcements': typeof AppContentAnnouncementsRoute
   '/content/banners': typeof AppContentBannersRoute
@@ -416,6 +423,7 @@ export interface FileRoutesByTo {
   '/reports': typeof AppReportsRoute
   '/test-customers': typeof AppTestCustomersRoute
   '/': typeof AppIndexRoute
+  '/catalog/quick-links': typeof AppCatalogQuickLinksRoute
   '/content/activity': typeof AppContentActivityRoute
   '/content/announcements': typeof AppContentAnnouncementsRoute
   '/content/banners': typeof AppContentBannersRoute
@@ -475,6 +483,7 @@ export interface FileRoutesById {
   '/_app/reports': typeof AppReportsRoute
   '/_app/test-customers': typeof AppTestCustomersRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/catalog/quick-links': typeof AppCatalogQuickLinksRoute
   '/_app/content/activity': typeof AppContentActivityRoute
   '/_app/content/announcements': typeof AppContentAnnouncementsRoute
   '/_app/content/banners': typeof AppContentBannersRoute
@@ -534,6 +543,7 @@ export interface FileRouteTypes {
     | '/rates'
     | '/reports'
     | '/test-customers'
+    | '/catalog/quick-links'
     | '/content/activity'
     | '/content/announcements'
     | '/content/banners'
@@ -590,6 +600,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/test-customers'
     | '/'
+    | '/catalog/quick-links'
     | '/content/activity'
     | '/content/announcements'
     | '/content/banners'
@@ -648,6 +659,7 @@ export interface FileRouteTypes {
     | '/_app/reports'
     | '/_app/test-customers'
     | '/_app/'
+    | '/_app/catalog/quick-links'
     | '/_app/content/activity'
     | '/_app/content/announcements'
     | '/_app/content/banners'
@@ -786,6 +798,13 @@ declare module '@tanstack/react-router' {
       path: '/catalog'
       fullPath: '/catalog/'
       preLoaderRoute: typeof AppCatalogIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/catalog/quick-links': {
+      id: '/_app/catalog/quick-links'
+      path: '/catalog/quick-links'
+      fullPath: '/catalog/quick-links'
+      preLoaderRoute: typeof AppCatalogQuickLinksRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/content/': {
@@ -1131,6 +1150,7 @@ interface AppRouteChildren {
   AppReportsRoute: typeof AppReportsRoute
   AppTestCustomersRoute: typeof AppTestCustomersRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppCatalogQuickLinksRoute: typeof AppCatalogQuickLinksRoute
   AppCustomersIdRoute: typeof AppCustomersIdRoute
   AppDepositsIdRoute: typeof AppDepositsIdRoute
   AppDepositsTransfersRoute: typeof AppDepositsTransfersRoute
@@ -1179,6 +1199,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppReportsRoute: AppReportsRoute,
   AppTestCustomersRoute: AppTestCustomersRoute,
   AppIndexRoute: AppIndexRoute,
+  AppCatalogQuickLinksRoute: AppCatalogQuickLinksRoute,
   AppCustomersIdRoute: AppCustomersIdRoute,
   AppDepositsIdRoute: AppDepositsIdRoute,
   AppDepositsTransfersRoute: AppDepositsTransfersRoute,

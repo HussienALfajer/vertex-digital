@@ -106,8 +106,11 @@ for (const theme of ['dark', 'light'] as const) {
 // S10's strings and the header's cart button took it to 209 (S10 PR 2). Raised to 215 (S14 PR 2,
 // as S14 SL5 allows): the content strings (1 KB) and the banner carousel's and the announcement's
 // close button's client parts took it to 212. Raised to 218 (S20 PR 3): the merchant application's
-// strings (the form's lists, states and terms sheet, about 2 KB gzipped) took it to 217.
-const BUDGET_KB = { script: 218, stylesheet: 20 };
+// strings (the form's lists, states and terms sheet, about 2 KB gzipped) took it to 217. Raised
+// to 220 (S22 PR 1): the product codes and the link attribution in the shared catalog and order
+// schemas, and the home page's quick-buy slot (its row, sheet and strings load only signed in),
+// took it to 219; the quick-buy strings stay in `features/quick-buy/messages.ar.json`.
+const BUDGET_KB = { script: 220, stylesheet: 20 };
 
 /**
  * The game page (S09): the home page's first load plus the buy box, the calculator and the
@@ -167,9 +170,10 @@ test('the game page stays within its performance budget', async ({ page, api: _a
  * took it from 215 to 216 KB in a full run. S20 PR 3: the merchant strings in the catalog every
  * page ships took the share page to 219 (raised to 220) and the cart to 389 (raised to 390).
  * S21 PR 3: the statement notification (its event, label and preference strings) took the cart
- * to 391 (raised to 392); its pages' own strings stay in the merchant catalog.
+ * to 391 (raised to 392); its pages' own strings stay in the merchant catalog. S22 PR 1: the
+ * gap block (BG5) with its strings took the cart to 393 (raised to 394).
  */
-const CART_BUDGET_KB = { script: 392, stylesheet: 20 };
+const CART_BUDGET_KB = { script: 394, stylesheet: 20 };
 const SHARE_BUDGET_KB = { script: 220, stylesheet: 20 };
 
 test('the cart stays within its performance budget', async ({ page, api }) => {
@@ -190,9 +194,10 @@ test('a share page stays within its performance budget', async ({ page, api: _ap
 /**
  * S14 SL5: the home page with the announcement and two banners keeps the home budget (the
  * carousel is the only client part added; the activity card left the store on 2026-10-19); the four pages and `/faq` render on the
- * server with no client part of their own: 215 KB (218 since S20 PR 3, as the home budget).
+ * server with no client part of their own: 215 KB (218 since S20 PR 3, 220 since S22 PR 1, as the
+ * home budget).
  */
-const CONTENT_BUDGET_KB = { script: 218, stylesheet: 20 };
+const CONTENT_BUDGET_KB = { script: 220, stylesheet: 20 };
 
 test('the home page with content stays within the home budget', async ({ page, api: _api }) => {
   test.skip(test.info().project.name !== 'desktop', 'measured once');

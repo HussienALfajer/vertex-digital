@@ -3,9 +3,11 @@ import {
   formatUsd,
   type Order,
   type OrderSummary,
+  type QuickBuyItem,
   type SavedPlayer,
   type StoreProduct,
 } from '@vertex-digital/contracts';
+import qb from '../src/features/quick-buy/messages.ar.json' with { type: 'json' };
 import ar from '../src/messages/ar.json' with { type: 'json' };
 import { PUBG, pack, searchIndex } from './catalog';
 import { CATALOG_PORT } from './servers';
@@ -16,7 +18,10 @@ import { expect, type MockApi, screenshot, test } from './test';
  * S10 in the store: saved player IDs in the buy box (SP1, SP3, SP6, SP7), the gift (GF1, GF3),
  * the cart (CT1–CT6) and its checkout view, one-tap repeat (OT1), the order page's gift and
  * receipt (GF4, RC1–RC3), "معرّفاتي" (SP5), the public gift and receipt pages (GF5, RC2, SH5,
- * SH6), the calculator's "add all" (CT3) and the wallet's checkout entry (W5).
+ * SH6), the calculator's "add all" (CT3) and the wallet's checkout entry (W5). S22 PR 1: the home
+ * page's "اشحن مجدداً" and its sheet (QB2–QB6), direct buy links (DL2–DL4), search commands
+ * (SC1–SC5), the quick-buy switch in "معرّفاتي" (QB5), the per-100 prices (BV2) and the cart's gap
+ * (BG5).
  */
 
 const p = ar.purchase;
@@ -44,7 +49,7 @@ function signedIn(api: MockApi, balanceUnits = 50 * USD): MockApi {
       user: { name: 'سارة الأحمد', email: 'sara@example.com', emailVerified: true },
       session: { token: 'this-device' },
     })
-    .on('GET /api/wallet', 200, { balanceUnits, syp: null });
+    .on('GET /api/wallet', 200, { balanceUnits, syp: null, reservedUsdUnits: 0 });
 }
 
 function saved(changes: Partial<SavedPlayer>): SavedPlayer {
@@ -62,6 +67,7 @@ function saved(changes: Partial<SavedPlayer>): SavedPlayer {
     rejected: false,
     complete: true,
     lastUsedAt: new Date(Date.now() - 3_600_000).toISOString(),
+    quickBuyHidden: false,
     ...changes,
   };
 }
@@ -498,14 +504,14 @@ test.describe('the cart (CT1–CT6)', () => {
     );
     signedIn(api, 5 * USD);
     await page.reload();
+    // S22 BG5: the gap and the deposit only, a cart reserves nothing.
     await expect(
-      page.getByText(
-        fill(c.shortfall, { balance: ltr('$5.00'), missing: ltr(formatUsd(4_990_000)) }),
-      ),
+      page.getByText(fill(qb.gap.missing, { missing: ltr(formatUsd(4_990_000)) })),
     ).toBeVisible();
-    await expect(page.getByRole('link', { name: c.deposit })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: qb.gap.reserve })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: qb.gap.deposit })).toHaveAttribute(
       'href',
-      '/wallet/deposit?amount=499',
+      '/wallet/deposit?gap=499',
     );
   });
 
@@ -719,6 +725,248 @@ test.describe('"معرّفاتي" (SP5)', () => {
     );
   });
 });
+
+/** A "اشحن مجدداً" card (S22 QB2) for a saved ID and its last pack. */
+function card(player: SavedPlayer, product: StoreProduct, changes: Partial<QuickBuyItem> = {}) {
+  return {
+    savedPlayer: player,
+    game: { slug: 'pubg-mobile', nameAr: PUBG.game.nameAr, cover: PUBG.game.cover },
+    product: {
+      id: product.id,
+      nameAr: product.nameAr,
+      kind: 'direct',
+      gameAmount: product.gameAmount,
+    },
+    quantity: 1,
+    unitPriceUsdUnits: product.priceUsdUnits,
+    unitPriceSypUnits: product.priceSypUnits,
+    priceKind: 'retail',
+    state: 'ready',
+    ...changes,
+  } as QuickBuyItem;
+}
+
+const QUICK_CODE = 'K7M2QX';
+
+/** The search dialog by Ctrl+K, pressed again until the page's handler is ready. */
+async function openSearch(page: Page) {
+  const dialog = page.getByRole('dialog');
+  await expect(async () => {
+    if (!(await dialog.isVisible())) await page.keyboard.press('Control+k');
+    await expect(dialog).toBeVisible({ timeout: 1000 });
+  }).toPass();
+}
+
+test.describe('quick buy (S22 F40)', () => {
+  test('"اشحن مجدداً" pays a saved ID’s last pack from a sheet on the home page (QB2–QB4)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on('GET /api/quick-buy', 200, {
+        items: [card(MINE, p660), card(BROTHER, p60, { state: 'rejected' })],
+      })
+      .on('POST /api/orders', 201, order(p660, { stage: 'processing' }))
+      .on(`GET /api/orders/${ORDER_ID}`, 200, order(p660, { stage: 'processing' }));
+    await page.goto('/');
+    const row = page.getByRole('region', { name: qb.row.title });
+    await expect(row.getByRole('listitem')).toHaveCount(2);
+    // A rejected ID opens the game page, where the buy box says why (QB3).
+    await expect(row.getByRole('link', { name: /أخي/ })).toHaveAttribute(
+      'href',
+      `/games/pubg-mobile?pack=${p60.id}&player=${BROTHER.id}`,
+    );
+    await row.getByRole('button', { name: /^اشحن 660 UC/ }).click();
+    const sheet = page.getByRole('dialog');
+    await expect(sheet.getByText('51234567')).toBeVisible();
+    await expect(sheet.getByText('Lina_99')).toBeVisible();
+    await sheet.getByRole('slider', { name: p.slidePay }).focus();
+    await page.keyboard.press('End');
+    await expect(page).toHaveURL(`/orders/${ORDER_ID}`);
+    expect(api.last('POST /api/orders')?.body).toEqual({
+      productId: p660.id,
+      quantity: 1,
+      fields: MINE.fields,
+      expectedUnitPriceUsdUnits: p660.priceUsdUnits,
+      whenBalanceShort: 'refuse',
+      confirmPlayer: true,
+    });
+  });
+
+  test('a short balance in the sheet shows the gap; a card hides with an undo (BG2, QB5)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api, 1 * USD)
+      .on('GET /api/quick-buy', 200, { items: [card(MINE, p660), card(BROTHER, p60)] })
+      .on(`PATCH /api/saved-players/${BROTHER.id}`, 200, { ...BROTHER, quickBuyHidden: true });
+    await page.goto('/');
+    const row = page.getByRole('region', { name: qb.row.title });
+    await row.getByRole('button', { name: fill(qb.row.menu, { label: 'أخي' }) }).click();
+    await page.getByRole('menuitem', { name: qb.row.hide }).click();
+    await expect(row.getByRole('listitem')).toHaveCount(1);
+    expect(api.last(`PATCH /api/saved-players/${BROTHER.id}`)?.body).toEqual({
+      quickBuyHidden: true,
+    });
+    await page.getByRole('button', { name: qb.row.undo }).click();
+    await expect(row.getByRole('listitem')).toHaveCount(2);
+    expect(api.last(`PATCH /api/saved-players/${BROTHER.id}`)?.body).toEqual({
+      quickBuyHidden: false,
+    });
+
+    await row.getByRole('button', { name: /حسابي/ }).first().click();
+    const sheet = page.getByRole('dialog');
+    await expect(
+      sheet.getByText(fill(qb.gap.missing, { missing: ltr(formatUsd(8_990_000)) })),
+    ).toBeVisible();
+    await expect(sheet.getByRole('link', { name: qb.gap.depositOnly })).toHaveAttribute(
+      'href',
+      '/wallet/deposit?gap=899',
+    );
+    await sheet.getByRole('button', { name: qb.gap.reserve }).click();
+    await expect(sheet.getByRole('slider', { name: p.slideReserve })).toBeVisible();
+  });
+
+  test('no row signed out or without cards (QB6)', async ({ page, api }) => {
+    await page.goto('/');
+    await expect(page.getByRole('navigation', { name: ar.catalog.categories })).toBeVisible();
+    await expect(page.getByRole('region', { name: qb.row.title })).toHaveCount(0);
+    signedIn(api).on('GET /api/quick-buy', 200, { items: [] });
+    await page.reload();
+    await expect.poll(() => api.last('GET /api/quick-buy')).toBeDefined();
+    await expect(page.getByRole('region', { name: qb.row.title })).toHaveCount(0);
+  });
+
+  test('a direct link opens its pack, counts the visitor, and the order carries it (DL2–DL4)', async ({
+    page,
+    api,
+    request,
+  }) => {
+    const visitor = `203.0.113.${Math.floor(Math.random() * 200) + 20}`;
+    await page.setExtraHTTPHeaders({ 'x-forwarded-for': visitor });
+    await page.goto(`/q/${QUICK_CODE}?c=whatsapp`);
+    await expect(page).toHaveURL(`/games/pubg-mobile?pack=${p660.id}&via=q`);
+    expect(page.url()).not.toContain('whatsapp');
+    const seen = await request.get(`http://127.0.0.1:${CATALOG_PORT}/_seen?token=${QUICK_CODE}`);
+    expect((await seen.json()).forwardedFor).toContain(`${visitor}|whatsapp`);
+    // Signed out: the sign-in comes back to the pack with the link's choice.
+    await buyBox(page).getByRole('button', { name: p.signIn }).click();
+    await expect(page).toHaveURL(
+      `/sign-in?next=${encodeURIComponent(`/games/pubg-mobile?pack=${p660.id}&via=q`)}`,
+    );
+    signedIn(api)
+      .on('GET /api/saved-players', 200, { items: [BROTHER, MINE] })
+      .on('POST /api/orders', 201, order(p660, { stage: 'processing' }))
+      .on(`GET /api/orders/${ORDER_ID}`, 200, order(p660, { stage: 'processing' }));
+    await page.goto(`/games/pubg-mobile?pack=${p660.id}&via=q`);
+    // The newest-used ID that is neither rejected nor incomplete: the slide step at once (DL3).
+    await expect(buyBox(page).getByText('حسابي')).toBeVisible();
+    await buyBox(page).getByRole('slider', { name: p.slidePay }).focus();
+    await page.keyboard.press('End');
+    await expect(page).toHaveURL(`/orders/${ORDER_ID}`);
+    expect(api.last('POST /api/orders')?.body).toMatchObject({
+      quickLink: { code: QUICK_CODE, campaign: 'whatsapp' },
+      confirmPlayer: true,
+    });
+  });
+
+  test('an unknown or hidden link lands on the home page (DL2)', async ({ page }) => {
+    await page.goto('/q/ZZZZZ2');
+    await expect(page).toHaveURL('/');
+    await page.goto('/q/G2MEXX?c=https://evil.example');
+    await expect(page).toHaveURL('/');
+  });
+
+  test('a search command opens the pack on the slide step with the saved ID (SC1–SC5)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on('GET /api/catalog/search-index', 200, searchIndex())
+      .on('GET /api/account', 200, { priceKind: 'retail' })
+      .on('GET /api/saved-players', 200, { items: [MINE, BROTHER] });
+    await page.goto('/');
+    await openSearch(page);
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('combobox').fill('٦٦٠ ببجي لحسابي');
+    const first = dialog.getByRole('option').first();
+    await expect(first).toContainText(fill(qb.search.packFor, { pack: '⁨660 UC⁩', label: '⁨حسابي⁩' }));
+    await dialog.getByRole('combobox').press('Enter');
+    await expect(page).toHaveURL(`/games/pubg-mobile?pack=${p660.id}&player=${MINE.id}`);
+    await expect(buyBox(page).getByRole('slider', { name: p.slidePay })).toBeVisible();
+
+    // A label alone opens its game with the ID chosen (SC5); on a phone the buy box is a sheet.
+    await page.goto('/');
+    await openSearch(page);
+    await page.getByRole('dialog').getByRole('combobox').fill('لأخي');
+    await expect(page.getByRole('dialog').getByRole('option').first()).toContainText(
+      fill(qb.search.for, { label: '⁨أخي⁩' }),
+    );
+  });
+
+  test('"معرّفاتي" shows or hides an ID on the home page (QB5)', async ({ page, api }) => {
+    signedIn(api)
+      .on('GET /api/saved-players', 200, { items: [MINE] })
+      .on(`PATCH /api/saved-players/${MINE.id}`, 200, { ...MINE, quickBuyHidden: true });
+    await page.goto('/account/players');
+    const toggle = page.getByRole('switch', {
+      name: fill(qb.players.showFor, { label: 'حسابي' }),
+    });
+    await expect(toggle).toBeChecked();
+    await toggle.click();
+    await expect(toggle).not.toBeChecked();
+    expect(api.last(`PATCH /api/saved-players/${MINE.id}`)?.body).toEqual({ quickBuyHidden: true });
+  });
+
+  test('the game page prices packs per 100 units (BV2)', async ({ page }) => {
+    await page.goto('/games/pubg-mobile');
+    await expect(
+      page
+        .getByRole('button', { name: /^660 UC/ })
+        .getByText(fill(ar.catalog.price.perHundred, { amount: ltr('$1.52') })),
+    ).toBeVisible();
+    // 1.4% below the next pack per unit: below the 2% lead, no badge.
+    await expect(page.getByText(ar.catalog.price.bestValue)).toHaveCount(0);
+  });
+});
+
+// S22 PR 1 screenshots in both themes, at phone width and desktop.
+for (const theme of ['dark', 'light'] as const) {
+  test(`S22 quick buy screenshots, ${theme} theme`, async ({ page, api }, testInfo) => {
+    if (theme === 'light') await page.addInitScript(lightTheme);
+    signedIn(api)
+      .on('GET /api/quick-buy', 200, {
+        items: [
+          card(MINE, p660),
+          card(BROTHER, p60, { state: 'rejected' }),
+          card(OLD, p1800, { state: 'unavailable', unitPriceUsdUnits: null }),
+        ],
+      })
+      .on('GET /api/catalog/search-index', 200, searchIndex())
+      .on('GET /api/account', 200, { priceKind: 'retail' })
+      .on('GET /api/saved-players', 200, { items: [MINE, BROTHER] });
+    await page.goto('/');
+    const row = page.getByRole('region', { name: qb.row.title });
+    await expect(row.getByRole('listitem')).toHaveCount(3);
+    await screenshot(page, testInfo, `s22-home-row-${theme}`);
+    await row.getByRole('button', { name: /^اشحن 660 UC/ }).click();
+    await expect(page.getByRole('dialog').getByRole('slider')).toBeVisible();
+    await screenshot(page, testInfo, `s22-quick-sheet-${theme}`);
+    await page.keyboard.press('Escape');
+
+    await openSearch(page);
+    await page.getByRole('dialog').getByRole('combobox').fill('660 ببجي لحسابي');
+    await expect(page.getByRole('dialog').getByRole('option').first()).toBeVisible();
+    await screenshot(page, testInfo, `s22-search-command-${theme}`);
+    await page.keyboard.press('Escape');
+
+    await page.goto('/games/pubg-mobile');
+    await expect(
+      page.getByText(fill(ar.catalog.price.perHundred, { amount: ltr('$1.52') })),
+    ).toBeVisible();
+    await screenshot(page, testInfo, `s22-per-hundred-${theme}`);
+  });
+}
 
 // RTL screenshots of every new screen in both themes, at phone width and desktop.
 for (const theme of ['dark', 'light'] as const) {

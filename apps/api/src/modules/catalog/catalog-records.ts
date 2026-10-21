@@ -99,7 +99,7 @@ export interface ProductPricing {
   deliveryStats: DeliveryStats | null;
 }
 
-export function toProduct(row: ProductRow, pricing: ProductPricing): Product {
+export function toProduct(row: ProductRow, pricing: ProductPricing, storeUrl: string): Product {
   return {
     ...record(row),
     gameId: row.gameId,
@@ -107,6 +107,8 @@ export function toProduct(row: ProductRow, pricing: ProductPricing): Product {
     nameAr: row.nameAr,
     gameAmount: row.gameAmount,
     officialPriceUsdUnits: row.officialPriceUsdUnits,
+    quickCode: row.quickCode,
+    quickLinkUrl: `${storeUrl}/q/${row.quickCode}`,
     maxQuantity: row.maxQuantity,
     regionAr: row.regionAr,
     redemptionAr: row.redemptionAr,

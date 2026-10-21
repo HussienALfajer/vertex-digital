@@ -239,7 +239,16 @@ export type Adjustment = z.infer<typeof adjustmentSchema>;
 export const walletSchema = z
   .object({
     balanceUnits: amountUnitsSchema,
-    syp: z.object({ valueUnits: amountUnitsSchema, rate: exchangeRateSchema }).nullable(),
+    syp: z
+      .object({
+        valueUnits: amountUnitsSchema,
+        rate: exchangeRateSchema,
+        /** S22 BG1: the step a gap's pounds round up to, as prices do. */
+        displayStepSypUnits: z.int().positive(),
+      })
+      .nullable(),
+    /** S22 BG1: the totals of the customer's open reservations, which A02 pays first. */
+    reservedUsdUnits: amountUnitsSchema,
   })
   .meta({ id: 'Wallet' });
 

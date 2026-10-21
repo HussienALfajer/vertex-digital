@@ -631,6 +631,27 @@
       "when": 1792580642309,
       "tag": "0089_wide_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1792586889854,
+      "tag": "0090_s22_quick_code_function",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1792586907191,
+      "tag": "0091_s22_quick_buy",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1792586926720,
+      "tag": "0092_s22_quick_buy_guards",
+      "breakpoints": true
     }
   ]
 }

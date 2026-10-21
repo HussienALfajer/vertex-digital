@@ -126,6 +126,14 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # Direct buy link targets (S22 DL2), public: on top of the API's 60 a minute per address.
+    location ~* ^/api/q/ {
+        limit_req zone=vdquick burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Code reveals (S08 rule C2), on top of the API's per-customer counter.
     location ~* "^/api/orders/[0-9a-f-]{36}/codes/[0-9a-f-]{36}/reveal/?$" {
         limit_req zone=vdreveal burst=10 nodelay;
@@ -258,6 +266,15 @@ server {
     # store, which reads /api/verify/ with the visitor's address; `noindex`.
     location ~ ^/v/ {
         limit_req zone=vdverify burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3061;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
+    # Direct buy links (S22 DL1, DL2): resolved per request by the store, which reads /api/q/ with
+    # the visitor's address and redirects to the pack.
+    location ~ ^/q/ {
+        limit_req zone=vdquick burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:3061;
         include snippets/vertexdigital-proxy.conf;

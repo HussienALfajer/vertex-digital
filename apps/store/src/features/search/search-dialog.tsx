@@ -3,6 +3,9 @@
 import {
   formatSyp,
   formatUsd,
+  parseSearchCommand,
+  type SearchCommand,
+  type SearchCommandPlayer,
   type SearchIndex,
   type SearchIndexGame,
   type SearchIndexProduct,
@@ -12,12 +15,14 @@ import { Button } from '@vertex-digital/ui/components/button';
 import { CommandDialogContent } from '@vertex-digital/ui/components/command-dialog';
 import { Dialog, DialogClose, DialogTitle } from '@vertex-digital/ui/components/dialog';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
-import { ClockIcon, Gamepad2Icon, PackageIcon, SearchIcon, XIcon } from 'lucide-react';
+import { ClockIcon, Gamepad2Icon, PackageIcon, SearchIcon, XIcon, ZapIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type KeyboardEvent, useEffect, useId, useMemo, useState } from 'react';
 import { CatalogPicture } from '@/features/catalog/catalog-picture';
 import { rememberPrivatePrices } from '@/features/catalog/private-prices';
+import { listSavedPlayers } from '@/features/players/requests';
+import { tq } from '@/features/quick-buy/i18n';
 import { apiRequest } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
@@ -32,6 +37,7 @@ type IndexState =
 
 /** One row of the results, in the order the arrow keys walk them. */
 type Option =
+  | { kind: 'command'; command: SearchCommand; href: string }
   | { kind: 'game'; game: SearchIndexGame; href: string }
   | { kind: 'product'; product: SearchIndexProduct; gameName: string; href: string }
   | { kind: 'recent'; query: string };
@@ -49,7 +55,9 @@ let cachedAt = 0;
  * The search dialog (S09 rule SR5): a full-screen sheet on phones, a dialog from `sm`. Results
  * update as the customer types (rules SR3, SR4 in the browser, over the public index); arrows,
  * `Enter` and `Esc` work. A game opens its page, a pack its game page with `?pack=<id>`. An empty
- * query lists the recent searches of this device.
+ * query lists the recent searches of this device. S22 SC1–SC5: an amount, a game and a saved ID's
+ * label ("660 ببجي لأخي") lead with purchase commands that open the game on the slide step;
+ * nothing is bought here.
  */
 export function SearchDialog({
   open,
@@ -66,16 +74,29 @@ export function SearchDialog({
   const [query, setQuery] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
   const [active, setActive] = useState(0);
+  // SC4: the saved IDs, read once per open when signed in; null signed out (no labels then).
+  const [players, setPlayers] = useState<SearchCommandPlayer[] | null>(null);
 
   // S20 AT4: the index is retail; an account with its own prices sees none here. Its kind is read
   // on each open, prices hidden meanwhile.
   useEffect(() => {
     if (!open) return;
+    setPlayers(null);
     void readSession().then(async (session) => {
       if (!session || session.user.emailVerified === false) return;
       document.documentElement.setAttribute('data-private-prices-hint', '');
-      const account = await apiRequest<{ priceKind: string }>('/api/account');
+      const [account, saved] = await Promise.all([
+        apiRequest<{ priceKind: string }>('/api/account'),
+        listSavedPlayers(),
+      ]);
       rememberPrivatePrices(!account.ok || account.data.priceKind !== 'retail');
+      if (saved.ok) {
+        setPlayers(
+          saved.data.items
+            .filter((item) => item.gameShown)
+            .map((item) => ({ id: item.id, label: item.label, gameSlug: item.gameSlug })),
+        );
+      }
     });
   }, [open]);
 
@@ -104,6 +125,10 @@ export function SearchDialog({
       state.status === 'ready' ? searchCatalog(state.index, query) : { games: [], products: [] },
     [state, query],
   );
+  const commands = useMemo(
+    () => (state.status === 'ready' ? parseSearchCommand(query, state.index, players) : []),
+    [state, query, players],
+  );
   const gameNames = useMemo(
     () =>
       new Map(
@@ -114,6 +139,9 @@ export function SearchDialog({
 
   const options: Option[] = query.trim()
     ? [
+        ...commands.map(
+          (command): Option => ({ kind: 'command', command, href: commandHref(command) }),
+        ),
         ...results.games.map(
           (game): Option => ({ kind: 'game', game, href: `/games/${game.slug}` }),
         ),
@@ -271,7 +299,20 @@ export function SearchDialog({
   );
 }
 
+/** SC3, SC5: the game on the pack and the saved ID, so the buy box opens on the slide step. */
+function commandHref(command: SearchCommand): string {
+  const query = new URLSearchParams({
+    ...(command.product && { pack: command.product.id }),
+    ...(command.savedPlayer && { player: command.savedPlayer.id }),
+  });
+  const search = query.toString();
+  return `/games/${command.game.slug}${search ? `?${search}` : ''}`;
+}
+
 function optionKey(option: Option): string {
+  if (option.kind === 'command') {
+    return `command:${option.command.game.slug}:${option.command.product?.id ?? ''}:${option.command.savedPlayer?.id ?? ''}`;
+  }
   if (option.kind === 'game') return `game:${option.game.id}`;
   if (option.kind === 'product') return `product:${option.product.id}`;
   return `recent:${option.query}`;
@@ -283,7 +324,39 @@ function isUnavailable(option: Option): boolean {
   return false;
 }
 
+/** S22 SC3: a command as an action, with the game's cover and name. */
+function CommandRow({ command }: { command: SearchCommand }) {
+  const { game, product, savedPlayer } = command;
+  // Each name in its own direction inside the Arabic sentence ("660 UC" stays whole).
+  const isolate = (text: string) => `⁨${text}⁩`;
+  const title = product
+    ? savedPlayer
+      ? tq('search.packFor', {
+          pack: isolate(product.nameAr),
+          label: isolate(savedPlayer.label),
+        })
+      : tq('search.pack', { pack: isolate(product.nameAr) })
+    : tq('search.for', { label: isolate(savedPlayer?.label ?? '') });
+  return (
+    <>
+      {game.cover ? (
+        <CatalogPicture image={game.cover} sizes="40px" className="size-10 shrink-0" />
+      ) : (
+        <Gamepad2Icon className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      )}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex items-center gap-1.5 font-bold">
+          <ZapIcon className="size-4 shrink-0 text-accent-text" aria-hidden="true" />
+          <bdi className="truncate">{title}</bdi>
+        </span>
+        <span className="truncate text-xs text-muted-foreground">{game.nameAr}</span>
+      </span>
+    </>
+  );
+}
+
 function OptionRow({ option }: { option: Option }) {
+  if (option.kind === 'command') return <CommandRow command={option.command} />;
   if (option.kind === 'recent') {
     return (
       <>

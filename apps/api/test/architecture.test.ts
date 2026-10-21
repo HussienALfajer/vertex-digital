@@ -217,6 +217,7 @@ describe('module boundaries', () => {
     orders: 'orders',
     'price-lists': 'pricing',
     pricing: 'pricing',
+    'quick-links': 'catalog',
     rates: 'rates',
     reconciliation: 'reconciliation',
     settings: 'settings',

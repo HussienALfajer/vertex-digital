@@ -84,6 +84,8 @@ interface NavItem {
 interface NavChild {
   to: NavPath;
   label:
+    | 'nav.catalogGames'
+    | 'nav.quickLinks'
     | 'nav.allOrders'
     | 'nav.liveOrders'
     | 'nav.depositRequests'
@@ -154,7 +156,15 @@ const navItems: NavItem[] = [
       { to: '/settings/support', label: 'nav.supportSettings' },
     ],
   },
-  { to: '/catalog', label: 'nav.catalog', icon: Gamepad2Icon },
+  {
+    to: '/catalog',
+    label: 'nav.catalog',
+    icon: Gamepad2Icon,
+    children: [
+      { to: '/catalog', label: 'nav.catalogGames', except: ['/catalog/quick-links'] },
+      { to: '/catalog/quick-links', label: 'nav.quickLinks' },
+    ],
+  },
   { to: '/content', label: 'nav.content', icon: NewspaperIcon },
   { to: '/suppliers', label: 'nav.suppliers', icon: TruckIcon },
   {

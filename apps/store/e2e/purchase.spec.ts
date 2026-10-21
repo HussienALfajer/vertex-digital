@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { formatSyp, formatUsd, type Order, type StoreProduct } from '@vertex-digital/contracts';
+import qb from '../src/features/quick-buy/messages.ar.json' with { type: 'json' };
 import ar from '../src/messages/ar.json' with { type: 'json' };
 import { PUBG, pack } from './catalog';
 import { expect, type MockApi, screenshot, test } from './test';
@@ -8,7 +9,9 @@ import { expect, type MockApi, screenshot, test } from './test';
  * The buy box (S09 rules BB1–BB8, PV1–PV8, RS1): signed out and back after signing in with the
  * id kept, the live player check (valid with the in-game name, invalid with the required
  * confirmation, unavailable), the shortfall with a reservation and the deposit link, the slide
- * confirmation and its submission with one Idempotency-Key per body, and a price change.
+ * confirmation and its submission with one Idempotency-Key per body, and a price change. S22: the
+ * gap with the open reservations (BG1), "احجز واشحن الفرق" into the deposit form (BG2), the cap
+ * of three reservations (BG5), and a direct link's attribution and saved ID (DL3, DL4).
  */
 
 const p = ar.purchase;
@@ -28,7 +31,7 @@ function signedIn(api: MockApi, balanceUnits = 50 * USD): MockApi {
       user: { name: 'سارة الأحمد', email: 'sara@example.com', emailVerified: true },
       session: { token: 'this-device' },
     })
-    .on('GET /api/wallet', 200, { balanceUnits, syp: null });
+    .on('GET /api/wallet', 200, { balanceUnits, syp: null, reservedUsdUnits: 0 });
 }
 
 function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
@@ -77,6 +80,46 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     createdAt: new Date().toISOString(),
     ...changes,
   };
+}
+
+/** What the deposit form reads after "احجز واشحن الفرق" (S22 BG2); USDT is off here. */
+function depositOptions(api: MockApi): MockApi {
+  return api
+    .on('GET /api/deposits/sham-cash/options', 200, {
+      state: 'available',
+      currencies: {
+        SYP: { available: true, reason: null },
+        USD: { available: true, reason: null },
+      },
+      account: { name: 'متجر تجريبي', number: '0990000000' },
+      limits: {
+        established: true,
+        minUnits: 2 * USD,
+        perDepositUnits: 500 * USD,
+        dailyUnits: 1_000 * USD,
+        remainingTodayUnits: 1_000 * USD,
+      },
+      rate: {
+        id: '0199e000-0000-7000-8000-0000000000aa',
+        sypPerUsd: '118',
+        displayStepSypUnits: 500,
+      },
+      reviewHours: { start: '10:00', end: '22:00' },
+      eta: { state: 'open', minutes: 15 },
+      pendingDepositId: null,
+    })
+    .on('GET /api/deposits/usdt/options', 200, {
+      networks: ['usdt_trc20', 'usdt_bep20'].map((method) => ({
+        method,
+        state: 'unavailable',
+        available: false,
+        unavailableReason: 'not_configured',
+        address: null,
+        confirmations: 19,
+      })),
+      limits: null,
+      pendingDepositId: null,
+    });
 }
 
 const buyBox = (page: Page) =>
@@ -238,24 +281,74 @@ test.describe('buy box', () => {
       .on('POST /api/player-checks', 200, { result: 'valid', playerName: null })
       .on('POST /api/orders', 201, reserved)
       .on(`GET /api/orders/${ORDER_ID}`, 200, reserved);
+    depositOptions(api);
     await page.goto(`/games/pubg-mobile?pack=${p660.id}`);
     await idField(page).fill('51234567');
     await expect(buyBox(page).getByText(p.playerValid)).toBeVisible();
+    // S22 BG1, BG2: the gap in place of the slide, "احجز واشحن الفرق" and "اشحن فقط".
     await expect(
-      buyBox(page).getByText(
-        fill(p.shortfall, { balance: `⁦$5.00⁩`, missing: `⁦${formatUsd(4_990_000)}⁩` }),
-      ),
+      buyBox(page).getByText(fill(qb.gap.missing, { missing: `⁦${formatUsd(4_990_000)}⁩` })),
     ).toBeVisible();
-    await expect(buyBox(page).getByRole('link', { name: p.deposit })).toHaveAttribute(
+    await expect(buyBox(page).getByText(fill(qb.gap.balance, { balance: `⁦$5.00⁩` }))).toBeVisible();
+    await expect(buyBox(page).getByRole('link', { name: qb.gap.depositOnly })).toHaveAttribute(
       'href',
-      '/wallet/deposit?amount=499',
+      '/wallet/deposit?gap=499',
     );
-    await buyBox(page).getByRole('button', { name: p.reserve }).click();
+    await buyBox(page).getByRole('button', { name: qb.gap.reserve }).click();
     await expect(buyBox(page).getByText(fill(p.reserveNote, { hours: 24 }))).toBeVisible();
+    // The server's balance and reservations after this one: the gap the deposit form receives.
+    api.on('GET /api/wallet', 200, {
+      balanceUnits: 5 * USD,
+      syp: null,
+      reservedUsdUnits: 9_990_000,
+    });
     await buyBox(page).getByRole('slider', { name: p.slideReserve }).focus();
     await page.keyboard.press('End');
-    await expect(page).toHaveURL(`/orders/${ORDER_ID}`);
+    await expect(page).toHaveURL(
+      `/wallet/deposit?order=${ORDER_ID}&number=${reserved.number}&gap=499`,
+    );
     expect(api.last('POST /api/orders')?.body).toMatchObject({ whenBalanceShort: 'reserve' });
+    await expect(
+      page.getByText(
+        fill(qb.deposit.forOrder, {
+          number: reserved.number,
+          amount: `⁦${formatUsd(4_990_000)}⁩`,
+        }),
+      ),
+    ).toBeVisible();
+    // Sham Cash in pounds: $4.99 × 118 = 588.82, up to the 5-pound step.
+    await expect(page.getByLabel(ar.deposits.form.amountSyp)).toHaveValue('590');
+  });
+
+  test('counts the open reservations in the gap and offers only the deposit at three (BG1, BG5)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api, 5 * USD)
+      .on('GET /api/wallet', 200, { balanceUnits: 5 * USD, syp: null, reservedUsdUnits: 3 * USD })
+      .on('POST /api/player-checks', 200, { result: 'valid', playerName: null })
+      .on('POST /api/orders', 409, {
+        statusCode: 409,
+        code: 'RESERVATIONS_LIMIT_REACHED',
+        message: 'Too many',
+        details: { limit: 3 },
+      });
+    await page.goto(`/games/pubg-mobile?pack=${p660.id}`);
+    await idField(page).fill('51234567');
+    await expect(buyBox(page).getByText(p.playerValid)).toBeVisible();
+    // $9.99 + $3.00 reserved − $5.00.
+    await expect(
+      buyBox(page).getByText(fill(qb.gap.missing, { missing: `⁦${formatUsd(7_990_000)}⁩` })),
+    ).toBeVisible();
+    await buyBox(page).getByRole('button', { name: qb.gap.reserve }).click();
+    await buyBox(page).getByRole('slider', { name: p.slideReserve }).focus();
+    await page.keyboard.press('End');
+    await expect(buyBox(page).getByText(ar.errors.RESERVATIONS_LIMIT_REACHED)).toBeVisible();
+    await expect(buyBox(page).getByRole('button', { name: qb.gap.reserve })).toBeHidden();
+    await expect(buyBox(page).getByRole('link', { name: qb.gap.deposit })).toHaveAttribute(
+      'href',
+      '/wallet/deposit?gap=799',
+    );
   });
 
   test('a changed price is shown and needs a new slide, with a new key (edge case 1)', async ({
@@ -491,9 +584,9 @@ for (const theme of ['dark', 'light'] as const) {
     await idField(page).fill('51234567');
     // The check settles first, as in the flow above: a press while it runs can be lost.
     await expect(buyBox(page).getByText(p.playerValid)).toBeVisible();
-    await expect(buyBox(page).getByRole('button', { name: p.reserve })).toBeVisible();
+    await expect(buyBox(page).getByRole('button', { name: qb.gap.reserve })).toBeVisible();
     await screenshot(page, testInfo, `buy-box-short-${theme}`);
-    await buyBox(page).getByRole('button', { name: p.reserve }).click();
+    await buyBox(page).getByRole('button', { name: qb.gap.reserve }).click();
     await expect(buyBox(page).getByRole('slider')).toBeVisible();
     await screenshot(page, testInfo, `buy-box-slide-${theme}`);
   });

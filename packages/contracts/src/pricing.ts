@@ -832,6 +832,8 @@ export const customerPricesSchema = z
         priceUsdUnits: true,
         priceSypUnits: true,
         savings: true,
+        perHundredUsdUnits: true,
+        bestValue: true,
       }),
     ),
     rateId: z.uuid().nullable(),

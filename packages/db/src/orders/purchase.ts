@@ -10,6 +10,7 @@ import {
   orderQuantityMax,
   orderTotal,
   type PlayerCheckState,
+  type QuickLinkAttribution,
   RESERVATION_HOURS,
   RESERVATIONS_MAX,
   rateFromNumeric,
@@ -35,6 +36,7 @@ import {
 import { afterMerchantPurchase } from '../merchant-tools/alerts.js';
 import { recordMerchantSale } from '../merchant-tools/sales.js';
 import { type ProductRoutingState, productRoutingStates } from '../pricing/index.js';
+import { recordQuickLinkOrder } from '../quick-links/index.js';
 import { catalogInputFields, catalogProducts, exchangeRates, orders } from '../schema/index.js';
 import { OrderError } from './errors.js';
 import { findSavedPlayer, type SavedPlayerRow, touchSavedPlayer } from './saved-players.js';
@@ -97,6 +99,8 @@ export interface PurchaseCommon {
 export interface PurchaseInput extends PurchaseCommon, LineInput {
   /** S09 rule RS1: `reserve` makes a reservation when the balance is short. */
   whenBalanceShort: 'refuse' | 'reserve';
+  /** S22 DL4: the direct link the tab opened; written only when it is the product's code. */
+  quickLink?: QuickLinkAttribution;
 }
 
 /**
@@ -502,6 +506,8 @@ export async function purchaseOrder(
     { from: null, to: order.status },
   );
   const savedPlayer = await touchSavedPlayer(tx, order, line.savePlayer, customer.accountType);
+  // S22 DL4: a reservation's row too; the counts take it once A02 paid the order.
+  await recordQuickLinkOrder(tx, order, product.quickCode, input.quickLink);
   // S21 SP4: a merchant's order keeps its selling price (a reservation too, paid at this price).
   if (customer.accountType === 'merchant') await recordMerchantSale(tx, order);
   if (reserve) {

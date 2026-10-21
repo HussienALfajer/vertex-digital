@@ -259,6 +259,15 @@ The public catalog routes (S09) add `perHundredUsdUnits` and `bestValue` per gam
 21. A browser without WebAuthn: the passkey buttons are hidden; password sign-in unchanged.
 22. A test customer: everything applies; their orders stay on test routes (S08), and link attributions from test customers are excluded from the counts.
 
+## Implementation notes (PR 1)
+Details the spec left open, settled while building PR 1:
+- The deposit form's `?gap=` is whole cents as digits, as S09's `?amount=` was (which it replaces everywhere: buy box, home sheet, cart, reservation page, merchant bulk list); a reservation adds `order=<order id>` (the way back) and `number=<order number>` (the strip). Sham Cash opens on its first available currency; SYP holds the pounds of the gap rounded up to the display step, which the wallet answer now carries (`syp.displayStepSypUnits`).
+- `/q/<code>` is a store route handler: `307` with a relative location, and the code and campaign in a 5-minute `vd-quick-link` cookie on `/games` that the game page moves into this tab's session storage; the URL after the redirect carries `?pack=<id>&via=q` only. A sign-in keeps `via=q` in its way back.
+- Product codes are drawn by `catalog_quick_code()` (migration 0090): a sequence through an affine permutation modulo 31^6, so the backfill and later inserts never collide; the guard of migration 0092 keeps a code unchanged.
+- The admin product row carries `quickLinkUrl` (from `STORE_URL`) beside `quickCode`, since the panel does not know the store's address.
+- A saved ID with its pack in the URL (`?pack=&player=`, a search command, a quick-buy card that is not ready) opens the slide step when the ID is ready (SP3); "معرّفاتي"'s "اشحن" (no pack) keeps S10's behaviour.
+- The quick-buy, gap, deposit strip and search-command strings live in `apps/store/src/features/quick-buy/messages.ar.json`; the home, content pages and cart budgets were raised by 2 KB (`e2e/store.spec.ts` gives the reason).
+
 ## Open questions
 None. The defaults listed under the owner decisions are the spec's choices and may be changed at review.
 

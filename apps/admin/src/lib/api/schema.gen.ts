@@ -1908,6 +1908,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/quick-buy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrdersController_quickBuyCards"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/saved-players": {
         parameters: {
             query?: never;
@@ -1937,7 +1953,7 @@ export interface paths {
         delete: operations["OrdersController_deleteSavedPlayer"];
         options?: never;
         head?: never;
-        patch: operations["OrdersController_renameSavedPlayer"];
+        patch: operations["OrdersController_updateSavedPlayer"];
         trace?: never;
     };
     "/api/orders/{id}": {
@@ -2862,6 +2878,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["CatalogItemsAdminController_restoreProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/q/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["QuickLinksController_resolve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/quick-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["QuickLinksAdminController_stats"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5504,7 +5552,9 @@ export interface components {
             syp: {
                 valueUnits: number;
                 rate: components["schemas"]["ExchangeRate"];
+                displayStepSypUnits: number;
             } | null;
+            reservedUsdUnits: number;
         };
         WalletEntryQuery: {
             cursor?: string;
@@ -5580,7 +5630,9 @@ export interface components {
             syp: {
                 valueUnits: number;
                 rate: components["schemas"]["ExchangeRate"];
+                displayStepSypUnits: number;
             } | null;
+            reservedUsdUnits: number;
             customer: components["schemas"]["WalletCustomer"];
             adjustmentCount: number;
         };
@@ -7090,11 +7142,17 @@ export interface components {
                 label: string;
             };
             gift?: components["schemas"]["Gift"];
+            quickLink?: components["schemas"]["QuickLinkAttribution"];
         };
         Gift: {
             senderName?: string;
             message?: string;
         };
+        QuickLinkAttribution: {
+            code: components["schemas"]["QuickCode"];
+            campaign?: string;
+        };
+        QuickCode: string;
         CreatedOrder: {
             /** Format: uuid */
             id: string;
@@ -7234,6 +7292,7 @@ export interface components {
             complete: boolean;
             /** Format: date-time */
             lastUsedAt: string | null;
+            quickBuyHidden: boolean;
         };
         CheckoutRequest: {
             lines: components["schemas"]["CheckoutLine"][];
@@ -7255,6 +7314,7 @@ export interface components {
                 label: string;
             };
             gift?: components["schemas"]["Gift"];
+            quickLink?: components["schemas"]["QuickLinkAttribution"];
         };
         /** @enum {string} */
         CheckoutSource: "cart" | "bulk";
@@ -7293,6 +7353,30 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        QuickBuy: {
+            items: {
+                savedPlayer: components["schemas"]["SavedPlayer"];
+                game: {
+                    slug: string;
+                    nameAr: string;
+                    cover: components["schemas"]["CatalogImage"] | null;
+                };
+                product: {
+                    /** Format: uuid */
+                    id: string;
+                    nameAr: string;
+                    kind: components["schemas"]["ProductKind"];
+                    gameAmount: number | null;
+                };
+                quantity: number;
+                unitPriceUsdUnits: number | null;
+                unitPriceSypUnits: number | null;
+                priceKind: components["schemas"]["PriceKind"];
+                state: components["schemas"]["QuickBuyState"];
+            }[];
+        };
+        /** @enum {string} */
+        QuickBuyState: "ready" | "unavailable" | "rejected" | "incomplete";
         SavedPlayerListQuery: {
             /** Format: uuid */
             gameId?: string;
@@ -7301,7 +7385,8 @@ export interface components {
             items: components["schemas"]["SavedPlayer"][];
         };
         UpdateSavedPlayer: {
-            label: string;
+            label?: string;
+            quickBuyHidden?: boolean;
         };
         OrderListQuery: {
             cursor?: string;
@@ -8184,6 +8269,8 @@ export interface components {
                 p90Ms: number;
                 count: number;
             } | null;
+            perHundredUsdUnits: number | null;
+            bestValue: boolean;
             playerCheck: boolean;
             regionAr: string | null;
             redemptionAr: string | null;
@@ -8227,6 +8314,8 @@ export interface components {
                     amountUsdUnits: number;
                     percent: number | null;
                 } | null;
+                perHundredUsdUnits: number | null;
+                bestValue: boolean;
             }[];
             /** Format: uuid */
             rateId: string | null;
@@ -8279,6 +8368,7 @@ export interface components {
             idGuide: components["schemas"]["CatalogImage"] | null;
             accentColor: string | null;
             regionNotesAr: string | null;
+            bestValueEnabled: boolean;
             productCount: number;
         };
         /** @enum {string} */
@@ -8334,6 +8424,7 @@ export interface components {
             idGuide: components["schemas"]["CatalogImage"] | null;
             accentColor: string | null;
             regionNotesAr: string | null;
+            bestValueEnabled: boolean;
             productCount: number;
             categoryArchived: boolean;
             searchTerms: string[];
@@ -8377,6 +8468,9 @@ export interface components {
             nameAr: string;
             gameAmount: number | null;
             officialPriceUsdUnits: number | null;
+            quickCode: components["schemas"]["QuickCode"];
+            /** Format: uri */
+            quickLinkUrl: string;
             maxQuantity: number;
             regionAr: string | null;
             redemptionAr: string | null;
@@ -8413,6 +8507,7 @@ export interface components {
             regionNotesAr?: string | null;
             status?: components["schemas"]["CatalogStatus"];
             searchTerms?: string[];
+            bestValueEnabled?: boolean;
         };
         CreateInputField: {
             key: string;
@@ -8587,6 +8682,44 @@ export interface components {
             regionAr?: string | null;
             redemptionAr?: string | null;
             status?: components["schemas"]["CatalogStatus"];
+        };
+        QuickLinkQuery: {
+            c?: string;
+        };
+        QuickLinkResolve: {
+            /** @enum {string} */
+            target: "pack";
+            gameSlug: string;
+            /** Format: uuid */
+            productId: string;
+        } | {
+            /** @enum {string} */
+            target: "game";
+            gameSlug: string;
+        } | {
+            /** @enum {string} */
+            target: "home";
+        };
+        QuickLinkStatsQuery: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            /** Format: uuid */
+            productId?: string;
+        };
+        QuickLinkStats: {
+            items: {
+                /** Format: uuid */
+                productId: string;
+                productNameAr: string;
+                gameNameAr: string;
+                quickCode: components["schemas"]["QuickCode"];
+                campaign: string | null;
+                opens: number;
+                orders: number;
+                revenueUsdUnits: number;
+            }[];
         };
         SupplierSummary: {
             code: components["schemas"]["SupplierCode"];
@@ -13895,6 +14028,26 @@ export interface operations {
             };
         };
     };
+    OrdersController_quickBuyCards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest-used saved ids first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickBuy"];
+                };
+            };
+        };
+    };
     OrdersController_savedPlayerList: {
         parameters: {
             query?: {
@@ -13937,7 +14090,7 @@ export interface operations {
             };
         };
     };
-    OrdersController_renameSavedPlayer: {
+    OrdersController_updateSavedPlayer: {
         parameters: {
             query?: never;
             header?: never;
@@ -13952,7 +14105,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The renamed id */
+            /** @description The changed id */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15494,6 +15647,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Product"];
+                };
+            };
+        };
+    };
+    QuickLinksController_resolve: {
+        parameters: {
+            query?: {
+                c?: string;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Where the link leads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickLinkResolve"];
+                };
+            };
+        };
+    };
+    QuickLinksAdminController_stats: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                productId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Opens and orders per link */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickLinkStats"];
                 };
             };
         };
