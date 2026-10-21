@@ -25,6 +25,7 @@ import {
 import {
   ArrowDownIcon,
   ArrowUpIcon,
+  LinkIcon,
   PackageIcon,
   PlusIcon,
   RouteIcon,
@@ -41,6 +42,7 @@ import { useArchiveProduct, useReorderProducts, useUpdateProduct } from './catal
 import { AvailabilityBadge, catalogFailure, MoveButton, StatusBadge } from './catalog-parts';
 import { moved } from './catalog-search';
 import { ProductDialog } from './product-dialog';
+import { QuickLinkDialog } from './quick-link-dialog';
 
 /**
  * "الباقات" (S06 screens): the game's products in order (name, kind, in-game amount, official
@@ -48,12 +50,14 @@ import { ProductDialog } from './product-dialog';
  * order (rule CT5), archive after a confirmation (audit A7) and restore with an archived filter
  * (rule CT1). S07: the stored price
  * in USD and SYP, the supplier it follows, a held review, and each product's routes drawer.
+ * S22 DL5: each pack's direct buy link, with its QR and campaign tag.
  */
 export function ProductsTab({ game }: { game: GameDetail }) {
   const { t } = useTranslation();
   const [archived, setArchived] = useState(false);
   const [editing, setEditing] = useState<Product | 'new' | null>(null);
   const [routing, setRouting] = useState<string | null>(null);
+  const [linking, setLinking] = useState<Product | null>(null);
   const [archiving, setArchiving] = useState<Product | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const reorder = useReorderProducts(game.id);
@@ -221,6 +225,10 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                           <RouteIcon />
                           {t('catalog.products.routes')}
                         </Button>
+                        <Button variant="outline" size="sm" onClick={() => setLinking(product)}>
+                          <LinkIcon />
+                          {t('catalog.quickLink.open')}
+                        </Button>
                         {/* S16: a purchase from the panel, this pack preset. */}
                         <Button
                           variant="outline"
@@ -274,6 +282,9 @@ export function ProductsTab({ game }: { game: GameDetail }) {
         product={game.products.find((product) => product.id === routing) ?? null}
         onClose={() => setRouting(null)}
       />
+      <Dialog open={linking !== null} onOpenChange={(open) => !open && setLinking(null)}>
+        {linking !== null && <QuickLinkDialog product={linking} />}
+      </Dialog>
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         {editing !== null && (
           <ProductDialog

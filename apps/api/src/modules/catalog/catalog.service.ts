@@ -446,9 +446,14 @@ export class CatalogService {
           }
           const before = await this.lockGame(tx, id);
           if (before.categoryId !== current.categoryId) throw new GameMoved();
-          // S09 rule AD1: the search terms change with the game, audited in the same entry.
-          const beforeValues = { ...gameValues(before), searchTerms: before.searchTerms };
-          const after: GameValues & { searchTerms: string[] } = {
+          // S09 rule AD1, S22 BV1: the search terms and the best-value switch change with the
+          // game, audited in the same entry.
+          const beforeValues = {
+            ...gameValues(before),
+            searchTerms: before.searchTerms,
+            bestValueEnabled: before.bestValueEnabled,
+          };
+          const after: GameValues & { searchTerms: string[]; bestValueEnabled: boolean } = {
             ...beforeValues,
             ...definedOnly({
               categoryId: input.categoryId,
@@ -460,6 +465,7 @@ export class CatalogService {
               accentColor: input.accentColor,
               regionNotesAr: input.regionNotesAr,
               searchTerms: input.searchTerms,
+              bestValueEnabled: input.bestValueEnabled,
             }),
           };
           const changed = changes(beforeValues, after);
@@ -601,23 +607,27 @@ export class CatalogService {
     return rows.map((row) => {
       const state = states.get(row.id) as ProductRoutingState;
       const price = state.current?.priceUsdUnits ?? null;
-      return toProduct(row, {
-        availability: state.availability,
-        priceUsdUnits: price,
-        priceSypUnits:
-          price !== null && rate
-            ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
+      return toProduct(
+        row,
+        {
+          availability: state.availability,
+          priceUsdUnits: price,
+          priceSypUnits:
+            price !== null && rate
+              ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
+              : null,
+          basisSupplierNameAr: state.basis?.supplier.nameAr ?? null,
+          basisCostUsdUnits: state.basis?.costUsdUnits ?? null,
+          basisStockLevel: state.basis
+            ? stockLevel(state.basis.offer.stock, state.basis.offer.inStock, policy.lowStockUnits)
             : null,
-        basisSupplierNameAr: state.basis?.supplier.nameAr ?? null,
-        basisCostUsdUnits: state.basis?.costUsdUnits ?? null,
-        basisStockLevel: state.basis
-          ? stockLevel(state.basis.offer.stock, state.basis.offer.inStock, policy.lowStockUnits)
-          : null,
-        priceHeld: state.priceHeld,
-        routed: state.routes.some((route) => route.archivedAt === null),
-        reviewOpen: state.openReview !== null,
-        deliveryStats: delivery.get(row.id) ?? null,
-      });
+          priceHeld: state.priceHeld,
+          routed: state.routes.some((route) => route.archivedAt === null),
+          reviewOpen: state.openReview !== null,
+          deliveryStats: delivery.get(row.id) ?? null,
+        },
+        this.env.STORE_URL,
+      );
     });
   }
 
@@ -1024,6 +1034,7 @@ function toGame(
     idGuide: image(row.idGuideFileId),
     accentColor: row.accentColor,
     regionNotesAr: row.regionNotesAr,
+    bestValueEnabled: row.bestValueEnabled,
     productCount,
   };
 }

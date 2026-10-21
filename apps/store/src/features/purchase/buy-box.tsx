@@ -4,6 +4,7 @@ import {
   type CreateOrder,
   canonicalFields,
   checkoutTotal,
+  depositGap,
   displaySypTotal,
   formatSyp,
   formatUsd,
@@ -52,9 +53,9 @@ import {
 } from '@/features/cart/cart';
 import { useCart } from '@/features/cart/use-cart';
 import { deliveryDetailText } from '@/features/catalog/delivery';
-import { centsParam } from '@/features/deposits/amounts';
 import { getOrder } from '@/features/orders/requests';
 import { listSavedPlayers } from '@/features/players/requests';
+import { quickLinkFor } from '@/features/quick-links/handoff';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
@@ -64,8 +65,11 @@ import { useBalance, usePurchasesStopped } from './customer';
 import { clearDraft, readDraft, saveDraft } from './draft';
 import { FieldInput } from './field-input';
 import { checkFields, type FieldValues } from './fields';
+import { GapBlock } from './gap-block';
+import { gapDepositPath } from './gap-path';
 import { GiftBox, type GiftDraft, giftErrors, giftOf, NO_GIFT } from './gift-box';
 import { IdGuideButton } from './id-guide';
+import { freesKey } from './order-key';
 import { usePlayerCheck } from './player-check';
 import { purchaseRefusalText } from './refusals';
 import { createOrder } from './requests';
@@ -79,11 +83,12 @@ export type Buyable = StoreProduct & { priceUsdUnits: number };
 /**
  * Why the buy box opened besides a pack being chosen (S10): a repeat of a delivered order (OT1),
  * a saved ID chosen in "معرّفاتي" (SP5), a cart line to edit (CT6), or the calculator's packs to
- * add together (CT3).
+ * add together (CT3). S22 DL3: a direct link (`?via=q`), which picks the newest-used saved ID.
  */
 export type BuyBoxIntent =
   | { kind: 'repeat'; orderId: string }
-  | { kind: 'player'; savedId: string }
+  | { kind: 'player'; savedId: string; jump?: boolean }
+  | { kind: 'link' }
   | { kind: 'edit'; lineId: string }
   | { kind: 'bundle'; lines: { product: Buyable; count: number }[] };
 
@@ -113,34 +118,6 @@ function useSavedPlayers(enabled: boolean): Saved {
 const TermsSheet = dynamic(() =>
   import('@/features/merchant/terms-sheet').then((module) => module.TermsSheet),
 );
-
-/**
- * The purchase's refusals decided after the API looked the key up (rules O1–O6, PV8, RS2): no
- * order holds the key, so the same body may go with a new one. `IDEMPOTENCY_KEY_REUSED` too: the
- * key's first request was written and the customer is told to check their orders, so a new slide
- * is a new purchase (F6-14).
- */
-const REFUSED_AFTER_LOOKUP: ReadonlySet<Failure> = new Set<Failure>([
-  'PRICE_CHANGED',
-  'PRODUCT_UNAVAILABLE',
-  'INSUFFICIENT_BALANCE',
-  'PLAYER_NOT_CONFIRMED',
-  'PURCHASES_STOPPED',
-  'RESERVATIONS_LIMIT_REACHED',
-  'NOT_FOUND',
-  'IDEMPOTENCY_KEY_REUSED',
-  'MERCHANT_TERMS_REQUIRED',
-]);
-
-/**
- * Whether a refusal frees the key. `VALIDATION_FAILED` may come before the lookup (the body's
- * schema) or after it, so it frees the key only when no earlier answer was lost. Anything else
- * keeps the key, including a rate limit or a lost session: those are answered before the key is
- * looked up, so the first request may still have paid (F6-14).
- */
-function freesKey(reason: Failure, unsettled: boolean): boolean {
-  return REFUSED_AFTER_LOOKUP.has(reason) || (reason === 'VALIDATION_FAILED' && !unsettled);
-}
 
 type Sending =
   | { status: 'idle' }
@@ -200,6 +177,8 @@ export function BuyBox({
   const [sending, setSending] = useState<Sending>({ status: 'idle' });
   // S20 MT2: a directly granted merchant accepts the terms in a sheet, then slides again.
   const [termsOpen, setTermsOpen] = useState(false);
+  // S22 BG5: three open reservations already; only "اشحن فقط" stays.
+  const [reserveBlocked, setReserveBlocked] = useState(false);
   const [slide, setSlide] = useState(0);
   // S10: the saved ID chosen, and the fields the customer already confirmed (a saved ID, a
   // delivered order's, a cart line's): unchanged, they need no new check or confirmation.
@@ -269,6 +248,15 @@ export function BuyBox({
   const check = playerCheck.state.status === 'done' ? playerCheck.state.check : null;
   const shortfall =
     balance.status === 'ready' && total > balance.units ? total - balance.units : null;
+  // S22 BG1: what to deposit counts the open reservations, which A02 pays first.
+  const gap =
+    balance.status === 'ready' && shortfall !== null
+      ? depositGap({
+          totalUsdUnits: total,
+          balanceUsdUnits: balance.units,
+          reservedUsdUnits: balance.reservedUnits,
+        })
+      : null;
   const gameSaved =
     saved.status === 'ready' ? saved.items.filter((item) => item.gameId === game.id) : [];
   const chosen = gameSaved.find((item) => item.id === chosenId) ?? null;
@@ -374,14 +362,23 @@ export function BuyBox({
     setAdded(null);
   }
 
-  // Rule SP5: "اشحن" in "معرّفاتي" opens the pack with the saved ID chosen.
+  // Rule SP5: "اشحن" in "معرّفاتي" opens the pack with the saved ID chosen. S22 DL3: a direct
+  // link picks the newest-used one that is neither rejected nor incomplete, on the slide step.
   // biome-ignore lint/correctness/useExhaustiveDependencies: once, when the saved IDs arrive.
   useEffect(() => {
-    if (intent?.kind !== 'player' || preselected.current || saved.status !== 'ready') return;
-    preselected.current = true;
-    const player = gameSaved.find((item) => item.id === intent.savedId);
-    if (player) pick(player, false);
-  }, [saved.status]);
+    if (preselected.current || saved.status !== 'ready') return;
+    if (intent?.kind === 'player' && (!intent.jump || balance.status !== 'loading')) {
+      preselected.current = true;
+      const player = gameSaved.find((item) => item.id === intent.savedId);
+      if (player) pick(player, intent.jump === true);
+    }
+    // The balance too: the jump to the slide needs to know it is not short.
+    if (intent?.kind === 'link' && balance.status !== 'loading') {
+      preselected.current = true;
+      const player = gameSaved.find((item) => !item.rejected && item.complete);
+      if (player) pick(player, true);
+    }
+  }, [saved.status, balance.status]);
 
   // Rule OT1: "اشترِ مجدداً" fills the delivered order's fields and quantity and opens the slide
   // step at today's price; OT2: what no longer applies stays on the details with the reason.
@@ -421,7 +418,12 @@ export function BuyBox({
 
   function signIn() {
     saveDraft({ gameSlug: game.slug, packId: product.id, quantity, fields: typed });
-    const back = `/games/${game.slug}?pack=${product.id}`;
+    // S22 DL3: a direct link's pack comes back with its saved-ID choice (the campaign stays in
+    // this tab's session storage).
+    const back = `/games/${game.slug}?${new URLSearchParams({
+      pack: product.id,
+      ...(intent?.kind === 'link' && { via: 'q' }),
+    })}`;
     router.push(`/sign-in?next=${encodeURIComponent(back)}`);
   }
 
@@ -530,7 +532,11 @@ export function BuyBox({
     );
     if (result.ok) {
       clearDraft();
-      router.push(`/orders/${result.data.id}`);
+      router.push(
+        result.data.stage === 'awaiting_balance'
+          ? await gapDepositPath(result.data)
+          : `/orders/${result.data.id}`,
+      );
       return;
     }
     refused(result.reason, result.details);
@@ -587,6 +593,12 @@ export function BuyBox({
         setTermsOpen(true);
         again();
         return setSending({ status: 'idle' });
+      case 'RESERVATIONS_LIMIT_REACHED':
+        // S22 BG5: back to the details, where only "اشحن فقط" is offered now.
+        setReserveBlocked(true);
+        setStep('details');
+        setSending({ status: 'idle' });
+        return setNotice(errorText(reason));
       case 'UNAUTHORIZED':
         return signIn();
       case 'NETWORK':
@@ -602,6 +614,7 @@ export function BuyBox({
   function body(): CreateOrder | null {
     if (!fieldsCheck.ok) return null;
     const giftValue = giftable ? giftOf(gift) : undefined;
+    const quickLink = quickLinkFor(product.id);
     return {
       productId: product.id,
       quantity,
@@ -612,6 +625,8 @@ export function BuyBox({
       confirmPlayer: isTrusted || (needsConfirm(check) && confirmed),
       ...(savePlayer && { savePlayer }),
       ...(giftValue && { gift: giftValue }),
+      // S22 DL4: the direct link this tab opened for this pack, within 24 hours.
+      ...(quickLink && { quickLink }),
     };
   }
 
@@ -910,6 +925,8 @@ export function BuyBox({
           balance={balance}
           total={total}
           shortfall={shortfall}
+          gap={gap}
+          reserveBlocked={reserveBlocked}
           orderBack={`/games/${game.slug}?pack=${product.id}`}
           onSignIn={signIn}
           onProceed={(next) => void proceed(next)}
@@ -964,6 +981,8 @@ function Actions({
   balance,
   total,
   shortfall,
+  gap,
+  reserveBlocked,
   orderBack,
   onSignIn,
   onProceed,
@@ -974,6 +993,8 @@ function Actions({
   balance: ReturnType<typeof useBalance>['balance'];
   total: number;
   shortfall: number | null;
+  gap: number | null;
+  reserveBlocked: boolean;
   orderBack: string;
   onSignIn: () => void;
   onProceed: (mode: Mode) => void;
@@ -1004,26 +1025,13 @@ function Actions({
   if (frozen) return <FormAlert>{errorText('ACCOUNT_FROZEN')}</FormAlert>;
   if (stopped) return <FormAlert>{t('purchase.stopped')}</FormAlert>;
   if (balance.status === 'loading') return <Skeleton className="h-24 w-full" />;
-  if (shortfall !== null && balance.status === 'ready') {
+  if (shortfall !== null && gap !== null && balance.status === 'ready') {
     return (
-      <div className="flex flex-col gap-3">
-        <p className="text-base">
-          {t('purchase.shortfall', {
-            balance: ltr(formatUsd(balance.units)),
-            missing: ltr(formatUsd(shortfall)),
-          })}
-        </p>
-        <Button size="xl" onClick={() => onProceed('reserve')}>
-          {t('purchase.reserve')}
-        </Button>
-        <Button
-          variant="outline"
-          size="xl"
-          render={<Link href={`/wallet/deposit?amount=${centsParam(shortfall)}`} />}
-        >
-          {t('purchase.deposit')}
-        </Button>
-      </div>
+      <GapBlock
+        balance={balance}
+        gapUnits={gap}
+        onReserve={reserveBlocked ? null : () => onProceed('reserve')}
+      />
     );
   }
   return (

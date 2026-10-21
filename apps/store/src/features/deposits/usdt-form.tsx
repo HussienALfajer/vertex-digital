@@ -20,13 +20,14 @@ import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
 import { useIdempotentRequest } from '@/lib/idempotency';
 import {
+  gapFill,
   limitText,
   ONE_CENT_UNITS,
   parseDepositAmount,
-  prefillText,
   USDT_PRESETS_USD,
   usdText,
 } from './amounts';
+import { GapLines } from './gap';
 import { createUsdtDeposit } from './requests';
 
 /**
@@ -36,15 +37,16 @@ import { createUsdtDeposit } from './requests';
 export function UsdtForm({
   options,
   method,
-  prefillUnits = null,
+  gap = null,
 }: {
   options: UsdtOptions;
   method: UsdtMethod;
-  /** The shortfall of a reservation (S09 rule BB8). */
-  prefillUnits?: number | null;
+  /** S22 BG3: what the customer lacks, filled with the USDT minimum and caps. */
+  gap?: number | null;
 }) {
   const router = useRouter();
-  const [text, setText] = useState(() => prefillText(prefillUnits, options.limits?.minUnits));
+  const gapLines = gap === null ? null : gapFill(gap, 'USD', options.limits, null);
+  const [text, setText] = useState(() => gapLines?.text ?? '');
   const [error, setError] = useState<string | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
   const [busyAlternatives, setBusyAlternatives] = useState<number[]>([]);
@@ -121,6 +123,7 @@ export function UsdtForm({
             onChange={(event) => change(event.target.value)}
           />
           <FieldError match={!!error}>{error}</FieldError>
+          {gapLines && <GapLines fill={gapLines} limits={limits} />}
         </Field>
         {busyAlternatives.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">

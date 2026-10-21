@@ -5089,6 +5089,27 @@
         ]
       }
     },
+    "/api/quick-buy": {
+      "get": {
+        "operationId": "OrdersController_quickBuyCards",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Newest-used saved ids first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuickBuy"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/api/saved-players": {
       "get": {
         "operationId": "OrdersController_savedPlayerList",
@@ -5123,7 +5144,7 @@
     },
     "/api/saved-players/{id}": {
       "patch": {
-        "operationId": "OrdersController_renameSavedPlayer",
+        "operationId": "OrdersController_updateSavedPlayer",
         "parameters": [
           {
             "name": "id",
@@ -5146,7 +5167,7 @@
         },
         "responses": {
           "200": {
-            "description": "The renamed id",
+            "description": "The changed id",
             "content": {
               "application/json": {
                 "schema": {
@@ -7654,6 +7675,97 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/q/{code}": {
+      "get": {
+        "operationId": "QuickLinksController_resolve",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "c",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Where the link leads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuickLinkResolve"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/admin/quick-links": {
+      "get": {
+        "operationId": "QuickLinksAdminController_stats",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            }
+          },
+          {
+            "name": "productId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Opens and orders per link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuickLinkStats"
                 }
               }
             }
@@ -15842,18 +15954,31 @@
               },
               "rate": {
                 "$ref": "#/components/schemas/ExchangeRate"
+              },
+              "displayStepSypUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
               }
             },
             "required": [
               "valueUnits",
-              "rate"
+              "rate",
+              "displayStepSypUnits"
             ],
             "additionalProperties": false
+          },
+          "reservedUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
           "balanceUnits",
-          "syp"
+          "syp",
+          "reservedUsdUnits"
         ],
         "additionalProperties": false
       },
@@ -16175,13 +16300,25 @@
               },
               "rate": {
                 "$ref": "#/components/schemas/ExchangeRate"
+              },
+              "displayStepSypUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
               }
             },
             "required": [
               "valueUnits",
-              "rate"
+              "rate",
+              "displayStepSypUnits"
             ],
             "additionalProperties": false
+          },
+          "reservedUsdUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           },
           "customer": {
             "$ref": "#/components/schemas/WalletCustomer"
@@ -16195,6 +16332,7 @@
         "required": [
           "balanceUnits",
           "syp",
+          "reservedUsdUnits",
           "customer",
           "adjustmentCount"
         ],
@@ -22833,6 +22971,13 @@
                 "$ref": "#/components/schemas/Gift"
               }
             ]
+          },
+          "quickLink": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuickLinkAttribution"
+              }
+            ]
           }
         },
         "required": [
@@ -22853,6 +22998,25 @@
             "maxLength": 140
           }
         }
+      },
+      "QuickLinkAttribution": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/QuickCode"
+          },
+          "campaign": {
+            "type": "string",
+            "pattern": "^[a-z0-9_-]{1,32}$"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "QuickCode": {
+        "type": "string",
+        "pattern": "^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$"
       },
       "CreatedOrder": {
         "type": "object",
@@ -23482,6 +23646,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "quickBuyHidden": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -23497,7 +23664,8 @@
           "playerName",
           "rejected",
           "complete",
-          "lastUsedAt"
+          "lastUsedAt",
+          "quickBuyHidden"
         ],
         "additionalProperties": false
       },
@@ -23573,6 +23741,13 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/Gift"
+              }
+            ]
+          },
+          "quickLink": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuickLinkAttribution"
               }
             ]
           }
@@ -23748,6 +23923,125 @@
         ],
         "additionalProperties": false
       },
+      "QuickBuy": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "savedPlayer": {
+                  "$ref": "#/components/schemas/SavedPlayer"
+                },
+                "game": {
+                  "type": "object",
+                  "properties": {
+                    "slug": {
+                      "type": "string"
+                    },
+                    "nameAr": {
+                      "type": "string"
+                    },
+                    "cover": {
+                      "nullable": true,
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/CatalogImage"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "slug",
+                    "nameAr",
+                    "cover"
+                  ],
+                  "additionalProperties": false
+                },
+                "product": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "nameAr": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "$ref": "#/components/schemas/ProductKind"
+                    },
+                    "gameAmount": {
+                      "nullable": true,
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "nameAr",
+                    "kind",
+                    "gameAmount"
+                  ],
+                  "additionalProperties": false
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "unitPriceUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "unitPriceSypUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "priceKind": {
+                  "$ref": "#/components/schemas/PriceKind"
+                },
+                "state": {
+                  "$ref": "#/components/schemas/QuickBuyState"
+                }
+              },
+              "required": [
+                "savedPlayer",
+                "game",
+                "product",
+                "quantity",
+                "unitPriceUsdUnits",
+                "unitPriceSypUnits",
+                "priceKind",
+                "state"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "QuickBuyState": {
+        "type": "string",
+        "enum": [
+          "ready",
+          "unavailable",
+          "rejected",
+          "incomplete"
+        ]
+      },
       "SavedPlayerListQuery": {
         "type": "object",
         "properties": {
@@ -23781,11 +24075,11 @@
             "minLength": 1,
             "maxLength": 30,
             "pattern": "^[^\\p{C}]+$"
+          },
+          "quickBuyHidden": {
+            "type": "boolean"
           }
-        },
-        "required": [
-          "label"
-        ]
+        }
       },
       "OrderListQuery": {
         "type": "object",
@@ -27754,6 +28048,16 @@
             ],
             "additionalProperties": false
           },
+          "perHundredUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "bestValue": {
+            "type": "boolean"
+          },
           "playerCheck": {
             "type": "boolean"
           },
@@ -27777,6 +28081,8 @@
           "priceSypUnits",
           "savings",
           "deliveryStats",
+          "perHundredUsdUnits",
+          "bestValue",
           "playerCheck",
           "regionAr",
           "redemptionAr"
@@ -27966,6 +28272,16 @@
                     "percent"
                   ],
                   "additionalProperties": false
+                },
+                "perHundredUsdUnits": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "bestValue": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -27973,7 +28289,9 @@
                 "available",
                 "priceUsdUnits",
                 "priceSypUnits",
-                "savings"
+                "savings",
+                "perHundredUsdUnits",
+                "bestValue"
               ],
               "additionalProperties": false
             }
@@ -28180,6 +28498,9 @@
             "nullable": true,
             "type": "string"
           },
+          "bestValueEnabled": {
+            "type": "boolean"
+          },
           "productCount": {
             "type": "integer",
             "minimum": 0,
@@ -28201,6 +28522,7 @@
           "idGuide",
           "accentColor",
           "regionNotesAr",
+          "bestValueEnabled",
           "productCount"
         ],
         "additionalProperties": false
@@ -28423,6 +28745,9 @@
             "nullable": true,
             "type": "string"
           },
+          "bestValueEnabled": {
+            "type": "boolean"
+          },
           "productCount": {
             "type": "integer",
             "minimum": 0,
@@ -28465,6 +28790,7 @@
           "idGuide",
           "accentColor",
           "regionNotesAr",
+          "bestValueEnabled",
           "productCount",
           "categoryArchived",
           "searchTerms",
@@ -28613,6 +28939,13 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "quickCode": {
+            "$ref": "#/components/schemas/QuickCode"
+          },
+          "quickLinkUrl": {
+            "type": "string",
+            "format": "uri"
+          },
           "maxQuantity": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -28710,6 +29043,8 @@
           "nameAr",
           "gameAmount",
           "officialPriceUsdUnits",
+          "quickCode",
+          "quickLinkUrl",
           "maxQuantity",
           "regionAr",
           "redemptionAr",
@@ -28813,6 +29148,9 @@
               "type": "string",
               "maxLength": 200
             }
+          },
+          "bestValueEnabled": {
+            "type": "boolean"
           }
         }
       },
@@ -29457,6 +29795,163 @@
             ]
           }
         }
+      },
+      "QuickLinkQuery": {
+        "type": "object",
+        "properties": {
+          "c": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      },
+      "QuickLinkResolve": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "enum": [
+                  "pack"
+                ]
+              },
+              "gameSlug": {
+                "type": "string"
+              },
+              "productId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": [
+              "target",
+              "gameSlug",
+              "productId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "enum": [
+                  "game"
+                ]
+              },
+              "gameSlug": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "target",
+              "gameSlug"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "enum": [
+                  "home"
+                ]
+              }
+            },
+            "required": [
+              "target"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "QuickLinkStatsQuery": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      },
+      "QuickLinkStats": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "productNameAr": {
+                  "type": "string"
+                },
+                "gameNameAr": {
+                  "type": "string"
+                },
+                "quickCode": {
+                  "$ref": "#/components/schemas/QuickCode"
+                },
+                "campaign": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "opens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "orders": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "revenueUsdUnits": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "productId",
+                "productNameAr",
+                "gameNameAr",
+                "quickCode",
+                "campaign",
+                "opens",
+                "orders",
+                "revenueUsdUnits"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
       },
       "SupplierSummary": {
         "type": "object",

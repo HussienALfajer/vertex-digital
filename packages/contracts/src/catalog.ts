@@ -363,6 +363,38 @@ export type UpdateInputField = z.input<typeof updateInputFieldSchema>;
 
 // Products --------------------------------------------------------------------------------------
 
+/* Direct buy links (S22 DL1, ADR 0037) -------------------------------------------------------- */
+
+/** A product's permanent direct-link code (DL1): 6 characters of the order-number alphabet. */
+export const QUICK_CODE_LENGTH = 6;
+
+/**
+ * The order-number alphabet (`REFERENCE_CODE_ALPHABET`), written here: importing `deposits.ts`
+ * would put its schemas in every store page that ships the catalog's.
+ */
+export const QUICK_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
+export const QUICK_CODE_PATTERN = new RegExp(`^[${QUICK_CODE_ALPHABET}]{${QUICK_CODE_LENGTH}}$`);
+
+export const quickCodeSchema = z.string().regex(QUICK_CODE_PATTERN).meta({ id: 'QuickCode' });
+
+/** DL1: a campaign tag (`?c=whatsapp`); anything else is dropped silently. */
+export const QUICK_CAMPAIGN_PATTERN = /^[a-z0-9_-]{1,32}$/;
+
+export const quickCampaignSchema = z.string().regex(QUICK_CAMPAIGN_PATTERN);
+
+/** DL2: the campaign when it matches the pattern, else none. */
+export function quickCampaign(value: unknown): string | null {
+  return typeof value === 'string' && QUICK_CAMPAIGN_PATTERN.test(value) ? value : null;
+}
+
+/** DL4: `POST /api/orders`' attribution, sent from the tab that opened the link. */
+export const quickLinkAttributionSchema = z
+  .object({ code: quickCodeSchema, campaign: quickCampaignSchema.optional() })
+  .meta({ id: 'QuickLinkAttribution' });
+
+export type QuickLinkAttribution = z.infer<typeof quickLinkAttributionSchema>;
+
 /** S16 rule SF2 (supplier offers): `unlimited` when the supplier reports no figure. */
 export const STOCK_LEVELS = ['ok', 'low', 'out', 'unlimited'] as const;
 
@@ -378,6 +410,9 @@ export const productSchema = z
     nameAr: z.string(),
     gameAmount: z.int().nullable(),
     officialPriceUsdUnits: z.int().nullable(),
+    /** S22 DL1: the permanent direct-link code, and the link on the store (`/q/<code>`). */
+    quickCode: quickCodeSchema,
+    quickLinkUrl: z.url(),
     maxQuantity: z.int(),
     regionAr: z.string().nullable(),
     redemptionAr: z.string().nullable(),
@@ -529,6 +564,8 @@ export const gameSchema = z
     idGuide: catalogImageSchema.nullable(),
     accentColor: z.string().nullable(),
     regionNotesAr: z.string().nullable(),
+    /** S22 BV1: the best-value badge and the per-100 prices are shown. */
+    bestValueEnabled: z.boolean(),
     /** Unarchived products. */
     productCount: z.int().nonnegative(),
   })
@@ -568,7 +605,12 @@ export type CreateGame = z.input<typeof createGameSchema>;
 
 /** Everything but the slug (immutable: URLs are never reused), the status and search terms. */
 export const updateGameSchema = z
-  .object({ ...gameValues, status: catalogStatusSchema, searchTerms: searchTermsSchema })
+  .object({
+    ...gameValues,
+    status: catalogStatusSchema,
+    searchTerms: searchTermsSchema,
+    bestValueEnabled: z.boolean(),
+  })
   .partial()
   .meta({ id: 'UpdateGame' });
 
@@ -703,6 +745,10 @@ export const storeProductSchema = z
       .object({ amountUsdUnits: z.int().positive(), percent: z.int().positive().nullable() })
       .nullable(),
     deliveryStats: storeDeliveryStats,
+    /** S22 BV2: the price per 100 units (display), null when the game shows no best value. */
+    perHundredUsdUnits: z.int().positive().nullable(),
+    /** S22 BV2: this pack has the "أفضل قيمة" badge. */
+    bestValue: z.boolean(),
     /** Rule PV1 says the player id can be checked for this pack (quota aside). */
     playerCheck: z.boolean(),
     regionAr: z.string().nullable(),

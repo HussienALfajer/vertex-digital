@@ -7,6 +7,7 @@ import {
   currentOrderPolicy,
   type Database,
   deleteOldAlertEvents,
+  deleteOldQuickLinkEvents,
   expireReservations,
   fulfilmentAttempts,
   lockOrder,
@@ -50,6 +51,8 @@ export interface SweepResult {
   checksDeleted: string[];
   /** S21: merchant alert events older than 90 days. */
   alertEventsDeleted: number;
+  /** S22: direct-link events older than 90 days. */
+  quickLinkEventsDeleted: number;
 }
 
 /**
@@ -59,7 +62,8 @@ export interface SweepResult {
  * `needs_review` (the admin's Telegram alert, the customer's "delayed"); open manual attempts get
  * their one reminder. Every change is made under the order lock, after reading it again. S09:
  * reservations past their deadline are cancelled (rule RS7, `FOR UPDATE SKIP LOCKED`, so a
- * payment in progress keeps its order), and player checks expired for a day are deleted.
+ * payment in progress keeps its order), and player checks expired for a day are deleted. S21, S22:
+ * merchant alert events and direct-link events older than 90 days are deleted.
  */
 @Injectable()
 export class OrdersSweepJob implements OnApplicationBootstrap {
@@ -110,6 +114,7 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
       ),
       checksDeleted: await this.deleteChecks(db, now),
       alertEventsDeleted: await deleteOldAlertEvents(db),
+      quickLinkEventsDeleted: await deleteOldQuickLinkEvents(db),
     };
   }
 

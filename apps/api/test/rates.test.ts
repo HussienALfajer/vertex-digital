@@ -236,7 +236,8 @@ describe('the wallet value in pounds (rule W9, FX8, FX9)', () => {
     // $10.30 × 118.5 = 1,220.55 SYP, shown as 1,220 (a 5-pound step, rounded down).
     expect(await (await client.get('/api/wallet', { cookie })).json()).toEqual({
       balanceUnits: 10_300_000,
-      syp: { valueUnits: 122_000, rate: '118.5' },
+      syp: { valueUnits: 122_000, rate: '118.5', displayStepSypUnits: 500 },
+      reservedUsdUnits: 0,
     });
     await setRate('130', 100);
     expect(

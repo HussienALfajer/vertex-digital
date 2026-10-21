@@ -22,6 +22,7 @@ import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/fie
 import { IconTile } from '@vertex-digital/ui/components/icon-tile';
 import { Input } from '@vertex-digital/ui/components/input';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
+import { Switch } from '@vertex-digital/ui/components/switch';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import {
   CircleAlertIcon,
@@ -35,11 +36,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { tq } from '@/features/quick-buy/i18n';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatRelative } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { deleteSavedPlayer, listSavedPlayers, renameSavedPlayer } from './requests';
+import {
+  deleteSavedPlayer,
+  listSavedPlayers,
+  renameSavedPlayer,
+  setQuickBuyHidden,
+} from './requests';
 
 type State =
   | { status: 'loading' }
@@ -166,6 +173,8 @@ function PlayerRow({ player, onChange }: { player: SavedPlayer; onChange: () => 
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  // S22 QB5: shown at once, put back when the change is refused.
+  const [shown, setShown] = useState(!player.quickBuyHidden);
   const value = mainValue(player);
   const labelValid = savedPlayerLabelSchema.safeParse(label).success;
   const { ref, focusInvalid } = useFocusInvalid();
@@ -180,6 +189,16 @@ function PlayerRow({ player, onChange }: { player: SavedPlayer; onChange: () => 
     if (!result.ok) return setFailure(result.reason);
     setRenaming(false);
     await onChange();
+  }
+
+  async function toggleQuickBuy(next: boolean) {
+    setFailure(null);
+    setShown(next);
+    const result = await setQuickBuyHidden(player.id, !next);
+    if (!result.ok) {
+      setShown(!next);
+      setFailure(result.reason);
+    }
   }
 
   async function remove() {
@@ -277,6 +296,16 @@ function PlayerRow({ player, onChange }: { player: SavedPlayer; onChange: () => 
               {t('players.topUp')}
             </Button>
           )}
+        </div>
+      )}
+      {!renaming && (
+        <div className="flex min-h-11 items-center justify-between gap-3 text-sm">
+          <span aria-hidden="true">{tq('players.show')}</span>
+          <Switch
+            aria-label={tq('players.showFor', { label: player.label })}
+            checked={shown}
+            onCheckedChange={(next) => void toggleQuickBuy(next)}
+          />
         </div>
       )}
       {!renaming && (

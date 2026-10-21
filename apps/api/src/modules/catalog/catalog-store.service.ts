@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  type BestValuePack,
+  bestValue,
   type CatalogImageWidth,
   type CustomerPrices,
   gameServiceStatus,
@@ -107,30 +109,32 @@ export class CatalogStoreService {
       playerCheckProviders(this.db, [game.id]),
     ]);
     const provider = providers.get(game.id);
-    const storeProducts = products.map((row): StoreProduct => {
-      const state = states.get(row.id);
-      const available = state?.availability === 'available';
-      const price = available ? (state?.current?.priceUsdUnits ?? null) : null;
-      const saving = price !== null ? savings(price, row.officialPriceUsdUnits) : null;
-      return {
-        id: row.id,
-        kind: row.kind,
-        nameAr: row.nameAr,
-        gameAmount: row.gameAmount,
-        maxQuantity: row.maxQuantity,
-        available: available && price !== null,
-        priceUsdUnits: price,
-        priceSypUnits:
-          price !== null && rate
-            ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
-            : null,
-        savings: saving && { amountUsdUnits: saving.amountUsdUnits, percent: saving.percent },
-        deliveryStats: delivery.get(row.id) ?? null,
-        playerCheck: row.kind === 'direct' && this.checksPlayers(state, provider),
-        regionAr: row.regionAr,
-        redemptionAr: row.redemptionAr,
-      };
-    });
+    const storeProducts = products.map(
+      (row): Omit<StoreProduct, 'perHundredUsdUnits' | 'bestValue'> => {
+        const state = states.get(row.id);
+        const available = state?.availability === 'available';
+        const price = available ? (state?.current?.priceUsdUnits ?? null) : null;
+        const saving = price !== null ? savings(price, row.officialPriceUsdUnits) : null;
+        return {
+          id: row.id,
+          kind: row.kind,
+          nameAr: row.nameAr,
+          gameAmount: row.gameAmount,
+          maxQuantity: row.maxQuantity,
+          available: available && price !== null,
+          priceUsdUnits: price,
+          priceSypUnits:
+            price !== null && rate
+              ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
+              : null,
+          savings: saving && { amountUsdUnits: saving.amountUsdUnits, percent: saving.percent },
+          deliveryStats: delivery.get(row.id) ?? null,
+          playerCheck: row.kind === 'direct' && this.checksPlayers(state, provider),
+          regionAr: row.regionAr,
+          redemptionAr: row.redemptionAr,
+        };
+      },
+    );
     return {
       game: {
         ...card(game, images),
@@ -148,7 +152,7 @@ export class CatalogStoreService {
         maxLength: field.maxLength,
         options: field.options,
       })),
-      products: storeProducts,
+      products: withBestValue(storeProducts, game.bestValueEnabled),
       rateId: rate?.id ?? null,
     };
   }
@@ -173,24 +177,29 @@ export class CatalogStoreService {
       routingContext(this.env),
       pricing.effectiveList.id,
     );
+    const prices = products.map((row) => {
+      const state = states.get(row.id);
+      const price =
+        state?.availability === 'available' ? (state.current?.priceUsdUnits ?? null) : null;
+      const saving = price !== null ? savings(price, row.officialPriceUsdUnits) : null;
+      return {
+        id: row.id,
+        // For the best value (dropped by the response schema).
+        kind: row.kind,
+        gameAmount: row.gameAmount,
+        available: price !== null,
+        priceUsdUnits: price,
+        priceSypUnits:
+          price !== null && rate
+            ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
+            : null,
+        savings: saving && { amountUsdUnits: saving.amountUsdUnits, percent: saving.percent },
+      };
+    });
+    // S22 BV3: the badge over the account's own prices.
     return {
       priceKind: pricing.priceKind,
-      products: products.map((row) => {
-        const state = states.get(row.id);
-        const price =
-          state?.availability === 'available' ? (state.current?.priceUsdUnits ?? null) : null;
-        const saving = price !== null ? savings(price, row.officialPriceUsdUnits) : null;
-        return {
-          id: row.id,
-          available: price !== null,
-          priceUsdUnits: price,
-          priceSypUnits:
-            price !== null && rate
-              ? sypDisplayPrice(price, rate.sypPerUsd, rate.displayStepSypUnits)
-              : null,
-          savings: saving && { amountUsdUnits: saving.amountUsdUnits, percent: saving.percent },
-        };
-      }),
+      products: withBestValue(prices, found.game.bestValueEnabled),
       rateId: rate?.id ?? null,
     };
   }
@@ -354,4 +363,17 @@ function card(game: GameRow, images: Images) {
     cover: game.coverFileId ? imageOf(game.coverFileId, images) : null,
     accentColor: game.accentColor,
   };
+}
+
+/** S22 BV1–BV2: the per-100 price and the badge over the prices shown. */
+function withBestValue<Pack extends BestValuePack>(
+  packs: Pack[],
+  enabled: boolean,
+): (Pack & { perHundredUsdUnits: number | null; bestValue: boolean })[] {
+  const value = bestValue(packs, enabled);
+  return packs.map((pack) => ({
+    ...pack,
+    perHundredUsdUnits: value.perHundredUsdUnits[pack.id] ?? null,
+    bestValue: value.bestProductId === pack.id,
+  }));
 }

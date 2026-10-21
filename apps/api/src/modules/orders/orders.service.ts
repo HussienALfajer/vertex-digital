@@ -137,6 +137,7 @@ export class OrdersService {
             confirmPlayer: body.confirmPlayer,
             savePlayer: body.savePlayer,
             gift: body.gift,
+            quickLink: body.quickLink,
             playerCheck: this.playerCheck,
             idempotencyKey,
             requestHash: requestHash(body),

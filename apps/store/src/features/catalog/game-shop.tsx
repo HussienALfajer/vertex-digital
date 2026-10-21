@@ -12,6 +12,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import type { Buyable, BuyBoxIntent } from '@/features/purchase/buy-box';
 import { useCustomer } from '@/features/purchase/session';
+import { takeQuickLinkCookie } from '@/features/quick-links/handoff';
 import { t } from '@/lib/i18n';
 import { CalculatorCard, calculatorPacks } from './calculator-card';
 import { PackButton } from './pack-button';
@@ -56,7 +57,8 @@ const buyable = (product: StoreProduct | undefined): product is Buyable =>
  * comes back to it; an unknown or unavailable pack in the URL opens nothing. S10 adds what opened
  * the box, read once from the URL: `?repeat=<order>` (OT1, the pack read from the order when the
  * link has none), `?player=<saved id>` (SP5) and `?line=<cart line>` (CT6), and the calculator's
- * "أضف الكل إلى السلة" (CT3).
+ * "أضف الكل إلى السلة" (CT3). S22 DL2, DL3: `?via=q` after a direct link keeps the link for the
+ * order and picks the newest-used saved ID.
  */
 export function GameShop({
   data,
@@ -94,9 +96,11 @@ export function GameShop({
 
   function choose(id: string | null, count = 1, next?: BuyBoxIntent) {
     setQuantity(count);
-    // A saved ID stays chosen across packs; a repeat, an edited line or the calculator's packs
-    // belong to the pack they opened.
-    setIntent((current) => next ?? (current?.kind === 'player' ? current : undefined));
+    // A saved ID stays chosen across packs; a repeat, an edited line, the calculator's packs or a
+    // direct link belong to the pack they opened.
+    setIntent(
+      (current) => next ?? (current?.kind === 'player' ? { ...current, jump: false } : undefined),
+    );
     const query = id ? `?${new URLSearchParams({ pack: id })}` : '';
     router.replace(`${pathname}${query}`, { scroll: false });
   }
@@ -107,7 +111,12 @@ export function GameShop({
     const player = searchParams.get('player');
     const line = searchParams.get('line');
     if (line) return setIntent({ kind: 'edit', lineId: line });
-    if (player) return setIntent({ kind: 'player', savedId: player });
+    // S22 SC3, QB3: with its pack in the URL, a ready saved ID opens the slide step.
+    if (player) return setIntent({ kind: 'player', savedId: player, jump: !!packId });
+    if (searchParams.get('via') === 'q') {
+      takeQuickLinkCookie();
+      return setIntent({ kind: 'link' });
+    }
     if (!repeat) return;
     const next: BuyBoxIntent = { kind: 'repeat', orderId: repeat };
     if (packId) {

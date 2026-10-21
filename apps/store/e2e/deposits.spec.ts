@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import qb from '../src/features/quick-buy/messages.ar.json' with { type: 'json' };
 import ar from '../src/messages/ar.json' with { type: 'json' };
 import { expect, type MockApi, screenshot, test } from './test';
 
@@ -158,7 +159,8 @@ test.describe('deposits', () => {
     signedIn(api)
       .on('GET /api/wallet', 200, {
         balanceUnits: 16_100_000,
-        syp: { valueUnits: 189_500, rate: '118' },
+        syp: { valueUnits: 189_500, rate: '118', displayStepSypUnits: 500 },
+        reservedUsdUnits: 0,
       })
       .on('GET /api/wallet/entries', 200, {
         items: [
@@ -234,20 +236,28 @@ test.describe('deposits', () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('VD-7KQ2M');
   });
 
-  test('opened from a reservation, prefills the shortfall in dollars and links back (S09 BB8)', async ({
+  test('opened with a gap, fills it per method and currency and links back (S22 BG3)', async ({
     page,
     api,
   }) => {
     const orderId = '0199e000-0000-7000-8000-000000000002';
     signedIn(api).on('GET /api/deposits/sham-cash/options', 200, OPTIONS);
-    await page.goto(`/wallet/deposit?amount=499&order=${orderId}`);
+    await page.goto(`/wallet/deposit?gap=499&order=${orderId}&number=VO-NEW234`);
+    await expect(
+      page.getByText(fill(qb.deposit.forOrder, { number: 'VO-NEW234', amount: usd('$4.99') })),
+    ).toBeVisible();
+    // Pounds on the display step: $4.99 × 118 = 588.82, up to 590.
+    await expect(page.getByLabel(ar.deposits.form.amountSyp)).toHaveValue('590');
+    await page.getByRole('button', { name: ar.deposits.currencies.USD, exact: true }).click();
     await expect(page.getByLabel(ar.deposits.form.amountUsd)).toHaveValue('4.99');
     await expect(
       page.getByRole('link', { name: ar.deposits.form.backToReservation }),
     ).toHaveAttribute('href', `/orders/${orderId}`);
-    // Below the minimum ($2), the minimum is prefilled.
-    await page.goto('/wallet/deposit?amount=150');
-    await expect(page.getByLabel(ar.deposits.form.amountUsd)).toHaveValue('2');
+    // Below the minimum ($2), the minimum is filled and said.
+    await page.goto('/wallet/deposit?gap=150');
+    await expect(page.getByText(fill(qb.deposit.needed, { amount: usd('$1.50') }))).toBeVisible();
+    await expect(page.getByLabel(ar.deposits.form.amountSyp)).toHaveValue('240');
+    await expect(page.getByText(fill(qb.deposit.minimum, { amount: usd('$2.00') }))).toBeVisible();
   });
 
   // Launch hardening (2026-10-14): a refusal, the browser's or the server's, focuses the amount.
@@ -439,7 +449,8 @@ for (const theme of ['dark', 'light'] as const) {
     signedIn(api)
       .on('GET /api/wallet', 200, {
         balanceUnits: 16_100_000,
-        syp: { valueUnits: 189_500, rate: '118' },
+        syp: { valueUnits: 189_500, rate: '118', displayStepSypUnits: 500 },
+        reservedUsdUnits: 0,
       })
       .on('GET /api/wallet/entries', 200, { items: [], nextCursor: null })
       .on('GET /api/deposits/sham-cash/options', 200, OPTIONS);

@@ -13,6 +13,7 @@ import type {
   CreateProduct,
   GameListQuery,
   GamePage,
+  QuickLinkStatsQuery,
   UpdateGame,
   UpdateInputField,
   UpdateProduct,
@@ -252,3 +253,10 @@ export const useReorderProducts = (gameId: string) =>
       }),
     ),
   );
+
+/** S22 DL5: the direct links' opens and orders over a range. */
+export const quickLinksQuery = (query: QuickLinkStatsQuery) =>
+  queryOptions({
+    queryKey: ['catalog', 'quick-links', query],
+    queryFn: () => call(api.GET('/api/admin/quick-links', { params: { query } })),
+  });

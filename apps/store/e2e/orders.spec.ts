@@ -298,7 +298,11 @@ test.describe('orders', () => {
     page,
     api,
   }) => {
-    withOrders(api).on('GET /api/wallet', 200, { balanceUnits: 5_000_000, syp: null });
+    withOrders(api).on('GET /api/wallet', 200, {
+      balanceUnits: 5_000_000,
+      syp: null,
+      reservedUsdUnits: 0,
+    });
     await page.goto(`/orders/${IDS.reserved}`);
     await expect(page.getByRole('heading', { name: o.reservation.title })).toBeVisible();
     await expect(page.getByRole('timer')).toHaveText(/^2[23]:\d\d:\d\d$/);
@@ -307,7 +311,7 @@ test.describe('orders', () => {
     await expect(page.getByText('ME', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: o.reservation.deposit })).toHaveAttribute(
       'href',
-      `/wallet/deposit?amount=499&order=${IDS.reserved}`,
+      `/wallet/deposit?gap=499&order=${IDS.reserved}&number=VO-WAIT23`,
     );
     // The steps ahead are listed, greyed.
     await expect(

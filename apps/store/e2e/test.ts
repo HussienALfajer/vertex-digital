@@ -99,7 +99,9 @@ export class MockApi {
     // A real challenge needs the API's key; the mock only checks that one is fetched and sent.
     ['GET /api/altcha/challenge', { status: 200, body: ALTCHA_CHALLENGE }],
     // An empty wallet: the header's balance chip reads it on every page once signed in (S02 W8).
-    ['GET /api/wallet', { status: 200, body: { balanceUnits: 0, syp: null } }],
+    ['GET /api/wallet', { status: 200, body: { balanceUnits: 0, syp: null, reservedUsdUnits: 0 } }],
+    // S22 QB6: the home page's "اشحن مجدداً" of a signed-in customer, none by default.
+    ['GET /api/quick-buy', { status: 200, body: { items: [] } }],
     // Every email and push on (S05 rule NT8, S15 PP1): the account page reads the choices.
     [
       'GET /api/account/notification-preferences',

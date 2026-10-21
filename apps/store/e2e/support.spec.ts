@@ -221,6 +221,7 @@ test.describe('frozen account (S12 CF5) and the purchase cap (LM4)', () => {
     signedIn(api, { frozen: true }).on('GET /api/wallet', 200, {
       balanceUnits: 50 * USD,
       syp: null,
+      reservedUsdUnits: 0,
     });
     await page.goto('/');
     const banner = page.getByRole('status').filter({ hasText: ar.frozen.banner });
@@ -260,7 +261,7 @@ test.describe('frozen account (S12 CF5) and the purchase cap (LM4)', () => {
 
   test('a purchase over the daily cap says what remains today', async ({ page, api }) => {
     signedIn(api)
-      .on('GET /api/wallet', 200, { balanceUnits: 50 * USD, syp: null })
+      .on('GET /api/wallet', 200, { balanceUnits: 50 * USD, syp: null, reservedUsdUnits: 0 })
       .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Lina_99' })
       .on('POST /api/orders', 409, {
         code: 'PURCHASE_LIMIT_EXCEEDED',
@@ -729,6 +730,7 @@ for (const theme of ['dark', 'light'] as const) {
     signedIn(api, { frozen: true }).on('GET /api/wallet', 200, {
       balanceUnits: 50 * USD,
       syp: null,
+      reservedUsdUnits: 0,
     });
     await page.goto(`/games/pubg-mobile?pack=${p60.id}`);
     await expect(buyBox(page).getByText(ar.errors.ACCOUNT_FROZEN)).toBeVisible();

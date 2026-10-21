@@ -51,6 +51,12 @@ import {
 import { netPurchases, recomputeMerchantLevel } from '../merchants/levels.js';
 import { accountMerchant, merchantProfileOf } from '../merchants/reads.js';
 import { repriceProducts, supplierDeliveryMedians } from '../pricing/index.js';
+import {
+  deleteOldQuickLinkEvents,
+  quickLinkStats,
+  recordQuickLinkOpen,
+  resolveQuickCode,
+} from '../quick-links/index.js';
 import { type CheckResult, internalChecks, runInternalChecks } from '../reconciliation/index.js';
 import {
   auditEntries,
@@ -82,6 +88,7 @@ import { type AdminPurchaseInput, adminPurchaseOrder, ownerSpentToday } from './
 import { type CheckoutInput, checkoutOrders } from './checkout.js';
 import { applyOutcome, ownerDrawings, refundRemaining } from './outcome.js';
 import { OrderError, type PurchaseInput, purchaseOrder } from './purchase.js';
+import { quickBuyRows, reservedUsdUnits } from './quick-buy.js';
 import {
   adminOrder,
   adminOrderCounts,
@@ -4670,5 +4677,177 @@ describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
     expect(await Promise.all([send(), send()])).toEqual(expect.arrayContaining([true, false]));
     expect(await send()).toBe(false);
     expect(await notifications(shop, 'merchant_statement_ready')).toEqual([{ month }]);
+  });
+});
+
+describe('quick buy (S22 DL1–DL5, QB2, BG1)', () => {
+  const codeOf = async (productId: string) =>
+    (
+      await pool.query<{ quick_code: string }>(
+        'select quick_code from catalog_products where id = $1',
+        [productId],
+      )
+    ).rows[0]?.quick_code as string;
+  const events = async (productId: string) =>
+    (
+      await pool.query<{ kind: string; campaign: string | null; order_id: string | null }>(
+        'select kind, campaign, order_id from quick_link_events where product_id = $1 order by created_at',
+        [productId],
+      )
+    ).rows;
+
+  it('gives every product a unique code of the alphabet that never changes', async () => {
+    const [a, b] = await Promise.all([product(), product()]);
+    const [codeA, codeB] = await Promise.all([codeOf(a.id), codeOf(b.id)]);
+    expect(codeA).toMatch(/^[2-9A-HJKMNP-Z]{6}$/);
+    expect(codeA).not.toBe(codeB);
+    const { rows } = await pool.query<{ duplicates: number; invalid: number }>(
+      `select (count(*) - count(distinct quick_code))::int as duplicates,
+         count(*) filter (where quick_code !~ '^[2-9A-HJKMNP-Z]{6}$')::int as invalid
+       from catalog_products`,
+    );
+    expect(rows[0]).toEqual({ duplicates: 0, invalid: 0 });
+    for (const client of [pool, owner.pool]) {
+      await expect(
+        client.query('update catalog_products set quick_code = $2 where id = $1', [a.id, codeB]),
+      ).rejects.toMatchObject({ code: '23001' });
+    }
+    await pool.query("update catalog_products set name_ar = name_ar || '٢' where id = $1", [a.id]);
+  });
+
+  it('resolves a code to its pack, its game or the home page', async () => {
+    const item = await product();
+    const code = await codeOf(item.id);
+    const { rows } = await pool.query<{ slug: string }>(
+      'select slug from catalog_games where id = $1',
+      [item.game],
+    );
+    const slug = rows[0]?.slug;
+    expect(await resolveQuickCode(db, code)).toEqual({
+      resolve: { target: 'pack', gameSlug: slug, productId: item.id },
+      productId: item.id,
+    });
+    await pool.query("update catalog_products set status = 'paused' where id = $1", [item.id]);
+    expect(await resolveQuickCode(db, code)).toEqual({
+      resolve: { target: 'game', gameSlug: slug },
+      productId: null,
+    });
+    await pool.query("update catalog_games set status = 'paused' where id = $1", [item.game]);
+    expect(await resolveQuickCode(db, code)).toEqual({
+      resolve: { target: 'home' },
+      productId: null,
+    });
+    expect(await resolveQuickCode(db, 'unknown')).toBeNull();
+  });
+
+  it('counts one open per address, code and hour', async () => {
+    const item = await product();
+    const code = await codeOf(item.id);
+    const address = `10.${unique()}`;
+    const open = (from: string, campaign: string | null = null) =>
+      recordQuickLinkOpen(db, { productId: item.id, code, campaign, address: from });
+    expect(await open(address, 'whatsapp')).toBe(true);
+    expect(await open(address)).toBe(false);
+    expect(await open(`${address}.2`)).toBe(true);
+    expect(await events(item.id)).toEqual([
+      { kind: 'open', campaign: 'whatsapp', order_id: null },
+      { kind: 'open', campaign: null, order_id: null },
+    ]);
+  });
+
+  it('attributes an order of the link once, ignoring another code and replays', async () => {
+    const [item, other] = await Promise.all([product(), product()]);
+    const code = await codeOf(item.id);
+    const buyer = await customer({ funds: usd(20) });
+    const input = request(buyer, item, { quickLink: { code, campaign: 'shop' } });
+    const { order } = await buy(input);
+    await buy(input);
+    await buy(request(buyer, item, { quickLink: { code: await codeOf(other.id) } }));
+    expect(await events(item.id)).toEqual([
+      { kind: 'order', campaign: 'shop', order_id: order.id },
+    ]);
+    await expect(
+      pool.query("update quick_link_events set campaign = 'x' where order_id = $1", [order.id]),
+    ).rejects.toMatchObject({ code: '23001' });
+    await expect(
+      pool.query('delete from quick_link_events where order_id = $1', [order.id]),
+    ).rejects.toMatchObject({ code: '23001' });
+    await expect(
+      pool.query(
+        "insert into quick_link_events (id, product_id, kind, order_id) values ($1, $2, 'open', $3)",
+        [newId(), item.id, order.id],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+  });
+
+  it('counts paid orders net of refunds, a reservation once paid, never a test customer', async () => {
+    const item = await product();
+    const code = await codeOf(item.id);
+    const from = new Date(Date.now() - 60_000).toISOString();
+    const link = { code, campaign: 'ads' };
+    await buy(request(await customer({ funds: usd(20) }), item, { quickLink: link }));
+    await buy(request(await customer({ funds: usd(20), isTest: true }), item, { quickLink: link }));
+    const { order: reserved } = await buy(
+      request(await customer(), item, { quickLink: link, whenBalanceShort: 'reserve' }),
+    );
+    expect(reserved.status).toBe('awaiting_balance');
+    await recordQuickLinkOpen(db, { productId: item.id, code, campaign: 'ads', address: unique() });
+    const to = new Date(Date.now() + 60_000).toISOString();
+    expect((await quickLinkStats(db, { from, to, productId: item.id })).items).toEqual([
+      expect.objectContaining({
+        productId: item.id,
+        quickCode: code,
+        campaign: 'ads',
+        opens: 1,
+        orders: 1,
+        revenueUsdUnits: item.price,
+      }),
+    ]);
+  });
+
+  it('deletes link events only after 90 days', async () => {
+    const item = await product();
+    await owner.pool.query(
+      `insert into quick_link_events (id, product_id, kind, created_at)
+       values ($1, $2, 'open', now() - interval '91 days')`,
+      [newId(), item.id],
+    );
+    expect(await deleteOldQuickLinkEvents(db)).toBeGreaterThanOrEqual(1);
+    expect(await events(item.id)).toEqual([]);
+  });
+
+  it('builds the cards from the latest paid order of each saved ID, skipping hidden ones', async () => {
+    const item = await product();
+    const buyer = await customer({ funds: usd(20) });
+    await buy(request(buyer, item, { savePlayer: { label: 'أخي' } }));
+    await buy(
+      request(buyer, item, { savePlayer: { label: 'أنا' }, fields: { player_id: '5999999999' } }),
+    );
+    await buy(
+      request(buyer, item, { whenBalanceShort: 'reserve', fields: { player_id: '5888888888' } }),
+    );
+    const cards = await quickBuyRows(db, buyer);
+    expect(cards.map((card) => [card.savedPlayer.label, card.product.id, card.quantity])).toEqual([
+      ['أنا', item.id, 1],
+      ['أخي', item.id, 1],
+    ]);
+    expect(cards[0]?.product.live).toBe(true);
+    await pool.query(
+      "update saved_players set quick_buy_hidden = true where customer_id = $1 and label = 'أنا'",
+      [buyer],
+    );
+    expect((await quickBuyRows(db, buyer)).map((card) => card.savedPlayer.label)).toEqual(['أخي']);
+    expect(await quickBuyRows(db, await customer())).toEqual([]);
+  });
+
+  it('sums the open reservations', async () => {
+    const item = await product();
+    const buyer = await customer();
+    expect(await reservedUsdUnits(db, buyer)).toBe(0);
+    await buy(request(buyer, item, { whenBalanceShort: 'reserve' }));
+    await buy(
+      request(buyer, item, { whenBalanceShort: 'reserve', fields: { player_id: '5777777777' } }),
+    );
+    expect(await reservedUsdUnits(db, buyer)).toBe(2 * item.price);
   });
 });

@@ -1,0 +1,49 @@
+{
+  "row": {
+    "title": "اشحن مجدداً",
+    "again": "اشحن مجدداً",
+    "packTimes": "{pack} × {count}",
+    "states": {
+      "unavailable": "الباقة غير متوفرة الآن",
+      "rejected": "راجع المعرّف قبل الشحن",
+      "incomplete": "أكمل بيانات المعرّف"
+    },
+    "openSheet": "اشحن {pack} لـ {label} بـ {price}",
+    "menu": "خيارات {label}",
+    "hide": "إخفاء",
+    "hidden": "أخفينا {label} من «اشحن مجدداً»",
+    "hiddenHint": "تظهره مرة أخرى من «معرّفاتي».",
+    "hideFailed": "تعذّر الإخفاء الآن. أعد المحاولة.",
+    "undo": "تراجع",
+    "close": "إغلاق",
+    "allHidden": "أخفيت كل البطاقات. تظهرها مرة أخرى من «معرّفاتي».",
+    "sheetTitle": "اشحن لـ {label}",
+    "playerId": "المعرّف",
+    "openGame": "تغيير الباقة أو المعرّف"
+  },
+  "gap": {
+    "missing": "ينقصك {missing}",
+    "missingSyp": "ينقصك {missing} (≈ {syp} ل.س)",
+    "balance": "رصيدك {balance}",
+    "balanceReserved": "رصيدك {balance}، ولديك طلبات محجوزة بـ {reserved} تُدفع قبل هذا الطلب",
+    "reserve": "احجز واشحن الفرق",
+    "depositOnly": "اشحن فقط",
+    "deposit": "اشحن الفرق"
+  },
+  "deposit": {
+    "forOrder": "المبلغ اللازم لطلبك {number}: {amount}",
+    "needed": "المبلغ اللازم لطلبك: {amount}",
+    "editable": "ملأنا المبلغ لك، ويمكنك تغييره قبل المتابعة.",
+    "minimum": "الحد الأدنى للإيداع بهذه الطريقة {amount}",
+    "short": "هذا أقصى ما تسمح به حدودك الآن، وسيلزمك إيداع آخر لبقية المبلغ."
+  },
+  "search": {
+    "pack": "اشحن {pack}",
+    "packFor": "اشحن {pack} لـ {label}",
+    "for": "اشحن لـ {label}"
+  },
+  "players": {
+    "show": "إظهار في «اشحن مجدداً»",
+    "showFor": "إظهار {label} في «اشحن مجدداً»"
+  }
+}

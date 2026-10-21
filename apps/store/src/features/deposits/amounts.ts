@@ -3,10 +3,12 @@ import {
   type Currency,
   type Deposit,
   type DepositLimitBreach,
+  type DepositLimits,
   type DepositStatus,
   formatAmountInput,
   formatSyp,
   formatUsd,
+  gapDepositAmount,
   parseUsd,
   parseWholeSyp,
   sypDepositUsd,
@@ -118,8 +120,9 @@ export function statusText(deposit: Pick<Deposit, 'status' | 'usdt'>): string {
 }
 
 /*
- * The wizard's `?amount=` (S09 rule BB8): a USD amount in whole cents, as digits, so a link from
- * the buy box can prefill the shortfall. Strings only: the money math stays the contracts'.
+ * The wizard's `?gap=` (S22 BG2, BG3; S09 rule BB8 before it): a USD amount in whole cents, as
+ * digits, so the buy box, the home sheet and the cart can send what the customer lacks. Strings
+ * only: the money math stays the contracts'.
  */
 
 /** `$12.05` as `1205`. */
@@ -136,12 +139,37 @@ export function amountFromCentsParam(param: string | null): number | null {
   return units === 0 ? null : units;
 }
 
+export interface GapFill {
+  /** The amount field's text in the form's currency; empty for pounds without a rate. */
+  text: string;
+  /** The gap was below the method's minimum, which the field holds. */
+  raisedToMinimum: boolean;
+  /** A cap (per deposit or what remains today) is below the gap: the rest needs another deposit. */
+  short: boolean;
+}
+
 /**
- * The amount field's first text when the wizard was opened from a reservation (rule BB8): the
- * larger of the shortfall and the method's minimum, in dollars; empty without a shortfall.
+ * S22 BG3: what the amount field holds for a gap with this method's limits: dollars for Sham Cash
+ * USD and USDT, pounds rounded up to the display step for Sham Cash SYP (`gapDepositAmount`).
  */
-export function prefillText(prefillUnits: number | null, minUnits: number | undefined): string {
-  if (prefillUnits === null) return '';
-  const units = minUnits !== undefined && minUnits > prefillUnits ? minUnits : prefillUnits;
-  return formatAmountInput('USD', units);
+export function gapFill(
+  gapUnits: number,
+  currency: Currency,
+  limits: DepositLimits | null,
+  rate: { sypPerUsd: string; displayStepSypUnits: number } | null,
+): GapFill {
+  const amount = gapDepositAmount(gapUnits, currency, {
+    minUnits: limits?.minUnits ?? 0,
+    perDepositMaxUnits: limits?.perDepositUnits ?? Number.MAX_SAFE_INTEGER,
+    remainingUnits: limits?.remainingTodayUnits ?? Number.MAX_SAFE_INTEGER,
+    rate: rate?.sypPerUsd ?? null,
+    stepSypUnits: rate?.displayStepSypUnits ?? CURRENCY_SCALE.SYP,
+  });
+  const text =
+    currency === 'USD'
+      ? formatAmountInput('USD', amount.usdUnits)
+      : amount.sypUnits === null
+        ? ''
+        : formatAmountInput('SYP', amount.sypUnits);
+  return { text, raisedToMinimum: amount.raisedToMinimum, short: amount.short };
 }

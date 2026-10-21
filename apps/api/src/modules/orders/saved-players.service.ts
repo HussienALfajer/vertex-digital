@@ -1,5 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { SavedPlayer, SavedPlayerList, SavedPlayerListQuery } from '@vertex-digital/contracts';
+import type {
+  SavedPlayer,
+  SavedPlayerList,
+  SavedPlayerListQuery,
+  UpdateSavedPlayer,
+} from '@vertex-digital/contracts';
 import { customerSavedPlayers, type Database, savedPlayers } from '@vertex-digital/db';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -31,11 +36,15 @@ export class SavedPlayersService {
     return saved;
   }
 
-  async rename(customerId: string, id: string, label: string): Promise<SavedPlayer> {
+  /** SP5 the label, S22 QB5 the quick-buy switch. */
+  async update(customerId: string, id: string, input: UpdateSavedPlayer): Promise<SavedPlayer> {
     if (!isUuid(id)) throw orderRefusals.notFound();
     const [row] = await this.db
       .update(savedPlayers)
-      .set({ label })
+      .set({
+        ...(input.label !== undefined && { label: input.label }),
+        ...(input.quickBuyHidden !== undefined && { quickBuyHidden: input.quickBuyHidden }),
+      })
       .where(and(eq(savedPlayers.id, id), eq(savedPlayers.customerId, customerId)))
       .returning({ id: savedPlayers.id });
     if (!row) throw orderRefusals.notFound();

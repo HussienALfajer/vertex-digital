@@ -10,6 +10,7 @@ import {
   productAvailability,
   productKindSchema,
   productSchema,
+  quickLinkAttributionSchema,
 } from './catalog.js';
 import { customerMarksSchema } from './customer-status.js';
 import { REFERENCE_CODE_ALPHABET, storedFileRefSchema } from './deposits.js';
@@ -1227,6 +1228,8 @@ export const createOrderSchema = z
     savePlayer: z.object({ label: savedPlayerLabelSchema }).optional(),
     /** S10 rule GF1: a direct top-up for someone else, with its texts. */
     gift: giftSchema.optional(),
+    /** S22 DL4: the direct link the tab opened; ignored unless it is the product's code. */
+    quickLink: quickLinkAttributionSchema.optional(),
   })
   .meta({ id: 'CreateOrder' });
 
@@ -1311,6 +1314,8 @@ export const savedPlayerSchema = z
     /** The saved values still validate against the game's fields (rule SP7). */
     complete: z.boolean(),
     lastUsedAt: z.iso.datetime().nullable(),
+    /** S22 QB5: hidden from the home page's "اشحن مجدداً". */
+    quickBuyHidden: z.boolean(),
   })
   .meta({ id: 'SavedPlayer' });
 
@@ -1329,9 +1334,13 @@ export const savedPlayerListSchema = z
 
 export type SavedPlayerList = z.infer<typeof savedPlayerListSchema>;
 
-/** `PATCH /api/saved-players/:id` (rule SP5). */
+/** `PATCH /api/saved-players/:id` (rule SP5; S22 QB5: the quick-buy switch). */
 export const updateSavedPlayerSchema = z
-  .object({ label: savedPlayerLabelSchema })
+  .object({ label: savedPlayerLabelSchema, quickBuyHidden: z.boolean() })
+  .partial()
+  .refine((input) => input.label !== undefined || input.quickBuyHidden !== undefined, {
+    message: 'Expected a change',
+  })
   .meta({ id: 'UpdateSavedPlayer' });
 
 export type UpdateSavedPlayer = z.infer<typeof updateSavedPlayerSchema>;

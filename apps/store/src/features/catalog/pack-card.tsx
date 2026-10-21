@@ -14,7 +14,7 @@ export const packAvailable = (product: StoreProduct) =>
 /**
  * What a pack card shows (rule SF2): the Arabic name and in-game amount, the USD price large, the
  * SYP after "≈" muted, the savings badge (S06 PR7) and the delivery chip (SF3); an unavailable
- * pack has no price (S06 CT9). Rendered on the server, so the money formatting never reaches the
+ * pack has no price (S06 CT9). S22 BV2: the price per 100 units and "أفضل قيمة". Rendered on the server, so the money formatting never reaches the
  * game page's first load; `PackButton` makes it selectable.
  */
 export function PackContent({
@@ -35,13 +35,18 @@ export function PackContent({
     <>
       <span className="flex items-start justify-between gap-2">
         <bdi className="font-bold break-words">{product.nameAr}</bdi>
-        {available && product.savings?.percent && (
-          <Badge
-            tone="success"
-            className={`shrink-0 ${cached ? '[[data-private-prices-hint]_&]:hidden' : ''}`}
+        {available && (product.savings?.percent || product.bestValue) && (
+          <span
+            className={`flex shrink-0 flex-col items-end gap-1 ${cached ? '[[data-private-prices-hint]_&]:hidden' : ''}`}
           >
-            {t('catalog.price.savings', { percent: ltr(`${product.savings.percent}%`) })}
-          </Badge>
+            {product.savings?.percent && (
+              <Badge tone="success">
+                {t('catalog.price.savings', { percent: ltr(`${product.savings.percent}%`) })}
+              </Badge>
+            )}
+            {/* S22 BV2: after the savings badge. */}
+            {product.bestValue && <Badge tone="gold">{t('catalog.price.bestValue')}</Badge>}
+          </span>
         )}
       </span>
       {amount && (
@@ -60,6 +65,13 @@ export function PackContent({
           {product.priceSypUnits !== null && (
             <span className="text-sm text-muted-foreground tabular-nums">
               {t('catalog.price.syp', { amount: formatSyp(product.priceSypUnits) })}
+            </span>
+          )}
+          {product.perHundredUsdUnits !== null && (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {t('catalog.price.perHundred', {
+                amount: ltr(formatUsd(product.perHundredUsdUnits)),
+              })}
             </span>
           )}
         </span>

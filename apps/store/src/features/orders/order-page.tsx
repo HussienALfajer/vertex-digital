@@ -1,6 +1,12 @@
 'use client';
 
-import { formatSyp, formatUsd, type Order, type OrderCode } from '@vertex-digital/contracts';
+import {
+  depositGap,
+  formatSyp,
+  formatUsd,
+  type Order,
+  type OrderCode,
+} from '@vertex-digital/contracts';
 import { SuccessMark } from '@vertex-digital/ui/brand/success-mark';
 import {
   AlertDialog,
@@ -376,9 +382,19 @@ function Reservation({ order, onChange }: { order: Order; onChange: () => Promis
   const total = order.totalUsdUnits ?? 0;
   const shortfall =
     balance.status === 'ready' && total > balance.units ? total - balance.units : null;
+  // S22 BG3: the open reservations (this one included) that A02 pays before it.
+  const gap =
+    balance.status === 'ready'
+      ? depositGap({
+          totalUsdUnits: 0,
+          balanceUsdUnits: balance.units,
+          reservedUsdUnits: Math.max(balance.reservedUnits, total),
+        })
+      : 0;
   const deposit = `/wallet/deposit?${new URLSearchParams({
-    ...(shortfall !== null && { amount: centsParam(shortfall) }),
+    ...(gap > 0 && { gap: centsParam(gap) }),
     order: order.id,
+    number: order.number,
   })}`;
 
   const cancel = async () => {

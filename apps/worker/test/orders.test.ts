@@ -927,6 +927,23 @@ describe('polling, the hard limit and the sweep (rules F3, F6, F7)', () => {
       expect((await sweep.sweep(now, tx)).reminded).not.toContain(manual?.id);
     });
   });
+
+  it('deletes direct-link events older than 90 days, once (S22)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, {});
+      await tx.execute(
+        sql`insert into quick_link_events (id, product_id, kind, created_at) values
+            (${newId()}, ${item.id}, 'open', now() - interval '91 days'),
+            (${newId()}, ${item.id}, 'open', now() - interval '89 days')`,
+      );
+      expect((await sweep.sweep(new Date(), tx)).quickLinkEventsDeleted).toBeGreaterThanOrEqual(1);
+      expect((await sweep.sweep(new Date(), tx)).quickLinkEventsDeleted).toBe(0);
+      const left = await tx.execute(
+        sql`select count(*)::int as count from quick_link_events where product_id = ${item.id}`,
+      );
+      expect(left.rows[0]).toEqual({ count: 1 });
+    });
+  });
 });
 
 describe('the cost read before buying and the charge (S18 PQ1–PQ3, CH1–CH3)', () => {

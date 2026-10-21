@@ -51,7 +51,7 @@ const FIRST_ENTRY = {
 
 function withEntries(api: MockApi): MockApi {
   return signedIn(api)
-    .on('GET /api/wallet', 200, { balanceUnits: 25 * USD, syp: null })
+    .on('GET /api/wallet', 200, { balanceUnits: 25 * USD, syp: null, reservedUsdUnits: 0 })
     .on('GET /api/wallet/entries', 200, { items: ENTRIES, nextCursor: 'page-2' });
 }
 
@@ -65,7 +65,7 @@ test.describe('wallet', () => {
     const chip = page.getByRole('link', { name: ar.header.balance.replace('{balance}', '$25.00') });
     await expect(chip).toBeVisible();
     // The header stays mounted across client navigations: the chip reads the balance again.
-    api.on('GET /api/wallet', 200, { balanceUnits: 40 * USD, syp: null });
+    api.on('GET /api/wallet', 200, { balanceUnits: 40 * USD, syp: null, reservedUsdUnits: 0 });
     await chip.click();
     await expect(page).toHaveURL('/wallet');
     await expect(page.getByRole('heading', { level: 1, name: ar.wallet.title })).toBeVisible();

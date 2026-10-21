@@ -531,7 +531,12 @@ export const AUDIT_DETAILS = {
   'catalog_game.created': z.strictObject(gameValues),
   /** Status changes included (rule CT4). */
   /** S09 rule AD1: the search terms change with the game. */
-  'catalog_game.updated': changed({ ...gameValues, searchTerms: z.array(z.string()) }),
+  /** S22 BV1: the best-value switch changes with the game. */
+  'catalog_game.updated': changed({
+    ...gameValues,
+    searchTerms: z.array(z.string()),
+    bestValueEnabled: z.boolean(),
+  }),
   'catalog_game.archived': named({}),
   'catalog_game.restored': named({}),
   'catalog_game.reordered': reordered({ categoryId: z.uuid() }),

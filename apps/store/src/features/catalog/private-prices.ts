@@ -42,7 +42,15 @@ export function withPrivatePrices(
     const own = prices.products.find((row) => row.id === product.id);
     return own
       ? { ...product, ...own }
-      : { ...product, available: false, priceUsdUnits: null, priceSypUnits: null, savings: null };
+      : {
+          ...product,
+          available: false,
+          priceUsdUnits: null,
+          priceSypUnits: null,
+          savings: null,
+          perHundredUsdUnits: null,
+          bestValue: false,
+        };
   });
 }
 

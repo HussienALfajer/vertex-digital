@@ -215,6 +215,10 @@ export const orders = pgTable(
     index('orders_customer_id_finished_at_idx')
       .on(table.customerId, table.finishedAt)
       .where(sql`${table.finishedAt} is not null`),
+    /** S22 QB2: a customer's latest paid order of a game. */
+    index('orders_customer_id_game_id_paid_at_idx')
+      .on(table.customerId, table.gameId, table.paidAt.desc())
+      .where(sql`${table.paidAt} is not null`),
     index('orders_finished_at_idx')
       .on(table.finishedAt)
       .where(sql`${table.finishedAt} is not null`),
@@ -402,6 +406,8 @@ export const savedPlayers = pgTable(
     /** A supplier refused these fields (rule SP6); cleared by a later delivery. */
     rejectedAt: timestamp('rejected_at', { withTimezone: true }),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    /** S22 QB5: hidden from the home page's "اشحن مجدداً". */
+    quickBuyHidden: boolean('quick_buy_hidden').notNull().default(false),
     ...timestamps(),
   },
   (table) => [

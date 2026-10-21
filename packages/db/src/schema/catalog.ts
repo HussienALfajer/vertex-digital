@@ -72,6 +72,8 @@ export const catalogGames = pgTable(
     idGuideFileId: uuid('id_guide_file_id').references(() => storedFiles.id),
     accentColor: text('accent_color'),
     regionNotesAr: text('region_notes_ar'),
+    /** S22 BV1: the best-value badge and the per-100 prices. */
+    bestValueEnabled: boolean('best_value_enabled').notNull().default(true),
     /** S09 rule AD1: normalized (rule SR1), unique, at most 20. */
     searchTerms: text('search_terms').array().notNull().default(sql`'{}'::text[]`),
     sortOrder: integer('sort_order').notNull(),
@@ -172,10 +174,16 @@ export const catalogProducts = pgTable(
     redemptionAr: text('redemption_ar'),
     status: catalogStatusEnum('status').notNull().default('active'),
     sortOrder: integer('sort_order').notNull(),
+    /**
+     * S22 DL1: the permanent direct-link code, drawn by `catalog_quick_code()` (migration 0090) at
+     * insert and for every existing product; never changed (the guard of migration 0092).
+     */
+    quickCode: text('quick_code').notNull().unique().default(sql`catalog_quick_code()`),
     ...timestamps(),
     archivedAt: archivedAt(),
   },
   (table) => [
+    check('catalog_products_quick_code_check', sql`${table.quickCode} ~ '^[2-9A-HJKMNP-Z]{6}$'`),
     index('catalog_products_game_id_sort_order_idx').on(table.gameId, table.sortOrder),
     uniqueIndex('catalog_products_game_id_name_ar_live_idx')
       .on(table.gameId, table.nameAr)

@@ -3,6 +3,7 @@ import { AdminModule } from '../admin/index.js';
 import { AuthModule } from '../auth/index.js';
 import { CatalogModule } from '../catalog/index.js';
 import { FilesModule } from '../files/index.js';
+import { RatesModule } from '../rates/index.js';
 import { SettingsModule } from '../settings/index.js';
 import { SuppliersModule } from '../suppliers/index.js';
 import { AdminPurchasesService } from './admin-purchases.service.js';
@@ -16,6 +17,7 @@ import { OrdersController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
 import { PlayerChecksAdminController } from './player-checks.admin.controller.js';
 import { PlayerChecksService } from './player-checks.service.js';
+import { QuickBuyService } from './quick-buy.service.js';
 import { SavedPlayersService } from './saved-players.service.js';
 import { ShareLinksService } from './share-links.service.js';
 import { SharesController } from './shares.controller.js';
@@ -32,10 +34,19 @@ import { VerifyController } from './verify.controller.js';
  * S19: a game's player-check provider (`game_player_checks`, `game-player-checks.service.ts`).
  * S21: code releases, printed receipts and the public verification page
  * (`order-receipts.service.ts`, `verify.controller.ts`); merchants' bulk lists check their ids
- * through `PlayerChecksService.checkLine`.
+ * through `PlayerChecksService.checkLine`. S22: the home page's quick-buy cards
+ * (`quick-buy.service.ts`).
  */
 @Module({
-  imports: [AdminModule, AuthModule, CatalogModule, FilesModule, SettingsModule, SuppliersModule],
+  imports: [
+    AdminModule,
+    AuthModule,
+    CatalogModule,
+    FilesModule,
+    RatesModule,
+    SettingsModule,
+    SuppliersModule,
+  ],
   controllers: [
     OrdersController,
     OrdersAdminController,
@@ -54,6 +65,7 @@ import { VerifyController } from './verify.controller.js';
     SavedPlayersService,
     ShareLinksService,
     OrderReceiptsService,
+    QuickBuyService,
   ],
   exports: [OrdersService, OrderActionsService, PlayerChecksService],
 })

@@ -4,7 +4,8 @@
 // from catalog-fixtures.json; under `/empty` the store has no games yet. S10: the public gift and
 // receipt links from share-fixtures.json, and `/_seen?token=` answers every `X-Forwarded-For` a
 // read of that share carried (the visitor's address the store must pass on; every value, not the
-// last one, since tests in other workers read shares at the same time). S12: the support channels, with a
+// last one, since tests in other workers read shares at the same time). S22: `/api/q/<code>`
+// with the same record of the visitor's address and campaign. S12: the support channels, with a
 // Telegram link except under `/empty`. S14: the content routes answer nothing published except
 // under `/content`, the store with an announcement, banners, two pages, the FAQ and live activity
 // (the store no longer shows activity since 2026-10-19: the specs check it stays hidden while the
@@ -91,6 +92,24 @@ createServer((request, response) => {
     seen.add(request.headers['x-forwarded-for'] ?? null);
     forwardedFor.set(verification[1], seen);
     if (verifications[verification[1]]) return json(response, 200, verifications[verification[1]]);
+  }
+  // S22 DL2: direct buy links; `K7M2QX` is PUBG's 660 UC, `G2MEXX` a paused game's pack. The
+  // visitor's address is kept per code, as for the shares.
+  const quick = /^\/api\/q\/([2-9A-HJKMNP-Z]{6})$/.exec(path);
+  if (quick) {
+    const seen = forwardedFor.get(quick[1]) ?? new Set();
+    seen.add(`${request.headers['x-forwarded-for'] ?? ''}|${url.searchParams.get('c') ?? ''}`);
+    forwardedFor.set(quick[1], seen);
+    const pubg = games['pubg-mobile'];
+    const targets = {
+      K7M2QX: {
+        target: 'pack',
+        gameSlug: 'pubg-mobile',
+        productId: pubg.products.find((item) => item.nameAr === '660 UC').id,
+      },
+      G2MEXX: { target: 'home' },
+    };
+    if (targets[quick[1]]) return json(response, 200, targets[quick[1]]);
   }
   const game = /^\/api\/catalog\/games\/([a-z0-9-]+)$/.exec(path);
   if (game && !empty && games[game[1]]) return json(response, 200, games[game[1]]);

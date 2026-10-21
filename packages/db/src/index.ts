@@ -12,6 +12,7 @@ export * from './merchants/index.js';
 export * from './notifications/index.js';
 export * from './orders/index.js';
 export * from './pricing/index.js';
+export * from './quick-links/index.js';
 export * from './rate-limits.js';
 export * from './reconciliation/index.js';
 export * from './reports/index.js';

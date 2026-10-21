@@ -14,7 +14,14 @@ import { getWallet } from '@/features/wallet/requests';
 export type Balance =
   | { status: 'loading' }
   | { status: 'failed' }
-  | { status: 'ready'; units: number };
+  | {
+      status: 'ready';
+      units: number;
+      /** S22 BG1: the open reservations, which A02 pays before a new one. */
+      reservedUnits: number;
+      /** The rate and step a gap's pounds use; null without a rate. */
+      syp: { rate: string; stepUnits: number } | null;
+    };
 
 /** The balance while `enabled` (signed in); read again after a credit and on `refresh()`. */
 export function useBalance(enabled: boolean): { balance: Balance; refresh: () => void } {
@@ -31,7 +38,17 @@ export function useBalance(enabled: boolean): { balance: Balance; refresh: () =>
     void getWallet().then((wallet) => {
       if (!live) return;
       setBalance(
-        wallet.ok ? { status: 'ready', units: wallet.data.balanceUnits } : { status: 'failed' },
+        wallet.ok
+          ? {
+              status: 'ready',
+              units: wallet.data.balanceUnits,
+              reservedUnits: wallet.data.reservedUsdUnits,
+              syp: wallet.data.syp && {
+                rate: wallet.data.syp.rate,
+                stepUnits: wallet.data.syp.displayStepSypUnits,
+              },
+            }
+          : { status: 'failed' },
       );
     });
     return () => {

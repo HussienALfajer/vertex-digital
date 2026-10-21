@@ -126,6 +126,8 @@
             "p90Ms": 95000,
             "count": 24
           },
+          "perHundredUsdUnits": 1650000,
+          "bestValue": false,
           "playerCheck": true,
           "regionAr": null,
           "redemptionAr": null
@@ -148,6 +150,8 @@
             "p90Ms": 95000,
             "count": 24
           },
+          "perHundredUsdUnits": 1540000,
+          "bestValue": false,
           "playerCheck": true,
           "regionAr": null,
           "redemptionAr": null
@@ -170,6 +174,8 @@
             "p90Ms": 95000,
             "count": 24
           },
+          "perHundredUsdUnits": 1520000,
+          "bestValue": false,
           "playerCheck": true,
           "regionAr": null,
           "redemptionAr": null
@@ -185,6 +191,8 @@
           "priceSypUnits": null,
           "savings": null,
           "deliveryStats": null,
+          "perHundredUsdUnits": null,
+          "bestValue": false,
           "playerCheck": false,
           "regionAr": null,
           "redemptionAr": null
@@ -233,6 +241,8 @@
           "priceSypUnits": 1300000,
           "savings": null,
           "deliveryStats": null,
+          "perHundredUsdUnits": null,
+          "bestValue": false,
           "playerCheck": true,
           "regionAr": null,
           "redemptionAr": null
@@ -248,6 +258,8 @@
           "priceSypUnits": 6250000,
           "savings": null,
           "deliveryStats": null,
+          "perHundredUsdUnits": null,
+          "bestValue": false,
           "playerCheck": true,
           "regionAr": null,
           "redemptionAr": null
@@ -301,6 +313,8 @@
           "priceSypUnits": null,
           "savings": null,
           "deliveryStats": null,
+          "perHundredUsdUnits": null,
+          "bestValue": false,
           "playerCheck": false,
           "regionAr": null,
           "redemptionAr": null
@@ -342,6 +356,8 @@
             "p90Ms": 95000,
             "count": 24
           },
+          "perHundredUsdUnits": null,
+          "bestValue": false,
           "playerCheck": false,
           "regionAr": "الولايات المتحدة",
           "redemptionAr": "افتح App Store، ثم الحساب، ثم استرداد بطاقة هدية."

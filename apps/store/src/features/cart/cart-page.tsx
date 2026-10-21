@@ -4,6 +4,7 @@ import {
   type CheckoutLineRefusal,
   type CheckoutRequest,
   checkoutTotal,
+  depositGap,
   displaySypTotal,
   formatSyp,
   formatUsd,
@@ -35,9 +36,9 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { savePendingEmail } from '@/features/auth/pending-email';
 import { readCustomerPrices } from '@/features/catalog/customer-prices';
-import { centsParam } from '@/features/deposits/amounts';
 import { sendAttempt } from '@/features/purchase/attempt';
-import { useBalance, usePurchasesStopped } from '@/features/purchase/customer';
+import { type Balance, useBalance, usePurchasesStopped } from '@/features/purchase/customer';
+import { GapBlock } from '@/features/purchase/gap-block';
 import { purchaseRefusalText } from '@/features/purchase/refusals';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { getSearchIndex } from '@/features/search/requests';
@@ -365,7 +366,7 @@ export function CartPage() {
           unavailable={unavailable}
           balanceLoading={signedIn && balance.status === 'loading'}
           shortfall={shortfall}
-          balanceUnits={balance.status === 'ready' ? balance.units : null}
+          readyBalance={balance.status === 'ready' ? balance : null}
           total={total}
           sending={sending}
           slide={slide}
@@ -394,7 +395,7 @@ function Pay({
   unavailable,
   balanceLoading,
   shortfall,
-  balanceUnits,
+  readyBalance,
   total,
   sending,
   slide,
@@ -410,7 +411,7 @@ function Pay({
   unavailable: boolean;
   balanceLoading: boolean;
   shortfall: number | null;
-  balanceUnits: number | null;
+  readyBalance: Extract<Balance, { status: 'ready' }> | null;
   total: number;
   sending: Sending;
   slide: number;
@@ -458,22 +459,18 @@ function Pay({
   }
   if (!pricesReady || balanceLoading) return <Skeleton className="h-14 w-full" />;
   if (unavailable) return <FormAlert>{t('cart.removeUnavailable')}</FormAlert>;
-  if (shortfall !== null && balanceUnits !== null) {
+  if (shortfall !== null && readyBalance !== null) {
+    // S22 BG5: the cart's total and the open reservations; a cart reserves nothing (S10).
     return (
-      <div className="flex flex-col gap-3">
-        <p className="text-base">
-          {t('cart.shortfall', {
-            balance: ltr(formatUsd(balanceUnits)),
-            missing: ltr(formatUsd(shortfall)),
-          })}
-        </p>
-        <Button
-          size="xl"
-          render={<Link href={`/wallet/deposit?amount=${centsParam(shortfall)}`} />}
-        >
-          {t('cart.deposit')}
-        </Button>
-      </div>
+      <GapBlock
+        balance={readyBalance}
+        gapUnits={depositGap({
+          totalUsdUnits: total,
+          balanceUsdUnits: readyBalance.units,
+          reservedUsdUnits: readyBalance.reservedUnits,
+        })}
+        onReserve={null}
+      />
     );
   }
   if (sending.status === 'sending') {
