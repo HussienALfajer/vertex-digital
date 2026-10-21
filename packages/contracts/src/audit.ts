@@ -16,6 +16,7 @@ import {
   usdtTxidSourceSchema,
 } from './deposits.js';
 import { cursorPageSchema, cursorQuerySchema } from './lists.js';
+import { merchantLevelInputSchema } from './merchant-tools.js';
 import { merchantSettingsInputSchema } from './merchants.js';
 import { currencySchema, exchangeRateSchema } from './money.js';
 import { notificationEventSchema } from './notifications.js';
@@ -83,6 +84,7 @@ export const AUDIT_ENTITY_TYPES = [
   'price_list',
   'merchant_application',
   'merchant_settings',
+  'merchant_level',
   'supplier',
   'supplier_policy',
   'supplier_offer',
@@ -367,6 +369,18 @@ export const AUDIT_DETAILS = {
   }),
   /** S20 MT2: the `merchant_terms` version accepted. */
   'merchant.terms_accepted': z.strictObject({ termsVersion: z.int().positive() }),
+  /**
+   * S21 LV4 (system actor): the levels before and after (null is none), the months' net purchases
+   * that decided it, whether the effective list changed and the reservations it cancelled (AT3).
+   */
+  'merchant.level_changed': z.strictObject({
+    levelIdBefore: z.uuid().nullable(),
+    levelIdAfter: z.uuid().nullable(),
+    previousMonthUsdUnits: z.int(),
+    thisMonthUsdUnits: z.int(),
+    listChanged: z.boolean(),
+    cancelledOrderIds: z.array(z.uuid()),
+  }),
   /** S12 LM5. */
   'customer.limits_changed': z.strictObject({
     before: customerLimitValues,
@@ -590,6 +604,13 @@ export const AUDIT_DETAILS = {
   'merchant_application.rejected': z.strictObject({ customerId: z.uuid() }),
   'merchant_application.expired': z.strictObject({ customerId: z.uuid() }),
   'merchant_application.withdrawn': z.strictObject({ customerId: z.uuid() }),
+  /** S21 LV1, LV6. */
+  'merchant_level.created': z.strictObject(merchantLevelInputSchema.shape),
+  'merchant_level.updated': z.strictObject({
+    before: z.strictObject(merchantLevelInputSchema.shape),
+    after: z.strictObject(merchantLevelInputSchema.shape),
+  }),
+  'merchant_level.archived': z.strictObject(merchantLevelInputSchema.shape),
   'merchant_settings.changed': z.strictObject({
     before: z.strictObject(merchantSettingsInputSchema.shape),
     after: z.strictObject(merchantSettingsInputSchema.shape),

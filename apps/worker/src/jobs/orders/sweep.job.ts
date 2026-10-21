@@ -6,6 +6,7 @@ import {
   catalogProducts,
   currentOrderPolicy,
   type Database,
+  deleteOldAlertEvents,
   expireReservations,
   fulfilmentAttempts,
   lockOrder,
@@ -47,6 +48,8 @@ export interface SweepResult {
   fulfilled: string[];
   expired: string[];
   checksDeleted: string[];
+  /** S21: merchant alert events older than 90 days. */
+  alertEventsDeleted: number;
 }
 
 /**
@@ -106,6 +109,7 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
         BATCH,
       ),
       checksDeleted: await this.deleteChecks(db, now),
+      alertEventsDeleted: await deleteOldAlertEvents(db),
     };
   }
 

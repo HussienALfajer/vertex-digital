@@ -103,6 +103,17 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   merchant_profiles:
     "A merchant's profile (S20 MA5–MA7): updated in place, a revocation sets revoked_at, audited",
   merchant_settings: 'Append-only (S20): a save is a new version, the newest is in force',
+  merchant_selling_settings: "The merchant's own preferences (S21 SP1), like saved players",
+  merchant_selling_prices:
+    "The merchant's own preferences (S21 SP2): deleted for real when cleared",
+  merchant_order_sales:
+    "The merchant's own bookkeeping (S21 SP4, SP5): no ledger posting, edited in place, never deleted",
+  merchant_watches:
+    "The merchant's own follows (S21 AL1): deleted for real, nothing references them",
+  merchant_watch_states: 'What the alerts job last told (S21 AL2): overwritten by the job only',
+  merchant_alert_events:
+    'A notification log (S21 AL2): never changed, deleted after 90 days, not a business record',
+  merchant_alert_settings: "The merchant's own preferences (S21 AL4–AL6)",
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */
@@ -121,6 +132,11 @@ const NATURAL_KEYS: Record<string, string> = {
   content_settings: 'One row, id 1 (S14)',
   merchant_shop_photos: 'Keyed by its stored file: one uploader per photo (S20 MA3)',
   merchant_profiles: 'Keyed by its customer: one merchant profile per customer (S20 MA5)',
+  merchant_selling_settings: 'Keyed by its customer: one row of selling settings (S21 SP1)',
+  merchant_selling_prices: 'Keyed by customer and product: one own price per product (S21 SP2)',
+  merchant_order_sales: 'Keyed by its order: one sale row per merchant order (S21 SP4)',
+  merchant_watch_states: 'Keyed by customer and product: the last state told (S21 AL2)',
+  merchant_alert_settings: 'Keyed by its customer: one row of alert settings (S21 AL4)',
 };
 
 /**

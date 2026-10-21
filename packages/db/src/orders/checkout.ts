@@ -9,6 +9,8 @@ import type { Transaction } from '../client.js';
 import { checkPurchaseCap, lockActiveCustomer, requireMerchantTerms } from '../customers/guard.js';
 import { newId } from '../id.js';
 import { LedgerError, lockCustomerWallet, postJournal } from '../ledger/index.js';
+import { afterMerchantPurchase } from '../merchant-tools/alerts.js';
+import { recordMerchantSale } from '../merchant-tools/sales.js';
 import { catalogProducts, checkouts, orders } from '../schema/index.js';
 import {
   displayTotal,
@@ -222,9 +224,12 @@ export async function checkoutOrders(
       },
     });
     await touchSavedPlayer(tx, order, line.savePlayer);
+    if (customer.accountType === 'merchant') await recordMerchantSale(tx, order);
     if (order.isGift) await createShareLink(tx, { orderId: order.id, kind: 'gift' });
     await queueFulfil(tx, context.jobs, order.id);
     written.push(order);
   }
+  // S21 LV4, AL5 after the checkout's one debit.
+  await afterMerchantPurchase(tx, context.jobs, customer);
   return { checkout, orders: written, created: true };
 }

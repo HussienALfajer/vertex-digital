@@ -500,6 +500,11 @@ export const revokeMerchantSchema = z
 
 export type RevokeMerchant = z.infer<typeof revokeMerchantSchema>;
 
+/** S21: a volume level by name (its list is the admin's to see on the levels page). */
+export const merchantLevelRefSchema = z
+  .object({ id: z.uuid(), nameAr: z.string() })
+  .meta({ id: 'MerchantLevelRef' });
+
 /** The merchant profile on the admin customer profile; null for an account never a merchant. */
 export const adminMerchantProfileSchema = z
   .object({
@@ -512,6 +517,14 @@ export const adminMerchantProfileSchema = z
     termsVersion: z.int().positive().nullable(),
     grantedAt: z.iso.datetime(),
     revokedAt: z.iso.datetime().nullable(),
+    /** S21 LV4: the volume level and since when; null for none. */
+    level: merchantLevelRefSchema.nullable(),
+    levelChangedAt: z.iso.datetime().nullable(),
+    /** S21 LV2: net wallet purchases of this and the previous Damascus month. */
+    thisMonthUsdUnits: z.int(),
+    previousMonthUsdUnits: z.int(),
+    /** S21 AL1: the follows. */
+    watchCount: z.int().nonnegative(),
   })
   .meta({ id: 'AdminMerchantProfile' });
 
@@ -522,6 +535,8 @@ export const merchantListQuerySchema = cursorQuerySchema
   .extend({
     q: z.string().trim().min(1).max(100).optional(),
     listId: z.uuid().optional(),
+    /** S21: a level's merchants, or `none` for merchants without a level. */
+    levelId: z.union([z.uuid(), z.literal('none')]).optional(),
   })
   .meta({ id: 'MerchantListQuery' });
 
@@ -538,6 +553,8 @@ export const adminMerchantRowSchema = z
     /** The effective list. */
     priceList: z.object({ id: z.uuid(), name: z.string() }),
     priceKind: priceKindSchema,
+    /** S21 LV4. */
+    level: merchantLevelRefSchema.nullable(),
     termsAccepted: z.boolean(),
     frozen: z.boolean(),
     grantedAt: z.iso.datetime(),

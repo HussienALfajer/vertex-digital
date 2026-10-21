@@ -8,7 +8,7 @@ import {
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Transaction } from '../client.js';
-import { purchasedLastDay } from '../customers/guard.js';
+import { lockActiveCustomer, purchasedLastDay } from '../customers/guard.js';
 import {
   accountPriceList,
   accountsOnList,
@@ -30,6 +30,7 @@ import { accountBalance } from '../ledger/balance.js';
 import { ensureCustomerWallet, ensureSystemAccount, findCustomerWallet } from '../ledger/index.js';
 import { postJournal } from '../ledger/post-journal.js';
 import { walletTimeline } from '../ledger/wallet.js';
+import { compareMerchantWatches } from '../merchant-tools/watch-alerts.js';
 import {
   type GrantInput,
   grantMerchant,
@@ -37,6 +38,7 @@ import {
   orderRate,
   revokeMerchant,
 } from '../merchants/accounts.js';
+import { recomputeMerchantLevel } from '../merchants/levels.js';
 import { accountMerchant, merchantProfileOf } from '../merchants/reads.js';
 import { repriceProducts, supplierDeliveryMedians } from '../pricing/index.js';
 import { type CheckResult, internalChecks, runInternalChecks } from '../reconciliation/index.js';
@@ -3949,5 +3951,323 @@ describe('merchant accounts (S20 MA5–MA7, MT2)', () => {
       // After the grant the account is a merchant without accepted terms (MT2).
       expect(purchase.reason).toMatchObject({ code: 'MERCHANT_TERMS_REQUIRED' });
     }
+  });
+});
+
+describe('merchant tools (S21 SP4, LV3–LV7, AL2–AL6)', () => {
+  const { retail, wholesale, cost } = ROOT_PRICE_LIST_IDS;
+  const termsVersion = async () => {
+    const id = newId();
+    await pool.query(
+      `insert into content_page_versions (id, page, version, title, body, draft_revision, admin_id)
+       values ($1, 'merchant_terms', 1000 + floor(random() * 1e9)::int, 'شروط التاجر', 'النص', 1, $2)`,
+      [id, newId()],
+    );
+    return id;
+  };
+  const merchant = async (funds: number) => {
+    const id = await customer({ funds });
+    await db.update(customers).set({ accountType: 'merchant' }).where(eq(customers.id, id));
+    await pool.query(
+      `insert into merchant_profiles (customer_id, trade_name, governorate, city, granted_at, terms_version_id)
+       values ($1, 'محل النور', 'aleppo', 'اعزاز', now(), $2)`,
+      [id, await termsVersion()],
+    );
+    return id;
+  };
+  const wholesalePrice = async (productId: string) =>
+    (
+      await db
+        .select({ price: productPrices.priceUsdUnits })
+        .from(productPrices)
+        .where(
+          and(eq(productPrices.productId, productId), eq(productPrices.priceListId, wholesale)),
+        )
+        .orderBy(desc(productPrices.createdAt))
+        .limit(1)
+    )[0]?.price as number;
+  const saleOf = async (orderId: string) =>
+    (await pool.query('select * from merchant_order_sales where order_id = $1', [orderId])).rows[0];
+  const recompute = (customerId: string) =>
+    db.transaction((tx) =>
+      recomputeMerchantLevel(tx, { jobs: context().jobs, now: new Date() }, customerId),
+    );
+  const level = async (threshold: number, priceListId: string) => {
+    const id = newId();
+    await pool.query(
+      `insert into merchant_levels (id, name_ar, monthly_threshold_usd_units, price_list_id)
+       values ($1, $2, $3, $4)`,
+      [id, `مستوى ${unique()}`, threshold, priceListId],
+    );
+    return id;
+  };
+  const archiveLevels = () =>
+    pool.query('update merchant_levels set archived_at = now() where archived_at is null');
+  const notifications = async (customerId: string, event: string) =>
+    (
+      await pool.query(
+        `select params from customer_notifications where customer_id = $1 and event = $2
+         order by created_at`,
+        [customerId, event],
+      )
+    ).rows.map((row) => row.params);
+  const credit = (customerId: string, amountUnits: number) =>
+    db.transaction(async (tx) => {
+      await postJournal(tx, {
+        idempotencyKey: `test:${newId()}`,
+        kind: 'adjustment',
+        postings: [
+          { accountId: await ensureCustomerWallet(tx, customerId), amountUnits },
+          {
+            accountId: await ensureSystemAccount(tx, {
+              code: 'adjustments:test_funds',
+              kind: 'adjustments',
+              currency: 'USD',
+            }),
+            amountUnits: -amountUnits,
+          },
+        ],
+      });
+    });
+
+  it("writes a merchant order's sale row in the purchase and the checkout (SP3, SP4)", async () => {
+    const item = await product({ cost: usd(1) });
+    const price = await wholesalePrice(item.id);
+    const shop = await merchant(usd(20));
+    await pool.query(
+      'insert into merchant_selling_settings (customer_id, markup_bp) values ($1, 1000)',
+      [shop],
+    );
+    const { order } = await buy(request(shop, { id: item.id, price }));
+    expect(await saleOf(order.id)).toMatchObject({
+      currency: 'usd',
+      unit_amount_units: String(usd(1.16)),
+      unit_usd_units: String(usd(1.16)),
+      source: 'markup',
+    });
+
+    await pool.query(
+      `insert into merchant_selling_prices (customer_id, product_id, currency, amount_units)
+       values ($1, $2, 'usd', $3)`,
+      [shop, item.id, usd(2)],
+    );
+    const input: CheckoutInput = {
+      customerId: shop,
+      idempotencyKey: newId(),
+      requestHash: hash({ checkout: newId() }),
+      fakeEnabled: true,
+      purchasesStopped: false,
+      channel: 'store',
+      playerCheck: async () => null,
+      lines: [
+        {
+          productId: item.id,
+          quantity: 1,
+          fields: { player_id: '5123456789' },
+          expectedUnitPriceUsdUnits: price,
+          confirmPlayer: false,
+        },
+      ],
+    };
+    const result = await db.transaction((tx) => checkoutOrders(tx, context(), input));
+    expect(await saleOf(result.orders[0]?.id as string)).toMatchObject({
+      unit_usd_units: String(usd(2)),
+      source: 'product',
+    });
+
+    // A customer's order has none; a sale is never deleted and belongs to its order's customer.
+    const buyer = await customer({ funds: usd(10) });
+    const retailOrder = (await buy(request(buyer, item))).order;
+    expect(await saleOf(retailOrder.id)).toBeUndefined();
+    await expect(
+      pool.query('delete from merchant_order_sales where order_id = $1', [order.id]),
+    ).rejects.toThrow(/permission denied|never deleted/);
+    await expect(
+      pool.query(
+        `insert into merchant_order_sales (order_id, customer_id, currency, unit_amount_units,
+           unit_usd_units, source) values ($1, $2, 'usd', 10000, 10000, 'manual')`,
+        [retailOrder.id, shop],
+      ),
+    ).rejects.toThrow(/not an order of its customer/);
+  });
+
+  it('moves a merchant to the level their month reached, below an assigned list (LV3–LV5)', async () => {
+    await archiveLevels();
+    const item = await product({ cost: usd(1) });
+    const shop = await merchant(usd(20));
+    try {
+      const silver = await level(usd(1), cost);
+      expect(await recompute(shop)).toEqual({ changed: false });
+
+      const before = sent.length;
+      const { order } = await buy(
+        request(shop, { id: item.id, price: await wholesalePrice(item.id) }),
+      );
+      expect(sent.slice(before).some((job) => job.queue === 'merchants.level')).toBe(true);
+      expect(await recompute(shop)).toEqual({
+        changed: true,
+        levelIdBefore: null,
+        levelIdAfter: silver,
+        listChanged: true,
+        cancelledOrderIds: [],
+      });
+      expect(await recompute(shop)).toEqual({ changed: false });
+      expect(await notifications(shop, 'merchant_level_changed')).toEqual([
+        { levelNameAr: expect.any(String), priceKind: 'special', direction: 'up' },
+      ]);
+      const { rows: audits } = await pool.query(
+        `select actor_kind, details from audit_entries
+         where entity_id = $1 and action = 'merchant.level_changed'`,
+        [shop],
+      );
+      expect(audits).toEqual([
+        {
+          actor_kind: 'system',
+          details: expect.objectContaining({
+            levelIdAfter: silver,
+            thisMonthUsdUnits: order.totalUsdUnits,
+            listChanged: true,
+          }),
+        },
+      ]);
+      expect((await accountPriceList(db, shop))?.effectiveList.id).toBe(cost);
+      expect((await db.transaction((tx) => lockActiveCustomer(tx, shop))).priceListId).toBe(cost);
+
+      // An assigned list wins, the level stays (LV5, edge case 1).
+      await db.update(customers).set({ priceListId: retail }).where(eq(customers.id, shop));
+      expect((await accountPriceList(db, shop))?.effectiveList.id).toBe(retail);
+      expect((await merchantProfileOf(db, shop))?.level?.id).toBe(silver);
+      await db.update(customers).set({ priceListId: null }).where(eq(customers.id, shop));
+
+      // An archived level leaves the merchant on wholesale (edge case 4).
+      await pool.query('update merchant_levels set archived_at = now() where id = $1', [silver]);
+      expect((await accountPriceList(db, shop))?.effectiveList.id).toBe(wholesale);
+      expect(await recompute(shop)).toMatchObject({ changed: true, levelIdAfter: null });
+      expect((await notifications(shop, 'merchant_level_changed')).at(-1)).toMatchObject({
+        levelNameAr: null,
+        direction: 'down',
+      });
+      await expect(
+        pool.query('delete from merchant_levels where id = $1', [silver]),
+      ).rejects.toThrow(/permission denied/);
+    } finally {
+      await archiveLevels();
+    }
+  });
+
+  it('serializes a level change and a purchase on the customer (LV4, AT3)', async () => {
+    await archiveLevels();
+    const item = await product({ cost: usd(1) });
+    const shop = await merchant(usd(20));
+    try {
+      const price = await wholesalePrice(item.id);
+      await buy(request(shop, { id: item.id, price }));
+      await level(usd(1), cost);
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const change = db.transaction(async (tx) => {
+        await recomputeMerchantLevel(tx, { jobs: context().jobs, now: new Date() }, shop);
+        await gate;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const purchase = refusal(buy(request(shop, { id: item.id, price })));
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      release();
+      await change;
+      // The purchase waited for the change, then met the level's list.
+      expect(await purchase).toMatchObject({ code: 'PRICE_CHANGED' });
+    } finally {
+      await archiveLevels();
+    }
+  });
+
+  it('clears the level on a revocation (LV7)', async () => {
+    await archiveLevels();
+    const shop = await merchant(usd(20));
+    try {
+      const silver = await level(usd(1), cost);
+      await pool.query('update merchant_profiles set level_id = $2 where customer_id = $1', [
+        shop,
+        silver,
+      ]);
+      await db.transaction(async (tx) =>
+        revokeMerchant(tx, context(), await lockCustomer(tx, shop), {
+          reason: 'لم يعد تاجراً',
+          actor: { adminId: newId(), ipAddress: null, userAgent: null },
+        }),
+      );
+      expect((await merchantProfileOf(db, shop))?.level).toBeNull();
+      expect(await recompute(shop)).toEqual({ changed: false });
+    } finally {
+      await archiveLevels();
+    }
+  });
+
+  it('sends the low-balance alert once until the balance is back (AL5, AL6)', async () => {
+    const item = await product({ cost: usd(1) });
+    const price = await wholesalePrice(item.id);
+    const shop = await merchant(usd(3));
+    await pool.query(
+      'insert into merchant_alert_settings (customer_id, low_balance_usd_units) values ($1, $2)',
+      [shop, usd(2)],
+    );
+    await buy(request(shop, { id: item.id, price }));
+    await buy(request(shop, { id: item.id, price }));
+    expect(await notifications(shop, 'merchant_low_balance')).toEqual([
+      { balanceUsdUnits: usd(3) - price, thresholdUsdUnits: usd(2) },
+    ]);
+    // A credit that takes the balance back above the threshold re-arms it.
+    await credit(shop, usd(1.5));
+    await buy(request(shop, { id: item.id, price }));
+    expect(await notifications(shop, 'merchant_low_balance')).toHaveLength(2);
+  });
+
+  it('tells a follower of a change once (AL2, AL3)', async () => {
+    const item = await product({ cost: usd(1) });
+    const shop = await merchant(usd(1));
+    await pool.query(
+      'insert into merchant_watches (id, customer_id, game_id) values ($1, $2, $3)',
+      [newId(), shop, item.game],
+    );
+    const compare = () =>
+      db.transaction((tx) =>
+        compareMerchantWatches(
+          tx,
+          { jobs: context().jobs, now: new Date(), fakeEnabled: true },
+          shop,
+        ),
+      );
+    expect(await compare()).toEqual({ events: 0 });
+    await pool.query('update supplier_offers set in_stock = false where id = $1', [item.offer]);
+    await db.transaction((tx) =>
+      repriceProducts(tx, {
+        productIds: [item.id],
+        cause: 'cost_sync',
+        context: { now: new Date(), fakeEnabled: true },
+      }),
+    );
+    expect(await compare()).toEqual({ events: 1 });
+    expect(await compare()).toEqual({ events: 0 });
+    const digests = await notifications(shop, 'merchant_watch_digest');
+    expect(digests).toEqual([
+      expect.objectContaining({
+        outOfStock: 1,
+        lines: [expect.objectContaining({ kind: 'out_of_stock' })],
+      }),
+    ]);
+
+    // Events are never changed and kept 90 days.
+    const { rows } = await pool.query(
+      'select id from merchant_alert_events where customer_id = $1',
+      [shop],
+    );
+    await expect(
+      pool.query("update merchant_alert_events set kind = 'price_up' where id = $1", [rows[0]?.id]),
+    ).rejects.toThrow(/permission denied|never changed/);
+    await expect(
+      pool.query('delete from merchant_alert_events where id = $1', [rows[0]?.id]),
+    ).rejects.toThrow(/kept 90 days/);
   });
 });

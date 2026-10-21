@@ -1492,6 +1492,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/merchant-levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantLevelsAdminController_list"];
+        put?: never;
+        post: operations["MerchantLevelsAdminController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/merchant-levels/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["MerchantLevelsAdminController_update"];
+        trace?: never;
+    };
+    "/api/admin/merchant-levels/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MerchantLevelsAdminController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantToolsController_dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/games": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantToolsController_games"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/selling-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantToolsController_sellingSettings"];
+        put: operations["MerchantToolsController_saveSellingSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/selling-prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantToolsController_sellingPrices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/selling-prices/{productId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["MerchantToolsController_setSellingPrice"];
+        post?: never;
+        delete: operations["MerchantToolsController_clearSellingPrice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/watches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantToolsController_watches"];
+        put: operations["MerchantToolsController_saveWatches"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantToolsController_alerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/merchant/alert-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MerchantToolsController_alertSettings"];
+        put: operations["MerchantToolsController_saveAlertSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/support/channels": {
         parameters: {
             query?: never;
@@ -4702,6 +4878,58 @@ export interface components {
             /** @enum {string} */
             event: "merchant_revoked";
             params: Record<string, never>;
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "merchant_level_changed";
+            params: {
+                levelNameAr: string | null;
+                priceKind: components["schemas"]["PriceKind"];
+                /** @enum {string} */
+                direction: "up" | "down";
+            };
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "merchant_watch_digest";
+            params: {
+                priceDown: number;
+                priceUp: number;
+                backInStock: number;
+                outOfStock: number;
+                lines: {
+                    /** Format: uuid */
+                    productId: string;
+                    gameNameAr: string;
+                    productNameAr: string;
+                    kind: components["schemas"]["MerchantAlertKind"];
+                    oldPriceUsdUnits: number | null;
+                    newPriceUsdUnits: number | null;
+                }[];
+            };
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "merchant_low_balance";
+            params: {
+                balanceUsdUnits: number;
+                thresholdUsdUnits: number;
+            };
         };
         /** @enum {string} */
         DepositRejectReason: "not_received" | "receipt_invalid" | "receipt_used" | "reference_other_customer" | "wrong_account" | "wrong_network" | "transfer_other_customer" | "other";
@@ -4713,6 +4941,8 @@ export interface components {
         RefundReason: "no_route" | "routes_exhausted" | "input_rejected" | "admin";
         /** @enum {string} */
         PriceKind: "retail" | "wholesale" | "special";
+        /** @enum {string} */
+        MerchantAlertKind: "price_down" | "price_up" | "back_in_stock" | "out_of_stock";
         MarkNotificationsRead: {
             /** Format: uuid */
             upToId: string;
@@ -4736,7 +4966,7 @@ export interface components {
             push: boolean;
         };
         /** @enum {string} */
-        NotificationEvent: "deposit_credited" | "deposit_rejected" | "deposit_receipt_requested" | "wallet_adjusted" | "order_delivered" | "order_partially_refunded" | "order_refunded" | "order_delayed" | "order_paid" | "order_cancelled" | "checkout_finished" | "ticket_replied" | "order_placed_for_you" | "price_list_changed" | "merchant_info_requested" | "merchant_approved" | "merchant_rejected" | "merchant_application_expired" | "merchant_revoked";
+        NotificationEvent: "deposit_credited" | "deposit_rejected" | "deposit_receipt_requested" | "wallet_adjusted" | "order_delivered" | "order_partially_refunded" | "order_refunded" | "order_delayed" | "order_paid" | "order_cancelled" | "checkout_finished" | "ticket_replied" | "order_placed_for_you" | "price_list_changed" | "merchant_info_requested" | "merchant_approved" | "merchant_rejected" | "merchant_application_expired" | "merchant_revoked" | "merchant_level_changed" | "merchant_watch_digest" | "merchant_low_balance";
         PushConfig: {
             publicKey: string | null;
         };
@@ -4945,9 +5175,9 @@ export interface components {
         /** @enum {string} */
         AuditActorKind: "admin" | "customer" | "system" | "cli";
         /** @enum {string} */
-        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.price_list_changed" | "customer.merchant_granted" | "customer.merchant_revoked" | "merchant.terms_accepted" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_game.activated_all" | "catalog_game.player_check_set" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "price_list.created" | "price_list.renamed" | "price_list.archived" | "price_list.fixed_price_set" | "price_list.fixed_price_archived" | "merchant_application.submitted" | "merchant_application.resubmitted" | "merchant_application.info_requested" | "merchant_application.approved" | "merchant_application.rejected" | "merchant_application.expired" | "merchant_application.withdrawn" | "merchant_settings.changed" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.connection_tested" | "supplier.webhook_set" | "supplier.webhook_tested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier.category_imported" | "supplier_category.linked" | "supplier_category.unlinked" | "supplier_category.ignored" | "supplier_category.unignored" | "supplier_offer.ignored" | "supplier_offer.unignored" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set";
+        AuditAction: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.price_list_changed" | "customer.merchant_granted" | "customer.merchant_revoked" | "merchant.terms_accepted" | "merchant.level_changed" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_game.activated_all" | "catalog_game.player_check_set" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "price_list.created" | "price_list.renamed" | "price_list.archived" | "price_list.fixed_price_set" | "price_list.fixed_price_archived" | "merchant_application.submitted" | "merchant_application.resubmitted" | "merchant_application.info_requested" | "merchant_application.approved" | "merchant_application.rejected" | "merchant_application.expired" | "merchant_application.withdrawn" | "merchant_level.created" | "merchant_level.updated" | "merchant_level.archived" | "merchant_settings.changed" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.connection_tested" | "supplier.webhook_set" | "supplier.webhook_tested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier.category_imported" | "supplier_category.linked" | "supplier_category.unlinked" | "supplier_category.ignored" | "supplier_category.unignored" | "supplier_offer.ignored" | "supplier_offer.unignored" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set";
         /** @enum {string} */
-        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "price_list" | "merchant_application" | "merchant_settings" | "supplier" | "supplier_policy" | "supplier_offer" | "supplier_category" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
+        AuditEntityType: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "price_list" | "merchant_application" | "merchant_settings" | "merchant_level" | "supplier" | "supplier_policy" | "supplier_offer" | "supplier_category" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
             nextCursor: string | null;
@@ -5834,9 +6064,20 @@ export interface components {
             grantedAt: string;
             /** Format: date-time */
             revokedAt: string | null;
+            level: components["schemas"]["MerchantLevelRef"] | null;
+            /** Format: date-time */
+            levelChangedAt: string | null;
+            thisMonthUsdUnits: number;
+            previousMonthUsdUnits: number;
+            watchCount: number;
         };
         /** @enum {string} */
         Governorate: "damascus" | "rif_dimashq" | "aleppo" | "homs" | "hama" | "latakia" | "tartus" | "idlib" | "deir_ez_zor" | "raqqa" | "hasakah" | "daraa" | "as_suwayda" | "quneitra" | "outside_syria";
+        MerchantLevelRef: {
+            /** Format: uuid */
+            id: string;
+            nameAr: string;
+        };
         CustomerNote: {
             /** Format: uuid */
             id: string;
@@ -6114,6 +6355,7 @@ export interface components {
             q?: string;
             /** Format: uuid */
             listId?: string;
+            levelId?: string | "none";
         };
         AdminMerchantPage: {
             items: components["schemas"]["AdminMerchantRow"][];
@@ -6133,6 +6375,7 @@ export interface components {
                 name: string;
             };
             priceKind: components["schemas"]["PriceKind"];
+            level: components["schemas"]["MerchantLevelRef"] | null;
             termsAccepted: boolean;
             frozen: boolean;
             /** Format: date-time */
@@ -6166,6 +6409,175 @@ export interface components {
             ordersPerTenMinutes: number;
             reapplyWaitDays: number;
             infoExpiryDays: number;
+        };
+        MerchantLevelList: {
+            items: components["schemas"]["MerchantLevel"][];
+        };
+        MerchantLevel: {
+            /** Format: uuid */
+            id: string;
+            nameAr: string;
+            monthlyThresholdUsdUnits: number;
+            priceList: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                priceKind: components["schemas"]["PriceKind"];
+            };
+            merchantCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            archivedAt: string | null;
+        };
+        MerchantLevelInput: {
+            nameAr: string;
+            monthlyThresholdUsdUnits: number;
+            /** Format: uuid */
+            priceListId: string;
+        };
+        MerchantDashboardQuery: {
+            /**
+             * @default today
+             * @enum {string}
+             */
+            period: "today" | "month";
+        };
+        MerchantDashboard: {
+            /** @enum {string} */
+            period: "today" | "month";
+            /** Format: date-time */
+            from: string;
+            salesUsdUnits: number;
+            salesSypUnits: number | null;
+            spendingUsdUnits: number;
+            profitUsdUnits: number;
+            ordersWithoutSale: number;
+            balanceUsdUnits: number;
+            topProducts: {
+                /** Format: uuid */
+                productId: string;
+                gameNameAr: string;
+                nameAr: string;
+                units: number;
+                salesUsdUnits: number;
+            }[];
+            level: {
+                current: components["schemas"]["MerchantLevelRef"] | null;
+                thisMonthUsdUnits: number;
+                next: {
+                    nameAr: string;
+                    monthlyThresholdUsdUnits: number;
+                    missingUsdUnits: number;
+                } | null;
+            } | null;
+            sellingConfigured: boolean;
+        };
+        MerchantGames: {
+            items: components["schemas"]["MerchantGame"][];
+        };
+        MerchantGame: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            nameAr: string;
+        };
+        SellingSettings: {
+            markupBp: number | null;
+            sypStepUnits: components["schemas"]["SypStep"] | null;
+        };
+        /** @enum {number} */
+        SypStep: 500 | 1000 | 5000 | 10000 | 50000 | 100000;
+        SellingPriceQuery: {
+            /** Format: uuid */
+            gameId: string;
+        };
+        SellingPrices: {
+            settings: components["schemas"]["SellingSettings"];
+            storeStepUnits: number;
+            products: components["schemas"]["SellingPriceRow"][];
+        };
+        SellingPriceRow: {
+            /** Format: uuid */
+            productId: string;
+            nameAr: string;
+            available: boolean;
+            purchaseUsdUnits: number | null;
+            ownPrice: components["schemas"]["SellingPriceInput"] | null;
+            sellingUsdUnits: number | null;
+            sellingSypUnits: number | null;
+            /** @enum {string} */
+            source: "product" | "markup" | "none";
+            belowCost: boolean;
+        };
+        SellingPriceInput: {
+            /** @enum {string} */
+            currency: "usd";
+            amountUnits: number;
+        } | {
+            /** @enum {string} */
+            currency: "syp";
+            amountUnits: number;
+        };
+        Watches: {
+            games: {
+                /** Format: uuid */
+                gameId: string;
+                nameAr: string;
+            }[];
+            products: {
+                /** Format: uuid */
+                productId: string;
+                /** Format: uuid */
+                gameId: string;
+                gameNameAr: string;
+                nameAr: string;
+            }[];
+            suggestions: {
+                games: {
+                    /** Format: uuid */
+                    gameId: string;
+                    nameAr: string;
+                }[];
+                products: {
+                    /** Format: uuid */
+                    productId: string;
+                    /** Format: uuid */
+                    gameId: string;
+                    gameNameAr: string;
+                    nameAr: string;
+                }[];
+            };
+        };
+        UpdateWatches: {
+            gameIds: string[];
+            productIds: string[];
+        };
+        MerchantAlertQuery: {
+            cursor?: string;
+            /** @default 20 */
+            limit: number;
+        };
+        MerchantAlertPage: {
+            items: components["schemas"]["MerchantAlert"][];
+            nextCursor: string | null;
+        };
+        MerchantAlert: {
+            /** Format: uuid */
+            productId: string;
+            gameNameAr: string;
+            productNameAr: string;
+            kind: components["schemas"]["MerchantAlertKind"];
+            oldPriceUsdUnits: number | null;
+            newPriceUsdUnits: number | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AlertSettings: {
+            lowBalanceUsdUnits: number | null;
+            dailyEmail: boolean;
         };
         SupportChannels: {
             telegramUrl: string | null;
@@ -10423,8 +10835,8 @@ export interface operations {
                 limit?: number;
                 actorKind?: "admin" | "customer" | "system" | "cli";
                 actorId?: string;
-                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.price_list_changed" | "customer.merchant_granted" | "customer.merchant_revoked" | "merchant.terms_accepted" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_game.activated_all" | "catalog_game.player_check_set" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "price_list.created" | "price_list.renamed" | "price_list.archived" | "price_list.fixed_price_set" | "price_list.fixed_price_archived" | "merchant_application.submitted" | "merchant_application.resubmitted" | "merchant_application.info_requested" | "merchant_application.approved" | "merchant_application.rejected" | "merchant_application.expired" | "merchant_application.withdrawn" | "merchant_settings.changed" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.connection_tested" | "supplier.webhook_set" | "supplier.webhook_tested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier.category_imported" | "supplier_category.linked" | "supplier_category.unlinked" | "supplier_category.ignored" | "supplier_category.unignored" | "supplier_offer.ignored" | "supplier_offer.unignored" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set";
-                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "price_list" | "merchant_application" | "merchant_settings" | "supplier" | "supplier_policy" | "supplier_offer" | "supplier_category" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
+                action?: "admin.created" | "admin.password_reset" | "admin.two_factor_reset" | "admin.signed_in" | "admin.password_changed" | "admin.two_factor_enabled" | "admin.backup_codes_regenerated" | "admin.sessions_revoked" | "customer.signed_up" | "customer.email_verified" | "customer.profile_updated" | "customer.email_changed" | "customer.password_changed" | "customer.password_reset" | "customer.sessions_revoked" | "customer.test_created" | "customer.test_password_reset" | "customer.frozen" | "customer.unfrozen" | "customer.price_list_changed" | "customer.merchant_granted" | "customer.merchant_revoked" | "merchant.terms_accepted" | "merchant.level_changed" | "customer.limits_changed" | "customer.archived" | "customer.unarchived" | "customer.sessions_revoked_by_admin" | "customer.note_added" | "customer.note_pinned" | "customer.note_unpinned" | "customer.note_archived" | "customer.notification_preference_changed" | "customer.push_preference_changed" | "wallet_adjustment.created" | "wallet_adjustment.reversed" | "exchange_rate.changed" | "deposit_settings.changed" | "deposit.created" | "deposit.requoted" | "deposit.submitted" | "deposit.cancelled" | "deposit.expired" | "deposit.credited" | "deposit.rejected" | "deposit.receipt_requested" | "deposit.txid_submitted" | "deposit.transfer_bound" | "deposit.txid_bounced" | "deposit.rechecked" | "store_switch.changed" | "telegram.link_code_created" | "telegram.linked" | "telegram.unlinked" | "catalog_category.created" | "catalog_category.updated" | "catalog_category.archived" | "catalog_category.restored" | "catalog_category.reordered" | "catalog_game.created" | "catalog_game.updated" | "catalog_game.archived" | "catalog_game.restored" | "catalog_game.reordered" | "catalog_game.activated_all" | "catalog_game.player_check_set" | "catalog_input_field.created" | "catalog_input_field.updated" | "catalog_input_field.archived" | "catalog_input_field.restored" | "catalog_input_field.reordered" | "catalog_product.created" | "catalog_product.updated" | "catalog_product.archived" | "catalog_product.restored" | "catalog_product.reordered" | "margin_rule.set" | "margin_rule.archived" | "price_list.created" | "price_list.renamed" | "price_list.archived" | "price_list.fixed_price_set" | "price_list.fixed_price_archived" | "merchant_application.submitted" | "merchant_application.resubmitted" | "merchant_application.info_requested" | "merchant_application.approved" | "merchant_application.rejected" | "merchant_application.expired" | "merchant_application.withdrawn" | "merchant_level.created" | "merchant_level.updated" | "merchant_level.archived" | "merchant_settings.changed" | "supplier.credentials_set" | "supplier.updated" | "supplier.sync_requested" | "supplier.connection_tested" | "supplier.webhook_set" | "supplier.webhook_tested" | "supplier.validation_quota_set" | "supplier.import" | "supplier_policy.set" | "supplier.category_imported" | "supplier_category.linked" | "supplier_category.unlinked" | "supplier_category.ignored" | "supplier_category.unignored" | "supplier_offer.ignored" | "supplier_offer.unignored" | "supplier_offer.manual_cost_set" | "product_route.created" | "product_route.updated" | "product_route.archived" | "product_route.restored" | "price_review.accepted" | "price_review.paused" | "price_review.margin_adjusted" | "order.paid" | "order.reserved" | "order.cancelled" | "order.cost_posted" | "order.refunded" | "order.poll_requested" | "order.attempt_resolved" | "order.refund_decided" | "order.share_revoked" | "order.rerouted" | "order.fulfilled_manually" | "order.proof_uploaded" | "order.code_revealed" | "ticket.opened" | "ticket.opened_by_admin" | "ticket.customer_replied" | "ticket.replied" | "ticket.closed" | "ticket.reopened" | "support.settings_changed" | "treasury_movement.created" | "treasury_movement.reversed" | "reconciliation_run.started" | "reconciliation_result.explained" | "reconciliation_settings.changed" | "report.exported" | "content_page.draft_saved" | "content_page.published" | "content_page.version_restored" | "faq_section.created" | "faq_section.updated" | "faq_section.archived" | "faq_section.restored" | "faq_item.created" | "faq_item.updated" | "faq_item.archived" | "faq_item.restored" | "faq.reordered" | "faq.published" | "banner.created" | "banner.updated" | "banner.enabled" | "banner.disabled" | "banner.archived" | "banner.restored" | "banner.reordered" | "announcement.created" | "announcement.updated" | "announcement.enabled" | "announcement.disabled" | "announcement.archived" | "announcement.restored" | "content_settings.set" | "order_policy.set";
+                entityType?: "admin_user" | "customer" | "wallet_adjustment" | "exchange_rate" | "deposit_settings" | "deposit" | "store_switch" | "telegram_link" | "catalog_category" | "catalog_game" | "catalog_input_field" | "catalog_product" | "margin_rule" | "price_list" | "merchant_application" | "merchant_settings" | "merchant_level" | "supplier" | "supplier_policy" | "supplier_offer" | "supplier_category" | "product_route" | "price_review" | "order" | "order_policy" | "customer_note" | "support_ticket" | "support_settings" | "treasury_movement" | "reconciliation_run" | "reconciliation_result" | "reconciliation_settings" | "report" | "content_page" | "faq_section" | "faq_item" | "faq" | "banner" | "announcement" | "content_settings";
                 entityId?: string;
                 from?: string;
                 to?: string;
@@ -12015,6 +12427,7 @@ export interface operations {
                 limit?: number;
                 q?: string;
                 listId?: string;
+                levelId?: string | "none";
             };
             header?: never;
             path?: never;
@@ -12125,6 +12538,365 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MerchantSettings"];
+                };
+            };
+        };
+    };
+    MerchantLevelsAdminController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The levels with their merchants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantLevelList"];
+                };
+            };
+        };
+    };
+    MerchantLevelsAdminController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchantLevelInput"];
+            };
+        };
+        responses: {
+            /** @description The new level */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantLevel"];
+                };
+            };
+        };
+    };
+    MerchantLevelsAdminController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchantLevelInput"];
+            };
+        };
+        responses: {
+            /** @description The level */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantLevel"];
+                };
+            };
+        };
+    };
+    MerchantLevelsAdminController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The archived level */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantLevel"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_dashboard: {
+        parameters: {
+            query?: {
+                period?: "today" | "month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Today or this month (DB1–DB5) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantDashboard"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_games: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The store’s games */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantGames"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_sellingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The markup and SYP step (SP1) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellingSettings"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_saveSellingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SellingSettings"];
+            };
+        };
+        responses: {
+            /** @description The saved settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellingSettings"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_sellingPrices: {
+        parameters: {
+            query: {
+                gameId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A game’s packs (SP3) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellingPrices"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_setSellingPrice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SellingPriceInput"];
+            };
+        };
+        responses: {
+            /** @description The pack with its price (SP2) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellingPriceRow"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_clearSellingPrice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pack back on the markup */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellingPriceRow"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_watches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Follows and suggestions (AL1) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Watches"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_saveWatches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWatches"];
+            };
+        };
+        responses: {
+            /** @description The saved follows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Watches"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_alerts: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The last 90 days of alerts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantAlertPage"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_alertSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The alert settings (AL4, AL5) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertSettings"];
+                };
+            };
+        };
+    };
+    MerchantToolsController_saveAlertSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertSettings"];
+            };
+        };
+        responses: {
+            /** @description The saved settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertSettings"];
                 };
             };
         };

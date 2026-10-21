@@ -28,6 +28,8 @@ export const statusOf = (tab: ApplicationTab): MerchantApplicationStatus | undef
 export interface MerchantsSearch {
   q?: string;
   listId?: string;
+  /** S21: a level's merchants, or `none` for those without a level. */
+  levelId?: string;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,5 +39,11 @@ export function parseMerchantsSearch(search: Record<string, unknown>): Merchants
   const q = typeof search.q === 'string' ? search.q.trim() : '';
   if (q.length >= 1 && q.length <= 100) parsed.q = q;
   if (typeof search.listId === 'string' && UUID.test(search.listId)) parsed.listId = search.listId;
+  if (
+    typeof search.levelId === 'string' &&
+    (search.levelId === 'none' || UUID.test(search.levelId))
+  ) {
+    parsed.levelId = search.levelId;
+  }
   return parsed;
 }

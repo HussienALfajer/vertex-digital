@@ -240,7 +240,10 @@ export const ERROR_CODES = [
   'CAPABILITY_UNSUPPORTED',
   /** S19 FC8: the store has no public HTTPS address for a supplier's webhook (`STORE_URL`). */
   'STORE_URL_NOT_PUBLIC',
-  /** S20 LS5: accounts are assigned to the list or lists name it as parent; `details.accounts`, `details.children`. */
+  /**
+   * S20 LS5: accounts are assigned to the list or lists name it as parent; `details.accounts`,
+   * `details.children`; S21 LV6: live volume levels name it, `details.levels`.
+   */
   'PRICE_LIST_IN_USE',
   /** S20 LS1: 20 unarchived custom lists already. */
   'PRICE_LISTS_LIMIT_REACHED',
@@ -267,6 +270,14 @@ export const ERROR_CODES = [
   'NOT_MERCHANT',
   /** S20 MA4: the application's status does not allow this; `details.status`. */
   'APPLICATION_STATE_INVALID',
+  /** S21 LV1: 10 live merchant levels already. */
+  'MERCHANT_LEVELS_LIMIT_REACHED',
+  /** S21 LV1: another live level has this monthly threshold. */
+  'MERCHANT_LEVEL_THRESHOLD_TAKEN',
+  /** S21 LV1: another live level has this name. */
+  'MERCHANT_LEVEL_NAME_TAKEN',
+  /** S21 AL1: more than 200 follows. */
+  'WATCHES_LIMIT_REACHED',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

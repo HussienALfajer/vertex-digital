@@ -270,6 +270,18 @@ describe('effectivePriceListId (S20 AT1)', () => {
     expect(effectivePriceListId({ accountType: 'customer', priceListId: 'vip' })).toBe('vip');
     expect(effectivePriceListId({ accountType: 'merchant', priceListId: 'vip' })).toBe('vip');
   });
+
+  it("takes a merchant's level list below the assigned list (S21 LV5)", () => {
+    const merchant = { accountType: 'merchant', levelListId: 'silver' } as const;
+    expect(effectivePriceListId({ ...merchant, priceListId: null })).toBe('silver');
+    expect(effectivePriceListId({ ...merchant, priceListId: 'vip' })).toBe('vip');
+    expect(effectivePriceListId({ ...merchant, priceListId: null, levelListId: null })).toBe(
+      ROOT_PRICE_LIST_IDS.wholesale,
+    );
+    expect(
+      effectivePriceListId({ accountType: 'customer', priceListId: null, levelListId: 'silver' }),
+    ).toBe(ROOT_PRICE_LIST_IDS.retail);
+  });
 });
 
 describe('listChain (S20 LS3)', () => {

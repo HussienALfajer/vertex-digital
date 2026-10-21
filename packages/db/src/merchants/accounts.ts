@@ -14,6 +14,7 @@ import { cancelAccountReservations, usableList } from '../customers/price-lists.
 import { type AdminActor, CustomerError, type CustomerRow } from '../customers/state.js';
 import { type JobSender, notifyCustomer } from '../notifications/index.js';
 import { customers, merchantProfiles, merchantSettings } from '../schema/index.js';
+import { queueMerchantLevel } from './levels.js';
 
 /*
  * Merchant accounts (S20 MA5–MA7, MD1): the grant (an approval or the admin's direct grant) and
@@ -147,6 +148,8 @@ export async function grantMerchant(
     event: 'merchant_approved',
     params: { priceKind: priceKindOf(list.kind) },
   });
+  // S21 LV7: a grant (a re-grant too) recomputes the volume level.
+  await queueMerchantLevel(tx, context.jobs, customer.id);
   return { effectiveListId, cancelledOrderIds };
 }
 
@@ -169,7 +172,8 @@ export async function revokeMerchant(
     .where(eq(customers.id, customer.id));
   await tx
     .update(merchantProfiles)
-    .set({ revokedAt: sql`now()` })
+    // S21 LV7: a revocation clears the level; a new grant recomputes it.
+    .set({ revokedAt: sql`now()`, levelId: null, levelChangedAt: sql`now()` })
     .where(eq(merchantProfiles.customerId, customer.id));
   // AT3, decision 11: a revocation cancels the reservations, whatever the list.
   const cancelledOrderIds = await cancelAccountReservations(tx, context, customer.id);

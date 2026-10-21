@@ -9,6 +9,7 @@ import {
   type TelegramMessageParams,
 } from '@vertex-digital/contracts';
 import {
+  auditEntries,
   bossJobSender,
   checkouts,
   currentOrderPolicy,
@@ -251,7 +252,22 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       ...(await this.ticketLines(db, dayStart)),
       reconciliation: await this.reconciliationLine(db),
       ownerOrders: await this.ownerOrdersLine(db, dayStart),
+      merchantLevelsChanged: await this.merchantLevelsLine(db, dayStart),
     };
+  }
+
+  /** S21 LV4: merchants whose volume level changed today (the recomputation's audit entries). */
+  private async merchantLevelsLine(db: Database | Transaction, dayStart: SQL) {
+    const [row] = await db
+      .select({ count: sql<number>`count(distinct ${auditEntries.entityId})::int` })
+      .from(auditEntries)
+      .where(
+        and(
+          eq(auditEntries.action, 'merchant.level_changed'),
+          gte(auditEntries.occurredAt, dayStart),
+        ),
+      );
+    return row?.count ?? 0;
   }
 
   /**

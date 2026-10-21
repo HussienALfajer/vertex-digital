@@ -3,8 +3,10 @@
 import {
   EMAIL_NOTIFICATION_EVENTS,
   isPushNotificationEvent,
+  PUSH_NOTIFICATION_EVENTS,
   type NotificationEvent,
   type NotificationPreferences,
+  type PushNotificationEvent,
 } from '@vertex-digital/contracts';
 import { Card, CardDescription, CardHeader, CardTitle } from '@vertex-digital/ui/components/card';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
@@ -25,6 +27,14 @@ import { getNotificationPreferences, setNotificationPreference } from './request
  * editable without a subscription here. Security emails are listed as always on. The toasts live
  * with the card, so pages without it load no toast code.
  */
+/** The events with a switch: every email event, then the push-only ones (S21 AL3). */
+const PREFERENCE_EVENTS: readonly PushNotificationEvent[] = [
+  ...EMAIL_NOTIFICATION_EVENTS,
+  ...PUSH_NOTIFICATION_EVENTS.filter(
+    (event) => !(EMAIL_NOTIFICATION_EVENTS as readonly NotificationEvent[]).includes(event),
+  ),
+];
+
 export function NotificationPreferencesCard() {
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [failed, setFailed] = useState(false);
@@ -78,14 +88,19 @@ export function NotificationPreferencesCard() {
               <span className="w-12 text-center">{t('account.notifications.pushColumn')}</span>
             </li>
           )}
-          {EMAIL_NOTIFICATION_EVENTS.map((event) => {
+          {(pushConfigured ? PREFERENCE_EVENTS : EMAIL_NOTIFICATION_EVENTS).map((event) => {
             const label = t(`account.notifications.events.${event}`);
-            const channels: ('email' | 'push')[] =
-              pushConfigured && isPushNotificationEvent(event) ? ['email', 'push'] : ['email'];
+            const email = (EMAIL_NOTIFICATION_EVENTS as readonly NotificationEvent[]).includes(event);
+            const channels: ('email' | 'push')[] = [
+              ...(email ? (['email'] as const) : []),
+              ...(pushConfigured && isPushNotificationEvent(event) ? (['push'] as const) : []),
+            ];
             return (
               <li key={event} className="flex min-h-14 items-center justify-between gap-4 py-2">
                 <span id={`notification-${event}`}>{label}</span>
                 <span className="flex shrink-0 items-center gap-4">
+                  {/* S21: a push-only event (the follow digest) keeps the email column empty. */}
+                  {!email && <span className="w-12" aria-hidden="true" />}
                   {channels.map((channel) =>
                     preferences ? (
                       <span key={channel} className="flex w-12 justify-center">

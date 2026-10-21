@@ -38,7 +38,10 @@ export function pushTtlSeconds(createdAt: Date, now: Date): number {
 
 /** PD3: order and deposit events are urgent; the balance, a cart's summary and a reply are not. */
 export function pushUrgency(event: PushNotificationEvent): 'high' | 'normal' {
-  return event === 'wallet_adjusted' || event === 'checkout_finished' || event === 'ticket_replied'
+  return event === 'wallet_adjusted' ||
+    event === 'checkout_finished' ||
+    event === 'ticket_replied' ||
+    event === 'merchant_watch_digest'
     ? 'normal'
     : 'high';
 }

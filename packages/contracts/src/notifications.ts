@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { otpCodeSchema } from './auth.js';
 import { depositRejectReasonSchema } from './deposits.js';
 import { cursorQuerySchema } from './lists.js';
+import { alertLineSchema, WATCH_DIGEST_LINES } from './merchant-tools.js';
 import {
   ADMIN_ORDER_NOTE_MAX_LENGTH,
   cancelReasonSchema,
@@ -62,6 +63,12 @@ export const EMAIL_TEMPLATES = [
   'customer_merchant_rejected',
   /** S20 MA7: the merchant status was withdrawn (never the reason). */
   'customer_merchant_revoked',
+  /** S21 LV4: the volume level changed: its name and the price kind, never the list's name. */
+  'customer_merchant_level_changed',
+  /** S21 AL5: the balance fell below the merchant's threshold. */
+  'customer_merchant_low_balance',
+  /** S21 AL4: the day's alert events, when the merchant turned the email on (no center row). */
+  'customer_merchant_daily_digest',
 ] as const;
 
 export const emailTemplateSchema = z.enum(EMAIL_TEMPLATES);
@@ -107,6 +114,10 @@ export const NOTIFICATION_EVENTS = [
   'merchant_rejected',
   'merchant_application_expired',
   'merchant_revoked',
+  /** S21 LV4, AL3, AL5: the merchant tools. */
+  'merchant_level_changed',
+  'merchant_watch_digest',
+  'merchant_low_balance',
 ] as const;
 
 export const notificationEventSchema = z
@@ -213,11 +224,33 @@ export const NOTIFICATION_PARAMS = {
   }),
   merchant_application_expired: z.object({ applicationId: z.uuid() }),
   merchant_revoked: z.object({}),
+  // S21 LV4: the level's name (null: no level) and the price kind, never the list's name.
+  merchant_level_changed: z.object({
+    levelNameAr: z.string().nullable(),
+    priceKind: priceKindSchema,
+    direction: z.enum(['up', 'down']),
+  }),
+  // S21 AL3: the counts of the hour's changes and up to five of them.
+  merchant_watch_digest: z.object({
+    priceDown: z.int().nonnegative(),
+    priceUp: z.int().nonnegative(),
+    backInStock: z.int().nonnegative(),
+    outOfStock: z.int().nonnegative(),
+    lines: z.array(alertLineSchema).max(WATCH_DIGEST_LINES),
+  }),
+  // S21 AL5.
+  merchant_low_balance: z.object({
+    balanceUsdUnits: z.int(),
+    thresholdUsdUnits: z.int().positive(),
+  }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
   (typeof NOTIFICATION_PARAMS)[Event]
 >;
+
+/** S21 AL4: the daily email lists at most this many events, then "و n غيرها". */
+export const MERCHANT_DAILY_DIGEST_LINES = 50;
 
 /** The parameters each template is rendered with. */
 export const EMAIL_PARAMS = {
@@ -247,6 +280,12 @@ export const EMAIL_PARAMS = {
   customer_merchant_approved: NOTIFICATION_PARAMS.merchant_approved,
   customer_merchant_rejected: NOTIFICATION_PARAMS.merchant_rejected,
   customer_merchant_revoked: NOTIFICATION_PARAMS.merchant_revoked.extend(at.shape),
+  customer_merchant_level_changed: NOTIFICATION_PARAMS.merchant_level_changed,
+  customer_merchant_low_balance: NOTIFICATION_PARAMS.merchant_low_balance.extend(at.shape),
+  customer_merchant_daily_digest: z.object({
+    total: z.int().positive(),
+    lines: z.array(alertLineSchema).max(MERCHANT_DAILY_DIGEST_LINES),
+  }),
 } as const satisfies Record<EmailTemplate, z.ZodType>;
 
 export type EmailParams<Template extends EmailTemplate> = z.infer<(typeof EMAIL_PARAMS)[Template]>;
@@ -289,6 +328,9 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   merchant_rejected: 'customer_merchant_rejected',
   merchant_application_expired: null,
   merchant_revoked: 'customer_merchant_revoked',
+  merchant_level_changed: 'customer_merchant_level_changed',
+  merchant_watch_digest: null,
+  merchant_low_balance: 'customer_merchant_low_balance',
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -303,12 +345,15 @@ export const EMAIL_NOTIFICATION_EVENTS = NOTIFICATION_EVENTS.filter(
 );
 
 /**
- * The events that also send a push (S15 rule PD1): every event that has an email, nothing more
- * (owner, 2026-10-11).
+ * The events that also send a push (S15 rule PD1): every event that has an email (owner,
+ * 2026-10-11), and the hourly follow digest, which has none (S21 AL3, decision 11).
  */
-export const PUSH_NOTIFICATION_EVENTS = EMAIL_NOTIFICATION_EVENTS;
+export type PushNotificationEvent = EmailNotificationEvent | 'merchant_watch_digest';
 
-export type PushNotificationEvent = EmailNotificationEvent;
+export const PUSH_NOTIFICATION_EVENTS: readonly PushNotificationEvent[] = [
+  ...EMAIL_NOTIFICATION_EVENTS,
+  'merchant_watch_digest',
+];
 
 export function isPushNotificationEvent(event: NotificationEvent): event is PushNotificationEvent {
   return (PUSH_NOTIFICATION_EVENTS as readonly NotificationEvent[]).includes(event);
@@ -345,6 +390,9 @@ export const customerNotificationSchema = z
     notification('merchant_rejected'),
     notification('merchant_application_expired'),
     notification('merchant_revoked'),
+    notification('merchant_level_changed'),
+    notification('merchant_watch_digest'),
+    notification('merchant_low_balance'),
   ])
   .meta({ id: 'CustomerNotification' });
 

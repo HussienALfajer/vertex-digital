@@ -326,6 +326,8 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     fixedPriceFallbacks: z.int().nonnegative().default(0),
     /** S20: merchant applications waiting for review now. */
     merchantApplicationsWaiting: z.int().nonnegative().default(0),
+    /** S21 LV4: merchants whose volume level changed today. */
+    merchantLevelsChanged: z.int().nonnegative().default(0),
   }),
   bot_reply: telegramBotReplySchema,
   /** To the previous chat when another chat was linked (rule TG3). */

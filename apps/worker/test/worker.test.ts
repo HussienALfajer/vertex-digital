@@ -9,6 +9,8 @@ import { DATABASE } from '../src/core/database/database.module.js';
 import { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { UsdtScanJob } from '../src/jobs/deposits/usdt-scan.job.js';
 import { UsdtVerifyJob } from '../src/jobs/deposits/usdt-verify.job.js';
+import { MerchantLevelJob } from '../src/jobs/merchants/level.job.js';
+import { MerchantWatchAlertsJob } from '../src/jobs/merchants/watch-alerts.job.js';
 import { OrdersFulfilJob } from '../src/jobs/orders/fulfil.job.js';
 import { OrdersPayWaitingJob } from '../src/jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from '../src/jobs/orders/poll.job.js';
@@ -34,6 +36,8 @@ import { WorkerModule } from '../src/worker.module.js';
  * their own tests; this file proves the module boots and works a queue.
  */
 const IDLE_JOBS = [
+  MerchantLevelJob,
+  MerchantWatchAlertsJob,
   OrdersFulfilJob,
   OrdersPollJob,
   OrdersSweepJob,

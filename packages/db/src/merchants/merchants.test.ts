@@ -322,7 +322,13 @@ describe('merchant profiles', () => {
       owner.pool.query('delete from merchant_profiles where customer_id = $1', [id]),
     ).rejects.toThrow(/never deleted/);
     // A profile of a customer who is not a merchant is not listed.
-    const page = await merchantPage(db, { q: null, listId: null, after: null, limit: 500 });
+    const page = await merchantPage(db, {
+      q: null,
+      listId: null,
+      levelId: null,
+      after: null,
+      limit: 500,
+    });
     expect(page.some((row) => row.customerId === id)).toBe(false);
   });
 });

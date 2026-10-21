@@ -9,7 +9,9 @@ import {
   grantMerchantSchema,
   MERCHANT_SETTINGS_DEFAULTS,
   type MerchantApplicationEventKind,
+  type MerchantLevel,
   type MerchantSettings,
+  merchantLevelInputSchema,
   merchantLimitsBelowMinimum,
   merchantMessageSchema,
   merchantSettingsInputSchema,
@@ -56,6 +58,12 @@ interface StoredProfile {
   termsVersion: number | null;
   grantedAt: string;
   revokedAt: string | null;
+  /** S21 LV4: the level, set by a test (`setLevel`). */
+  level: { id: string; nameAr: string } | null;
+  levelChangedAt: string | null;
+  thisMonthUsdUnits: number;
+  previousMonthUsdUnits: number;
+  watchCount: number;
 }
 
 const EVENTS: Record<ApplicationAction, MerchantApplicationEventKind> = {
@@ -71,6 +79,8 @@ const EVENTS: Record<ApplicationAction, MerchantApplicationEventKind> = {
 export class MerchantsMock {
   applications: AdminMerchantApplication[] = [];
   readonly profiles = new Map<string, StoredProfile>();
+  /** S21 LV1: the levels, live and archived. */
+  levels: Omit<MerchantLevel, 'merchantCount'>[] = [];
   settings: MerchantSettings = {
     ...MERCHANT_SETTINGS_DEFAULTS,
     minDepositUsdUnits: MIN_DEPOSIT,
@@ -203,10 +213,15 @@ export class MerchantsMock {
     if (key === 'GET /api/admin/merchants') {
       const q = url.searchParams.get('q');
       const listId = url.searchParams.get('listId');
+      const levelId = url.searchParams.get('levelId');
       const rows = [...this.profiles.entries()]
         .filter(([customerId]) => this.isMerchant(customerId))
         .map(([customerId, profile]) => this.merchantRow(customerId, profile))
         .filter((row) => !listId || row.priceList.id === listId)
+        .filter(
+          (row) =>
+            !levelId || (levelId === 'none' ? row.level === null : row.level?.id === levelId),
+        )
         .filter((row) => !q || row.tradeName.includes(q) || row.name.includes(q));
       return { status: 200, json: { items: rows, nextCursor: null } };
     }
@@ -242,6 +257,15 @@ export class MerchantsMock {
       if (open) this.move(open, 'grant', null);
       return { status: 200, json: this.profile(customerId) };
     }
+    if (key === 'GET /api/admin/merchant-levels') {
+      return { status: 200, json: { items: this.levelRows() } };
+    }
+    const level = path.match(/^\/api\/admin\/merchant-levels(?:\/([^/]+))?(\/archive)?$/);
+    if (level && (method === 'POST' || method === 'PATCH')) {
+      const refused = sensitive();
+      if (refused) return refused;
+      return this.changeLevel(method, level[1] ?? null, Boolean(level[2]), body);
+    }
     if (key === 'GET /api/admin/merchant-settings') return { status: 200, json: this.settings };
     if (key === 'PUT /api/admin/merchant-settings') {
       const refused = sensitive();
@@ -270,10 +294,22 @@ export class MerchantsMock {
 
   private grant(
     customerId: string,
-    input: Omit<StoredProfile, 'grantedAt' | 'revokedAt'> & { listId: string | null },
+    input: Pick<
+      StoredProfile,
+      'tradeName' | 'governorate' | 'city' | 'applicationId' | 'termsVersion'
+    > & { listId: string | null },
   ): void {
     const { listId, ...profile } = input;
-    this.profiles.set(customerId, { ...profile, grantedAt: NOW(), revokedAt: null });
+    this.profiles.set(customerId, {
+      ...profile,
+      grantedAt: NOW(),
+      revokedAt: null,
+      level: null,
+      levelChangedAt: null,
+      thisMonthUsdUnits: 180 * USD,
+      previousMonthUsdUnits: 95 * USD,
+      watchCount: 0,
+    });
     this.priceLists.assign(
       customerId,
       listId && listId !== ROOT_PRICE_LIST_IDS.wholesale ? listId : null,
@@ -340,6 +376,69 @@ export class MerchantsMock {
     };
   }
 
+  /** A test's level for a merchant (the worker's recomputation, LV4). */
+  setLevel(customerId: string, levelId: string | null): void {
+    const profile = this.profiles.get(customerId);
+    if (!profile) return;
+    const found = this.levels.find((row) => row.id === levelId);
+    profile.level = found ? { id: found.id, nameAr: found.nameAr } : null;
+    profile.levelChangedAt = NOW();
+  }
+
+  private levelRows(): MerchantLevel[] {
+    return [...this.levels]
+      .sort(
+        (a, b) =>
+          Number(a.archivedAt !== null) - Number(b.archivedAt !== null) ||
+          a.monthlyThresholdUsdUnits - b.monthlyThresholdUsdUnits,
+      )
+      .map((row) => ({
+        ...row,
+        merchantCount: [...this.profiles.values()].filter(
+          (profile) => profile.revokedAt === null && profile.level?.id === row.id,
+        ).length,
+      }));
+  }
+
+  /** LV1, LV6: create, edit or archive under the contracts' schema and the live uniqueness. */
+  private changeLevel(method: string, id: string | null, archive: boolean, body: Body): Answer {
+    const current = id ? this.levels.find((row) => row.id === id && row.archivedAt === null) : null;
+    if (id && !current) return error(404, 'NOT_FOUND');
+    if (archive && current) {
+      current.archivedAt = NOW();
+      for (const profile of this.profiles.values()) {
+        if (profile.level?.id === current.id) profile.level = null;
+      }
+      return { status: 200, json: { ...current, merchantCount: 0 } };
+    }
+    const parsed = merchantLevelInputSchema.safeParse(body);
+    if (!parsed.success) return error(400, 'VALIDATION_FAILED');
+    const list = this.priceLists.lists.find((row) => row.id === parsed.data.priceListId);
+    if (!list || (list.kind !== 'wholesale' && list.kind !== 'custom')) {
+      return error(400, 'VALIDATION_FAILED');
+    }
+    const live = this.levels.filter((row) => row.archivedAt === null && row.id !== id);
+    if (!id && live.length >= 10) return error(409, 'MERCHANT_LEVELS_LIMIT_REACHED');
+    if (live.some((row) => row.nameAr === parsed.data.nameAr)) {
+      return error(409, 'MERCHANT_LEVEL_NAME_TAKEN');
+    }
+    if (live.some((row) => row.monthlyThresholdUsdUnits === parsed.data.monthlyThresholdUsdUnits)) {
+      return error(409, 'MERCHANT_LEVEL_THRESHOLD_TAKEN');
+    }
+    const values = {
+      nameAr: parsed.data.nameAr,
+      monthlyThresholdUsdUnits: parsed.data.monthlyThresholdUsdUnits,
+      priceList: { id: list.id, name: list.name, priceKind: priceKindOf(list.kind) },
+    };
+    if (current) {
+      Object.assign(current, values);
+      return { status: 200, json: this.levelRows().find((row) => row.id === current.id) };
+    }
+    const created = { id: nextId(), ...values, createdAt: NOW(), archivedAt: null };
+    this.levels.push(created);
+    return { status: method === 'POST' ? 201 : 200, json: { ...created, merchantCount: 0 } };
+  }
+
   private merchantRow(customerId: string, profile: StoredProfile): AdminMerchantRow {
     const person = this.customer(customerId);
     const pricing = this.priceLists.pricing(customerId, 'merchant');
@@ -352,6 +451,7 @@ export class MerchantsMock {
       city: profile.city,
       priceList: { id: pricing.effectiveList.id, name: pricing.effectiveList.name },
       priceKind: priceKindOf(pricing.effectiveList.kind),
+      level: profile.level,
       termsAccepted: profile.termsVersion !== null,
       frozen: !!person?.frozenAt,
       grantedAt: profile.grantedAt,

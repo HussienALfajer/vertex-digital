@@ -32,6 +32,7 @@ import { Route as AppDepositsIndexRouteImport } from './routes/_app/deposits.ind
 import { Route as AppDepositsIdRouteImport } from './routes/_app/deposits.$id'
 import { Route as AppDepositsTransfersRouteImport } from './routes/_app/deposits.transfers'
 import { Route as AppMerchantsIndexRouteImport } from './routes/_app/merchants.index'
+import { Route as AppMerchantsLevelsRouteImport } from './routes/_app/merchants.levels'
 import { Route as AppOrdersIndexRouteImport } from './routes/_app/orders.index'
 import { Route as AppOrdersIdRouteImport } from './routes/_app/orders.$id'
 import { Route as AppOrdersLiveRouteImport } from './routes/_app/orders.live'
@@ -177,6 +178,11 @@ const AppDepositsTransfersRoute = AppDepositsTransfersRouteImport.update({
 const AppMerchantsIndexRoute = AppMerchantsIndexRouteImport.update({
   id: '/merchants/',
   path: '/merchants/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMerchantsLevelsRoute = AppMerchantsLevelsRouteImport.update({
+  id: '/merchants/levels',
+  path: '/merchants/levels',
   getParentRoute: () => AppRoute,
 } as any)
 const AppOrdersIndexRoute = AppOrdersIndexRouteImport.update({
@@ -361,6 +367,7 @@ export interface FileRoutesByFullPath {
   '/customers/$id': typeof AppCustomersIdRoute
   '/deposits/$id': typeof AppDepositsIdRoute
   '/deposits/transfers': typeof AppDepositsTransfersRoute
+  '/merchants/levels': typeof AppMerchantsLevelsRoute
   '/orders/$id': typeof AppOrdersIdRoute
   '/orders/live': typeof AppOrdersLiveRoute
   '/orders/new': typeof AppOrdersNewRoute
@@ -416,6 +423,7 @@ export interface FileRoutesByTo {
   '/customers/$id': typeof AppCustomersIdRoute
   '/deposits/$id': typeof AppDepositsIdRoute
   '/deposits/transfers': typeof AppDepositsTransfersRoute
+  '/merchants/levels': typeof AppMerchantsLevelsRoute
   '/orders/$id': typeof AppOrdersIdRoute
   '/orders/live': typeof AppOrdersLiveRoute
   '/orders/new': typeof AppOrdersNewRoute
@@ -474,6 +482,7 @@ export interface FileRoutesById {
   '/_app/customers/$id': typeof AppCustomersIdRoute
   '/_app/deposits/$id': typeof AppDepositsIdRoute
   '/_app/deposits/transfers': typeof AppDepositsTransfersRoute
+  '/_app/merchants/levels': typeof AppMerchantsLevelsRoute
   '/_app/orders/$id': typeof AppOrdersIdRoute
   '/_app/orders/live': typeof AppOrdersLiveRoute
   '/_app/orders/new': typeof AppOrdersNewRoute
@@ -532,6 +541,7 @@ export interface FileRouteTypes {
     | '/customers/$id'
     | '/deposits/$id'
     | '/deposits/transfers'
+    | '/merchants/levels'
     | '/orders/$id'
     | '/orders/live'
     | '/orders/new'
@@ -587,6 +597,7 @@ export interface FileRouteTypes {
     | '/customers/$id'
     | '/deposits/$id'
     | '/deposits/transfers'
+    | '/merchants/levels'
     | '/orders/$id'
     | '/orders/live'
     | '/orders/new'
@@ -644,6 +655,7 @@ export interface FileRouteTypes {
     | '/_app/customers/$id'
     | '/_app/deposits/$id'
     | '/_app/deposits/transfers'
+    | '/_app/merchants/levels'
     | '/_app/orders/$id'
     | '/_app/orders/live'
     | '/_app/orders/new'
@@ -851,6 +863,13 @@ declare module '@tanstack/react-router' {
       path: '/merchants'
       fullPath: '/merchants/'
       preLoaderRoute: typeof AppMerchantsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/merchants/levels': {
+      id: '/_app/merchants/levels'
+      path: '/merchants/levels'
+      fullPath: '/merchants/levels'
+      preLoaderRoute: typeof AppMerchantsLevelsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/orders/': {
@@ -1115,6 +1134,7 @@ interface AppRouteChildren {
   AppCustomersIdRoute: typeof AppCustomersIdRoute
   AppDepositsIdRoute: typeof AppDepositsIdRoute
   AppDepositsTransfersRoute: typeof AppDepositsTransfersRoute
+  AppMerchantsLevelsRoute: typeof AppMerchantsLevelsRoute
   AppOrdersIdRoute: typeof AppOrdersIdRoute
   AppOrdersLiveRoute: typeof AppOrdersLiveRoute
   AppOrdersNewRoute: typeof AppOrdersNewRoute
@@ -1162,6 +1182,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCustomersIdRoute: AppCustomersIdRoute,
   AppDepositsIdRoute: AppDepositsIdRoute,
   AppDepositsTransfersRoute: AppDepositsTransfersRoute,
+  AppMerchantsLevelsRoute: AppMerchantsLevelsRoute,
   AppOrdersIdRoute: AppOrdersIdRoute,
   AppOrdersLiveRoute: AppOrdersLiveRoute,
   AppOrdersNewRoute: AppOrdersNewRoute,

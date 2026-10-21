@@ -22,7 +22,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { customers } from './auth.js';
-import { amountUnits, id, timestamps } from './columns.js';
+import { amountUnits, archivedAt, id, timestamps } from './columns.js';
 import { contentPageVersions } from './content.js';
 import { storedFiles } from './files.js';
 import { priceLists } from './price-lists.js';
@@ -171,6 +171,40 @@ export const merchantApplicationEvents = pgTable(
 );
 
 /**
+ * S21 LV1: the volume levels the admin sets; a business table, archived. Names and thresholds are
+ * unique among live levels; at most 10 live (the API, under an advisory lock). The list is a
+ * wholesale or custom list, checked by the API.
+ */
+export const merchantLevels = pgTable(
+  'merchant_levels',
+  {
+    id: id(),
+    nameAr: text('name_ar').notNull(),
+    monthlyThresholdUsdUnits: amountUnits('monthly_threshold_usd_units').notNull(),
+    priceListId: uuid('price_list_id')
+      .notNull()
+      .references(() => priceLists.id),
+    ...timestamps(),
+    archivedAt: archivedAt(),
+  },
+  (table) => [
+    uniqueIndex('merchant_levels_name_idx')
+      .on(table.nameAr)
+      .where(sql`${table.archivedAt} is null`),
+    uniqueIndex('merchant_levels_threshold_idx')
+      .on(table.monthlyThresholdUsdUnits)
+      .where(sql`${table.archivedAt} is null`),
+    index('merchant_levels_price_list_id_idx').on(table.priceListId),
+    check(
+      'merchant_levels_check',
+      sql`char_length(${table.nameAr}) between 2 and 30
+        and ${table.monthlyThresholdUsdUnits} >= 1000000
+        and ${table.monthlyThresholdUsdUnits} % 1000000 = 0`,
+    ),
+  ],
+);
+
+/**
  * A merchant's profile (MA5–MA7), keyed by customer: upserted on a grant, `revoked_at` set on a
  * revocation (the audit log keeps the history).
  */
@@ -189,6 +223,9 @@ export const merchantProfiles = pgTable(
     termsVersionId: uuid('terms_version_id').references(() => contentPageVersions.id),
     grantedAt: timestamp('granted_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    /** S21 LV4: the volume level, written by the level recomputation only; null for none. */
+    levelId: uuid('level_id').references(() => merchantLevels.id),
+    levelChangedAt: timestamp('level_changed_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
@@ -197,6 +234,7 @@ export const merchantProfiles = pgTable(
   (table) => [
     index('merchant_profiles_application_id_idx').on(table.applicationId),
     index('merchant_profiles_terms_version_id_idx').on(table.termsVersionId),
+    index('merchant_profiles_level_id_idx').on(table.levelId),
     check(
       'merchant_profiles_text_check',
       sql`char_length(${table.tradeName}) between 2 and 80 and char_length(${table.city}) between 2 and 60`,

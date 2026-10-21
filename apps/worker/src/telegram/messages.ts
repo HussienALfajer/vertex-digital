@@ -545,6 +545,9 @@ function summaryText(summary: TelegramMessageParams<'daily_summary'>): string {
     ...(summary.merchantApplicationsWaiting > 0
       ? [`🏪 طلبات تاجر بانتظار المراجعة: ${summary.merchantApplicationsWaiting}`]
       : []),
+    ...(summary.merchantLevelsChanged > 0
+      ? [`🏅 مستويات التجار: ${summary.merchantLevelsChanged} تغيّرت اليوم`]
+      : []),
     `الطلبات اليوم: ${summary.ordersDelivered} مُسلّمة، ${summary.ordersPartiallyRefunded} جزئية، ${summary.ordersRefunded} مستردة`,
     `بحاجة لمراجعة: ${summary.ordersInReview} · يدوي بانتظارك: ${summary.manualWaiting}`,
     ...(summary.medianDeliveryMs === null

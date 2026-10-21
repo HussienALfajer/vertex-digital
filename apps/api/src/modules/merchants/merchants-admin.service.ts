@@ -270,6 +270,7 @@ export class MerchantsAdminService {
     const rows = await merchantPage(this.db, {
       q: query.q ?? null,
       listId: query.listId ?? null,
+      levelId: query.levelId ?? null,
       after: query.cursor ? decodeCursor(query.cursor) : null,
       limit: query.limit,
     });
@@ -285,6 +286,7 @@ export class MerchantsAdminService {
         city: row.city,
         priceList: { id: row.listId, name: row.listName },
         priceKind: priceKindOf(row.listKind),
+        level: row.level,
         termsAccepted: row.termsAccepted,
         frozen: row.frozen,
         grantedAt: row.grantedAt.toISOString(),

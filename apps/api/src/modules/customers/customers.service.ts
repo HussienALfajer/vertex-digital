@@ -180,6 +180,7 @@ export class CustomersService {
         termsVersion: merchant.termsVersion ?? null,
         grantedAt: merchant.grantedAt.toISOString(),
         revokedAt: merchant.revokedAt?.toISOString() ?? null,
+        levelChangedAt: merchant.levelChangedAt?.toISOString() ?? null,
       },
       pinnedNote: pinned && noteOf(pinned),
       balanceUnits: facts.balanceUnits,

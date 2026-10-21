@@ -9,6 +9,7 @@ import {
 import { and, asc, count, eq, isNotNull, isNull } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Executor, Transaction } from '../client.js';
+import { levelListId } from '../merchants/levels.js';
 import { type JobSender, notifyCustomer } from '../notifications/index.js';
 import { cancelReservation } from '../orders/reservations.js';
 import { listIsPriced, listPricingFacts } from '../pricing/reprice.js';
@@ -41,7 +42,11 @@ export async function accountPriceList(
     .from(customers)
     .where(eq(customers.id, customerId));
   if (!customer) return null;
-  const id = effectivePriceListId(customer);
+  // S21 LV5: a merchant's level picks the list below an assigned one.
+  const id = effectivePriceListId({
+    ...customer,
+    levelListId: customer.accountType === 'merchant' ? await levelListId(db, customerId) : null,
+  });
   const [list] = await db
     .select({ id: priceLists.id, kind: priceLists.kind, name: priceLists.name })
     .from(priceLists)
@@ -97,9 +102,15 @@ export async function setCustomerPriceList(
   if (status === 'archived') {
     throw new CustomerError('CUSTOMER_STATE_INVALID', 'The customer is archived', { status });
   }
-  const afterListId = effectivePriceListId({ ...customer, priceListId: input.priceListId });
+  // S21 LV5: the level's list stands under the assignment, on both sides.
+  const level = customer.accountType === 'merchant' ? await levelListId(tx, customer.id) : null;
+  const afterListId = effectivePriceListId({
+    ...customer,
+    priceListId: input.priceListId,
+    levelListId: level,
+  });
   const list = await usableList(tx, afterListId);
-  const beforeListId = effectivePriceListId(customer);
+  const beforeListId = effectivePriceListId({ ...customer, levelListId: level });
   await tx
     .update(customers)
     .set({ priceListId: input.priceListId })
@@ -224,7 +235,12 @@ export async function releaseArchivedAccounts(
         before: { priceListId: customer.priceListId, effectiveListId: input.priceListId },
         after: {
           priceListId: null,
-          effectiveListId: effectivePriceListId({ ...customer, priceListId: null }),
+          effectiveListId: effectivePriceListId({
+            ...customer,
+            priceListId: null,
+            levelListId:
+              customer.accountType === 'merchant' ? await levelListId(tx, customer.id) : null,
+          }),
         },
         cancelledOrderIds: [],
       },

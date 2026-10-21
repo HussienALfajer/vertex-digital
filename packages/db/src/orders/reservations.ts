@@ -19,6 +19,7 @@ import {
   lockCustomerWallet,
   postJournal,
 } from '../ledger/index.js';
+import { afterMerchantPurchase } from '../merchant-tools/alerts.js';
 import { notifyCustomer } from '../notifications/index.js';
 import { catalogProducts, orders, storeSwitchChanges } from '../schema/index.js';
 import {
@@ -366,6 +367,8 @@ async function payOne(
     params: { orderId: order.id, orderNumber: order.number, productNameAr: product?.nameAr ?? '' },
   });
   await queueFulfil(tx, context.jobs, order.id);
+  // S21 LV4, AL5 after the reservation's debit.
+  await afterMerchantPurchase(tx, context.jobs, customer);
   return 'paid';
 }
 
