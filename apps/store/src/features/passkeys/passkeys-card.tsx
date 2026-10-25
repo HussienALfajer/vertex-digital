@@ -55,14 +55,26 @@ type State = { status: 'loading' } | { status: 'failed' } | { status: 'ready'; i
 /** What the card says after an action. */
 type Note = { tone: 'success' | 'error'; text: string } | null;
 
-const failureText = (reason: CeremonyFailure) =>
-  reason === 'CANCELLED'
-    ? tp('card.cancelled')
-    : reason === 'ALREADY_REGISTERED'
-      ? tp('card.already')
-      : reason === 'UNKNOWN'
-        ? tp('card.failed')
-        : errorText(reason);
+/**
+ * The card's own refusals read from its catalog: the passkey codes stay out of the main catalog,
+ * which every page ships (the share page's budget).
+ */
+const failureText = (reason: CeremonyFailure) => {
+  switch (reason) {
+    case 'CANCELLED':
+      return tp('card.cancelled');
+    case 'ALREADY_REGISTERED':
+      return tp('card.already');
+    case 'PASSKEYS_LIMIT_REACHED':
+      return tp('card.limitReached');
+    case 'REAUTHENTICATION_REQUIRED':
+      return tp('card.grantExpired');
+    case 'UNKNOWN':
+      return tp('card.failed');
+    default:
+      return errorText(reason);
+  }
+};
 
 /**
  * "الدخول بالبصمة" on the account page (S22 PK2, PK4): the passkeys with when they were added and

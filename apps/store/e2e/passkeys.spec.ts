@@ -135,7 +135,12 @@ test('adds a passkey with the password, renames and removes it, then signs in wi
   await page.goto(`${ORIGIN}/sign-in?next=%2Forders`);
   signedIn(api);
   api.on('GET /api/orders', 200, { items: [], nextCursor: null });
-  await page.getByRole('button', { name: messages.signIn.button }).click();
+  // The virtual authenticator may answer the email field's suggestions (autofill) before the
+  // button is pressed: either ceremony signs in and leaves the page.
+  await page
+    .getByRole('button', { name: messages.signIn.button })
+    .click({ timeout: 5_000 })
+    .catch(() => undefined);
   await expect(page).toHaveURL(/\/orders$/);
   const assertion = api.last('POST /api/auth/sign-in/passkey')?.body as {
     response: { type: string; response: { signature: string } };
