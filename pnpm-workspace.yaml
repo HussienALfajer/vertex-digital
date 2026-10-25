@@ -11,3 +11,14 @@ allowBuilds:
   '@scarf/scarf': false # install telemetry from swagger-ui-dist
   '@swc/core': false # the native binary arrives as an optional dependency
   esbuild: false # drizzle-kit's loader; its native binary arrives as an optional dependency
+
+# Security floors (2026-10-25, pnpm audit in CI): versions other packages reach as peers or through
+# their own ranges (better-auth's next, better-call's zod, NestJS's multer, express's body-parser,
+# vitest's happy-dom) are lifted to the patched releases. Remove an entry once nothing resolves
+# below it.
+overrides:
+  'next@>=16.0.0 <16.4.1': '~16.4.1'
+  'zod@>=4.0.0 <4.6.6': '^4.6.6'
+  'multer@>=2.0.0 <2.5.0': '^2.5.0'
+  'body-parser@>=2.0.0 <2.4.0': '^2.4.0'
+  'happy-dom@>=17.0.0 <21.0.4': '^21.0.4'
