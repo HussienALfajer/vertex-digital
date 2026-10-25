@@ -14,7 +14,7 @@ const PermissionCard = dynamic(() => import('./permission-card').then((m) => m.P
  * The permission card's place on the order and deposit pages (PC1): the card's code loads only
  * once its conditions hold, and it stays through its own outcome (done, denied) for this visit.
  */
-export function PushCard({ kind }: { kind: 'order' | 'deposit' }) {
+export function PushCard({ kind }: { kind: 'order' | 'deposit' | 'alert' }) {
   const { device } = usePushDevice();
   const [shown, setShown] = useState(false);
   useEffect(() => {

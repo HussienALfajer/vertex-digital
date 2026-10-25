@@ -42,7 +42,7 @@ import {
 import { reportBreakdownSchema, reportKindSchema } from './reports.js';
 import { storeSwitchSchema } from './settings.js';
 import { failureKindSchema, supplierCodeSchema, supplierPolicySchema } from './suppliers.js';
-import { ticketCategorySchema, ticketStatusSchema } from './support.js';
+import { orderProblemSchema, ticketCategorySchema, ticketStatusSchema } from './support.js';
 import {
   adjustmentCategorySchema,
   adjustmentDirectionSchema,
@@ -791,8 +791,8 @@ export const AUDIT_DETAILS = {
   'order.proof_uploaded': z.strictObject({ fileId: z.uuid() }),
   /** Rule C3: which stored item was shown, never its value. */
   'order.code_revealed': z.strictObject({ itemId: z.uuid(), position: z.int().positive() }),
-  /** S12 AU1: by the customer (TK1) or the admin (TK2). */
-  'ticket.opened': ticketChange,
+  /** S12 AU1: by the customer (TK1, S22 OP5: with the order problem) or the admin (TK2). */
+  'ticket.opened': ticketChange.extend({ orderProblem: orderProblemSchema.optional() }),
   'ticket.opened_by_admin': ticketChange.extend({ customerId: z.uuid() }),
   /** The customer's message (TK3, TK4); `ticket.replied` is the admin's (TK3, TK5). */
   'ticket.customer_replied': ticketMessage,

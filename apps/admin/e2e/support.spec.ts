@@ -84,6 +84,26 @@ test.describe('the queue (TK12, TK13)', () => {
     await expect(page).toHaveURL(`/support/${TICKET_IDS.waiting}`);
   });
 
+  test('shows the order problem as a chip, filters by it and names it in the thread (S22 OP6)', async ({
+    page,
+    admin,
+  }) => {
+    await open(page, admin, '/support?status=all');
+    await expect(rows(page).first()).toContainText(s.problems.not_arrived);
+    await page.getByRole('combobox', { name: s.filters.problem }).click();
+    await page.getByRole('option', { name: s.problems.not_arrived }).click();
+    await expect(page).toHaveURL(/problem=not_arrived/);
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page).first()).toContainText('VT-7KQ2MX');
+    await page.getByRole('combobox', { name: s.filters.problem }).click();
+    await page.getByRole('option', { name: s.problems.code_used }).click();
+    await expect(page.getByText(s.empty.filtered)).toBeVisible();
+
+    await page.goto(`/support/${TICKET_IDS.waiting}`);
+    await expect(page.getByText(s.side.problem)).toBeVisible();
+    await expect(page.getByText(s.problems.not_arrived).first()).toBeVisible();
+  });
+
   test('is empty per tab', async ({ page, admin }) => {
     admin.customers.tickets = admin.customers.tickets.filter((ticket) => ticket.status !== 'open');
     await open(page, admin, '/support');
@@ -249,6 +269,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await open(page, admin, '/support?status=all');
       await expect(rows(page)).toHaveCount(3);
       await screenshot(page, testInfo, `support-queue-${colorScheme}`);
+      // S22 OP6: the queue filtered by an order problem.
+      await page.goto('/support?status=all&problem=not_arrived');
+      await expect(rows(page)).toHaveCount(1);
+      await screenshot(page, testInfo, `support-queue-problem-${colorScheme}`);
 
       await page.goto(`/support/${TICKET_IDS.waiting}`);
       await expect(page.getByText('مرحبًا، دفعت قبل ساعة', { exact: false })).toBeVisible();

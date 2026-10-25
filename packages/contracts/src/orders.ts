@@ -1502,6 +1502,16 @@ export const orderSchema = z
     sale: orderSaleSchema.nullable(),
     /** S21 CR4: the reveals and releases of the order's codes, newest first. */
     codeReleases: z.array(codeReleaseLogSchema),
+    /**
+     * S22 OP1–OP4: what the "مشكلة في الطلب؟" card reads: the status and times its problems
+     * depend on, and the ticket already open about the order (TK1: one at a time).
+     */
+    help: z.object({
+      status: orderStatusSchema,
+      paidAt: z.iso.datetime().nullable(),
+      finishedAt: z.iso.datetime().nullable(),
+      openTicketId: z.uuid().nullable(),
+    }),
     createdAt: z.iso.datetime(),
   })
   .meta({ id: 'Order' });

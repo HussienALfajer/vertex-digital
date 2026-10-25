@@ -466,6 +466,8 @@ export const adminCustomerSchema = z
       reservations: z.int().nonnegative(),
       /** S15: the devices with push on. */
       pushDevices: z.int().nonnegative(),
+      /** S22 PA7: active product alerts. */
+      activeAlerts: z.int().nonnegative(),
     }),
     signals: customerSignalsSchema,
     /** S14 TA3: the versions in force at sign-up; null before the page was published. */

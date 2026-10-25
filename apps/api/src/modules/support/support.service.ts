@@ -3,6 +3,7 @@ import {
   type CreateTicket,
   type CursorQuery,
   customerCanReply,
+  type OrderProblem,
   type SupportChannels,
   TICKET_LIMITS,
   type Ticket,
@@ -100,7 +101,11 @@ export class SupportService {
   async open(
     customerId: string,
     idempotencyKey: string,
-    input: CreateTicket & { orderId?: string | undefined; depositId?: string | undefined },
+    input: CreateTicket & {
+      orderId?: string | undefined;
+      depositId?: string | undefined;
+      orderProblem?: OrderProblem | undefined;
+    },
     uploads: readonly Buffer[],
     meta: RequestMeta,
   ): Promise<{ ticket: Ticket; created: boolean }> {
@@ -146,6 +151,7 @@ export class SupportService {
         category: input.category,
         ...link,
         subject: input.subject,
+        orderProblem: input.orderProblem ?? null,
         status: 'open',
         openedBy: 'customer',
         lastCustomerMessageAt: sql`now()`,
@@ -162,7 +168,10 @@ export class SupportService {
       await recordAudit(tx, {
         ...this.entry(customerId, ticket.id, meta),
         action: 'ticket.opened',
-        details: ticketChange(ticket, null),
+        details: {
+          ...ticketChange(ticket, null),
+          ...(ticket.orderProblem !== null && { orderProblem: ticket.orderProblem }),
+        },
       });
       await this.tellAdmin(tx, ticket, customerId, fileIds.length > 0, 'ticket_opened');
       return { id: ticket.id, created: true };
@@ -373,6 +382,8 @@ export class SupportService {
         subject: ticket.subject.slice(0, 120),
         hasImages,
         customerEmail: customer?.email ?? '',
+        ...(kind === 'ticket_opened' &&
+          ticket.orderProblem !== null && { orderProblem: ticket.orderProblem }),
       },
       dedupeKey:
         kind === 'ticket_opened'

@@ -33,6 +33,7 @@ import {
   productRoutingStates,
   readAll,
   type Transaction,
+  waitingAlertCounts,
 } from '@vertex-digital/db';
 import {
   and,
@@ -598,11 +599,12 @@ export class CatalogService {
    */
   async products(executor: Database | Transaction, rows: ProductRow[]): Promise<Product[]> {
     const ids = rows.map((row) => row.id);
-    const [states, rate, delivery, policy] = await readAll(executor, [
+    const [states, rate, delivery, policy, waiting] = await readAll(executor, [
       () => productRoutingStates(executor, ids, routingContext(this.env)),
       () => this.rates.current(executor),
       () => productDeliveryStats(executor, ids),
       () => currentSupplierPolicy(executor),
+      () => waitingAlertCounts(executor, ids),
     ]);
     return rows.map((row) => {
       const state = states.get(row.id) as ProductRoutingState;
@@ -625,6 +627,7 @@ export class CatalogService {
           routed: state.routes.some((route) => route.archivedAt === null),
           reviewOpen: state.openReview !== null,
           deliveryStats: delivery.get(row.id) ?? null,
+          waitingAlerts: waiting.get(row.id) ?? 0,
         },
         this.env.STORE_URL,
       );

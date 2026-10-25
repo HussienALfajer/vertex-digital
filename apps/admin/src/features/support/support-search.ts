@@ -1,6 +1,8 @@
 import {
   ADMIN_TICKET_TABS,
   type AdminTicketTab,
+  ORDER_PROBLEMS,
+  type OrderProblem,
   TICKET_CATEGORIES,
   type TicketCategory,
 } from '@vertex-digital/contracts';
@@ -14,6 +16,8 @@ export interface SupportSearch {
   /** Absent for "بانتظار ردّك" (`open`), so a plain link to `/support` opens the queue. */
   status?: Exclude<AdminTicketTab, 'open'>;
   category?: TicketCategory;
+  /** S22 OP6: tickets naming this order problem. */
+  problem?: OrderProblem;
   customerId?: string;
   /** A ticket number, as typed. */
   q?: string;
@@ -34,6 +38,9 @@ export function parseSupportSearch(search: Record<string, unknown>): SupportSear
   }
   if ((TICKET_CATEGORIES as readonly unknown[]).includes(search.category)) {
     parsed.category = search.category as TicketCategory;
+  }
+  if ((ORDER_PROBLEMS as readonly unknown[]).includes(search.problem)) {
+    parsed.problem = search.problem as OrderProblem;
   }
   if (isUuid(search.customerId)) parsed.customerId = search.customerId;
   const q = typeof search.q === 'string' ? search.q.trim() : '';

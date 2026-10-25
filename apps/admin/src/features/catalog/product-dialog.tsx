@@ -9,6 +9,7 @@ import {
   updateProductSchema,
 } from '@vertex-digital/contracts';
 import {
+  Badge,
   Button,
   DialogContent,
   DialogDescription,
@@ -132,6 +133,11 @@ export function ProductDialog({
           {product ? t('catalog.products.editTitle') : t('catalog.products.addTitle')}
         </DialogTitle>
         <DialogDescription>{t('catalog.products.description')}</DialogDescription>
+        {product && product.waitingAlerts > 0 && (
+          <Badge tone="info">
+            {t('catalog.products.waitingAlerts', { count: product.waitingAlerts })}
+          </Badge>
+        )}
       </DialogHeader>
       <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field>

@@ -71,6 +71,8 @@ function order(changes: Partial<Order> & { id: string }): Order {
     verificationCode: 'VrfyCode0123456789abcd',
     sale: null,
     codeReleases: [],
+    // S22 OP2: no problem card unless a test sets one.
+    help: { status: 'awaiting_balance', paidAt: null, finishedAt: null, openTicketId: null },
     repeatable: false,
     createdAt: '2026-10-09T10:00:00.000Z',
     ...changes,

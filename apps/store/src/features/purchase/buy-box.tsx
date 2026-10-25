@@ -119,6 +119,11 @@ const TermsSheet = dynamic(() =>
   import('@/features/merchant/terms-sheet').then((module) => module.TermsSheet),
 );
 
+/** S22 PA1: the price-drop bell, with its own catalog. */
+const AlertButton = dynamic(() =>
+  import('@/features/product-alerts/alert-button').then((module) => module.AlertButton),
+);
+
 type Sending =
   | { status: 'idle' }
   | { status: 'sending' }
@@ -667,6 +672,10 @@ export function BuyBox({
           <ClockIcon className="size-4 shrink-0" aria-hidden="true" />
           {deliveryDetailText(product.deliveryStats)}
         </p>
+      )}
+      {/* S22 PA1: the bell for a price drop, on the price the customer sees. */}
+      {!bundle && signedIn && (
+        <AlertButton productId={product.id} gameId={game.id} kind="price_drop" />
       )}
     </div>
   );

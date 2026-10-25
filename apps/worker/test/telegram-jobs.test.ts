@@ -716,6 +716,11 @@ describe('the messages of PR 4', () => {
     ).text;
     expect(reply).toContain('ردّ العميل على التذكرة VT-7KQ2MX');
     expect(reply).not.toContain('مع صور');
+    expect(opened).not.toContain('المشكلة');
+    // S22 OP6: the problem a ticket names.
+    expect(
+      renderTelegramMessage('ticket_opened', { ...ticket, orderProblem: 'code_used' }, LINKS).text,
+    ).toContain('المشكلة: الكود مستخدم مسبقاً');
   });
 
   it('render a purchase from the panel with its mode and the owner cap, never fields (S16 AP13)', () => {

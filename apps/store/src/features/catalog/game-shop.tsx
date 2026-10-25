@@ -25,6 +25,11 @@ const PrivatePackContent = dynamic(() =>
 
 // The buy box (its field rules, the player check, slide-to-pay) loads once a pack is chosen, so
 // the game page's first load stays light (apps/store/CLAUDE.md, the game page's budget).
+/** S22 PA1: "نبّهني عند التوفر" under an unavailable pack, with its own catalog. */
+const AlertButton = dynamic(() =>
+  import('@/features/product-alerts/alert-button').then((module) => module.AlertButton),
+);
+
 const BuyBox = dynamic(
   () => import('@/features/purchase/buy-box').then((module) => module.BuyBox),
   {
@@ -78,6 +83,7 @@ export function GameShop({
   // AT4: no buy while an account's own prices are unknown (its last read had them, or it failed).
   const waiting = prices.status === 'failed' || (prices.status === 'loading' && prices.hinted);
   const [quantity, setQuantity] = useState(1);
+  const [restingOpen, setRestingOpen] = useState(false);
   const [intent, setIntent] = useState<BuyBoxIntent | undefined>();
   const [repeatFailed, setRepeatFailed] = useState(false);
   const packId = searchParams.get('pack');
@@ -148,6 +154,10 @@ export function GameShop({
     />
   );
 
+  // A list that opens itself (all packs resting, or a link to a resting pack) shows its alerts
+  // at once: its `toggle` may fire before hydration, so it cannot be waited for.
+  const restingDefaultOpen = ready.length === 0 || resting.some((product) => product.id === packId);
+
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="flex flex-col gap-6">
@@ -203,7 +213,8 @@ export function GameShop({
         {resting.length > 0 && (
           <details
             className="group rounded-lg border border-border bg-surface"
-            open={ready.length === 0 || resting.some((product) => product.id === packId)}
+            open={restingDefaultOpen}
+            onToggle={(event) => setRestingOpen(event.currentTarget.open)}
           >
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
               {t('game.unavailable', { count: resting.length })}
@@ -214,10 +225,14 @@ export function GameShop({
             </summary>
             <ul className="grid grid-cols-2 gap-3 px-4 pb-4 sm:grid-cols-3">
               {resting.map((product) => (
-                <li key={product.id}>
+                <li key={product.id} className="flex flex-col gap-2">
                   <PackButton available={false} selected={false} onSelect={() => {}}>
                     {card(product)}
                   </PackButton>
+                  {/* Loaded once the list is open: the game page's first load stays in budget. */}
+                  {(restingOpen || restingDefaultOpen) && (
+                    <AlertButton productId={product.id} gameId={data.game.id} kind="available" />
+                  )}
                 </li>
               ))}
             </ul>

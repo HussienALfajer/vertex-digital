@@ -23,6 +23,7 @@ import {
 } from '@nestjs/swagger';
 import {
   createTicketSchema,
+  ORDER_PROBLEMS,
   supportChannelsSchema,
   type TicketListQuery,
   ticketListQuerySchema,
@@ -89,6 +90,8 @@ export class SupportController {
       depositId: { type: 'string', format: 'uuid' },
       subject: { type: 'string' },
       body: { type: 'string' },
+      // S22 OP5: an order ticket from a problem button names the problem.
+      orderProblem: { type: 'string', enum: [...ORDER_PROBLEMS] },
     }),
   )
   @SerializeOptions({ schema: ticketSchema })

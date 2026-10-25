@@ -32,6 +32,7 @@
     "cart": "السلة",
     "cartCount": "السلة، {count} بنود",
     "players": "معرّفاتي",
+    "alerts": "تنبيهاتي",
     "merchantTools": "أدوات التاجر"
   },
   "stopBanner": {
@@ -193,7 +194,9 @@
         "merchant_level_changed": "عند تغيّر مستوى حساب التاجر",
         "merchant_low_balance": "عند انخفاض الرصيد عن الحد الذي حددته",
         "merchant_watch_digest": "تغيّرات الباقات التي تتابعها",
-        "merchant_statement_ready": "كشف الحساب الشهري"
+        "merchant_statement_ready": "كشف الحساب الشهري",
+        "product_available": "عند توفر باقة طلبت التنبيه عنها",
+        "product_price_dropped": "عند انخفاض سعر باقة طلبت التنبيه عنها"
       },
       "emailLabel": "البريد: {event}",
       "pushLabel": "الهاتف: {event}",
@@ -530,7 +533,9 @@
       "merchant_level_none": "لم يعد حسابك ضمن أي مستوى، وتظهر لك {kind}.",
       "merchant_watch_digest": "تغيّرات على باقات تتابعها: أسعار {prices}، عادت للتوفر {back}، نفدت {out}.",
       "merchant_low_balance": "أصبح رصيدك {balance}، أقل من الحد الذي حددته ({threshold}). اشحن رصيدك لتتابع البيع.",
-      "merchant_statement_ready": "كشف حساب شهر {month} جاهز."
+      "merchant_statement_ready": "كشف حساب شهر {month} جاهز.",
+      "product_available": "عادت باقة {product} في {game} إلى التوفر.",
+      "product_price_dropped": "انخفض سعر {product} في {game} من {old} إلى {new}."
     }
   },
   "errors": {
@@ -602,7 +607,10 @@
     "PLAYER_CHECK_QUOTA_EXCEEDED": "استخدمت كل فحوص المعرّفات المتاحة الآن. يمكنك الدفع بعد تأكيد المعرّفات، أو الفحص لاحقاً.",
     "CODES_NOT_DELIVERED": "لم تُسلَّم أكواد هذا الطلب بعد.",
     "APPLICATION_STATE_INVALID": "تغيّرت حالة طلبك. حدّث الصفحة.",
-    "QUICK_LINK_NOT_FOUND": "هذا الرابط غير صالح. تصفّح الألعاب للعثور على الباقة."
+    "QUICK_LINK_NOT_FOUND": "هذا الرابط غير صالح. تصفّح الألعاب للعثور على الباقة.",
+    "ORDER_PROBLEM_UNAVAILABLE": "تغيّرت حالة الطلب ولم تعد هذه المشكلة متاحة. حدّث الصفحة.",
+    "PRODUCT_ALERTS_LIMIT_REACHED": "لديك 30 تنبيهاً فعّالاً، وهو الحد. ألغِ بعضها من «تنبيهاتي» ثم أضف غيره.",
+    "PRODUCT_ALERT_INVALID": "تغيّرت حالة الباقة. حدّث الصفحة ثم أعد المحاولة."
   },
   "notFound": {
     "title": "الصفحة غير موجودة",
@@ -1207,6 +1215,7 @@
     "card": {
       "order": "فعّل الإشعارات لنخبرك فور التسليم",
       "deposit": "فعّل الإشعارات لنخبرك فور إضافة رصيدك",
+      "alert": "فعّل الإشعارات ليصلك التنبيه على هذا الجهاز",
       "body": "يصلك إشعار على هذا الجهاز حتى لو كان المتجر مغلقًا، دون أي مبلغ أو كود.",
       "enable": "فعّل",
       "later": "لاحقًا",

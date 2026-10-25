@@ -336,6 +336,12 @@ function SidePanel({ ticket }: { ticket: AdminTicket }) {
       {order && (
         <Card className="gap-3">
           <CardTitle className="text-lg">{t('support.side.order')}</CardTitle>
+          {ticket.orderProblem && (
+            <div className="flex flex-col gap-1">
+              <span className="text-sm text-muted-foreground">{t('support.side.problem')}</span>
+              <Badge tone="warning">{t(`support.problems.${ticket.orderProblem}`)}</Badge>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Link
               to="/orders/$id"

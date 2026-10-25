@@ -7,6 +7,7 @@ import {
   currentOrderPolicy,
   type Database,
   deleteOldAlertEvents,
+  deleteOldProductAlerts,
   deleteOldQuickLinkEvents,
   expireReservations,
   fulfilmentAttempts,
@@ -53,6 +54,8 @@ export interface SweepResult {
   alertEventsDeleted: number;
   /** S22: direct-link events older than 90 days. */
   quickLinkEventsDeleted: number;
+  /** S22: product alerts 90 days after they ended. */
+  productAlertsDeleted: number;
 }
 
 /**
@@ -63,7 +66,8 @@ export interface SweepResult {
  * their one reminder. Every change is made under the order lock, after reading it again. S09:
  * reservations past their deadline are cancelled (rule RS7, `FOR UPDATE SKIP LOCKED`, so a
  * payment in progress keeps its order), and player checks expired for a day are deleted. S21, S22:
- * merchant alert events and direct-link events older than 90 days are deleted.
+ * merchant alert events and direct-link events older than 90 days are deleted, and product alerts
+ * 90 days after they ended.
  */
 @Injectable()
 export class OrdersSweepJob implements OnApplicationBootstrap {
@@ -115,6 +119,7 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
       checksDeleted: await this.deleteChecks(db, now),
       alertEventsDeleted: await deleteOldAlertEvents(db),
       quickLinkEventsDeleted: await deleteOldQuickLinkEvents(db),
+      productAlertsDeleted: await deleteOldProductAlerts(db, now),
     };
   }
 

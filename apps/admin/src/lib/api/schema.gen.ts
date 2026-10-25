@@ -2980,6 +2980,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/product-alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProductAlertsController_list"];
+        put?: never;
+        post: operations["ProductAlertsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/product-alerts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["ProductAlertsController_cancel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/suppliers": {
         parameters: {
             query?: never;
@@ -5310,6 +5342,44 @@ export interface components {
             params: {
                 month: components["schemas"]["Month"];
             };
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "product_available";
+            params: {
+                /** Format: uuid */
+                alertId: string;
+                /** Format: uuid */
+                productId: string;
+                productNameAr: string;
+                gameSlug: string;
+                gameNameAr: string;
+            };
+        } | {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            event: "product_price_dropped";
+            params: {
+                /** Format: uuid */
+                alertId: string;
+                /** Format: uuid */
+                productId: string;
+                productNameAr: string;
+                gameSlug: string;
+                gameNameAr: string;
+                oldUnitPriceUsdUnits: number;
+                newUnitPriceUsdUnits: number;
+            };
         };
         /** @enum {string} */
         DepositRejectReason: "not_received" | "receipt_invalid" | "receipt_used" | "reference_other_customer" | "wrong_account" | "wrong_network" | "transfer_other_customer" | "other";
@@ -5347,7 +5417,7 @@ export interface components {
             push: boolean;
         };
         /** @enum {string} */
-        NotificationEvent: "deposit_credited" | "deposit_rejected" | "deposit_receipt_requested" | "wallet_adjusted" | "order_delivered" | "order_partially_refunded" | "order_refunded" | "order_delayed" | "order_paid" | "order_cancelled" | "checkout_finished" | "ticket_replied" | "order_placed_for_you" | "price_list_changed" | "merchant_info_requested" | "merchant_approved" | "merchant_rejected" | "merchant_application_expired" | "merchant_revoked" | "merchant_level_changed" | "merchant_watch_digest" | "merchant_low_balance" | "merchant_statement_ready";
+        NotificationEvent: "deposit_credited" | "deposit_rejected" | "deposit_receipt_requested" | "wallet_adjusted" | "order_delivered" | "order_partially_refunded" | "order_refunded" | "order_delayed" | "order_paid" | "order_cancelled" | "checkout_finished" | "ticket_replied" | "order_placed_for_you" | "price_list_changed" | "merchant_info_requested" | "merchant_approved" | "merchant_rejected" | "merchant_application_expired" | "merchant_revoked" | "merchant_level_changed" | "merchant_watch_digest" | "merchant_low_balance" | "merchant_statement_ready" | "product_available" | "product_price_dropped";
         PushConfig: {
             publicKey: string | null;
         };
@@ -6430,6 +6500,7 @@ export interface components {
                 activeSessions: number;
                 reservations: number;
                 pushDevices: number;
+                activeAlerts: number;
             };
             signals: components["schemas"]["CustomerSignals"];
             termsVersion: components["schemas"]["AcceptedVersion"] | null;
@@ -7300,6 +7371,15 @@ export interface components {
             verificationCode: string;
             sale: components["schemas"]["OrderSale"] | null;
             codeReleases: components["schemas"]["CodeReleaseLog"][];
+            help: {
+                status: components["schemas"]["OrderStatus"];
+                /** Format: date-time */
+                paidAt: string | null;
+                /** Format: date-time */
+                finishedAt: string | null;
+                /** Format: uuid */
+                openTicketId: string | null;
+            };
             /** Format: date-time */
             createdAt: string;
             savedPlayer: components["schemas"]["SavedPlayer"] | null;
@@ -7355,6 +7435,8 @@ export interface components {
         };
         /** @enum {string} */
         CodeReleasePurpose: "reveal" | "print" | "copy" | "export";
+        /** @enum {string} */
+        OrderStatus: "awaiting_balance" | "paid" | "sent_to_supplier" | "failed" | "needs_review" | "delivered" | "partially_refunded" | "refunded" | "cancelled";
         SavedPlayer: {
             /** Format: uuid */
             id: string;
@@ -7555,6 +7637,15 @@ export interface components {
             verificationCode: string;
             sale: components["schemas"]["OrderSale"] | null;
             codeReleases: components["schemas"]["CodeReleaseLog"][];
+            help: {
+                status: components["schemas"]["OrderStatus"];
+                /** Format: date-time */
+                paidAt: string | null;
+                /** Format: date-time */
+                finishedAt: string | null;
+                /** Format: uuid */
+                openTicketId: string | null;
+            };
             /** Format: date-time */
             createdAt: string;
         };
@@ -7756,8 +7847,6 @@ export interface components {
                 revokeReason: string | null;
             }[];
         };
-        /** @enum {string} */
-        OrderStatus: "awaiting_balance" | "paid" | "sent_to_supplier" | "failed" | "needs_review" | "delivered" | "partially_refunded" | "refunded" | "cancelled";
         /** @enum {string} */
         OrderPlacer: "customer" | "admin";
         /** @enum {string} */
@@ -8555,6 +8644,7 @@ export interface components {
             quickCode: components["schemas"]["QuickCode"];
             /** Format: uri */
             quickLinkUrl: string;
+            waitingAlerts: number;
             maxQuantity: number;
             regionAr: string | null;
             redemptionAr: string | null;
@@ -8804,6 +8894,55 @@ export interface components {
                 orders: number;
                 revenueUsdUnits: number;
             }[];
+        };
+        ProductAlertListQuery: {
+            /** Format: uuid */
+            gameId?: string;
+            /**
+             * @default active
+             * @enum {string}
+             */
+            status: "active" | "ended";
+        };
+        ProductAlertList: {
+            items: components["schemas"]["ProductAlert"][];
+        };
+        ProductAlert: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ProductAlertKind"];
+            status: components["schemas"]["ProductAlertStatus"];
+            product: {
+                /** Format: uuid */
+                id: string;
+                nameAr: string;
+                kind: components["schemas"]["ProductKind"];
+            };
+            game: {
+                /** Format: uuid */
+                id: string;
+                slug: string;
+                nameAr: string;
+                cover: components["schemas"]["CatalogImage"] | null;
+            };
+            baselinePriceUsdUnits: number | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            sentAt: string | null;
+            /** Format: date-time */
+            endedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        ProductAlertKind: "available" | "price_drop";
+        /** @enum {string} */
+        ProductAlertStatus: "active" | "sent" | "cancelled" | "expired";
+        CreateProductAlert: {
+            /** Format: uuid */
+            productId: string;
+            kind: components["schemas"]["ProductAlertKind"];
         };
         SupplierSummary: {
             code: components["schemas"]["SupplierCode"];
@@ -9800,6 +9939,7 @@ export interface components {
                 referenceCode: string;
             } | null;
             subject: string;
+            orderProblem: components["schemas"]["OrderProblem"] | null;
             status: components["schemas"]["TicketStatus"];
             openedBy: components["schemas"]["TicketAuthor"];
             lastAuthor: components["schemas"]["TicketAuthor"];
@@ -9814,6 +9954,8 @@ export interface components {
         /** @enum {string} */
         TicketCategory: "order" | "deposit" | "account" | "other";
         /** @enum {string} */
+        OrderProblem: "not_arrived" | "wrong_player_id" | "wrong_amount" | "code_not_working" | "code_used" | "wrong_region" | "refund_missing" | "other";
+        /** @enum {string} */
         TicketStatus: "open" | "answered" | "closed";
         /** @enum {string} */
         TicketAuthor: "customer" | "admin";
@@ -9827,6 +9969,7 @@ export interface components {
             depositId?: string;
             subject: string;
             body: string;
+            orderProblem?: components["schemas"]["OrderProblem"];
         };
         Ticket: {
             /** Format: uuid */
@@ -9844,6 +9987,7 @@ export interface components {
                 referenceCode: string;
             } | null;
             subject: string;
+            orderProblem: components["schemas"]["OrderProblem"] | null;
             status: components["schemas"]["TicketStatus"];
             openedBy: components["schemas"]["TicketAuthor"];
             lastAuthor: components["schemas"]["TicketAuthor"];
@@ -9879,6 +10023,7 @@ export interface components {
              */
             status: "open" | "answered" | "closed" | "all";
             category?: components["schemas"]["TicketCategory"];
+            problem?: components["schemas"]["OrderProblem"];
             /** Format: uuid */
             customerId?: string;
             q?: string;
@@ -9904,6 +10049,7 @@ export interface components {
                 referenceCode: string;
             } | null;
             subject: string;
+            orderProblem: components["schemas"]["OrderProblem"] | null;
             status: components["schemas"]["TicketStatus"];
             openedBy: components["schemas"]["TicketAuthor"];
             lastAuthor: components["schemas"]["TicketAuthor"];
@@ -9949,6 +10095,7 @@ export interface components {
                 referenceCode: string;
             } | null;
             subject: string;
+            orderProblem: components["schemas"]["OrderProblem"] | null;
             status: components["schemas"]["TicketStatus"];
             openedBy: components["schemas"]["TicketAuthor"];
             lastAuthor: components["schemas"]["TicketAuthor"];
@@ -15893,6 +16040,73 @@ export interface operations {
             };
         };
     };
+    ProductAlertsController_list: {
+        parameters: {
+            query?: {
+                gameId?: string;
+                status?: "active" | "ended";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The alerts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductAlertList"];
+                };
+            };
+        };
+    };
+    ProductAlertsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProductAlert"];
+            };
+        };
+        responses: {
+            /** @description Set (200: the active alert of that kind) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductAlert"];
+                };
+            };
+        };
+    };
+    ProductAlertsController_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     SuppliersAdminController_list: {
         parameters: {
             query?: never;
@@ -17451,6 +17665,7 @@ export interface operations {
                 limit?: number;
                 status?: "open" | "answered" | "closed" | "all";
                 category?: "order" | "deposit" | "account" | "other";
+                problem?: "not_arrived" | "wrong_player_id" | "wrong_amount" | "code_not_working" | "code_used" | "wrong_region" | "refund_missing" | "other";
                 customerId?: string;
                 q?: string;
             };

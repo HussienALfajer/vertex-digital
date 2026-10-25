@@ -53,6 +53,8 @@ describe('notifications (S05 F27)', () => {
       'price_list_changed',
       'merchant_application_expired',
       'merchant_watch_digest',
+      'product_available',
+      'product_price_dropped',
     ]);
   });
 
@@ -122,12 +124,15 @@ describe('notifications (S05 F27)', () => {
     expect(parse({ event: 'order_delivered' })).toBe(false);
   });
 
-  it('push the events that email and the follow digest (PD1, S21 AL3)', () => {
+  it('push the events that email, the follow digest and product alerts (PD1, AL3, PA4)', () => {
     expect(PUSH_NOTIFICATION_EVENTS).toEqual([
       ...EMAIL_NOTIFICATION_EVENTS,
       'merchant_watch_digest',
+      'product_available',
+      'product_price_dropped',
     ]);
     expect(isPushNotificationEvent('merchant_watch_digest')).toBe(true);
+    expect(isPushNotificationEvent('product_price_dropped')).toBe(true);
     expect(isPushNotificationEvent('checkout_finished')).toBe(true);
     expect(isPushNotificationEvent('order_delayed')).toBe(false);
   });

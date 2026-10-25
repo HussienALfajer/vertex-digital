@@ -36,6 +36,7 @@ import {
   orders,
   playerChecks,
   postJournal,
+  productAlerts,
   productPrices,
   productRoutes,
   purchaseOrder,
@@ -68,6 +69,7 @@ import { TelegramAlerts } from '../src/core/alerts/telegram-alerts.js';
 import { parseEnv } from '../src/core/config/env.js';
 import { LOG_REDACT_PATHS } from '../src/core/config/log-redact.js';
 import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
+import { ProductAlertsJob } from '../src/jobs/catalog/product-alerts.job.js';
 import { OrdersFulfilJob } from '../src/jobs/orders/fulfil.job.js';
 import { attemptOutcome, checkCharge, markStockRefusal } from '../src/jobs/orders/order-calls.js';
 import { OrdersPayWaitingJob } from '../src/jobs/orders/pay-waiting.job.js';
@@ -925,6 +927,46 @@ describe('polling, the hard limit and the sweep (rules F3, F6, F7)', () => {
       expect(reminder).toMatchObject({ kind: 'manual_order_reminder' });
       expect(reminder?.params).toMatchObject({ orderNumber: order.number, waitMinutes: 16 });
       expect((await sweep.sweep(now, tx)).reminded).not.toContain(manual?.id);
+    });
+  });
+
+  it('sends an alert once when its pack is available; ended ones go after 90 days (S22 PA3, PA4)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, {});
+      const buyer = await customer(tx, { funds: 0 });
+      const [alert] = await tx
+        .insert(productAlerts)
+        .values({
+          customerId: buyer,
+          productId: item.id,
+          kind: 'available',
+          priceListId: ROOT_PRICE_LIST_IDS.retail,
+          expiresAt: new Date(Date.now() + 86_400_000),
+        })
+        .returning({ id: productAlerts.id });
+      const job = new ProductAlertsJob(pgBoss, tx as never, {
+        ...env,
+        SUPPLIER_FAKE_ENABLED: true,
+      });
+      expect((await job.run(new Date())).sent).toBeGreaterThanOrEqual(1);
+      await job.run(new Date());
+      const notices = await tx
+        .select({ event: customerNotifications.event })
+        .from(customerNotifications)
+        .where(eq(customerNotifications.customerId, buyer));
+      expect(notices).toEqual([{ event: 'product_available' }]);
+
+      await tx
+        .update(productAlerts)
+        .set({ endedAt: new Date(Date.now() - 91 * 86_400_000) })
+        .where(eq(productAlerts.id, alert?.id as string));
+      expect((await sweep.sweep(new Date(), tx)).productAlertsDeleted).toBeGreaterThanOrEqual(1);
+      expect(
+        await tx
+          .select()
+          .from(productAlerts)
+          .where(eq(productAlerts.id, alert?.id as string)),
+      ).toEqual([]);
     });
   });
 

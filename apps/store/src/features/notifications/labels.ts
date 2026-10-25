@@ -167,6 +167,19 @@ export function notificationText(notification: CustomerNotification): string {
       return t('notifications.events.merchant_statement_ready', {
         month: ltr(notification.params.month),
       });
+    // S22 PA4: the customer's own prices only.
+    case 'product_available':
+      return t('notifications.events.product_available', {
+        product: notification.params.productNameAr,
+        game: notification.params.gameNameAr,
+      });
+    case 'product_price_dropped':
+      return t('notifications.events.product_price_dropped', {
+        product: notification.params.productNameAr,
+        game: notification.params.gameNameAr,
+        old: ltr(formatUsd(notification.params.oldUnitPriceUsdUnits)),
+        new: ltr(formatUsd(notification.params.newUnitPriceUsdUnits)),
+      });
   }
 }
 
@@ -200,6 +213,9 @@ export function notificationHref(notification: CustomerNotification): string {
       return '/wallet';
     case 'merchant_statement_ready':
       return `/merchant/statements/${notification.params.month}`;
+    case 'product_available':
+    case 'product_price_dropped':
+      return `/games/${notification.params.gameSlug}?pack=${notification.params.productId}`;
     default:
       return `/orders/${notification.params.orderId}`;
   }

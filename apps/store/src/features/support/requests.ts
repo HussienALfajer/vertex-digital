@@ -1,6 +1,7 @@
 import type {
   DepositPage,
   OrderPage,
+  OrderProblem,
   Ticket,
   TicketCategory,
   TicketPage,
@@ -45,6 +46,8 @@ export type NewTicket = {
   depositId?: string | null;
   subject: string;
   body: string;
+  /** S22 OP5: the problem an order's problem button names. */
+  orderProblem?: OrderProblem;
 };
 
 /** The multipart body: the fields, then each image as `files` in its order. */
@@ -77,6 +80,7 @@ export function openTicket(
             depositId: ticket.category === 'deposit' ? ticket.depositId : null,
             subject: ticket.subject,
             body: ticket.body,
+            orderProblem: ticket.category === 'order' ? ticket.orderProblem : null,
           },
           files,
         ),

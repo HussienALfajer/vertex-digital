@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { priceFromCost } from '@vertex-digital/contracts';
+import { priceFromCost, ROOT_PRICE_LIST_IDS } from '@vertex-digital/contracts';
 import {
   catalogCategories,
   ensureCustomerWallet,
@@ -11,6 +11,7 @@ import {
   supplierOffers,
   supplierSyncRuns,
   suppliers,
+  telegramMessages,
 } from '@vertex-digital/db';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -28,7 +29,8 @@ import { startApp, type TestApp } from './start-app.js';
 /*
  * S22 PR 1 over HTTP against the test database with the `fake` supplier: the quick-buy cards,
  * the saved IDs' quick-buy switch, direct buy links (targets, counted opens, attribution and the
- * panel's counts), the reservations beside the balance, and the best-value badge with its switch.
+ * panel's counts), the reservations beside the balance, and the best-value badge with its switch;
+ * PR 3: tickets naming an order problem, and product alerts.
  * Categories are archived and the switches put back in `afterAll`; orders and ledger rows stay.
  */
 
@@ -484,5 +486,223 @@ describe('best value (S22 BV1–BV3)', () => {
         }),
       ]),
     );
+  });
+});
+
+describe('order problem tickets (S22 OP2, OP3, OP5, OP6)', () => {
+  const ticket = async (who: Buyer, fields: Record<string, string>) => {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.set(key, value);
+    return client.post('/api/support/tickets', {
+      cookie: who.cookie,
+      form,
+      headers: { 'idempotency-key': randomUUID(), ...(await client.altcha()) },
+    });
+  };
+
+  it('opens a ticket naming the problem the order offers, and refuses the others', async () => {
+    const item = await product(ids.gameId, 0.88);
+    const customer = await buyer();
+    const order = await json<{ id: string; number: string }>(await purchase(customer, item), 201);
+    const base = {
+      category: 'order',
+      orderId: order.id,
+      subject: `تأخر الطلب · ${order.number}`,
+      body: 'لم يصل الشحن بعد.',
+    };
+
+    // A paid order offers no refund problem (OP2).
+    const refused = await json<{ code: string; details: unknown }>(
+      await ticket(customer, { ...base, orderProblem: 'refund_missing' }),
+      409,
+    );
+    expect(refused).toMatchObject({
+      code: 'ORDER_PROBLEM_UNAVAILABLE',
+      details: { reason: 'state' },
+    });
+    // A problem goes with the order category only.
+    await json(
+      await ticket(customer, {
+        category: 'account',
+        subject: 'سؤال',
+        body: 'مرحباً',
+        orderProblem: 'other',
+      }),
+      400,
+    );
+    // Another customer's order is not a link.
+    const stranger = await buyer(0);
+    expect(
+      (
+        await json<{ code: string }>(
+          await ticket(stranger, { ...base, orderProblem: 'other' }),
+          400,
+        )
+      ).code,
+    ).toBe('TICKET_LINK_INVALID');
+
+    const opened = await json<{ id: string; orderProblem: string }>(
+      await ticket(customer, { ...base, orderProblem: 'not_arrived' }),
+      201,
+    );
+    expect(opened.orderProblem).toBe('not_arrived');
+    expect(await auditOf(test.db, opened.id)).toEqual([
+      expect.objectContaining({
+        action: 'ticket.opened',
+        details: expect.objectContaining({ orderProblem: 'not_arrived' }),
+      }),
+    ]);
+    const [notice] = await test.db
+      .select({ params: telegramMessages.params })
+      .from(telegramMessages)
+      .where(sql`${telegramMessages.params}->>'ticketId' = ${opened.id}`);
+    expect(notice?.params).toMatchObject({ orderProblem: 'not_arrived' });
+
+    const queue = await json<{ items: { id: string; orderProblem: string | null }[] }>(
+      await client.get('/api/admin/support/tickets?status=all&problem=not_arrived', {
+        cookie: admin.cookie,
+      }),
+      200,
+    );
+    expect(queue.items.map((row) => row.id)).toContain(opened.id);
+    expect(queue.items.every((row) => row.orderProblem === 'not_arrived')).toBe(true);
+    const other = await json<{ items: { id: string }[] }>(
+      await client.get('/api/admin/support/tickets?status=all&problem=code_used', {
+        cookie: admin.cookie,
+      }),
+      200,
+    );
+    expect(other.items.map((row) => row.id)).not.toContain(opened.id);
+    const thread = await json<{ orderProblem: string }>(
+      await client.get(`/api/admin/support/tickets/${opened.id}`, { cookie: admin.cookie }),
+      200,
+    );
+    expect(thread.orderProblem).toBe('not_arrived');
+  });
+});
+
+describe('product alerts (S22 PA1, PA6–PA8)', () => {
+  const alerts = (who: Buyer, payload: unknown) =>
+    client.post('/api/product-alerts', { cookie: who.cookie, body: payload });
+  const outOfStock = (productId: string) =>
+    test.db.execute(
+      sql`update supplier_offers set in_stock = false where id in
+            (select offer_id from product_routes where product_id = ${productId})`,
+    );
+
+  it('sets, lists and cancels the customer’s own alerts on the customer’s price', async () => {
+    const live = await product(ids.gameId, 1.2);
+    const gone = await product(ids.gameId, 1.4);
+    await outOfStock(gone.id);
+    const customer = await buyer(0);
+
+    expect((await client.get('/api/product-alerts')).status).toBe(401);
+    expect(
+      (await client.get('/api/product-alerts', { cookie: admin.cookie })).status,
+    ).toBeGreaterThanOrEqual(401);
+    expect(
+      await json<{ code: string; details: unknown }>(
+        await alerts(customer, { productId: live.id, kind: 'available' }),
+        409,
+      ),
+    ).toMatchObject({ code: 'PRODUCT_ALERT_INVALID', details: { reason: 'available' } });
+    expect(
+      (
+        await json<{ code: string }>(
+          await alerts(customer, { productId: randomUUID(), kind: 'available' }),
+          404,
+        )
+      ).code,
+    ).toBe('NOT_FOUND');
+
+    const drop = await json<{ id: string; baselinePriceUsdUnits: number; status: string }>(
+      await alerts(customer, { productId: live.id, kind: 'price_drop' }),
+      201,
+    );
+    expect(drop).toMatchObject({ baselinePriceUsdUnits: live.price, status: 'active' });
+    expect(
+      (
+        await json<{ id: string }>(
+          await alerts(customer, { productId: live.id, kind: 'price_drop' }),
+          200,
+        )
+      ).id,
+    ).toBe(drop.id);
+    const back = await json<{ id: string }>(
+      await alerts(customer, { productId: gone.id, kind: 'available' }),
+      201,
+    );
+
+    const active = await json<{ items: { id: string }[] }>(
+      await client.get(`/api/product-alerts?gameId=${ids.gameId}`, { cookie: customer.cookie }),
+      200,
+    );
+    expect(active.items.map((alert) => alert.id).sort()).toEqual([drop.id, back.id].sort());
+    const detail = await json<{ products: { id: string; waitingAlerts: number }[] }>(
+      await client.get(`/api/admin/catalog/games/${ids.gameId}`, { cookie: admin.cookie }),
+      200,
+    );
+    expect(detail.products.find((pack) => pack.id === gone.id)?.waitingAlerts).toBe(1);
+    expect(detail.products.find((pack) => pack.id === live.id)?.waitingAlerts).toBe(0);
+
+    const stranger = await buyer(0);
+    expect(
+      (await client.delete(`/api/product-alerts/${drop.id}`, { cookie: stranger.cookie })).status,
+    ).toBe(404);
+    expect(
+      (
+        await json<{ items: unknown[] }>(
+          await client.get('/api/product-alerts', { cookie: stranger.cookie }),
+          200,
+        )
+      ).items,
+    ).toEqual([]);
+    expect(
+      (await client.delete(`/api/product-alerts/${drop.id}`, { cookie: customer.cookie })).status,
+    ).toBe(204);
+    const ended = await json<{ items: { id: string; status: string }[] }>(
+      await client.get('/api/product-alerts?status=ended', { cookie: customer.cookie }),
+      200,
+    );
+    expect(ended.items).toEqual([expect.objectContaining({ id: drop.id, status: 'cancelled' })]);
+  });
+
+  it('sets a price drop on the customer’s own list price, never retail (abuse table)', async () => {
+    const item = await product(ids.gameId, 2.2);
+    const merchant = await buyer(0);
+    await test.db.execute(
+      sql`update customers set price_list_id = ${ROOT_PRICE_LIST_IDS.wholesale} where id = ${merchant.id}`,
+    );
+    const [row] = (
+      await test.db.execute<{ units: string }>(
+        sql`select price_usd_units as units from product_prices where product_id = ${item.id}
+            and price_list_id = ${ROOT_PRICE_LIST_IDS.wholesale}
+            order by created_at desc, id desc limit 1`,
+      )
+    ).rows;
+    const drop = await json<{ baselinePriceUsdUnits: number }>(
+      await alerts(merchant, { productId: item.id, kind: 'price_drop' }),
+      201,
+    );
+    expect(drop.baselinePriceUsdUnits).toBe(Number(row?.units));
+    expect(drop.baselinePriceUsdUnits).not.toBe(item.price);
+  });
+
+  it('takes 30 alert requests an hour per customer', async () => {
+    const gone = await product(ids.gameId, 1.6);
+    await outOfStock(gone.id);
+    const customer = await buyer(0);
+    for (let index = 0; index < 30; index += 1)
+      expect([200, 201]).toContain(
+        (await alerts(customer, { productId: gone.id, kind: 'available' })).status,
+      );
+    expect(
+      (
+        await json<{ code: string }>(
+          await alerts(customer, { productId: gone.id, kind: 'available' }),
+          429,
+        )
+      ).code,
+    ).toBe('RATE_LIMITED');
   });
 });

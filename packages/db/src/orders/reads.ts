@@ -43,6 +43,7 @@ import {
   isNull,
   lt,
   lte,
+  ne,
   or,
   type SQL,
   sql,
@@ -71,6 +72,7 @@ import {
   supplierOffers,
   suppliers,
   supplierWebhookEvents,
+  supportTickets,
 } from '../schema/index.js';
 import { codeReleaseLog, merchantBranding, sellingPriceOf, shownFields } from './receipts.js';
 import { decryptSecret } from './secrets.js';
@@ -322,21 +324,28 @@ export async function customerOrder(
   if (!row) return null;
   const { order, product, game } = row;
   const store = placedByStore(order);
-  const [fields, statusEvents, codes, images, stats, shareLinks, open, sale] = await readAll(db, [
-    () => fieldsWithLabels(db, order),
-    () =>
-      db
-        .select({ status: orderEvents.toStatus, at: orderEvents.createdAt })
-        .from(orderEvents)
-        .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.kind, 'status')))
-        .orderBy(asc(orderEvents.createdAt), asc(orderEvents.id)),
-    () => orderCodeList(db, order.id),
-    () => covers(db, [game.coverFileId]),
-    () => productDeliveryStats(db, [product.id]),
-    () => liveShareLinks(db, order.id, storeUrl),
-    () => openAttempt(db, order.id),
-    () => db.select().from(merchantOrderSales).where(eq(merchantOrderSales.orderId, order.id)),
-  ]);
+  const [fields, statusEvents, codes, images, stats, shareLinks, open, sale, tickets] =
+    await readAll(db, [
+      () => fieldsWithLabels(db, order),
+      () =>
+        db
+          .select({ status: orderEvents.toStatus, at: orderEvents.createdAt })
+          .from(orderEvents)
+          .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.kind, 'status')))
+          .orderBy(asc(orderEvents.createdAt), asc(orderEvents.id)),
+      () => orderCodeList(db, order.id),
+      () => covers(db, [game.coverFileId]),
+      () => productDeliveryStats(db, [product.id]),
+      () => liveShareLinks(db, order.id, storeUrl),
+      () => openAttempt(db, order.id),
+      () => db.select().from(merchantOrderSales).where(eq(merchantOrderSales.orderId, order.id)),
+      // S22 OP1: the ticket open about the order, if any (TK1).
+      () =>
+        db
+          .select({ id: supportTickets.id })
+          .from(supportTickets)
+          .where(and(eq(supportTickets.orderId, order.id), ne(supportTickets.status, 'closed'))),
+    ]);
   const codeReleases = await codeReleaseLog(
     db,
     order.id,
@@ -405,6 +414,12 @@ export async function customerOrder(
         }
       : null,
     codeReleases,
+    help: {
+      status: order.status,
+      paidAt: iso(order.paidAt),
+      finishedAt: iso(order.finishedAt),
+      openTicketId: tickets[0]?.id ?? null,
+    },
     createdAt: order.createdAt.toISOString(),
   };
 }

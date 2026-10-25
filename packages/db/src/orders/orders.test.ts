@@ -52,6 +52,15 @@ import { netPurchases, recomputeMerchantLevel } from '../merchants/levels.js';
 import { accountMerchant, merchantProfileOf } from '../merchants/reads.js';
 import { repriceProducts, supplierDeliveryMedians } from '../pricing/index.js';
 import {
+  activeAlertCount,
+  cancelProductAlert,
+  createProductAlert,
+  customerProductAlerts,
+  deleteOldProductAlerts,
+  runProductAlerts,
+  waitingAlertCounts,
+} from '../product-alerts/index.js';
+import {
   deleteOldQuickLinkEvents,
   quickLinkStats,
   recordQuickLinkOpen,
@@ -71,6 +80,7 @@ import {
   orderShareLinks,
   orders,
   playerChecks,
+  productAlerts,
   productPrices,
   savedPlayers,
   storeSwitchChanges,
@@ -4849,5 +4859,311 @@ describe('quick buy (S22 DL1–DL5, QB2, BG1)', () => {
       request(buyer, item, { whenBalanceShort: 'reserve', fields: { player_id: '5777777777' } }),
     );
     expect(await reservedUsdUnits(db, buyer)).toBe(2 * item.price);
+  });
+});
+
+describe('order problems and product alerts (S22 OP5, PA1–PA6)', () => {
+  const routing = () => ({ now: new Date(), fakeEnabled: true });
+  const ticketNumber = () =>
+    `VT-${Array.from({ length: 6 }, () => TICKET_ALPHABET[(randomBytes(1)[0] as number) % TICKET_ALPHABET.length]).join('')}`;
+  const run = () => runProductAlerts(db, { ...routing(), jobs: context().jobs }, new Date());
+  const alertRow = async (id: string) =>
+    (await db.select().from(productAlerts).where(eq(productAlerts.id, id)))[0];
+  const notices = async (customerId: string) =>
+    (
+      await db
+        .select({ event: customerNotifications.event, params: customerNotifications.params })
+        .from(customerNotifications)
+        .where(eq(customerNotifications.customerId, customerId))
+    ).filter((row) => row.event.startsWith('product_'));
+  const create = (customerId: string, productId: string, kind: 'available' | 'price_drop') =>
+    db.transaction((tx) =>
+      createProductAlert(tx, routing(), customerId, { productId, kind }, new Date()),
+    );
+  const reprice = (productId: string) =>
+    db.transaction((tx) =>
+      repriceProducts(tx, { productIds: [productId], cause: 'cost_sync', context: routing() }),
+    );
+
+  it('keeps the problem on order tickets only, fixed once opened (OP5)', async () => {
+    const buyer = await customer();
+    await expect(
+      pool.query(
+        `insert into support_tickets (id, number, customer_id, category, subject, status, opened_by,
+           order_problem) values ($1, $2, $3, 'other', 'مشكلة أخرى', 'open', 'customer', 'other')`,
+        [newId(), ticketNumber(), buyer],
+      ),
+    ).rejects.toThrow(/support_tickets_order_problem_check/);
+    const item = await product();
+    const funded = await customer({ funds: usd(10) });
+    const { order } = await buy(request(funded, item));
+    const id = newId();
+    await pool.query(
+      `insert into support_tickets (id, number, customer_id, category, order_id, subject, status,
+         opened_by, order_problem) values ($1, $2, $3, 'order', $4, 'تأخر الطلب', 'open', 'customer',
+         'not_arrived')`,
+      [id, ticketNumber(), funded, order.id],
+    );
+    await expect(
+      pool.query(`update support_tickets set order_problem = 'other' where id = $1`, [id]),
+    ).rejects.toThrow(/what it is about is fixed/);
+  });
+
+  it('sets an alert that fits the pack, once per kind, within the limit (PA1)', async () => {
+    const buyer = await customer();
+    const gone = await product({ inStock: false });
+    const live = await product();
+    expect(await refusal(create(buyer, live.id, 'available'))).toEqual({
+      code: 'PRODUCT_ALERT_INVALID',
+      details: { reason: 'available' },
+    });
+    expect(await refusal(create(buyer, gone.id, 'price_drop'))).toEqual({
+      code: 'PRODUCT_ALERT_INVALID',
+      details: { reason: 'unavailable' },
+    });
+    const drop = await create(buyer, live.id, 'price_drop');
+    expect(drop.created).toBe(true);
+    expect(drop.alert.baselinePriceUsdUnits).toBe(live.price);
+    // Two presses at once write one alert.
+    const [first, second] = await Promise.all([
+      create(buyer, gone.id, 'available'),
+      create(buyer, gone.id, 'available'),
+    ]);
+    expect([first.created, second.created].sort()).toEqual([false, true]);
+    expect(first.alert.id).toBe(second.alert.id);
+    expect(await waitingAlertCounts(db, [gone.id, live.id])).toEqual(new Map([[gone.id, 1]]));
+    expect((await customerProductAlerts(db, buyer, { status: 'active' })).length).toBe(2);
+    expect(await activeAlertCount(db, buyer)).toBe(2);
+
+    // The 30th active alert is the last (rows written directly: the limit is what is tested).
+    const others = await Promise.all(Array.from({ length: 14 }, () => product({ inStock: false })));
+    await db.insert(productAlerts).values(
+      others.flatMap((item) =>
+        (['available', 'price_drop'] as const).map((kind) => ({
+          customerId: buyer,
+          productId: item.id,
+          kind,
+          baselinePriceUsdUnits: kind === 'price_drop' ? item.price : null,
+          priceListId: ROOT_PRICE_LIST_IDS.retail,
+          expiresAt: new Date(Date.now() + 86_400_000),
+        })),
+      ),
+    );
+    const extra = await product({ inStock: false });
+    expect(await refusal(create(buyer, extra.id, 'available'))).toEqual({
+      code: 'PRODUCT_ALERTS_LIMIT_REACHED',
+      details: { limit: 30 },
+    });
+
+    expect(await cancelProductAlert(db, await customer(), drop.alert.id)).toBe(false);
+    expect(await cancelProductAlert(db, buyer, drop.alert.id)).toBe(true);
+    expect((await alertRow(drop.alert.id))?.status).toBe('cancelled');
+    expect(
+      (await customerProductAlerts(db, buyer, { status: 'ended' })).map((alert) => alert.id),
+    ).toEqual([drop.alert.id]);
+    // The extra rows would otherwise be read by every later run.
+    await pool.query(
+      `update product_alerts set status = 'cancelled', ended_at = now() where customer_id = $1
+         and status = 'active'`,
+      [buyer],
+    );
+  });
+
+  it('sends a due alert once, on the customer list, and ends the others (PA3–PA6)', async () => {
+    const buyer = await customer();
+    const back = await product({ inStock: false });
+    const cheaper = await product({ cost: usd(2) });
+    const same = await product();
+    const archived = await product({ inStock: false });
+    const old = await product({ inStock: false });
+    const availability = await create(buyer, back.id, 'available');
+    const drop = await create(buyer, cheaper.id, 'price_drop');
+    const steady = await create(buyer, same.id, 'price_drop');
+    const gone = await create(buyer, archived.id, 'available');
+    const expiring = await create(buyer, old.id, 'available');
+
+    // Nothing is due yet.
+    await run();
+    expect(await notices(buyer)).toEqual([]);
+
+    await pool.query('update supplier_offers set in_stock = true where id = $1', [back.offer]);
+    await reprice(back.id);
+    // 5% cheaper: under the review threshold, so the new price applies at once.
+    await pool.query('update supplier_offers set cost_usd_units = $1 where id = $2', [
+      usd(1.9),
+      cheaper.offer,
+    ]);
+    await reprice(cheaper.id);
+    await pool.query('update catalog_products set archived_at = now() where id = $1', [
+      archived.id,
+    ]);
+    await pool.query(
+      `update product_alerts set expires_at = now() - interval '1 minute' where id = $1`,
+      [expiring.alert.id],
+    );
+    await run();
+    await run();
+
+    expect((await alertRow(availability.alert.id))?.status).toBe('sent');
+    expect((await alertRow(drop.alert.id))?.status).toBe('sent');
+    expect((await alertRow(steady.alert.id))?.status).toBe('active');
+    expect((await alertRow(gone.alert.id))?.status).toBe('cancelled');
+    expect((await alertRow(expiring.alert.id))?.status).toBe('expired');
+    const sent = await notices(buyer);
+    expect(sent.map((row) => row.event).sort()).toEqual([
+      'product_available',
+      'product_price_dropped',
+    ]);
+    expect(sent.find((row) => row.event === 'product_price_dropped')?.params).toMatchObject({
+      alertId: drop.alert.id,
+      oldUnitPriceUsdUnits: cheaper.price,
+      newUnitPriceUsdUnits: priceFromCost(usd(1.9), rule),
+    });
+    await pool.query(
+      `update product_alerts set status = 'cancelled', ended_at = now() where customer_id = $1
+         and status = 'active'`,
+      [buyer],
+    );
+  });
+
+  it('rebases an alert to a new list without sending; ended ones go after 90 days (PA5)', async () => {
+    const buyer = await customer();
+    const item = await product();
+    const alert = await create(buyer, item.id, 'price_drop');
+    await pool.query('update customers set price_list_id = $1 where id = $2', [
+      ROOT_PRICE_LIST_IDS.wholesale,
+      buyer,
+    ]);
+    await run();
+    expect(await alertRow(alert.alert.id)).toMatchObject({
+      status: 'active',
+      priceListId: ROOT_PRICE_LIST_IDS.wholesale,
+    });
+    expect(await notices(buyer)).toEqual([]);
+
+    await pool.query(
+      `update product_alerts set status = 'cancelled', ended_at = now() - interval '91 days'
+       where id = $1`,
+      [alert.alert.id],
+    );
+    expect(await deleteOldProductAlerts(db, new Date())).toBeGreaterThanOrEqual(1);
+    expect(await alertRow(alert.alert.id)).toBeUndefined();
+  });
+
+  const listPrice = async (productId: string, priceListId: string) =>
+    (
+      await pool.query<{ units: string }>(
+        `select price_usd_units as units from product_prices
+          where product_id = $1 and price_list_id = $2
+          order by created_at desc, id desc limit 1`,
+        [productId, priceListId],
+      )
+    ).rows[0]?.units;
+  const endAll = (customerId: string) =>
+    pool.query(
+      `update product_alerts set status = 'cancelled', ended_at = now() where customer_id = $1
+         and status = 'active'`,
+      [customerId],
+    );
+
+  it('keeps a private list’s price as the baseline and in the notice, never retail (abuse table)', async () => {
+    const merchant = await customer();
+    await pool.query('update customers set price_list_id = $1 where id = $2', [
+      ROOT_PRICE_LIST_IDS.wholesale,
+      merchant,
+    ]);
+    const item = await product({ cost: usd(2) });
+    const before = Number(await listPrice(item.id, ROOT_PRICE_LIST_IDS.wholesale));
+    expect(before).not.toBe(item.price);
+    const drop = await create(merchant, item.id, 'price_drop');
+    expect(drop.alert.baselinePriceUsdUnits).toBe(before);
+    await pool.query('update supplier_offers set cost_usd_units = $1 where id = $2', [
+      usd(1.9),
+      item.offer,
+    ]);
+    await reprice(item.id);
+    const after = Number(await listPrice(item.id, ROOT_PRICE_LIST_IDS.wholesale));
+    await run();
+    expect((await notices(merchant))[0]?.params).toMatchObject({
+      oldUnitPriceUsdUnits: before,
+      newUnitPriceUsdUnits: after,
+    });
+  });
+
+  it('rebases to the new list’s price (PA5)', async () => {
+    const buyer = await customer();
+    const item = await product();
+    const alert = await create(buyer, item.id, 'price_drop');
+    expect(alert.alert.baselinePriceUsdUnits).toBe(item.price);
+    await pool.query('update customers set price_list_id = $1 where id = $2', [
+      ROOT_PRICE_LIST_IDS.wholesale,
+      buyer,
+    ]);
+    await run();
+    expect((await alertRow(alert.alert.id))?.baselinePriceUsdUnits).toBe(
+      Number(await listPrice(item.id, ROOT_PRICE_LIST_IDS.wholesale)),
+    );
+    await endAll(buyer);
+  });
+
+  it('refuses a paused game’s pack, and a paused game keeps its alerts unsent (PA1, edge case 17)', async () => {
+    const buyer = await customer();
+    const item = await product({ inStock: false });
+    const alert = await create(buyer, item.id, 'available');
+    await pool.query(`update catalog_games set status = 'paused' where id = $1`, [item.game]);
+    const other = await product();
+    await pool.query(`update catalog_games set status = 'paused' where id = $1`, [other.game]);
+    expect(await refusal(create(buyer, other.id, 'price_drop'))).toEqual({
+      code: 'PRODUCT_ALERT_INVALID',
+      details: { reason: 'hidden' },
+    });
+    await pool.query('update supplier_offers set in_stock = true where id = $1', [item.offer]);
+    await reprice(item.id);
+    await run();
+    expect((await alertRow(alert.alert.id))?.status).toBe('active');
+    expect(await notices(buyer)).toEqual([]);
+    await endAll(buyer);
+  });
+
+  it('cancels an archived customer’s alerts without a notice (PA6, edge case 18)', async () => {
+    const buyer = await customer();
+    const item = await product({ inStock: false });
+    const alert = await create(buyer, item.id, 'available');
+    await pool.query('update supplier_offers set in_stock = true where id = $1', [item.offer]);
+    await reprice(item.id);
+    await pool.query('update customers set archived_at = now() where id = $1', [buyer]);
+    await run();
+    expect((await alertRow(alert.alert.id))?.status).toBe('cancelled');
+    expect(await notices(buyer)).toEqual([]);
+  });
+
+  it('lets one of two parallel creations take the 30th place (PA1)', async () => {
+    const buyer = await customer();
+    const items = await Promise.all(Array.from({ length: 15 }, () => product({ inStock: false })));
+    await db.insert(productAlerts).values(
+      items.slice(0, 14).flatMap((item) =>
+        (['available', 'price_drop'] as const).map((kind) => ({
+          customerId: buyer,
+          productId: item.id,
+          kind,
+          baselinePriceUsdUnits: kind === 'price_drop' ? item.price : null,
+          priceListId: ROOT_PRICE_LIST_IDS.retail,
+          expiresAt: new Date(Date.now() + 86_400_000),
+        })),
+      ),
+    );
+    await create(buyer, (items[14] as { id: string }).id, 'available');
+    const [a, b] = [await product({ inStock: false }), await product({ inStock: false })];
+    const outcomes = await Promise.allSettled([
+      create(buyer, a.id, 'available'),
+      create(buyer, b.id, 'available'),
+    ]);
+    expect(outcomes.map((outcome) => outcome.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const refused = outcomes.find((outcome) => outcome.status === 'rejected');
+    expect((refused as PromiseRejectedResult).reason).toMatchObject({
+      code: 'PRODUCT_ALERTS_LIMIT_REACHED',
+    });
+    expect(await activeAlertCount(db, buyer)).toBe(30);
+    await endAll(buyer);
   });
 });

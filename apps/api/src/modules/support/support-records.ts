@@ -1,5 +1,7 @@
 import { randomInt } from 'node:crypto';
 import {
+  type OrderProblem,
+  orderProblemAllowed,
   TICKET_NUMBER_ALPHABET,
   TICKET_NUMBER_LENGTH,
   TICKET_NUMBER_PREFIX,
@@ -47,6 +49,10 @@ export const ticketRefusals = {
   limit: (limit: 'open' | 'daily') =>
     new CodedException(409, 'TICKETS_LIMIT_REACHED', 'Too many tickets', { limit }),
   closed: () => new CodedException(409, 'TICKET_CLOSED', 'The ticket closed more than 7 days ago'),
+  problemUnavailable: (reason: string) =>
+    new CodedException(409, 'ORDER_PROBLEM_UNAVAILABLE', 'The order does not offer this problem', {
+      reason,
+    }),
   keyReused: () =>
     new CodedException(409, 'IDEMPOTENCY_KEY_REUSED', 'The key was used for another message'),
 };
@@ -85,7 +91,12 @@ async function openTicketFor(
 export async function checkLink(
   db: Executor,
   customerId: string,
-  link: { category: TicketCategory; orderId?: string | undefined; depositId?: string | undefined },
+  link: {
+    category: TicketCategory;
+    orderId?: string | undefined;
+    depositId?: string | undefined;
+    orderProblem?: OrderProblem | undefined;
+  },
 ): Promise<{ orderId: string | null; depositId: string | null }> {
   if (!ticketLinkValid(link)) throw ticketRefusals.linkInvalid();
   const orderId = link.orderId ?? null;
@@ -93,6 +104,9 @@ export async function checkLink(
   if (orderId) {
     const order = await ticketOrderLink(db, orderId);
     if (order?.customerId !== customerId) throw ticketRefusals.linkInvalid();
+    // S22 OP2, OP3: the problem is checked against the order as it is now (edge cases 13, 14).
+    const refusal = link.orderProblem && orderProblemAllowed(order, link.orderProblem, new Date());
+    if (refusal) throw ticketRefusals.problemUnavailable(refusal);
   }
   if (depositId) {
     const deposit = await ticketDepositLink(db, depositId);
@@ -248,6 +262,7 @@ export async function ticketSummary(db: Executor, row: TicketRow): Promise<Ticke
     order: order && { id: order.id, number: order.number },
     deposit: deposit && { id: deposit.id, referenceCode: deposit.referenceCode },
     subject: row.subject,
+    orderProblem: row.orderProblem,
     status: row.status,
     openedBy: row.openedBy,
     lastAuthor: adminAt > customerAt ? 'admin' : 'customer',

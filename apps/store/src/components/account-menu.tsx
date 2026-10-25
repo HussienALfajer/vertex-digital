@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@vertex-digital/ui/components/dropdown-menu';
 import {
+  BellRingIcon,
   DownloadIcon,
   IdCardIcon,
   LogOutIcon,
@@ -103,6 +104,10 @@ export function AccountMenu({
           <DropdownMenuItem className="min-h-11" render={<Link href="/account/players" />}>
             <IdCardIcon />
             {t('header.players')}
+          </DropdownMenuItem>
+          <DropdownMenuItem className="min-h-11" render={<Link href="/account/alerts" />}>
+            <BellRingIcon />
+            {t('header.alerts')}
           </DropdownMenuItem>
           {install.mode && (
             <DropdownMenuItem className="min-h-11" onClick={install.start}>

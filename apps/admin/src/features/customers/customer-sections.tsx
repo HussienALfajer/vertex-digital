@@ -172,6 +172,8 @@ export function SummarySection({
               ? t('customers.summary.pushOn', { count: counts.pushDevices })
               : t('customers.summary.pushOff')}
           </Fact>
+          {/* S22 PA7: the product alerts waiting to be sent. */}
+          <Fact label={t('customers.summary.alerts')}>{counts.activeAlerts}</Fact>
         </dl>
       </Card>
       <Card className="gap-4">

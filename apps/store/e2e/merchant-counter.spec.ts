@@ -131,6 +131,8 @@ function order(changes: Partial<Order> = {}): Order {
       source: 'markup',
     },
     codeReleases: [],
+    // S22 OP2: no problem card unless a test sets one.
+    help: { status: 'awaiting_balance', paidAt: null, finishedAt: null, openTicketId: null },
     createdAt: '2026-10-21T09:30:00.000Z',
     ...changes,
   };

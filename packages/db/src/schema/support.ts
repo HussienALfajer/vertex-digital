@@ -1,4 +1,5 @@
 import {
+  ORDER_PROBLEMS,
   TICKET_AUTHORS,
   TICKET_CATEGORIES,
   TICKET_CLOSERS,
@@ -38,6 +39,8 @@ export const ticketAuthorEnum = pgEnum('ticket_author', TICKET_AUTHORS);
 
 export const ticketCloserEnum = pgEnum('ticket_closer', TICKET_CLOSERS);
 
+export const orderProblemEnum = pgEnum('order_problem', ORDER_PROBLEMS);
+
 export const supportTickets = pgTable(
   'support_tickets',
   {
@@ -57,6 +60,8 @@ export const supportTickets = pgTable(
     lastAdminMessageAt: timestamp('last_admin_message_at', { withTimezone: true }),
     closedAt: timestamp('closed_at', { withTimezone: true }),
     closedBy: ticketCloserEnum('closed_by'),
+    /** S22 OP5: the problem named at opening, an order ticket's only; never changed. */
+    orderProblem: orderProblemEnum('order_problem'),
     ...timestamps(),
   },
   (table) => [
@@ -79,6 +84,13 @@ export const supportTickets = pgTable(
       'support_tickets_link_check',
       sql`(${table.category} = 'order') = (${table.orderId} is not null) and (${table.category} = 'deposit') = (${table.depositId} is not null)`,
     ),
+    check(
+      'support_tickets_order_problem_check',
+      sql`${table.orderProblem} is null or ${table.category} = 'order'`,
+    ),
+    index('support_tickets_order_problem_idx')
+      .on(table.orderProblem, table.lastCustomerMessageAt)
+      .where(sql`${table.orderProblem} is not null`),
     check(
       'support_tickets_closed_check',
       sql`(${table.status} = 'closed') = (${table.closedAt} is not null and ${table.closedBy} is not null) and (${table.closedAt} is null) = (${table.closedBy} is null)`,

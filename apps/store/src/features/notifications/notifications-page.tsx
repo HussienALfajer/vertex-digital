@@ -20,11 +20,13 @@ import {
   MedalIcon,
   PackageCheckIcon,
   PackageMinusIcon,
+  PackagePlusIcon,
   ReceiptTextIcon,
   ShoppingCartIcon,
   SlidersHorizontalIcon,
   StoreIcon,
   TagIcon,
+  TrendingDownIcon,
   Undo2Icon,
   WalletIcon,
   WalletMinimalIcon,
@@ -70,6 +72,8 @@ const ICONS: Record<NotificationEvent, LucideIcon> = {
   merchant_watch_digest: BellRingIcon,
   merchant_low_balance: WalletMinimalIcon,
   merchant_statement_ready: FileSpreadsheetIcon,
+  product_available: PackagePlusIcon,
+  product_price_dropped: TrendingDownIcon,
 };
 
 /** Marks everything up to the newest shown as read and tells the bell (rule NT5). */

@@ -15,6 +15,10 @@ export interface TicketOrderLink {
   customerId: string;
   number: string;
   status: (typeof orders.$inferSelect)['status'];
+  /** S22 OP2, OP3: what the order's problem buttons depend on. */
+  productKind: (typeof catalogProducts.$inferSelect)['kind'];
+  paidAt: Date | null;
+  finishedAt: Date | null;
   productNameAr: string;
   quantity: number;
   totalUsdUnits: number;
@@ -42,6 +46,9 @@ export async function ticketOrderLink(
       customerId: orders.customerId,
       number: orders.number,
       status: orders.status,
+      productKind: catalogProducts.kind,
+      paidAt: orders.paidAt,
+      finishedAt: orders.finishedAt,
       productNameAr: catalogProducts.nameAr,
       quantity: orders.quantity,
       totalUsdUnits: orders.totalUsdUnits,

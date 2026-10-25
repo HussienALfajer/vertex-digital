@@ -102,6 +102,8 @@ export class MockApi {
     ['GET /api/wallet', { status: 200, body: { balanceUnits: 0, syp: null, reservedUsdUnits: 0 } }],
     // S22 QB6: the home page's "اشحن مجدداً" of a signed-in customer, none by default.
     ['GET /api/quick-buy', { status: 200, body: { items: [] } }],
+    // S22 PA1: no product alerts by default; the buy box reads a game's once signed in.
+    ['GET /api/product-alerts', { status: 200, body: { items: [] } }],
     // Every email and push on (S05 rule NT8, S15 PP1): the account page reads the choices.
     [
       'GET /api/account/notification-preferences',
@@ -188,10 +190,13 @@ export class MockApi {
 
   async answer(route: Route): Promise<void> {
     const request = route.request();
-    const key = `${request.method()} ${new URL(request.url()).pathname}`;
+    const url = new URL(request.url());
+    const key = `${request.method()} ${url.pathname}`;
     this.requests.push({ key, body: bodyOf(request), headers: request.headers() });
     // Catalog images are public files on every catalog page (S09 rule SF5): a PNG by default.
+    // A key with its query (S22: "تنبيهاتي"'s active and ended lists) wins over the bare path.
     const answer =
+      (url.search ? this.answers.get(`${key}${url.search}`) : undefined) ??
       this.answers.get(key) ??
       (key.startsWith('GET /api/catalog/images/')
         ? ({ status: 200, image: true } as const)

@@ -166,6 +166,11 @@ export function ProductsTab({ game }: { game: GameDetail }) {
                     {product.reviewOpen && (
                       <Badge tone="warning">{t('catalog.products.reviewOpen')}</Badge>
                     )}
+                    {product.waitingAlerts > 0 && (
+                      <Badge tone="info">
+                        {t('catalog.products.waitingAlerts', { count: product.waitingAlerts })}
+                      </Badge>
+                    )}
                   </span>
                 </TableCell>
                 <TableCell className="whitespace-nowrap tabular-nums">
