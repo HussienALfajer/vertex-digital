@@ -3,6 +3,7 @@ export {
   type CustomerProfileFacts,
   customerActiveSessions,
   customerPage,
+  customerPasskeyRows,
   customerProfileFacts,
   customerRecordIds,
   customerSignInRows,

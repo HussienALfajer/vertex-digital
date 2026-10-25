@@ -204,6 +204,15 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
       NOT_YOU,
     ],
   }),
+  // S22 PK2: the name is the default one drawn from the device, never text the customer typed.
+  customer_passkey_added: ({ at, name, browser, system, ipAddress }) => ({
+    subject: 'أُضيفت بصمة دخول إلى حسابك',
+    lines: [
+      `أُضيفت بصمة دخول باسم «${name}» إلى حسابك في Vertex Digital بتاريخ ${formatTime(at)}، ويمكن الدخول بها دون كلمة المرور.`,
+      `الجهاز: ${deviceName(browser)} على ${deviceName(system)}${ipAddress ? `، عنوان الإنترنت: ${ipAddress}` : ''}.`,
+      'إذا لم تكن أنت، احذفها من صفحة حسابك واستخدم «نسيت كلمة المرور» فورًا: استعادة كلمة المرور تحذف كل البصمات.',
+    ],
+  }),
   customer_sign_up_attempt: () => ({
     subject: 'محاولة استخدام بريدك في Vertex Digital',
     lines: [

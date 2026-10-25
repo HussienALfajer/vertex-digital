@@ -16,6 +16,7 @@ import {
   customerLimits as customerLimitsOf,
   customerStatus,
   DEPOSIT_SETTINGS_DEFAULTS,
+  type Passkey,
   type SetCustomerPriceList,
   type UpdateCustomerLimits,
 } from '@vertex-digital/contracts';
@@ -31,6 +32,7 @@ import {
   customerLimitOverrides,
   customerNotes,
   customerPage,
+  customerPasskeyRows,
   customerProfileFacts,
   customerRecordIds,
   customerSignals,
@@ -233,6 +235,17 @@ export class CustomersService {
       ...row,
       createdAt: row.createdAt.toISOString(),
       lastActiveAt: row.lastActiveAt.toISOString(),
+    }));
+  }
+
+  /** `GET …/passkeys` (S22 PK6): read only, never the key or the credential id. */
+  async passkeys(id: string): Promise<Passkey[]> {
+    await this.existing(id);
+    const rows = await customerPasskeyRows(this.db, id);
+    return rows.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     }));
   }
 

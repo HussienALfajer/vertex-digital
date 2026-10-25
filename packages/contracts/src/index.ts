@@ -16,6 +16,7 @@ export * from './merchants.js';
 export * from './money.js';
 export * from './notifications.js';
 export * from './orders.js';
+export * from './passkeys.js';
 export * from './pricing.js';
 export * from './push.js';
 export * from './quick-buy.js';

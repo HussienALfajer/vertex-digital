@@ -5,9 +5,10 @@ import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/fie
 import { Input } from '@vertex-digital/ui/components/input';
 import { PasswordInput } from '@vertex-digital/ui/components/password-input';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
@@ -19,6 +20,12 @@ import { useSearchParam } from '@/lib/use-search-param';
 import { holdPassword, savePendingEmail } from './pending-email';
 import { registrationState, signIn } from './requests';
 import { currentPasswordError, emailError } from './validation';
+
+// S22 PK3: the passkey button and autofill, with their own code and strings.
+const PasskeySignIn = dynamic(
+  () => import('../passkeys/passkey-sign-in').then((m) => m.PasskeySignIn),
+  { ssr: false },
+);
 
 /** Why the customer arrived here, from `?notice=`: shown above the form. */
 const NOTICES = {
@@ -45,6 +52,15 @@ export function SignInForm() {
     };
   }, []);
 
+  // A full load, so everything rendered for a signed-out visitor is read again. `next` is read
+  // from the address at that moment: a sign-in that ends before hydration has read it (a passkey
+  // suggestion, a quick click) still goes back to the page asked for.
+  const signedIn = useCallback(
+    () =>
+      window.location.assign(safeRedirect(new URLSearchParams(window.location.search).get('next'))),
+    [],
+  );
+
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -60,11 +76,7 @@ export function SignInForm() {
     setPending(true);
     const result = await signIn(email, password, { onVerifying: () => setVerifying(true) });
     setVerifying(false);
-    if (result.ok) {
-      // A full load, so everything rendered for a signed-out visitor is read again.
-      window.location.assign(safeRedirect(next));
-      return;
-    }
+    if (result.ok) return signedIn();
     // The API sent a new code to an unverified account (account states): enter it next.
     if (result.reason === 'EMAIL_NOT_VERIFIED') {
       savePendingEmail({ email, next: safeRedirect(next) });
@@ -94,7 +106,8 @@ export function SignInForm() {
             name="email"
             type="email"
             dir="ltr"
-            autoComplete="email"
+            // S22 PK3: the browser offers the store's passkeys here too, where it can.
+            autoComplete="email webauthn"
             inputMode="email"
             className="h-11 text-md"
             aria-invalid={!!errors.email}
@@ -131,6 +144,7 @@ export function SignInForm() {
               : t('signIn.submit')}
         </Button>
       </form>
+      <PasskeySignIn onSignedIn={signedIn} />
       {canSignUp && (
         <p className="text-center text-sm text-muted-foreground">
           {t('signIn.noAccount')}{' '}

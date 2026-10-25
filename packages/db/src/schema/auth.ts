@@ -1,4 +1,4 @@
-import { ACCOUNT_TYPES } from '@vertex-digital/contracts';
+import { ACCOUNT_TYPES, PASSKEY_DEVICE_TYPES } from '@vertex-digital/contracts';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -125,8 +125,51 @@ export const customerAccounts = pgTable(
 );
 
 /**
+ * S22 PK1–PK6 (ADR 0037): the customer's passkeys, written only by the auth module's passkey
+ * endpoints and account routes. Credentials, not business records: a removal or a password reset
+ * deletes the row, and its audit entry keeps the id and name. `public_key` is the COSE key in
+ * base64; `counter` the authenticator's signature counter, which must only go up (PK3).
+ */
+export const customerPasskeys = pgTable(
+  'customer_passkeys',
+  {
+    id: id(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    publicKey: text('public_key').notNull(),
+    /** The WebAuthn credential id, base64url. */
+    credentialId: text('credential_id').notNull(),
+    counter: bigint('counter', { mode: 'number' }).notNull(),
+    deviceType: text('device_type', { enum: PASSKEY_DEVICE_TYPES }).notNull(),
+    backedUp: boolean('backed_up').notNull(),
+    /** The authenticator's transports, comma-separated (`internal,hybrid`). */
+    transports: text('transports'),
+    aaguid: text('aaguid'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('customer_passkeys_credential_id_idx').on(table.credentialId),
+    index('customer_passkeys_customer_idx').on(table.customerId, table.createdAt),
+    check(
+      'customer_passkeys_name_check',
+      sql`char_length(${table.name}) between 1 and 40 and ${table.name} = btrim(${table.name})`,
+    ),
+    check(
+      'customer_passkeys_device_type_check',
+      sql`${table.deviceType} in ('singleDevice', 'multiDevice')`,
+    ),
+    check('customer_passkeys_counter_check', sql`${table.counter} >= 0`),
+  ],
+);
+
+/**
  * Short-lived values of the customer instance: email codes. One per identifier (`<purpose>-otp-<email>`),
- * so a new code always replaces the previous one of the same purpose (rule C4).
+ * so a new code always replaces the previous one of the same purpose (rule C4). S22: WebAuthn
+ * challenges (a random identifier in a signed cookie, single use) and the passkey registration
+ * grant of a session (`passkey-grant:<session id>`, rule PK2).
  */
 export const customerVerifications = pgTable(
   'customer_verifications',

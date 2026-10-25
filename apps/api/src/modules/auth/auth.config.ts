@@ -23,9 +23,11 @@ import { ALTCHA_HEADER } from '../../core/altcha/altcha.guard.js';
 import type { Env } from '../../core/config/env.js';
 import { betterAuthLogger } from '../../core/errors/better-auth-logger.js';
 import { CodedException } from '../../core/errors/index.js';
-import type { RequestMeta } from '../../core/http/request-meta.js';
 import { SignInFailures } from '../../core/rate-limit/sign-in-failures.js';
 import type { AuthAccountService } from './auth-account.service.js';
+import { metaOf, toApiError } from './auth-endpoints.js';
+import type { AuthPasskeysService } from './auth-passkeys.service.js';
+import { passkeysPlugin } from './passkeys.plugin.js';
 
 export const CUSTOMER_AUTH_BASE_PATH = '/api/auth';
 
@@ -101,21 +103,6 @@ const emailOf = (body: unknown): string => {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
 };
 
-const metaOf = (headers: Headers | undefined): RequestMeta => ({
-  // nginx overwrites X-Forwarded-For with the client address (ADR 0009).
-  ipAddress: headers?.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
-  userAgent: headers?.get('user-agent')?.slice(0, 500) ?? null,
-});
-
-/** A coded error of the auth module, answered by Better Auth with its code (the store translates it). */
-const toApiError = (error: unknown): unknown =>
-  error instanceof CodedException
-    ? new APIError(error.getStatus() === 429 ? 'TOO_MANY_REQUESTS' : 'BAD_REQUEST', {
-        code: error.code,
-        message: error.message,
-      })
-    : error;
-
 /**
  * `POST /api/auth/email-otp/verify-email` (rule C7): the code and the password verify the email, then the
  * customer is signed in with one session. A Better Auth endpoint, so the session cookie is set the
@@ -180,6 +167,7 @@ export function createCustomerAuth(
   db: Database,
   env: Env,
   accounts: AuthAccountService,
+  passkeys: AuthPasskeysService,
   verifyAltcha: (header: string | undefined) => Promise<void>,
 ) {
   const production = env.NODE_ENV === 'production';
@@ -242,7 +230,8 @@ export function createCustomerAuth(
         '/sign-in/email': { window: 60, max: CUSTOMER_SIGN_IN_LIMITS.perIpPerMinute },
       },
     },
-    plugins: [verifyEmailPlugin(accounts)],
+    // S22 PK1: passkeys on the customer instance only; the admin instance never gets them.
+    plugins: [verifyEmailPlugin(accounts), passkeysPlugin(passkeys, accounts, env)],
     databaseHooks: {
       session: {
         create: {

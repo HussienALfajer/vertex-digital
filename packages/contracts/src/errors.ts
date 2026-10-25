@@ -35,7 +35,10 @@ export const ERROR_CODES = [
   'INTERNAL_ERROR',
   /** Customer sign-up while registration is closed (S01 rule C16). */
   'REGISTRATION_CLOSED',
-  /** A sensitive admin action without a re-authentication in the last 5 minutes (rule D5). */
+  /**
+   * A sensitive admin action without a re-authentication in the last 5 minutes (rule D5); S22 PK2:
+   * a passkey registration without this session's live password grant.
+   */
   'REAUTHENTICATION_REQUIRED',
   /** The admin signed in with a CLI-issued password and must change it first (rule D1). */
   'PASSWORD_CHANGE_REQUIRED',
@@ -288,6 +291,8 @@ export const ERROR_CODES = [
   'STATEMENT_MONTH_INVALID',
   /** S22 DL2: no product has this direct-link code. */
   'QUICK_LINK_NOT_FOUND',
+  /** S22 PK2: the account already has 10 passkeys. */
+  'PASSKEYS_LIMIT_REACHED',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

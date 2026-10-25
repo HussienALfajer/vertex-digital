@@ -134,6 +134,20 @@ export class MockApi {
         body: { application: null, canApply: false, availableAt: null, termsVersionId: null },
       },
     ],
+    // S22 PK4: no passkey; the account page reads them once signed in.
+    ['GET /api/account/passkeys', { status: 200, body: [] }],
+    // S22 PK3: the sign-in page asks options for the browser's passkey suggestions.
+    [
+      'POST /api/auth/passkey/sign-in-options',
+      {
+        status: 200,
+        body: {
+          challenge: 'ZTJlLXNpZ24taW4tY2hhbGxlbmdl',
+          timeout: 60000,
+          userVerification: 'required',
+        },
+      },
+    ],
     // No saved player ID: the buy box reads them once signed in (S10 rule SP3).
     ['GET /api/saved-players', { status: 200, body: { items: [] } }],
     // No unread notification: the header's bell opens the stream once signed in (S05 NT6).

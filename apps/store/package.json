@@ -12,6 +12,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
     "@vertex-digital/contracts": "workspace:*",
     "@vertex-digital/ui": "workspace:*",
     "altcha-lib": "^2.6.0",

@@ -11,6 +11,7 @@ import {
   accountMerchant,
   accountPriceList,
   customerAccounts,
+  customerPasskeys,
   customerSessions,
   customers,
   type Database,
@@ -312,6 +313,24 @@ export class AuthAccountService {
         ...this.byCustomer(customer.id, meta),
         details: {},
       });
+      // S22 PK5: a reset takes back every passkey, so a stolen session's passkey goes with it.
+      const passkeys = await tx
+        .delete(customerPasskeys)
+        .where(eq(customerPasskeys.customerId, customer.id))
+        .returning({ id: customerPasskeys.id });
+      if (passkeys.length > 0) {
+        await recordAudit(tx, {
+          action: 'customer.passkeys_cleared',
+          actorKind: 'system',
+          actorId: null,
+          channel: 'store',
+          entityType: 'customer',
+          entityId: customer.id,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+          details: { count: passkeys.length },
+        });
+      }
       await this.notifications.queueEmail(tx, {
         to: email,
         template: 'customer_password_changed',
@@ -643,6 +662,14 @@ export class AuthAccountService {
       .where(and(eq(customerSessions.userId, holder.id), ne(customerSessions.id, holder.sessionId)))
       .returning({ id: customerSessions.id });
     return removed.length;
+  }
+
+  /**
+   * S22 PK2: the current password, counted with C11's checks (10 in 15 minutes per customer), for
+   * the passkey grant.
+   */
+  async checkCurrentPassword(customerId: string, password: string): Promise<void> {
+    await this.assertPassword(customerId, password);
   }
 
   private async assertPassword(customerId: string, password: string): Promise<void> {

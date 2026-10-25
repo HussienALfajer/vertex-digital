@@ -6,6 +6,7 @@ import { Card } from '@vertex-digital/ui/components/card';
 import { EmptyState } from '@vertex-digital/ui/components/empty-state';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { CircleAlertIcon } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { MerchantCard } from '@/features/merchant/merchant-card';
@@ -15,6 +16,12 @@ import { PasswordCard } from './password-card';
 import { ProfileCard } from './profile-card';
 import { type CustomerSession, currentSessionToken, getProfile, listSessions } from './requests';
 import { SessionsCard } from './sessions-card';
+
+// S22 PK2, PK4: the passkeys card, with WebAuthn and its strings, loads on its own.
+const PasskeysCard = dynamic(
+  () => import('@/features/passkeys/passkeys-card').then((m) => m.PasskeysCard),
+  { ssr: false },
+);
 
 type State =
   | { status: 'loading' }
@@ -27,7 +34,7 @@ type State =
     };
 
 /**
- * The customer's account (S01 screens): profile, the merchant card (S20), password, signed-in
+ * The customer's account (S01 screens): profile, the merchant card (S20), password, passkeys (S22), signed-in
  * devices and the email choices of S05 (rule NT8). Read in the browser, never cached; without a session the customer
  * signs in and comes back here.
  */
@@ -95,6 +102,7 @@ export function AccountPage() {
           );
         }}
       />
+      <PasskeysCard />
       <SessionsCard
         sessions={state.sessions}
         currentToken={state.currentToken}

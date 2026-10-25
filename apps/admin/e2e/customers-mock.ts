@@ -17,6 +17,7 @@ import {
   customerStateChangeSchema,
   DEPOSIT_SETTINGS_DEFAULTS,
   NO_LIMIT_OVERRIDES,
+  type Passkey,
   ROOT_PRICE_LIST_IDS,
   type SupportSettings,
   setCustomerPriceListSchema,
@@ -112,6 +113,8 @@ interface MockCustomer {
     lastActiveAt: string;
   }[];
   signIns: { id: string; ipAddress: string; userAgent: string; createdAt: string }[];
+  /** S22 PK6. */
+  passkeys: Passkey[];
 }
 
 interface MockTicket {
@@ -152,6 +155,7 @@ function customer(
     openOrders: false,
     sessions: [],
     signIns: [],
+    passkeys: [],
     ...fields,
   };
 }
@@ -226,6 +230,24 @@ export class CustomersMock {
       signIns: [
         { id: id(411), ipAddress: '5.0.0.1', userAgent: CHROME_WINDOWS, createdAt: at(30) },
         { id: id(412), ipAddress: '203.0.113.48', userAgent: SAFARI_IPHONE, createdAt: at(72) },
+      ],
+      passkeys: [
+        {
+          id: id(431),
+          name: 'iOS · Safari',
+          createdAt: at(24 * 10),
+          lastUsedAt: at(20),
+          deviceType: 'multiDevice',
+          backedUp: true,
+        },
+        {
+          id: id(432),
+          name: 'حاسوب العمل',
+          createdAt: at(24 * 2),
+          lastUsedAt: null,
+          deviceType: 'singleDevice',
+          backedUp: false,
+        },
       ],
     }),
     customer('layla', {
@@ -828,6 +850,8 @@ export class CustomersMock {
           return ok(row.sessions);
         case '/sign-ins':
           return ok({ items: row.signIns, nextCursor: null });
+        case '/passkeys':
+          return ok(row.passkeys);
         case '/history':
           return ok({
             items: this.history.filter(

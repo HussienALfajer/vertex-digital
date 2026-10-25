@@ -90,6 +90,14 @@ export const customerSessionsQuery = (id: string) =>
       call(api.GET('/api/admin/customers/{id}/sessions', { params: { path: { id } } })),
   });
 
+/** S22 PK6 "الأجهزة": the customer's passkeys, read only. */
+export const customerPasskeysQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['customers', 'passkeys', id],
+    queryFn: () =>
+      call(api.GET('/api/admin/customers/{id}/passkeys', { params: { path: { id } } })),
+  });
+
 /** CS4 "الأجهزة": the sign-in log, 50 a page (the first page is the last 50 sign-ins). */
 export const customerSignInsQuery = (id: string) =>
   infiniteQueryOptions({

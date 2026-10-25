@@ -268,6 +268,15 @@ Details the spec left open, settled while building PR 1:
 - A saved ID with its pack in the URL (`?pack=&player=`, a search command, a quick-buy card that is not ready) opens the slide step when the ID is ready (SP3); "معرّفاتي"'s "اشحن" (no pack) keeps S10's behaviour.
 - The quick-buy, gap, deposit strip and search-command strings live in `apps/store/src/features/quick-buy/messages.ar.json`; the home, content pages and cart budgets were raised by 2 KB (`e2e/store.spec.ts` gives the reason).
 
+## Implementation notes (PR 2)
+Details the spec left open, settled while building PR 2:
+- PK1: Better Auth's passkey plugin (1.7.7) verifies with `requireUserVerification: false`, cannot tell a counter that went backwards from any other failure, writes the row outside our transaction and asks for a session made in the last day. The ceremonies are therefore the auth module's own Better Auth plugin (`apps/api/src/modules/auth/passkeys.plugin.ts`) on SimpleWebAuthn, the library that plugin is built on, with the same challenge mechanics (a random token in a signed cookie names a verification row, used once, for its own ceremony, 5 minutes): `POST /api/auth/passkey/register-options` and `/passkey/register` (session), `POST /api/auth/passkey/sign-in-options` and `/sign-in/passkey` (public, 30 and 10 a minute per address). User verification is required at both ceremonies.
+- List, rename and remove are Nest routes (`GET`, `PATCH /:id`, `DELETE /:id` under `/api/account/passkeys`), like every other account change; a wrong password at `authorize` answers `INVALID_PASSWORD`, as C11 does.
+- The name at registration is always the default one from the device (`defaultPasskeyName`: system and browser, a part the device does not name left out, "بصمة" when neither), so the security email never carries text someone typed; renaming is not audited and sends no email.
+- PK3's counter: the signature is verified first (a forged assertion never raises the alert), then one guarded update takes a counter above the stored one, or zero over zero (synced passkeys keep 0); anything else refuses with the generic sign-in error and reports to Sentry (A13).
+- The WebAuthn relying party is the host of `STORE_URL`. Browsers refuse an IP address there, so a local test of passkeys opens the store at `http://localhost:3001` with `STORE_URL` set to it; the E2E specs open `localhost` for the same reason.
+- A reset with no passkey writes no `customer.passkeys_cleared` entry. The store's passkey strings live in `apps/store/src/features/passkeys/messages.ar.json` (`tp()`), loaded with the card and the sign-in button through `next/dynamic`.
+
 ## Open questions
 None. The defaults listed under the owner decisions are the spec's choices and may be changed at review.
 

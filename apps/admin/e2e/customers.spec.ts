@@ -114,6 +114,11 @@ test.describe('the profile (CS3–CS5)', () => {
     await expect(
       page.getByText(fill(c.devices.device, { browser: 'Chrome', system: 'Windows' })).first(),
     ).toBeVisible();
+    // S22 PK6: the passkeys, read only.
+    await expect(page.getByText(c.devices.passkeys)).toBeVisible();
+    await expect(page.getByText('حاسوب العمل')).toBeVisible();
+    await expect(page.getByText(c.devices.passkeyNeverUsed)).toBeVisible();
+    await expect(page.getByText(c.devices.passkeySynced)).toBeVisible();
 
     await page.getByRole('tab', { name: c.sections.tickets }).click();
     await expect(rows(page)).toHaveCount(2);
@@ -246,7 +251,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test('the devices and notes tabs', async ({ page, admin }, testInfo) => {
       await open(page, admin, `/customers/${CUSTOMER_IDS.sara}?tab=devices`);
       await expect(page.getByText(c.devices.signIns)).toBeVisible();
-      await screenshot(page, testInfo, `customer-devices-${colorScheme}`);
+      await expect(page.getByText(c.devices.passkeys)).toBeVisible();
+      await screenshot(page, testInfo, `customer-devices-${colorScheme}`, { fullPage: true });
 
       await page.goto(`/customers/${CUSTOMER_IDS.sara}?tab=notes`);
       await expect(page.getByText('عميلة قديمة وموثوقة')).toBeVisible();

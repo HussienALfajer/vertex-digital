@@ -77,7 +77,11 @@ test.describe('sign-in', () => {
     await expect(page.getByText(ar.validation.emailRequired)).toBeVisible();
     await expect(page.getByText(ar.validation.passwordRequired)).toBeVisible();
     await expect(page.getByLabel(ar.fields.email)).toBeFocused();
-    expect(api.requests.some((r) => r.key.startsWith('POST'))).toBe(false);
+    // S22 PK3: only the options of the browser's passkey suggestions, asked on load.
+    const sent = api.requests.filter(
+      (r) => r.key.startsWith('POST') && r.key !== 'POST /api/auth/passkey/sign-in-options',
+    );
+    expect(sent).toEqual([]);
   });
 });
 

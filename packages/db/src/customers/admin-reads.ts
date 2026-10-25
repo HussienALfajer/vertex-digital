@@ -21,6 +21,7 @@ import { type Database, readAll, type Transaction } from '../client.js';
 import { customerWalletBalances } from '../ledger/wallet.js';
 import {
   auditEntries,
+  customerPasskeys,
   customerSessions,
   customerSignIns,
   customers,
@@ -316,6 +317,22 @@ export async function customerActiveSessions(db: Executor, customerId: string) {
     .from(customerSessions)
     .where(and(eq(customerSessions.userId, customerId), gt(customerSessions.expiresAt, sql`now()`)))
     .orderBy(desc(customerSessions.updatedAt));
+}
+
+/** S22 PK4, PK6: the customer's passkeys, oldest first; never the key or the credential id. */
+export async function customerPasskeyRows(db: Executor, customerId: string) {
+  return db
+    .select({
+      id: customerPasskeys.id,
+      name: customerPasskeys.name,
+      createdAt: customerPasskeys.createdAt,
+      lastUsedAt: customerPasskeys.lastUsedAt,
+      deviceType: customerPasskeys.deviceType,
+      backedUp: customerPasskeys.backedUp,
+    })
+    .from(customerPasskeys)
+    .where(eq(customerPasskeys.customerId, customerId))
+    .orderBy(customerPasskeys.createdAt, customerPasskeys.id);
 }
 
 /** Rule CS4: one page (and one extra row) of the sign-in log, newest first. */
