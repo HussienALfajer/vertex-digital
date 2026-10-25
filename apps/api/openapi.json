@@ -814,6 +814,112 @@
         ]
       }
     },
+    "/api/account/passkeys": {
+      "get": {
+        "operationId": "AuthPasskeysController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/account/passkeys/authorize": {
+      "post": {
+        "operationId": "AuthPasskeysController_authorize",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizePasskey"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "This session may register a passkey for 5 minutes"
+          }
+        },
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/account/passkeys/{id}": {
+      "patch": {
+        "operationId": "AuthPasskeysController_rename",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenamePasskey"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The renamed passkey",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Passkey"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "account"
+        ]
+      },
+      "delete": {
+        "operationId": "AuthPasskeysController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The passkey no longer signs in"
+          }
+        },
+        "tags": [
+          "account"
+        ]
+      }
+    },
     "/api/admin/test-customers": {
       "get": {
         "operationId": "AuthAdminController_list",
@@ -991,6 +1097,9 @@
                 "customer.test_password_reset",
                 "customer.frozen",
                 "customer.unfrozen",
+                "customer.passkey_added",
+                "customer.passkey_removed",
+                "customer.passkeys_cleared",
                 "customer.price_list_changed",
                 "customer.merchant_granted",
                 "customer.merchant_revoked",
@@ -2758,6 +2867,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CustomerSessionList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/admin/customers/{id}/passkeys": {
+      "get": {
+        "operationId": "CustomersAdminController_passkeys",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Oldest first (S22 PK6)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyList"
                 }
               }
             }
@@ -15287,6 +15426,85 @@
           }
         }
       },
+      "PasskeyList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Passkey"
+        }
+      },
+      "Passkey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "lastUsedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "deviceType": {
+            "$ref": "#/components/schemas/PasskeyDeviceType"
+          },
+          "backedUp": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdAt",
+          "lastUsedAt",
+          "deviceType",
+          "backedUp"
+        ],
+        "additionalProperties": false
+      },
+      "PasskeyDeviceType": {
+        "type": "string",
+        "enum": [
+          "singleDevice",
+          "multiDevice"
+        ]
+      },
+      "AuthorizePasskey": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
+      "RenamePasskey": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[^\\p{C}]+$"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
       "TestCustomerListQuery": {
         "type": "object",
         "properties": {
@@ -15521,6 +15739,9 @@
           "customer.test_password_reset",
           "customer.frozen",
           "customer.unfrozen",
+          "customer.passkey_added",
+          "customer.passkey_removed",
+          "customer.passkeys_cleared",
           "customer.price_list_changed",
           "customer.merchant_granted",
           "customer.merchant_revoked",

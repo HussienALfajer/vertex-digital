@@ -23,6 +23,7 @@ import {
   TableRow,
 } from '@vertex-digital/ui';
 import {
+  FingerprintIcon,
   InboxIcon,
   LifeBuoyIcon,
   MonitorSmartphoneIcon,
@@ -47,6 +48,7 @@ import {
   customerDepositsQuery,
   customerHistoryQuery,
   customerOrdersQuery,
+  customerPasskeysQuery,
   customerSessionsQuery,
   customerSignInsQuery,
 } from './customers.queries';
@@ -415,10 +417,11 @@ export function TicketsSection({ customerId }: { customerId: string }) {
   );
 }
 
-/** "الأجهزة": the active sessions and the sign-in log (the last 50 first). */
+/** "الأجهزة": the active sessions, the passkeys (S22 PK6) and the sign-in log (the last 50 first). */
 export function DevicesSection({ customerId }: { customerId: string }) {
   const { t } = useTranslation();
   const sessions = useQuery(customerSessionsQuery(customerId));
+  const passkeys = useQuery(customerPasskeysQuery(customerId));
   const signIns = useInfiniteQuery(customerSignInsQuery(customerId));
   const rows = signIns.data?.pages.flatMap((page) => page.items) ?? [];
   const device = (userAgent: string | null) => {
@@ -462,6 +465,48 @@ export function DevicesSection({ customerId }: { customerId: string }) {
                       {session.ipAddress}
                     </span>
                   )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      <Card className="gap-4">
+        <CardTitle>{t('customers.devices.passkeys')}</CardTitle>
+        {passkeys.isPending && <SectionSkeleton />}
+        {passkeys.isError && (
+          <SectionError error={passkeys.error} onRetry={() => passkeys.refetch()} />
+        )}
+        {passkeys.data?.length === 0 && (
+          <p className="text-muted-foreground">{t('customers.devices.noPasskeys')}</p>
+        )}
+        {passkeys.data && passkeys.data.length > 0 && (
+          <ul className="flex flex-col divide-y divide-border">
+            {passkeys.data.map((passkey) => (
+              <li key={passkey.id} className="flex items-start gap-3 py-3">
+                <FingerprintIcon
+                  className="mt-0.5 size-5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <div className="flex min-w-0 flex-col gap-1">
+                  {/* The customer's own words: text only. */}
+                  <span className="font-medium break-words">{passkey.name}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {t('customers.devices.passkeyAdded', {
+                      date: formatDateTime(passkey.createdAt),
+                    })}
+                    {' · '}
+                    {passkey.lastUsedAt
+                      ? t('customers.devices.passkeyUsed', {
+                          date: formatDateTime(passkey.lastUsedAt),
+                        })
+                      : t('customers.devices.passkeyNeverUsed')}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {passkey.backedUp
+                      ? t('customers.devices.passkeySynced')
+                      : t('customers.devices.passkeyDeviceOnly')}
+                  </span>
                 </div>
               </li>
             ))}

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CUSTOMER_AUTH_NEST_PATHS } from '../src/modules/auth/auth.config.js';
 import { AuthService } from '../src/modules/auth/auth.service.js';
 import { AuthAccountService } from '../src/modules/auth/auth-account.service.js';
+import { PASSKEY_PATHS } from '../src/modules/auth/passkeys.plugin.js';
 import {
   api,
   auditOf,
@@ -511,6 +512,8 @@ describe('the account (rules C11–C14)', () => {
       '/error',
       // Answered by the auth module's Nest routes, tested above.
       ...CUSTOMER_AUTH_NEST_PATHS,
+      // S22: the passkey ceremonies (`test/passkeys.test.ts`).
+      ...Object.values(PASSKEY_PATHS),
     ]);
     const paths = Object.values(test.app.get(AuthService).auth.api)
       .map((endpoint) => (endpoint as { path?: unknown }).path)

@@ -16,8 +16,16 @@ Spec `docs/specs/S22-quick-buy-and-order-help.md`, ADR 0037. Three PRs as the sp
 - [x] Owner acceptance (2026-10-21), PR with auto-merge
 
 ## PR 2 — passkeys (branch `feat/s22-passkeys`)
-- [ ] Contracts, DB (`customer_passkeys`), API (plugin, grant, limits, reset clears, sign-in hooks, email), store (account section, sign-in button and autofill), admin (profile devices tab), E2E with the virtual authenticator
-- [ ] Wiring checklist, checks, reviewer, owner acceptance, PR with auto-merge
+- [x] Contracts: `passkeySchema`, `passkeyNameSchema` (1–40, printable, no bidi controls), `PASSKEY_LIMIT` (10), `PASSKEY_GRANT_MINUTES` (5), `authorizePasskeySchema`; errors `PASSKEYS_LIMIT_REACHED` (and `REAUTHENTICATION_REQUIRED` for customers) with Arabic text; audit `customer.passkey_added`, `customer.passkey_removed`, `customer.passkeys_cleared`; email template `customer_passkey_added`; admin profile passkeys schema; unit tests
+- [x] DB (`/db-migration`): `customer_passkeys` (plugin columns, `credential_id` unique, `customer_id` indexed FK, name check); `TABLE_OWNERS` (`auth`), listed as not business records (credentials); drift
+- [x] API: the auth module's own Better Auth plugin on SimpleWebAuthn (`@better-auth/passkey` 1.7.7 neither requires user verification nor tells a counter regression apart: spec implementation notes) on the customer instance only (rp id = store host, origin `STORE_URL`, user verification required, resident keys preferred); `POST /api/account/passkeys/authorize` (C11 limit, grant row `passkey-grant:<session>`); registration refused without a live grant, at 10; addition: row, audit, email, grant deleted in one transaction; remove audited (rename is not: spec notes); sign-in through the session hooks (C15, sign-in log, `customer_new_sign_in`), per-address limit, no ALTCHA; counter regression refused and alerted (A13); a password reset clears passkeys with `customer.passkeys_cleared`; admin profile passkeys read; tests (grant missing/expired/used, limit, reset, archived, rename/remove other customer's → not found)
+- [x] Worker: the `customer_passkey_added` email template; test
+- [x] Bridge: OpenAPI export and admin client
+- [x] Store: account section "الدخول بالبصمة" (password dialog, list, rename, remove; hidden without WebAuthn), sign-in button and email autofill (`@simplewebauthn/browser` through `next/dynamic`); i18n, states, phone width; budgets held or raised with the reason
+- [x] Admin: profile devices tab passkeys list (read only); i18n, states
+- [x] E2E with a virtual authenticator (store: section and sign-in, phone and desktop, dark and light; admin: devices tab, light and dark)
+- [x] Wiring checklist, checks (lint, typecheck, test, build, drift, OpenAPI, changed E2E), reviewer (1 blocking finding fixed: a passkey sign-in racing a reset; re-review clean)
+- [x] Owner acceptance (2026-10-25), PR with auto-merge
 
 ## PR 3 — order help and alerts (branch `feat/s22-order-help-alerts`)
 - [ ] Contracts, DB (`support_tickets.order_problem`, `product_alerts`), API (ticket problem, alerts CRUD, waiting count, admin filter), worker (`catalog.product-alerts`, sweep, notifications, Telegram label), store (problem card, hints, form, alert buttons, "تنبيهاتي"), admin (queue chip and filter, thread line, waiting count), E2E

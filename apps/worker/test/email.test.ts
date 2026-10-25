@@ -264,6 +264,24 @@ describe('email.send', () => {
     expect(email.text).not.toContain('Unknown');
   });
 
+  it('writes the passkey email with its name, device and address (S22 PK2)', () => {
+    const email = renderEmail(
+      'customer_passkey_added',
+      {
+        at: '2026-10-25T09:30:00.000Z',
+        name: 'iOS · Safari',
+        browser: 'Safari',
+        system: 'iOS',
+        ipAddress: '203.0.113.7',
+      },
+      'https://digital.example',
+    );
+    expect(email.subject).toBe('أُضيفت بصمة دخول إلى حسابك');
+    expect(email.text).toContain('«iOS · Safari»');
+    expect(email.text).toContain('203.0.113.7');
+    expect(email.text).toContain('نسيت كلمة المرور');
+  });
+
   it('frames every email in the brand: the logo, the title and the store address', () => {
     const email = renderEmail(
       'customer_new_sign_in',

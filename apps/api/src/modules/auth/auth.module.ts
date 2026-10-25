@@ -6,16 +6,18 @@ import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { AuthAccountController } from './auth-account.controller.js';
 import { AuthAccountService } from './auth-account.service.js';
+import { AuthPasskeysController } from './auth-passkeys.controller.js';
+import { AuthPasskeysService } from './auth-passkeys.service.js';
 import { AuthTestCustomersService } from './auth-test-customers.service.js';
 
 /**
  * Customer identity (ADR 0007, S01): the customer Better Auth instance at `/api/auth` and its
- * tables, the account changes, the profile and the admin's test customers.
+ * tables, the account changes, the profile, the passkeys (S22) and the admin's test customers.
  */
 @Module({
   imports: [NotificationsModule, SettingsModule],
-  controllers: [AuthController, AuthAccountController, AuthAdminController],
-  providers: [AuthService, AuthAccountService, AuthTestCustomersService],
+  controllers: [AuthController, AuthAccountController, AuthPasskeysController, AuthAdminController],
+  providers: [AuthService, AuthAccountService, AuthPasskeysService, AuthTestCustomersService],
   exports: [AuthService],
 })
 export class AuthModule {}

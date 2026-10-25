@@ -31,6 +31,8 @@ export const EMAIL_TEMPLATES = [
   'customer_password_changed',
   /** After a sign-in, with the device and address (rule C10). */
   'customer_new_sign_in',
+  /** S22 PK2: a passkey was added, with its name, the device and the address; always sent. */
+  'customer_passkey_added',
   /** Someone tried to sign up, or to move an account, with this address (rules C2, C12). */
   'customer_sign_up_attempt',
   /** The admin adjusted the wallet, or reversed an adjustment (S02); never the reason or note. */
@@ -266,6 +268,12 @@ export const EMAIL_PARAMS = {
   customer_email_changed: at,
   customer_password_changed: at,
   customer_new_sign_in: at.extend({
+    browser: z.string(),
+    system: z.string(),
+    ipAddress: z.string().nullable(),
+  }),
+  customer_passkey_added: at.extend({
+    name: z.string(),
     browser: z.string(),
     system: z.string(),
     ipAddress: z.string().nullable(),

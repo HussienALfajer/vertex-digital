@@ -11,6 +11,7 @@ import { DATABASE } from '../../core/database/database.module.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import { type CustomerAuth, createCustomerAuth } from './auth.config.js';
 import { AuthAccountService } from './auth-account.service.js';
+import { AuthPasskeysService } from './auth-passkeys.service.js';
 
 /** The signed-in customer of a request, as the access guard sees them. */
 export interface CustomerIdentity {
@@ -55,9 +56,10 @@ export class AuthService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(ENV) env: Env,
     accounts: AuthAccountService,
+    passkeys: AuthPasskeysService,
     altcha: AltchaService,
   ) {
-    this.auth = createCustomerAuth(db, env, accounts, (header) => altcha.verify(header));
+    this.auth = createCustomerAuth(db, env, accounts, passkeys, (header) => altcha.verify(header));
   }
 
   /** The Node handler mounted at `/api/auth` (`app.setup.ts`). */

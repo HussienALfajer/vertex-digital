@@ -359,7 +359,8 @@
       "PLAYER_CHECK_QUOTA_EXCEEDED": "استُنفدت فحوص المعرّفات المسموحة حالياً. حاول لاحقاً.",
       "CODES_NOT_DELIVERED": "لا توجد أكواد مسلّمة في هذا الطلب.",
       "STATEMENT_MONTH_INVALID": "لا يوجد كشف حساب لهذا الشهر.",
-      "QUICK_LINK_NOT_FOUND": "لا توجد باقة بهذا الرمز."
+      "QUICK_LINK_NOT_FOUND": "لا توجد باقة بهذا الرمز.",
+      "PASSKEYS_LIMIT_REACHED": "لدى العميل 10 بصمات، وهو الحد الأقصى."
     }
   },
   "changePassword": {
@@ -745,6 +746,9 @@
       "order_policy.set": "تعديل سياسة الطلبات",
       "customer.frozen": "تجميد عميل",
       "customer.unfrozen": "إلغاء تجميد عميل",
+      "customer.passkey_added": "إضافة بصمة دخول",
+      "customer.passkey_removed": "حذف بصمة دخول",
+      "customer.passkeys_cleared": "حذف بصمات الدخول عند استعادة كلمة المرور",
       "customer.limits_changed": "تعديل حدود عميل",
       "customer.archived": "أرشفة عميل",
       "customer.unarchived": "إلغاء أرشفة عميل",
@@ -3906,6 +3910,13 @@
       "device": "{{browser}} على {{system}}",
       "started": "بدأت {{date}}",
       "lastActive": "آخر نشاط {{date}}",
+      "passkeys": "بصمات الدخول",
+      "noPasskeys": "لا بصمات دخول.",
+      "passkeyAdded": "أُضيفت {{date}}",
+      "passkeyUsed": "آخر دخول بها {{date}}",
+      "passkeyNeverUsed": "لم تُستخدم للدخول بعد",
+      "passkeySynced": "متزامنة بين أجهزة العميل",
+      "passkeyDeviceOnly": "على جهاز واحد",
       "columns": {
         "time": "الوقت",
         "device": "الجهاز",

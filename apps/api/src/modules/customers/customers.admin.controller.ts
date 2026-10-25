@@ -31,6 +31,8 @@ import {
   customerSessionSchema,
   customerSignInPageSchema,
   customerStateChangeSchema,
+  passkeyListSchema,
+  passkeySchema,
   type SetCustomerPriceList,
   setCustomerPriceListSchema,
   type UpdateCustomerLimits,
@@ -89,6 +91,15 @@ export class CustomersAdminController {
   @ApiOkResponse({ description: 'Sessions not expired', standardSchema: customerSessionListSchema })
   sessions(@Param('id') id: string) {
     return this.customers.sessions(id);
+  }
+
+  @Get(':id/passkeys')
+  @AdminRoute()
+  @Header('cache-control', 'no-store')
+  @SerializeOptions({ schema: passkeySchema })
+  @ApiOkResponse({ description: 'Oldest first (S22 PK6)', standardSchema: passkeyListSchema })
+  passkeys(@Param('id') id: string) {
+    return this.customers.passkeys(id);
   }
 
   @Get(':id/history')

@@ -342,6 +342,12 @@ export const AUDIT_DETAILS = {
   /** S12 CF1: the reason is the entry's `reason`; the reservations it cancelled. */
   'customer.frozen': z.strictObject({ cancelledOrderIds: z.array(z.uuid()) }),
   'customer.unfrozen': none,
+  /** S22 PK2: the passkey's id and name (the credential stays out of the log). */
+  'customer.passkey_added': z.strictObject({ id: z.uuid(), name: z.string() }),
+  /** S22 PK4: the row is deleted; the entry keeps its id and name. */
+  'customer.passkey_removed': z.strictObject({ id: z.uuid(), name: z.string() }),
+  /** S22 PK5: every passkey deleted by a password reset; `count` is how many. */
+  'customer.passkeys_cleared': count,
   /**
    * S20 AT2, AT3: the reason is the entry's `reason`; null is the type's default. The lists are
    * the effective ones before and after, and the reservations cancelled.

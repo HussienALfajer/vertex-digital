@@ -22,6 +22,8 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   customer_sessions: 'Better Auth sessions: deleted on sign-out and expiry, not business records',
   customer_accounts: 'Better Auth credentials of a customer, who is the record that is archived',
   customer_verifications: 'Better Auth short-lived codes: deleted once used or expired',
+  customer_passkeys:
+    'Sign-in credentials (S22 PK4, PK5): deleted on removal and on a password reset, the audit entry keeps id and name',
   admin_sessions: 'Better Auth sessions: deleted on sign-out and expiry, not business records',
   admin_accounts: 'Better Auth credentials of the admin, who is the record that is archived',
   admin_verifications: 'Better Auth short-lived values: deleted once used or expired',
