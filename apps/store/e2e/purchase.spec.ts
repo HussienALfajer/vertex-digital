@@ -76,6 +76,8 @@ function order(product: StoreProduct, changes: Partial<Order> = {}): Order {
     verificationCode: 'VrfyCode0123456789abcd',
     sale: null,
     codeReleases: [],
+    // S22 OP2: no problem card unless a test sets one.
+    help: { status: 'awaiting_balance', paidAt: null, finishedAt: null, openTicketId: null },
     repeatable: false,
     createdAt: new Date().toISOString(),
     ...changes,

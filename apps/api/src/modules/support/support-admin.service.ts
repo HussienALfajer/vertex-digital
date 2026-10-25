@@ -69,6 +69,7 @@ export class SupportAdminService {
     const filters: (SQL | undefined)[] = [
       query.status === 'all' ? undefined : eq(supportTickets.status, query.status),
       query.category ? eq(supportTickets.category, query.category) : undefined,
+      query.problem ? eq(supportTickets.orderProblem, query.problem) : undefined,
       query.customerId ? eq(supportTickets.customerId, query.customerId) : undefined,
     ];
     if (query.q) {

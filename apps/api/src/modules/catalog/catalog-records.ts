@@ -97,6 +97,8 @@ export interface ProductPricing {
   routed: boolean;
   reviewOpen: boolean;
   deliveryStats: DeliveryStats | null;
+  /** S22 PA8: active availability alerts. */
+  waitingAlerts: number;
 }
 
 export function toProduct(row: ProductRow, pricing: ProductPricing, storeUrl: string): Product {

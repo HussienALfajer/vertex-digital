@@ -360,7 +360,10 @@
       "CODES_NOT_DELIVERED": "لا توجد أكواد مسلّمة في هذا الطلب.",
       "STATEMENT_MONTH_INVALID": "لا يوجد كشف حساب لهذا الشهر.",
       "QUICK_LINK_NOT_FOUND": "لا توجد باقة بهذا الرمز.",
-      "PASSKEYS_LIMIT_REACHED": "لدى العميل 10 بصمات، وهو الحد الأقصى."
+      "PASSKEYS_LIMIT_REACHED": "لدى العميل 10 بصمات، وهو الحد الأقصى.",
+      "ORDER_PROBLEM_UNAVAILABLE": "لا يتيح الطلب هذه المشكلة في حالته الحالية.",
+      "PRODUCT_ALERTS_LIMIT_REACHED": "لدى العميل 30 تنبيهاً فعّالاً، وهو الحد الأقصى.",
+      "PRODUCT_ALERT_INVALID": "لا تناسب حالة الباقة نوع هذا التنبيه."
     }
   },
   "changePassword": {
@@ -2031,6 +2034,7 @@
       "basis": "يتبع {{supplier}}",
       "priceHeld": "السعر محفوظ: لا مسار محسوب متاح",
       "reviewOpen": "بانتظار مراجعة السعر",
+      "waitingAlerts": "بانتظار التوفر: {{count}}",
       "routes": "المسارات",
       "deliveryTime": "الوسيط {{median}} · 90% خلال {{p90}}",
       "noDeliveryData": "لا بيانات بعد",
@@ -3865,6 +3869,7 @@
       "sessions": "جلسات نشطة",
       "push": "إشعارات الهاتف",
       "pushOff": "غير مفعّلة",
+      "alerts": "تنبيهات الباقات النشطة",
       "pushOn_one": "مفعّلة على 1 جهاز",
       "pushOn_two": "مفعّلة على جهازين",
       "pushOn_few": "مفعّلة على {{count}} أجهزة",
@@ -3993,9 +3998,21 @@
       "account": "الحساب",
       "other": "أخرى"
     },
+    "problems": {
+      "not_arrived": "لم يصل الطلب",
+      "wrong_player_id": "المعرّف خاطئ",
+      "wrong_amount": "كمية أقل أو مختلفة",
+      "code_not_working": "الكود لا يعمل",
+      "code_used": "الكود مستخدم مسبقًا",
+      "wrong_region": "الكود لا يناسب المنطقة",
+      "refund_missing": "لم يجد المبلغ المسترد",
+      "other": "مشكلة أخرى"
+    },
     "filters": {
       "category": "النوع",
       "allCategories": "كل الأنواع",
+      "problem": "المشكلة",
+      "allProblems": "كل المشكلات",
       "oneCustomer": "تذاكر عميل واحد",
       "clearCustomer": "كل العملاء",
       "search": "رقم التذكرة",
@@ -4055,6 +4072,7 @@
       "badType": "الملف {{name}} ليس صورة JPEG أو PNG أو WebP."
     },
     "side": {
+      "problem": "المشكلة التي اختارها العميل",
       "customer": "العميل",
       "order": "الطلب",
       "deposit": "الإيداع",

@@ -8,6 +8,7 @@ import { LOG_REDACT_PATHS } from './core/config/log-redact.js';
 import { DATABASE, DatabaseModule } from './core/database/database.module.js';
 import { Mailer } from './core/email/mailer.js';
 import { PgBossService } from './core/jobs/pg-boss.service.js';
+import { ProductAlertsJob } from './jobs/catalog/product-alerts.job.js';
 import { chainReadersProvider } from './jobs/deposits/chain/chain-readers.provider.js';
 import { ExpireDepositsJob } from './jobs/deposits/expire.job.js';
 import { UsdtScanJob } from './jobs/deposits/usdt-scan.job.js';
@@ -117,6 +118,7 @@ import { TelegramWebhookSetup } from './telegram/webhook-setup.js';
     MerchantLevelJob,
     MerchantStatementEmailsJob,
     MerchantWatchAlertsJob,
+    ProductAlertsJob,
     SupplierRegistry,
     SupplierSyncJob,
     SupplierSyncScheduleJob,

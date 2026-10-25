@@ -19,6 +19,7 @@ import {
 } from 'drizzle-orm';
 import { type Database, readAll, type Transaction } from '../client.js';
 import { customerWalletBalances } from '../ledger/wallet.js';
+import { activeAlertCount } from '../product-alerts/index.js';
 import {
   auditEntries,
   customerPasskeys,
@@ -193,6 +194,7 @@ export interface CustomerProfileFacts {
     activeSessions: number;
     reservations: number;
     pushDevices: number;
+    activeAlerts: number;
   };
 }
 
@@ -202,78 +204,85 @@ export async function customerProfileFacts(
   customer: { id: string; frozenAt: Date | null; archivedAt: Date | null },
 ): Promise<CustomerProfileFacts> {
   const status = customerStatus(customer);
-  const [[orderFacts], [depositFacts], [tickets], [sessions], [devices], balances, [change]] =
-    await readAll(db, [
-      () =>
-        db
-          .select({
-            delivered: sql<number>`(count(*) filter (where ${orders.status} in ('delivered', 'partially_refunded')))::int`,
-            deliveredTotal: sql<string>`coalesce(sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits}) filter (where ${orders.status} in ('delivered', 'partially_refunded')), 0)::text`,
-            refunded: sql<number>`(count(*) filter (where ${orders.status} = 'refunded'))::int`,
-            reservations: sql<number>`(count(*) filter (where ${orders.status} = 'awaiting_balance'))::int`,
-          })
-          .from(orders)
-          .where(eq(orders.customerId, customer.id)),
-      () =>
-        db
-          .select({
-            credited: sql<number>`(count(*) filter (where ${deposits.status} = 'credited'))::int`,
-            creditedTotal: sql<string>`coalesce(sum(${deposits.creditedUsdUnits}) filter (where ${deposits.status} = 'credited'), 0)::text`,
-          })
-          .from(deposits)
-          .where(eq(deposits.customerId, customer.id)),
-      () =>
-        db
-          .select({ open: sql<number>`count(*)::int` })
-          .from(supportTickets)
-          .where(
-            and(
-              eq(supportTickets.customerId, customer.id),
-              sql`${supportTickets.status} <> 'closed'`,
-            ),
+  const [
+    [orderFacts],
+    [depositFacts],
+    [tickets],
+    [sessions],
+    [devices],
+    balances,
+    [change],
+    alerts,
+  ] = await readAll(db, [
+    () =>
+      db
+        .select({
+          delivered: sql<number>`(count(*) filter (where ${orders.status} in ('delivered', 'partially_refunded')))::int`,
+          deliveredTotal: sql<string>`coalesce(sum(${orders.totalUsdUnits} - ${orders.refundedUsdUnits}) filter (where ${orders.status} in ('delivered', 'partially_refunded')), 0)::text`,
+          refunded: sql<number>`(count(*) filter (where ${orders.status} = 'refunded'))::int`,
+          reservations: sql<number>`(count(*) filter (where ${orders.status} = 'awaiting_balance'))::int`,
+        })
+        .from(orders)
+        .where(eq(orders.customerId, customer.id)),
+    () =>
+      db
+        .select({
+          credited: sql<number>`(count(*) filter (where ${deposits.status} = 'credited'))::int`,
+          creditedTotal: sql<string>`coalesce(sum(${deposits.creditedUsdUnits}) filter (where ${deposits.status} = 'credited'), 0)::text`,
+        })
+        .from(deposits)
+        .where(eq(deposits.customerId, customer.id)),
+    () =>
+      db
+        .select({ open: sql<number>`count(*)::int` })
+        .from(supportTickets)
+        .where(
+          and(
+            eq(supportTickets.customerId, customer.id),
+            sql`${supportTickets.status} <> 'closed'`,
           ),
-      () =>
-        db
-          .select({ active: sql<number>`count(*)::int` })
-          .from(customerSessions)
-          .where(
-            and(
-              eq(customerSessions.userId, customer.id),
-              gt(customerSessions.expiresAt, sql`now()`),
-            ),
+        ),
+    () =>
+      db
+        .select({ active: sql<number>`count(*)::int` })
+        .from(customerSessions)
+        .where(
+          and(eq(customerSessions.userId, customer.id), gt(customerSessions.expiresAt, sql`now()`)),
+        ),
+    // S15: the devices the worker would send to (PD2), whatever their VAPID key.
+    () =>
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(pushSubscriptions)
+        .innerJoin(customerSessions, eq(customerSessions.id, pushSubscriptions.sessionId))
+        .where(
+          and(
+            eq(pushSubscriptions.customerId, customer.id),
+            gt(customerSessions.expiresAt, sql`now()`),
           ),
-      // S15: the devices the worker would send to (PD2), whatever their VAPID key.
-      () =>
-        db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(pushSubscriptions)
-          .innerJoin(customerSessions, eq(customerSessions.id, pushSubscriptions.sessionId))
-          .where(
-            and(
-              eq(pushSubscriptions.customerId, customer.id),
-              gt(customerSessions.expiresAt, sql`now()`),
-            ),
-          ),
-      () => customerWalletBalances(db, [customer.id]),
-      () =>
-        status === 'active'
-          ? [undefined]
-          : db
-              .select({ reason: auditEntries.reason, at: auditEntries.occurredAt })
-              .from(auditEntries)
-              .where(
-                and(
-                  eq(auditEntries.entityType, 'customer'),
-                  eq(auditEntries.entityId, customer.id),
-                  eq(
-                    auditEntries.action,
-                    status === 'frozen' ? 'customer.frozen' : 'customer.archived',
-                  ),
+        ),
+    () => customerWalletBalances(db, [customer.id]),
+    () =>
+      status === 'active'
+        ? [undefined]
+        : db
+            .select({ reason: auditEntries.reason, at: auditEntries.occurredAt })
+            .from(auditEntries)
+            .where(
+              and(
+                eq(auditEntries.entityType, 'customer'),
+                eq(auditEntries.entityId, customer.id),
+                eq(
+                  auditEntries.action,
+                  status === 'frozen' ? 'customer.frozen' : 'customer.archived',
                 ),
-              )
-              .orderBy(desc(auditEntries.occurredAt))
-              .limit(1),
-    ]);
+              ),
+            )
+            .orderBy(desc(auditEntries.occurredAt))
+            .limit(1),
+    // S22 PA7: the customer's active product alerts.
+    () => activeAlertCount(db, customer.id),
+  ]);
   const credited = depositFacts?.credited ?? 0;
   return {
     established: credited > 0,
@@ -289,6 +298,7 @@ export async function customerProfileFacts(
       activeSessions: sessions?.active ?? 0,
       reservations: orderFacts?.reservations ?? 0,
       pushDevices: devices?.count ?? 0,
+      activeAlerts: alerts,
     },
   };
 }

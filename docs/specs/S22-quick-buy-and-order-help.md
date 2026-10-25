@@ -277,6 +277,17 @@ Details the spec left open, settled while building PR 2:
 - The WebAuthn relying party is the host of `STORE_URL`. Browsers refuse an IP address there, so a local test of passkeys opens the store at `http://localhost:3001` with `STORE_URL` set to it; the E2E specs open `localhost` for the same reason.
 - A reset with no passkey writes no `customer.passkeys_cleared` entry. The store's passkey strings live in `apps/store/src/features/passkeys/messages.ar.json` (`tp()`), loaded with the card and the sign-in button through `next/dynamic`.
 
+## Implementation notes (PR 3)
+Details the spec left open, settled while building PR 3:
+- `product_alerts.price_list_id` is not null: every alert has the customer's effective list when it is set. The job rebases an alert of either kind whenever that list changed (PA5) and checks it at the next run; a price-drop alert keeps its old baseline when the pack has no price on the new list.
+- PA4's "dedupe key" is the alert's own row: each alert is settled in its own transaction, locked `FOR UPDATE SKIP LOCKED` and still `active`, and marked `sent` with its notification, so a second run (or a parallel one) sends nothing (`notifyCustomer` has no dedupe key). The notification's params carry the alert id.
+- A paused game or an archived pack is `hidden` for PA1 (`productAlertRefusal`); a paused pack takes an availability alert. A hidden pack is never due: a paused game keeps its alerts until they expire (PA6).
+- The store composes OP5's subject ("<label> · <order number>", 120 characters at most) and body (the problem's sentence, then the details); the server checks the problem against the order as it is (`orderProblemAllowed`), stores it on the ticket (fixed by migration 0095's guard), and adds it to `ticket.opened` and the Telegram notice. The customer's order view gains `help` (status, paid and finished times, the open ticket) for the card.
+- The order help strings live in `apps/store/src/features/order-help/messages.ar.json` and the alert strings in `apps/store/src/features/product-alerts/messages.ar.json`, both loaded with their parts through `next/dynamic`. The store's E2E mock answers a key with its query string before the bare path (the alerts page's active and ended lists).
+- The admin profile's counts gain `activeAlerts` (the spec's devices-tab summary).
+- OP2 lists `failed` with `refunded`, but `failed` is not a final state here (ADR 0004: it goes back to a supplier or on to a refund, the customer sees "processing"): a `failed` order offers the in-progress problems, and `refund_missing` stays for `refunded` and `partially_refunded`. The refund hint (OP4) shows only once an amount came back and the order finished; otherwise the problem goes straight to the form.
+- An alert rebased while the new list has no price keeps the old list's baseline; if the new list later prices the pack below it, the notice compares the two (both the customer's own prices).
+
 ## Open questions
 None. The defaults listed under the owner decisions are the spec's choices and may be changed at review.
 

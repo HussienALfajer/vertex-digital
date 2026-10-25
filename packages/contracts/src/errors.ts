@@ -293,6 +293,12 @@ export const ERROR_CODES = [
   'QUICK_LINK_NOT_FOUND',
   /** S22 PK2: the account already has 10 passkeys. */
   'PASSKEYS_LIMIT_REACHED',
+  /** S22 OP2, OP3: the order does not offer this problem; `details.reason`. */
+  'ORDER_PROBLEM_UNAVAILABLE',
+  /** S22 PA1: the customer has 30 active product alerts; `details.limit`. */
+  'PRODUCT_ALERTS_LIMIT_REACHED',
+  /** S22 PA1: the pack's state does not fit the alert's kind; `details.reason`. */
+  'PRODUCT_ALERT_INVALID',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES).meta({ id: 'ErrorCode' });

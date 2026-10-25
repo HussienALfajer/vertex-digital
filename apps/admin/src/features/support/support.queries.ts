@@ -48,6 +48,7 @@ export const ticketListQuery = (search: SupportSearch) =>
             query: {
               status: tabOf(search),
               category: search.category,
+              problem: search.problem,
               customerId: search.customerId,
               q: search.q,
               cursor: pageParam,

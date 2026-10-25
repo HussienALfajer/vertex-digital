@@ -42,6 +42,11 @@ const deposit = (params: { depositId: string }) => ({
 
 const merchant = { url: '/account/merchant', tag: 'merchant' };
 
+const productAlert = (params: { alertId: string; gameSlug: string; productId: string }) => ({
+  url: `/games/${params.gameSlug}?pack=${params.productId}`,
+  tag: `product-alert-${params.alertId}`,
+});
+
 const PLACED_FOR_YOU = {
   on_behalf: 'أنشأ المتجر طلباً بطلبك',
   gift: 'هدية من المتجر',
@@ -146,6 +151,15 @@ const RENDERERS: Renderers = {
     body: `تغيّرت ${params.priceDown + params.priceUp + params.backInStock + params.outOfStock} باقات تتابعها`,
     url: '/merchant/alerts',
     tag: 'merchant-alerts',
+  }),
+  // S22 PA4: the pack's name, never its price (PT2).
+  product_available: (params) => ({
+    body: `عادت باقة ${params.productNameAr} في ${params.gameNameAr} إلى التوفر`,
+    ...productAlert(params),
+  }),
+  product_price_dropped: (params) => ({
+    body: `انخفض سعر ${params.productNameAr} في ${params.gameNameAr}`,
+    ...productAlert(params),
   }),
 };
 

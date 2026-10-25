@@ -72,6 +72,8 @@ export const QUEUES = {
   merchantsDailyDigest: 'merchants.daily-digest',
   /** Tells merchants last month's statement is ready, the 1st at 08:00 `Asia/Damascus` (S21 ST4). */
   merchantsStatementEmails: 'merchants.statement-emails',
+  /** Sends due product alerts, every 15 minutes at :07, one run at a time (S22 PA3–PA6). */
+  catalogProductAlerts: 'catalog.product-alerts',
 } as const;
 
 /**
@@ -80,7 +82,8 @@ export const QUEUES = {
  * successor (S04 rules U9, U12); a deposit's card is sent or edited by one job at a time, which
  * loads the deposit fresh (S05); an order is routed, and an attempt polled, by one job at a time
  * (S08 rules R1, F3); a customer's reservations are paid by one job at a time (S09 rule RS4).
- * `singleton`: one store refresh runs at a time (S09 rule SF4), and one reconciliation run (S13);
+ * `singleton`: one store refresh runs at a time (S09 rule SF4), one reconciliation run (S13), and
+ * one product alert run (S22 PA3);
  * a run's recheck is `stately` by run. The API and the worker create
  * queues with these policies.
  */
@@ -95,6 +98,7 @@ export const QUEUE_POLICIES: Readonly<Record<string, 'stately' | 'singleton'>> =
   [QUEUES.reconciliationRun]: 'singleton',
   [QUEUES.reconciliationRecheck]: 'stately',
   [QUEUES.merchantsLevel]: 'stately',
+  [QUEUES.catalogProductAlerts]: 'singleton',
 };
 
 /** A store refresh is queued at most once per this many seconds (S09 rule SF4). */

@@ -28,7 +28,7 @@ import {
   switchChannelSchema,
 } from './settings.js';
 import { supplierCodeSchema, supplierHealthStateSchema } from './suppliers.js';
-import { ticketCategorySchema } from './support.js';
+import { orderProblemSchema, ticketCategorySchema } from './support.js';
 import { usdtMethodSchema } from './usdt.js';
 
 /*
@@ -472,6 +472,8 @@ export const TELEGRAM_MESSAGE_PARAMS = {
     subject: z.string().max(120),
     hasImages: z.boolean(),
     customerEmail: z.string(),
+    /** S22 OP6: the problem named at opening. */
+    orderProblem: orderProblemSchema.optional(),
   }),
   ticket_reply: z.object({
     ticketId: z.uuid(),

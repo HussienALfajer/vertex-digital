@@ -24,6 +24,7 @@ import {
   newId,
   notificationPreferences,
   playerChecks,
+  productAlerts,
   pushSubscriptions,
   storeSwitchChanges,
   supportTickets,
@@ -181,6 +182,8 @@ export async function removeAccounts(db: Database, ids: string[]): Promise<void>
   // S12: the sign-in log and the limit overrides are not records.
   await db.delete(customerSignIns).where(inArray(customerSignIns.customerId, ids));
   await db.delete(customerLimits).where(inArray(customerLimits.customerId, ids));
+  // S22: product alerts are preferences, not records.
+  await db.delete(productAlerts).where(inArray(productAlerts.customerId, ids));
   await db.delete(customers).where(and(inArray(customers.id, ids), withoutWallet(db)));
   await db.delete(adminUsers).where(inArray(adminUsers.id, ids));
 }
@@ -206,6 +209,7 @@ export async function removeLeftovers(db: Database): Promise<void> {
   await db.delete(pushSubscriptions).where(inArray(pushSubscriptions.customerId, leftovers));
   await db.delete(customerSignIns).where(inArray(customerSignIns.customerId, leftovers));
   await db.delete(customerLimits).where(inArray(customerLimits.customerId, leftovers));
+  await db.delete(productAlerts).where(inArray(productAlerts.customerId, leftovers));
   await db
     .delete(customers)
     .where(and(like(customers.email, `%${TEST_EMAIL_DOMAIN}`), withoutWallet(db)));

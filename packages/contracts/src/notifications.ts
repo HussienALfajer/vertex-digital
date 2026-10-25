@@ -90,6 +90,14 @@ export type EmailStatus = (typeof EMAIL_STATUSES)[number];
 const code = z.object({ code: otpCodeSchema });
 const at = z.object({ at: z.iso.datetime() });
 
+const productAlertParams = z.object({
+  alertId: z.uuid(),
+  productId: z.uuid(),
+  productNameAr: z.string(),
+  gameSlug: z.string(),
+  gameNameAr: z.string(),
+});
+
 /*
  * The customer notification center (S05 F27, rules NT1–NT8): one `customer_notifications` row per
  * event, written with `notifyCustomer` in the transaction of the change, live over SSE, and the
@@ -124,6 +132,9 @@ export const NOTIFICATION_EVENTS = [
   'merchant_low_balance',
   /** S21 ST4: last month's statement. */
   'merchant_statement_ready',
+  /** S22 PA4: a pack the customer asked about is available, or cheaper (center and push). */
+  'product_available',
+  'product_price_dropped',
 ] as const;
 
 export const notificationEventSchema = z
@@ -251,6 +262,12 @@ export const NOTIFICATION_PARAMS = {
   }),
   // S21 ST4: the month, `YYYY-MM`.
   merchant_statement_ready: z.object({ month: monthSchema }),
+  // S22 PA4: the pack and its game; a drop adds the customer's own old and new unit prices.
+  product_available: productAlertParams,
+  product_price_dropped: productAlertParams.extend({
+    oldUnitPriceUsdUnits: z.int().positive(),
+    newUnitPriceUsdUnits: z.int().positive(),
+  }),
 } as const satisfies Record<NotificationEvent, z.ZodObject>;
 
 export type NotificationParams<Event extends NotificationEvent> = z.infer<
@@ -347,6 +364,8 @@ export const NOTIFICATION_EMAIL_TEMPLATE = {
   merchant_watch_digest: null,
   merchant_low_balance: 'customer_merchant_low_balance',
   merchant_statement_ready: 'customer_merchant_statement_ready',
+  product_available: null,
+  product_price_dropped: null,
 } as const satisfies Record<NotificationEvent, EmailTemplate | null>;
 
 /** An event that sends an email, which the customer can turn off (rule NT8). */
@@ -362,13 +381,20 @@ export const EMAIL_NOTIFICATION_EVENTS = NOTIFICATION_EVENTS.filter(
 
 /**
  * The events that also send a push (S15 rule PD1): every event that has an email (owner,
- * 2026-10-11), and the hourly follow digest, which has none (S21 AL3, decision 11).
+ * 2026-10-11), and those that have none but push: the hourly follow digest (S21 AL3, decision
+ * 11) and the product alerts (S22 PA4).
  */
-export type PushNotificationEvent = EmailNotificationEvent | 'merchant_watch_digest';
+export type PushNotificationEvent =
+  | EmailNotificationEvent
+  | 'merchant_watch_digest'
+  | 'product_available'
+  | 'product_price_dropped';
 
 export const PUSH_NOTIFICATION_EVENTS: readonly PushNotificationEvent[] = [
   ...EMAIL_NOTIFICATION_EVENTS,
   'merchant_watch_digest',
+  'product_available',
+  'product_price_dropped',
 ];
 
 export function isPushNotificationEvent(event: NotificationEvent): event is PushNotificationEvent {
@@ -410,6 +436,8 @@ export const customerNotificationSchema = z
     notification('merchant_watch_digest'),
     notification('merchant_low_balance'),
     notification('merchant_statement_ready'),
+    notification('product_available'),
+    notification('product_price_dropped'),
   ])
   .meta({ id: 'CustomerNotification' });
 

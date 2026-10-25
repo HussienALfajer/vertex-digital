@@ -17,6 +17,7 @@ import {
   customerStateChangeSchema,
   DEPOSIT_SETTINGS_DEFAULTS,
   NO_LIMIT_OVERRIDES,
+  type OrderProblem,
   type Passkey,
   ROOT_PRICE_LIST_IDS,
   type SupportSettings,
@@ -125,6 +126,7 @@ interface MockTicket {
   orderId: string | null;
   depositId: string | null;
   subject: string;
+  orderProblem: OrderProblem | null;
   status: TicketStatus;
   openedBy: 'customer' | 'admin';
   closedAt: string | null;
@@ -301,6 +303,7 @@ export class CustomersMock {
       orderId: null,
       depositId: null,
       subject: 'لم يصل الشحن بعد',
+      orderProblem: 'not_arrived',
       status: 'open',
       openedBy: 'customer',
       closedAt: null,
@@ -324,6 +327,7 @@ export class CustomersMock {
       orderId: null,
       depositId: null,
       subject: 'لماذا لا أستطيع الإيداع؟',
+      orderProblem: null,
       status: 'answered',
       openedBy: 'customer',
       closedAt: null,
@@ -342,6 +346,7 @@ export class CustomersMock {
       orderId: null,
       depositId: null,
       subject: 'سؤال عن طرق الدفع',
+      orderProblem: null,
       status: 'closed',
       openedBy: 'customer',
       closedAt: at(24 * 10),
@@ -549,6 +554,7 @@ export class CustomersMock {
         activeSessions: row.sessions.length,
         reservations: row.reservations,
         pushDevices: row.pushDevices,
+        activeAlerts: 0,
       },
       signals: this.signals(row),
       termsVersion: this.accepted.get(row.id)?.terms ?? null,
@@ -599,6 +605,7 @@ export class CustomersMock {
       order: order ? { id: order.id, number: order.number } : null,
       deposit: null,
       subject: ticket.subject,
+      orderProblem: ticket.orderProblem,
       status: ticket.status,
       openedBy: ticket.openedBy,
       lastAuthor: last.author,
@@ -710,11 +717,13 @@ export class CustomersMock {
   private queue(url: URL) {
     const status = url.searchParams.get('status') ?? 'open';
     const category = url.searchParams.get('category');
+    const problem = url.searchParams.get('problem');
     const customerId = url.searchParams.get('customerId');
     const q = url.searchParams.get('q')?.toUpperCase().replace(/^VT-?/, '');
     const items = this.tickets
       .filter((ticket) => status === 'all' || ticket.status === status)
       .filter((ticket) => !category || ticket.category === category)
+      .filter((ticket) => !problem || ticket.orderProblem === problem)
       .filter((ticket) => !customerId || ticket.customerId === customerId)
       .filter((ticket) => !q || ticket.number.includes(q))
       .map((ticket) => this.summary(ticket))
@@ -810,6 +819,7 @@ export class CustomersMock {
       orderId: input.orderId ?? null,
       depositId: null,
       subject: input.subject,
+      orderProblem: null,
       status: 'answered',
       openedBy: 'admin',
       closedAt: null,

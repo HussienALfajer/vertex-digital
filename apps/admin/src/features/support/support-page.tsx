@@ -4,6 +4,8 @@ import {
   ADMIN_TICKET_TABS,
   type AdminTicketSummary,
   type AdminTicketTab,
+  ORDER_PROBLEMS,
+  type OrderProblem,
   TICKET_CATEGORIES,
   type TicketCategory,
 } from '@vertex-digital/contracts';
@@ -59,10 +61,14 @@ export function SupportPage({
   const list = useInfiniteQuery(ticketListQuery(search));
   const tab = tabOf(search);
   const tickets = list.data?.pages.flatMap((page) => page.items) ?? [];
-  const filtered = !!search.category || !!search.customerId || !!search.q;
+  const filtered = !!search.category || !!search.problem || !!search.customerId || !!search.q;
   const categories = [
     { value: ALL, label: t('support.filters.allCategories') },
     ...TICKET_CATEGORIES.map((item) => ({ value: item, label: t(`support.categories.${item}`) })),
+  ];
+  const problems = [
+    { value: ALL, label: t('support.filters.allProblems') },
+    ...ORDER_PROBLEMS.map((item) => ({ value: item, label: t(`support.problems.${item}`) })),
   ];
 
   return (
@@ -108,6 +114,31 @@ export function SupportPage({
             </SelectTrigger>
             <SelectContent>
               {categories.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field className="w-52">
+          <FieldLabel>{t('support.filters.problem')}</FieldLabel>
+          <Select
+            items={problems}
+            value={search.problem ?? ALL}
+            onValueChange={(value) =>
+              onSearch(
+                withFilter(search, {
+                  problem: value === ALL || !value ? undefined : (value as OrderProblem),
+                }),
+              )
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {problems.map((item) => (
                 <SelectItem key={item.value} value={item.value}>
                   {item.label}
                 </SelectItem>
@@ -285,6 +316,11 @@ export function TicketTable({
             </TableCell>
             <TableCell className="max-w-72 min-w-48 whitespace-normal">
               <span className="line-clamp-2 break-words">{ticket.subject}</span>
+              {ticket.orderProblem && (
+                <Badge tone="warning" className="mt-1">
+                  {t(`support.problems.${ticket.orderProblem}`)}
+                </Badge>
+              )}
               {ticket.openedBy === 'admin' && (
                 <Badge tone="neutral" className="mt-1">
                   {t('support.openedByAdmin')}

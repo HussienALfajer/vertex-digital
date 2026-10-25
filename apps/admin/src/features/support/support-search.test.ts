@@ -17,8 +17,18 @@ describe('parseSupportSearch', () => {
 
   it('drops the queue tab and anything invalid', () => {
     expect(
-      parseSupportSearch({ status: 'open', category: 'refund', customerId: 'x', q: '' }),
+      parseSupportSearch({
+        status: 'open',
+        category: 'refund',
+        problem: 'late',
+        customerId: 'x',
+        q: '',
+      }),
     ).toEqual({});
+  });
+
+  it('keeps an order problem (S22 OP6)', () => {
+    expect(parseSupportSearch({ problem: 'code_used' })).toEqual({ problem: 'code_used' });
   });
 });
 

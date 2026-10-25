@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENV, type Env } from '../src/core/config/env.js';
 import { DATABASE } from '../src/core/database/database.module.js';
 import { PgBossService } from '../src/core/jobs/pg-boss.service.js';
+import { ProductAlertsJob } from '../src/jobs/catalog/product-alerts.job.js';
 import { UsdtScanJob } from '../src/jobs/deposits/usdt-scan.job.js';
 import { UsdtVerifyJob } from '../src/jobs/deposits/usdt-verify.job.js';
 import { MerchantLevelJob } from '../src/jobs/merchants/level.job.js';
@@ -38,6 +39,7 @@ import { WorkerModule } from '../src/worker.module.js';
 const IDLE_JOBS = [
   MerchantLevelJob,
   MerchantWatchAlertsJob,
+  ProductAlertsJob,
   OrdersFulfilJob,
   OrdersPollJob,
   OrdersSweepJob,

@@ -18,6 +18,7 @@ export * from './notifications.js';
 export * from './orders.js';
 export * from './passkeys.js';
 export * from './pricing.js';
+export * from './product-alerts.js';
 export * from './push.js';
 export * from './quick-buy.js';
 export * from './rates.js';

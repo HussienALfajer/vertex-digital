@@ -74,6 +74,7 @@ function ticket(changes: Partial<Ticket> = {}): Ticket {
     deposit: null,
     subject: 'لم يصل شحن 60 UC',
     status: 'answered',
+    orderProblem: null,
     openedBy: 'customer',
     lastAuthor: 'admin',
     lastMessageAt: minutesAgo(5),
@@ -184,6 +185,8 @@ function order(orderId: string, number: string): Order {
     verificationCode: 'VrfyCode0123456789abcd',
     sale: null,
     codeReleases: [],
+    // S22 OP2: no problem card unless a test sets one.
+    help: { status: 'awaiting_balance', paidAt: null, finishedAt: null, openTicketId: null },
     repeatable: false,
     createdAt: daysAgo(40),
   };

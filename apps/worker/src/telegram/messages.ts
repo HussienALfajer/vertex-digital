@@ -6,6 +6,7 @@ import {
   formatSyp,
   formatUsd,
   formatUsdtAmount,
+  type OrderProblem,
   type ReconciliationCheck,
   type StopScope,
   type StoreSwitch,
@@ -348,6 +349,18 @@ const TICKET_CATEGORY_LABELS: Record<TicketCategory, string> = {
   deposit: 'إيداع',
   account: 'حسابي',
   other: 'أخرى',
+};
+
+/** S22 OP6: the problem a ticket names, as the admin reads it. */
+const ORDER_PROBLEM_LABELS: Record<OrderProblem, string> = {
+  not_arrived: 'لم يصل الطلب',
+  wrong_player_id: 'المعرّف خاطئ',
+  wrong_amount: 'وصلت كمية أقل أو مختلفة',
+  code_not_working: 'الكود لا يعمل',
+  code_used: 'الكود مستخدم مسبقاً',
+  wrong_region: 'الكود لا يناسب منطقة الحساب',
+  refund_missing: 'لم يجد المبلغ المسترد',
+  other: 'مشكلة أخرى',
 };
 
 /** S16 AP1: the four modes of a purchase from the panel. */
@@ -744,6 +757,7 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
           kind === 'ticket_opened'
             ? `🎫 تذكرة جديدة ${ticket.number} · ${TICKET_CATEGORY_LABELS[ticket.category]}`
             : `💬 ردّ العميل على التذكرة ${ticket.number} · ${TICKET_CATEGORY_LABELS[ticket.category]}`,
+          ...(ticket.orderProblem ? [`المشكلة: ${ORDER_PROBLEM_LABELS[ticket.orderProblem]}`] : []),
           ticket.subject,
           `${ticket.customerEmail}${ticket.hasImages ? ' · مع صور' : ''}`,
           `افتح في اللوحة: ${links.admin}/support/${ticket.ticketId}`,

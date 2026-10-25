@@ -55,6 +55,7 @@ type Row<T> = Omit<
   | 'priceHeld'
   | 'routed'
   | 'reviewOpen'
+  | 'waitingAlerts'
   | 'deliveryStats'
 >;
 
@@ -169,6 +170,8 @@ export class CatalogMock {
    * suppliers mock; without it a product has no price and no route.
    */
   pricing: ((productId: string) => ProductPricing) | null = null;
+  /** S22 PA8: customers waiting for a pack, set by a test. */
+  waitingAlerts = new Map<string, number>();
 
   /** S22 DL5: what `GET /api/admin/quick-links` answers, and the ranges it was asked for. */
   quickLinks: QuickLinkStats['items'] = [];
@@ -348,6 +351,7 @@ export class CatalogMock {
       reviewOpen: pricing?.reviewOpen ?? false,
       // S08: no delivered orders in the mock.
       deliveryStats: null,
+      waitingAlerts: this.waitingAlerts.get(row.id) ?? 0,
     };
   }
 

@@ -119,6 +119,8 @@ const NOT_BUSINESS_RECORDS: Record<string, string> = {
   merchant_receipt_settings: "The merchant's own preferences (S21 BR3)",
   quick_link_events:
     'A counting log (S22 DL2, DL4): never changed, deleted after 90 days, not a business record',
+  product_alerts:
+    "The customer's preference data (S22 F42): sent or ended once, deleted 90 days after ending",
 };
 
 /** Tables keyed by a natural value instead of a UUIDv7 `id`. Every entry needs a reason. */

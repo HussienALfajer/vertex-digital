@@ -413,6 +413,8 @@ export const productSchema = z
     /** S22 DL1: the permanent direct-link code, and the link on the store (`/q/<code>`). */
     quickCode: quickCodeSchema,
     quickLinkUrl: z.url(),
+    /** S22 PA8: customers waiting for this pack ("بانتظار التوفر": active `available` alerts). */
+    waitingAlerts: z.int().nonnegative(),
     maxQuantity: z.int(),
     regionAr: z.string().nullable(),
     redemptionAr: z.string().nullable(),

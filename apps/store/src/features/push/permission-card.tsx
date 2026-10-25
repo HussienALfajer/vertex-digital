@@ -35,7 +35,7 @@ export function PermissionCard({
   publicKey,
   support,
 }: {
-  kind: 'order' | 'deposit';
+  kind: 'order' | 'deposit' | 'alert';
   publicKey: string;
   support: 'push' | 'ios-install';
 }) {

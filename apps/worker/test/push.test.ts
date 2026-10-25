@@ -137,6 +137,22 @@ const SAMPLE: { [Event in PushNotificationEvent]: NotificationParams<Event> } = 
     outOfStock: 0,
     lines: [],
   },
+  product_available: {
+    alertId: newId(),
+    productId: newId(),
+    productNameAr: '660 شدة',
+    gameSlug: 'pubg-mobile',
+    gameNameAr: 'ببجي موبايل',
+  },
+  product_price_dropped: {
+    alertId: newId(),
+    productId: newId(),
+    productNameAr: '660 شدة',
+    gameSlug: 'pubg-mobile',
+    gameNameAr: 'ببجي موبايل',
+    oldUnitPriceUsdUnits: 9_990_000,
+    newUnitPriceUsdUnits: 9_490_000,
+  },
 };
 
 describe('lock-screen texts (PT1–PT3)', () => {

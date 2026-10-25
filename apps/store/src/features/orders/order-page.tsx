@@ -63,6 +63,11 @@ const OrderTools = dynamic(() =>
   import('@/features/merchant-tools/order-tools').then((module) => module.OrderTools),
 );
 
+/** S22 OP1: the order's problem buttons, with their own catalog. */
+const ProblemCard = dynamic(() =>
+  import('@/features/order-help/problem-card').then((module) => module.ProblemCard),
+);
+
 type State =
   | { status: 'loading' }
   | { status: 'failed' }
@@ -325,6 +330,7 @@ export function OrderPage() {
           <p className="text-sm text-muted-foreground">{tm('qr.hint')}</p>
         </div>
       </Card>
+      <ProblemCard order={order} onChanged={() => void load()} />
       <HelpButton link={{ orderId: order.id }} />
     </div>
   );

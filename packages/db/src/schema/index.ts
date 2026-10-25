@@ -13,6 +13,7 @@ export * from './notifications.js';
 export * from './orders.js';
 export * from './price-lists.js';
 export * from './pricing.js';
+export * from './product-alerts.js';
 export * from './quick-links.js';
 export * from './rates.js';
 export * from './reconciliation.js';

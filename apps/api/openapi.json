@@ -7915,6 +7915,103 @@
         ]
       }
     },
+    "/api/product-alerts": {
+      "get": {
+        "operationId": "ProductAlertsController_list",
+        "parameters": [
+          {
+            "name": "gameId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "active",
+              "type": "string",
+              "enum": [
+                "active",
+                "ended"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The alerts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductAlertList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "operationId": "ProductAlertsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductAlert"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Set (200: the active alert of that kind)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductAlert"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/product-alerts/{id}": {
+      "delete": {
+        "operationId": "ProductAlertsController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelled"
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/admin/suppliers": {
       "get": {
         "operationId": "SuppliersAdminController_list",
@@ -10556,6 +10653,24 @@
                 "order",
                 "deposit",
                 "account",
+                "other"
+              ]
+            }
+          },
+          {
+            "name": "problem",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "not_arrived",
+                "wrong_player_id",
+                "wrong_amount",
+                "code_not_working",
+                "code_used",
+                "wrong_region",
+                "refund_missing",
                 "other"
               ]
             }
@@ -14586,6 +14701,154 @@
               "params"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "product_available"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "alertId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "productId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "productNameAr": {
+                    "type": "string"
+                  },
+                  "gameSlug": {
+                    "type": "string"
+                  },
+                  "gameNameAr": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "alertId",
+                  "productId",
+                  "productNameAr",
+                  "gameSlug",
+                  "gameNameAr"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "readAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "event": {
+                "type": "string",
+                "enum": [
+                  "product_price_dropped"
+                ]
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "alertId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "productId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "productNameAr": {
+                    "type": "string"
+                  },
+                  "gameSlug": {
+                    "type": "string"
+                  },
+                  "gameNameAr": {
+                    "type": "string"
+                  },
+                  "oldUnitPriceUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  },
+                  "newUnitPriceUsdUnits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "alertId",
+                  "productId",
+                  "productNameAr",
+                  "gameSlug",
+                  "gameNameAr",
+                  "oldUnitPriceUsdUnits",
+                  "newUnitPriceUsdUnits"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "readAt",
+              "createdAt",
+              "event",
+              "params"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -14707,7 +14970,9 @@
               "merchant_level_changed",
               "merchant_watch_digest",
               "merchant_low_balance",
-              "merchant_statement_ready"
+              "merchant_statement_ready",
+              "product_available",
+              "product_price_dropped"
             ]
           },
           "push": {
@@ -14738,7 +15003,9 @@
               "merchant_level_changed",
               "merchant_watch_digest",
               "merchant_low_balance",
-              "merchant_statement_ready"
+              "merchant_statement_ready",
+              "product_available",
+              "product_price_dropped"
             ]
           }
         },
@@ -14813,7 +15080,9 @@
           "merchant_level_changed",
           "merchant_watch_digest",
           "merchant_low_balance",
-          "merchant_statement_ready"
+          "merchant_statement_ready",
+          "product_available",
+          "product_price_dropped"
         ]
       },
       "PushConfig": {
@@ -19684,6 +19953,11 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "activeAlerts": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               }
             },
             "required": [
@@ -19695,7 +19969,8 @@
               "openTickets",
               "activeSessions",
               "reservations",
-              "pushDevices"
+              "pushDevices",
+              "activeAlerts"
             ],
             "additionalProperties": false
           },
@@ -23529,6 +23804,39 @@
               "$ref": "#/components/schemas/CodeReleaseLog"
             }
           },
+          "help": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "$ref": "#/components/schemas/OrderStatus"
+              },
+              "paidAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "finishedAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "openTicketId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": [
+              "status",
+              "paidAt",
+              "finishedAt",
+              "openTicketId"
+            ],
+            "additionalProperties": false
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -23577,6 +23885,7 @@
           "verificationCode",
           "sale",
           "codeReleases",
+          "help",
           "createdAt",
           "savedPlayer"
         ],
@@ -23805,6 +24114,20 @@
           "print",
           "copy",
           "export"
+        ]
+      },
+      "OrderStatus": {
+        "type": "string",
+        "enum": [
+          "awaiting_balance",
+          "paid",
+          "sent_to_supplier",
+          "failed",
+          "needs_review",
+          "delivered",
+          "partially_refunded",
+          "refunded",
+          "cancelled"
         ]
       },
       "SavedPlayer": {
@@ -24677,6 +25000,39 @@
               "$ref": "#/components/schemas/CodeReleaseLog"
             }
           },
+          "help": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "$ref": "#/components/schemas/OrderStatus"
+              },
+              "paidAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "finishedAt": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "openTicketId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": [
+              "status",
+              "paidAt",
+              "finishedAt",
+              "openTicketId"
+            ],
+            "additionalProperties": false
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -24717,6 +25073,7 @@
           "verificationCode",
           "sale",
           "codeReleases",
+          "help",
           "createdAt"
         ],
         "additionalProperties": false
@@ -25589,20 +25946,6 @@
           "shareLinks"
         ],
         "additionalProperties": false
-      },
-      "OrderStatus": {
-        "type": "string",
-        "enum": [
-          "awaiting_balance",
-          "paid",
-          "sent_to_supplier",
-          "failed",
-          "needs_review",
-          "delivered",
-          "partially_refunded",
-          "refunded",
-          "cancelled"
-        ]
       },
       "OrderPlacer": {
         "type": "string",
@@ -29167,6 +29510,11 @@
             "type": "string",
             "format": "uri"
           },
+          "waitingAlerts": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "maxQuantity": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -29266,6 +29614,7 @@
           "officialPriceUsdUnits",
           "quickCode",
           "quickLinkUrl",
+          "waitingAlerts",
           "maxQuantity",
           "regionAr",
           "redemptionAr",
@@ -30173,6 +30522,182 @@
           "items"
         ],
         "additionalProperties": false
+      },
+      "ProductAlertListQuery": {
+        "type": "object",
+        "properties": {
+          "gameId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "default": "active",
+            "type": "string",
+            "enum": [
+              "active",
+              "ended"
+            ]
+          }
+        }
+      },
+      "ProductAlertList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductAlert"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "ProductAlert": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProductAlertKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProductAlertStatus"
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "nameAr": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/components/schemas/ProductKind"
+              }
+            },
+            "required": [
+              "id",
+              "nameAr",
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          "game": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "nameAr": {
+                "type": "string"
+              },
+              "cover": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CatalogImage"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "slug",
+              "nameAr",
+              "cover"
+            ],
+            "additionalProperties": false
+          },
+          "baselinePriceUsdUnits": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "sentAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "endedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "product",
+          "game",
+          "baselinePriceUsdUnits",
+          "expiresAt",
+          "sentAt",
+          "endedAt",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ProductAlertKind": {
+        "type": "string",
+        "enum": [
+          "available",
+          "price_drop"
+        ]
+      },
+      "ProductAlertStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "sent",
+          "cancelled",
+          "expired"
+        ]
+      },
+      "CreateProductAlert": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProductAlertKind"
+          }
+        },
+        "required": [
+          "productId",
+          "kind"
+        ]
       },
       "SupplierSummary": {
         "type": "object",
@@ -34704,6 +35229,14 @@
           "subject": {
             "type": "string"
           },
+          "orderProblem": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderProblem"
+              }
+            ]
+          },
           "status": {
             "$ref": "#/components/schemas/TicketStatus"
           },
@@ -34745,6 +35278,7 @@
           "order",
           "deposit",
           "subject",
+          "orderProblem",
           "status",
           "openedBy",
           "lastAuthor",
@@ -34761,6 +35295,19 @@
           "order",
           "deposit",
           "account",
+          "other"
+        ]
+      },
+      "OrderProblem": {
+        "type": "string",
+        "enum": [
+          "not_arrived",
+          "wrong_player_id",
+          "wrong_amount",
+          "code_not_working",
+          "code_used",
+          "wrong_region",
+          "refund_missing",
           "other"
         ]
       },
@@ -34811,6 +35358,13 @@
           },
           "body": {
             "type": "string"
+          },
+          "orderProblem": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderProblem"
+              }
+            ]
           }
         },
         "required": [
@@ -34874,6 +35428,14 @@
           "subject": {
             "type": "string"
           },
+          "orderProblem": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderProblem"
+              }
+            ]
+          },
           "status": {
             "$ref": "#/components/schemas/TicketStatus"
           },
@@ -34924,6 +35486,7 @@
           "order",
           "deposit",
           "subject",
+          "orderProblem",
           "status",
           "openedBy",
           "lastAuthor",
@@ -35012,6 +35575,13 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/TicketCategory"
+              }
+            ]
+          },
+          "problem": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderProblem"
               }
             ]
           },
@@ -35108,6 +35678,14 @@
           "subject": {
             "type": "string"
           },
+          "orderProblem": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderProblem"
+              }
+            ]
+          },
           "status": {
             "$ref": "#/components/schemas/TicketStatus"
           },
@@ -35175,6 +35753,7 @@
           "order",
           "deposit",
           "subject",
+          "orderProblem",
           "status",
           "openedBy",
           "lastAuthor",
@@ -35278,6 +35857,14 @@
           },
           "subject": {
             "type": "string"
+          },
+          "orderProblem": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderProblem"
+              }
+            ]
           },
           "status": {
             "$ref": "#/components/schemas/TicketStatus"
@@ -35449,6 +36036,7 @@
           "order",
           "deposit",
           "subject",
+          "orderProblem",
           "status",
           "openedBy",
           "lastAuthor",

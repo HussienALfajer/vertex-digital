@@ -448,6 +448,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await screenshot(page, testInfo, `game-${tab}-${colorScheme}`, { fullPage: true });
       }
       await page.getByRole('tab', { name: ar.catalog.game.tabs.products }).click();
+      // S22 PA8: customers waiting for a pack.
+      const waiting = admin.catalog.products.find((item) => item.gameId === game.id);
+      if (waiting) admin.catalog.waitingAlerts.set(waiting.id, 3);
+      await page.reload();
+      await expect(
+        page.getByText(fill(ar.catalog.products.waitingAlerts, { count: '3' })).first(),
+      ).toBeVisible();
+      await screenshot(page, testInfo, `game-products-waiting-${colorScheme}`, { fullPage: true });
       await page.getByRole('button', { name: ar.catalog.products.add }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
       await screenshot(page, testInfo, `game-product-dialog-${colorScheme}`);
