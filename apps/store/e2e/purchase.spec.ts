@@ -125,9 +125,15 @@ function depositOptions(api: MockApi): MockApi {
 const buyBox = (page: Page) =>
   page.getByRole('dialog').or(page.getByRole('complementary', { name: ar.game.buyBox }));
 
+/**
+ * Picks a pack until its buy box opens: on a slow runner the first click can land before the
+ * game page hydrates and is lost (flaky on main since 2026-10-21).
+ */
 async function choose(page: Page, name: string) {
-  await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
-  await expect(buyBox(page).getByRole('heading', { name })).toBeVisible();
+  await expect(async () => {
+    await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+    await expect(buyBox(page).getByRole('heading', { name })).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
 }
 
 const idField = (page: Page) => buyBox(page).getByLabel('معرّف اللاعب (ID)');
