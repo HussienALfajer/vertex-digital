@@ -1,6 +1,6 @@
 # A02 Wallet, ledger and deposits
 
-Status: merged
+Status: merged ([#178](https://github.com/HussienALfajer/vertex-digital/pull/178))
 Branch: fix/audit-a02-wallet · Started: 2026-10-27 · Specs: S02, S03, S04 · ADRs: 0003, 0006, 0017, 0018
 
 ## Scope

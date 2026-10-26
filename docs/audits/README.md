@@ -13,7 +13,7 @@ In a new session (Opus, effort `high`), the owner writes one line, for example "
 | Group | Name | Status | Report | PR | Deployed |
 |---|---|---|---|---|---|
 | A01 | Identity and access | deployed | [A01-identity.md](A01-identity.md) | [#177](https://github.com/HussienALfajer/vertex-digital/pull/177) | `097b869` (2026-10-27) |
-| A02 | Wallet, ledger and deposits | in progress | [A02-wallet.md](A02-wallet.md) | | |
+| A02 | Wallet, ledger and deposits | merged | [A02-wallet.md](A02-wallet.md) | [#178](https://github.com/HussienALfajer/vertex-digital/pull/178) | |
 | A03 | Catalog and storefront | not started | | | |
 | A04 | Purchase, orders and fulfilment | not started | | | |
 | A05 | Suppliers and pricing | not started | | | |
