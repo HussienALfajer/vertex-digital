@@ -39,6 +39,10 @@ Steps inside a session:
 4. **Review:** the `reviewer` subagent (fresh context) checks the branch against the spec and the rules, with a money, security and fraud checklist, and reports blocking issues only.
 5. **Accept and open the PR at once:** the owner tries it in the browser; in the same turn the agent follows "Finishing a task" in `AGENTS.md`: updates `docs/ROADMAP.md`, runs `pnpm verify` again if anything changed since its last green run (Turbo's cache replays every task whose inputs did not change), commits, pushes, opens the PR and enables auto-merge. There is no separate shipping command (owner, 2026-10-06). CI runs every check on every PR before the merge (the full E2E suite over four shards); a PR that changes only Markdown outside `brand/` skips them.
 
+## The audit cycle
+
+Before the pilot the whole product is audited in ten groups, A01 to A10 (`docs/audits/README.md`: scope, order, dimensions, severity, report template). One group per session, Opus 5.5 at `high`; the first message is `ابدأ المجموعة A<nn>` or `/audit-group A<nn>`. The `audit-group` skill maps the group, audits every dimension, tests it live in the browser, fixes every finding with a regression test, runs the `reviewer`, opens the PR with auto-merge, and deploys `main` to production once it is merged (an exception to the once-per-phase deploys, owner 2026-10-26). Each group's report is `docs/audits/A<nn>-<slug>.md`; decisions it raises go to `docs/open-questions.md`.
+
 ## How the instructions are layered
 
 Each rule lives in one place and loads only when it is needed.
@@ -71,6 +75,7 @@ Don't write "think hard" or "step by step": effort controls depth.
 |---|---|---|
 | Ledger, orders, fulfilment, deposits, security (data model and code) | Opus 5.5 | `high`, `xhigh` for the core ledger and order model |
 | Spec interviews | Opus 5.5 | `high` |
+| An audit group (`/audit-group`) | Opus 5.5 | `high` |
 | A supplier adapter | Opus 5.5 | `high` |
 | Implementing a clearly specified non-money feature | Opus 5.5 | `medium` |
 | Production deploy at the end of a phase | Opus 5.5 | `low` |

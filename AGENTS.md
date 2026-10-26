@@ -16,6 +16,7 @@ This project is independent. Do not read or reuse other folders on this machine 
 | `docs/architecture.md` | Stack, repo layout, module map, data conventions, deployment topology. |
 | `docs/ROADMAP.md` | Phase and feature status. Update it when a feature ships. |
 | `docs/specs/<feature>.md` | Detailed spec per feature, written before implementation. |
+| `docs/audits/README.md` | The comprehensive audit: groups A01–A10 with their scope and status, the audit dimensions, severity, the cycle of a group; one report per group (`docs/audits/A<nn>-*.md`). |
 | `docs/open-questions.md` | Unresolved decisions. Never guess an answer to one: ask. |
 | `docs/workflow.md` | How work is run with AI coding agents (feature cycle, effort, sessions). |
 | `docs/testing.md` | How checks run: `pnpm verify`, what runs locally and what in CI, the test databases, the Vitest and E2E rules, the CI jobs, the local machine. |

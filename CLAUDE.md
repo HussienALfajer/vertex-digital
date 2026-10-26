@@ -19,6 +19,7 @@
 - `/spec <feature>`: interview the owner, then write `docs/specs/<feature>.md`.
 - `/feature-slice <feature>`: implement an approved spec layer by layer (contracts → db → api/worker → bridge → admin/store → E2E) with a check gate per layer, the reviewer and the owner's acceptance steps, then opens the PR with auto-merge ("Finishing a task" in `AGENTS.md`).
 - `/db-migration`: change the schema, generate and review the migration, test it.
+- `/audit-group <A01…A10>`: run one group of the comprehensive audit (`docs/audits/README.md`): map, audit every dimension, live browser test, fix every finding with a regression test, reviewer, PR with auto-merge, production deploy. The owner may also just write "ابدأ المجموعة A02".
 - `/supplier-adapter <supplier>`: add or change a supplier adapter in `packages/suppliers` with recorded fixtures, error mapping and webhook verification.
 - There is no shipping skill: every task ends by opening its PR with auto-merge right away, following "Finishing a task" in `AGENTS.md`. In the desktop app, turn on the PR's Auto-fix afterwards, so a failing CI run comes back to the session to fix.
 
