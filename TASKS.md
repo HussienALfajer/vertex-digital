@@ -53,4 +53,5 @@ The model vertex-hub adopted on 2026-10-26 (its PR #172), adapted here; `docs/te
 - [x] Agent rules and docs: checker, feature-slice, db-migration, supplier-adapter, AGENTS.md, CLAUDE.md, `docs/testing.md`, folder `CLAUDE.md` files, workflow, architecture, README, roadmap
 - [x] CI: `TURBO_*` env on the turbo jobs, `remoteCache.signature`, the cache comment, `TEST_WORKERS` passed through
 - [x] Measure after, `pnpm verify`, reviewer (fixed: the worker's Sentry module mock, now a spy, and `vi.mock` refused in both suites; the remote-cache secrets on the turbo steps only, read-only for pull requests; the connection budget stated as measured); `client.test.ts` connect limits sized for parallel suites; the staff scan skips `.data`
-- [ ] PR with auto-merge, Auto-fix; api CI shards only if Tests is still the longest job
+- [x] PR with auto-merge (#174), Auto-fix; CI's first run caught a race in `suppliers.spec.ts` (typing before the refused field took the focus), fixed with a wait for the focus
+- [ ] api CI shards only if Tests is still the longest job in this PR's CI run
