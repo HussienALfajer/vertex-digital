@@ -1,14 +1,15 @@
 import {
   type DepositFlagCode,
   USD_CENT,
+  USDT_METHODS,
   USDT_RESERVATION_GRACE_DAYS,
   type UsdtMethod,
   type UsdtTransferState,
 } from '@vertex-digital/contracts';
-import { and, eq, or, type SQL, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/record-audit.js';
 import type { Transaction } from '../client.js';
-import { deposits, usdtDeposits } from '../schema/index.js';
+import { deposits, usdtDeposits, usdtTransfers } from '../schema/index.js';
 import { type PostedDepositCredit, postUsdtDepositCredit } from './deposits.js';
 import { claimPaymentReference, txidClaimed } from './payment-references.js';
 import { lockCustomerWallet } from './wallet.js';
@@ -57,6 +58,23 @@ export const usdtTransferState = sql<UsdtTransferState>`case
   when exists (select 1 from usdt_deposits as bound
     where bound.transfer_id = usdt_transfers.id and bound.deposit_open) then 'bound'
   else 'unmatched' end`;
+
+/**
+ * The recorded transfer of a normalized TXID on either network, or null (S04 rule U13: an S02
+ * manual deposit of an unmatched transfer is checked against it, audit A02-2).
+ */
+export async function recordedUsdtTransfer(
+  tx: Transaction,
+  txid: string,
+): Promise<{ method: UsdtMethod; amountUnits: number } | null> {
+  const [transfer] = await tx
+    .select({ method: usdtTransfers.method, amountUnits: usdtTransfers.amountUnits })
+    .from(usdtTransfers)
+    .where(and(inArray(usdtTransfers.method, [...USDT_METHODS]), eq(usdtTransfers.txid, txid)));
+  return transfer
+    ? { method: transfer.method as UsdtMethod, amountUnits: transfer.amountUnits }
+    : null;
+}
 
 /** The transfer bound to the deposit, as recorded in `usdt_transfers`. */
 export interface BoundUsdtTransfer {

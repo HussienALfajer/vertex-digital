@@ -110,6 +110,79 @@ test.describe('wallet', () => {
     await expect(page.getByRole('button', { name: ar.wallet.loadMore })).toHaveCount(0);
   });
 
+  test('a credit arrives live: the new entry on top, the pages loaded kept (A02-4)', async ({
+    page,
+    api,
+  }) => {
+    withEntries(api).stream(
+      'GET /api/notifications/stream',
+      [
+        { event: 'unread', data: { unreadCount: 0 } },
+        {
+          event: 'notification',
+          data: {
+            notification: {
+              id: '0199a000-0000-7000-8000-0000000000c2',
+              event: 'wallet_adjusted',
+              params: {
+                direction: 'credit',
+                amountUnits: 10 * USD,
+                category: 'compensation',
+                reversal: false,
+              },
+              readAt: null,
+              createdAt: new Date().toISOString(),
+            },
+            unreadCount: 1,
+          },
+        },
+      ],
+      2500,
+    );
+    await page.goto('/wallet');
+    const rows = page.locator('main').getByRole('listitem');
+    await expect(rows).toHaveCount(2);
+    api.on('GET /api/wallet/entries', 200, { items: [FIRST_ENTRY], nextCursor: null });
+    await page.getByRole('button', { name: ar.wallet.loadMore }).click();
+    await expect(rows).toHaveCount(3);
+    const credit = {
+      ...FIRST_ENTRY,
+      occurredAt: '2026-10-09T08:00:00.000Z',
+      amountUnits: 10 * USD,
+      balanceAfterUnits: 35 * USD,
+      adjustment: { category: 'compensation', customerNote: null, reversal: false },
+    };
+    api
+      .on('GET /api/wallet', 200, { balanceUnits: 35 * USD, syp: null, reservedUsdUnits: 0 })
+      .on('GET /api/wallet/entries', 200, { items: [credit, ...ENTRIES], nextCursor: 'page-2' });
+    await expect(rows).toHaveCount(4);
+    await expect(rows.first()).toContainText('+$10.00');
+    // The page loaded with "load more" is still there, and nothing more to load.
+    await expect(rows.nth(3)).toContainText(ar.wallet.categories.test_funds);
+    await expect(page.getByRole('button', { name: ar.wallet.loadMore })).toHaveCount(0);
+  });
+
+  test('a refresh that fails keeps the wallet on screen (A02-6)', async ({ page, api }) => {
+    // The bell reads its list again when the tab is shown, too.
+    withEntries(api).on('GET /api/notifications', 200, {
+      items: [],
+      nextCursor: null,
+      unreadCount: 0,
+    });
+    await page.goto('/wallet');
+    const rows = page.locator('main').getByRole('listitem');
+    await expect(rows).toHaveCount(2);
+    api.on('GET /api/wallet/entries', 500, {});
+    const reads = () =>
+      api.requests.filter((request) => request.key === 'GET /api/wallet/entries').length;
+    const before = reads();
+    // The tab shown again reads the wallet (S09 rule LT2).
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await expect.poll(reads).toBeGreaterThan(before);
+    await expect(page.getByText(ar.wallet.loadFailed)).toBeHidden();
+    await expect(rows).toHaveCount(2);
+  });
+
   test('a new wallet says there is nothing yet', async ({ page, api }) => {
     signedIn(api).on('GET /api/wallet/entries', 200, { items: [], nextCursor: null });
     await page.goto('/wallet');

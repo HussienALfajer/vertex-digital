@@ -31,11 +31,17 @@ import type { RequestMeta } from '../../core/http/request-meta.js';
 import { JobsService } from '../../core/jobs/index.js';
 import { after, cursorTime, decodeCursor, pageOf } from '../../core/lists/cursor.js';
 import type { AdminIdentity } from '../admin/index.js';
+import { AuditService } from '../audit/index.js';
 import { AuthService } from '../auth/index.js';
 import { isUuid, lockDeposit, notFound, stateConflict } from './deposit-records.js';
 import { DepositReviewService } from './deposit-review.service.js';
 import { verifyJob } from './usdt-deposits.service.js';
-import { transferView, usdtCandidates } from './usdt-records.js';
+import {
+  candidatesOf,
+  transferView,
+  type UsdtCandidateRow,
+  usdtCandidateRows,
+} from './usdt-records.js';
 
 /** Thrown inside the approval's transaction when its key decided first: answered as a replay. */
 class AlreadyDecided extends Error {}
@@ -51,6 +57,7 @@ export class UsdtReviewService {
     private readonly review: DepositReviewService,
     private readonly customers: AuthService,
     private readonly jobs: JobsService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -162,6 +169,17 @@ export class UsdtReviewService {
       if (deposit.method === 'sham_cash' || deposit.status !== 'submitted') {
         throw stateConflict(deposit.status);
       }
+      // In review or bound, the verification has nothing left to read (audit A02-26).
+      const [usdt] = await tx
+        .select({ checkStatus: usdtDeposits.checkStatus, transferId: usdtDeposits.transferId })
+        .from(usdtDeposits)
+        .where(eq(usdtDeposits.depositId, deposit.id));
+      if (
+        usdt?.transferId !== null ||
+        (usdt.checkStatus !== 'searching' && usdt.checkStatus !== 'confirming')
+      ) {
+        throw stateConflict(deposit.status);
+      }
       await recordAudit(tx, {
         action: 'deposit.rechecked',
         actorKind: 'admin',
@@ -202,36 +220,46 @@ export class UsdtReviewService {
     const holders = await this.holders(
       page.items.map(({ transfer, state }) => ({ transfer, state })),
     );
+    // Audit A02-11: one candidate read per amount, one after another, and the customers of the
+    // whole page in one read (a page of 100 sent up to 200 queries at once before).
+    const candidateRows = new Map<string, UsdtCandidateRow[]>();
+    for (const { transfer, state } of page.items) {
+      const key = `${transfer.method}:${transfer.amountUnits}`;
+      if (state !== 'unmatched' || candidateRows.has(key)) continue;
+      candidateRows.set(
+        key,
+        await usdtCandidateRows(this.db, transfer.method as UsdtMethod, transfer.amountUnits),
+      );
+    }
     const customers = await this.customers.depositCustomers([
-      ...new Set([...holders.values()].map((holder) => holder.customerId)),
+      ...new Set([
+        ...[...holders.values()].map((holder) => holder.customerId),
+        ...[...candidateRows.values()].flat().map((row) => row.customerId),
+      ]),
     ]);
-    const items = await Promise.all(
-      page.items.map(async ({ transfer, state }) => {
-        const holder = holders.get(transfer.id);
-        const customer = holder && customers.get(holder.customerId);
-        return {
-          ...transferView(transfer),
-          state,
-          holder:
-            holder && customer
-              ? {
-                  kind: holder.kind,
-                  id: holder.id,
-                  customer: { id: customer.id, name: customer.name, email: customer.email },
-                }
-              : null,
-          candidates:
-            state === 'unmatched'
-              ? await usdtCandidates(
-                  this.db,
-                  transfer.method as UsdtMethod,
-                  transfer.amountUnits,
-                  (ids) => this.customers.depositCustomers(ids),
-                )
-              : [],
-        };
-      }),
-    );
+    const items = page.items.map(({ transfer, state }) => {
+      const holder = holders.get(transfer.id);
+      const customer = holder && customers.get(holder.customerId);
+      return {
+        ...transferView(transfer),
+        state,
+        holder:
+          holder && customer
+            ? {
+                kind: holder.kind,
+                id: holder.id,
+                customer: { id: customer.id, name: customer.name, email: customer.email },
+              }
+            : null,
+        candidates:
+          state === 'unmatched'
+            ? candidatesOf(
+                candidateRows.get(`${transfer.method}:${transfer.amountUnits}`) ?? [],
+                customers,
+              )
+            : [],
+      };
+    });
     return { items, nextCursor: page.nextCursor };
   }
 
@@ -301,7 +329,10 @@ export class UsdtReviewService {
       sameFlags(
         input.acknowledgedFlags,
         flags.map((flag) => flag.code),
-      );
+      ) &&
+      // The internal note is part of the body, as for Sham Cash (F4-16, audit A02-24).
+      (await this.audit.reasonOf(this.db, row.id, 'deposit.credited')) ===
+        (input.internalNote ?? null);
     if (!same) {
       throw new CodedException(
         409,

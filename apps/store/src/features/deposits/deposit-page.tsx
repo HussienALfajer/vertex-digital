@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNotificationEvents } from '@/features/notifications/live';
 import { PushCard } from '@/features/push/push-card';
 import { HelpButton } from '@/features/support/help-button';
@@ -25,7 +25,7 @@ import { Line, Panel } from './panel';
 import { PendingDeposit } from './pending-deposit';
 import { getDeposit } from './requests';
 import { UsdtAwaiting, UsdtChecking, UsdtCreditedLines } from './usdt-deposit';
-import { useTimeLeft } from './use-time-left';
+import { useHasPassed } from './use-time-left';
 
 /** While in review the page reads the deposit again this often, when visible (S03 screens). */
 const REFRESH_MS = 30_000;
@@ -47,18 +47,37 @@ export function DepositPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<State>({ status: 'loading' });
+  // Audit A02-7: every read and every answer the page applies starts a generation; an older read
+  // answering late (a poll sent before a TXID or a cancel) is dropped.
+  const generation = useRef(0);
 
-  const load = useCallback(async () => {
-    const result = await getDeposit(id);
-    if (!result.ok && result.reason === 'UNAUTHORIZED') {
-      router.replace(`/sign-in?next=${encodeURIComponent(`/wallet/deposits/${id}`)}`);
-      return;
-    }
-    if (!result.ok) {
-      return setState({ status: result.reason === 'NOT_FOUND' ? 'missing' : 'failed' });
-    }
-    setState({ status: 'ready', deposit: result.data });
-  }, [id, router]);
+  /**
+   * Reads the deposit. A background read (a poll, a live event) that fails keeps what is on
+   * screen (audit A02-6: one failed poll used to replace the address, the QR and a typed TXID with
+   * the error); only the first read and the retry show the error.
+   */
+  const load = useCallback(
+    async (background = false) => {
+      const current = ++generation.current;
+      const result = await getDeposit(id);
+      if (current !== generation.current) return;
+      if (!result.ok && result.reason === 'UNAUTHORIZED') {
+        router.replace(`/sign-in?next=${encodeURIComponent(`/wallet/deposits/${id}`)}`);
+        return;
+      }
+      if (!result.ok) {
+        if (background && result.reason !== 'NOT_FOUND') return;
+        return setState({ status: result.reason === 'NOT_FOUND' ? 'missing' : 'failed' });
+      }
+      setState({ status: 'ready', deposit: result.data });
+    },
+    [id, router],
+  );
+  const applied = (next: Deposit | null) => {
+    if (!next) return void load(true);
+    generation.current += 1;
+    setState({ status: 'ready', deposit: next });
+  };
 
   useEffect(() => {
     void load();
@@ -72,7 +91,7 @@ export function DepositPage() {
         'depositId' in event.notification.params &&
         event.notification.params.depositId === id)
     )
-      void load();
+      void load(true);
   });
 
   const open =
@@ -88,7 +107,7 @@ export function DepositPage() {
         const visible = document.visibilityState === 'visible';
         if (!visible && (!usdt || Date.now() - last < REFRESH_MS)) return;
         last = Date.now();
-        void load();
+        void load(true);
       },
       usdt ? USDT_REFRESH_MS : REFRESH_MS,
     );
@@ -102,7 +121,7 @@ export function DepositPage() {
   // transfer sent before the deadline still shows as credited when it is.
   const loaded = state.status === 'ready' ? state.deposit : null;
   const expiresAt = loaded?.status === 'pending' ? loaded.expiresAt : null;
-  const overdue = useTimeLeft(expiresAt) === 0 && expiresAt !== null;
+  const overdue = useHasPassed(expiresAt);
 
   if (state.status === 'missing') notFound();
   if (state.status === 'loading') return <DepositSkeleton />;
@@ -140,29 +159,17 @@ export function DepositPage() {
             </bdi>
           </p>
         )}
-        <Badge tone={STATUS_TONES[deposit.status]}>{statusText(deposit)}</Badge>
+        {/* A change of status is announced to screen readers (audit A02-34). */}
+        <span role="status">
+          <Badge tone={STATUS_TONES[deposit.status]}>{statusText(deposit)}</Badge>
+        </span>
       </div>
       {deposit.usdt && deposit.status === 'pending' ? (
-        <UsdtAwaiting
-          key={deposit.id}
-          deposit={deposit}
-          usdt={deposit.usdt}
-          onChange={(next) => {
-            if (next) setState({ status: 'ready', deposit: next });
-            else void load();
-          }}
-        />
+        <UsdtAwaiting key={deposit.id} deposit={deposit} usdt={deposit.usdt} onChange={applied} />
       ) : deposit.usdt && deposit.status === 'submitted' ? (
         <UsdtChecking deposit={deposit} usdt={deposit.usdt} />
       ) : deposit.status === 'pending' ? (
-        <PendingDeposit
-          key={deposit.id}
-          deposit={deposit}
-          onChange={(next) => {
-            if (next) setState({ status: 'ready', deposit: next });
-            else void load();
-          }}
-        />
+        <PendingDeposit key={deposit.id} deposit={deposit} onChange={applied} />
       ) : (
         <Outcome deposit={deposit} />
       )}

@@ -52,7 +52,8 @@ export function BalanceChip() {
       size="xl"
       className="px-2 sm:px-3"
       aria-label={t('header.balance', { balance })}
-      render={<Link href="/wallet" />}
+      // An account page: never prefetched from the header (store rule, audit A02-8).
+      render={<Link href="/wallet" prefetch={false} />}
     >
       <WalletIcon />
       <bdi dir="ltr" className="font-bold tabular-nums">

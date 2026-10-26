@@ -25,6 +25,7 @@ import {
 import { ExternalLinkIcon, ShieldCheckIcon } from 'lucide-react';
 import { type FormEvent, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
@@ -111,7 +112,7 @@ export function UsdtFacts({ deposit, usdt }: { deposit: AdminDeposit; usdt: Admi
   );
 }
 
-/** The bound transfer: from, to, the received amount with its difference, block and time. */
+/** The bound transfer: from, to, the received amount with its difference, block, time and finality. */
 export function UsdtTransferCard({ usdt }: { usdt: AdminDepositUsdt }) {
   const { t } = useTranslation();
   const transfer = usdt.transfer;
@@ -139,6 +140,12 @@ export function UsdtTransferCard({ usdt }: { usdt: AdminDepositUsdt }) {
             </ExplorerLink>
           </Fact>
           <Fact label={t('deposits.usdt.blockTime')}>{formatDateTime(transfer.blockTime)}</Fact>
+          {/* S04: a transfer is recorded only once final (audit A02-37). */}
+          <Fact label={t('deposits.usdt.confirmations')}>
+            {usdt.confirmations === null
+              ? t('deposits.usdt.final')
+              : t('deposits.usdt.finalWith', { count: usdt.confirmations })}
+          </Fact>
         </dl>
       )}
     </Card>
@@ -247,6 +254,8 @@ export function UsdtApproveForm({
   const [flagsError, setFlagsError] = useState<string | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
   const [failure, setFailure] = useState<string | null>(null);
+  // Audit A02-3: a valid approval waits for a confirmation that states the credit.
+  const [confirming, setConfirming] = useState<ApproveUsdtDeposit | null>(null);
 
   const flags = [...new Set(deposit.flags.map((flag) => flag.code))];
   const credit = usdt.transfer ? floorToWholeCents(usdt.transfer.amountUnits) : 0;
@@ -263,9 +272,12 @@ export function UsdtApproveForm({
       acknowledgedFlags: ticked.filter((code) => flags.includes(code)),
       internalNote: note.trim() || undefined,
     };
-    const parsed = approveUsdtDepositSchema.parse(body);
+    setConfirming(approveUsdtDepositSchema.parse(body));
+  }
+
+  async function approveNow(request: ApproveUsdtDeposit) {
     try {
-      await send(parsed, (key) => approve.mutateAsync({ body: parsed, key }));
+      await send(request, (key) => approve.mutateAsync({ body: request, key }));
     } catch (error) {
       if (error instanceof ApiError && error.code === 'FLAGS_NOT_ACKNOWLEDGED') {
         setFlagsError(errorMessage(t, error));
@@ -339,6 +351,19 @@ export function UsdtApproveForm({
             : t('deposits.approve.submit', { amount: ltr(formatUsd(credit)) })}
         </Button>
       </form>
+      <ConfirmDialog
+        open={confirming !== null}
+        onClose={() => setConfirming(null)}
+        title={t('deposits.approve.confirmTitle')}
+        body={t('deposits.approve.confirmBody', {
+          amount: ltr(formatUsd(credit)),
+          name: deposit.customer.name,
+          reference: ltr(deposit.referenceCode),
+        })}
+        action={t('deposits.approve.submit', { amount: ltr(formatUsd(credit)) })}
+        pending={approve.isPending}
+        onConfirm={() => (confirming ? approveNow(confirming) : Promise.resolve())}
+      />
     </Card>
   );
 }

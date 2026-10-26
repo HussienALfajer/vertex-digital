@@ -35,7 +35,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
-import { useNotificationEvents } from '@/features/notifications/live';
+import {
+  isMoneyEvent,
+  useNotificationEvents,
+  useVisibleAgain,
+} from '@/features/notifications/live';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
@@ -47,6 +51,33 @@ type State =
   | { status: 'loading' }
   | { status: 'failed' }
   | { status: 'ready'; wallet: Wallet; entries: WalletEntry[]; nextCursor: string | null };
+
+/** A burst of live events (a bulk checkout's orders) is read once, this long after the last. */
+const REFRESH_DEBOUNCE_MS = 500;
+
+/** An entry's identity on screen: entries are never rewritten, so these never change. */
+const entryKey = (entry: WalletEntry) =>
+  `${entry.occurredAt}:${entry.balanceAfterUnits}:${entry.amountUnits}`;
+
+/**
+ * The newest page laid over the entries already loaded (audit A02-4): entries are append-only and
+ * an older entry's running balance never changes, so the loaded pages stay, under the new ones.
+ * When the newest page does not reach the loaded entries (more than a page arrived), it starts
+ * the list again with its own cursor.
+ */
+export function mergeNewest(
+  loaded: { entries: WalletEntry[]; nextCursor: string | null },
+  newest: { items: WalletEntry[]; nextCursor: string | null },
+): { entries: WalletEntry[]; nextCursor: string | null } {
+  const oldest = newest.items.at(-1);
+  if (!oldest) return { entries: [], nextCursor: null };
+  const at = loaded.entries.findIndex((entry) => entryKey(entry) === entryKey(oldest));
+  if (at === -1) return { entries: newest.items, nextCursor: newest.nextCursor };
+  return {
+    entries: [...newest.items, ...loaded.entries.slice(at + 1)],
+    nextCursor: loaded.nextCursor,
+  };
+}
 
 const KIND_ICONS: Record<JournalKind, LucideIcon> = {
   deposit: ArrowDownToLineIcon,
@@ -72,31 +103,51 @@ export function WalletPage() {
   // or splices a page into a list it does not follow (audit A7).
   const generation = useRef(0);
 
-  const load = useCallback(async () => {
-    const current = ++generation.current;
-    const [wallet, page] = await Promise.all([getWallet(), listWalletEntries()]);
-    if (current !== generation.current) return;
-    if (!wallet.ok && wallet.reason === 'UNAUTHORIZED') {
-      router.replace('/sign-in?next=%2Fwallet');
-      return;
-    }
-    if (!wallet.ok || !page.ok) return setState({ status: 'failed' });
-    setState({
-      status: 'ready',
-      wallet: wallet.data,
-      entries: page.data.items,
-      nextCursor: page.data.nextCursor,
-    });
-  }, [router]);
+  /**
+   * Reads the balance and the newest page. A refresh (a live event, the tab shown again) keeps the
+   * pages loaded and, when it fails, what is on screen (audit A02-4, A02-6).
+   */
+  const load = useCallback(
+    async (refresh = false) => {
+      const current = ++generation.current;
+      const [wallet, page] = await Promise.all([getWallet(), listWalletEntries()]);
+      if (current !== generation.current) return;
+      if (!wallet.ok && wallet.reason === 'UNAUTHORIZED') {
+        router.replace('/sign-in?next=%2Fwallet');
+        return;
+      }
+      if (!wallet.ok || !page.ok) {
+        if (!refresh) setState({ status: 'failed' });
+        return;
+      }
+      setState((previous) => ({
+        status: 'ready',
+        wallet: wallet.data,
+        ...(refresh && previous.status === 'ready'
+          ? mergeNewest(previous, page.data)
+          : { entries: page.data.items, nextCursor: page.data.nextCursor }),
+      }));
+    },
+    [router],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  // A credit, an adjustment or any deposit decision arrives live (S05 rule NT7): read again.
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const refresh = useCallback(() => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => void load(true), REFRESH_DEBOUNCE_MS);
+  }, [load]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  // What moves the balance arrives live (S05 rule NT7): a credit, an adjustment, a refund, a
+  // purchase's order; tickets and alerts do not (audit A02-4).
   useNotificationEvents((event) => {
-    if (event.type !== 'unread') void load();
+    if (isMoneyEvent(event) || event.type === 'order') refresh();
   });
+  useVisibleAgain(refresh);
 
   const loadMore = async (cursor: string) => {
     setMoreFailure(null);
@@ -227,7 +278,7 @@ function EntryRow({ entry }: { entry: WalletEntry }) {
         {entry.order && (
           <Link
             href={`/orders/${entry.order.id}`}
-            className="w-fit text-sm text-primary underline-offset-4 hover:underline"
+            className="inline-flex min-h-11 w-fit items-center text-sm text-primary underline-offset-4 hover:underline"
           >
             <bdi dir="ltr">{entry.order.number}</bdi>
           </Link>
@@ -245,7 +296,7 @@ function EntryRow({ entry }: { entry: WalletEntry }) {
                     <bdi>{order.productNameAr}</bdi>
                     <Link
                       href={`/orders/${order.id}`}
-                      className="text-primary underline-offset-4 hover:underline"
+                      className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
                     >
                       <bdi dir="ltr">{order.number}</bdi>
                     </Link>
@@ -254,7 +305,7 @@ function EntryRow({ entry }: { entry: WalletEntry }) {
                 <li>
                   <Link
                     href={`/orders?checkout=${entry.checkout.id}`}
-                    className="text-primary underline-offset-4 hover:underline"
+                    className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
                   >
                     {t('wallet.checkoutView')}
                   </Link>

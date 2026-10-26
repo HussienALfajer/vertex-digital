@@ -36,6 +36,7 @@ import {
 import { ShieldCheckIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
@@ -70,6 +71,8 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
   const [note, setNote] = useState('');
   const [errors, setErrors] = useState<Partial<Record<ApproveField, string>>>({});
   const [failure, setFailure] = useState<{ message: string; holder?: unknown } | null>(null);
+  // Audit A02-3: a valid approval waits for a confirmation that states the credit.
+  const [confirming, setConfirming] = useState<ApproveDeposit | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
 
   const receivedUnits = parseAmount(currency, amount);
@@ -151,8 +154,12 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
     }
     setErrors(found);
     if (!parsed.success || Object.keys(found).length > 0) return focusInvalid();
+    setConfirming(parsed.data);
+  }
+
+  async function approveNow(request: ApproveDeposit) {
     try {
-      await send(parsed.data, (key) => approve.mutateAsync({ body: parsed.data, key }));
+      await send(request, (key) => approve.mutateAsync({ body: request, key }));
       onDone();
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined;
@@ -305,6 +312,21 @@ export function ApproveForm({ deposit, onDone }: { deposit: AdminDeposit; onDone
               : t('deposits.approve.submitEmpty')}
         </Button>
       </form>
+      <ConfirmDialog
+        open={confirming !== null}
+        onClose={() => setConfirming(null)}
+        title={t('deposits.approve.confirmTitle')}
+        body={t('deposits.approve.confirmBody', {
+          amount: ltr(formatUsd(confirming?.expectedCreditUsdUnits ?? 0)),
+          name: deposit.customer.name,
+          reference: ltr(deposit.referenceCode),
+        })}
+        action={t('deposits.approve.submit', {
+          amount: ltr(formatUsd(confirming?.expectedCreditUsdUnits ?? 0)),
+        })}
+        pending={approve.isPending}
+        onConfirm={() => (confirming ? approveNow(confirming) : Promise.resolve())}
+      />
     </Card>
   );
 }

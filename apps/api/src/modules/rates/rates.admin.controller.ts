@@ -49,6 +49,7 @@ export class RatesAdminController {
   @Post('rates')
   @AdminRoute()
   @Sensitive()
+  @Header('cache-control', 'no-store')
   @SerializeOptions({ schema: exchangeRateRecordSchema })
   @ApiCreatedResponse({ description: 'The new rate', standardSchema: exchangeRateRecordSchema })
   change(

@@ -302,6 +302,13 @@ test.describe('USDT deposits', () => {
     await page.getByRole('checkbox').click();
     admin.reauthenticationRequired = true;
     await submit.click();
+    // Audit A02-3: the confirmation states the credit before anything is sent.
+    const confirmation = page.getByRole('alertdialog', { name: ar.deposits.approve.confirmTitle });
+    await expect(confirmation).toContainText(usd('$9.00'));
+    expect(admin.requests.filter((request) => request.key.endsWith('/approve-usdt'))).toEqual([]);
+    await confirmation
+      .getByRole('button', { name: fill(ar.deposits.approve.submit, { amount: usd('$9.00') }) })
+      .click();
     await reauthenticate(page);
     await expect(page.getByRole('heading', { name: ar.deposits.detail.decision })).toBeVisible();
     await expect(page.getByText(ar.deposits.statuses.credited).first()).toBeVisible();
@@ -359,14 +366,44 @@ test.describe('USDT deposits', () => {
       .getByRole('button', { name: /سارة الأحمد/ })
       .click();
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('heading', { name: ar.wallets.adjust.title })).toBeVisible();
-    await expect(field(page, ar.wallets.adjust.amount)).toHaveValue('7.12');
-    await expect(field(page, ar.wallets.adjust.reference)).toHaveValue(UNMATCHED_TXID);
-    await expect(dialog.getByRole('combobox', { name: ar.wallets.adjust.method })).toContainText(
-      ar.wallets.methods.usdt_bep20,
+    await expect(
+      dialog.getByRole('heading', { name: ar.wallets.adjust.recordTitle }),
+    ).toBeVisible();
+    // Audit A02-2, A02-22: the customer and the transfer's network, TXID and amount are shown,
+    // never edited.
+    await expect(dialog.getByText('سارة الأحمد').first()).toBeVisible();
+    await expect(dialog.getByText(ar.wallets.methods.usdt_bep20)).toBeVisible();
+    await expect(dialog.getByText(UNMATCHED_TXID)).toBeVisible();
+    await expect(dialog.getByText('$7.12').first()).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: ar.wallets.adjust.amount })).toBeHidden();
+    await expect(dialog.getByRole('textbox', { name: ar.wallets.adjust.reference })).toBeHidden();
+    await expect(dialog.getByRole('combobox')).toHaveCount(0);
+    // Back to the customer choice, then the same customer again.
+    await dialog.getByRole('button', { name: ar.wallets.adjust.changeCustomer }).click();
+    // This time by search, sent once on submit (audit A02-12), not per keystroke.
+    const search = page.getByRole('dialog').getByLabel(ar.deposits.transfers.searchCustomer);
+    await search.fill('sa');
+    await search.press('Enter');
+    await expect(page.getByRole('dialog').getByText(ar.wallets.search.tooShort)).toBeVisible();
+    await search.fill('sara@');
+    expect(admin.requests.filter((request) => request.key === 'GET /api/admin/wallets')).toEqual(
+      [],
     );
+    await search.press('Enter');
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: /سارة الأحمد/ })
+      .last()
+      .click();
+    expect(
+      admin.requests.filter((request) => request.key === 'GET /api/admin/wallets'),
+    ).toHaveLength(1);
     await field(page, ar.wallets.adjust.reason).fill('تحويل متأخر لإيداع منتهٍ');
-    await dialog.getByRole('button', { name: ar.wallets.adjust.submit }).click();
+    await dialog
+      .getByRole('button', {
+        name: fill(ar.wallets.adjust.submitAmount, { amount: usd('+$7.12') }),
+      })
+      .click();
     await expect(dialog).toBeHidden();
     expect(admin.lastBody(`POST /api/admin/wallets/${CUSTOMER_ID}/adjustments`)).toMatchObject({
       direction: 'credit',
@@ -401,6 +438,8 @@ test.describe('USDT deposits', () => {
     await open(page, admin, '/settings/deposits');
     await expect(page.getByText(TRON_ADDRESS)).toBeVisible();
     await expect(page.getByText(ar.depositSettings.usdt.noAddress)).toBeVisible();
+    // A network with no address shows no delayed badge (audit A02-43); the other one is fresh.
+    await expect(page.getByText(ar.depositSettings.usdt.delayed)).toBeHidden();
     await expect(page.getByRole('switch', { name: ar.wallets.methods.usdt_bep20 })).toBeDisabled();
     await page.getByRole('switch', { name: ar.wallets.methods.usdt_trc20 }).click();
     await field(page, ar.depositSettings.fields.usdtMinDepositUsdUnits).fill('7');

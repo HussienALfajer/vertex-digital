@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { type RefObject, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FormAlert } from '../../components/form-alert';
 import { formatDateTime } from '../../lib/format';
 import { receiptUrl } from './deposits.queries';
 import { receiptLayout } from './receipt-layout';
@@ -41,6 +42,10 @@ export function ReceiptViewer({ deposit }: { deposit: AdminDeposit }) {
   const frame = useRef<HTMLDivElement>(null);
   const frameWidth = useContentWidth(frame);
   const [ratio, setRatio] = useState<number | null>(null);
+  // Audit A02-17: a receipt that does not load says so and is read again on demand (a new
+  // element: the image is never cached, SC15).
+  const [failed, setFailed] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   if (receipts.length === 0) {
     return <EmptyState icon={<ImageOffIcon />} title={t('deposits.receipt.none')} />;
@@ -115,11 +120,22 @@ export function ReceiptViewer({ deposit }: { deposit: AdminDeposit }) {
           className="mx-auto grid grid-cols-1 grid-rows-1 place-items-center"
           style={size ? { width: size.boxWidth, height: size.boxHeight } : undefined}
         >
+          {failed === url && (
+            <div className="flex flex-col items-center gap-3 p-6 text-center">
+              <FormAlert>{t('deposits.receipt.failed')}</FormAlert>
+              <Button variant="outline" onClick={() => setAttempt((value) => value + 1)}>
+                {t('common.retry')}
+              </Button>
+            </div>
+          )}
           <img
-            key={url}
+            key={`${url}#${attempt}`}
             src={url}
+            hidden={failed === url}
+            onError={() => setFailed(url)}
             alt={t('deposits.receipt.alt', { reference: deposit.referenceCode })}
             onLoad={(event) => {
+              setFailed(null);
               const image = event.currentTarget;
               if (image.naturalWidth > 0) setRatio(image.naturalHeight / image.naturalWidth);
             }}

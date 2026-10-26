@@ -55,6 +55,27 @@ export const depositQuery = (id: string) =>
     queryFn: () => call(api.GET('/api/admin/deposits/{id}', { params: { path: { id } } })),
   });
 
+/** How often a USDT deposit still being verified is read again (S04: the worker reads every 10 s). */
+const VERIFYING_REFRESH_MS = 10_000;
+
+/**
+ * Audit A02-14: a USDT deposit the worker is still verifying, read again in the background (never
+ * the admin's activity, rule D4) under the deposit's own key, so its page follows the search and
+ * the confirmations.
+ */
+export const verifyingDepositRead = (id: string) =>
+  queryOptions({
+    queryKey: depositQuery(id).queryKey,
+    queryFn: () =>
+      call(
+        api.GET('/api/admin/deposits/{id}', {
+          params: { path: { id } },
+          headers: BACKGROUND_REQUEST,
+        }),
+      ),
+    refetchInterval: VERIFYING_REFRESH_MS,
+  });
+
 /** Rule U13: the incoming USDT transfers, unmatched by default; the filters are in the URL. */
 export const usdtTransferListQuery = (query: Pick<AdminUsdtTransferQuery, 'method' | 'state'>) =>
   infiniteQueryOptions({
@@ -134,12 +155,18 @@ export function useApproveUsdtDeposit(id: string) {
   });
 }
 
-/** Rule U17: sends the verification again; changes nothing by itself. */
+/**
+ * Rule U17: sends the verification again; changes nothing by itself. Like every admin mutation
+ * it runs through the re-authentication (audit A02-42), though the API asks for none here.
+ */
 export function useRecheckDeposit(id: string) {
   const invalidate = useInvalidateDecision();
+  const withReauthentication = useReauthentication();
   return useMutation({
     mutationFn: () =>
-      call(api.POST('/api/admin/deposits/{id}/recheck', { params: { path: { id } } })),
+      withReauthentication(() =>
+        call(api.POST('/api/admin/deposits/{id}/recheck', { params: { path: { id } } })),
+      ),
     onSettled: invalidate,
   });
 }
@@ -147,13 +174,16 @@ export function useRecheckDeposit(id: string) {
 /** Rule RV6: no re-authentication (no money moves); the key makes a retry a replay (RV9). */
 export function useRejectDeposit(id: string) {
   const invalidate = useInvalidateDecision();
+  const withReauthentication = useReauthentication();
   return useMutation({
     mutationFn: ({ body, key }: { body: RejectDeposit; key: string }) =>
-      call(
-        api.POST('/api/admin/deposits/{id}/reject', {
-          params: { path: { id }, header: { 'Idempotency-Key': key } },
-          body,
-        }),
+      withReauthentication(() =>
+        call(
+          api.POST('/api/admin/deposits/{id}/reject', {
+            params: { path: { id }, header: { 'Idempotency-Key': key } },
+            body,
+          }),
+        ),
       ),
     onSettled: invalidate,
   });
@@ -162,10 +192,13 @@ export function useRejectDeposit(id: string) {
 /** Rule RV8: once per deposit, back to the customer for a clearer receipt. */
 export function useRequestReceipt(id: string) {
   const invalidate = useInvalidateDecision();
+  const withReauthentication = useReauthentication();
   return useMutation({
     mutationFn: (body: RequestReceipt) =>
-      call(
-        api.POST('/api/admin/deposits/{id}/request-receipt', { params: { path: { id } }, body }),
+      withReauthentication(() =>
+        call(
+          api.POST('/api/admin/deposits/{id}/request-receipt', { params: { path: { id } }, body }),
+        ),
       ),
     onSettled: invalidate,
   });

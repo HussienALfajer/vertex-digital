@@ -19,6 +19,7 @@ import {
   DialogTitle,
   EmptyState,
   Field,
+  FieldError,
   FieldLabel,
   Input,
   PageHeader,
@@ -38,7 +39,7 @@ import {
   ToggleGroupItem,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, InboxIcon, NotebookPenIcon } from 'lucide-react';
-import { useState } from 'react';
+import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
@@ -84,7 +85,7 @@ export function TransfersPage({
   return (
     <>
       <Button variant="ghost" className="self-start" render={<Link to="/deposits" />}>
-        <ArrowRightIcon className="rtl:-scale-x-100" />
+        <ArrowRightIcon className="ltr:-scale-x-100" />
         {t('deposits.detail.back')}
       </Button>
       <PageHeader
@@ -290,6 +291,7 @@ function ManualDepositDialog({
           method: transfer.method,
           reference: transfer.txid,
           amountText: formatAmountInput('USD', floorToWholeCents(transfer.amountUnits)),
+          onBack: () => setCustomerId(null),
         }}
         onDone={() => {
           void queryClient.invalidateQueries({ queryKey: ['deposits'] });
@@ -341,26 +343,46 @@ function ManualDepositDialog({
   );
 }
 
+/**
+ * The customer by search, on submit as the wallets page searches (audit A02-12: a request per
+ * keystroke before), at least 3 characters; Arabic names type in their own direction (A02-40).
+ */
 function CustomerSearch({ onPick }: { onPick: (customerId: string) => void }) {
   const { t } = useTranslation();
-  const [text, setText] = useState('');
-  const q = text.trim();
+  const [q, setQ] = useState('');
+  const [tooShort, setTooShort] = useState(false);
   const results = useInfiniteQuery({ ...walletSearchQuery(q), enabled: q.length >= 3 });
   const customers = results.data?.pages.flatMap((page) => page.items) ?? [];
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = String(new FormData(event.currentTarget).get('q') ?? '').trim();
+    setTooShort(value.length < 3);
+    if (value.length >= 3) setQ(value);
+  }
+
   return (
     <div className="flex flex-col gap-2">
-      <Field>
-        <FieldLabel>{t('deposits.transfers.searchCustomer')}</FieldLabel>
-        <Input
-          type="search"
-          dir="ltr"
-          autoComplete="off"
-          spellCheck={false}
-          maxLength={100}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-        />
-      </Field>
+      <form className="flex items-end gap-2" onSubmit={submit} noValidate>
+        <Field invalid={tooShort} className="flex-1">
+          <FieldLabel>{t('deposits.transfers.searchCustomer')}</FieldLabel>
+          <Input
+            name="q"
+            type="search"
+            dir="auto"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={100}
+          />
+          <FieldError match={tooShort}>{t('wallets.search.tooShort')}</FieldError>
+        </Field>
+        <Button type="submit" variant="outline" disabled={results.isFetching}>
+          {t('wallets.search.submit')}
+        </Button>
+      </form>
+      {results.isFetching && !results.isFetchingNextPage && (
+        <Skeleton className="h-12 w-full" aria-hidden="true" />
+      )}
       {results.isError && <FormAlert>{errorMessage(t, results.error)}</FormAlert>}
       {results.isSuccess && customers.length === 0 && (
         <p className="text-sm text-muted-foreground">{t('deposits.transfers.noCustomers')}</p>

@@ -20,7 +20,16 @@ import {
   type ChainTransfer,
 } from './chain/chain-reader.js';
 import { mismatchFlags, type TransferFacts, usdtTransferTo } from './usdt-assess.js';
-import { bindAndSettle, bounce, recordTransfer, transferHeldElsewhere } from './usdt-settle.js';
+import {
+  askedByAnother,
+  bindAndSettle,
+  bounce,
+  creditExactMatch,
+  exactMatchDeposit,
+  queueUnmatchedNotice,
+  recordTransfer,
+  transferHeldElsewhere,
+} from './usdt-settle.js';
 
 /** Rule U9: a TXID not found is read every 15 seconds for 5 minutes, then every minute. */
 export const SEARCH_FAST_SECONDS = 15;
@@ -181,20 +190,40 @@ export class UsdtVerifyJob implements OnApplicationBootstrap {
     const outcome = await this.db.transaction(async (tx) => {
       const deposit = await this.lockUnchanged(tx, checked);
       if (!deposit) return 'skipped' as const;
-      const { row } = await recordTransfer(tx, found, 'txid');
+      const { row, inserted } = await recordTransfer(tx, found, 'txid');
       // Another deposit or an S02 adjustment holds it: final for this one (PR 1 review).
       if (await transferHeldElsewhere(tx, row, deposit.id)) {
+        const bounced = await bounce(tx, this.pgBoss.boss, deposit, checked.txid, 'txid_used');
+        return bounced === 'pending' ? ('bounced' as const) : bounced;
+      }
+      const flags = mismatchFlags(found, {
+        method: checked.method,
+        payAmountUnits: checked.payAmountUnits,
+        createdAt: deposit.createdAt,
+      });
+      // Audit A02-1: the address is public, so a TXID may name another deposit's exact
+      // transfer. That deposit gets it, as the scanner would give it (rule U12); this one bounces.
+      const owner = flags.length > 0 ? await exactMatchDeposit(tx, found, deposit.id) : null;
+      if (owner) {
+        await creditExactMatch(tx, this.pgBoss.boss, owner, row);
+        this.logger.log(`USDT transfer ${row.id} belongs to deposit ${owner.deposit.id}`);
+        const bounced = await bounce(tx, this.pgBoss.boss, deposit, checked.txid, 'txid_used');
+        return bounced === 'pending' ? ('bounced' as const) : bounced;
+      }
+      // Nor is a different amount sent to this deposit's review when another deposit, in any
+      // status, asked for exactly it: it is that deposit's and stays unmatched for the admin (rule
+      // U13), where its candidates show (audit A02-1, review). Any other different amount goes to
+      // review as rule U11 says (an exchange's fee taken from the amount), even when the scanner
+      // recorded it first.
+      if (flags.includes('amount_mismatch') && (await askedByAnother(tx, found, deposit.id))) {
+        if (inserted) await queueUnmatchedNotice(tx, this.pgBoss.boss, row);
         const bounced = await bounce(tx, this.pgBoss.boss, deposit, checked.txid, 'txid_used');
         return bounced === 'pending' ? ('bounced' as const) : bounced;
       }
       return bindAndSettle(tx, this.pgBoss.boss, {
         deposit,
         transfer: row,
-        flags: mismatchFlags(found, {
-          method: checked.method,
-          payAmountUnits: checked.payAmountUnits,
-          createdAt: deposit.createdAt,
-        }),
+        flags,
         txidSource: (await this.txidSource(tx, deposit.id)) ?? 'customer',
         payAmountUnits: checked.payAmountUnits,
         depositMethod: checked.method,

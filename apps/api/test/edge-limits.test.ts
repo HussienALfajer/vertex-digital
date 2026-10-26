@@ -10,13 +10,13 @@ import { PASSKEY_PATHS } from '../src/modules/auth/passkeys.plugin.js';
  * (audit A01-2: the passkey routes had).
  */
 
-/** The regex locations of a site that use the auth zone, as JavaScript patterns. */
-function authZonePatterns(site: string): RegExp[] {
+/** The regex locations of a site that use `zone`, as JavaScript patterns. */
+function zonePatterns(site: string, zone = 'vdsignin'): RegExp[] {
   const text = readFileSync(new URL(`../../../deploy/nginx/${site}`, import.meta.url), 'utf8');
   const patterns: RegExp[] = [];
   for (const block of text.matchAll(/location ~\*\s+("?)(\S+?)\1\s*\{([^}]*)\}/g)) {
     const [, , pattern, body] = block;
-    if (pattern && body?.includes('zone=vdsignin')) patterns.push(new RegExp(pattern, 'i'));
+    if (pattern && body?.includes(`zone=${zone} `)) patterns.push(new RegExp(pattern, 'i'));
   }
   return patterns;
 }
@@ -25,7 +25,7 @@ const inZone = (patterns: RegExp[], path: string) => patterns.some((pattern) => 
 
 describe('the nginx auth zone (ADR 0008)', () => {
   it('covers every customer route that checks a password or a code, or makes a passkey challenge', () => {
-    const zone = authZonePatterns('digital.vertexmedia.pro');
+    const zone = zonePatterns('digital.vertexmedia.pro');
     const paths = [
       '/sign-in/email',
       '/email-otp/verify-email',
@@ -42,7 +42,7 @@ describe('the nginx auth zone (ADR 0008)', () => {
   });
 
   it('covers every admin route that checks a password or a code', () => {
-    const zone = authZonePatterns('digital-admin.vertexmedia.pro');
+    const zone = zonePatterns('digital-admin.vertexmedia.pro');
     const paths = [
       '/api/admin/auth/sign-in/email',
       '/api/admin/auth/two-factor/verify-totp',
@@ -53,5 +53,23 @@ describe('the nginx auth zone (ADR 0008)', () => {
       '/api/admin/me/reauthenticate',
     ];
     expect(paths.filter((path) => !inZone(zone, path))).toEqual([]);
+  });
+});
+
+describe('the nginx deposit zone (ADR 0008, S03 rule SC6)', () => {
+  it('covers every deposit change a customer makes but the receipt, which has its own', () => {
+    const zone = zonePatterns('digital.vertexmedia.pro', 'vddeposit');
+    const id = '0199a000-0000-7000-8000-0000000000d1';
+    const paths = [
+      '/api/deposits/sham-cash',
+      '/api/deposits/usdt',
+      `/api/deposits/${id}/txid`,
+      // Audit A02-25: each writes an audit entry.
+      `/api/deposits/${id}/quote`,
+      `/api/deposits/${id}/cancel`,
+    ];
+    expect(paths.filter((path) => !inZone(zone, path))).toEqual([]);
+    expect(inZone(zone, '/api/deposits')).toBe(false);
+    expect(inZone(zone, `/api/deposits/${id}`)).toBe(false);
   });
 });

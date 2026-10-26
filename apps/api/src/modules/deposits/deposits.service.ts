@@ -3,6 +3,7 @@ import {
   type CreateShamCashDeposit,
   type Currency,
   type CursorQuery,
+  DEPOSIT_CHANGES_PER_HOUR,
   DEPOSIT_FLAG_DETAILS,
   DEPOSIT_PENDING_HOURS,
   type Deposit,
@@ -267,6 +268,7 @@ export class DepositsService {
 
   /** `POST /api/deposits/:id/quote` (rule SC10): the current rate for an unfixed SYP deposit. */
   async requote(customerId: string, id: string, meta: RequestMeta): Promise<Deposit> {
+    await this.countChange(customerId);
     const row = await this.db.transaction(async (tx) => {
       const deposit = await lockDeposit(tx, id, eq(deposits.customerId, customerId));
       if (!(await isOpen(tx, deposit))) throw stateConflict(openStatus(deposit));
@@ -395,6 +397,7 @@ export class DepositsService {
 
   /** `POST /api/deposits/:id/cancel` (rule SC11): only before a receipt. */
   async cancel(customerId: string, id: string, meta: RequestMeta): Promise<Deposit> {
+    await this.countChange(customerId);
     const row = await this.db.transaction(async (tx) => {
       const deposit = await lockDeposit(tx, id, eq(deposits.customerId, customerId));
       if (deposit.status !== 'pending') throw stateConflict(deposit.status);
@@ -449,6 +452,14 @@ export class DepositsService {
     });
   }
 
+  /** Rule SC6 (audit A02-25): requotes and cancellations per customer, refused ones included. */
+  private async countChange(customerId: string): Promise<void> {
+    const allowed = await withinLimits(this.db, [
+      { key: `deposit-change:${customerId}`, max: DEPOSIT_CHANGES_PER_HOUR, windowMs: HOUR_MS },
+    ]);
+    if (!allowed) throw rateLimited();
+  }
+
   /** The first deposit of an earlier request with this key, or null; another body is refused. */
   private async replay(
     customerId: string,
@@ -462,6 +473,8 @@ export class DepositsService {
     if (!row) return null;
     if (
       row.customerId !== customerId ||
+      // A USDT deposit is in USD too: its key is not this request's (audit A02-23).
+      row.method !== 'sham_cash' ||
       row.currency !== input.currency ||
       row.declaredAmountUnits !== input.amountUnits
     ) {

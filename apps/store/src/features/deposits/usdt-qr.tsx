@@ -90,7 +90,7 @@ export function UsdtQr({ address, method }: { address: string; method: UsdtMetho
 function NetworkLine({ method }: { method: UsdtMethod }) {
   return (
     <span dir="ltr" className="flex items-center gap-2 text-sm">
-      <span className="font-bold">USDT</span>
+      <span className="font-bold">{t('deposits.usdt.token')}</span>
       <span className="flex items-center gap-1.5 rounded-full border border-neutral-200 px-2 py-0.5 font-medium">
         <span aria-hidden="true" className={`size-2 rounded-full ${NETWORK_ACCENTS[method].dot}`} />
         {t(`deposits.usdt.networks.${method}`)}

@@ -1,6 +1,6 @@
 # A01 Identity and access
 
-Status: merged ([#177](https://github.com/HussienALfajer/vertex-digital/pull/177))
+Status: deployed (`097b869`, 2026-10-27; PR [#177](https://github.com/HussienALfajer/vertex-digital/pull/177))
 Branch: fix/audit-a01-identity · Started: 2026-10-26 · Specs: S01, S22 (passkeys PK1–PK6) · ADRs: 0007, 0008, 0016, 0037
 
 ## Scope
@@ -94,4 +94,4 @@ Local stack (`preview_start`: api, worker, store, admin; the development databas
 ## Checks
 - `pnpm verify` on the final tree (2026-10-27): pass in 4m 32s. Lint; typecheck, test and build (25 tasks); migrations in step; OpenAPI in step; store E2E 516 passed (every spec, the first-load budgets included); admin E2E 252 passed. A first full run had failed in `orders`, `deposits-usdt` and `suppliers.health`: the suites re-authenticate one admin many times, and the first version of A01-3 counted every check; fixed by starting the count again after a passing re-authentication, then all green.
 - Reviewer: first pass, 4 blocking findings (the TOTP step on an enrolled session outside the count, the purge removing idle admin sessions and with them the idle notice, a race deleting a re-issued code, `docs/architecture.md` stale), all fixed; second pass, 1 (a password change must not reset the count), fixed; third pass, none left.
-- CI, the deploy and the production smoke test: recorded after the merge.
+- CI green on the merge (run 40405653703). Deployed `097b869` on 2026-10-27 (detached `systemd-run`; no migration, 96 applied), then `provision.sh` re-run for the A01-2 nginx location. Production smoke test: `/api/health`, `/sign-in`, `/forgot-password` and the admin `/login` answer 200; the new `vdsignin` location is installed; the health timer is active.

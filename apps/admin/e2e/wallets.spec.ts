@@ -217,7 +217,8 @@ test.describe('wallets', () => {
       category: 'cash_refund',
     });
     await expect(
-      page.getByText(ar.wallets.adjust.insufficient.replace('{{balance}}', '$275.00')),
+      // The amount kept whole in the Arabic sentence (audit A02-39).
+      page.getByText(ar.wallets.adjust.insufficient.replace('{{balance}}', '⁦$275.00⁩')),
     ).toBeVisible();
   });
 
@@ -253,6 +254,36 @@ test.describe('wallets', () => {
 
     await rows(page).nth(1).getByRole('link').click();
     await expect(page).toHaveURL(new RegExp(`#adjustment-${admin.adjustments[0]?.id}$`));
+  });
+
+  test('a reversal made elsewhere meanwhile is refused in the dialog, with the amount on its button (A02-16, A02-18)', async ({
+    page,
+    admin,
+  }) => {
+    await open(page, admin, `/wallets/${CUSTOMER_ID}`);
+    await adjust(page, { amount: '25', category: 'compensation' });
+    await page
+      .getByRole('button', {
+        name: ar.wallets.detail.reverseLabel.replace('{{amount}}', '$25.00'),
+      })
+      .click();
+    const dialog = page.getByRole('dialog');
+    await field(page, ar.wallets.adjust.reason).fill('تعويض مكرر بالخطأ');
+    // Another tab reversed it meanwhile.
+    const [original] = admin.adjustments;
+    if (!original) throw new Error('No adjustment');
+    admin.adjustments.push({
+      ...original,
+      id: crypto.randomUUID(),
+      direction: 'debit',
+      reversesAdjustmentId: original.id,
+    });
+    await dialog
+      .getByRole('button', {
+        name: ar.wallets.reverse.submitAmount.replace('{{amount}}', '⁦−$25.00⁩'),
+      })
+      .click();
+    await expect(dialog.getByText(ar.errors.api.ADJUSTMENT_ALREADY_REVERSED)).toBeVisible();
   });
 
   test('a manual deposit reference is used once; an edited request gets a new key', async ({

@@ -440,6 +440,124 @@ test.describe('deposits', () => {
   });
 });
 
+/** A live notification about the deposit, `delayMs` after the page opened its stream. */
+function liveDepositEvent(api: MockApi, event: string, delayMs: number) {
+  return api.stream(
+    'GET /api/notifications/stream',
+    [
+      { event: 'unread', data: { unreadCount: 0 } },
+      {
+        event: 'notification',
+        data: {
+          notification: {
+            id: '0199a000-0000-7000-8000-0000000000c1',
+            event,
+            params:
+              event === 'deposit_credited'
+                ? { depositId: DEPOSIT_ID, referenceCode: 'VD-7KQ2M', creditedUsdUnits: 16_100_000 }
+                : { depositId: DEPOSIT_ID, referenceCode: 'VD-7KQ2M' },
+            readAt: null,
+            createdAt: new Date().toISOString(),
+          },
+          unreadCount: 1,
+        },
+      },
+    ],
+    delayMs,
+  );
+}
+
+test.describe('the deposit screens follow what happens (audit A02)', () => {
+  test('the list follows a credit live and keeps the pages loaded (A02-5)', async ({
+    page,
+    api,
+  }) => {
+    const older = {
+      ...REJECTED,
+      id: '0199a000-0000-7000-8000-0000000000d7',
+      referenceCode: 'VD-OLD22',
+    };
+    signedIn(api).on('GET /api/deposits', 200, { items: [SUBMITTED], nextCursor: 'page-2' });
+    liveDepositEvent(api, 'deposit_credited', 2500);
+    await page.goto('/wallet/deposits');
+    const rows = page.locator('main').getByRole('listitem');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(ar.deposits.statuses.submitted);
+    api.on('GET /api/deposits', 200, { items: [older], nextCursor: null });
+    await page.getByRole('button', { name: ar.wallet.loadMore }).click();
+    await expect(rows).toHaveCount(2);
+    // The credit arrives: the newest page read again, laid over the list.
+    api.on('GET /api/deposits', 200, { items: [CREDITED], nextCursor: 'page-2' });
+    await expect(rows.first()).toContainText(ar.deposits.statuses.credited);
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(1)).toContainText('VD-OLD22');
+  });
+
+  test('a read that fails in the background keeps the deposit on screen (A02-6)', async ({
+    page,
+    api,
+  }) => {
+    pending(api);
+    liveDepositEvent(api, 'deposit_receipt_requested', 2500);
+    await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);
+    await expect(page.getByText('VD-7KQ2M').first()).toBeVisible();
+    api.on(`GET ${DEPOSIT_PATH}`, 500, {});
+    const reads = () => api.requests.filter((request) => request.key === `GET ${DEPOSIT_PATH}`);
+    const before = reads().length;
+    await expect.poll(() => reads().length).toBeGreaterThan(before);
+    await expect(page.getByText(ar.deposits.loadFailed)).toBeHidden();
+    await expect(page.getByText('VD-7KQ2M').first()).toBeVisible();
+  });
+
+  test('the receipt picker refuses a file that is not an image or is too large (A02-10)', async ({
+    page,
+    api,
+  }) => {
+    pending(api);
+    await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);
+    const input = page.locator('input[type="file"]').first();
+    await input.setInputFiles({
+      name: 'receipt.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4'),
+    });
+    await expect(page.getByText(ar.errors.RECEIPT_INVALID)).toBeVisible();
+    await input.setInputFiles({
+      name: 'receipt.png',
+      mimeType: 'image/png',
+      buffer: Buffer.alloc(6 * 1024 * 1024),
+    });
+    await expect(page.getByText(ar.deposits.receipt.tooLarge)).toBeVisible();
+    await expect(page.getByRole('img', { name: ar.deposits.receipt.preview })).toBeHidden();
+  });
+
+  test('a receipt the server finds too large says so for one image (A02-32)', async ({
+    page,
+    api,
+  }) => {
+    pending(api).on(`POST ${DEPOSIT_PATH}/receipt`, 413, { code: 'PAYLOAD_TOO_LARGE' });
+    await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);
+    await chooseReceipt(page);
+    await page.getByRole('button', { name: ar.deposits.pending.submit }).click();
+    await expect(page.getByText(ar.deposits.receipt.tooLarge)).toBeVisible();
+    await expect(page.getByText(ar.errors.PAYLOAD_TOO_LARGE)).toBeHidden();
+  });
+
+  test('without a session, the deposit screens send to sign-in and back (A02-10)', async ({
+    page,
+    api,
+  }) => {
+    api.on('GET /api/deposits', 401, { code: 'UNAUTHORIZED' });
+    await page.goto('/wallet/deposits');
+    await expect(page).toHaveURL('/sign-in?next=%2Fwallet%2Fdeposits');
+    api.on(`GET ${DEPOSIT_PATH}`, 401, { code: 'UNAUTHORIZED' });
+    await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);
+    await expect(page).toHaveURL(
+      `/sign-in?next=${encodeURIComponent(`/wallet/deposits/${DEPOSIT_ID}`)}`,
+    );
+  });
+});
+
 // RTL screenshots, dark and light, at phone width and desktop.
 for (const theme of ['dark', 'light'] as const) {
   test(`deposit screenshots, ${theme} theme`, async ({ page, api }, testInfo) => {
@@ -466,6 +584,17 @@ for (const theme of ['dark', 'light'] as const) {
       page.getByText(fill(ar.deposits.form.youGet, { amount: usd('$16.94') })),
     ).toBeVisible();
     await screenshot(page, testInfo, `deposit-form-${theme}`);
+
+    // "إيداعاتي" (audit A02-10: no screenshot until then).
+    const credited = {
+      ...CREDITED,
+      id: '0199a000-0000-7000-8000-0000000000d8',
+      referenceCode: 'VD-9CR3D',
+    };
+    api.on('GET /api/deposits', 200, { items: [SUBMITTED, credited], nextCursor: 'page-2' });
+    await page.goto('/wallet/deposits');
+    await expect(page.locator('main').getByRole('listitem')).toHaveCount(2);
+    await screenshot(page, testInfo, `deposits-list-${theme}`);
 
     pending(api);
     await page.goto(`/wallet/deposits/${DEPOSIT_ID}`);

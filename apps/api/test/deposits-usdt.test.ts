@@ -22,7 +22,8 @@ import {
   usdtTransfers,
 } from '@vertex-digital/db';
 import { asc, eq, isNull, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { AuthService } from '../src/modules/auth/index.js';
 import {
   api,
   auditOf,
@@ -874,10 +875,10 @@ describe('the review of a USDT deposit (rules U11, U15)', () => {
         referenceCheck: null,
       }),
     });
-    // The same key replays; another body with it is refused.
+    // The same key and body replay, the note included (audit A02-24); another body is refused.
     const again = await approveUsdt(
       deposit.id,
-      { acknowledgedFlags: ['amount_mismatch'] },
+      { acknowledgedFlags: ['amount_mismatch'], internalNote: 'Exchange fee taken' },
       { key },
     );
     expect(again.status).toBe(200);
@@ -1001,18 +1002,20 @@ describe('the review of a USDT deposit (rules U11, U15)', () => {
       status: 409,
       code: 'EXTERNAL_REFERENCE_TAKEN',
     });
-    // Recorded by hand under BEP20 first, then approved under TRC20: refused, nothing posted.
+    // Recorded by hand under BEP20 first: a recorded TRC20 transfer is refused under the other
+    // network before any claim (audit A02-2), so the approval under TRC20 still credits it. The
+    // claim across networks itself is the database's (`payment-references.test.ts`, audit A1).
     const second = await customer();
     const recorded = await inReview(second);
     const centsSecond = Math.floor(recorded.received / 10_000) * 10_000;
-    expect((await manual(second.id, centsSecond, recorded.transfer.txid)).status).toBe(201);
+    expect(await body(await manual(second.id, centsSecond, recorded.transfer.txid))).toMatchObject({
+      status: 400,
+      code: 'VALIDATION_FAILED',
+      details: [expect.objectContaining({ path: ['depositMethod'] })],
+    });
     expect(
-      await body(
-        await approveUsdt(recorded.deposit.id, { acknowledgedFlags: ['amount_mismatch'] }),
-      ),
-    ).toMatchObject({ status: 409, code: 'EXTERNAL_REFERENCE_TAKEN' });
-    expect(await postingsOf(recorded.deposit.id)).toEqual([]);
-    expect((await adminDeposit(recorded.deposit.id)).status).toBe('submitted');
+      (await approveUsdt(recorded.deposit.id, { acknowledgedFlags: ['amount_mismatch'] })).status,
+    ).toBe(200);
   });
 
   it('refuses a deposit not in review, a Sham Cash deposit and an unknown one', async () => {
@@ -1093,6 +1096,43 @@ describe('rejecting and re-checking a USDT deposit (rules U16, U17)', () => {
     expect(await verifyJobs(deposit.id)).toBe(1);
   });
 
+  it('refuses a re-check of a deposit in review: nothing is left to read (audit A02-26)', async () => {
+    const { deposit } = await inReview(await customer());
+    expect(
+      await body(
+        await client.post(`/api/admin/deposits/${deposit.id}/recheck`, { cookie: admin.cookie }),
+      ),
+    ).toMatchObject({ status: 409, code: 'DEPOSIT_STATE_CONFLICT' });
+    expect(await actionsOf(deposit.id)).not.toContain('deposit.rechecked');
+  });
+
+  it('refuses an approval replay with another internal note (audit A02-24)', async () => {
+    await reauthenticate();
+    const { deposit } = await inReview(await customer());
+    const key = randomUUID();
+    const input = { acknowledgedFlags: ['amount_mismatch'], internalNote: 'Seen on chain' };
+    expect((await approveUsdt(deposit.id, input, { key })).status).toBe(200);
+    expect((await approveUsdt(deposit.id, input, { key })).status).toBe(200);
+    expect(
+      await body(
+        await approveUsdt(deposit.id, { ...input, internalNote: 'Another note' }, { key }),
+      ),
+    ).toMatchObject({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+  });
+
+  it('refuses a Sham Cash deposit under the key of a USDT deposit (audit A02-23)', async () => {
+    const someone = await customer();
+    const key = randomUUID();
+    const amountUnits = amount();
+    expect((await create(someone.cookie, { amountUnits }, key)).status).toBe(201);
+    const shamCash = await client.post('/api/deposits/sham-cash', {
+      cookie: someone.cookie,
+      body: { currency: 'USD', amountUnits },
+      headers: { 'idempotency-key': key, ...(await client.altcha()) },
+    });
+    expect(await body(shamCash)).toMatchObject({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+  });
+
   it('settles an approval racing a re-check with one credit', async () => {
     await reauthenticate();
     const { deposit } = await inReview(await customer());
@@ -1150,6 +1190,60 @@ describe('the USDT transfers (rule U13) and the badge', () => {
       })
     ).json()) as { items: { id: string }[] };
     expect(next.items[0]?.id).not.toBe(first.items[0]?.id);
+  });
+
+  it('records a recorded transfer by hand only on its network and for at most its cents (audit A02-2)', async () => {
+    await reauthenticate();
+    const someone = await customer();
+    const loose = await transfer({ amountUnits: 7_123_400 });
+    const manual = (body: { amountUnits: number; depositMethod: string }) =>
+      client.post(`/api/admin/wallets/${someone.id}/adjustments`, {
+        cookie: admin.cookie,
+        body: {
+          direction: 'credit',
+          category: 'manual_deposit',
+          reason: 'An unmatched transfer',
+          externalReference: loose.txid,
+          ...body,
+        },
+        headers: { 'idempotency-key': randomUUID() },
+      });
+    expect(
+      await body(await manual({ amountUnits: 7_130_000, depositMethod: 'usdt_trc20' })),
+    ).toMatchObject({
+      status: 400,
+      code: 'VALIDATION_FAILED',
+      details: [expect.objectContaining({ path: ['amountUnits'] })],
+    });
+    expect(
+      await body(await manual({ amountUnits: 7_120_000, depositMethod: 'usdt_bep20' })),
+    ).toMatchObject({
+      status: 400,
+      code: 'VALIDATION_FAILED',
+      details: [expect.objectContaining({ path: ['depositMethod'] })],
+    });
+    // Nothing was claimed: the right one, less than the transfer, still records it.
+    expect((await manual({ amountUnits: 7_000_000, depositMethod: 'usdt_trc20' })).status).toBe(
+      201,
+    );
+  });
+
+  it("reads a page's customers once, whatever its unmatched transfers (audit A02-11)", async () => {
+    const someone = await customer();
+    const deposit = await created(someone.cookie);
+    for (let count = 0; count < 3; count += 1) {
+      await transfer({ amountUnits: deposit.usdt.payAmountUnits - (count + 1) * USD });
+    }
+    const reads = vi.spyOn(AuthService.prototype, 'depositCustomers');
+    const page = (await (
+      await client.get('/api/admin/usdt-transfers?limit=100', { cookie: admin.cookie })
+    ).json()) as { items: { candidates: { depositId: string }[] }[] };
+    expect(reads).toHaveBeenCalledTimes(1);
+    reads.mockRestore();
+    // The candidates still come with each transfer (same tail as the deposit).
+    expect(page.items.some((item) => item.candidates.some((c) => c.depositId === deposit.id))).toBe(
+      true,
+    );
   });
 
   it('shows a transfer credited by an S02 manual deposit with its holder', async () => {

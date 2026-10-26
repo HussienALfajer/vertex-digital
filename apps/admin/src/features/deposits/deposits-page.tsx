@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
   type AdminDepositListItem,
@@ -33,7 +33,7 @@ import {
   useFocusInvalid,
 } from '@vertex-digital/ui';
 import { InboxIcon, SearchIcon } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
@@ -47,7 +47,7 @@ import {
   withMethod,
   withTab,
 } from './deposit-search';
-import { depositListQuery } from './deposits.queries';
+import { depositCountsQuery, depositListQuery } from './deposits.queries';
 
 /**
  * "الإيداعات" (S03 screens): the review queue (flagged first, then the oldest, rule RV10), the
@@ -64,6 +64,7 @@ export function DepositsPage({
   const list = useInfiniteQuery(depositListQuery(search));
   const tab = tabOf(search);
   const deposits = list.data?.pages.flatMap((page) => page.items) ?? [];
+  const moved = useCountsMoved(list.dataUpdatedAt);
 
   return (
     <>
@@ -103,6 +104,17 @@ export function DepositsPage({
           title={search.q ? t('deposits.empty.search') : t(`deposits.empty.${tab}`)}
         />
       )}
+      {moved && list.isSuccess && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-status-info p-3 text-sm text-status-info-foreground"
+        >
+          {t('deposits.queueMoved')}
+          <Button variant="outline" disabled={list.isFetching} onClick={() => list.refetch()}>
+            {t('deposits.refreshQueue')}
+          </Button>
+        </div>
+      )}
       {deposits.length > 0 && <DepositTable deposits={deposits} tab={tab} />}
       {list.hasNextPage && (
         <Button
@@ -116,6 +128,33 @@ export function DepositsPage({
       )}
     </>
   );
+}
+
+/**
+ * Audit A02-14: the badge reads the counts every 30 seconds in the background; once they differ
+ * from the counts when the list arrived, the page says so and the admin reads it again (a click,
+ * so the activity rule D4 holds: the list itself is never read in the background).
+ */
+function useCountsMoved(listUpdatedAt: number): boolean {
+  const counts = useQuery(depositCountsQuery);
+  const signature = counts.data
+    ? `${counts.data.submitted}/${counts.data.submittedFlagged}/${counts.data.pending}`
+    : null;
+  const [baseline, setBaseline] = useState<{ at: number; signature: string } | null>(null);
+  if (signature !== null && listUpdatedAt > 0 && baseline?.at !== listUpdatedAt) {
+    setBaseline({ at: listUpdatedAt, signature });
+  }
+  return baseline !== null && signature !== null && signature !== baseline.signature;
+}
+
+/** The queue's waiting times move on with the clock (audit A02-41). */
+function useMinuteClock(): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
 }
 
 /** S04: one payment method, or all of them. */
@@ -215,7 +254,7 @@ export function DepositTable({
   withCustomer?: boolean;
 }) {
   const { t } = useTranslation();
-  const now = new Date();
+  const now = useMinuteClock();
   return (
     <Table>
       <TableHeader>

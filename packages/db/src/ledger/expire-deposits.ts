@@ -3,8 +3,11 @@ import { and, eq, inArray, lte, type SQL, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Transaction } from '../client.js';
 import type { JobSender } from '../notifications/index.js';
-import { deposits, usdtDeposits } from '../schema/index.js';
+import { deposits, usdtDeposits, usdtScanCursors } from '../schema/index.js';
 import { queueDepositCard } from '../telegram/index.js';
+
+/** How long past its expiry a USDT deposit waits for a scanner that is behind (audit A02-21). */
+export const USDT_EXPIRY_HOLD_MINUTES = 60;
 
 /**
  * Moves `pending` deposits past `expires_at` (by the database's clock) to `expired` (S03 rule
@@ -14,6 +17,11 @@ import { queueDepositCard } from '../telegram/index.js';
  * receipt has a card to close (S05 rule TC6). No email: the customer did nothing after creating
  * it. Shared by the worker's `deposits.expire` and, for one customer, a new deposit's creation
  * (F4-13), so an elapsed deposit never blocks the next while the job has not run.
+ *
+ * The job leaves a USDT deposit pending while its network's scanner has not read past its expiry,
+ * for up to an hour (audit A02-21): a transfer sent before the deadline is still credited when the
+ * scanner catches up (edge case 5), instead of landing unmatched. The customer's own new deposit
+ * expires it by the clock, as before.
  */
 export async function expireDueDeposits(
   tx: Transaction,
@@ -22,6 +30,17 @@ export async function expireDueDeposits(
 ): Promise<number> {
   const conditions: SQL[] = [eq(deposits.status, 'pending'), lte(deposits.expiresAt, sql`now()`)];
   if (options.customerId) conditions.push(eq(deposits.customerId, options.customerId));
+  else {
+    conditions.push(sql`not exists (
+      select 1 from ${usdtDeposits}
+      where ${usdtDeposits.depositId} = ${deposits.id}
+        and ${deposits.expiresAt} > now() - make_interval(mins => ${USDT_EXPIRY_HOLD_MINUTES})
+        and coalesce(
+          (select ${usdtScanCursors.lastSuccessAt} from ${usdtScanCursors}
+            where ${usdtScanCursors.method} = ${usdtDeposits.method}),
+          'epoch'::timestamptz
+        ) <= ${deposits.expiresAt})`);
+  }
   const due = await tx
     .select({ id: deposits.id, receiptRequestCount: deposits.receiptRequestCount })
     .from(deposits)

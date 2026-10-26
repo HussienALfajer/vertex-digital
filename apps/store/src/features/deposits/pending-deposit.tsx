@@ -73,7 +73,12 @@ export function PendingDeposit({
     if (result.reason === 'QUOTE_EXPIRED' && quote.success) return setOffer(quote.data);
     // Another tab, the expiry job or the admin moved the deposit on: show where it is now.
     if (result.reason === 'DEPOSIT_STATE_CONFLICT') return onChange(null);
-    setFailure(errorText(result.reason));
+    // One receipt here, not the tickets' three images (audit A02-32).
+    setFailure(
+      result.reason === 'PAYLOAD_TOO_LARGE'
+        ? t('deposits.receipt.tooLarge')
+        : errorText(result.reason),
+    );
   }
 
   /** "أوافق وأرسل": a new quote at the current rate, then the receipt at that rate. */

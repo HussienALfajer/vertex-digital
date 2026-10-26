@@ -82,6 +82,8 @@ export class WalletAdminController {
   @Post('wallets/:customerId/adjustments')
   @AdminRoute()
   @Sensitive()
+  // Rule W10: the answer carries the balance after it (audit A02-27).
+  @Header('cache-control', 'no-store')
   @ApiIdempotencyKey()
   @SerializeOptions({ schema: adjustmentSchema })
   @ApiCreatedResponse({ description: 'Written (200: a replay)', standardSchema: adjustmentSchema })
@@ -107,6 +109,8 @@ export class WalletAdminController {
   @Post('wallet-adjustments/:id/reverse')
   @AdminRoute()
   @Sensitive()
+  // Rule W10: the answer carries the balance after it (audit A02-27).
+  @Header('cache-control', 'no-store')
   @ApiIdempotencyKey()
   @SerializeOptions({ schema: adjustmentSchema })
   @ApiCreatedResponse({

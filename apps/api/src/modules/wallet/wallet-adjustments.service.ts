@@ -5,6 +5,7 @@ import {
   type AdjustmentDirection,
   amountConfirmationError,
   type CreateAdjustment,
+  floorToWholeCents,
   isUsdtMethod,
   type ManualDepositMethod,
   normalizeTxid,
@@ -23,6 +24,8 @@ import {
   paymentReferenceOwner,
   postJournal,
   recordAudit,
+  recordedUsdtTransfer,
+  type Transaction,
   walletAdjustments,
   walletBalanceAfter,
 } from '@vertex-digital/db';
@@ -90,6 +93,28 @@ function externalReferenceOf(input: CreateAdjustment): string | null {
     ]);
   }
   return txid;
+}
+
+/**
+ * A USDT manual deposit of a transfer the store recorded (S04 rule U13) credits it on its own
+ * network and for at most its whole cents (audit A02-2): a mistyped network or amount never
+ * credits more than arrived. A TXID the store never recorded (an outage) is the admin's to judge.
+ */
+async function checkRecordedTransfer(tx: Transaction, request: AdjustmentRequest): Promise<void> {
+  const { depositMethod, externalReference } = request;
+  if (!depositMethod || !externalReference || !isUsdtMethod(depositMethod)) return;
+  const transfer = await recordedUsdtTransfer(tx, externalReference);
+  if (!transfer) return;
+  if (transfer.method !== depositMethod) {
+    throw new CodedException(400, 'VALIDATION_FAILED', 'The transfer is on another network', [
+      { path: ['depositMethod'], message: `The transfer was received on ${transfer.method}` },
+    ]);
+  }
+  if (request.amountUnits > floorToWholeCents(transfer.amountUnits)) {
+    throw new CodedException(400, 'VALIDATION_FAILED', 'More than the transfer brought', [
+      { path: ['amountUnits'], message: 'At most the whole cents the transfer brought' },
+    ]);
+  }
 }
 
 /**
@@ -305,6 +330,8 @@ export class WalletAdjustmentsService {
             }
             throw error;
           }
+          // After the claim, so a transfer already credited answers as taken.
+          await checkRecordedTransfer(tx, request);
         }
         const balanceAfterUnits = await walletBalanceAfter(tx, wallet, journalId);
         const audited = {

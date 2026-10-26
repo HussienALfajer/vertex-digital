@@ -519,6 +519,25 @@ describe('creating a deposit (rules SC2–SC6)', () => {
     ).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
   });
 
+  it('allows 20 requotes and cancellations an hour per customer (rule SC6, audit A02-25)', async () => {
+    const someone = await customer();
+    // Counted before the deposit is looked up, refused ones too, as the receipt uploads are.
+    for (let count = 0; count < 10; count += 1) {
+      expect(
+        (await client.post(`/api/deposits/${newId()}/cancel`, { cookie: someone.cookie })).status,
+      ).toBe(404);
+      expect(
+        (await client.post(`/api/deposits/${newId()}/quote`, { cookie: someone.cookie })).status,
+      ).toBe(404);
+    }
+    expect(
+      await body(await client.post(`/api/deposits/${newId()}/cancel`, { cookie: someone.cookie })),
+    ).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
+    expect(
+      await body(await client.post(`/api/deposits/${newId()}/quote`, { cookie: someone.cookie })),
+    ).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
+  });
+
   it('refuses a disabled currency, a fraction of a pound and no ALTCHA', async () => {
     const someone = await customer();
     expect(
@@ -687,6 +706,25 @@ describe('receipts (rule SC8)', () => {
         })
       ).status,
     ).toBe(404);
+  });
+
+  it("serves a receipt only under its own deposit, never another deposit's (audit A02-19)", async () => {
+    const someone = await customer();
+    const own = await submitted(someone.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    const other = await submitted((await customer()).cookie, {
+      currency: 'USD',
+      amountUnits: 5 * USD,
+    });
+    const [receipt] = await test.db
+      .select()
+      .from(depositReceipts)
+      .where(eq(depositReceipts.depositId, own.id));
+    const read = (depositId: string) =>
+      client.get(`/api/admin/deposits/${depositId}/receipts/${receipt?.id}`, {
+        cookie: admin.cookie,
+      });
+    expect((await read(own.id)).status).toBe(200);
+    expect((await read(other.id)).status).toBe(404);
   });
 
   it('refuses a PDF, a decompression bomb and an oversized file', async () => {
@@ -1248,6 +1286,25 @@ describe('approving (rules RV1–RV5, RV7, RV9, M1–M3)', () => {
       )
     ).rows;
     expect(payRuns?.count).toBe(1);
+  });
+
+  it('credits or rejects, never both, when an approval races a rejection (audit A02-19)', async () => {
+    const someone = await customer();
+    const deposit = await submitted(someone.cookie, { currency: 'USD', amountUnits: 5 * USD });
+    const responses = await Promise.all([
+      approve(deposit.id, {
+        transactionNumber: transactionNumber(),
+        receivedCurrency: 'USD',
+        receivedAmountUnits: 5 * USD,
+      }),
+      reject(deposit.id, { reason: 'not_received', internalNote: 'Nothing arrived' }),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    const decisions = (await actionsOf(deposit.id)).filter(
+      (action) => action === 'deposit.credited' || action === 'deposit.rejected',
+    );
+    expect(decisions).toHaveLength(1);
+    expect(await journalsOf(deposit.id)).toHaveLength(decisions[0] === 'deposit.credited' ? 1 : 0);
   });
 
   it('credits one of two deposits approved at once with one transaction number (edge case 7)', async () => {

@@ -17,6 +17,26 @@ export function useTimeLeft(iso: string | null): number {
   return secondsUntil(iso);
 }
 
+/**
+ * Whether `iso` passed on the server's clock, with one timer set to that moment instead of a
+ * render every second (audit A02-9: the whole deposit page ticked for this one boolean).
+ */
+export function useHasPassed(iso: string | null): boolean {
+  const [, setPassed] = useState(0);
+  useEffect(() => {
+    if (!iso) return;
+    const left = new Date(iso).getTime() - serverNow();
+    if (left <= 0) return;
+    // A timer longer than 2^31 ms fires at once; the page reads the deposit long before anyway.
+    const timer = setTimeout(
+      () => setPassed((count) => count + 1),
+      Math.min(left + 50, 2 ** 31 - 1),
+    );
+    return () => clearTimeout(timer);
+  }, [iso]);
+  return iso !== null && secondsUntil(iso) === 0;
+}
+
 function secondsUntil(iso: string | null): number {
   if (!iso) return 0;
   return Math.max(0, Math.ceil((new Date(iso).getTime() - serverNow()) / 1000));

@@ -3,7 +3,9 @@ import {
   type DepositFlagCode,
   floorToWholeCents,
   USDT_METHODS,
+  USDT_NETWORKS,
   type UsdtCheckError,
+  usdtRawForUnits,
 } from '@vertex-digital/contracts';
 import {
   bossJobSender,
@@ -21,7 +23,7 @@ import {
   usdtDeposits,
   usdtTransfers,
 } from '@vertex-digital/db';
-import { and, count, eq, ne, sql } from 'drizzle-orm';
+import { and, count, eq, gt, inArray, isNull, lte, ne, sql } from 'drizzle-orm';
 import type { PgBoss } from 'pg-boss';
 import type { TransferFacts } from './usdt-assess.js';
 
@@ -118,6 +120,118 @@ export async function txidClaimed(tx: Transaction, txid: string): Promise<boolea
     if (await paymentReferenceOwner(tx, method, txid)) return true;
   }
   return false;
+}
+
+export interface ExactMatch {
+  deposit: DepositRow;
+  payAmountUnits: number;
+}
+
+/**
+ * The deposit a final transfer belongs to by rule U12, locked: **one** `pending` deposit of the
+ * transfer's network and address asking for exactly its amount, created before the block and not
+ * expired at it; else the oldest deposit searching another TXID for that amount (the customer
+ * pasted a wrong one, edge case 7). Null when none asks for it, or when the transfer is not an
+ * exact whole-tail amount. `exceptDepositId` leaves out the deposit whose TXID led to the
+ * transfer (audit A02-1: a TXID pasted from someone else's transfer).
+ */
+export async function exactMatchDeposit(
+  tx: Transaction,
+  transfer: TransferFacts,
+  exceptDepositId?: string,
+): Promise<ExactMatch | null> {
+  const exact =
+    usdtRawForUnits(transfer.amountUnits, USDT_NETWORKS[transfer.method].decimals) === transfer.raw;
+  if (!exact) return null;
+  const matching = and(
+    eq(usdtDeposits.method, transfer.method),
+    eq(usdtDeposits.receivingAddress, transfer.toAddress),
+    eq(usdtDeposits.payAmountUnits, transfer.amountUnits),
+    isNull(usdtDeposits.transferId),
+    lte(deposits.createdAt, transfer.blockTime),
+    exceptDepositId === undefined ? undefined : ne(deposits.id, exceptDepositId),
+  );
+  const [waiting] = await tx
+    .select({ deposit: deposits, payAmountUnits: usdtDeposits.payAmountUnits })
+    .from(usdtDeposits)
+    .innerJoin(deposits, eq(deposits.id, usdtDeposits.depositId))
+    .where(
+      and(matching, eq(deposits.status, 'pending'), gt(deposits.expiresAt, transfer.blockTime)),
+    )
+    .for('update', { of: deposits });
+  if (waiting) return waiting;
+  const [searching] = await tx
+    .select({ deposit: deposits, payAmountUnits: usdtDeposits.payAmountUnits })
+    .from(usdtDeposits)
+    .innerJoin(deposits, eq(deposits.id, usdtDeposits.depositId))
+    .where(
+      and(
+        matching,
+        eq(deposits.status, 'submitted'),
+        inArray(usdtDeposits.checkStatus, ['searching', 'confirming']),
+        ne(usdtDeposits.txid, transfer.txid),
+      ),
+    )
+    .orderBy(deposits.createdAt)
+    .limit(1)
+    .for('update', { of: deposits });
+  return searching ?? null;
+}
+
+/**
+ * True when another USDT deposit of the transfer's network, in any status, asked for exactly its
+ * amount (audit A02-1, review): the transfer is that deposit's, even when it can no longer be
+ * credited automatically (expired, cancelled, or sent too late), and is settled by the admin as an
+ * unmatched transfer (rule U13), never through a review of another customer's deposit.
+ */
+export async function askedByAnother(
+  tx: Transaction,
+  transfer: TransferFacts,
+  depositId: string,
+): Promise<boolean> {
+  const exact =
+    usdtRawForUnits(transfer.amountUnits, USDT_NETWORKS[transfer.method].decimals) === transfer.raw;
+  if (!exact) return false;
+  const [other] = await tx
+    .select({ depositId: usdtDeposits.depositId })
+    .from(usdtDeposits)
+    .where(
+      and(
+        eq(usdtDeposits.method, transfer.method),
+        eq(usdtDeposits.payAmountUnits, transfer.amountUnits),
+        ne(usdtDeposits.depositId, depositId),
+      ),
+    )
+    .limit(1);
+  return other !== undefined;
+}
+
+/** Binds the transfer to its exact match and credits it (rule U12); a `pending` one is submitted. */
+export async function creditExactMatch(
+  tx: Transaction,
+  boss: PgBoss,
+  match: ExactMatch,
+  transfer: TransferRow,
+): Promise<'credited'> {
+  let { deposit } = match;
+  if (deposit.status === 'pending') {
+    const [submitted] = await tx
+      .update(deposits)
+      .set({ status: 'submitted', submittedAt: sql`now()` })
+      .where(eq(deposits.id, deposit.id))
+      .returning();
+    if (!submitted) throw new Error(`Deposit ${deposit.id} vanished`);
+    deposit = submitted;
+  }
+  await bindAndSettle(tx, boss, {
+    deposit,
+    transfer,
+    flags: [],
+    txidSource: 'scan',
+    payAmountUnits: match.payAmountUnits,
+    depositMethod: transfer.method as TransferFacts['method'],
+  });
+  return 'credited';
 }
 
 export interface Binding {
