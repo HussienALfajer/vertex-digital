@@ -18,6 +18,7 @@ This project is independent. Do not read or reuse other folders on this machine 
 | `docs/specs/<feature>.md` | Detailed spec per feature, written before implementation. |
 | `docs/open-questions.md` | Unresolved decisions. Never guess an answer to one: ask. |
 | `docs/workflow.md` | How work is run with AI coding agents (feature cycle, effort, sessions). |
+| `docs/testing.md` | How checks run: `pnpm verify`, what runs locally and what in CI, the test databases, the Vitest and E2E rules, the CI jobs, the local machine. |
 | `brand/identity.md` | Visual identity: colors, typography, motif, store-specific guidance, patterns to avoid. Read before any UI work. |
 
 Read these on demand. For a feature, read its spec, the ADRs it touches, and its section of `v1-scope.md`.
@@ -40,11 +41,12 @@ Run from the repository root (Node 24, pnpm via Corepack: `corepack enable`).
 | Task | Command |
 |---|---|
 | Install | `pnpm install` |
-| Local databases: `.env` with random passwords and a local VAPID key pair for web push (S15), the owner and app roles (ADR 0014), dev and test databases with the `pgboss` schema (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
+| Local databases: `.env` with random passwords and a local VAPID key pair for web push (S15), the owner and app roles (ADR 0014), dev and test databases with the `pgboss` schema, and one test database per Vitest worker of the api and worker suites (`TEST_WORKERS`, sized to the machine; the suites' global setups create the ones a larger number needs, as the owner role) (asks for the PostgreSQL superuser password) | `pnpm db:setup-local` |
 | Dev: api, worker, store (http://127.0.0.1:3001) and admin (http://127.0.0.1:5173) in watch mode | `pnpm dev` |
+| Check a change, each check once: lint; typecheck, test and build (Turborepo replays unchanged packages); the changed E2E specs of the store and the admin panel; migration and OpenAPI drift when their sources changed. Refuses while `pnpm dev` is up; summary on the console, logs in `.verify/` (`docs/testing.md`) · only some test files (paths from the root; `--grep <title>` for part of a spec) | `pnpm verify` · `pnpm verify <file>...` |
 | Typecheck · lint · lint fix | `pnpm typecheck` · `pnpm lint` · `pnpm lint:fix` |
-| Unit + integration tests (need the test database URLs in `.env`, and the per-worker test databases from `pnpm db:setup-local`); Turbo replays packages whose inputs did not change | `pnpm test` |
-| E2E (Playwright: builds, then store and admin against a mocked API; first time: `pnpm --filter @vertex-digital/store exec playwright install chromium`): the full suite (CI runs it over four shards) · only the specs changed against `main` (after `pnpm build`) | `pnpm test:e2e` · `pnpm --filter @vertex-digital/<store or admin> exec playwright test --only-changed=origin/main` |
+| Unit + integration tests (need the test database URLs in `.env`; the db, api and worker suites run at the same time on databases of their own, `TEST_WORKERS` Vitest workers each for the api and the worker; a second run of a suite waits for the first); Turbo replays packages whose inputs did not change | `pnpm test` |
+| E2E (Playwright: store and admin against a mocked API; first time: `pnpm --filter @vertex-digital/store exec playwright install chromium`): the changed specs run in `pnpm verify`; the whole suite runs in CI over four shards (here only on purpose: `pnpm verify --e2e-all`) | `pnpm verify apps/<store or admin>/e2e/<file>.spec.ts [--grep <title>]` |
 | A full local store to test by hand: copy the production catalog read-only into the git-ignored `storage/catalog-snapshot` (SSH alias `vertex`; catalog tables and the games' images only, no customer, order, ledger or key) · empty and migrate the dev database again (stop `pnpm dev` first) · fill it with `pnpm dev` running (the catalog with every WDGZone pack mirrored on the fake supplier and WDGZone paused, customers, wallets, deposits, orders in every state, decisions, tickets, content, treasury, reconciliation; about 8 minutes; prints the customers' password, and the admin's when it creates the admin) | `bash scripts/pull-catalog-snapshot.sh` · `pnpm db:reset-local --yes` · `pnpm db:seed-local [--admin-email <email>] [--admin-name <name>] [--catalog <dir>]` |
 | Migration after a schema change · apply to the dev database (Drizzle migrations, then pg-boss, as the owner role) | `pnpm db:generate` · `pnpm db:migrate` |
 | OpenAPI document and the admin client after an API change (after `pnpm build`; commit `apps/api/openapi.json` and `apps/admin/src/lib/api/schema.gen.ts`) | `pnpm --filter @vertex-digital/api openapi:export` · `pnpm --filter @vertex-digital/admin api:generate` |
@@ -77,7 +79,7 @@ Keep this table true: the PR that adds or changes a command updates it.
 
 - Continue without asking when the next step needs no input from the owner. Put brief status notes in the same message as the next action.
 - Stop and ask only when a decision belongs to the owner (scope, business rules, prices, anything in `open-questions.md`), when a spec is ambiguous in a way that changes the result, or before a destructive or outward-facing action (deleting data, dropping tables, restoring a database snapshot, force-push, calling a live supplier or blockchain API with real money, moving real customer money, publishing). Deploying `main` to production and changing production through the server or the admin panel (catalog, settings, test fixtures) need no approval (owner, 2026-10-18): do them when the task calls for them and report what changed.
-- A task is done only when its checks pass: typecheck, lint, and the relevant tests; for UI changes, a Playwright screenshot in RTL. Show the evidence (commands run and their results) instead of asserting success.
+- A task is done only when `pnpm verify` passes on its final state and CI is green; for UI changes, a Playwright screenshot in RTL. Show the evidence (the verify summary) instead of asserting success.
 - Fix root causes. Never silence a failing test, type error, or lint rule to make a check pass.
 - For multi-step work keep a checklist in `TASKS.md`: mark items done and add work you discover.
 - Mark anything you could not confirm and say where you looked.
@@ -87,7 +89,7 @@ Keep this table true: the PR that adds or changes a command updates it.
 
 - Search before reading, then read only the relevant range. For `v1-scope.md`, read the feature's section, not the whole file.
 - Never read generated or lock files: `pnpm-lock.yaml`, `packages/db/migrations/meta/`, `routeTree.gen.ts`, `.next/`, `dist/`, `.turbo/`. Open Playwright screenshots only to verify a UI change.
-- Run the narrowest check first (one package, one test file), and the full set once before the PR, in one turbo command (`pnpm turbo run typecheck test build`) so the tasks run in parallel and Turbo's cache skips what did not change. Add `--output-logs=errors-only`. Run the `checker` in the background and keep working (the reviewer can run at the same time).
+- Checks (`docs/testing.md`): while building, run only the tests you work on (`pnpm verify <file>`); before the PR, `pnpm verify` once, and again only after a change. Each check runs once: read its failures in the summary and in `.verify/`, never run a suite again to see its output, and rerun only the files that failed. One test run at a time, and no edits while it runs: the `test-guard` hook refuses a second run, the whole E2E suite and `timeout` around tests. CI runs everything.
 - In replies, point to `path:line` instead of pasting files or diffs.
 
 ## Git
@@ -103,10 +105,10 @@ When a task's work is done (a spec approved, a `/feature-slice` PR accepted, a s
 1. **Branch:** not `main`; if on `main`, create the branch named by type. `TASKS.md` has no open items for this PR.
 2. **Docs:** update `docs/ROADMAP.md` when a feature or roadmap item is done, and every doc the change made stale (`docs/architecture.md`, a folder `CLAUDE.md`, `docs/open-questions.md`, the commands table above).
 3. **Secrets:** `git status` and `git diff --stat` show no `.env`, key, receipt image, customer data or real supplier response; fixtures are sanitized.
-4. **Checks:** lint, typecheck, test and build, plus the changed E2E specs when `apps/store`, `apps/admin` or `packages/ui` changed and `drift` when `packages/db` changed, through the `checker` subagent. Turbo's cache replays every task whose inputs did not change, so this run costs only what changed since the last one: run it again after any fix rather than reasoning about what already passed. Documentation-only changes run no local checks (CI skips them as well). CI runs everything, the full E2E suite over four shards. Everything must pass; fix root causes.
+4. **Checks:** `pnpm verify` passes on the final tree (lint, typecheck, test, build, the changed E2E specs, and migration and OpenAPI drift when their sources changed). A green run on the same tree counts; after a fix run it again, and Turborepo replays what the fix did not touch. Documentation-only changes run no local checks (CI skips them as well). CI runs everything, the whole E2E suite over four shards. Everything must pass; fix root causes.
 5. **Review:** for feature and supplier work, the `reviewer` subagent has run and its blocking findings are fixed.
 6. **Commit:** stage the intended files only; Conventional Commit subject, a body with what and why, ending with the session's attribution line.
-7. **Pull request:** `git push -u origin <branch>`, `gh pr create --base main` with `## Summary` (what and why, in bullets) and `## Test plan` (the checks as ticked boxes, each marked run now or reused from the record; for docs only, "documentation only, CI runs the checks"), ending with the session's attribution line; then immediately `gh pr merge <number> --auto --merge`.
+7. **Pull request:** `git push -u origin <branch>`, `gh pr create --base main` with `## Summary` (what and why, in bullets) and `## Test plan` (the checks as ticked boxes, each marked run now or reused from the record; for docs only, "documentation only, CI runs the checks"), ending with the session's attribution line; then immediately `gh pr merge <number> --auto --merge`. If CI fails, read `gh run view <run-id> --log-failed`, fix the cause on the branch and push: auto-merge waits for green.
 8. **Report** in the format below, with the PR link under Changed and the cleanup line at the end of "Needs from you".
 
 ## Reporting

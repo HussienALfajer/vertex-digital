@@ -7,9 +7,11 @@
     "TEST_DATABASE_URL",
     "DATABASE_OWNER_URL",
     "TEST_DATABASE_OWNER_URL",
+    "TEST_WORKERS",
     "CI",
     "PLAYWRIGHT_BROWSERS_PATH"
   ],
+  "remoteCache": { "signature": true },
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

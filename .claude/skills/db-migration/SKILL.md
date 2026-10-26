@@ -17,7 +17,7 @@ Schema change: **$ARGUMENTS**. Rules: `packages/db/CLAUDE.md` and ADR 0011 (Data
    - a removed or renamed enum value (order and deposit states especially);
    - anything that changes or deletes ledger, audit or event rows.
    Contract steps ship in a later release, once no deployed code uses the old shape. Data backfills go in a custom migration (`pnpm --filter @vertex-digital/db exec drizzle-kit generate --custom`); a backfill never touches ledger rows: money corrections are new journals.
-5. **Test:** `pnpm --filter @vertex-digital/db test` (runs the migrations, `src/conventions.test.ts` and the ledger tests), then the tests of every package that uses the tables. Use the `checker` subagent for these runs.
+5. **Test:** `pnpm verify packages/db/src/conventions.test.ts` (runs the migrations and the conventions test) with the db test files of the tables you changed (`src/ledger/guards.test.ts` for a new append-only table), then the test files of the packages that use the tables, with `pnpm verify <files>`.
 6. **Confirm no drift:** running `pnpm db:generate` again reports nothing to migrate.
 7. **Dev database:** `pnpm db:migrate` changes the owner's local data, so ask before running it.
 

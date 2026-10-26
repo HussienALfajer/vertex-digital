@@ -15,6 +15,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done. Feature IDs
 - [x] Design system: tokens from `brand/identity.md`, Vertex Hub components copied and adapted, VERTEX DIGITAL logo (final, Q16 resolved 2026-10-15; fonts: Noto Kufi Arabic and Montserrat, Q2 resolved 2026-10-14)
 - [x] Auth skeletons: customer and staff Better Auth instances, staff TOTP enforcement, first-owner CLI, permission map skeleton in `packages/contracts`, sign-in pages in the store and the panel
 - [x] CI: typecheck, lint, test, build, gitleaks and migration drift (PostgreSQL 17 service, non-superuser app role), OpenAPI and admin client drift, a start check of the built API and worker, E2E (store and panel, screenshots as artifacts)
+- [x] Faster checks (2026-10-26, `docs/testing.md`): `pnpm verify` (each check once, summary and logs in `.verify/`), the `test-guard` hook, api and worker suites without Vitest isolation on workers sized to the machine with an advisory lock per suite, E2E traces on first retry, CI ready for Turborepo's remote cache
 - [x] Deployment skeleton: `deploy/` (both hosts, TLS, nginx limits and headers, Brotli when available, fail2ban jail, PM2 store/api/worker, atomic releases with rollback, health checks, daily backups) and `docs/deployment.md` written; provisioned and first deployed on 2026-10-07
 
 ## Phase 1 — Money core

@@ -35,9 +35,6 @@ import { PUSH_TITLE, renderPush } from '../src/jobs/push/push-texts.js';
 import { SendPushJob } from '../src/jobs/push/send.job.js';
 import { PushSender } from '../src/push/push-sender.js';
 
-const sentry = vi.hoisted(() => ({ captureMessage: vi.fn() }));
-vi.mock('@sentry/nestjs', () => ({ captureMessage: sentry.captureMessage }));
-
 /*
  * Web push (S15 PT1–PT3, PD1–PD7): the lock-screen texts, the outcome rules, and `push.send`
  * against the test database with the `log` transport and with a scripted push service (`fetch`
@@ -61,9 +58,14 @@ const pgBoss = {
   },
 } as unknown as PgBossService;
 
+// The job's Sentry event (A13), watched without sending: test/worker-env.ts restores it after the file.
+const reportRefusals = vi
+  .spyOn(SendPushJob.prototype, 'reportRefusals')
+  .mockImplementation(() => {});
+
 beforeEach(() => {
   sentJobs.length = 0;
-  sentry.captureMessage.mockClear();
+  reportRefusals.mockClear();
 });
 
 const SAMPLE: { [Event in PushNotificationEvent]: NotificationParams<Event> } = {
@@ -467,8 +469,8 @@ describe('push.send against a push service (PD3–PD5)', () => {
     expect(rows.get(ok)?.lastSentAt).toBeInstanceOf(Date);
 
     // One Sentry event for the job, without the payload or keys.
-    expect(sentry.captureMessage).toHaveBeenCalledTimes(1);
-    expect(String(sentry.captureMessage.mock.calls[0]?.[0])).not.toContain('VD-');
+    expect(reportRefusals).toHaveBeenCalledTimes(1);
+    expect(String(reportRefusals.mock.calls[0]?.[0])).not.toContain('VD-');
 
     expect(sentJobs).toEqual([
       {

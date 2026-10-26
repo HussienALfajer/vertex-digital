@@ -80,6 +80,9 @@ async function addWebRoute(page: Page, drawer: Locator) {
   await add.getByLabel(s.routes.settings.expected).fill('30');
   await add.getByRole('button', { name: s.routes.addSubmit }).click();
   await expect(add.getByText(s.routes.settings.expectedError)).toBeVisible();
+  // The dialog moves the focus to the refused field a frame after the error shows: typing into
+  // the limit before then lands in the expected time ("3045", seen in CI).
+  await expect(add.getByLabel(s.routes.settings.expected)).toBeFocused();
   await add.getByLabel(fill(s.routes.settings.limit, { policy: 30 })).fill('45');
   await add.getByRole('button', { name: s.routes.addSubmit }).click();
   await expect(add).toBeHidden();
@@ -307,6 +310,8 @@ test.describe('suppliers', () => {
     await settings.getByLabel(fill(s.routes.settings.limit, { policy: 30 })).fill('20');
     await settings.getByRole('button', { name: ar.catalog.actions.save }).click();
     await expect(settings.getByText(s.routes.settings.expectedError)).toBeVisible();
+    // As in addWebRoute: the focus goes to the refused field a frame after the error shows.
+    await expect(settings.getByLabel(s.routes.settings.expected)).toBeFocused();
     await settings.getByLabel(fill(s.routes.settings.limit, { policy: 30 })).fill('45');
     await settings.getByRole('switch', { name: s.routes.settings.priceBasis }).click();
     await settings.getByRole('button', { name: ar.catalog.actions.save }).click();

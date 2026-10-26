@@ -12,6 +12,8 @@
       "Bash(pnpm lint*)",
       "Bash(pnpm typecheck*)",
       "Bash(pnpm test*)",
+      "Bash(pnpm verify*)",
+      "Bash(pnpm --silent verify*)",
       "Bash(pnpm build*)",
       "Bash(pnpm dev*)",
       "Bash(pnpm db:generate*)",
@@ -109,6 +111,18 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/cloud-session.sh\"",
             "timeout": 600,
             "statusMessage": "Cloud session setup"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-guard.mjs\"",
+            "timeout": 30
           }
         ]
       }

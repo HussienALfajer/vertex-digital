@@ -145,7 +145,7 @@ export class SendPushJob implements OnApplicationBootstrap {
       // A13: one event per job, never the payload or the keys.
       const message = `push.send: ${refused.length} device(s) refused notification ${row.id}`;
       this.logger.warn(message);
-      Sentry.captureMessage(message, 'warning');
+      this.reportRefusals(message);
     }
     const retry = payload.retry ?? 0;
     const delay = PUSH_RETRY_DELAYS_SECONDS[retry];
@@ -159,6 +159,14 @@ export class SendPushJob implements OnApplicationBootstrap {
       result.retried = [];
     }
     return result;
+  }
+
+  /**
+   * A13's Sentry event for the refused devices. A method of its own so the tests watch it with a
+   * spy: they run without module isolation, where a module mock of Sentry would reach other files.
+   */
+  reportRefusals(message: string): void {
+    Sentry.captureMessage(message, 'warning');
   }
 
   /** One device's send and its row settled (PD4, PD5); `transient` ones join `result.retried`. */

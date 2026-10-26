@@ -47,6 +47,8 @@ export const envSchema = z
     API_HOST: z.string().min(1).default('127.0.0.1'),
     API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    /** Connections the app's pool may open; the tests lower it so parallel workers fit the server. */
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
     /** Public origin of the store; customer routes and `/api/auth` are served under it. */
     STORE_URL: origin().default('http://127.0.0.1:3001'),
     /** Public origin of the admin panel; `/api/admin` is served under it (ADR 0007). */

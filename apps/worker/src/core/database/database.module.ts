@@ -12,7 +12,8 @@ const DATABASE_CONNECTION = Symbol('DATABASE_CONNECTION');
     {
       provide: DATABASE_CONNECTION,
       inject: [ENV],
-      useFactory: (env: Env) => createDatabase(env.DATABASE_URL, APP_POOL_LIMITS),
+      useFactory: (env: Env) =>
+        createDatabase(env.DATABASE_URL, { ...APP_POOL_LIMITS, max: env.DATABASE_POOL_MAX }),
     },
     {
       provide: DATABASE,

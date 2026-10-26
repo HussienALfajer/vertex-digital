@@ -53,7 +53,7 @@ export const APP_POOL_LIMITS = {
 
 export function createDatabase(
   connectionString: string,
-  limits: Pick<pg.PoolConfig, 'connectionTimeoutMillis' | 'lock_timeout'> = {},
+  limits: Pick<pg.PoolConfig, 'connectionTimeoutMillis' | 'lock_timeout' | 'max'> = {},
 ): DatabaseConnection {
   const pool = new pg.Pool({ ...limits, connectionString });
   const db = drizzle({ client: pool, schema, casing: 'snake_case' });
