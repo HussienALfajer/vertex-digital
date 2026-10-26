@@ -54,4 +54,4 @@ The model vertex-hub adopted on 2026-10-26 (its PR #172), adapted here; `docs/te
 - [x] CI: `TURBO_*` env on the turbo jobs, `remoteCache.signature`, the cache comment, `TEST_WORKERS` passed through
 - [x] Measure after, `pnpm verify`, reviewer (fixed: the worker's Sentry module mock, now a spy, and `vi.mock` refused in both suites; the remote-cache secrets on the turbo steps only, read-only for pull requests; the connection budget stated as measured); `client.test.ts` connect limits sized for parallel suites; the staff scan skips `.data`
 - [x] PR with auto-merge (#174), Auto-fix; CI's first run caught a race in `suppliers.spec.ts` (typing before the refused field took the focus), fixed with a wait for the focus
-- [ ] api CI shards only if Tests is still the longest job in this PR's CI run
+- [x] api CI shards only if Tests is still the longest job in this PR's CI run: not needed. In #174's runs Tests took 2 min 31 s (every suite ran) and 55 s, the longest E2E shard 4 min 54 s and 3 min 58 s; E2E sets the PR's time
