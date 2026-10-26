@@ -1,4 +1,4 @@
-import { concurrentQueryWarnings } from '@vertex-digital/db/testing';
+import { concurrentQueries } from '@vertex-digital/db/testing';
 import { afterAll, expect } from 'vitest';
 
 /*
@@ -6,7 +6,7 @@ import { afterAll, expect } from 'vitest';
  * 2026-10-14): independent reads inside a transaction go through `readAll` (packages/db
  * client.ts), never `Promise.all` on the transaction.
  */
-const seen = concurrentQueryWarnings();
+const seen = concurrentQueries();
 
 afterAll(() => {
   expect(seen, 'a query was sent on a pg client already running one: use readAll').toEqual([]);

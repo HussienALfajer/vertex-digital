@@ -10,16 +10,26 @@ export default defineConfig({
     // files in one worker run one after another on it, so a check that reads global rows (the
     // active owner) sees only its worker's files.
     maxWorkers: TEST_WORKERS,
+    // A worker keeps its modules from one file to the next instead of loading the whole app again
+    // for each file. Each file still starts its own app and seeds its own rows; test/worker-env.ts
+    // puts process.env and the spies back after each file, and the setup files' guards report per
+    // file (packages/db testing.ts). A run with shuffled files passed whole (2026-10-26).
+    isolate: false,
     globalSetup: ['./test/global-setup.ts'],
+    // worker-env.ts last: hooks run in reverse, so its afterAll puts the environment back first,
+    // even when a guard's afterAll fails the file and skips the hooks after it.
     setupFiles: [
-      './test/worker-env.ts',
       './test/no-concurrent-queries.ts',
       './test/no-pool-reads-in-transactions.ts',
+      './test/worker-env.ts',
     ],
     // Set explicitly: the root .env (loaded to find the test database) must not leak in.
     env: {
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
+      // Each worker's app opens at most 4 connections, so both suites' workers fit PostgreSQL's
+      // default 100 while Turborepo runs them at the same time (packages/db test-workers.ts).
+      DATABASE_POOL_MAX: '4',
       // test/worker-env.ts sets DATABASE_URL to the worker's database.
       TEST_DATABASE_SUITE: 'api',
       STORE_URL: 'http://127.0.0.1:3001',

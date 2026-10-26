@@ -161,6 +161,6 @@ Ports are chosen at provisioning from the server's map (`/root/SERVER.md`) and r
 
 ## Environments
 
-- **Local (Windows):** PostgreSQL 17 installed natively; dev and test databases; the fake supplier and a local chain-reader stub; email written to files instead of sent.
+- **Local (Windows):** PostgreSQL 17 installed natively; dev and test databases (one test database per Vitest worker of the api and worker suites); the fake supplier and a local chain-reader stub; email written to files instead of sent. Checks run through `pnpm verify` (`docs/testing.md`).
 - **CI:** GitHub Actions with a PostgreSQL service container; no secrets needed. Lint/typecheck/build, the tests and four E2E shards run as parallel jobs behind two gate jobs (the required checks); Turborepo's cache is kept between runs, and a PR that changes only Markdown outside `brand/` skips the checks.
 - **Production:** the owner's VPS, atomic releases with automatic rollback. No staging in V1.

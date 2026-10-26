@@ -30,7 +30,7 @@ Write or update `docs/suppliers/<code>.md`: base URL, authentication header form
 - `fixtures/`: request and response samples from the documentation, or recorded from a sandbox, **sanitized** (no keys, signatures from a test secret, no real player names or ids, no real order ids).
 - Tests against a local fake HTTP server: each endpoint's happy path; every status and error code mapped to the right outcome; timeout and 5xx after send → `unknown`; repeat `placeOrder` with the same key → same order; webhook with a valid, a wrong and a stale signature, and a replayed event id; decimal prices to micro-dollars at the edges.
 - If the fake supplier lacks a scenario this supplier can produce, add it to the `fake` adapter so the order engine is tested against it too.
-- Gates through the `checker` subagent: `suppliers` test and typecheck, then the `worker` tests that use the registry.
+- Gates: `pnpm verify` on the adapter's `packages/suppliers` test files and `pnpm typecheck`, then `pnpm verify` on the `worker` test files that use the registry.
 
 ## 4. Live smoke test (only with the owner)
 A live call costs money and uses real keys, so it never runs from tests or CI. When the owner asks, give them the CLI command to run themselves on the server or a trusted machine (`supplier:smoke <code>`: balance, list offers, validate a known test ID, and one smallest order only if the owner says so), and read back only the summary they share.

@@ -14,7 +14,9 @@ export default defineConfig({
     baseURL,
     locale: 'ar',
     timezoneId: 'Asia/Damascus',
-    trace: 'retain-on-failure',
+    // Recording a trace for every test (to keep the failed ones) slowed the whole suite and made
+    // tests time out under load. CI records the retry of a failed test; locally pass `--trace on`.
+    trace: 'on-first-retry',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   // Serves the production build; `pnpm test:e2e` from the root builds it first.

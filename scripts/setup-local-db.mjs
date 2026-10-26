@@ -16,6 +16,8 @@ import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseEnv } from 'node:util';
+import { databaseAccessStatements } from '../packages/db/src/database-access.ts';
+import { testWorkers } from '../packages/db/src/test-workers.ts';
 
 const root = new URL('..', import.meta.url);
 const envFile = new URL('.env', root);
@@ -106,9 +108,10 @@ if (app.pathname !== owner.pathname || testApp.pathname !== testOwner.pathname) 
 const name = (url) => decodeURIComponent(url.username);
 const appRole = name(app);
 const ownerRole = name(owner);
-// One test database per parallel Vitest worker of each app suite: `<test database>_<suite>_<n>`.
-// Keep in step with TEST_WORKERS in packages/db/src/testing.ts.
-const TEST_WORKERS = 4;
+// One test database per parallel Vitest worker of each app suite: `<test database>_<suite>_<n>`, as
+// many as the suites use on this machine (packages/db/src/test-workers.ts). The suites' global
+// setups create the ones a larger TEST_WORKERS needs later, as the owner role.
+const TEST_WORKERS = testWorkers();
 const testDatabase = decodeURIComponent(testApp.pathname.slice(1));
 const databases = [
   decodeURIComponent(app.pathname.slice(1)),
@@ -126,7 +129,9 @@ const sql = [
     [appRole, passwordOf(app.href)],
   ].flatMap(([role, password]) => [
     `SELECT format('CREATE ROLE %I LOGIN', ${literal(role)}) WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = ${literal(role)})\\gexec`,
-    `ALTER ROLE ${ident(role)} WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD ${literal(password)};`,
+    // Here (local and CI only) the owner role may create databases: the test suites' global setups
+    // create the worker databases they miss. Production's roles have no CREATEDB (deploy/provision.sh).
+    `ALTER ROLE ${ident(role)} WITH LOGIN NOSUPERUSER ${role === ownerRole ? 'CREATEDB' : 'NOCREATEDB'} NOCREATEROLE PASSWORD ${literal(password)};`,
   ]),
   ...databases.map(
     (database) =>
@@ -135,17 +140,7 @@ const sql = [
   ...databases.flatMap((database) => [
     `\\connect ${ident(database)}`,
     `REASSIGN OWNED BY ${ident(appRole)} TO ${ident(ownerRole)};`,
-    // No temporary tables for the app role: nothing may shadow a table a trigger reads.
-    `REVOKE CONNECT, TEMPORARY ON DATABASE ${ident(database)} FROM PUBLIC;`,
-    `GRANT CONNECT ON DATABASE ${ident(database)} TO ${ident(appRole)};`,
-    `GRANT USAGE ON SCHEMA public TO ${ident(appRole)};`,
-    `ALTER DEFAULT PRIVILEGES FOR ROLE ${ident(ownerRole)} IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${ident(appRole)};`,
-    `ALTER DEFAULT PRIVILEGES FOR ROLE ${ident(ownerRole)} IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ${ident(appRole)};`,
-    // pg-boss's tables: installed by the owner with the migrations, used by the app role.
-    `CREATE SCHEMA IF NOT EXISTS pgboss AUTHORIZATION ${ident(ownerRole)};`,
-    `GRANT USAGE ON SCHEMA pgboss TO ${ident(appRole)};`,
-    `ALTER DEFAULT PRIVILEGES FOR ROLE ${ident(ownerRole)} IN SCHEMA pgboss GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${ident(appRole)};`,
-    `ALTER DEFAULT PRIVILEGES FOR ROLE ${ident(ownerRole)} IN SCHEMA pgboss GRANT USAGE, SELECT ON SEQUENCES TO ${ident(appRole)};`,
+    ...databaseAccessStatements(database, ownerRole, appRole),
   ]),
 ].join('\n');
 

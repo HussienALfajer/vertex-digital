@@ -38,3 +38,19 @@ Spec `docs/specs/S22-quick-buy-and-order-help.md`, ADR 0037. Three PRs as the sp
 - [x] E2E flows and RTL screenshots (store: problem card, hint sheet, form, alert buttons, "تنبيهاتي"; phone and desktop, dark and light; admin: queue chip and filter, waiting count, light and dark)
 - [x] Wiring checklist, checks (lint, typecheck, test, build, drift, OpenAPI, changed E2E), reviewer (blocking findings fixed: a `failed` order treated as in progress and the refund hint only after a refund; tests for private-list baselines, the rebase, hidden packs, paused games, archived customers and the parallel 30th alert; `orderProblem` in the OpenAPI body; alert buttons on a folded list that opens itself)
 - [x] Owner acceptance (2026-10-26), PR with auto-merge; `docs/ROADMAP.md` S22 done
+
+# TASKS — Faster checks (branch `chore/test-speed`)
+
+The model vertex-hub adopted on 2026-10-26 (its PR #172), adapted here; `docs/testing.md`.
+
+- [x] Measure before: api and worker suites, the whole E2E suite of admin and store
+- [x] Vitest: `isolate: false` for the api and the worker; `process.env` and spies restored after each file; the query guards patched once per process with a list per file (probe files proved both fail every file in one worker, then deleted)
+- [x] Workers sized to the machine (`testWorkers()`, shared with `scripts/setup-local-db.mjs`); missing worker databases created by the global setups as the owner role; `DATABASE_POOL_MAX` for the test apps
+- [x] An advisory lock per suite for the length of a run (`holdTestDatabases`) in the db, api and worker global setups
+- [x] Playwright: `trace: 'on-first-retry'`; every timeout was the trace's load, none left to fix (two whole runs each)
+- [x] `pnpm verify`; `.verify/` git-ignored
+- [x] The `test-guard` hook and `Bash(pnpm verify*)`
+- [x] Agent rules and docs: checker, feature-slice, db-migration, supplier-adapter, AGENTS.md, CLAUDE.md, `docs/testing.md`, folder `CLAUDE.md` files, workflow, architecture, README, roadmap
+- [x] CI: `TURBO_*` env on the turbo jobs, `remoteCache.signature`, the cache comment, `TEST_WORKERS` passed through
+- [x] Measure after, `pnpm verify`, reviewer (fixed: the worker's Sentry module mock, now a spy, and `vi.mock` refused in both suites; the remote-cache secrets on the turbo steps only, read-only for pull requests; the connection budget stated as measured); `client.test.ts` connect limits sized for parallel suites; the staff scan skips `.data`
+- [ ] PR with auto-merge, Auto-fix; api CI shards only if Tests is still the longest job

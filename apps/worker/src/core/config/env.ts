@@ -54,6 +54,8 @@ export const envSchema = z
     /** Identifies this worker process in the heartbeat table. */
     WORKER_NAME: z.string().min(1).default(hostname()),
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    /** Connections the app's pool may open; the tests lower it so parallel workers fit the server. */
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
     /** Empty disables Sentry. */
     SENTRY_DSN: optional().pipe(z.url().optional()),
     /**

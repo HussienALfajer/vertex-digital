@@ -35,9 +35,9 @@ Steps inside a session:
 
 1. **Spec** (`/spec`): the agent interviews the owner about the feature from `v1-scope.md` and writes `docs/specs/<id>-<name>.md` from `docs/specs/_template.md`: access, data, states, money flows, API, screens, abuse cases, edge cases, and an end-to-end acceptance check.
 2. **Plan** (`/feature-slice`, first step): the agent splits the feature into PRs and writes `TASKS.md`; the owner approves before any code.
-3. **Implement** (`/feature-slice`): one layer at a time, contracts → db → api/worker → bridge (OpenAPI) → admin/store → E2E, each followed by a check gate through the `checker` subagent. The wiring checklist is in `.claude/skills/feature-slice/wiring.md`.
+3. **Implement** (`/feature-slice`): one layer at a time, contracts → db → api/worker → bridge (OpenAPI) → admin/store → E2E, each followed by a check gate on the layer's own tests (`pnpm verify <files>`, `docs/testing.md`). The wiring checklist is in `.claude/skills/feature-slice/wiring.md`.
 4. **Review:** the `reviewer` subagent (fresh context) checks the branch against the spec and the rules, with a money, security and fraud checklist, and reports blocking issues only.
-5. **Accept and open the PR at once:** the owner tries it in the browser; in the same turn the agent follows "Finishing a task" in `AGENTS.md`: updates `docs/ROADMAP.md`, runs the checks through the `checker` (Turbo's cache replays every task whose inputs did not change, so only what changed since the last run runs again), commits, pushes, opens the PR and enables auto-merge. There is no separate shipping command (owner, 2026-10-06). CI runs every check on every PR before the merge (the full E2E suite over four shards); a PR that changes only Markdown outside `brand/` skips them.
+5. **Accept and open the PR at once:** the owner tries it in the browser; in the same turn the agent follows "Finishing a task" in `AGENTS.md`: updates `docs/ROADMAP.md`, runs `pnpm verify` again if anything changed since its last green run (Turbo's cache replays every task whose inputs did not change), commits, pushes, opens the PR and enables auto-merge. There is no separate shipping command (owner, 2026-10-06). CI runs every check on every PR before the merge (the full E2E suite over four shards); a PR that changes only Markdown outside `brand/` skips them.
 
 ## How the instructions are layered
 
@@ -49,8 +49,8 @@ Each rule lives in one place and loads only when it is needed.
 | Folder rules | `<app or package>/CLAUDE.md` (created with the Phase 0 scaffold); the root `AGENTS.md` points other agents to them | When the agent reads a file in that folder |
 | Decisions and specs | `docs/decisions/`, `docs/specs/`, `docs/product/v1-scope.md` | On demand, the parts the task needs |
 | Workflows | `.claude/skills/`: `spec`, `feature-slice`, `db-migration`, `supplier-adapter` (each ends by opening its PR) | When invoked (`db-migration` also when a schema change is detected) |
-| Subagents | `.claude/agents/`: `checker` (Haiku, runs checks, returns failures only), `reviewer` (Opus, fresh-context review) | In their own context; only their summary returns |
-| Enforcement | Biome hook on every edit (`.claude/hooks/`), architecture and conventions tests, CI, gitleaks | Always, without costing context |
+| Subagents | `.claude/agents/`: `checker` (Haiku, runs `pnpm verify` and returns its summary), `reviewer` (Opus, fresh-context review) | In their own context; only their summary returns |
+| Enforcement | Biome hook on every edit and the test guard on every shell command (`.claude/hooks/`: one test run at a time, no whole E2E suite locally, no `timeout` around tests), architecture and conventions tests, CI, gitleaks | Always, without costing context |
 | Guard rails | `.claude/settings.json`: model and effort, permissions, reads of secrets and generated files denied | Always |
 
 A rule that a machine can check belongs in a test or lint rule, not in prose (ADR 0011). A rule that only applies to one folder belongs in that folder's `CLAUDE.md`, not the root.
@@ -60,7 +60,7 @@ A rule that a machine can check belongs in a test or lint rule, not in prose (AD
 - **Goal:** what to build.
 - **Reference:** which spec file.
 - **Scope:** what may change and what must not.
-- **Finish line:** a checkable condition (e.g. "typecheck, lint and tests pass; RTL screenshot of the page attached").
+- **Finish line:** a checkable condition (e.g. "`pnpm verify` passes; RTL screenshot of the page attached").
 - **Stop conditions:** only for owner decisions, destructive actions, and anything that spends real money.
 
 Don't write "think hard" or "step by step": effort controls depth.
@@ -89,7 +89,7 @@ Avoid `max` unless a gain is measured. Agent teams, fast mode and `opusplan` are
 5. After two failed corrections on the same issue, `/clear` and start again with a better request.
 6. Side questions: `/btw`, so they don't enter the context.
 7. Disconnect connectors and plugins the project does not need. The project turns off the `ui-ux-pro-max` plugin (the identity is fixed in `brand/identity.md`); turn Hostinger DNS on only for DNS work.
-8. Let the `checker` subagent run long checks, so their output never enters the main context.
+8. Run checks with `pnpm verify`: it prints a short summary and keeps the whole output in `.verify/`, so long output never enters the context. Delegate a long run to the `checker` when something else can go on meanwhile (the reviewer), never edits.
 9. Check `/usage` after each feature: cache share should be high; output should be small relative to the change.
 
 ## Accounts and tools

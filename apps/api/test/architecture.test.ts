@@ -274,9 +274,21 @@ describe('module boundaries', () => {
 
 describe('one admin, no staff (ADR 0016)', () => {
   const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
-  /** Code, tests and front ends; migrations keep their history and are left out. */
+  /**
+   * Code, tests and front ends; migrations keep their history and are left out, and so are the
+   * git-ignored uploads of the dev app and the tests (`.data`: thousands of files, written while
+   * the suite runs).
+   */
   const roots = ['apps', 'packages'].map((dir) => join(repoRoot, dir));
-  const skipped = new Set(['node_modules', 'dist', 'coverage', '.next', '.turbo', 'migrations']);
+  const skipped = new Set([
+    'node_modules',
+    'dist',
+    'coverage',
+    '.next',
+    '.turbo',
+    '.data',
+    'migrations',
+  ]);
   /**
    * Files that may contain the word: the test that the rename keeps the Phase 0 row (it names the
    * old tables), and the common-password data (a leaked password list, not code).
@@ -303,6 +315,26 @@ describe('one admin, no staff (ADR 0016)', () => {
       .filter((file) => /staff|ROLE_PERMISSIONS|hasPermission/i.test(readFileSync(file, 'utf8')))
       .map((file) => relative(repoRoot, file).split(sep).join('/'))
       .filter((file) => !allowed.has(file));
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('test files leave no module state (the api and worker suites run without isolation)', () => {
+  const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
+  const suites = ['apps/api/test', 'apps/worker/test'];
+
+  it('mocks no module: a worker keeps its modules from one file to the next, mocked or not', () => {
+    // `vi.mock` would reach the files after it in the worker, or miss modules an earlier file
+    // loaded; spy on a method instead (`vi.spyOn`, restored after each file by test/worker-env.ts).
+    const offenders = suites
+      .flatMap((dir) =>
+        readdirSync(join(repoRoot, dir))
+          .filter((name) => name.endsWith('.ts'))
+          .map((name) => `${dir}/${name}`),
+      )
+      .filter((file) =>
+        /\bvi\.(?:mock|doMock|unmock|doUnmock)\(/.test(readFileSync(join(repoRoot, file), 'utf8')),
+      );
     expect(offenders).toEqual([]);
   });
 });

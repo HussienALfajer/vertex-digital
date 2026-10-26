@@ -26,7 +26,9 @@ export default defineConfig({
     baseURL,
     locale: 'ar',
     timezoneId: 'Asia/Damascus',
-    trace: 'retain-on-failure',
+    // Recording a trace for every test (to keep the failed ones) slowed the whole suite and made
+    // tests time out under load. CI records the retry of a failed test; locally pass `--trace on`.
+    trace: 'on-first-retry',
     // The store registers /sw.js on every page (S15 SW2). The API mock routes the page's
     // requests; a service worker would sit between them, so only e2e/pwa.spec.ts allows it.
     serviceWorkers: 'block',

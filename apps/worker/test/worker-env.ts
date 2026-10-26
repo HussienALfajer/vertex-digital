@@ -1,4 +1,17 @@
 import { testDatabaseUrl } from '@vertex-digital/db/testing';
+import { afterAll, vi } from 'vitest';
+
+// A worker runs one file after another without isolation (vitest.config.ts) and this file before
+// each of them: what a file sets in process.env (USDT addresses, the worker's paths below) and the
+// spies it leaves on shared prototypes are put back after it, so they never reach the next file.
+const environment = { ...process.env };
+afterAll(() => {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in environment)) delete process.env[key];
+  }
+  Object.assign(process.env, environment);
+  vi.restoreAllMocks();
+});
 
 /*
  * Each Vitest worker has its own test database, fake supplier state, bot and email logs and files
