@@ -130,9 +130,9 @@ const PASSWORD_CHECK_PATHS = ['/two-factor/enable', '/two-factor/generate-backup
  * The signed-in admin's password and re-authentication checks: 10 in 15 minutes, from any address,
  * counted before the check (audit A01-3, as the customers' F2-8). A stolen session cannot guess the
  * password or the code that opens sensitive routes; the sign-in has its own limits and ALTCHA step.
- * A re-authentication or password change that passes starts the count again
- * (`clearAdminPasswordChecks`): it proved both, so it helps no guesser, and a busy admin
- * re-authenticating every 5 minutes is never locked out.
+ * A re-authentication that passes starts the count again (`clearAdminPasswordChecks`): it proved
+ * the password and the code, so it helps no guesser, and a busy admin re-authenticating every 5
+ * minutes is never locked out. Nothing else clears it: a password change proves only the password.
  */
 export const ADMIN_PASSWORD_CHECKS = { max: 10, windowMs: 15 * 60 * 1000 } as const;
 

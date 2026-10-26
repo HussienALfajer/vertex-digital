@@ -290,6 +290,30 @@ describe('re-authentication (rule D5)', () => {
     }
   });
 
+  it('keeps counting through a password change, which proves only the password (A01-3, review)', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const wrongCode = () => (totp(admin.secret) === '000000' ? '111111' : '000000');
+    // The enrolment's check and 8 wrong codes: 9 of the 10.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const response = await client.post('/api/admin/me/reauthenticate', {
+        cookie: admin.cookie,
+        body: { password: PASSWORD, totpCode: wrongCode() },
+      });
+      expect(await body(response)).toMatchObject({ code: 'INVALID_CODE' });
+    }
+    const change = await client.post('/api/admin/auth/change-password', {
+      cookie: admin.cookie,
+      body: { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+    });
+    expect(change.status).toBe(200);
+    const after = await client.post('/api/admin/me/reauthenticate', {
+      cookie: admin.cookie,
+      body: { password: NEW_PASSWORD, totpCode: totp(admin.secret) },
+    });
+    expect(await body(after)).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
+  });
+
   it('gives a signed-in, enrolled admin no TOTP check outside the count (A01-3, review)', async () => {
     const admin = await client.adminWithTotp(test.db);
     seeded.push(admin.id);

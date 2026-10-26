@@ -8,8 +8,8 @@ Plan `docs/audits/README.md`, report `docs/audits/A01-identity.md`. Specs S01, S
 - [x] Findings shown to the owner
 - [x] Fixes P0 → P3, each with its regression test (A01-31 has none: no screen reaches it)
 - [x] Re-test live with screenshots (store)
-- [ ] `pnpm verify` (checker) and the reviewer; findings fixed
-- [ ] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
+- [x] `pnpm verify` (checker) and the reviewer; findings fixed
+- [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
 - [ ] Deploy, production smoke test, README `deployed`
 
 # TASKS — S22 Quick buy and order help (F40, F41, F42)

@@ -87,7 +87,6 @@ export class AdminAccountService {
         details: { count: others.length },
       });
     });
-    await clearAdminPasswordChecks(this.db, admin.id);
   }
 
   /**
