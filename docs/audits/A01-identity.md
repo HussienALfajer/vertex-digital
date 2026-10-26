@@ -1,6 +1,6 @@
 # A01 Identity and access
 
-Status: in progress
+Status: merged ([#177](https://github.com/HussienALfajer/vertex-digital/pull/177))
 Branch: fix/audit-a01-identity · Started: 2026-10-26 · Specs: S01, S22 (passkeys PK1–PK6) · ADRs: 0007, 0008, 0016, 0037
 
 ## Scope
