@@ -176,6 +176,9 @@ test.describe('the profile (CS3–CS5)', () => {
     await limits.getByRole('button', { name: c.limits.submit }).click();
     await expect(limits.getByText(c.limits.dailyBelow)).toBeVisible();
     await expect(limits.getByText(c.limits.fieldError)).toBeVisible();
+    // The focus goes to the first refused field a frame after the errors show: typing in the
+    // next field before then would land in this one.
+    await expect(limits.getByLabel(c.limits.dailyDeposit)).toBeFocused();
     await limits.getByLabel(c.limits.dailyDeposit).fill('1000');
     await limits.getByLabel(c.limits.dailyPurchase).fill('20');
     await limits.getByRole('button', { name: c.limits.submit }).click();
