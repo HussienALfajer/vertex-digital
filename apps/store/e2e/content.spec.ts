@@ -269,6 +269,13 @@ test.describe('sign-up and support (TA1, SL3)', () => {
     await expect(page.getByTestId('terms-agreement')).toHaveCount(0);
   });
 
+  test('closed registration asks no one to agree to the terms (A01-14)', async ({ page, api }) => {
+    api.on('GET /api/auth/registration', 200, { open: false });
+    await page.goto(at('/sign-up'));
+    await expect(page.getByText(ar.signUp.closedTitle)).toBeVisible();
+    await expect(page.getByTestId('terms-agreement')).toHaveCount(0);
+  });
+
   test('support points to the FAQ before a ticket', async ({ page, api }, testInfo) => {
     api.on('GET /api/support/tickets', 401, { code: 'UNAUTHORIZED' });
     await page.goto(at('/support'));

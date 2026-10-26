@@ -9,6 +9,7 @@ import {
   type Database,
   newId,
   recordAudit,
+  withinLimits,
 } from '@vertex-digital/db';
 import { BASE_ERROR_CODES, betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -120,6 +121,24 @@ export const ACTIVITY_GRANULARITY_MS = 60 * 1000;
 
 /** Paths that need the CLI-issued password changed first (rule D1). */
 const AFTER_PASSWORD_CHANGE_PATHS = ['/two-factor/enable', '/two-factor/generate-backup-codes'];
+
+/** Better Auth paths that check the signed-in admin's password (counted by A01-3's limit). */
+const PASSWORD_CHECK_PATHS = ['/two-factor/enable', '/two-factor/generate-backup-codes'];
+
+/**
+ * The signed-in admin's password and re-authentication checks: 10 in 15 minutes, from any address,
+ * counted before the check, right or wrong (audit A01-3, as the customers' F2-8). A stolen session
+ * cannot guess the password or the code that opens sensitive routes; the sign-in has its own
+ * limits and ALTCHA step.
+ */
+export const ADMIN_PASSWORD_CHECKS = { max: 10, windowMs: 15 * 60 * 1000 } as const;
+
+export async function countAdminPasswordCheck(db: Database, adminId: string): Promise<void> {
+  const limit = { key: `admin-password-check:${adminId}`, ...ADMIN_PASSWORD_CHECKS };
+  if (!(await withinLimits(db, [limit]))) {
+    throw new CodedException(429, 'RATE_LIMITED', 'Too many password checks, try later');
+  }
+}
 
 /** Whether a session saw no activity for the idle timeout (rule D4). */
 export const isIdle = (lastActiveAt: Date, now = Date.now()) =>
@@ -314,6 +333,14 @@ export function createAdminAuth(
             code: 'PASSWORD_CHANGE_REQUIRED',
             message: 'Change the password first',
           });
+        }
+        if (PASSWORD_CHECK_PATHS.includes(ctx.path)) {
+          try {
+            await countAdminPasswordCheck(db, current.user.id);
+          } catch (error) {
+            if (!(error instanceof CodedException)) throw error;
+            throw new APIError('TOO_MANY_REQUESTS', { code: error.code, message: error.message });
+          }
         }
         // An enrolled authenticator is replaced only after a reset on the server (rule D3): a
         // stolen session and password must not swap it for the thief's.

@@ -79,8 +79,9 @@ export function needsTwoFactorSetup(session: AdminSession): boolean {
 
 /**
  * Leaves the signed-in state after sign-out or an expired session: stops running requests, marks
- * the session gone, runs `navigate` (to the sign-in page), then drops every cached answer, so no
- * later session ever sees the previous one's data.
+ * the session gone, runs `navigate` (to the sign-in page), then drops every cached answer and every
+ * mutation's input and result (typed passwords, new backup codes, test customers' one-time
+ * passwords: A01-25), so no later session ever sees the previous one's data.
  */
 export async function leaveSession(
   queryClient: QueryClient,
@@ -90,4 +91,20 @@ export async function leaveSession(
   queryClient.setQueryData(sessionQuery.queryKey, null);
   await navigate();
   queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
+  queryClient.getMutationCache().clear();
+}
+
+/**
+ * Signs the admin out, then leaves. Only a sign-out the server confirmed leaves the page (a 401:
+ * the session had already ended): on a shared computer, one that only looked done would leave the
+ * panel a reload away (A01-20). False when it failed; the caller says so and stays.
+ */
+export async function signOutAndLeave(
+  queryClient: QueryClient,
+  navigate: () => Promise<void>,
+): Promise<boolean> {
+  const { error } = await authClient.signOut();
+  if (error && error.status !== 401) return false;
+  await leaveSession(queryClient, navigate);
+  return true;
 }

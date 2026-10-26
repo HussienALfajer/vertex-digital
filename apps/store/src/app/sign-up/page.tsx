@@ -13,10 +13,13 @@ export const metadata: Metadata = {
 export default function SignUpPage() {
   return (
     <AuthFrame title={t('signUp.title')} description={t('signUp.subtitle')}>
-      <SignUpPanel />
-      <Suspense fallback={null}>
-        <TermsAgreement />
-      </Suspense>
+      <SignUpPanel
+        terms={
+          <Suspense fallback={null}>
+            <TermsAgreement />
+          </Suspense>
+        }
+      />
     </AuthFrame>
   );
 }

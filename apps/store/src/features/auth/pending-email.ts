@@ -5,6 +5,8 @@
  * nothing to verify and links back.
  */
 
+import { safeRedirect } from '@/lib/safe-redirect';
+
 const KEY = 'vertex-pending-email';
 
 export interface PendingEmail {
@@ -21,11 +23,12 @@ export function savePendingEmail(value: PendingEmail): void {
   }
 }
 
+/** The stored value; its destination checked again, since storage is not ours alone (A01-18). */
 export function readPendingEmail(): PendingEmail | null {
   try {
     const value = JSON.parse(sessionStorage.getItem(KEY) ?? 'null') as Partial<PendingEmail> | null;
     if (typeof value?.email !== 'string') return null;
-    return { email: value.email, next: typeof value.next === 'string' ? value.next : '/' };
+    return { email: value.email, next: safeRedirect(value.next) };
   } catch {
     return null;
   }

@@ -4,7 +4,7 @@ import { Button, toast } from '@vertex-digital/ui';
 import { LogOutIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AuthHeading, AuthLayout } from '../../components/auth-layout';
-import { authClient, leaveSession, sessionQuery, setupStep } from '../../lib/auth';
+import { sessionQuery, setupStep, signOutAndLeave } from '../../lib/auth';
 import { ChangePasswordForm } from './change-password-form';
 
 /**
@@ -17,8 +17,8 @@ export function ChangePasswordPage() {
   const queryClient = useQueryClient();
 
   async function signOut() {
-    await authClient.signOut();
-    await leaveSession(queryClient, () => router.navigate({ to: '/login' }));
+    const left = await signOutAndLeave(queryClient, () => router.navigate({ to: '/login' }));
+    if (!left) toast.add({ title: t('user.signOutFailed'), type: 'error' });
   }
 
   return (

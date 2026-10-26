@@ -32,20 +32,46 @@ export function LoginPage({ redirect, idle }: { redirect?: string; idle?: boolea
   const router = useRouter();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('password');
+  const [entering, setEntering] = useState<'idle' | 'retrying' | 'failed'>('idle');
 
   /**
    * Loads the new session, then goes where the user was heading (or changes the CLI-issued
-   * password and sets up 2FA first).
+   * password and sets up 2FA first). The sign-in already succeeded: a failed read says so with a
+   * retry of the read alone, never a form waiting forever (A01-27).
    */
   async function enter() {
-    // Replace the cached "no session" answer before the guarded route reads it.
-    const session = await queryClient.fetchQuery({ ...sessionQuery, staleTime: 0 });
-    const step = session && setupStep(session);
-    if (step) {
-      await router.navigate({ to: step, replace: true });
-      return;
+    try {
+      // Replace the cached "no session" answer before the guarded route reads it.
+      const session = await queryClient.fetchQuery({ ...sessionQuery, staleTime: 0 });
+      const step = session && setupStep(session);
+      if (step) {
+        await router.navigate({ to: step, replace: true });
+        return;
+      }
+      await router.navigate({ href: safeRedirect(redirect), replace: true });
+    } catch {
+      setEntering('failed');
     }
-    await router.navigate({ href: safeRedirect(redirect), replace: true });
+  }
+
+  if (entering !== 'idle') {
+    return (
+      <AuthLayout>
+        <AuthHeading title={t('login.title')} subtitle={t('login.subtitle')} />
+        <FormAlert>{t('errors.network')}</FormAlert>
+        <Button
+          size="lg"
+          className="w-full"
+          disabled={entering === 'retrying'}
+          onClick={() => {
+            setEntering('retrying');
+            void enter();
+          }}
+        >
+          {t('common.retry')}
+        </Button>
+      </AuthLayout>
+    );
   }
 
   return (

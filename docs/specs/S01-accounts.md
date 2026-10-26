@@ -287,6 +287,7 @@ Settled while building PR 1 (rename, contracts, db, API, worker):
 - **Common passwords:** the 2,087 entries of 8+ characters of SecLists' 10k list (shorter ones fail the length rules anyway), in `packages/contracts/src/common-passwords.data.ts`.
 - **Own admin sessions:** `DELETE /api/admin/me/sessions/:id` answers `204`.
 - **Emails locally:** `.eml` files under `EMAIL_LOG_DIR` (`apps/worker/.data/emails` with `pnpm dev`).
+- **Housekeeping (2026-10-26 audit A01):** the worker's `auth.purge-expired` deletes, hourly, sessions of both instances past their expiry (and the admin's idle past D4) and expired verification rows, which Better Auth removes only when they are read again. The admin's password and re-authentication checks count per admin like C11's (10 in 15 minutes, any address), Better Auth's password-checking two-factor routes included. The per-email sign-in failure counter (C8) holds at most 10,000 emails, dropping those below the ALTCHA threshold first.
 
 Settled while building PR 2 (screens):
 - **Registration state for the store:** `GET /api/auth/registration` answers `{ open }` (public), so the header and `/sign-up` know whether sign-up is open (rule C16) without a store-side copy of `REGISTRATION_OPEN`. S05 points it at the switch.
@@ -294,6 +295,7 @@ Settled while building PR 2 (screens):
 - **Admin activity (rule D4):** the panel does not refetch on window focus or reconnect (the session included), so an unattended panel makes no requests that count as activity, and the first action after 30 idle minutes meets `SESSION_IDLE_EXPIRED` and shows the notice. A reload after that finds no session and shows the plain sign-in page.
 - **Re-authentication (rule D5):** every admin mutation in the shell runs through the dialog's wrapper (the forced password change, outside the shell, runs as it is); the test-customer creation and reset are the S01 routes marked sensitive (since the 2026-10-15 audit, F2-9); the E2E drives the dialog through a mocked `REAUTHENTICATION_REQUIRED`.
 - **Registration read failures:** when `GET /api/auth/registration` fails, `/sign-up` says so with a retry instead of showing the closed state; the header shows no sign-up link until it is known to be open.
+- **Since the 2026-10-26 audit (A01):** the entry pages (sign-in, sign-up, the code, recovery) send a signed-in customer on to `?next=` or home; `/account/email` reads the session first; `/forgot-password` keeps `?next=` through the reset and offers "send a new code" after 60 seconds; every way of signing this browser out (the header, "this device", "every device", a password reset) forgets the push subscription, the cart and the hints (`features/account/signed-out.ts`); the panel leaves only after the server confirms a sign-out, and an ended session met inside the re-authentication dialog goes to sign-in like any other.
 
 ## Open questions
 None blocking. Recorded for later:

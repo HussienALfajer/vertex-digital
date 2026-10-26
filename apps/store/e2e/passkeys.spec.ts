@@ -132,9 +132,22 @@ test('adds a passkey with the password, renames and removes it, then signs in wi
     .on('GET /api/auth/get-session', 200, null)
     .on('POST /api/auth/passkey/sign-in-options', 200, SIGN_IN_OPTIONS)
     .on('POST /api/auth/sign-in/passkey', 200, { status: true, user: { email: EMAIL } });
-  await page.goto(`${ORIGIN}/sign-in?next=%2Forders`);
+  // Signed out until the passkey sign-in is sent: the sign-in page reads the session as it opens
+  // and sends a signed-in customer on (A01-13).
+  let passkeyUsed = false;
+  page.on('request', (request) => {
+    if (request.url().includes('/api/auth/sign-in/passkey')) passkeyUsed = true;
+  });
   signedIn(api);
   api.on('GET /api/orders', 200, { items: [], nextCursor: null });
+  await page.route('**/api/auth/get-session', (route) =>
+    route.fulfill({
+      json: passkeyUsed
+        ? { user: { name: 'سارة الأحمد', email: EMAIL }, session: { token: 'this-device' } }
+        : null,
+    }),
+  );
+  await page.goto(`${ORIGIN}/sign-in?next=%2Forders`);
   // The virtual authenticator may answer the email field's suggestions (autofill) before the
   // button is pressed: either ceremony signs in and leaves the page.
   await page

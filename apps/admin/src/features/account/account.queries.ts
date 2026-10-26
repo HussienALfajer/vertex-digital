@@ -34,11 +34,14 @@ export function useRevokeSession() {
   const queryClient = useQueryClient();
   const withReauthentication = useReauthentication();
   return useMutation({
-    mutationFn: (id: string) =>
+    mutationFn: ({ id }: { id: string; current: boolean }) =>
       withReauthentication(() =>
         call(api.DELETE('/api/admin/me/sessions/{id}', { params: { path: { id } } })),
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['account', 'sessions'] }),
+    // The current session gone, the page leaves: reading the list again would only meet a 401 and
+    // a second sign-in redirect (A01-26).
+    onSuccess: (_, { current }) =>
+      current ? undefined : queryClient.invalidateQueries({ queryKey: ['account', 'sessions'] }),
   });
 }
 

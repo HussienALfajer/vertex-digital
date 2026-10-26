@@ -46,6 +46,7 @@ function endSession(reason?: 'idle') {
 }
 
 onAccess('idle-expired', () => endSession('idle'));
+onAccess('signed-out', () => endSession());
 onAccess('password-change-required', () => void router.navigate({ to: '/change-password' }));
 
 const queryClient = new QueryClient({

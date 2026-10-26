@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from '@tanstack/react-router';
+import { useBlocker, useRouter } from '@tanstack/react-router';
 import { describeUserAgent, type AdminSession as OwnSession } from '@vertex-digital/contracts';
 import {
   Badge,
@@ -17,7 +17,7 @@ import {
   toast,
   useFocusInvalid,
 } from '@vertex-digital/ui';
-import { DownloadIcon, MonitorSmartphoneIcon } from 'lucide-react';
+import { MonitorSmartphoneIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
@@ -62,6 +62,13 @@ function BackupCodesCard() {
   const [failure, setFailure] = useState<Failure | null>(null);
   const generateCodes = useGenerateBackupCodes();
   const { ref, focusInvalid } = useFocusInvalid();
+  // The old codes stopped working when these were made: leaving before "done" (a link, back, a
+  // reload, closing the tab) asks first, as the enrolment does (A01-22).
+  const blocker = useBlocker({
+    shouldBlockFn: () => codes !== null,
+    enableBeforeUnload: () => codes !== null,
+    withResolver: true,
+  });
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,17 +86,10 @@ function BackupCodesCard() {
       const refused = passwordFailure(t, error);
       setFailure(refused);
       if (refused.field) focusInvalid();
+    } finally {
+      // The typed password and the codes leave the mutation cache: the card holds the codes (A01-25).
+      generateCodes.reset();
     }
-  }
-
-  function download(values: string[]) {
-    const url = URL.createObjectURL(new Blob([`${values.join('\n')}\n`], { type: 'text/plain' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = t('account.backupCodes.fileName');
-    link.click();
-    // Released after the browser has started the download: revoking at once can cancel it.
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   return (
@@ -104,15 +104,19 @@ function BackupCodesCard() {
             {t('account.backupCodes.shown')}
           </p>
           <BackupCodes codes={codes} />
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => download(codes)}>
-              <DownloadIcon />
-              {t('account.backupCodes.download')}
-            </Button>
-            <Button variant="ghost" onClick={() => setCodes(null)}>
-              {t('account.backupCodes.done')}
-            </Button>
-          </div>
+          <Button variant="ghost" className="self-start" onClick={() => setCodes(null)}>
+            {t('account.backupCodes.done')}
+          </Button>
+          <ConfirmDialog
+            open={blocker.status === 'blocked'}
+            onClose={() => blocker.reset?.()}
+            title={t('twoFactorSetup.leaveCodes.title')}
+            body={t('twoFactorSetup.leaveCodes.body')}
+            action={t('twoFactorSetup.leaveCodes.leave')}
+            destructive
+            pending={false}
+            onConfirm={async () => blocker.proceed?.()}
+          />
         </div>
       ) : (
         <form ref={ref} className="flex flex-col gap-5" onSubmit={generate} noValidate>
@@ -235,7 +239,7 @@ function SessionsCard() {
         pending={revoke.isPending}
         onConfirm={async () => {
           if (!target) return;
-          await revoke.mutateAsync(target.id);
+          await revoke.mutateAsync(target);
           if (target.current) {
             await leaveSession(queryClient, () => router.navigate({ to: '/login' }));
           }

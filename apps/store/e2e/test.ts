@@ -40,7 +40,7 @@ const ALTCHA_CHALLENGE = {
 };
 
 /** Every event with an email (and a push): all on, as a customer without a choice has them. */
-const ALL_ON = Object.fromEntries(
+export const ALL_ON = Object.fromEntries(
   [
     'deposit_credited',
     'deposit_rejected',

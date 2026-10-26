@@ -1,5 +1,6 @@
 'use client';
 
+import { PASSWORD_EQUALS_EMAIL } from '@vertex-digital/contracts';
 import { Button } from '@vertex-digital/ui/components/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@vertex-digital/ui/components/card';
 import {
@@ -20,8 +21,18 @@ import { t } from '@/lib/i18n';
 import { currentPasswordError, newPasswordError } from '../auth/validation';
 import { changePassword } from './requests';
 
-/** Rule C11: the current password, then the new one; every other session is signed out. */
-export function PasswordCard({ onChanged }: { onChanged: () => void }) {
+/** The API's refusal of a new password equal to the account's email (rule C3). */
+const equalsEmail = (details: unknown) =>
+  Array.isArray(details) &&
+  details.some(
+    (detail: { path?: unknown; message?: unknown }) => detail?.message === PASSWORD_EQUALS_EMAIL,
+  );
+
+/**
+ * Rule C11: the current password, then the new one; every other session is signed out. The new
+ * password is checked against the account's email too (C3, A01-8).
+ */
+export function PasswordCard({ email, onChanged }: { email: string; onChanged: () => void }) {
   const [errors, setErrors] = useState<{ currentPassword?: string; newPassword?: string }>({});
   const [failure, setFailure] = useState<Failure | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
@@ -36,7 +47,7 @@ export function PasswordCard({ onChanged }: { onChanged: () => void }) {
     const newPassword = String(data.get('newPassword') ?? '');
     const found = {
       currentPassword: currentPasswordError(currentPassword),
-      newPassword: newPasswordError(newPassword),
+      newPassword: newPasswordError(newPassword, email),
     };
     setErrors(found);
     setFailure(null);
@@ -57,6 +68,9 @@ export function PasswordCard({ onChanged }: { onChanged: () => void }) {
       setErrors({ currentPassword: errorText(result.reason) });
     } else if (result.reason === 'PASSWORD_TOO_COMMON') {
       setErrors({ newPassword: t('validation.passwordCommon') });
+    } else if (result.reason === 'VALIDATION_FAILED' && equalsEmail(result.details)) {
+      // The email changed in another tab since this page loaded.
+      setErrors({ newPassword: t('validation.passwordEqualsEmail') });
     } else return setFailure(result.reason);
     focusInvalid();
   };

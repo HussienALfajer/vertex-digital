@@ -16,12 +16,12 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@vertex-digital/ui
 import { MonitorSmartphoneIcon } from 'lucide-react';
 import { useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
-import { clearStoredCart } from '@/features/cart/cart-keys';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { type CustomerSession, revokeAllSessions, revokeSession } from './requests';
+import { forgetThisBrowser } from './signed-out';
 
 /**
  * Every signed-in device, newest activity first (rule C14): sign out one, or every one with a
@@ -33,7 +33,7 @@ export function SessionsCard({
   onRevoked,
 }: {
   sessions: CustomerSession[];
-  currentToken: string | null;
+  currentToken: string;
   onRevoked: (token: string) => void;
 }) {
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -48,10 +48,10 @@ export function SessionsCard({
     const result = await revokeSession(token);
     setRevoking(null);
     if (!result.ok) return setFailure(result.reason);
-    // This device is now signed out: the same as signing out (edge case 12), so the cart goes
-    // too (S10 rule CT1).
+    // This device is now signed out: the same as signing out (edge case 12), so the browser
+    // forgets what the header's sign-out forgets (A01-6).
     if (token === currentToken) {
-      clearStoredCart();
+      await forgetThisBrowser();
       return window.location.assign('/sign-in');
     }
     onRevoked(token);
@@ -61,7 +61,7 @@ export function SessionsCard({
     setRevokingAll(true);
     const result = await revokeAllSessions();
     if (result.ok) {
-      clearStoredCart();
+      await forgetThisBrowser();
       return window.location.assign('/sign-in?notice=signed-out');
     }
     setRevokingAll(false);

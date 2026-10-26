@@ -23,6 +23,7 @@ import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
+import { countAdminPasswordCheck } from './admin-auth.config.js';
 import { AdminAuthService, type AdminIdentity } from './admin-auth.service.js';
 
 /**
@@ -47,6 +48,7 @@ export class AdminAccountService {
     input: AdminChangePassword,
     meta: RequestMeta,
   ): Promise<void> {
+    await countAdminPasswordCheck(this.db, admin.id);
     await this.assertPassword(admin.id, input.currentPassword);
     if (passwordEqualsEmail(input.newPassword, admin.email)) {
       throw new CodedException(400, 'VALIDATION_FAILED', 'Invalid input', [
@@ -96,6 +98,9 @@ export class AdminAccountService {
     input: Reauthenticate,
     headers: Parameters<typeof fromNodeHeaders>[0],
   ): Promise<Reauthentication> {
+    // The code is checked on a signed-in session, where Better Auth counts no tries: this count
+    // limits both guesses (A01-3).
+    await countAdminPasswordCheck(this.db, admin.id);
     await this.assertPassword(admin.id, input.password);
     try {
       // On a signed-in session the plugin only checks the code: no session or cookie changes.

@@ -5,7 +5,7 @@ import { EmptyState } from '@vertex-digital/ui/components/empty-state';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { DoorClosedIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { errorText } from '@/lib/errors';
 import { t } from '@/lib/i18n';
@@ -13,11 +13,16 @@ import { withNext } from '@/lib/safe-redirect';
 import { useSearchParam } from '@/lib/use-search-param';
 import { registrationState } from './requests';
 import { SignUpForm } from './sign-up-form';
+import { useLeaveIfSignedIn } from './use-leave-if-signed-in';
 
-/** The sign-up form while registration is open; a calm "opens soon" otherwise (rule C16). */
-export function SignUpPanel() {
+/**
+ * The sign-up form while registration is open, with the terms sentence rendered by the server
+ * (`terms`, S14); a calm "opens soon" otherwise (rule C16), with no terms to agree to (A01-14).
+ */
+export function SignUpPanel({ terms }: { terms: ReactNode }) {
   const next = useSearchParam('next');
   const [state, setState] = useState<'loading' | 'open' | 'closed' | 'failed'>('loading');
+  useLeaveIfSignedIn();
 
   const read = useCallback(() => {
     setState('loading');
@@ -64,6 +69,7 @@ export function SignUpPanel() {
           {t('signUp.signInLink')}
         </Link>
       </p>
+      {terms}
     </>
   );
 }

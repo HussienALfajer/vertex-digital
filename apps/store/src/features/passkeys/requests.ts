@@ -1,3 +1,7 @@
+import type {
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/browser';
 import type { Passkey } from '@vertex-digital/contracts';
 import { apiRequest, type Failure } from '@/lib/api';
 
@@ -9,17 +13,18 @@ import { apiRequest, type Failure } from '@/lib/api';
 
 type Fetcher = typeof fetch;
 
-/** The browser calls a ceremony needs; tests pass fakes. */
+/** The browser calls a ceremony needs, typed by the library (A01-17); tests pass fakes. */
 export interface Browser {
-  startRegistration: (input: { optionsJSON: never }) => Promise<unknown>;
+  startRegistration: (input: {
+    optionsJSON: PublicKeyCredentialCreationOptionsJSON;
+  }) => Promise<unknown>;
   startAuthentication: (input: {
-    optionsJSON: never;
+    optionsJSON: PublicKeyCredentialRequestOptionsJSON;
     useBrowserAutofill?: boolean;
   }) => Promise<unknown>;
 }
 
-const loadBrowser = async (): Promise<Browser> =>
-  (await import('@simplewebauthn/browser')) as unknown as Browser;
+const loadBrowser = (): Promise<Browser> => import('@simplewebauthn/browser');
 
 /** `CANCELLED`: the customer closed the browser's prompt, or it timed out. */
 export type CeremonyFailure = Failure | 'CANCELLED' | 'ALREADY_REGISTERED';
@@ -83,15 +88,14 @@ export async function registerPasskey(
   fetcher: Fetcher = fetch,
   browser: () => Promise<Browser> = loadBrowser,
 ): Promise<CeremonyResult<{ id: string; name: string }>> {
-  const options = await apiRequest<unknown>('/api/auth/passkey/register-options', {
-    method: 'POST',
-    body: {},
-    fetcher,
-  });
+  const options = await apiRequest<PublicKeyCredentialCreationOptionsJSON>(
+    '/api/auth/passkey/register-options',
+    { method: 'POST', body: {}, fetcher },
+  );
   if (!options.ok) return options;
   let response: unknown;
   try {
-    response = await (await browser()).startRegistration({ optionsJSON: options.data as never });
+    response = await (await browser()).startRegistration({ optionsJSON: options.data });
   } catch (error) {
     return { ok: false, reason: ceremonyFailure(error) };
   }
@@ -111,16 +115,15 @@ export async function signInWithPasskey(
   fetcher: Fetcher = fetch,
   browser: () => Promise<Browser> = loadBrowser,
 ): Promise<CeremonyResult<unknown>> {
-  const options = await apiRequest<unknown>('/api/auth/passkey/sign-in-options', {
-    method: 'POST',
-    body: {},
-    fetcher,
-  });
+  const options = await apiRequest<PublicKeyCredentialRequestOptionsJSON>(
+    '/api/auth/passkey/sign-in-options',
+    { method: 'POST', body: {}, fetcher },
+  );
   if (!options.ok) return options;
   let response: unknown;
   try {
     response = await (await browser()).startAuthentication({
-      optionsJSON: options.data as never,
+      optionsJSON: options.data,
       useBrowserAutofill: autofill,
     });
   } catch (error) {

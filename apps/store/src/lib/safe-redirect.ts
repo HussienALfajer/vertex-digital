@@ -23,12 +23,9 @@ export function safeRedirect(target: unknown, origin = window.location.origin): 
  * customer was heading: from the cart to sign-in, then to sign-up, the code brings them back to the
  * cart (2026-10-15 audit). Without a destination the plain path.
  */
-export function withNext(
-  path: string,
-  next: string | null | undefined,
-  origin = window.location.origin,
-): string {
+export function withNext(path: string, next: string | null | undefined, origin?: string): string {
+  // Without a destination (a page rendered on the server, before `next` is read) no `window`.
   if (!next) return path;
-  const target = safeRedirect(next, origin);
+  const target = safeRedirect(next, origin ?? window.location.origin);
   return target === '/' ? path : `${path}?next=${encodeURIComponent(target)}`;
 }

@@ -35,6 +35,62 @@ test('signs in with the password and the TOTP code, then signs out', async ({ pa
   expect(admin.calls).toContain('POST /api/admin/auth/sign-out');
 });
 
+test('a sign-out the server did not confirm says so and stays signed in (A01-20)', async ({
+  page,
+  admin,
+}) => {
+  admin.signedIn = true;
+  await page.goto('/account');
+  await page.route(
+    '**/api/admin/auth/sign-out',
+    (route) => route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR' } }),
+    { times: 1 },
+  );
+  await page.getByRole('button', { name: ar.user.menu }).click();
+  await page.getByRole('menuitem', { name: ar.user.signOut }).click();
+  await expect(page.getByText(ar.user.signOutFailed)).toBeVisible();
+  await expect(page).toHaveURL(/\/account$/);
+  // Once the server answers, the sign-out leaves.
+  await page.getByRole('button', { name: ar.user.menu }).click();
+  await page.getByRole('menuitem', { name: ar.user.signOut }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  expect(admin.signedIn).toBe(false);
+});
+
+test('the setup pages sign out the same way (A01-20)', async ({ page, admin }) => {
+  admin.user.mustChangePassword = true;
+  admin.signedIn = true;
+  await page.goto('/change-password');
+  await page.route(
+    '**/api/admin/auth/sign-out',
+    (route) => route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR' } }),
+    { times: 1 },
+  );
+  await page.getByRole('button', { name: ar.changePassword.signOut }).click();
+  await expect(page.getByText(ar.user.signOutFailed)).toBeVisible();
+  await expect(page).toHaveURL(/\/change-password$/);
+  await page.getByRole('button', { name: ar.changePassword.signOut }).click();
+  await expect(page).toHaveURL(/\/login$/);
+});
+
+test('a failed session read after the code says so, and its retry enters (A01-27)', async ({
+  page,
+  admin: _admin,
+}) => {
+  await page.goto('/login');
+  await signInWithPassword(page);
+  await expect(page.getByRole('heading', { name: ar.login.twoFactor.title })).toBeVisible();
+  await page.route(
+    '**/api/admin/auth/get-session',
+    (route) => route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR' } }),
+    { times: 1 },
+  );
+  await page.getByRole('textbox').first().pressSequentially(TOTP_CODE);
+  await expect(page.getByText(ar.errors.network)).toBeVisible();
+  await page.getByRole('button', { name: ar.common.retry }).click();
+  await expect(page.getByRole('navigation', { name: ar.nav.label })).toBeVisible();
+});
+
 test('a wrong password and a wrong code say what happened', async ({ page, admin: _admin }) => {
   await page.goto('/login');
   await signInWithPassword(page, 'wrong');
@@ -86,6 +142,10 @@ test('the admin without TOTP enrols before reaching the panel', async ({ page, a
   await page.getByRole('textbox').first().pressSequentially(TOTP_CODE);
 
   await expect(page.getByText(BACKUP_CODE)).toBeVisible();
+  // Copy or download as text, wherever the codes are shown (S01 screens, A01-28).
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: ar.account.backupCodes.download }).click();
+  expect((await download).suggestedFilename()).toBe(ar.account.backupCodes.fileName);
   await page.getByRole('checkbox', { name: ar.twoFactorSetup.confirmSaved }).click();
   await page.getByRole('button', { name: ar.twoFactorSetup.finish }).click();
   await expect(page.getByRole('navigation', { name: ar.nav.label })).toBeVisible();

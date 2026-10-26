@@ -23,10 +23,9 @@ import {
 import Link from 'next/link';
 import { useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
-import { clearStoredCart } from '@/features/cart/cart-keys';
+import { forgetThisBrowser } from '@/features/account/signed-out';
 import { useInstall } from '@/features/pwa/install-button';
 import { t } from '@/lib/i18n';
-import { forgetSession } from '@/lib/session';
 import { useTheme } from '@/lib/theme';
 
 /**
@@ -48,8 +47,6 @@ export function AccountMenu({
   const [signOutFailed, setSignOutFailed] = useState(false);
   const signOut = async () => {
     setSignOutFailed(false);
-    // Its own chunk, as the header's refresh: fetched only on sign-out.
-    await import('@/features/push/device').then((device) => device.forgetDevice()).catch(() => {});
     const response = await fetch('/api/auth/sign-out', {
       method: 'POST',
       credentials: 'same-origin',
@@ -61,8 +58,7 @@ export function AccountMenu({
       setSignOutFailed(true);
       return;
     }
-    clearStoredCart();
-    forgetSession();
+    await forgetThisBrowser();
     // A full load, so nothing rendered for the customer stays on screen.
     window.location.assign('/');
   };
