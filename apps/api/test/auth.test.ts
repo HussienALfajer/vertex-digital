@@ -428,6 +428,45 @@ describe('sign-in (rules C8, C10, C15)', () => {
   });
 });
 
+describe('limits per address (S01 "Abuse and fraud", rule C8; audit A01-5)', () => {
+  it('takes 5 sign-ups an hour from one address', async () => {
+    const ip = clientIp();
+    const signUpFrom = async (email: string) =>
+      client.post('/api/auth/sign-up/email', {
+        ip,
+        body: signUpBody(email),
+        headers: await client.altcha(),
+      });
+    for (let n = 0; n < 5; n += 1) {
+      const email = uniqueEmail(`limit-${n}`);
+      expect((await signUpFrom(email)).status).toBe(200);
+      await idOf(email);
+    }
+    const sixth = uniqueEmail('limit-6');
+    expect(await body(await signUpFrom(sixth))).toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+    });
+    // Another address still signs up.
+    expect((await signUp(sixth)).status).toBe(200);
+    await idOf(sixth);
+  });
+
+  it('takes 10 password sign-ins a minute from one address', async () => {
+    const ip = clientIp();
+    // Other emails each time, so the per-email ALTCHA step never comes first.
+    const signInFrom = (email: string) =>
+      client.post('/api/auth/sign-in/email', {
+        ip,
+        body: { email, password: 'wrong-password-123' },
+      });
+    for (let n = 0; n < 10; n += 1) {
+      expect((await signInFrom(uniqueEmail(`spray-${n}`))).status).toBe(401);
+    }
+    expect((await signInFrom(uniqueEmail('spray-11'))).status).toBe(429);
+  });
+});
+
 describe('forgot password (rule C7)', () => {
   it('answers the same for unknown emails, then resets, verifies and signs out everywhere', async () => {
     const customer = await seedCustomer(test.db, { emailVerified: false });

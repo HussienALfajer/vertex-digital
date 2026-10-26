@@ -269,7 +269,16 @@ function PasswordOnceDialog({
 }) {
   const { t } = useTranslation();
   return (
-    <Dialog open={!!shown} onOpenChange={(open) => !open && onClose()}>
+    // Closed only by its button: Escape or a click beside it would lose the password for good,
+    // with a reset the only way back (A01-29).
+    <Dialog
+      open={!!shown}
+      disablePointerDismissal
+      onOpenChange={(open, details) => {
+        if (open || details.reason === 'escape-key' || details.reason === 'outside-press') return;
+        onClose();
+      }}
+    >
       {shown && (
         <DialogContent>
           <DialogHeader>

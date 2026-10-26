@@ -1,10 +1,11 @@
 /*
  * Access changes found by any request, API or Better Auth, handled in one place (`main.tsx`, which
- * owns the router): the session ended after 30 minutes without activity (rule D4), or the
+ * owns the router): the session ended after 30 minutes without activity (rule D4), it ended any
+ * other way (a 401 met outside the query caches, the re-authentication dialog: A01-21), or the
  * CLI-issued password must be changed first (rule D1).
  */
 
-export type AccessEvent = 'idle-expired' | 'password-change-required';
+export type AccessEvent = 'idle-expired' | 'signed-out' | 'password-change-required';
 
 const target = new EventTarget();
 

@@ -4,10 +4,11 @@ import { Button } from '@vertex-digital/ui/components/button';
 import { Field, FieldError, FieldLabel } from '@vertex-digital/ui/components/field';
 import { Input } from '@vertex-digital/ui/components/input';
 import { PasswordInput } from '@vertex-digital/ui/components/password-input';
+import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { useFocusInvalid } from '@vertex-digital/ui/focus-invalid';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { InvalidAlert } from '@/components/invalid-alert';
 import type { Failure } from '@/lib/api';
@@ -17,20 +18,45 @@ import { t } from '@/lib/i18n';
 import { CodeInput } from '../auth/code-input';
 import { codeError, currentPasswordError, emailError } from '../auth/validation';
 import { SentTo } from '../auth/verify-email-panel';
-import { confirmEmailChange, requestEmailChange } from './requests';
+import { confirmEmailChange, getProfile, requestEmailChange } from './requests';
 
-type Step = { name: 'request' } | { name: 'code'; newEmail: string } | { name: 'done' };
+type Step =
+  | { name: 'checking' }
+  | { name: 'request' }
+  | { name: 'code'; newEmail: string }
+  | { name: 'done' };
 
 /**
  * Email change (rule C12): the new address and the current password, then the code sent to the
- * new address. The old address gets a notice; other sessions are signed out.
+ * new address. The old address gets a notice; other sessions are signed out. Without a session
+ * the customer signs in first, before typing anything (A01-7).
  */
 export function ChangeEmailPanel() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>({ name: 'request' });
+  const [step, setStep] = useState<Step>({ name: 'checking' });
 
-  const onUnauthorized = () => router.replace('/sign-in?next=%2Faccount%2Femail');
+  const onUnauthorized = useCallback(
+    () => router.replace('/sign-in?next=%2Faccount%2Femail'),
+    [router],
+  );
 
+  useEffect(() => {
+    void getProfile().then((profile) => {
+      // Only a clear "signed out" leaves; a failed read shows the form, whose submit answers.
+      if (!profile.ok && profile.reason === 'UNAUTHORIZED') return onUnauthorized();
+      setStep((current) => (current.name === 'checking' ? { name: 'request' } : current));
+    });
+  }, [onUnauthorized]);
+
+  if (step.name === 'checking') {
+    return (
+      <div className="flex flex-col gap-5" aria-hidden="true">
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-full" />
+      </div>
+    );
+  }
   if (step.name === 'done') {
     return (
       <div className="flex flex-col gap-5">

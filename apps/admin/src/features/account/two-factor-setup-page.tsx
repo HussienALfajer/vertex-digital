@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthHeading, AuthLayout } from '../../components/auth-layout';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
-import { authClient, sessionQuery } from '../../lib/auth';
+import { authClient, sessionQuery, signOutAndLeave } from '../../lib/auth';
 import { useCopy } from '../../lib/clipboard';
 import { type Failure, passwordFailure } from '../../lib/errors';
 import { BackupCodes } from './backup-codes';
@@ -43,10 +43,10 @@ export function TwoFactorSetupPage() {
   const [step, setStep] = useState<Step>('password');
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
 
+  // The same leave as everywhere: running reads cancelled, caches dropped (known lead, A01-20).
   async function signOut() {
-    await authClient.signOut();
-    queryClient.clear();
-    await router.navigate({ to: '/login' });
+    const left = await signOutAndLeave(queryClient, () => router.navigate({ to: '/login' }));
+    if (!left) toast.add({ title: t('user.signOutFailed'), type: 'error' });
   }
 
   return (

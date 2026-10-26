@@ -29,6 +29,7 @@ import {
 import { sendVerificationCode, verifyEmail } from './requests';
 import { FormSkeleton } from './sign-up-panel';
 import { useCountdown } from './use-countdown';
+import { useLeaveIfSignedIn } from './use-leave-if-signed-in';
 import { codeError, currentPasswordError } from './validation';
 
 /**
@@ -40,6 +41,7 @@ export function VerifyEmailPanel() {
   const [pending, setPending] = useState<PendingEmail | null | undefined>(undefined);
 
   useEffect(() => setPending(readPendingEmail()), []);
+  useLeaveIfSignedIn();
 
   if (pending === undefined) return <FormSkeleton fields={1} />;
   if (pending === null) {

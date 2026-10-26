@@ -8,12 +8,14 @@ import {
   PUSH_NOTIFICATION_EVENTS,
   type PushNotificationEvent,
 } from '@vertex-digital/contracts';
+import { Button } from '@vertex-digital/ui/components/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@vertex-digital/ui/components/card';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { Switch } from '@vertex-digital/ui/components/switch';
 import { Toaster, toast } from '@vertex-digital/ui/components/toast';
 import { ShieldCheckIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { FormAlert } from '@/components/form-alert';
 import { DeviceSwitch } from '@/features/push/device-switch';
 import { usePushDevice } from '@/features/push/use-push-device';
 import { errorText } from '@/lib/errors';
@@ -42,11 +44,14 @@ export function NotificationPreferencesCard() {
   const { device, reload } = usePushDevice();
   const pushConfigured = device.status === 'ready' && device.publicKey !== null;
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setFailed(false);
     void getNotificationPreferences().then((result) =>
       result.ok ? setPreferences(result.data) : setFailed(true),
     );
   }, []);
+
+  useEffect(load, [load]);
 
   const change = async (event: NotificationEvent, channel: 'email' | 'push', on: boolean) => {
     setSaving(event);
@@ -64,8 +69,20 @@ export function NotificationPreferencesCard() {
     }
   };
 
-  // A failed read hides the card: the rest of the account still works.
-  if (failed) return null;
+  // A failed read says so with a retry; the rest of the account still works (A01-9).
+  if (failed) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('account.notifications.title')}</CardTitle>
+        </CardHeader>
+        <FormAlert>{t('account.notifications.loadFailed')}</FormAlert>
+        <Button variant="outline" size="xl" className="self-start" onClick={load}>
+          {t('account.retry')}
+        </Button>
+      </Card>
+    );
+  }
   return (
     <Toaster closeLabel={t('account.notifications.close')}>
       <Card>
@@ -107,6 +124,8 @@ export function NotificationPreferencesCard() {
                     preferences ? (
                       <span key={channel} className="flex w-12 justify-center">
                         <Switch
+                          // A 56 × 44 px target around the 40 × 24 px switch (A01-11).
+                          className="after:absolute after:-inset-x-2 after:-inset-y-2.5"
                           aria-label={t(
                             channel === 'email'
                               ? 'account.notifications.emailLabel'

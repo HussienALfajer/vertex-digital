@@ -174,9 +174,77 @@ test.describe('test customers', () => {
       email: 'sara@example.com',
       phone: '+963944123456',
     });
+    // Escape or a click beside it would lose the password: only its button closes it (A01-29).
+    await page.keyboard.press('Escape');
+    await page.mouse.click(5, 5);
+    await expect(dialog.getByText(GENERATED_PASSWORD)).toBeVisible();
     await dialog.getByRole('button', { name: ar.testCustomers.password.done }).click();
     await expect(page.getByRole('cell', { name: 'sara@example.com' })).toBeVisible();
     await expect(page.getByText(GENERATED_PASSWORD)).toHaveCount(0);
+  });
+
+  test('creating one asks for re-authentication first, then creates it (rule T2)', async ({
+    page,
+    admin,
+  }) => {
+    admin.reauthenticationRequired = true;
+    await open(page, admin, '/test-customers');
+    await page.getByRole('button', { name: ar.testCustomers.add }).click();
+    await field(page, ar.testCustomers.form.name).fill('سارة الأحمد');
+    await field(page, ar.testCustomers.form.email).fill('sara@example.com');
+    await field(page, ar.testCustomers.form.phone).fill('0944123456');
+    await page.getByRole('button', { name: ar.testCustomers.form.submit }).click();
+    await expect(page.getByRole('heading', { name: ar.reauth.title })).toBeVisible();
+    await field(page, ar.reauth.password).fill(PASSWORD);
+    await page.getByRole('textbox').filter({ visible: true }).nth(1).pressSequentially(TOTP_CODE);
+    await page.getByRole('button', { name: ar.reauth.submit }).click();
+    await expect(page.getByText(GENERATED_PASSWORD)).toBeVisible();
+    expect(admin.calls.filter((call) => call === 'POST /api/admin/test-customers')).toHaveLength(2);
+  });
+
+  test('a session that went idle behind the re-authentication dialog returns to sign-in (A01-21)', async ({
+    page,
+    admin,
+  }) => {
+    admin.testCustomers = [
+      {
+        id: CUSTOMER_ID,
+        name: 'سارة الأحمد',
+        email: 'sara@example.com',
+        phone: '+963944123456',
+        createdAt: '2026-10-08T09:00:00.000Z',
+      },
+    ];
+    admin.reauthenticationRequired = true;
+    await open(page, admin, '/test-customers');
+    await page
+      .getByRole('button', {
+        name: ar.testCustomers.reset.label.replace('{{name}}', 'سارة الأحمد'),
+      })
+      .click();
+    await page.getByRole('button', { name: ar.testCustomers.reset.confirm }).click();
+    await expect(page.getByRole('heading', { name: ar.reauth.title })).toBeVisible();
+    admin.idleExpired = true;
+    await field(page, ar.reauth.password).fill(PASSWORD);
+    await page.getByRole('textbox').filter({ visible: true }).nth(1).pressSequentially(TOTP_CODE);
+    await page.getByRole('button', { name: ar.reauth.submit }).click();
+    await expect(page).toHaveURL(/\/login\?redirect=%2Ftest-customers&reason=idle$/);
+    await expect(page.getByText(ar.login.idleNotice)).toBeVisible();
+    await expect(page.getByRole('heading', { name: ar.reauth.title })).toHaveCount(0);
+  });
+
+  test('a failed read of the list offers a retry', async ({ page, admin }) => {
+    admin.signedIn = true;
+    // The first read and TanStack's two retries of a server fault.
+    await page.route(
+      /\/api\/admin\/test-customers(\?|$)/,
+      (route) => route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR' } }),
+      { times: 3 },
+    );
+    await page.goto('/test-customers');
+    await expect(page.getByText(ar.errors.generic)).toBeVisible();
+    await page.getByRole('button', { name: ar.common.retry }).click();
+    await expect(page.getByText(ar.testCustomers.emptyTitle)).toBeVisible();
   });
 
   test('a taken email is shown under its field', async ({ page, admin }) => {
@@ -256,8 +324,84 @@ test.describe('account', () => {
     await page.getByRole('button', { name: ar.account.backupCodes.generate }).click();
     await expect(page.getByText('hjkmn-pqrst')).toBeVisible();
     await expect(page.getByRole('button', { name: ar.account.backupCodes.download })).toBeVisible();
+
+    // The old codes are void now: leaving before "done" asks first (A01-22).
+    await page.getByRole('link', { name: ar.nav.audit }).first().click();
+    const leave = page.getByRole('alertdialog');
+    await expect(leave.getByText(ar.twoFactorSetup.leaveCodes.title)).toBeVisible();
+    await leave.getByRole('button', { name: ar.common.cancel }).click();
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.getByText('hjkmn-pqrst')).toBeVisible();
+
     await page.getByRole('button', { name: ar.account.backupCodes.done }).click();
     await expect(page.getByText('hjkmn-pqrst')).toHaveCount(0);
+    await page.getByRole('link', { name: ar.nav.audit }).first().click();
+    await expect(page).toHaveURL(/\/audit$/);
+  });
+
+  test('a new password equal to the email is refused, before sending and from the server (A01-23)', async ({
+    page,
+    admin,
+  }) => {
+    await open(page, admin, '/account');
+    await field(page, ar.changePassword.current).fill(PASSWORD);
+    await field(page, ar.changePassword.new).fill(admin.user.email.toUpperCase());
+    await field(page, ar.changePassword.confirm).fill(admin.user.email.toUpperCase());
+    await page.getByRole('button', { name: ar.changePassword.submit }).click();
+    await expect(page.getByText(ar.changePassword.errors.equalsEmail)).toBeVisible();
+    expect(admin.calls).not.toContain('POST /api/admin/auth/change-password');
+
+    // The server's refusal of the same lands on the same field.
+    await page.route(
+      '**/api/admin/auth/change-password',
+      (route) =>
+        route.fulfill({
+          status: 400,
+          json: {
+            statusCode: 400,
+            code: 'VALIDATION_FAILED',
+            message: 'Invalid input',
+            details: [{ path: ['newPassword'], message: 'PASSWORD_EQUALS_EMAIL' }],
+          },
+        }),
+      { times: 1 },
+    );
+    await field(page, ar.changePassword.new).fill(NEW_PASSWORD);
+    await field(page, ar.changePassword.confirm).fill(NEW_PASSWORD);
+    await page.getByRole('button', { name: ar.changePassword.submit }).click();
+    await expect(page.getByText(ar.changePassword.errors.equalsEmail)).toBeVisible();
+    await expect(field(page, ar.changePassword.new)).toBeFocused();
+  });
+
+  test('signing out this session goes to sign-in once, without reading the list again (A01-26)', async ({
+    page,
+    admin,
+  }) => {
+    await open(page, admin, '/account');
+    await expect(page.getByText(ar.account.sessions.thisSession)).toBeVisible();
+    const current = page.getByRole('listitem').filter({ hasText: ar.account.sessions.thisSession });
+    await current.getByRole('button', { name: ar.account.sessions.signOut }).click();
+    const reads = admin.calls.filter((call) => call === 'GET /api/admin/me/sessions').length;
+    admin.signedIn = false;
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: ar.account.sessions.signOut })
+      .click();
+    await expect(page).toHaveURL(/\/login$/);
+    expect(admin.calls.filter((call) => call === 'GET /api/admin/me/sessions')).toHaveLength(reads);
+  });
+
+  test('a failed read of the sessions offers a retry', async ({ page, admin }) => {
+    admin.signedIn = true;
+    await page.route(
+      '**/api/admin/me/sessions',
+      (route) => route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR' } }),
+      { times: 3 },
+    );
+    await page.goto('/account');
+    await expect(page.getByText(ar.errors.generic)).toBeVisible();
+    await page.getByRole('button', { name: ar.common.retry }).click();
+    await expect(page.getByText(ar.account.sessions.thisSession)).toBeVisible();
   });
 
   test('lists its sessions and signs another one out', async ({ page, admin }) => {

@@ -33,15 +33,6 @@ export function updateProfile(input: UpdateCustomerProfile, fetcher: Fetcher = f
   return apiRequest<CustomerProfile>('/api/account', { method: 'PATCH', body: input, fetcher });
 }
 
-/** The token of this browser's session, to mark "this device" in the list. */
-export async function currentSessionToken(fetcher: Fetcher = fetch): Promise<string | null> {
-  const result = await apiRequest<{ session?: { token?: string } } | null>(
-    '/api/auth/get-session',
-    { fetcher },
-  );
-  return (result.ok && result.data?.session?.token) || null;
-}
-
 export function listSessions(fetcher: Fetcher = fetch) {
   return apiRequest<CustomerSession[]>('/api/auth/list-sessions', { fetcher });
 }

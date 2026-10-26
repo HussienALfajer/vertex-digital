@@ -20,6 +20,7 @@ import { useSearchParam } from '@/lib/use-search-param';
 import { passkeysSupported } from '../passkeys/requests';
 import { holdPassword, savePendingEmail } from './pending-email';
 import { registrationState, signIn } from './requests';
+import { useLeaveIfSignedIn } from './use-leave-if-signed-in';
 import { currentPasswordError, emailError } from './validation';
 
 // S22 PK3: the passkey button and autofill, with their own code and strings.
@@ -44,6 +45,7 @@ export function SignInForm() {
   const [failure, setFailure] = useState<Failure | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
   const [canSignUp, setCanSignUp] = useState(false);
+  useLeaveIfSignedIn();
 
   // S22 PK3: the passkey part loads after hydration and only where WebAuthn exists (edge case 21);
   // rendered from the first render, its client-only bailout re-rendered the form around a click.
@@ -124,7 +126,8 @@ export function SignInForm() {
           <div className="flex items-center justify-between gap-2">
             <FieldLabel>{t('fields.password')}</FieldLabel>
             <Link
-              href="/forgot-password"
+              // Where the customer was heading stays through the reset (A01-19).
+              href={withNext('/forgot-password', next)}
               className="inline-flex min-h-11 items-center text-sm font-medium text-accent-text hover:underline"
             >
               {t('signIn.forgotPassword')}

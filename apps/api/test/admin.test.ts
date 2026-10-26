@@ -246,6 +246,91 @@ describe('re-authentication (rule D5)', () => {
     });
     expect(await body(response)).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
   });
+
+  it('stops guessing the password and the code after 10 checks in 15 minutes, from any address (A01-3)', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const wrongCode = () => (totp(admin.secret) === '000000' ? '111111' : '000000');
+    // The TOTP enrolment's password check was the first of the 10. Every request comes from another
+    // address: the per-address limits never meet these.
+    for (let attempt = 1; attempt < 10; attempt += 1) {
+      const response = await client.post('/api/admin/me/reauthenticate', {
+        cookie: admin.cookie,
+        body: { password: PASSWORD, totpCode: wrongCode() },
+      });
+      expect(await body(response)).toMatchObject({ status: 400, code: 'INVALID_CODE' });
+    }
+    const right = await client.post('/api/admin/me/reauthenticate', {
+      cookie: admin.cookie,
+      body: { password: PASSWORD, totpCode: totp(admin.secret) },
+    });
+    expect(await body(right)).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
+    // The same count stands on every route that checks the admin's password.
+    const change = await client.post('/api/admin/auth/change-password', {
+      cookie: admin.cookie,
+      body: { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+    });
+    expect(await body(change)).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
+    const codes = await client.post('/api/admin/auth/two-factor/generate-backup-codes', {
+      cookie: admin.cookie,
+      body: { password: PASSWORD },
+    });
+    expect(await body(codes)).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
+  });
+
+  it('starts the count again after a check that passed, so a busy admin is never locked out', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    for (let round = 0; round < 12; round += 1) {
+      const response = await client.post('/api/admin/me/reauthenticate', {
+        cookie: admin.cookie,
+        body: { password: PASSWORD, totpCode: totp(admin.secret) },
+      });
+      expect(response.status).toBe(200);
+    }
+  });
+
+  it('keeps counting through a password change, which proves only the password (A01-3, review)', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    const wrongCode = () => (totp(admin.secret) === '000000' ? '111111' : '000000');
+    // The enrolment's check and 8 wrong codes: 9 of the 10.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const response = await client.post('/api/admin/me/reauthenticate', {
+        cookie: admin.cookie,
+        body: { password: PASSWORD, totpCode: wrongCode() },
+      });
+      expect(await body(response)).toMatchObject({ code: 'INVALID_CODE' });
+    }
+    const change = await client.post('/api/admin/auth/change-password', {
+      cookie: admin.cookie,
+      body: { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+    });
+    expect(change.status).toBe(200);
+    const after = await client.post('/api/admin/me/reauthenticate', {
+      cookie: admin.cookie,
+      body: { password: NEW_PASSWORD, totpCode: totp(admin.secret) },
+    });
+    expect(await body(after)).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
+  });
+
+  it('gives a signed-in, enrolled admin no TOTP check outside the count (A01-3, review)', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    for (const path of ['verify-totp', 'verify-backup-code']) {
+      const response = await client.post(`/api/admin/auth/two-factor/${path}`, {
+        cookie: admin.cookie,
+        body: { code: totp(admin.secret) },
+      });
+      expect(response.status).toBe(403);
+    }
+    // Re-authentication still checks the code, through the service.
+    const reauthenticated = await client.post('/api/admin/me/reauthenticate', {
+      cookie: admin.cookie,
+      body: { password: PASSWORD, totpCode: totp(admin.secret) },
+    });
+    expect(reauthenticated.status).toBe(200);
+  });
 });
 
 describe('own sessions and backup codes (rule D7)', () => {

@@ -1217,6 +1217,8 @@ export class AdminApi {
       case 'GET /api/admin/test-customers':
         return json(200, { items: this.testCustomers, nextCursor: null });
       case 'POST /api/admin/test-customers': {
+        // Sensitive, as the reset (rule T2).
+        if (this.reauthenticationRequired) return apiError(403, 'REAUTHENTICATION_REQUIRED');
         if (this.testCustomers.some((customer) => customer.email === body?.email)) {
           return apiError(409, 'EMAIL_TAKEN');
         }

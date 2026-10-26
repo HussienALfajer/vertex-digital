@@ -12,9 +12,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { MerchantCard } from '@/features/merchant/merchant-card';
 import { NotificationPreferencesCard } from '@/features/notifications/preferences-card';
 import { t } from '@/lib/i18n';
+import { readSession } from '@/lib/session';
 import { PasswordCard } from './password-card';
 import { ProfileCard } from './profile-card';
-import { type CustomerSession, currentSessionToken, getProfile, listSessions } from './requests';
+import { type CustomerSession, getProfile, listSessions } from './requests';
 import { SessionsCard } from './sessions-card';
 
 // S22 PK2, PK4: the passkeys card, with WebAuthn and its strings, loads on its own.
@@ -30,7 +31,7 @@ type State =
       status: 'ready';
       profile: CustomerProfile;
       sessions: CustomerSession[];
-      currentToken: string | null;
+      currentToken: string;
     };
 
 /**
@@ -43,16 +44,19 @@ export function AccountPage() {
   const [state, setState] = useState<State>({ status: 'loading' });
 
   const load = useCallback(async () => {
-    const [profile, sessions, currentToken] = await Promise.all([
+    // The header's session read, shared while in flight (A01-16): its token marks this device.
+    const [profile, sessions, session] = await Promise.all([
       getProfile(),
       listSessions(),
-      currentSessionToken(),
+      readSession(),
     ]);
     if (!profile.ok && profile.reason === 'UNAUTHORIZED') {
       router.replace('/sign-in?next=%2Faccount');
       return;
     }
-    if (!profile.ok || !sessions.ok) return setState({ status: 'failed' });
+    const currentToken = session?.session?.token;
+    // Signed in, yet no token read: the device could not be told apart, so the page says it failed.
+    if (!profile.ok || !sessions.ok || !currentToken) return setState({ status: 'failed' });
     setState({ status: 'ready', profile: profile.data, sessions: sessions.data, currentToken });
   }, [router]);
 
@@ -95,6 +99,7 @@ export function AccountPage() {
         }
       />
       <PasswordCard
+        email={state.profile.email}
         onChanged={() => {
           // Other sessions were signed out (rule C11): the list shows only this one now.
           void listSessions().then(
@@ -107,7 +112,15 @@ export function AccountPage() {
         sessions={state.sessions}
         currentToken={state.currentToken}
         onRevoked={(token) =>
-          update({ sessions: state.sessions.filter((session) => session.token !== token) })
+          // From the latest list: a refresh may have landed since this render (A01-15).
+          setState((previous) =>
+            previous.status === 'ready'
+              ? {
+                  ...previous,
+                  sessions: previous.sessions.filter((session) => session.token !== token),
+                }
+              : previous,
+          )
         }
       />
       <NotificationPreferencesCard />

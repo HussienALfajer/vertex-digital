@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import ar from '../src/messages/ar.json' with { type: 'json' };
-import { expect, type MockApi, screenshot, test } from './test';
+import { ALL_ON, expect, type MockApi, screenshot, test } from './test';
 
 /*
  * Customer accounts (S01): sign-up, the email code, sign-in, recovery and the account page,
@@ -270,11 +270,20 @@ test.describe('sign-in', () => {
   });
 });
 
-test('forgot password: the code and a new password, then sign in', async ({ page, api }) => {
+test('forgot password: the code and a new password, then sign in and on to the page asked for', async ({
+  page,
+  api,
+}) => {
+  await page.clock.install();
   api.on('POST /api/auth/email-otp/request-password-reset', 200, { success: true });
-  api.on('POST /api/auth/email-otp/reset-password', 400, { code: 'OTP_EXPIRED' });
-  await page.goto('/sign-in');
-  await page.getByRole('link', { name: ar.signIn.forgotPassword }).click();
+  // Every failed check answers INVALID_OTP (rule C4, F2-18), shown under the code (A01-12).
+  api.on('POST /api/auth/email-otp/reset-password', 400, { code: 'INVALID_OTP' });
+  await page.goto('/sign-in?next=%2Faccount');
+  // Where the customer was heading stays through the reset (A01-19), once the page has read it.
+  const forgot = page.getByRole('link', { name: ar.signIn.forgotPassword });
+  await expect(forgot).toHaveAttribute('href', '/forgot-password?next=%2Faccount');
+  await forgot.click();
+  await expect(page).toHaveURL('/forgot-password?next=%2Faccount');
   await expect(page.getByRole('heading', { name: ar.forgotPassword.title })).toBeVisible();
   await field(page, ar.fields.email).fill(EMAIL);
   await page.getByRole('button', { name: ar.forgotPassword.send }).click();
@@ -283,20 +292,71 @@ test('forgot password: the code and a new password, then sign in', async ({ page
     api.last('POST /api/auth/email-otp/request-password-reset')?.headers['x-altcha'],
   ).toBeTruthy();
 
+  // A new code after a minute, with a new challenge (A01-10).
+  const waiting = page.getByRole('button', {
+    name: ar.verifyEmail.resendIn.replace('{seconds}', '60'),
+  });
+  await expect(waiting).toBeDisabled();
+  await page.clock.runFor(61_000);
+  const before = api.requests.length;
+  await page.getByRole('button', { name: ar.verifyEmail.resend }).click();
+  await expect(page.getByText(ar.verifyEmail.resent)).toBeVisible();
+  const resent = api.requests
+    .slice(before)
+    .filter((request) => request.key === 'POST /api/auth/email-otp/request-password-reset');
+  expect(resent).toHaveLength(1);
+  expect(resent[0]?.body).toEqual({ email: EMAIL });
+  expect(resent[0]?.headers['x-altcha']).toBeTruthy();
+
   await codeField(page).fill(CODE);
   await field(page, ar.fields.newPassword).fill(PASSWORD);
   await page.getByRole('button', { name: ar.forgotPassword.submit }).click();
-  await expect(page.getByText(ar.errors.OTP_EXPIRED)).toBeVisible();
+  await expect(page.getByText(ar.errors.INVALID_OTP)).toBeVisible();
 
+  // A merchant's hint from before the reset goes with the session (A01-13).
+  await page.evaluate(() => {
+    localStorage.setItem('vd-signed-in', '1');
+    localStorage.setItem('vd-private-prices', '1');
+  });
   api.on('POST /api/auth/email-otp/reset-password', 200, { success: true });
   await page.getByRole('button', { name: ar.forgotPassword.submit }).click();
-  await expect(page).toHaveURL('/sign-in?notice=password-reset');
+  await expect(page).toHaveURL('/sign-in?notice=password-reset&next=%2Faccount');
   await expect(page.getByText(ar.signIn.passwordReset)).toBeVisible();
+  expect(
+    await page.evaluate(() => [
+      localStorage.getItem('vd-signed-in'),
+      localStorage.getItem('vd-private-prices'),
+    ]),
+  ).toEqual([null, null]);
   expect(api.last('POST /api/auth/email-otp/reset-password')?.body).toEqual({
     email: EMAIL,
     otp: CODE,
     password: PASSWORD,
   });
+});
+
+test('the entry pages send a signed-in customer on, never to a second sign-in (A01-13)', async ({
+  page,
+  api,
+}) => {
+  signedIn(api);
+  await page.goto('/sign-in?next=%2Faccount');
+  await expect(page).toHaveURL('/account');
+  await expect(page.getByText(ar.account.sessions.thisDevice)).toBeVisible();
+  for (const path of ['/sign-up', '/forgot-password', '/verify-email']) {
+    await page.goto(path);
+    await expect(page).toHaveURL('/');
+  }
+  expect(api.last('POST /api/auth/sign-in/email')).toBeUndefined();
+});
+
+test('the code page without a waiting address links back to sign-in', async ({ page }) => {
+  await page.goto('/verify-email');
+  await expect(page.getByText(ar.verifyEmail.missingTitle)).toBeVisible();
+  await expect(page.getByRole('main').getByRole('link', { name: ar.signIn.title })).toHaveAttribute(
+    'href',
+    '/sign-in',
+  );
 });
 
 test.describe('account', () => {
@@ -378,6 +438,133 @@ test.describe('account', () => {
     await expect(page).toHaveURL('/sign-in?notice=signed-out');
     await expect(page.getByText(ar.signIn.signedOut)).toBeVisible();
     expect(await page.evaluate(() => localStorage.getItem('vd-cart'))).toBeNull();
+  });
+
+  test('signing this device out from the list forgets what the header sign-out forgets (A01-6)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api);
+    api.on('POST /api/auth/revoke-session', 200, { success: true });
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('vd:e2e-seeded')) return;
+      sessionStorage.setItem('vd:e2e-seeded', '1');
+      localStorage.setItem('vd-cart', JSON.stringify({ v: 1, lines: [{ id: 'l1' }] }));
+      localStorage.setItem('vd-private-prices', '1');
+    });
+    await page.goto('/account');
+    await expect(page.getByText(ar.account.sessions.thisDevice)).toBeVisible();
+    const thisDevice = ar.account.sessions.device
+      .replace('{browser}', 'Chrome')
+      .replace('{system}', 'Android');
+    api.on('GET /api/auth/get-session', 200, null);
+    await page
+      .getByRole('button', {
+        name: ar.account.sessions.signOutLabel.replace('{device}', thisDevice),
+      })
+      .click();
+    await expect(page).toHaveURL('/sign-in');
+    expect(api.last('POST /api/auth/revoke-session')?.body).toEqual({ token: 'this-device' });
+    expect(
+      await page.evaluate(() => [
+        localStorage.getItem('vd-cart'),
+        localStorage.getItem('vd-private-prices'),
+      ]),
+    ).toEqual([null, null]);
+  });
+
+  test('refuses a new password equal to the email, before sending and from the server (A01-8)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api);
+    await page.goto('/account');
+    await field(page, ar.fields.currentPassword).fill(PASSWORD);
+    await field(page, ar.fields.newPassword).fill(EMAIL.toUpperCase());
+    await page.getByRole('button', { name: ar.account.password.submit }).click();
+    await expect(page.getByText(ar.validation.passwordEqualsEmail)).toBeVisible();
+    await expect(field(page, ar.fields.newPassword)).toBeFocused();
+    expect(api.last('POST /api/auth/change-password')).toBeUndefined();
+
+    // The email changed in another tab: the server's refusal lands on the same field.
+    api.on('POST /api/auth/change-password', 400, {
+      code: 'VALIDATION_FAILED',
+      details: [{ path: ['newPassword'], message: 'PASSWORD_EQUALS_EMAIL' }],
+    });
+    await field(page, ar.fields.newPassword).fill('sara.new@example.com');
+    await page.getByRole('button', { name: ar.account.password.submit }).click();
+    await expect(page.getByText(ar.validation.passwordEqualsEmail)).toBeVisible();
+    await expect(field(page, ar.fields.newPassword)).toBeFocused();
+  });
+
+  test('a failed read of the account, or of its email choices, offers a retry (A01-9, A01-12)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api);
+    api.on('GET /api/account', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/account');
+    await expect(page.getByText(ar.account.loadFailed)).toBeVisible();
+    signedIn(api);
+    api.on('GET /api/account/notification-preferences', 500, { code: 'INTERNAL_ERROR' });
+    await page.getByRole('button', { name: ar.account.retry }).click();
+    await expect(page.getByText(ar.account.sessions.thisDevice)).toBeVisible();
+    await expect(page.getByText(ar.account.notifications.loadFailed)).toBeVisible();
+    api.on('GET /api/account/notification-preferences', 200, { email: ALL_ON, push: ALL_ON });
+    // The account loaded: the only retry left is the email choices' own.
+    await page.getByRole('button', { name: ar.account.retry }).click();
+    const credited = page.getByRole('switch', {
+      name: ar.account.notifications.emailLabel.replace(
+        '{event}',
+        ar.account.notifications.events.deposit_credited,
+      ),
+    });
+    await expect(credited).toBeChecked();
+
+    // A01-11: the switch answers a tap up to 10 px above it, a 44 px target.
+    api.on('PUT /api/account/notification-preferences', 500, { code: 'INTERNAL_ERROR' });
+    const box = await credited.boundingBox();
+    if (!box) throw new Error('No switch box');
+    expect(box.height).toBeLessThan(44);
+    await page.mouse.click(box.x + box.width / 2, box.y - 8);
+    await expect
+      .poll(() => api.last('PUT /api/account/notification-preferences')?.body)
+      .toEqual({
+        event: 'deposit_credited',
+        email: false,
+      });
+  });
+
+  test('the email change: signed out goes to sign-in first, then each refusal where it belongs (A01-7, A01-12)', async ({
+    page,
+    api,
+  }) => {
+    api.on('GET /api/account', 401, { code: 'UNAUTHORIZED' });
+    await page.goto('/account/email');
+    await expect(page).toHaveURL('/sign-in?next=%2Faccount%2Femail');
+    expect(api.last('POST /api/auth/email-otp/request-email-change')).toBeUndefined();
+
+    signedIn(api);
+    api.on('POST /api/auth/email-otp/request-email-change', 400, { code: 'INVALID_PASSWORD' });
+    await page.goto('/account/email');
+    await field(page, ar.fields.newEmail).fill('sara.new@example.com');
+    await field(page, ar.fields.currentPassword).fill('wrong-password');
+    await page.getByRole('button', { name: ar.changeEmail.send }).click();
+    await expect(page.getByText(ar.errors.INVALID_PASSWORD)).toBeVisible();
+    await expect(field(page, ar.fields.currentPassword)).toBeFocused();
+
+    api.on('POST /api/auth/email-otp/request-email-change', 200, { success: true });
+    api.on('POST /api/auth/email-otp/change-email', 400, { code: 'INVALID_OTP' });
+    await field(page, ar.fields.currentPassword).fill(PASSWORD);
+    await page.getByRole('button', { name: ar.changeEmail.send }).click();
+    await codeField(page).fill(CODE);
+    await page.getByRole('button', { name: ar.changeEmail.submit }).click();
+    await expect(page.getByText(ar.errors.INVALID_OTP)).toBeVisible();
+
+    // Edge case 8: the address was taken meanwhile.
+    api.on('POST /api/auth/email-otp/change-email', 409, { code: 'EMAIL_TAKEN' });
+    await page.getByRole('button', { name: ar.changeEmail.submit }).click();
+    await expect(page.getByText(ar.errors.EMAIL_TAKEN)).toBeVisible();
   });
 
   test('changes the email with a code sent to the new address', async ({ page, api }) => {

@@ -52,6 +52,8 @@ export const QUEUES = {
   supportAutoClose: 'support.auto-close',
   /** Deletes sign-ins older than 90 days, daily at 04:00 `Asia/Damascus` (S12 data). */
   customersPurgeSignIns: 'customers.purge-sign-ins',
+  /** Deletes ended sessions and expired codes and challenges of both auth instances, hourly (A01-1). */
+  authPurgeExpired: 'auth.purge-expired',
   /** The nightly reconciliation at 00:30 `Asia/Damascus`, or a manual run (S13 RN1–RN5). */
   reconciliationRun: 'reconciliation.run',
   /** Reads again a run's external checks that were off their range (S13 RN4). */

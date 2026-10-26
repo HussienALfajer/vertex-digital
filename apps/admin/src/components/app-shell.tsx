@@ -14,6 +14,7 @@ import {
   SheetContent,
   SheetTitle,
   SheetTrigger,
+  toast,
   VertexMark,
 } from '@vertex-digital/ui';
 import {
@@ -49,7 +50,7 @@ import { reconciliationCountsQuery } from '../features/reconciliation/reconcilia
 import { SwitchesBanner } from '../features/settings/switches-banner';
 import { newPacksQuery } from '../features/suppliers/suppliers.queries';
 import { supportOpenCountQuery } from '../features/support/support.queries';
-import { type AdminSession, authClient, leaveSession, useSession } from '../lib/auth';
+import { type AdminSession, signOutAndLeave, useSession } from '../lib/auth';
 import { ThemeToggle } from './theme-toggle';
 
 type NavPath = NonNullable<LinkProps['to']>;
@@ -480,8 +481,8 @@ function UserMenu({ session }: { session: AdminSession }) {
   const { user } = session;
 
   async function signOut() {
-    await authClient.signOut();
-    await leaveSession(queryClient, () => router.navigate({ to: '/login' }));
+    const left = await signOutAndLeave(queryClient, () => router.navigate({ to: '/login' }));
+    if (!left) toast.add({ title: t('user.signOutFailed'), type: 'error' });
   }
 
   return (

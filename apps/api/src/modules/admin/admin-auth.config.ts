@@ -6,9 +6,11 @@ import {
   adminTwoFactors,
   adminUsers,
   adminVerifications,
+  clearHits,
   type Database,
   newId,
   recordAudit,
+  withinLimits,
 } from '@vertex-digital/db';
 import { BASE_ERROR_CODES, betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -120,6 +122,31 @@ export const ACTIVITY_GRANULARITY_MS = 60 * 1000;
 
 /** Paths that need the CLI-issued password changed first (rule D1). */
 const AFTER_PASSWORD_CHANGE_PATHS = ['/two-factor/enable', '/two-factor/generate-backup-codes'];
+
+/** Better Auth paths that check the signed-in admin's password (counted by A01-3's limit). */
+const PASSWORD_CHECK_PATHS = ['/two-factor/enable', '/two-factor/generate-backup-codes'];
+
+/**
+ * The signed-in admin's password and re-authentication checks: 10 in 15 minutes, from any address,
+ * counted before the check (audit A01-3, as the customers' F2-8). A stolen session cannot guess the
+ * password or the code that opens sensitive routes; the sign-in has its own limits and ALTCHA step.
+ * A re-authentication that passes starts the count again (`clearAdminPasswordChecks`): it proved
+ * the password and the code, so it helps no guesser, and a busy admin re-authenticating every 5
+ * minutes is never locked out. Nothing else clears it: a password change proves only the password.
+ */
+export const ADMIN_PASSWORD_CHECKS = { max: 10, windowMs: 15 * 60 * 1000 } as const;
+
+const passwordCheckKey = (adminId: string) => `admin-password-check:${adminId}`;
+
+export async function countAdminPasswordCheck(db: Database, adminId: string): Promise<void> {
+  if (!(await withinLimits(db, [{ key: passwordCheckKey(adminId), ...ADMIN_PASSWORD_CHECKS }]))) {
+    throw new CodedException(429, 'RATE_LIMITED', 'Too many password checks, try later');
+  }
+}
+
+export function clearAdminPasswordChecks(db: Database, adminId: string): Promise<void> {
+  return clearHits(db, passwordCheckKey(adminId));
+}
 
 /** Whether a session saw no activity for the idle timeout (rule D4). */
 export const isIdle = (lastActiveAt: Date, now = Date.now()) =>
@@ -314,6 +341,20 @@ export function createAdminAuth(
             code: 'PASSWORD_CHANGE_REQUIRED',
             message: 'Change the password first',
           });
+        }
+        // A01-3: the TOTP step serves a sign-in (no session yet) and the enrolment (TOTP not on yet).
+        // On an enrolled admin's session it would only be a code oracle outside the per-admin
+        // count; re-authentication checks the code through the service, without a request.
+        if (TOTP_STEP_PATHS.includes(ctx.path) && ctx.request && current.user.twoFactorEnabled) {
+          throw new APIError('FORBIDDEN', { message: 'Two-factor sign-in is already set up' });
+        }
+        if (PASSWORD_CHECK_PATHS.includes(ctx.path)) {
+          try {
+            await countAdminPasswordCheck(db, current.user.id);
+          } catch (error) {
+            if (!(error instanceof CodedException)) throw error;
+            throw new APIError('TOO_MANY_REQUESTS', { code: error.code, message: error.message });
+          }
         }
         // An enrolled authenticator is replaced only after a reset on the server (rule D3): a
         // stolen session and password must not swap it for the thief's.

@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorCode, errorMessage } from '../../lib/errors';
+import { accessEventOf, reportAccess } from '../../lib/session-events';
 import { reauthenticate } from './account.queries';
 
 /** Runs an admin action; when the API asks for re-authentication first, asks, then runs it again. */
@@ -46,11 +47,12 @@ const isReauthenticationRequired = (error: unknown) =>
  */
 export function ReauthenticationProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const pending = useRef<((confirmed: boolean) => void) | null>(null);
+  // Every action waiting on the dialog: a second one asking while it is open waits with the first
+  // and is answered with it (A01-31).
+  const pending = useRef<((confirmed: boolean) => void)[]>([]);
 
   const settle = useCallback((confirmed: boolean) => {
-    pending.current?.(confirmed);
-    pending.current = null;
+    for (const resolve of pending.current.splice(0)) resolve(confirmed);
     setOpen(false);
   }, []);
 
@@ -60,7 +62,7 @@ export function ReauthenticationProvider({ children }: { children: ReactNode }) 
     } catch (error) {
       if (!isReauthenticationRequired(error)) throw error;
       const confirmed = await new Promise<boolean>((resolve) => {
-        pending.current = resolve;
+        pending.current.push(resolve);
         setOpen(true);
       });
       if (!confirmed) throw error;
@@ -72,7 +74,12 @@ export function ReauthenticationProvider({ children }: { children: ReactNode }) 
     <ReauthenticationContext value={withReauthentication}>
       {children}
       <Dialog open={open} onOpenChange={(next) => !next && settle(false)}>
-        {open && <ReauthenticationDialog onConfirmed={() => settle(true)} />}
+        {open && (
+          <ReauthenticationDialog
+            onConfirmed={() => settle(true)}
+            onSessionEnded={() => settle(false)}
+          />
+        )}
       </Dialog>
     </ReauthenticationContext>
   );
@@ -90,7 +97,13 @@ export function useReauthentication(): WithReauthentication {
   return useContext(ReauthenticationContext) ?? direct;
 }
 
-function ReauthenticationDialog({ onConfirmed }: { onConfirmed: () => void }) {
+function ReauthenticationDialog({
+  onConfirmed,
+  onSessionEnded,
+}: {
+  onConfirmed: () => void;
+  onSessionEnded: () => void;
+}) {
   const { t } = useTranslation();
   const codeId = useId();
   const [failure, setFailure] = useState<string | null>(null);
@@ -114,6 +127,15 @@ function ReauthenticationDialog({ onConfirmed }: { onConfirmed: () => void }) {
         await reauthenticate(values);
       } catch (error) {
         const code = errorCode(error);
+        // The call runs outside the query caches, whose handler sends an ended session to sign-in:
+        // the dialog does it, with the idle notice when it applies (rule D4, A01-21).
+        const ended =
+          accessEventOf(code) ??
+          (error instanceof ApiError && error.status === 401 ? 'signed-out' : undefined);
+        if (ended === 'idle-expired' || ended === 'signed-out') {
+          onSessionEnded();
+          return reportAccess(ended);
+        }
         if (code === 'INVALID_PASSWORD') {
           setError('password', { type: 'server', message: errorMessage(t, error) });
           return focusInvalid();

@@ -12,7 +12,7 @@ In a new session (Opus, effort `high`), the owner writes one line, for example "
 
 | Group | Name | Status | Report | PR | Deployed |
 |---|---|---|---|---|---|
-| A01 | Identity and access | not started | | | |
+| A01 | Identity and access | merged | [A01-identity.md](A01-identity.md) | [#177](https://github.com/HussienALfajer/vertex-digital/pull/177) | |
 | A02 | Wallet, ledger and deposits | not started | | | |
 | A03 | Catalog and storefront | not started | | | |
 | A04 | Purchase, orders and fulfilment | not started | | | |

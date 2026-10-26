@@ -1,3 +1,17 @@
+# TASKS — Audit A01 Identity and access (branch `fix/audit-a01-identity`)
+
+Plan `docs/audits/README.md`, report `docs/audits/A01-identity.md`. Specs S01, S22 (passkeys); ADR 0007, 0008, 0016, 0037.
+
+- [x] Start: branch, README status `in progress`, report file, this list
+- [x] Map and audit (backend, database, worker, store, admin, tests, observability); known leads checked
+- [x] Live browser test (store screens; admin `/login` only until the owner allows resetting the local admin)
+- [x] Findings shown to the owner
+- [x] Fixes P0 → P3, each with its regression test (A01-31 has none: no screen reaches it)
+- [x] Re-test live with screenshots (store)
+- [x] `pnpm verify` (checker) and the reviewer; findings fixed
+- [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
+- [ ] Deploy, production smoke test, README `deployed`
+
 # TASKS — S22 Quick buy and order help (F40, F41, F42)
 
 Spec `docs/specs/S22-quick-buy-and-order-help.md`, ADR 0037. Three PRs as the spec's delivery plan says, one session each. No new money flow: every purchase is S08 M1, every gap is an S09 reservation then an S03/S04 deposit.
