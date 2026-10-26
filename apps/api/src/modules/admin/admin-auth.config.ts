@@ -6,6 +6,7 @@ import {
   adminTwoFactors,
   adminUsers,
   adminVerifications,
+  clearHits,
   type Database,
   newId,
   recordAudit,
@@ -127,17 +128,24 @@ const PASSWORD_CHECK_PATHS = ['/two-factor/enable', '/two-factor/generate-backup
 
 /**
  * The signed-in admin's password and re-authentication checks: 10 in 15 minutes, from any address,
- * counted before the check, right or wrong (audit A01-3, as the customers' F2-8). A stolen session
- * cannot guess the password or the code that opens sensitive routes; the sign-in has its own
- * limits and ALTCHA step.
+ * counted before the check (audit A01-3, as the customers' F2-8). A stolen session cannot guess the
+ * password or the code that opens sensitive routes; the sign-in has its own limits and ALTCHA step.
+ * A re-authentication or password change that passes starts the count again
+ * (`clearAdminPasswordChecks`): it proved both, so it helps no guesser, and a busy admin
+ * re-authenticating every 5 minutes is never locked out.
  */
 export const ADMIN_PASSWORD_CHECKS = { max: 10, windowMs: 15 * 60 * 1000 } as const;
 
+const passwordCheckKey = (adminId: string) => `admin-password-check:${adminId}`;
+
 export async function countAdminPasswordCheck(db: Database, adminId: string): Promise<void> {
-  const limit = { key: `admin-password-check:${adminId}`, ...ADMIN_PASSWORD_CHECKS };
-  if (!(await withinLimits(db, [limit]))) {
+  if (!(await withinLimits(db, [{ key: passwordCheckKey(adminId), ...ADMIN_PASSWORD_CHECKS }]))) {
     throw new CodedException(429, 'RATE_LIMITED', 'Too many password checks, try later');
   }
+}
+
+export function clearAdminPasswordChecks(db: Database, adminId: string): Promise<void> {
+  return clearHits(db, passwordCheckKey(adminId));
 }
 
 /** Whether a session saw no activity for the idle timeout (rule D4). */
@@ -333,6 +341,12 @@ export function createAdminAuth(
             code: 'PASSWORD_CHANGE_REQUIRED',
             message: 'Change the password first',
           });
+        }
+        // A01-3: the TOTP step serves a sign-in (no session yet) and the enrolment (TOTP not on yet).
+        // On an enrolled admin's session it would only be a code oracle outside the per-admin
+        // count; re-authentication checks the code through the service, without a request.
+        if (TOTP_STEP_PATHS.includes(ctx.path) && ctx.request && current.user.twoFactorEnabled) {
+          throw new APIError('FORBIDDEN', { message: 'Two-factor sign-in is already set up' });
         }
         if (PASSWORD_CHECK_PATHS.includes(ctx.path)) {
           try {

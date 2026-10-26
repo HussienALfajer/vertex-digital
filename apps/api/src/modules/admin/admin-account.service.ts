@@ -23,7 +23,7 @@ import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import { DATABASE } from '../../core/database/database.module.js';
 import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
-import { countAdminPasswordCheck } from './admin-auth.config.js';
+import { clearAdminPasswordChecks, countAdminPasswordCheck } from './admin-auth.config.js';
 import { AdminAuthService, type AdminIdentity } from './admin-auth.service.js';
 
 /**
@@ -87,6 +87,7 @@ export class AdminAccountService {
         details: { count: others.length },
       });
     });
+    await clearAdminPasswordChecks(this.db, admin.id);
   }
 
   /**
@@ -119,6 +120,7 @@ export class AdminAccountService {
       .update(adminSessions)
       .set({ reauthenticatedAt: now })
       .where(eq(adminSessions.id, admin.sessionId));
+    await clearAdminPasswordChecks(this.db, admin.id);
     return {
       reauthenticatedUntil: new Date(
         now.getTime() + ADMIN_SESSION_RULES.reauthenticationMs,

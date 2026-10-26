@@ -98,7 +98,8 @@ describe('auth.purge-expired (A01-1)', () => {
     const [endedAdmin, idleAdmin, liveAdmin] = [newId(), newId(), newId()];
     await db.insert(adminSessions).values([
       { id: endedAdmin, userId: adminId, token: newId(), expiresAt: ago(1) },
-      // Rule D4: idle for more than 30 minutes, though not past its 12 hours.
+      // Idle past rule D4 but within its 12 hours: kept, so the next action still meets
+      // SESSION_IDLE_EXPIRED and the panel's idle notice (review).
       {
         id: idleAdmin,
         userId: adminId,
@@ -120,7 +121,7 @@ describe('auth.purge-expired (A01-1)', () => {
       { id: liveStep, identifier: `2fa-${liveStep}`, value: adminId, expiresAt: ahead(5) },
     ]);
 
-    expect(await app.get(PurgeExpiredJob).purge()).toBeGreaterThanOrEqual(5);
+    expect(await app.get(PurgeExpiredJob).purge()).toBeGreaterThanOrEqual(4);
 
     const ids = async (table: 'customer' | 'admin') =>
       (table === 'customer'
@@ -134,7 +135,7 @@ describe('auth.purge-expired (A01-1)', () => {
             .where(inArray(adminSessions.id, [endedAdmin, idleAdmin, liveAdmin]))
       ).map((row) => row.id);
     expect(await ids('customer')).toEqual([liveCustomer]);
-    expect(await ids('admin')).toEqual([liveAdmin]);
+    expect((await ids('admin')).sort()).toEqual([idleAdmin, liveAdmin].sort());
     const codes = await db
       .select({ id: customerVerifications.id })
       .from(customerVerifications)
@@ -150,7 +151,7 @@ describe('auth.purge-expired (A01-1)', () => {
     await app.get(PurgeExpiredJob).purge();
     expect(await ids('customer')).toEqual([liveCustomer]);
     await db.delete(customerSessions).where(eq(customerSessions.id, liveCustomer));
-    await db.delete(adminSessions).where(eq(adminSessions.id, liveAdmin));
+    await db.delete(adminSessions).where(inArray(adminSessions.id, [idleAdmin, liveAdmin]));
     await db.delete(customerVerifications).where(eq(customerVerifications.id, liveCode));
     await db.delete(adminVerifications).where(eq(adminVerifications.id, liveStep));
   });

@@ -277,6 +277,36 @@ describe('re-authentication (rule D5)', () => {
     });
     expect(await body(codes)).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
   });
+
+  it('starts the count again after a check that passed, so a busy admin is never locked out', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    for (let round = 0; round < 12; round += 1) {
+      const response = await client.post('/api/admin/me/reauthenticate', {
+        cookie: admin.cookie,
+        body: { password: PASSWORD, totpCode: totp(admin.secret) },
+      });
+      expect(response.status).toBe(200);
+    }
+  });
+
+  it('gives a signed-in, enrolled admin no TOTP check outside the count (A01-3, review)', async () => {
+    const admin = await client.adminWithTotp(test.db);
+    seeded.push(admin.id);
+    for (const path of ['verify-totp', 'verify-backup-code']) {
+      const response = await client.post(`/api/admin/auth/two-factor/${path}`, {
+        cookie: admin.cookie,
+        body: { code: totp(admin.secret) },
+      });
+      expect(response.status).toBe(403);
+    }
+    // Re-authentication still checks the code, through the service.
+    const reauthenticated = await client.post('/api/admin/me/reauthenticate', {
+      cookie: admin.cookie,
+      body: { password: PASSWORD, totpCode: totp(admin.secret) },
+    });
+    expect(reauthenticated.status).toBe(200);
+  });
 });
 
 describe('own sessions and backup codes (rule D7)', () => {

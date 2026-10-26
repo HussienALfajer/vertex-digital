@@ -1,4 +1,4 @@
-import { lt, sql } from 'drizzle-orm';
+import { eq, lt, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import { newId } from './id.js';
 import { customerRateLimits } from './schema/index.js';
@@ -37,6 +37,11 @@ export async function countHit(db: Database, key: string, windowMs: number): Pro
       .where(lt(customerRateLimits.lastRequest, now - 2 * LONGEST_WINDOW_MS));
   }
   return row?.count ?? 1;
+}
+
+/** Ends the current window of `key`: the next hit starts from one (a check that passed). */
+export async function clearHits(db: Database, key: string): Promise<void> {
+  await db.delete(customerRateLimits).where(eq(customerRateLimits.key, key));
 }
 
 export interface Limit {
