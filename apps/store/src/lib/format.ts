@@ -12,6 +12,17 @@ export function formatDateTime(iso: string): string {
   return dateTime.format(new Date(iso));
 }
 
+const damascusDateTime = new Intl.DateTimeFormat(LOCALE, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Damascus',
+});
+
+/** A time a sentence states "بتوقيت دمشق" (the review hours, audit A02-36), wherever the viewer is. */
+export function formatDamascusDateTime(iso: string): string {
+  return damascusDateTime.format(new Date(iso));
+}
+
 export function formatDate(iso: string): string {
   return date.format(new Date(iso));
 }

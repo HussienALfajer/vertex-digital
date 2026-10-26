@@ -27,7 +27,7 @@ import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { InvalidAlert } from '@/components/invalid-alert';
 import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { errorText } from '@/lib/errors';
-import { formatDateTime } from '@/lib/format';
+import { formatDamascusDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { useIdempotentRequest } from '@/lib/idempotency';
 import { useSearchParam } from '@/lib/use-search-param';
@@ -444,7 +444,7 @@ function ReviewTime({ options }: { options: ShamCashOptions }) {
           : t('deposits.eta.closedWithHours', {
               start: options.reviewHours.start,
               end: options.reviewHours.end,
-              date: formatDateTime(options.eta.opensAt),
+              date: formatDamascusDateTime(options.eta.opensAt),
             })}
       </span>
     </p>

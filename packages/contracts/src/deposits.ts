@@ -83,6 +83,8 @@ export const QR_MAX_DIMENSION = 1000;
 /** Per-customer limits (rule SC6), counted in the database over the last hour. */
 export const DEPOSIT_CREATIONS_PER_HOUR = 10;
 export const RECEIPT_UPLOADS_PER_HOUR = 20;
+/** Requotes and cancellations together (rule SC6, audit A02-25): each writes an audit entry. */
+export const DEPOSIT_CHANGES_PER_HOUR = 20;
 
 /** The time zone of the review hours (rule SC13). */
 export const REVIEW_TIME_ZONE = 'Asia/Damascus';

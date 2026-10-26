@@ -23,7 +23,7 @@ import {
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
-import { formatDateTime } from '../../lib/format';
+import { formatDateTime, ltr } from '../../lib/format';
 import { useIdempotentRequest } from '../../lib/idempotency';
 import {
   type AdjustmentFieldErrors,
@@ -136,7 +136,11 @@ export function ReverseDialog({
         <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" variant="destructive" disabled={reverse.isPending}>
-            {reverse.isPending ? t('wallets.reverse.submitting') : t('wallets.reverse.submit')}
+            {reverse.isPending
+              ? t('wallets.reverse.submitting')
+              : t('wallets.reverse.submitAmount', {
+                  amount: ltr(formatSignedUsd(-entry.amountUnits)),
+                })}
           </Button>
         </DialogFooter>
       </form>

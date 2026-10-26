@@ -39,7 +39,7 @@ import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
-import { formatDateTime, ltr } from '../../lib/format';
+import { formatDateTime, formatSince, ltr } from '../../lib/format';
 import { ratesQuery, useChangeRate } from './rates.queries';
 
 /**
@@ -126,7 +126,11 @@ function CurrentRate({ current }: { current: ExchangeRateRecord | null }) {
         </div>
         <div className="flex flex-col gap-1">
           <dt className="text-muted-foreground">{t('rates.current.since')}</dt>
-          <dd className="font-medium">{formatDateTime(current.createdAt)}</dd>
+          <dd className="font-medium">
+            <time dateTime={current.createdAt} title={formatDateTime(current.createdAt)}>
+              {formatSince(current.createdAt)}
+            </time>
+          </dd>
         </div>
       </dl>
     </Card>
@@ -177,6 +181,7 @@ function ChangeRateForm({ current }: { current: ExchangeRateRecord | null }) {
   const [saved, setSaved] = useState(false);
 
   const percent = changeOf(current, rateText);
+  const validRate = changeRateSchema.shape.sypPerUsd.safeParse(rateText).success;
   const needsConfirmation =
     percent !== null && Math.abs(Number(percent)) > RATE_CONFIRMATION_THRESHOLD_PERCENT;
 
@@ -295,7 +300,11 @@ function ChangeRateForm({ current }: { current: ExchangeRateRecord | null }) {
           </p>
         )}
         <Button type="submit" className="self-start" disabled={change.isPending}>
-          {change.isPending ? t('rates.form.submitting') : t('rates.form.submit')}
+          {change.isPending
+            ? t('rates.form.submitting')
+            : validRate
+              ? t('rates.form.submitRate', { rate: ltr(rateText.trim()) })
+              : t('rates.form.submit')}
         </Button>
       </form>
     </Card>

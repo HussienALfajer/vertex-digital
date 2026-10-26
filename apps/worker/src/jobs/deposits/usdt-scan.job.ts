@@ -9,17 +9,15 @@ import {
   USDT_NETWORKS,
   USDT_SCANNER_STALE_MINUTES,
   type UsdtMethod,
-  usdtRawForUnits,
 } from '@vertex-digital/contracts';
 import {
   type Database,
-  deposits,
   type Transaction,
   usdtDeposits,
   usdtScanCursors,
   usdtTransfers,
 } from '@vertex-digital/db';
-import { and, eq, gt, inArray, isNull, lte, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { TelegramAlerts } from '../../core/alerts/telegram-alerts.js';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -31,7 +29,13 @@ import {
   type IncomingPage,
 } from './chain/chain-reader.js';
 import { type TransferFacts, usdtTransferTo } from './usdt-assess.js';
-import { bindAndSettle, queueUnmatchedNotice, recordTransfer, txidClaimed } from './usdt-settle.js';
+import {
+  creditExactMatch,
+  exactMatchDeposit,
+  queueUnmatchedNotice,
+  recordTransfer,
+  txidClaimed,
+} from './usdt-settle.js';
 
 /** The safety-net schedule of every network (rule U12). */
 export const USDT_SCAN_CRON = '*/5 * * * *';
@@ -196,49 +200,8 @@ export class UsdtScanJob implements OnApplicationBootstrap {
     // Claimed already, on either network (an S02 manual deposit during an outage): it stays
     // unmatched, so it is never credited twice and never blocks the scan.
     if (await txidClaimed(tx, transfer.txid)) return 'unmatched';
-    const exactRaw = (units: number) =>
-      usdtRawForUnits(units, USDT_NETWORKS[transfer.method].decimals) === transfer.raw;
-    if (!exactRaw(transfer.amountUnits)) return this.unmatched(tx, row);
-    const matching = and(
-      eq(usdtDeposits.method, transfer.method),
-      eq(usdtDeposits.receivingAddress, transfer.toAddress),
-      eq(usdtDeposits.payAmountUnits, transfer.amountUnits),
-      isNull(usdtDeposits.transferId),
-      lte(deposits.createdAt, transfer.blockTime),
-    );
-    const [waiting] = await tx
-      .select({ deposit: deposits, payAmountUnits: usdtDeposits.payAmountUnits })
-      .from(usdtDeposits)
-      .innerJoin(deposits, eq(deposits.id, usdtDeposits.depositId))
-      .where(
-        and(matching, eq(deposits.status, 'pending'), gt(deposits.expiresAt, transfer.blockTime)),
-      )
-      .for('update', { of: deposits });
-    if (waiting) {
-      await tx
-        .update(deposits)
-        .set({ status: 'submitted', submittedAt: sql`now()` })
-        .where(eq(deposits.id, waiting.deposit.id));
-      return this.bind(tx, waiting.deposit.id, row, transfer, waiting.payAmountUnits);
-    }
-    const [searching] = await tx
-      .select({ deposit: deposits, payAmountUnits: usdtDeposits.payAmountUnits })
-      .from(usdtDeposits)
-      .innerJoin(deposits, eq(deposits.id, usdtDeposits.depositId))
-      .where(
-        and(
-          matching,
-          eq(deposits.status, 'submitted'),
-          inArray(usdtDeposits.checkStatus, ['searching', 'confirming']),
-          ne(usdtDeposits.txid, transfer.txid),
-        ),
-      )
-      .orderBy(deposits.createdAt)
-      .limit(1)
-      .for('update', { of: deposits });
-    if (searching) {
-      return this.bind(tx, searching.deposit.id, row, transfer, searching.payAmountUnits);
-    }
+    const match = await exactMatchDeposit(tx, transfer);
+    if (match) return creditExactMatch(tx, this.pgBoss.boss, match, row);
     return this.unmatched(tx, row);
   }
 
@@ -249,26 +212,6 @@ export class UsdtScanJob implements OnApplicationBootstrap {
   ): Promise<'unmatched'> {
     await queueUnmatchedNotice(tx, this.pgBoss.boss, row);
     return 'unmatched';
-  }
-
-  private async bind(
-    tx: Transaction,
-    depositId: string,
-    row: typeof usdtTransfers.$inferSelect,
-    transfer: TransferFacts,
-    payAmountUnits: number,
-  ): Promise<'credited'> {
-    const [deposit] = await tx.select().from(deposits).where(eq(deposits.id, depositId));
-    if (!deposit) throw new Error(`Deposit ${depositId} vanished`);
-    await bindAndSettle(tx, this.pgBoss.boss, {
-      deposit,
-      transfer: row,
-      flags: [],
-      txidSource: 'scan',
-      payAmountUnits,
-      depositMethod: transfer.method,
-    });
-    return 'credited';
   }
 
   /** Rule U12: no complete scan for 10 minutes; one alert per window (repeats suppressed). */

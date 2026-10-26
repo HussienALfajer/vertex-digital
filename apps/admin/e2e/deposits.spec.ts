@@ -138,6 +138,15 @@ async function reauthenticate(page: Page) {
 
 const rows = (page: Page) => page.getByRole('table').first().getByRole('row');
 
+/** Audit A02-3: an approval credits only from its confirmation, which states the credit. */
+async function confirmApproval(page: Page, amount: string) {
+  const dialog = page.getByRole('alertdialog', { name: ar.deposits.approve.confirmTitle });
+  await expect(dialog).toContainText(usd(amount));
+  await dialog
+    .getByRole('button', { name: fill(ar.deposits.approve.submit, { amount: usd(amount) }) })
+    .click();
+}
+
 test.describe('exchange rate', () => {
   test('the banner without a rate, the first rate, then a change above 5% typed twice', async ({
     page,
@@ -309,7 +318,14 @@ test.describe('deposits', () => {
     const mismatch = page.getByRole('checkbox').nth(2);
     await expect(mismatch).not.toBeChecked();
     await mismatch.click();
+    // Enter in a field opens the confirmation; nothing is sent before it (audit A02-3).
+    await field(page, ar.deposits.approve.transaction).press('Enter');
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    expect(admin.requests.filter((request) => request.key.endsWith('/approve'))).toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('alertdialog')).toBeHidden();
     await submit.click();
+    await confirmApproval(page, '$24.57');
     await reauthenticate(page);
     await expect(page.getByRole('heading', { name: ar.deposits.detail.decision })).toBeVisible();
     await expect(page.getByText('TEST-001')).toBeVisible();
@@ -343,6 +359,7 @@ test.describe('deposits', () => {
     await page
       .getByRole('button', { name: fill(ar.deposits.approve.submit, { amount: usd('$20.00') }) })
       .click();
+    await confirmApproval(page, '$20.00');
     await expect(page.getByText(ar.errors.api.EXTERNAL_REFERENCE_TAKEN)).toBeVisible();
     await expect(page.getByText('0199a000-0000-7000-8000-0000000000b9')).toBeVisible();
   });
@@ -379,6 +396,7 @@ test.describe('deposits', () => {
     await page
       .getByRole('button', { name: fill(ar.deposits.approve.submit, { amount: usd('$20.00') }) })
       .click();
+    await confirmApproval(page, '$20.00');
     await expect(page.getByText(ar.deposits.detail.resubmittedTitle)).toBeVisible();
     // The newest receipt is shown and nothing typed for the first one is kept.
     await expect(page.getByRole('tab', { name: ar.deposits.receipt.latest })).toHaveAttribute(
@@ -483,6 +501,108 @@ test.describe('deposits', () => {
       // F4-10: the submission the dialog opened on.
       submittedAt: admin.deposits.find((deposit) => deposit.id === USD_DEPOSIT)?.submittedAt,
     });
+  });
+});
+
+test.describe('the review screens (audit A02)', () => {
+  test('the queue says when the counts moved, and reads again on a click (A02-14)', async ({
+    page,
+    admin,
+  }) => {
+    queue(admin);
+    await page.clock.install();
+    await open(page, admin, '/deposits');
+    await expect(rows(page)).toHaveCount(3);
+    await expect(page.getByText(ar.deposits.queueMoved)).toBeHidden();
+    admin.deposits.push(
+      deposit({
+        id: '0199a000-0000-7000-8000-0000000000d9',
+        referenceCode: 'VD-9NEW2',
+        submittedAt: minutesAgo(1),
+      }),
+    );
+    // The badge's background read, 30 seconds on.
+    await page.clock.fastForward(31_000);
+    await expect(page.getByText(ar.deposits.queueMoved)).toBeVisible();
+    await expect(rows(page)).toHaveCount(3);
+    await page.getByRole('button', { name: ar.deposits.refreshQueue }).click();
+    await expect(rows(page)).toHaveCount(4);
+    await expect(page.getByText(ar.deposits.queueMoved)).toBeHidden();
+  });
+
+  test('the back arrow points back in RTL (A02-13)', async ({ page, admin }) => {
+    queue(admin);
+    await open(page, admin, `/deposits/${USD_DEPOSIT}`);
+    const back = page.getByRole('link', { name: ar.deposits.detail.back });
+    await expect(back).toBeVisible();
+    // `ltr:-scale-x-100`: no turn in RTL, where the arrow already points right, the way back.
+    expect(await back.locator('svg').evaluate((icon) => getComputedStyle(icon).transform)).toBe(
+      'none',
+    );
+  });
+
+  test('a clearer receipt refused for another pending deposit offers the rejection (A02-15)', async ({
+    page,
+    admin,
+  }) => {
+    queue(admin);
+    await page.route(`**/api/admin/deposits/${USD_DEPOSIT}/request-receipt`, (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          statusCode: 409,
+          code: 'DEPOSIT_ALREADY_PENDING',
+          message: 'pending',
+        }),
+      }),
+    );
+    await open(page, admin, `/deposits/${USD_DEPOSIT}`);
+    await page.getByRole('button', { name: ar.deposits.requestReceipt.open }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel(ar.deposits.decision.internalNote).fill('رقم العملية غير ظاهر');
+    await dialog.getByRole('button', { name: ar.deposits.requestReceipt.submit }).click();
+    await expect(dialog.getByText(ar.errors.api.DEPOSIT_ALREADY_PENDING)).toBeVisible();
+    await dialog.getByRole('button', { name: ar.deposits.requestReceipt.rejectInstead }).click();
+    await expect(
+      page.getByRole('dialog').getByRole('combobox', { name: ar.deposits.reject.reason }),
+    ).toBeVisible();
+  });
+
+  test('a receipt or an audit trail that fails to load says so and reads again (A02-17)', async ({
+    page,
+    admin,
+  }) => {
+    queue(admin);
+    let receiptFails = true;
+    await page.route(/\/api\/admin\/deposits\/[^/]+\/receipts\/[^/]+$/, (route) =>
+      receiptFails ? route.fulfill({ status: 404, body: '' }) : route.fallback(),
+    );
+    let auditFails = true;
+    await page.route(/\/api\/admin\/audit(\?|$)/, (route) =>
+      auditFails
+        ? route.fulfill({
+            status: 500,
+            contentType: 'application/json',
+            body: JSON.stringify({ statusCode: 500, code: 'INTERNAL_ERROR', message: 'down' }),
+          })
+        : route.fallback(),
+    );
+    await open(page, admin, `/deposits/${USD_DEPOSIT}`);
+    await expect(page.getByText(ar.deposits.receipt.failed)).toBeVisible();
+    receiptFails = false;
+    await page.getByRole('button', { name: ar.common.retry }).first().click();
+    await expect(page.getByText(ar.deposits.receipt.failed)).toBeHidden();
+    await expect(page.getByRole('img', { name: /VD-3HWX9/ })).toBeVisible();
+
+    const trail = page.getByRole('region', { name: ar.deposits.detail.audit });
+    await expect(trail.getByRole('button', { name: ar.common.retry })).toBeVisible();
+    auditFails = false;
+    await trail.getByRole('button', { name: ar.common.retry }).click();
+    await expect(trail.getByRole('button', { name: ar.common.retry })).toBeHidden();
+    await expect(
+      trail.getByRole('table').or(trail.getByText(ar.deposits.detail.noAudit)),
+    ).toBeVisible();
   });
 });
 

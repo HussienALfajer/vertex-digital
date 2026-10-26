@@ -12,8 +12,8 @@ In a new session (Opus, effort `high`), the owner writes one line, for example "
 
 | Group | Name | Status | Report | PR | Deployed |
 |---|---|---|---|---|---|
-| A01 | Identity and access | merged | [A01-identity.md](A01-identity.md) | [#177](https://github.com/HussienALfajer/vertex-digital/pull/177) | |
-| A02 | Wallet, ledger and deposits | not started | | | |
+| A01 | Identity and access | deployed | [A01-identity.md](A01-identity.md) | [#177](https://github.com/HussienALfajer/vertex-digital/pull/177) | `097b869` (2026-10-27) |
+| A02 | Wallet, ledger and deposits | in progress | [A02-wallet.md](A02-wallet.md) | | |
 | A03 | Catalog and storefront | not started | | | |
 | A04 | Purchase, orders and fulfilment | not started | | | |
 | A05 | Suppliers and pricing | not started | | | |
@@ -120,7 +120,7 @@ Each group owns its screens and everything behind them: API modules, worker jobs
 - **Ops:** `deploy/` (nginx, CSP, limits, fail2ban, systemd, backups, health check), CI, `docs/deployment.md`.
 - **Specs and ADRs:** S15 (PWA), Phase 0; ADR 0001, 0002, 0008, 0009, 0011, 0012, 0014, 0015.
 - **E2E:** store `pwa`, `store`; admin `forms`.
-- **Known leads:** Next.js warns that `cacheComponents` is on without a `partialPrefetching` choice (production store log, 2026-10-26); header account links prefetch against the store rule (`balance-chip.tsx:55`, `notification-bell.tsx:106`, `account-menu.tsx:87-108`); `robots.ts` relies on per-page `noindex` for `/support/`, `/v/`, `/q/`; no E2E reaches the admin root error and not-found pages; backups still live on the production server (Launch checklist).
+- **Known leads:** Next.js warns that `cacheComponents` is on without a `partialPrefetching` choice (production store log, 2026-10-26); header account links prefetch against the store rule (`balance-chip.tsx:55`, `notification-bell.tsx:106`, `account-menu.tsx:87-108`); `robots.ts` relies on per-page `noindex` for `/support/`, `/v/`, `/q/`; no E2E reaches the admin root error and not-found pages; backups still live on the production server (Launch checklist); the panel's switches banner is titled "طريقة إيداع موقوفة مؤقتاً" when a supplier is paused (`switches-banner.tsx:28`, `ar.json` `switches.banner.pausedTitle`; A02 live test); from A02: the USDT scanner stuck on one transfer has no alert naming it (A02-28), no database guard ties a credited USDT deposit to its transfer (A02-29), TXID lookups have no index (A02-30), `updated_at` comes from the app's clock while some reads compare it with `now()` (`columns.ts`).
 
 ## The audit dimensions
 

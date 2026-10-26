@@ -142,7 +142,20 @@ export async function usdtCandidates(
   customersOf: (ids: string[]) => Promise<Map<string, DepositCustomer>>,
   exceptId?: string,
 ): Promise<UsdtCandidate[]> {
-  const rows = await db
+  const rows = await usdtCandidateRows(db, method, amountUnits, exceptId);
+  return candidatesOf(rows, await customersOf([...new Set(rows.map((row) => row.customerId))]));
+}
+
+export type UsdtCandidateRow = Awaited<ReturnType<typeof usdtCandidateRows>>[number];
+
+/** The candidate deposits of a transfer amount, without their customers. */
+export function usdtCandidateRows(
+  db: Database | Transaction,
+  method: UsdtMethod,
+  amountUnits: number,
+  exceptId?: string,
+) {
+  return db
     .select({
       depositId: deposits.id,
       customerId: deposits.customerId,
@@ -165,7 +178,13 @@ export async function usdtCandidates(
       desc(deposits.createdAt),
     )
     .limit(CANDIDATE_LIMIT);
-  const customers = await customersOf([...new Set(rows.map((row) => row.customerId))]);
+}
+
+/** Candidate rows with their customers, read once for a whole page. */
+export function candidatesOf(
+  rows: UsdtCandidateRow[],
+  customers: Map<string, DepositCustomer>,
+): UsdtCandidate[] {
   return rows.map((row) => {
     const customer = customers.get(row.customerId);
     if (!customer) throw new Error(`Deposit ${row.depositId} has no customer`);

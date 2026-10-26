@@ -183,7 +183,7 @@ Claims each real-world payment once across every table that can credit it (rule 
   - Limits apply when the deposit is created. An approval credits what was received, even above a limit (RV2): the money has already moved.
 - SC4. A customer has at most one `pending` deposit (partial unique index). Creating another answers `DEPOSIT_ALREADY_PENDING` with `details.depositId`, and the store opens that deposit. The customer can cancel it first.
 - SC5. A customer has at most 3 `submitted` deposits. A fourth create answers `TOO_MANY_DEPOSITS_IN_REVIEW`.
-- SC6. Creation, requote, submission and cancellation are rate-limited per customer: 10 creations per hour, 20 receipt uploads per hour (ADR 0008). nginx keeps its deposit and receipt-upload zones.
+- SC6. Creation, requote, submission and cancellation are rate-limited per customer: 10 creations per hour, 20 receipt uploads per hour, 20 requotes and cancellations per hour together (audit A02-25) (ADR 0008). nginx keeps its deposit and receipt-upload zones; the deposit zone covers requotes and cancellations too.
 - SC7. The pending deposit's page shows:
   - the account name and number, with copy buttons;
   - the QR of the deposit's currency;

@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
+import { ltr } from '../../lib/format';
 
 /*
  * What the adjust and reverse dialogs share: the typed confirmation above $100 (rule J6), the
@@ -42,7 +43,7 @@ export function failureOf(
     const balance = (error.details as { balanceUnits?: unknown } | undefined)?.balanceUnits;
     if (Number.isSafeInteger(balance)) {
       return {
-        message: t('wallets.adjust.insufficient', { balance: formatUsd(balance as number) }),
+        message: t('wallets.adjust.insufficient', { balance: ltr(formatUsd(balance as number)) }),
       };
     }
   }

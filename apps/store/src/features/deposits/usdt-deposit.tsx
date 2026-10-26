@@ -47,7 +47,7 @@ import { addressGroups, splitPayAmount } from './amounts';
 import { CopyButton } from './copy-button';
 import { Line, Panel } from './panel';
 import { cancelDeposit, submitTxid } from './requests';
-import { UsdtQr } from './usdt-qr';
+import { LazyUsdtQr } from './usdt-qr-lazy';
 import { formatClock, useTimeLeft } from './use-time-left';
 
 /**
@@ -100,7 +100,9 @@ export function UsdtAwaiting({
           <p className="text-3xl font-bold tabular-nums" dir="ltr">
             <span>{head}</span>
             <mark className="rounded-sm bg-accent px-0.5 text-accent-foreground">{tail}</mark>
-            <span className="ms-2 text-lg font-medium text-muted-foreground">USDT</span>
+            <span className="ms-2 text-lg font-medium text-muted-foreground">
+              {t('deposits.usdt.token')}
+            </span>
           </p>
           <CopyButton value={usdt.payAmount} label={t('deposits.usdt.copyAmount')} />
         </div>
@@ -108,7 +110,7 @@ export function UsdtAwaiting({
       </Card>
       <Card className="gap-4">
         <h2 className="text-lg font-bold">{t('deposits.usdt.address')}</h2>
-        <UsdtQr address={usdt.address} method={usdt.method} />
+        <LazyUsdtQr address={usdt.address} method={usdt.method} />
         <div className="flex items-center justify-between gap-3">
           <p
             dir="ltr"
@@ -235,7 +237,9 @@ function TxidForm({
 export function UsdtChecking({ deposit, usdt }: { deposit: Deposit; usdt: DepositUsdt }) {
   const declared = (
     <Line label={t('deposits.usdt.payAmount')}>
-      <bdi dir="ltr">{usdt.payAmount} USDT</bdi>
+      <bdi dir="ltr">
+        {usdt.payAmount} {t('deposits.usdt.token')}
+      </bdi>
     </Line>
   );
   if (usdt.checkStatus === 'review') {
@@ -332,7 +336,7 @@ function ExplorerLink({ usdt, children }: { usdt: DepositUsdt; children: ReactNo
       href={usdt.explorerUrl}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-1 rounded-sm underline underline-offset-4"
+      className="inline-flex min-h-11 items-center gap-1 rounded-sm underline underline-offset-4"
       aria-label={t('deposits.usdt.explorer')}
     >
       {children}
@@ -346,7 +350,9 @@ export function UsdtCreditedLines({ deposit, usdt }: { deposit: Deposit; usdt: D
   return (
     <>
       <Line label={t('deposits.usdt.payAmount')}>
-        <bdi dir="ltr">{usdt.payAmount} USDT</bdi>
+        <bdi dir="ltr">
+          {usdt.payAmount} {t('deposits.usdt.token')}
+        </bdi>
       </Line>
       {deposit.credited && deposit.credited.usdUnits !== deposit.declaredUsdUnits && (
         <Line label={t('deposits.detail.amount')}>

@@ -59,7 +59,10 @@ export function ReceiptPicker({
     if (!problem) onFile(candidate);
   };
 
-  // Pasting anywhere on the page while the receipt is awaited (the spec: Ctrl+V).
+  // Pasting anywhere on the page while the receipt is awaited (the spec: Ctrl+V). One listener
+  // while enabled, reading the latest `choose` (audit A02-9: it was added again every render).
+  const latestChoose = useRef(choose);
+  latestChoose.current = choose;
   useEffect(() => {
     if (disabled) return;
     const onPaste = (event: ClipboardEvent) => {
@@ -67,11 +70,11 @@ export function ReceiptPicker({
       const image = items.find((item) => item.kind === 'file' && item.type.startsWith('image/'));
       if (!image) return setHint(t('deposits.receipt.noImage'));
       event.preventDefault();
-      choose(image.getAsFile());
+      latestChoose.current(image.getAsFile());
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
-  });
+  }, [disabled]);
 
   async function pasteFromClipboard() {
     try {

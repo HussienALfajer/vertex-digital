@@ -30,7 +30,7 @@ import { CustomerPanel } from './customer-panel';
 import { RejectDialog, RequestReceiptDialog } from './decision-dialogs';
 import { DepositFlags } from './deposit-flags';
 import { depositAmount, STATUS_TONES } from './deposit-labels';
-import { depositQuery, useRecheckDeposit } from './deposits.queries';
+import { depositQuery, useRecheckDeposit, verifyingDepositRead } from './deposits.queries';
 import { Fact } from './fact';
 import { ReceiptViewer } from './receipt-viewer';
 import { CandidateList, UsdtApproveForm, UsdtFacts, UsdtTransferCard } from './usdt-panels';
@@ -44,6 +44,11 @@ import { CandidateList, UsdtApproveForm, UsdtFacts, UsdtTransferCard } from './u
 export function DepositPage({ id }: { id: string }) {
   const { t } = useTranslation();
   const deposit = useQuery(depositQuery(id));
+  const verifying =
+    deposit.data?.status === 'submitted' &&
+    (deposit.data.usdt?.checkStatus === 'searching' ||
+      deposit.data.usdt?.checkStatus === 'confirming');
+  useQuery({ ...verifyingDepositRead(id), enabled: verifying });
   const [dialog, setDialog] = useState<'reject' | 'request' | null>(null);
   // F4-10: the submission first shown here; a newer one is announced, and the receipt and the
   // approval form start again on it, so nothing typed or ticked for one image approves another.
@@ -57,7 +62,7 @@ export function DepositPage({ id }: { id: string }) {
 
   const back = (
     <Button variant="ghost" className="self-start" render={<Link to="/deposits" />}>
-      <ArrowRightIcon className="rtl:-scale-x-100" />
+      <ArrowRightIcon className="ltr:-scale-x-100" />
       {t('deposits.detail.back')}
     </Button>
   );
@@ -180,7 +185,11 @@ export function DepositPage({ id }: { id: string }) {
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
         {dialog === 'reject' && <RejectDialog deposit={data} onDone={() => setDialog(null)} />}
         {dialog === 'request' && (
-          <RequestReceiptDialog deposit={data} onDone={() => setDialog(null)} />
+          <RequestReceiptDialog
+            deposit={data}
+            onDone={() => setDialog(null)}
+            onReject={() => setDialog('reject')}
+          />
         )}
       </Dialog>
     </>
@@ -299,10 +308,19 @@ function Decision({ deposit }: { deposit: AdminDeposit }) {
   );
 }
 
+/** How long the re-check button says the verification was sent. */
+const RECHECK_SHOWN_MS = 10_000;
+
 /** Rule U17: sends the verification again, for example after a reader outage. */
 function RecheckButton({ id }: { id: string }) {
   const { t } = useTranslation();
   const recheck = useRecheckDeposit(id);
+  // Audit A02-14: "sent" for a moment only; the page then follows the verification on its own.
+  useEffect(() => {
+    if (!recheck.isSuccess) return;
+    const timer = setTimeout(() => recheck.reset(), RECHECK_SHOWN_MS);
+    return () => clearTimeout(timer);
+  }, [recheck.isSuccess, recheck.reset]);
   return (
     <span className="flex flex-col items-end gap-1">
       <Button variant="outline" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
@@ -329,7 +347,14 @@ function AuditTrail({ id }: { id: string }) {
         {t('deposits.detail.audit')}
       </h2>
       {list.isPending && <Skeleton className="h-24 w-full" aria-hidden="true" />}
-      {list.isError && <FormAlert>{errorMessage(t, list.error)}</FormAlert>}
+      {list.isError && (
+        <div className="flex flex-col items-start gap-3">
+          <FormAlert>{errorMessage(t, list.error)}</FormAlert>
+          <Button variant="outline" onClick={() => list.refetch()}>
+            {t('common.retry')}
+          </Button>
+        </div>
+      )}
       {list.isSuccess && entries.length === 0 && (
         <p className="text-sm text-muted-foreground">{t('deposits.detail.noAudit')}</p>
       )}

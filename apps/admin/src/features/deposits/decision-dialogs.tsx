@@ -26,9 +26,10 @@ import {
   useFocusInvalid,
 } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
+import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { useIdempotentRequest } from '../../lib/idempotency';
 import { useRejectDeposit, useRequestReceipt } from './deposits.queries';
@@ -151,19 +152,26 @@ export function RejectDialog({ deposit, onDone }: { deposit: AdminDeposit; onDon
 
 /**
  * "طلب إيصال أوضح" (rule RV8): once per deposit, back to `pending` with a new 24 hours. Refused
- * while the customer has another deposit waiting for a receipt: the message says to reject.
+ * while the customer has another deposit waiting for a receipt: the message says to reject, and
+ * a button opens the rejection instead (audit A02-15).
  */
 export function RequestReceiptDialog({
   deposit,
   onDone,
+  onReject,
 }: {
   deposit: AdminDeposit;
   onDone: () => void;
+  onReject: () => void;
 }) {
   const { t } = useTranslation();
   const request = useRequestReceipt(deposit.id);
   const [errors, setErrors] = useState<Partial<Record<NoteField, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const [pendingElsewhere, setPendingElsewhere] = useState(false);
+  // A02-42: the route takes no key; a retry after an attempt with no answer that finds the
+  // request made was this dialog's own.
+  const attempted = useRef(false);
   const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -178,10 +186,15 @@ export function RequestReceiptDialog({
     const parsed = requestReceiptSchema.safeParse(body);
     setErrors(fieldErrors(t, parsed.error?.issues ?? []));
     if (!parsed.success) return focusInvalid();
+    const retry = attempted.current;
+    attempted.current = true;
     try {
       await request.mutateAsync(parsed.data);
       onDone();
     } catch (error) {
+      const code = error instanceof ApiError ? error.code : undefined;
+      if (retry && code === 'RECEIPT_ALREADY_REQUESTED') return onDone();
+      setPendingElsewhere(code === 'DEPOSIT_ALREADY_PENDING');
       setFailure(errorMessage(t, error));
     }
   }
@@ -195,6 +208,11 @@ export function RequestReceiptDialog({
       <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <NoteFields errors={errors} customerNoteRequired={false} />
         {failure && <FormAlert>{failure}</FormAlert>}
+        {pendingElsewhere && (
+          <Button type="button" variant="destructive" className="self-start" onClick={onReject}>
+            {t('deposits.requestReceipt.rejectInstead')}
+          </Button>
+        )}
         <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
           <Button type="submit" disabled={request.isPending}>

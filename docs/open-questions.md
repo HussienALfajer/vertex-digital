@@ -6,6 +6,7 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 |---|---|---|---|
 | Q1 | Off-server backup destination (shared need with Vertex Hub) | Launch | Required: the system holds customer money. Interim (owner, 2026-10-20): the daily backups stay on the production server until the owner subscribes to a second server; the destination is set up and a restore tested then |
 | Q3 | License for the public repository (none means all rights reserved) | Anytime | — |
+| Q23 | How long a credited USDT deposit keeps its exact amount reserved (S04 rule U4, `USDT_RESERVATION_GRACE_DAYS` = 7; audit A02, worker finding): after the grace another customer's new deposit may draw the same tail, and a customer who sends an old exact amount again (a saved exchange withdrawal) credits that other customer automatically | The pilot | 30 days: at pilot volumes each amount still has 99 tails per network, and a resent amount is far likelier than a tail shortage. Until answered, 7 days stays |
 
 ## Resolved
 

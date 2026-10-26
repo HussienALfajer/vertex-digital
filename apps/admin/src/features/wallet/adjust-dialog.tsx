@@ -7,6 +7,8 @@ import {
   type AdminWallet,
   type CreateAdjustment,
   createAdjustmentSchema,
+  formatSignedUsd,
+  formatUsd,
   isAllowedAdjustment,
   MANUAL_DEPOSIT_METHODS,
   type ManualDepositMethod,
@@ -37,6 +39,7 @@ import {
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
+import { ltr } from '../../lib/format';
 import { useIdempotentRequest } from '../../lib/idempotency';
 import {
   type AdjustmentField,
@@ -64,11 +67,17 @@ const FIELDS: Record<string, AdjustmentField> = {
   customerNote: 'note',
 };
 
-/** S04 rule U13: an unmatched USDT transfer recorded as a manual deposit, its values filled in. */
+/**
+ * S04 rule U13: an unmatched USDT transfer recorded as a manual deposit. Its network, TXID and
+ * amount are shown, not edited (audit A02-2): the API refuses another network or more than the
+ * transfer brought, and a mistyped TXID would leave the real transfer unclaimed.
+ */
 export interface ManualDepositPrefill {
   method: ManualDepositMethod;
   reference: string;
   amountText: string;
+  /** Back to the customer choice (audit A02-22). */
+  onBack: () => void;
 }
 
 /**
@@ -119,6 +128,7 @@ export function AdjustDialog({
     const text = (name: string) => String(data.get(name) ?? '').trim();
     const note = text('customerNote');
     const manual = category === 'manual_deposit';
+    const reference = prefill?.reference ?? text('externalReference');
     const body = {
       direction,
       amountUnits: amountUnits ?? Number.NaN,
@@ -127,7 +137,7 @@ export function AdjustDialog({
       reason: text('reason'),
       customerNote: note || undefined,
       depositMethod: manual ? (method ?? undefined) : undefined,
-      externalReference: manual ? text('externalReference') || undefined : undefined,
+      externalReference: manual ? reference || undefined : undefined,
     };
     const parsed = createAdjustmentSchema.safeParse(body);
     const found: AdjustmentFieldErrors = {};
@@ -156,38 +166,68 @@ export function AdjustDialog({
   return (
     <DialogContent closeLabel={t('common.close')} className="max-h-[90vh] overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>{t('wallets.adjust.title')}</DialogTitle>
-        <DialogDescription>{t('wallets.adjust.description')}</DialogDescription>
+        <DialogTitle>
+          {t(prefill ? 'wallets.adjust.recordTitle' : 'wallets.adjust.title')}
+        </DialogTitle>
+        <DialogDescription>
+          {prefill
+            ? t('wallets.adjust.recordDescription', { name: wallet.customer.name })
+            : t('wallets.adjust.description')}
+        </DialogDescription>
       </DialogHeader>
       <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
-        <Field>
-          <FieldLabel>{t('wallets.adjust.direction')}</FieldLabel>
-          <ToggleGroup<AdjustmentDirection>
-            aria-label={t('wallets.adjust.direction')}
-            value={[direction]}
-            onValueChange={(value) => value[0] && changeDirection(value[0])}
-          >
-            {ADJUSTMENT_DIRECTIONS.map((item) => (
-              <ToggleGroupItem key={item} value={item}>
-                {t(`wallets.directions.${item}`)}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </Field>
-        <Field invalid={!!errors.amount}>
-          <FieldLabel>{t('wallets.adjust.amount')}</FieldLabel>
-          <Input
-            name="amount"
-            dir="ltr"
-            inputMode="decimal"
-            autoComplete="off"
-            autoFocus
-            value={amountText}
-            onChange={(event) => setAmountText(event.target.value)}
-          />
-          <FieldDescription>{t('wallets.adjust.amountHint')}</FieldDescription>
-          <FieldError match={!!errors.amount}>{errors.amount}</FieldError>
-        </Field>
+        {prefill ? (
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt className="text-muted-foreground">{t('wallets.adjust.customer')}</dt>
+            <dd className="flex flex-col">
+              <span className="font-medium">{wallet.customer.name}</span>
+              <span dir="ltr" className="text-end text-muted-foreground">
+                {wallet.customer.email}
+              </span>
+            </dd>
+            <dt className="text-muted-foreground">{t('wallets.adjust.method')}</dt>
+            <dd className="font-medium">{t(`wallets.methods.${prefill.method}`)}</dd>
+            <dt className="text-muted-foreground">{t('wallets.adjust.reference')}</dt>
+            <dd dir="ltr" className="text-end break-all">
+              <code>{prefill.reference}</code>
+            </dd>
+            <dt className="text-muted-foreground">{t('wallets.adjust.amount')}</dt>
+            <dd className="font-medium">
+              <bdi dir="ltr">{amountUnits === null ? '—' : formatUsd(amountUnits)}</bdi>
+            </dd>
+          </dl>
+        ) : (
+          <>
+            <Field>
+              <FieldLabel>{t('wallets.adjust.direction')}</FieldLabel>
+              <ToggleGroup<AdjustmentDirection>
+                aria-label={t('wallets.adjust.direction')}
+                value={[direction]}
+                onValueChange={(value) => value[0] && changeDirection(value[0])}
+              >
+                {ADJUSTMENT_DIRECTIONS.map((item) => (
+                  <ToggleGroupItem key={item} value={item}>
+                    {t(`wallets.directions.${item}`)}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </Field>
+            <Field invalid={!!errors.amount}>
+              <FieldLabel>{t('wallets.adjust.amount')}</FieldLabel>
+              <Input
+                name="amount"
+                dir="ltr"
+                inputMode="decimal"
+                autoComplete="off"
+                autoFocus
+                value={amountText}
+                onChange={(event) => setAmountText(event.target.value)}
+              />
+              <FieldDescription>{t('wallets.adjust.amountHint')}</FieldDescription>
+              <FieldError match={!!errors.amount}>{errors.amount}</FieldError>
+            </Field>
+          </>
+        )}
         {needsConfirmation && (
           <ConfirmAmountField
             value={confirmText}
@@ -195,30 +235,32 @@ export function AdjustDialog({
             error={errors.confirm}
           />
         )}
-        <Field invalid={!!errors.category}>
-          <FieldLabel>{t('wallets.adjust.category')}</FieldLabel>
-          <Select
-            items={categories.map((item) => ({
-              value: item,
-              label: t(`wallets.categories.${item}`),
-            }))}
-            value={category}
-            onValueChange={(value) => setCategory(value)}
-          >
-            <SelectTrigger aria-label={t('wallets.adjust.category')}>
-              <SelectValue placeholder={t('wallets.adjust.chooseCategory')} />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {t(`wallets.categories.${item}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <FieldError match={!!errors.category}>{errors.category}</FieldError>
-        </Field>
-        {category === 'manual_deposit' && (
+        {!prefill && (
+          <Field invalid={!!errors.category}>
+            <FieldLabel>{t('wallets.adjust.category')}</FieldLabel>
+            <Select
+              items={categories.map((item) => ({
+                value: item,
+                label: t(`wallets.categories.${item}`),
+              }))}
+              value={category}
+              onValueChange={(value) => setCategory(value)}
+            >
+              <SelectTrigger aria-label={t('wallets.adjust.category')}>
+                <SelectValue placeholder={t('wallets.adjust.chooseCategory')} />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {t(`wallets.categories.${item}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldError match={!!errors.category}>{errors.category}</FieldError>
+          </Field>
+        )}
+        {!prefill && category === 'manual_deposit' && (
           <>
             <Field invalid={!!errors.method}>
               <FieldLabel>{t('wallets.adjust.method')}</FieldLabel>
@@ -247,7 +289,6 @@ export function AdjustDialog({
               <FieldLabel>{t('wallets.adjust.reference')}</FieldLabel>
               <Input
                 name="externalReference"
-                defaultValue={prefill?.reference}
                 dir="ltr"
                 autoComplete="off"
                 spellCheck={false}
@@ -259,7 +300,7 @@ export function AdjustDialog({
         )}
         <Field invalid={!!errors.reason}>
           <FieldLabel>{t('wallets.adjust.reason')}</FieldLabel>
-          <Textarea name="reason" rows={2} maxLength={500} />
+          <Textarea name="reason" rows={2} maxLength={500} autoFocus={!!prefill} />
           <FieldDescription>{t('wallets.adjust.reasonHint')}</FieldDescription>
           <FieldError match={!!errors.reason}>{errors.reason}</FieldError>
         </Field>
@@ -270,11 +311,23 @@ export function AdjustDialog({
           <FieldError match={!!errors.note}>{errors.note}</FieldError>
         </Field>
         <BalanceLines balanceUnits={wallet.balanceUnits} signedUnits={signed} />
+        {prefill && (errors.amount || errors.method || errors.reference) && (
+          <FormAlert>{errors.amount ?? errors.method ?? errors.reference ?? ''}</FormAlert>
+        )}
         {failure && <FormAlert>{failure}</FormAlert>}
         <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
+          {prefill && (
+            <Button type="button" variant="outline" onClick={prefill.onBack}>
+              {t('wallets.adjust.changeCustomer')}
+            </Button>
+          )}
           <Button type="submit" disabled={adjust.isPending}>
-            {adjust.isPending ? t('wallets.adjust.submitting') : t('wallets.adjust.submit')}
+            {adjust.isPending
+              ? t('wallets.adjust.submitting')
+              : signed === null
+                ? t('wallets.adjust.submit')
+                : t('wallets.adjust.submitAmount', { amount: ltr(formatSignedUsd(signed)) })}
           </Button>
         </DialogFooter>
       </form>

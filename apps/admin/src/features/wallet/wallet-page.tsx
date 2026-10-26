@@ -47,7 +47,7 @@ export function WalletPage({ customerId }: { customerId: string }) {
 
   const back = (
     <Button variant="ghost" className="self-start" render={<Link to="/wallets" />}>
-      <ArrowRightIcon className="rtl:-scale-x-100" />
+      <ArrowRightIcon className="ltr:-scale-x-100" />
       {t('wallets.detail.back')}
     </Button>
   );

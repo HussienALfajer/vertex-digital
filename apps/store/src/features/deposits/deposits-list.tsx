@@ -5,11 +5,16 @@ import { Badge } from '@vertex-digital/ui/components/badge';
 import { Button } from '@vertex-digital/ui/components/button';
 import { EmptyState } from '@vertex-digital/ui/components/empty-state';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
-import { ArrowDownToLineIcon, ChevronRightIcon, CircleAlertIcon } from 'lucide-react';
+import { ArrowDownToLineIcon, ChevronLeftIcon, CircleAlertIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import {
+  isMoneyEvent,
+  useNotificationEvents,
+  useVisibleAgain,
+} from '@/features/notifications/live';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
@@ -42,6 +47,37 @@ export function DepositsList() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * The newest page again, merged over the deposits already loaded (audit A02-5: the list never
+   * followed a credit or a rejection); a failed refresh keeps the list.
+   */
+  const refresh = useCallback(async () => {
+    const page = await listDeposits();
+    if (!page.ok) return;
+    setState((previous) => {
+      if (previous.status !== 'ready') {
+        return { status: 'ready', deposits: page.data.items, nextCursor: page.data.nextCursor };
+      }
+      const fresh = new Set(page.data.items.map((deposit) => deposit.id));
+      return {
+        ...previous,
+        deposits: [
+          ...page.data.items,
+          ...previous.deposits.filter((deposit) => !fresh.has(deposit.id)),
+        ],
+      };
+    });
+  }, []);
+
+  useNotificationEvents((event) => {
+    if (
+      isMoneyEvent(event) ||
+      (event.type === 'notification' && 'depositId' in event.notification.params)
+    )
+      void refresh();
+  });
+  useVisibleAgain(() => void refresh());
 
   const loadMore = async (cursor: string) => {
     setMoreFailure(null);
@@ -122,8 +158,8 @@ export function DepositsList() {
                 </p>
               </div>
               <Badge tone={STATUS_TONES[deposit.status]}>{statusText(deposit)}</Badge>
-              <ChevronRightIcon
-                className="size-5 text-muted-foreground rtl:-scale-x-100"
+              <ChevronLeftIcon
+                className="size-5 text-muted-foreground ltr:-scale-x-100"
                 aria-hidden="true"
               />
             </Link>

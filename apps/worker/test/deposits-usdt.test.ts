@@ -17,6 +17,8 @@ import {
   depositFlags,
   deposits,
   emailOutbox,
+  expireDueDeposits,
+  type JobSender,
   ledgerAccounts,
   ledgerJournals,
   ledgerPostings,
@@ -192,8 +194,15 @@ interface Seeded {
   pay: number;
 }
 
-/** A pending USDT deposit of a new customer; `expired` puts `expires_at` in the past. */
-async function usdtDeposit(method: UsdtMethod = 'usdt_trc20', expired = false): Promise<Seeded> {
+/**
+ * A pending USDT deposit of a new customer; `expired` puts `expires_at` in the past, and
+ * `minutesOld` its creation before now.
+ */
+async function usdtDeposit(
+  method: UsdtMethod = 'usdt_trc20',
+  expired = false,
+  minutesOld = 0,
+): Promise<Seeded> {
   const customerId = newId();
   await db.insert(customers).values({
     id: customerId,
@@ -216,6 +225,7 @@ async function usdtDeposit(method: UsdtMethod = 'usdt_trc20', expired = false): 
     declaredAmountUnits: declared,
     declaredUsdUnits: declared,
     expiresAt: expired ? sql`now() - interval '1 minute'` : sql`now() + interval '24 hours'`,
+    ...(minutesOld > 0 && { createdAt: sql`now() - make_interval(mins => ${minutesOld})` }),
     idempotencyKey: newId(),
   });
   await db.insert(usdtDeposits).values({
@@ -613,6 +623,66 @@ describe('review (rule U11)', () => {
     expect(await postingsOf(deposit.id)).toEqual([]);
   });
 
+  it("gives a TXID pasted from another deposit's exact transfer to that deposit, bouncing the paster (audit A02-1)", async () => {
+    const owner = await usdtDeposit();
+    const paster = await usdtDeposit();
+    const hash = txid();
+    await onChain('usdt_trc20', hash, [{ raw: raw('usdt_trc20', owner.pay) }]);
+    await submitted(paster, hash);
+    expect(await verify.verify(paster.id)).toBe('bounced');
+    const credited = await state(owner.id);
+    expect(credited.deposit.status).toBe('credited');
+    expect(credited.usdt).toMatchObject({ txid: hash, txidSource: 'scan', checkStatus: 'done' });
+    expect(await postingsOf(owner.id)).not.toEqual([]);
+    expect(await creditEmails(owner.customerId)).toHaveLength(1);
+    const bounced = await state(paster.id);
+    expect(bounced.deposit.status).toBe('pending');
+    expect(bounced.usdt).toMatchObject({ txid: null, checkError: 'txid_used', transferId: null });
+    expect(await postingsOf(paster.id)).toEqual([]);
+    expect(await creditEmails(paster.customerId)).toEqual([]);
+    // The scanner then finds the transfer known and leaves it.
+    await scan.scan('usdt_trc20');
+    expect((await state(owner.id)).deposit.status).toBe('credited');
+  });
+
+  it('sends to review an exchange fee taken from the amount, pasted after the scanner recorded it (rule U11, audit A02-1 review)', async () => {
+    const customer = await usdtDeposit();
+    const hash = txid();
+    await onChain('usdt_trc20', hash, [{ raw: raw('usdt_trc20', customer.pay - USD) }]);
+    // The scanner saw it first: no deposit asked for it, so it is unmatched.
+    await scan.scan('usdt_trc20');
+    const [recorded] = await db.select().from(usdtTransfers).where(eq(usdtTransfers.txid, hash));
+    expect(recorded).toBeDefined();
+    await submitted(customer, hash);
+    expect(await verify.verify(customer.id)).toBe('review');
+    expect((await state(customer.id)).usdt).toMatchObject({
+      checkStatus: 'review',
+      transferId: recorded?.id,
+    });
+  });
+
+  it('leaves unmatched an amount another deposit asked for, even expired, bouncing the paster (audit A02-1, review)', async () => {
+    const owner = await usdtDeposit('usdt_trc20', true);
+    const paster = await usdtDeposit();
+    const hash = txid();
+    await onChain('usdt_trc20', hash, [{ raw: raw('usdt_trc20', owner.pay) }]);
+    await submitted(paster, hash);
+    expect(await verify.verify(paster.id)).toBe('bounced');
+    expect((await state(paster.id)).usdt).toMatchObject({
+      checkError: 'txid_used',
+      transferId: null,
+    });
+    expect(await postingsOf(paster.id)).toEqual([]);
+    expect(await postingsOf(owner.id)).toEqual([]);
+    // Recorded by this read, it is the admin's unmatched transfer, announced once (rule TC7).
+    const [recorded] = await db.select().from(usdtTransfers).where(eq(usdtTransfers.txid, hash));
+    const notices = await db
+      .select({ id: telegramMessages.id })
+      .from(telegramMessages)
+      .where(eq(telegramMessages.dedupeKey, `unmatched:${recorded?.id}`));
+    expect(notices).toHaveLength(1);
+  });
+
   it('flags a transfer sent before the deposit', async () => {
     const deposit = await usdtDeposit();
     const hash = txid();
@@ -746,6 +816,32 @@ describe('the scanner (rules U12–U14)', () => {
     expect((await state(expired.id)).deposit.status).toBe('pending');
   });
 
+  it('holds a deposit past its expiry while the scanner is behind, then credits a transfer sent in time (audit A02-21)', async () => {
+    const deposit = await usdtDeposit('usdt_trc20', true, 30);
+    const none: JobSender = { send: async () => null };
+    const expire = () =>
+      db.transaction((tx) => expireDueDeposits(tx, none, { limit: 1000, channel: 'worker' }));
+    // The scanner's last complete read is from before the deadline: the job waits.
+    await scan.scan('usdt_trc20');
+    await db
+      .update(usdtScanCursors)
+      .set({ lastSuccessAt: sql`now() - interval '10 minutes'` })
+      .where(eq(usdtScanCursors.method, 'usdt_trc20'));
+    await expire();
+    expect((await state(deposit.id)).deposit.status).toBe('pending');
+    // Caught up, it finds the transfer whose block came before the deadline (edge case 5).
+    const hash = txid();
+    await onChain('usdt_trc20', hash, [{ raw: raw('usdt_trc20', deposit.pay) }], {
+      blockTime: new Date(Date.now() - 90_000).toISOString(),
+    });
+    await scan.scan('usdt_trc20');
+    expect((await state(deposit.id)).deposit.status).toBe('credited');
+    // Once the scanner has read past it, an elapsed deposit expires as before.
+    const late = await usdtDeposit('usdt_trc20', true);
+    await expire();
+    expect((await state(late.id)).deposit.status).toBe('expired');
+  });
+
   it('replaces a wrong TXID the customer pasted with the exact transfer it found (edge case 7)', async () => {
     const deposit = await usdtDeposit();
     const wrong = txid();
@@ -773,7 +869,14 @@ describe('the scanner (rules U12–U14)', () => {
         scan.scan('usdt_trc20'),
         verify.verify(deposit.id),
       ]);
-      // A deadlock between the two is retried by pg-boss; the money is never doubled.
+      // A deadlock between the two is retried by pg-boss; the money is never doubled. Nothing else
+      // may fail (audit A02-20: any error used to pass).
+      for (const outcome of outcomes) {
+        if (outcome.status === 'rejected') {
+          const error = outcome.reason as { code?: string; cause?: { code?: string } };
+          expect(error.cause?.code ?? error.code).toBe('40P01');
+        }
+      }
       expect(outcomes.filter((outcome) => outcome.status === 'fulfilled').length).toBeGreaterThan(
         0,
       );

@@ -546,7 +546,10 @@ function UsdtNetworkCard({
             ? formatDateTime(network.lastScanAt)
             : t('depositSettings.usdt.never')}
         </span>
-        {network.delayed && <Badge tone="warning">{t('depositSettings.usdt.delayed')}</Badge>}
+        {/* Audit A02-43: a network with no address is unavailable, not late. */}
+        {network.address && network.delayed && (
+          <Badge tone="warning">{t('depositSettings.usdt.delayed')}</Badge>
+        )}
       </div>
     </div>
   );
