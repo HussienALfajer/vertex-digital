@@ -32,8 +32,9 @@ const BODY_MAX = 2000;
 /**
  * One problem's sheet (S22 OP4, OP5): first what the customer can check (with "افتح تذكرة على
  * أي حال" always there), then the form: the problem as a chip, optional details and up to 3
- * images, sent as an order ticket naming the problem. A problem the order no longer offers sends
- * the card back to refresh (edge cases 13, 14); an open ticket is linked.
+ * images, sent as an order ticket naming the problem. A problem the order no longer offers says so
+ * in the sheet, keeping what was typed, and the card refreshes once it is closed (edge cases 13,
+ * 14; audit A04-41); an open ticket is linked.
  */
 export function ProblemSheet({
   order,
@@ -81,13 +82,17 @@ export function ProblemSheet({
       return;
     }
     setSending(false);
-    if (result.reason === 'ORDER_PROBLEM_UNAVAILABLE') return onRefused();
     const ticketId = (result.details as { ticketId?: unknown } | undefined)?.ticketId;
     setRefusal({ reason: result.reason, ...(typeof ticketId === 'string' && { ticketId }) });
   }
 
   return (
-    <Sheet open onOpenChange={onOpenChange}>
+    <Sheet
+      open
+      onOpenChange={(open) =>
+        !open && refusal?.reason === 'ORDER_PROBLEM_UNAVAILABLE' ? onRefused() : onOpenChange(open)
+      }
+    >
       <SheetContent side="bottom" className="gap-4 bg-surface p-5 pb-8" data-testid="problem-sheet">
         <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
           <SheetTitle className="text-lg font-bold">{label}</SheetTitle>

@@ -9,6 +9,21 @@ import { apiRequest } from '@/lib/api';
 
 type Fetcher = typeof fetch;
 
+/**
+ * A game's active alerts, read once and shared by every button of the game. Any change of an
+ * alert, on the game page or on "تنبيهاتي", drops what was read (audit A04-40).
+ */
+const gameAlerts = new Map<string, Promise<ProductAlert[]>>();
+
+export function readGameAlerts(gameId: string): Promise<ProductAlert[]> {
+  let read = gameAlerts.get(gameId);
+  if (!read) {
+    read = listProductAlerts({ gameId }).then((result) => (result.ok ? result.data.items : []));
+    gameAlerts.set(gameId, read);
+  }
+  return read;
+}
+
 /** A game's active alerts (its page), or "تنبيهاتي"'s active or newest ended ones. */
 export function listProductAlerts(
   query: { gameId?: string; status?: 'active' | 'ended' } = {},
@@ -32,12 +47,12 @@ export function createProductAlert(
     method: 'POST',
     body: { productId, kind },
     fetcher,
-  });
+  }).finally(() => gameAlerts.clear());
 }
 
 export function cancelProductAlert(id: string, fetcher: Fetcher = fetch) {
   return apiRequest<null>(`/api/product-alerts/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     fetcher,
-  });
+  }).finally(() => gameAlerts.clear());
 }

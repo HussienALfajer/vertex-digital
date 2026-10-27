@@ -1,10 +1,11 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link, useBlocker, useNavigate } from '@tanstack/react-router';
 import {
   ADMIN_ORDER_PURPOSES,
   type AdminOrderPurpose,
   type AdminPurchaseContext,
   adminOrderShape,
+  type CreateAdminOrder,
   createAdminOrderSchema,
   formatSyp,
   formatUsd,
@@ -36,8 +37,9 @@ import {
   useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, SearchIcon, UserXIcon } from 'lucide-react';
-import { type FormEvent, type ReactNode, useId, useState } from 'react';
+import { type FormEvent, type ReactNode, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
@@ -117,6 +119,10 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
   const send = useIdempotentRequest();
   const create = useCreateAdminOrder();
   const playerCheck = useAdminPlayerCheck();
+  /** The order checked and waiting for "تأكيد الشراء" in the dialog (audit A04-3). */
+  const [confirming, setConfirming] = useState<CreateAdminOrder | null>(null);
+  /** Set once the order is placed, so the leave guard lets the order page open. */
+  const placed = useRef(false);
 
   const shape = purpose ? adminOrderShape(purpose) : null;
   const ownerFunded = shape?.payer === 'owner';
@@ -127,6 +133,10 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
       shape?.payer === 'customer' ? (gameId ?? undefined) : undefined,
     ),
     enabled: shape !== null && (!shape.hasCustomer || customerId !== null),
+    // Another game keeps the same customer on screen while its list prices are read (audit
+    // A04-50); another customer never shows the one before.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (customerId ?? null) ? previous : undefined,
   });
   const games = useQuery(allGamesQuery);
   const loaded = useQuery({ ...gameQuery(gameId ?? ''), enabled: gameId !== null });
@@ -136,6 +146,26 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
   const units = /^\d{1,2}$/.test(quantity) ? Number(quantity) : 0;
   const total =
     product?.priceUsdUnits && units > 0 ? orderTotal(product.priceUsdUnits, units) : null;
+  // A customer-paid pack waits for the customer's own list prices (S20 PO4, audit A04-50).
+  const pricesPending =
+    shape?.payer === 'customer' &&
+    customerId !== null &&
+    (context.isPending || context.isPlaceholderData);
+  // The page's own callout already says why such a customer cannot be charged (audit A04-12).
+  const customerRefused =
+    shape?.hasCustomer === true &&
+    !!context.data?.customer &&
+    (context.data.customer.frozen || !context.data.customer.emailVerified);
+  // Anything chosen or typed asks before leaving; the order page after a purchase does not.
+  const dirty = useRef(false);
+  dirty.current =
+    purpose !== null || productId !== null || reason.trim() !== '' || note.trim() !== '';
+  const blocker = useBlocker({
+    shouldBlockFn: ({ current, next }) =>
+      !placed.current && dirty.current && current.pathname !== next.pathname,
+    enableBeforeUnload: () => !placed.current && dirty.current,
+    withResolver: true,
+  });
 
   /** A change of what is bought clears the checks made for the earlier choice. */
   function resetCheck() {
@@ -171,22 +201,34 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
         note.trim() && { customerNote: note }),
     };
     const parsed = createAdminOrderSchema.safeParse(body);
-    if (!parsed.success) {
+    // The pack's own maximum, under the quantity before anything is sent (audit A04-49).
+    const overMax = product !== null && units > product.maxQuantity;
+    if (!parsed.success || overMax) {
       const next: Partial<Record<FieldKey, string>> = {};
-      for (const issue of parsed.error.issues) {
+      for (const issue of parsed.error?.issues ?? []) {
         const key = FIELD_OF[String(issue.path[0])] ?? 'productId';
         next[key] ??= t(`orders.buy.errors.${key}`);
+      }
+      if (overMax && product) {
+        next.quantity = t('orders.buy.errors.quantityMax', { max: product.maxQuantity });
       }
       setErrors(next);
       return focusInvalid();
     }
     setErrors({});
+    // Nothing is paid before the dialog's own button (audit A04-3).
+    setConfirming(parsed.data);
+  }
+
+  /** Pays the confirmed order with the page's key; a refusal closes the dialog and shows here. */
+  async function place(body: CreateAdminOrder) {
     try {
-      const order = await send(parsed.data, (key) =>
-        create.mutateAsync({ body: parsed.data, key }),
-      );
+      const order = await send(body, (key) => create.mutateAsync({ body, key }));
+      placed.current = true;
+      setConfirming(null);
       await navigate({ to: '/orders/$id', params: { id: order.id } });
     } catch (error) {
+      setConfirming(null);
       setFailure(refusal(error));
     }
   }
@@ -247,6 +289,8 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
                     onChange={() => {
                       setPurpose(item);
                       if (item === 'walk_in') setCustomerId(null);
+                      // A paused "trial" pack is the owner's only (rule AP5, audit A04-51).
+                      if (adminOrderShape(item).payer !== shape?.payer) setProductId(null);
                       resetCheck();
                     }}
                   />
@@ -265,7 +309,9 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
             <CustomerPicker
               customerId={customerId}
               context={context.data?.customer ?? null}
-              loading={customerId !== null && context.isPending}
+              loading={customerId !== null && (context.isPending || context.isPlaceholderData)}
+              failed={customerId !== null && context.isError && !context.data}
+              onRetry={() => void context.refetch()}
               onPick={(id) => {
                 setCustomerId(id);
                 resetCheck();
@@ -304,9 +350,20 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
                 </SelectContent>
               </Select>
             </Field>
+            {/* The games' read: a skeleton, then a retry when it fails (audit A04-11). */}
+            {games.isPending && <Skeleton className="h-10 w-full" aria-hidden="true" />}
+            {games.isError && (
+              <Retry message={errorMessage(t, games.error)} onRetry={() => void games.refetch()} />
+            )}
             {loaded.isPending && gameId && <Skeleton className="h-32 w-full" aria-hidden="true" />}
-            {loaded.isError && <FormAlert>{errorMessage(t, loaded.error)}</FormAlert>}
-            {gameData && (
+            {loaded.isError && (
+              <Retry
+                message={errorMessage(t, loaded.error)}
+                onRetry={() => void loaded.refetch()}
+              />
+            )}
+            {gameData && pricesPending && <Skeleton className="h-32 w-full" aria-hidden="true" />}
+            {gameData && !pricesPending && (
               <Packs
                 game={gameData}
                 ownerFunded={ownerFunded}
@@ -410,7 +467,13 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
                 <FieldError match={!!errors.customerNote}>{errors.customerNote}</FieldError>
               </Field>
             )}
-            <Summary total={total} ownerFunded={ownerFunded} context={context.data ?? null} />
+            <Summary
+              total={total}
+              ownerFunded={ownerFunded}
+              context={context.data ?? null}
+              failed={context.isError && !context.data}
+              onRetry={() => void context.refetch()}
+            />
           </Step>
         )}
 
@@ -422,12 +485,56 @@ export function NewOrderPage({ preset }: { preset: NewOrderSearch }) {
           </Button>
         )}
         {product && shape && (
-          <Button type="submit" size="lg" className="self-start" disabled={create.isPending}>
+          <Button
+            type="submit"
+            size="lg"
+            className="self-start"
+            disabled={create.isPending || customerRefused || context.isPlaceholderData}
+          >
             {create.isPending ? t('orders.buy.placing') : t('orders.buy.confirm')}
           </Button>
         )}
       </form>
+      {confirming && product && total !== null && (
+        <ConfirmDialog
+          open
+          onClose={() => setConfirming(null)}
+          title={t('orders.buy.confirmTitle')}
+          body={t(ownerFunded ? 'orders.buy.confirmOwner' : 'orders.buy.confirmCustomer', {
+            pack: product.nameAr,
+            quantity: units,
+            total: ltr(formatUsd(total)),
+            name: context.data?.customer?.name ?? '',
+          })}
+          action={t('orders.buy.confirmAction', { total: ltr(formatUsd(total)) })}
+          pending={create.isPending}
+          onConfirm={() => place(confirming)}
+        />
+      )}
+      <ConfirmDialog
+        open={blocker.status === 'blocked'}
+        onClose={() => blocker.reset?.()}
+        title={t('orders.buy.leave.title')}
+        body={t('orders.buy.leave.body')}
+        action={t('orders.buy.leave.leave')}
+        destructive
+        pending={false}
+        onConfirm={async () => blocker.proceed?.()}
+      />
     </>
+  );
+}
+
+/** A failed read with its retry. */
+function Retry({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-2">
+      <FormAlert>{message}</FormAlert>
+      <Button type="button" variant="outline" className="self-start" onClick={onRetry}>
+        {t('common.retry')}
+      </Button>
+    </div>
   );
 }
 
@@ -472,11 +579,15 @@ function CustomerPicker({
   customerId,
   context,
   loading,
+  failed,
+  onRetry,
   onPick,
 }: {
   customerId: string | null;
   context: AdminPurchaseContext['customer'];
   loading: boolean;
+  failed: boolean;
+  onRetry: () => void;
   onPick: (id: string | null) => void;
 }) {
   const { t } = useTranslation();
@@ -486,6 +597,22 @@ function CustomerPicker({
   const rows = (found.data?.pages[0]?.items ?? []).slice(0, 8);
 
   if (customerId !== null) {
+    // A failed read says so, with a retry and the way back to the search (audit A04-11).
+    if (failed) {
+      return (
+        <div className="flex flex-col gap-2">
+          <FormAlert>{t('orders.buy.customerFailed')}</FormAlert>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={onRetry}>
+              {t('common.retry')}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => onPick(null)}>
+              {t('orders.buy.changeCustomer')}
+            </Button>
+          </div>
+        </div>
+      );
+    }
     if (loading || !context) return <Skeleton className="h-24 w-full" aria-hidden="true" />;
     const refused = context.frozen || !context.emailVerified;
     return (
@@ -758,6 +885,41 @@ function AccountFields({
 
 /** The total, who pays, and the customer's balance after or the owner's day against the cap. */
 function Summary({
+  total,
+  ownerFunded,
+  context,
+  failed,
+  onRetry,
+}: {
+  total: number | null;
+  ownerFunded: boolean;
+  context: AdminPurchaseContext | null;
+  failed: boolean;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+  const customer = context?.customer ?? null;
+  // What the API would refuse, said before the press (audit A04-49).
+  const short = total !== null && !ownerFunded && !!customer && total > customer.balanceUsdUnits;
+  const capLeft = customer?.purchaseCapLeftUsdUnits ?? null;
+  const overCustomerCap = total !== null && !ownerFunded && capLeft !== null && total > capLeft;
+  const overOwnerCap =
+    total !== null &&
+    ownerFunded &&
+    !!context &&
+    context.owner.usedTodayUsdUnits + total > context.owner.capUsdUnits;
+  return (
+    <>
+      {failed && <Retry message={t('orders.buy.contextFailed')} onRetry={onRetry} />}
+      {short && <FormAlert>{t('orders.buy.shortBalance')}</FormAlert>}
+      {overCustomerCap && <FormAlert>{t('orders.buy.overCustomerCap')}</FormAlert>}
+      {overOwnerCap && <FormAlert>{t('orders.buy.overOwnerCap')}</FormAlert>}
+      <SummaryTable total={total} ownerFunded={ownerFunded} context={context} />
+    </>
+  );
+}
+
+function SummaryTable({
   total,
   ownerFunded,
   context,

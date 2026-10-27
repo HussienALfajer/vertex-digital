@@ -26,6 +26,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { CopyButton } from '../../components/copy-button';
 import { FormAlert } from '../../components/form-alert';
+import ar from '../../i18n/locales/ar.json';
 import { useAdminStream, useDebounced, useVisibleAgain } from '../../lib/admin-stream';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, ltr } from '../../lib/format';
@@ -636,9 +637,7 @@ function Events({ order }: { order: AdminOrder }) {
               {event.reason && (
                 <>
                   {' · '}
-                  <bdi dir="ltr" className="text-muted-foreground">
-                    {event.reason}
-                  </bdi>
+                  <EventReason reason={event.reason} />
                 </>
               )}
             </span>
@@ -669,5 +668,28 @@ function Journals({ order }: { order: AdminOrder }) {
         ))}
       </ul>
     </Card>
+  );
+}
+
+/**
+ * An event's reason: the words for a reason the store writes (its own codes, a refund's or a
+ * cancel's), else the supplier's text as it came, left to right (audit A04-46).
+ */
+function EventReason({ reason }: { reason: string }) {
+  const { t } = useTranslation();
+  const o = ar.orders;
+  const text =
+    reason in o.events.reasons
+      ? t(`orders.events.reasons.${reason as keyof typeof o.events.reasons}`)
+      : reason in o.refundReasons
+        ? t(`orders.refundReasons.${reason as keyof typeof o.refundReasons}`)
+        : reason in o.cancelReasons
+          ? t(`orders.cancelReasons.${reason as keyof typeof o.cancelReasons}`)
+          : null;
+  if (text) return <span className="text-muted-foreground">{text}</span>;
+  return (
+    <bdi dir="ltr" className="text-muted-foreground">
+      {reason}
+    </bdi>
   );
 }

@@ -55,6 +55,8 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
   const units = remainingUnits(order);
   const codeProduct = order.product.kind === 'code';
   const options = useQuery(rerouteOptionsQuery(order.id));
+  // A failed read leaves the cost to type, and says so (audit A04-53).
+  const costUnread = options.isError;
   const manualCost = options.data?.routes.find(
     (route) => route.supplierCode === 'manual' && route.unitCostUsdUnits !== null,
   )?.unitCostUsdUnits;
@@ -231,6 +233,7 @@ export function FulfilDialog({ order, onDone }: { order: AdminOrder; onDone: () 
           <FieldDescription>
             {t('orders.fulfil.costHint', { price: ltr(formatUsd(order.unitPriceUsdUnits)) })}
           </FieldDescription>
+          {costUnread && <FieldDescription>{t('orders.fulfil.costUnread')}</FieldDescription>}
           <FieldError match={!!errors.cost}>{t('orders.fulfil.costError')}</FieldError>
         </Field>
         {profitUnits !== null && (

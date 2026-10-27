@@ -84,7 +84,19 @@ export function RerouteDialog({ order, onDone }: { order: AdminOrder; onDone: ()
       </DialogHeader>
       <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         {options.isPending && <Skeleton className="h-40 w-full" aria-hidden="true" />}
-        {options.isError && <FormAlert>{errorMessage(t, options.error)}</FormAlert>}
+        {options.isError && (
+          <div className="flex flex-col gap-2">
+            <FormAlert>{errorMessage(t, options.error)}</FormAlert>
+            <Button
+              type="button"
+              variant="outline"
+              className="self-start"
+              onClick={() => void options.refetch()}
+            >
+              {t('common.retry')}
+            </Button>
+          </div>
+        )}
         {options.isSuccess && eligible.length === 0 && (
           <Callout
             tone="info"
@@ -117,13 +129,15 @@ export function RerouteDialog({ order, onDone }: { order: AdminOrder; onDone: ()
                   <TableRow
                     key={route.routeId}
                     data-state={routeId === route.routeId ? 'selected' : undefined}
-                    className={route.eligible ? undefined : 'text-muted-foreground'}
+                    className={route.eligible ? 'cursor-pointer' : 'text-muted-foreground'}
+                    // The whole row picks its route, not only the radio (audit A04-53).
+                    onClick={() => route.eligible && setRouteId(route.routeId)}
                   >
                     <TableCell>
                       <input
                         type="radio"
                         name="route"
-                        className="size-4 accent-primary"
+                        className="size-5 accent-primary"
                         value={route.routeId}
                         disabled={!route.eligible}
                         checked={routeId === route.routeId}

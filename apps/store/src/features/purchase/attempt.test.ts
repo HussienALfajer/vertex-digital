@@ -76,6 +76,27 @@ describe('sendAttempt (rule BB6)', () => {
     expect(await keyOf('p7', '{"player":"2"}')).not.toBe(first);
   });
 
+  it('keeps the key for a body edited while the first is still in flight (A04-1)', async () => {
+    vi.stubGlobal('sessionStorage', memoryStorage());
+    let answer: (result: Result<unknown>) => void = () => {};
+    let firstKey = '';
+    const first = sendAttempt<unknown>(
+      'p9',
+      '{"lines":2}',
+      (key) => {
+        firstKey = key;
+        return new Promise<Result<unknown>>((resolve) => {
+          answer = resolve;
+        });
+      },
+      frees,
+    );
+    // The cart edited and sent again before the first checkout answered: the same key.
+    expect(await keyOf('p9', '{"lines":1}', refused('IDEMPOTENCY_KEY_REUSED'))).toBe(firstKey);
+    answer(ok);
+    await first;
+  });
+
   it('frees the key on a schema refusal when no answer was lost', async () => {
     vi.stubGlobal('sessionStorage', memoryStorage());
     const first = await keyOf('p8', 'body', refused('VALIDATION_FAILED'));

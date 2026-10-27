@@ -6,11 +6,12 @@ import {
   type RerouteOptions,
   type SupplierCode,
 } from '@vertex-digital/contracts';
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { type Database, readAll, type Transaction } from '../client.js';
 import { newId } from '../id.js';
 import { productRoutingStates, type RouteState, type RoutingContext } from '../pricing/routing.js';
 import {
+  auditEntries,
   catalogGames,
   catalogProducts,
   fulfilmentAttempts,
@@ -355,7 +356,23 @@ export async function fulfilOrderManually(
     .from(storedFiles)
     .leftJoin(fulfilmentAttempts, eq(fulfilmentAttempts.proofFileId, storedFiles.id))
     .where(and(eq(storedFiles.id, input.proofFileId), eq(storedFiles.kind, 'delivery_proof')));
-  if (!proof || proof.usedBy !== null) {
+  // Rule MF2: the proof was uploaded for this order (its upload's audit entry names it), so the
+  // trail never shows one order's screenshot on another (audit A04-20).
+  const [uploadedHere] = proof
+    ? await tx
+        .select({ id: auditEntries.id })
+        .from(auditEntries)
+        .where(
+          and(
+            eq(auditEntries.entityType, 'order'),
+            eq(auditEntries.entityId, order.id),
+            eq(auditEntries.action, 'order.proof_uploaded'),
+            sql`${auditEntries.details}->>'fileId' = ${input.proofFileId}`,
+          ),
+        )
+        .limit(1)
+    : [];
+  if (!proof || proof.usedBy !== null || !uploadedHere) {
     throw new OrderError('PROOF_INVALID', 'The delivery proof is missing or already used');
   }
   const { admin } = input;

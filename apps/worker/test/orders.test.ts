@@ -40,6 +40,7 @@ import {
   productPrices,
   productRoutes,
   purchaseOrder,
+  recordAudit,
   repriceProducts,
   rerouteOrder,
   storeSwitchChanges,
@@ -71,10 +72,15 @@ import { LOG_REDACT_PATHS } from '../src/core/config/log-redact.js';
 import type { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { ProductAlertsJob } from '../src/jobs/catalog/product-alerts.job.js';
 import { OrdersFulfilJob } from '../src/jobs/orders/fulfil.job.js';
-import { attemptOutcome, checkCharge, markStockRefusal } from '../src/jobs/orders/order-calls.js';
+import {
+  attemptOutcome,
+  checkCharge,
+  markStockRefusal,
+  retryOnDeadlock,
+} from '../src/jobs/orders/order-calls.js';
 import { OrdersPayWaitingJob } from '../src/jobs/orders/pay-waiting.job.js';
 import { OrdersPollJob } from '../src/jobs/orders/poll.job.js';
-import { OrdersSweepJob } from '../src/jobs/orders/sweep.job.js';
+import { OrdersSweepJob, SweepStepsFailed } from '../src/jobs/orders/sweep.job.js';
 import { OrdersWaitingSweepJob } from '../src/jobs/orders/waiting-sweep.job.js';
 import { SupplierWebhookJob } from '../src/jobs/suppliers/webhook.job.js';
 import { DailySummaryJob, damascusDate } from '../src/jobs/telegram/daily-summary.job.js';
@@ -907,6 +913,93 @@ describe('polling, the hard limit and the sweep (rules F3, F6, F7)', () => {
     });
   });
 
+  it('runs every step when one fails, then fails naming it (audit A04-27)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      const lost = await buy(tx, item);
+      await tx.execute(
+        sql`update orders set updated_at = now() - interval '5 minutes' where id = ${lost.id}`,
+      );
+      await tx.execute(
+        sql`update orders set updated_at = now()
+            where status in ('paid', 'failed', 'needs_review') and id <> ${lost.id}`,
+      );
+      vi.spyOn(sweep as unknown as { hold: () => Promise<string[]> }, 'hold').mockRejectedValueOnce(
+        new Error('lock timeout'),
+      );
+      sent.length = 0;
+      const failure = await sweep.sweep(new Date(), tx).catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(SweepStepsFailed);
+      expect((failure as SweepStepsFailed).steps).toEqual(['held']);
+      // The steps after it still ran: the lost routing job is queued again.
+      expect((failure as SweepStepsFailed).result.fulfilled).toContain(lost.id);
+      expect(queued(QUEUES.ordersFulfil, 'orderId', lost.id)).toHaveLength(1);
+    });
+  });
+
+  it('leaves a first send still within its calls alone (audit A04-29)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      const now = new Date();
+      const slow = await buy(tx, item);
+      const [offer] = await tx
+        .select({ id: supplierOffers.id })
+        .from(supplierOffers)
+        .where(
+          and(eq(supplierOffers.supplierId, ids.fake), eq(supplierOffers.offerId, 'fake-uc-60')),
+        );
+      const attemptId = newId();
+      await tx.insert(fulfilmentAttempts).values({
+        id: attemptId,
+        orderId: slow.id,
+        routeId: item.fakeRoute as string,
+        supplierId: ids.fake,
+        offerId: offer?.id as string,
+        supplierOfferId: 'fake-uc-60',
+        quantity: 1,
+        unitCostUsdUnits: usd(0.88),
+        status: 'sending',
+        candidates: [],
+        // A minute and a quarter: the quote and a 30-second purchase call may still be out.
+        sentAt: new Date(now.getTime() - 75_000),
+      });
+      await tx.execute(sql`update orders set status = 'sent_to_supplier' where id = ${slow.id}`);
+      // Open attempts other runs committed would fill the batch first.
+      await tx.execute(
+        sql`update fulfilment_attempts set sent_at = now(), next_poll_at = now() + interval '1 hour'
+            where status in ('sending', 'pending', 'unknown') and id <> ${attemptId}`,
+      );
+      expect((await sweep.sweep(now, tx)).resent).not.toContain(attemptId);
+      expect((await sweep.sweep(new Date(now.getTime() + 30_000), tx)).resent).toContain(attemptId);
+    });
+  });
+
+  it('routes again a held order left with no open attempt (audit A04-5)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx);
+      const now = new Date();
+      // Held, then its attempt failed while held: its one routing job was lost.
+      const held = await buy(tx, item);
+      await tx.execute(sql`update orders set status = 'sent_to_supplier' where id = ${held.id}`);
+      await tx.execute(
+        sql`update orders set status = 'needs_review', review_since = now() - interval '40 minutes',
+            updated_at = now() - interval '5 minutes' where id = ${held.id}`,
+      );
+      await tx.execute(
+        sql`update orders set updated_at = now()
+            where status in ('paid', 'failed', 'needs_review') and id <> ${held.id}`,
+      );
+      sent.length = 0;
+      const result = await sweep.sweep(now, tx);
+      expect(result.fulfilled).toContain(held.id);
+      expect(queued(QUEUES.ordersFulfil, 'orderId', held.id)).toHaveLength(1);
+      // Routing takes it from review: the next route, delivered.
+      script('fake-uc-60', 'delivered');
+      await fulfil.fulfil(held.id, tx);
+      expect(await orderOf(tx, held.id)).toMatchObject({ status: 'delivered' });
+    });
+  });
+
   it('reminds of an open manual attempt once (rule MN2)', async () => {
     await isolated(async (tx) => {
       const item = await product(tx, { fake: null, manualCost: usd(0.9) });
@@ -1307,6 +1400,41 @@ describe('two routes of one supplier (S17 WR8, WR9)', () => {
   });
 });
 
+describe('an outcome picked by a deadlock (audit A04-4)', () => {
+  const deadlock = () =>
+    Object.assign(new Error('Failed query'), {
+      cause: Object.assign(new Error('deadlock detected'), { code: '40P01' }),
+    });
+
+  it('runs the transaction again, up to three times, and nothing else again', async () => {
+    let runs = 0;
+    expect(
+      await retryOnDeadlock(async () => {
+        runs += 1;
+        if (runs === 1) throw deadlock();
+        return 'applied';
+      }),
+    ).toBe('applied');
+    expect(runs).toBe(2);
+    runs = 0;
+    await expect(
+      retryOnDeadlock(async () => {
+        runs += 1;
+        throw deadlock();
+      }),
+    ).rejects.toThrow('Failed query');
+    expect(runs).toBe(3);
+    runs = 0;
+    await expect(
+      retryOnDeadlock(async () => {
+        runs += 1;
+        throw new Error('lock timeout');
+      }),
+    ).rejects.toThrow('lock timeout');
+    expect(runs).toBe(1);
+  });
+});
+
 describe('re-sends and late answers (rules F3, F5, F6)', () => {
   it('sends again with the fields of the first send, whatever the route map became', async () => {
     await isolated(async (tx) => {
@@ -1531,6 +1659,41 @@ describe('re-sends and late answers (rules F3, F5, F6)', () => {
     });
   });
 
+  it('sends nothing for an attempt the admin closed after the poll read it (audit A04-26)', async () => {
+    await isolated(async (tx) => {
+      const item = await product(tx, { manualCost: usd(0.9) });
+      script('fake-uc-60', 'unknown');
+      const order = await buy(tx, item);
+      await fulfil.fulfil(order.id, tx);
+      const [attempt] = await attemptsOf(tx, order.id);
+      const attemptId = attempt?.id as string;
+      expect(attempt).toMatchObject({ status: 'unknown' });
+      const untouched = {
+        connect: async () => {
+          throw new Error('the supplier must not be called for a closed attempt');
+        },
+      } as unknown as SupplierRegistry;
+      const job = new OrdersPollJob(pgBoss, untouched, db, env);
+      // The admin confirms it failed (rule D3) right after the poll decided to re-send.
+      const decide = (job as unknown as { call: (...args: unknown[]) => Promise<unknown> }).call;
+      vi.spyOn(job as unknown as { call: typeof decide }, 'call').mockImplementation(
+        async (...args) => {
+          const call = await decide.apply(job, args);
+          await applyOutcome(
+            tx,
+            { jobs, codesKey, now: new Date() },
+            attemptId,
+            { status: 'failed', reason: 'admin' },
+            { by: 'admin', admin: { id: newId(), reason: 'confirmed', idempotencyKey: newId() } },
+          );
+          return call;
+        },
+      );
+      expect(await job.poll(attemptId, tx)).toBeNull();
+      expect((await attemptsOf(tx, order.id))[0]).toMatchObject({ status: 'failed' });
+    });
+  });
+
   it('reports a delivery found after the admin confirmed the attempt failed', async () => {
     await isolated(async (tx) => {
       const item = await product(tx, { manualCost: usd(0.9) });
@@ -1674,8 +1837,15 @@ describe('supplier webhooks (rule F5)', () => {
       const byOrderId = (supplierOrderId: string) =>
         JSON.stringify({ eventId: `evt-${unique()}`, supplierOrderId, status: 'delivered' });
 
+      // Not matched yet: it may come before the first send's answer stored the id, so it is read
+      // again shortly, unprocessed (audit A04-25); only an older one is kept as unknown.
       const other = await stored(tx, byOrderId(`fake-${unique()}`));
-      expect(await webhooks.process(other, tx)).toBe('unknown_key');
+      sent.length = 0;
+      expect(await webhooks.process(other, tx)).toBeNull();
+      expect(await eventRow(tx, other)).toMatchObject({ processedAt: null });
+      expect(queued(QUEUES.suppliersWebhook, 'eventId', other)).toHaveLength(1);
+      const later = new Date(Date.now() + 4 * 60_000);
+      expect(await webhooks.process(other, tx, later)).toBe('unknown_key');
       // Two attempts with one supplier order id: neither is picked.
       const second = await buy(tx, item);
       await fulfil.fulfil(second.id, tx);
@@ -2492,6 +2662,16 @@ describe('live operations (S11)', () => {
       await tx.execute(sql`insert into stored_files (id, kind, storage_key, content_type,
         byte_size, width, height) values (${proof}, 'delivery_proof',
         ${`delivery_proof/${proof.slice(-2)}/${proof}.webp`}, 'image/webp', 10, 1, 1)`);
+      // Uploaded for this order, as the API records it (audit A04-20).
+      await recordAudit(tx, {
+        action: 'order.proof_uploaded',
+        actorKind: 'admin',
+        actorId: newId(),
+        channel: 'admin',
+        entityType: 'order',
+        entityId: order.id,
+        details: { fileId: proof },
+      });
       const done = await fulfilOrderManually(tx, context(), {
         orderId: order.id,
         quantity: 1,

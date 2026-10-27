@@ -11,6 +11,7 @@ import {
 } from '@vertex-digital/contracts';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { recordAudit } from '../audit/index.js';
 import { createDatabase, type Transaction } from '../client.js';
 import { lockActiveCustomer, purchasedLastDay } from '../customers/guard.js';
 import {
@@ -2284,9 +2285,25 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
     db.transaction((tx) =>
       rerouteOrder(tx, { ...context(), routing }, { orderId, routeId, admin: decision }),
     );
-  const fulfil = (orderId: string, input: Partial<ManualFulfilInput> & { proofFileId: string }) =>
-    db.transaction((tx) =>
-      fulfilOrderManually(tx, context(), {
+  /** As the API's upload does: the proof's audit entry names the order it was taken for. */
+  const uploaded = (tx: Transaction, orderId: string, fileId: string) =>
+    recordAudit(tx, {
+      action: 'order.proof_uploaded',
+      actorKind: 'admin',
+      actorId: newId(),
+      channel: 'admin',
+      entityType: 'order',
+      entityId: orderId,
+      details: { fileId },
+    });
+  const fulfil = (
+    orderId: string,
+    input: Partial<ManualFulfilInput> & { proofFileId: string },
+    upload = true,
+  ) =>
+    db.transaction(async (tx) => {
+      if (upload) await uploaded(tx, orderId, input.proofFileId);
+      return fulfilOrderManually(tx, context(), {
         orderId,
         quantity: 1,
         codes: [],
@@ -2295,8 +2312,8 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
         reference: null,
         admin: admin(),
         ...input,
-      }),
-    );
+      });
+    });
   const attemptsOf = (orderId: string) =>
     db
       .select()
@@ -2662,6 +2679,10 @@ describe('live operations: reroute, manual fulfil, refund (S11)', () => {
     expect(
       await refusal(fulfil(id, { proofFileId: await proof('deposit_receipt') })),
     ).toMatchObject({ code: 'PROOF_INVALID' });
+    // A proof no upload of this order took (audit A04-20).
+    expect(await refusal(fulfil(id, { proofFileId: await proof() }, false))).toMatchObject({
+      code: 'PROOF_INVALID',
+    });
     expect(await refusal(fulfil(id, { proofFileId: newId() }))).toMatchObject({
       code: 'PROOF_INVALID',
     });

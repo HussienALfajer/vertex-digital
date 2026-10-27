@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { tq } from '@/features/quick-buy/i18n';
 import type { Failure } from '@/lib/api';
@@ -175,9 +175,21 @@ function PlayerRow({ player, onChange }: { player: SavedPlayer; onChange: () => 
   const [failure, setFailure] = useState<Failure | null>(null);
   // S22 QB5: shown at once, put back when the change is refused.
   const [shown, setShown] = useState(!player.quickBuyHidden);
+  // One change of the switch at a time, so a late refusal never undoes the next (audit A04-43).
+  const [toggling, setToggling] = useState(false);
+  const labelInput = useRef<HTMLInputElement>(null);
+  const renameButton = useRef<HTMLButtonElement>(null);
+  const wasRenaming = useRef(false);
   const value = mainValue(player);
   const labelValid = savedPlayerLabelSchema.safeParse(label).success;
   const { ref, focusInvalid } = useFocusInvalid();
+
+  // The label's field takes the focus when it opens, and "إعادة التسمية" gets it back after.
+  useEffect(() => {
+    if (renaming) labelInput.current?.focus();
+    else if (wasRenaming.current) renameButton.current?.focus();
+    wasRenaming.current = renaming;
+  }, [renaming]);
 
   async function rename() {
     // Enter submits even while the button is disabled.
@@ -194,7 +206,9 @@ function PlayerRow({ player, onChange }: { player: SavedPlayer; onChange: () => 
   async function toggleQuickBuy(next: boolean) {
     setFailure(null);
     setShown(next);
+    setToggling(true);
     const result = await setQuickBuyHidden(player.id, !next);
+    setToggling(false);
     if (!result.ok) {
       setShown(!next);
       setFailure(result.reason);
@@ -225,6 +239,7 @@ function PlayerRow({ player, onChange }: { player: SavedPlayer; onChange: () => 
           <Field invalid={!labelValid}>
             <FieldLabel>{t('players.label')}</FieldLabel>
             <Input
+              ref={labelInput}
               value={label}
               maxLength={40}
               autoComplete="off"
@@ -304,13 +319,20 @@ function PlayerRow({ player, onChange }: { player: SavedPlayer; onChange: () => 
           <Switch
             aria-label={tq('players.showFor', { label: player.label })}
             checked={shown}
+            disabled={toggling}
             onCheckedChange={(next) => void toggleQuickBuy(next)}
           />
         </div>
       )}
       {!renaming && (
         <div className="flex gap-2">
-          <Button variant="ghost" size="xl" className="px-3" onClick={() => setRenaming(true)}>
+          <Button
+            ref={renameButton}
+            variant="ghost"
+            size="xl"
+            className="px-3"
+            onClick={() => setRenaming(true)}
+          >
             <PencilIcon aria-hidden="true" />
             {t('players.rename')}
           </Button>

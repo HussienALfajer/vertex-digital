@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { formatUsd } from '@vertex-digital/contracts';
 import {
@@ -14,6 +14,7 @@ import {
 import { CircleAlertIcon, ExternalLinkIcon, XIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAdminStream, useDebounced, useVisibleAgain } from '../../lib/admin-stream';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
 import {
@@ -23,7 +24,10 @@ import {
   OrderActionDialog,
 } from './order-actions';
 import { ATTEMPT_TONES, PURPOSE_TONES, STATUS_TONES } from './order-labels';
-import { orderQuery } from './orders.queries';
+import { orderQuery, orderStreamRead } from './orders.queries';
+
+/** A burst of stream events reads the open order once. */
+const STREAM_DEBOUNCE_MS = 1_000;
 
 /** The newest events the sheet shows (rule LR7). */
 const EVENTS_SHOWN = 5;
@@ -64,6 +68,17 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 function SheetBody({ orderId }: { orderId: string }) {
   const { t } = useTranslation();
   const order = useQuery(orderQuery(orderId));
+  const queryClient = useQueryClient();
+  // The open order follows the stream as its page does, so its actions never outlive a change
+  // the worker made (audit A04-13).
+  const reread = useDebounced(
+    () => void queryClient.fetchQuery(orderStreamRead(orderId)).catch(() => undefined),
+    STREAM_DEBOUNCE_MS,
+  );
+  useAdminStream((event) => {
+    if (event.type === 'resync' || event.order.orderId === orderId) reread();
+  });
+  useVisibleAgain(reread);
   const [action, setAction] = useState<OrderAction | null>(null);
 
   if (order.isPending) return <Skeleton className="h-80 w-full" aria-hidden="true" />;

@@ -185,5 +185,18 @@ export function removeLine(id: string): void {
   writeCart(lines.filter((line) => line.id !== id));
 }
 
+/**
+ * Puts a removed line back where it was ("تراجع", audit A04-30), unless the cart is full again or
+ * already holds it.
+ */
+export function restoreLine(line: CartLine, at: number): boolean {
+  const lines = readCart();
+  if (!lines || lines.length >= CART_LINES_MAX || lines.some((other) => other.id === line.id)) {
+    return false;
+  }
+  lines.splice(Math.min(at, lines.length), 0, line);
+  return writeCart(lines);
+}
+
 /** After a paid checkout (CT6) and at sign-out (CT1). */
 export const clearCart = clearStoredCart;

@@ -33,6 +33,14 @@ import {
 type Executor = Database | Transaction;
 
 /**
+ * An event naming only the supplier's order id may come before the first send's answer stored
+ * that id: it is read again after this many seconds, while it is younger than `WAIT_FOR_SEND_MS`,
+ * before it is kept as `unknown_key` (audit A04-25).
+ */
+const RETRY_UNMATCHED_SECONDS = 30;
+const WAIT_FOR_SEND_MS = 3 * 60_000;
+
+/**
  * `suppliers.webhook` (S08 rule F5): one stored, verified event. Its body is decrypted and parsed
  * by the supplier's adapter, the attempt found by its key and supplier, and the result applied by
  * rule F1 (`resolvedBy = webhook`). An event for a closed attempt is `same_result` when it agrees
@@ -64,7 +72,11 @@ export class SupplierWebhookJob implements OnApplicationBootstrap {
   }
 
   /** The event's result, or null when it was already processed. */
-  async process(eventId: string, db: Executor = this.db): Promise<WebhookEventResult | null> {
+  async process(
+    eventId: string,
+    db: Executor = this.db,
+    now = new Date(),
+  ): Promise<WebhookEventResult | null> {
     const [event] = await db
       .select({ event: supplierWebhookEvents, supplierCode: suppliers.code })
       .from(supplierWebhookEvents)
@@ -97,6 +109,25 @@ export class SupplierWebhookJob implements OnApplicationBootstrap {
           .limit(2)
       : [];
     const attempt = matches.length === 1 ? matches[0] : undefined;
+    if (
+      !attempt &&
+      matches.length === 0 &&
+      idempotencyKey === undefined &&
+      supplierOrderId &&
+      now.getTime() - event.event.createdAt.getTime() < WAIT_FOR_SEND_MS
+    ) {
+      // Faster than the first send's answer: read again shortly, still unprocessed.
+      const { jobs } = orderContext(this.pgBoss, this.codesKey);
+      await db.transaction((tx) =>
+        jobs.send(
+          tx,
+          QUEUES.suppliersWebhook,
+          { eventId },
+          { startAfter: RETRY_UNMATCHED_SECONDS },
+        ),
+      );
+      return null;
+    }
     // Another environment's or an old order: kept, nothing changes (edge case 19).
     if (!attempt) return this.finish(db, eventId, 'unknown_key', null);
 

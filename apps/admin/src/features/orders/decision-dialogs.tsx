@@ -1,5 +1,7 @@
 import {
   type AdminOrder,
+  formatUsd,
+  orderTotal,
   pollAttemptSchema,
   refundOrderSchema,
   resolveAttemptSchema,
@@ -25,7 +27,9 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
+import { ltr } from '../../lib/format';
 import { useIdempotentRequest } from '../../lib/idempotency';
+import { remainingUnits } from './fulfil-dialog';
 import { usePollAttempt, useRefundOrder, useResolveAttempt } from './orders.queries';
 
 /** The four decisions of rule D1, each its own dialog. */
@@ -60,6 +64,10 @@ export function DecisionDialog({
   const [failure, setFailure] = useState<string | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
   const pending = poll.isPending || resolve.isPending || refund.isPending;
+  // Rule D5: the undelivered units at the order's price, back to the customer's wallet, or to the
+  // owner's money for an order the owner paid (S16 AP10); stated before the press (audit A04-2).
+  const refundUnits = remainingUnits(order);
+  const refundAmount = ltr(formatUsd(orderTotal(order.unitPriceUsdUnits, refundUnits)));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -152,6 +160,17 @@ export function DecisionDialog({
           <FieldError match={!!errors.reason}>{t('orders.decisions.reasonError')}</FieldError>
         </Field>
         {decision === 'refund' && (
+          <p className="text-base font-medium">
+            {order.payer === 'customer' && order.customer
+              ? t('orders.decisions.refund.toWallet', {
+                  amount: refundAmount,
+                  count: refundUnits,
+                  name: order.customer.name,
+                })
+              : t('orders.decisions.refund.toOwner', { amount: refundAmount, count: refundUnits })}
+          </p>
+        )}
+        {decision === 'refund' && (
           <Callout
             tone="warning"
             icon={<TriangleAlertIcon />}
@@ -166,7 +185,11 @@ export function DecisionDialog({
             variant={decision === 'refund' || decision === 'failed' ? 'destructive' : 'primary'}
             disabled={pending}
           >
-            {pending ? t('orders.decisions.submitting') : t(`orders.decisions.${decision}.submit`)}
+            {pending
+              ? t('orders.decisions.submitting')
+              : decision === 'refund'
+                ? t('orders.decisions.refund.submitAmount', { amount: refundAmount })
+                : t(`orders.decisions.${decision}.submit`)}
           </Button>
         </DialogFooter>
       </form>

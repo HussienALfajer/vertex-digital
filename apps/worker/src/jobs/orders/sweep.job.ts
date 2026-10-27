@@ -31,8 +31,15 @@ type Executor = Database | Transaction;
 /** Every minute (rule F6). */
 export const ORDERS_SWEEP_CRON = '* * * * *';
 
-/** A `sending` attempt older than this was left by a crash; a poll this late was lost. */
+/** A poll this late was lost; a paid order untouched this long lost its routing job. */
 export const SWEEP_GRACE_MS = 60_000;
+
+/**
+ * A `sending` attempt older than this was left by a crash: longer than a first send can take (the
+ * quote, the adapters' 30-second purchase call and the pool's waits), so a slow send is not sent
+ * again beside itself (audit A04-29).
+ */
+export const SEND_GRACE_MS = 90_000;
 
 /** At most this many rows per step and run; the next minute takes the rest. */
 const BATCH = 100;
@@ -41,6 +48,16 @@ const BATCH = 100;
 export const PLAYER_CHECK_KEEP_MS = 24 * 60 * 60_000;
 
 const OPEN = ['sending', 'pending', 'unknown'] as const;
+
+/** Some steps of a sweep failed; the others ran, and their result is kept for the log. */
+export class SweepStepsFailed extends Error {
+  constructor(
+    readonly steps: string[],
+    readonly result: SweepResult,
+  ) {
+    super(`Orders sweep steps failed: ${steps.join(', ')}`);
+  }
+}
 
 export interface SweepResult {
   resent: string[];
@@ -81,10 +98,12 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     await this.pgBoss.work(QUEUES.ordersSweep, async () => {
       const result = await this.sweep();
-      const changed = Object.entries(result).filter(([, ids]) => ids.length > 0);
+      const changed = Object.entries(result).filter(([, done]) =>
+        typeof done === 'number' ? done > 0 : done.length > 0,
+      );
       if (changed.length > 0) {
         this.logger.log(
-          `Sweep: ${changed.map(([step, ids]) => `${step} ${ids.length}`).join(', ')}`,
+          `Sweep: ${changed.map(([step, done]) => `${step} ${typeof done === 'number' ? done : done.length}`).join(', ')}`,
         );
       }
     });
@@ -92,35 +111,60 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
     this.logger.log(`Scheduled ${QUEUES.ordersSweep} (${ORDERS_SWEEP_CRON})`);
   }
 
+  /**
+   * Each step on its own: one that throws (a lock timeout on one row) is logged and leaves the
+   * others to run; the run then fails with the steps' names, so pg-boss reports it (audit A04-27).
+   */
   async sweep(now = new Date(), db: Executor = this.db): Promise<SweepResult> {
     const policy = await currentOrderPolicy(db);
     const late = new Date(now.getTime() - SWEEP_GRACE_MS);
-    return {
-      resent: await this.queuePolls(
-        db,
-        now,
-        eq(fulfilmentAttempts.status, 'sending'),
-        lt(fulfilmentAttempts.sentAt, late),
-      ),
-      polled: await this.queuePolls(
-        db,
-        now,
-        inArray(fulfilmentAttempts.status, ['pending', 'unknown']),
-        lt(fulfilmentAttempts.nextPollAt, late),
-      ),
-      held: await this.hold(db, now, policy),
-      reminded: await this.remind(db, now, policy),
-      fulfilled: await this.queueFulfils(db, late),
-      expired: await expireReservations(
-        db as Database,
-        { jobs: bossJobSender(this.pgBoss.boss) },
-        BATCH,
-      ),
-      checksDeleted: await this.deleteChecks(db, now),
-      alertEventsDeleted: await deleteOldAlertEvents(db),
-      quickLinkEventsDeleted: await deleteOldQuickLinkEvents(db),
-      productAlertsDeleted: await deleteOldProductAlerts(db, now),
+    const failed: string[] = [];
+    const step = async <T>(name: string, empty: T, run: () => Promise<T>): Promise<T> => {
+      try {
+        return await run();
+      } catch (error) {
+        failed.push(name);
+        this.logger.error(
+          `Sweep step ${name} failed`,
+          error instanceof Error ? error.stack : error,
+        );
+        return empty;
+      }
     };
+    const result: SweepResult = {
+      resent: await step('resent', [], () =>
+        this.queuePolls(
+          db,
+          now,
+          eq(fulfilmentAttempts.status, 'sending'),
+          lt(fulfilmentAttempts.sentAt, new Date(now.getTime() - SEND_GRACE_MS)),
+        ),
+      ),
+      polled: await step('polled', [], () =>
+        this.queuePolls(
+          db,
+          now,
+          inArray(fulfilmentAttempts.status, ['pending', 'unknown']),
+          lt(fulfilmentAttempts.nextPollAt, late),
+        ),
+      ),
+      held: await step('held', [], () => this.hold(db, now, policy)),
+      reminded: await step('reminded', [], () => this.remind(db, now, policy)),
+      fulfilled: await step('fulfilled', [], () => this.queueFulfils(db, late)),
+      expired: await step('expired', [], () =>
+        expireReservations(db as Database, { jobs: bossJobSender(this.pgBoss.boss) }, BATCH),
+      ),
+      checksDeleted: await step('checksDeleted', [], () => this.deleteChecks(db, now)),
+      alertEventsDeleted: await step('alertEventsDeleted', 0, () => deleteOldAlertEvents(db)),
+      quickLinkEventsDeleted: await step('quickLinkEventsDeleted', 0, () =>
+        deleteOldQuickLinkEvents(db),
+      ),
+      productAlertsDeleted: await step('productAlertsDeleted', 0, () =>
+        deleteOldProductAlerts(db, now),
+      ),
+    };
+    if (failed.length > 0) throw new SweepStepsFailed(failed, result);
+    return result;
   }
 
   /** The player-check cache keeps no row a day past its expiry (S09 "Data"). */
@@ -295,14 +339,18 @@ export class OrdersSweepJob implements OnApplicationBootstrap {
     return reminded;
   }
 
-  /** Rule F6: `paid` or `failed` orders with no open attempt, untouched for a minute. */
+  /**
+   * Rule F6: `paid` or `failed` orders with no open attempt, untouched for a minute; and a held
+   * order left with no open attempt (a failure or partial delivery while held, whose one routing
+   * job may have failed for good), which routing takes as `needs_review` (audit A04-5).
+   */
   private async queueFulfils(db: Executor, late: Date): Promise<string[]> {
     const rows = await db
       .select({ id: orders.id })
       .from(orders)
       .where(
         and(
-          inArray(orders.status, ['paid', 'failed']),
+          inArray(orders.status, ['paid', 'failed', 'needs_review']),
           lt(orders.updatedAt, late),
           notExists(
             db

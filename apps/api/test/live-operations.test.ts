@@ -631,6 +631,14 @@ describe('manual fulfil (rules MF1–MF6)', () => {
       status: 400,
       code: 'VALIDATION_FAILED',
     });
+    // A proof uploaded under another order, still unused, is refused here (audit A04-20).
+    const elsewhere = await held(customer, item);
+    const foreign = await json<{ fileId: string }>(await uploadProof(elsewhere.orderId), 201);
+    expect(
+      await body(
+        await adminPost(path, { ...base, unitCostUsdUnits: 0, proofFileId: foreign.fileId }),
+      ),
+    ).toMatchObject({ status: 400, code: 'PROOF_INVALID' });
 
     const key = randomUUID();
     const payload = {
@@ -681,6 +689,33 @@ describe('manual fulfil (rules MF1–MF6)', () => {
     expect(
       (await adminGet(`/api/admin/orders/${other.orderId}/proofs/${proof.fileId}`)).status,
     ).toBe(404);
+  });
+
+  it('fulfils once for one key sent twice at once (audit A04-15)', async () => {
+    const customer = await buyer();
+    const item = await product();
+    const { orderId } = await held(customer, item);
+    const proof = await json<{ fileId: string }>(await uploadProof(orderId), 201);
+    const key = randomUUID();
+    const payload = {
+      quantity: 1,
+      proofFileId: proof.fileId,
+      reason: 'سلّمت من مصدر آخر',
+      unitCostUsdUnits: 0,
+    };
+    const path = `/api/admin/orders/${orderId}/fulfil`;
+    const answers = await Promise.all([
+      adminPost(path, payload, key),
+      adminPost(path, payload, key),
+    ]);
+    expect(answers.map((answer) => answer.status)).toEqual([200, 200]);
+    const done = await json<AdminOrder>(await adminPost(path, payload, key), 200);
+    expect(done.attempts.filter((attempt) => attempt.kind === 'admin_fulfil')).toHaveLength(1);
+    expect(
+      (await auditOf(test.db, orderId)).filter(
+        (entry) => entry.action === 'order.fulfilled_manually',
+      ),
+    ).toHaveLength(1);
   });
 
   it('delivers an open manual attempt at its cost, and refuses a proof on a running order', async () => {

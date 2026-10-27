@@ -204,6 +204,11 @@ test.describe('order problems (S22 OP1–OP5)', () => {
       });
     await sheet.getByRole('button', { name: oh.hints.anyway }).click();
     await page.getByTestId('problem-sheet').getByRole('button', { name: oh.form.send }).click();
+    // The sheet says why and keeps what was typed; closing it refreshes the card (audit A04-41).
+    await expect(
+      page.getByTestId('problem-sheet').getByText(ar.errors.ORDER_PROBLEM_UNAVAILABLE),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(page.getByText(oh.card.windowClosed)).toBeVisible();
     await expect(page.getByRole('link', { name: oh.card.windowClosedLink })).toHaveAttribute(
       'href',

@@ -15,6 +15,7 @@ import {
   applicant,
   cancelOwnReservation,
   checkoutOrders,
+  checkouts,
   customerCheckout,
   customerOrder,
   customerOrderPage,
@@ -22,6 +23,7 @@ import {
   type Database,
   orderCodesKey,
   orderRate,
+  orders,
   type PlayerCheckLookup,
   productRoutingStates,
   purchaseOrder,
@@ -29,6 +31,7 @@ import {
   type Transaction,
   withinLimits,
 } from '@vertex-digital/db';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
@@ -120,7 +123,9 @@ export class OrdersService {
     meta: RequestMeta,
     channel: 'store' | 'cli' = 'store',
   ): Promise<{ order: CreatedOrder; created: boolean }> {
-    if (channel === 'store') await this.purchaseLimits(customerId, meta);
+    if (channel === 'store' && !(await this.keyHeld('order', customerId, idempotencyKey))) {
+      await this.purchaseLimits(customerId, meta);
+    }
     try {
       const { order, created, savedPlayer } = await this.db.transaction(async (tx) => {
         const switches = await this.settings.valuesForCreation(tx);
@@ -175,7 +180,9 @@ export class OrdersService {
     meta: RequestMeta,
     channel: 'store' | 'cli' = 'store',
   ): Promise<{ checkout: Checkout; created: boolean }> {
-    if (channel === 'store') await this.purchaseLimits(customerId, meta);
+    if (channel === 'store' && !(await this.keyHeld('checkout', customerId, idempotencyKey))) {
+      await this.purchaseLimits(customerId, meta);
+    }
     try {
       const { checkout, created } = await this.db.transaction(async (tx) => {
         const switches = await this.settings.valuesForCreation(tx);
@@ -219,6 +226,26 @@ export class OrdersService {
    * merchant's rate is the merchant settings', per customer and per address alike (a shop's
    * counter shares one address).
    */
+  /**
+   * Rule O1: a key that already holds this customer's order or checkout is a replay, answered
+   * with the first result; it spends no purchase limit (audit A04-19). Another body under it is
+   * refused by the write path as before.
+   */
+  private async keyHeld(
+    kind: 'order' | 'checkout',
+    customerId: string,
+    idempotencyKey: string,
+  ): Promise<boolean> {
+    if (!isUuid(idempotencyKey)) return false;
+    const table = kind === 'order' ? orders : checkouts;
+    const [row] = await this.db
+      .select({ id: table.id })
+      .from(table)
+      .where(and(eq(table.idempotencyKey, idempotencyKey), eq(table.customerId, customerId)))
+      .limit(1);
+    return row !== undefined;
+  }
+
   private async purchaseLimits(customerId: string, meta: RequestMeta) {
     const rate = await orderRate(this.db, customerId);
     const allowed = await withinLimits(this.db, [

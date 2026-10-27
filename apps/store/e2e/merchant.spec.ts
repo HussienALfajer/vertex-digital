@@ -287,6 +287,13 @@ test.describe('merchant accounts', () => {
     await box.getByRole('slider').focus();
     await page.keyboard.press('End');
     await expect.poll(() => api.last('POST /api/orders')).toBeDefined();
-    await expect(page.getByTestId('terms-sheet')).toBeVisible();
+    const sheet = page.getByTestId('terms-sheet');
+    await expect(sheet).toBeVisible();
+    // Accepted: the customer is told nothing was paid and to slide again (audit A04-31).
+    api.on('POST /api/merchant/terms', 204, null);
+    await sheet.getByRole('checkbox', { name: m.terms.check }).check();
+    await sheet.getByRole('button', { name: m.terms.accept }).click();
+    await expect(box.getByText(m.terms.slideAgain)).toBeVisible();
+    await expect(box.getByRole('slider')).toBeVisible();
   });
 });

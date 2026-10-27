@@ -71,4 +71,11 @@ describe('withFilter and listQuery', () => {
       86_399_999,
     );
   });
+
+  it('reads the dates as Damascus days in any browser zone (audit A04-52)', () => {
+    const query = listQuery({ from: '2026-10-01', to: '2026-10-02' });
+    // Damascus is UTC+3 all year.
+    expect(query.from).toBe('2026-09-30T21:00:00.000Z');
+    expect(query.to).toBe('2026-10-02T20:59:59.999Z');
+  });
 });

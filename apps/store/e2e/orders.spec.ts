@@ -9,6 +9,8 @@ import { expect, type MockApi, screenshot, test } from './test';
  */
 
 const o = ar.orders;
+const fill = (text: string, values: Record<string, string | number>) =>
+  text.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key]));
 
 const id = (n: number) => `0199c000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
 const IDS = {
@@ -245,6 +247,33 @@ test.describe('orders', () => {
     await expect(page.getByText(o.sentences.delayed)).toBeVisible();
   });
 
+  test('a late answer for the checkout never lands on the whole list (audit A04-9)', async ({
+    page,
+    api,
+  }) => {
+    const checkoutId = '0199e000-0000-7000-8000-00000000c0c0';
+    const oneCheckout = {
+      items: [summary(ORDERS.topUp)],
+      nextCursor: null,
+      checkout: { id: checkoutId, totalUsdUnits: 990_000, orderCount: 1, finishedAt: null },
+    };
+    withOrders(api)
+      .on(`GET /api/orders?checkout=${checkoutId}`, 200, oneCheckout)
+      // The bell reads its list again when the tab is shown, too.
+      .on('GET /api/notifications', 200, { items: [], nextCursor: null, unreadCount: 0 });
+    await page.goto(`/orders?checkout=${checkoutId}`);
+    const header = page.getByText(fill(o.checkout.title, { count: 1 }));
+    await expect(header).toBeVisible();
+    // A refresh of the checkout still in flight while the customer opens the whole list.
+    api.on(`GET /api/orders?checkout=${checkoutId}`, 200, oneCheckout, 1500);
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.getByRole('link', { name: o.checkout.all }).click();
+    await expect(page).toHaveURL('/orders');
+    await expect(page.getByRole('link', { name: /VO-LATE67/ })).toBeVisible();
+    await page.waitForTimeout(2000);
+    await expect(header).toBeHidden();
+  });
+
   test('a delivered top-up shows its account field, money and stages', async ({ page, api }) => {
     withOrders(api);
     await page.goto(`/orders/${IDS.topUp}`);
@@ -270,6 +299,44 @@ test.describe('orders', () => {
     await expect(page.getByText(o.codes.firstRevealed.split('{')[0] as string)).toBeVisible();
     await expect(page.getByRole('button', { name: o.codes.copy })).toBeVisible();
     await expect(page.getByText('الولايات المتحدة')).toBeVisible();
+  });
+
+  test('a failed re-read keeps the order and its revealed code, with a retry (audit A04-8)', async ({
+    page,
+    api,
+  }) => {
+    withOrders(api)
+      .on(`POST /api/orders/${IDS.codes}/codes/${CODE_ID}/reveal`, 200, {
+        code: 'ITUNES-7K2M-9Q4X',
+        firstRevealedAt: '2026-10-09T10:05:00.000Z',
+      })
+      .on('GET /api/notifications', 200, { items: [], nextCursor: null, unreadCount: 0 });
+    await page.goto(`/orders/${IDS.codes}`);
+    await page
+      .getByRole('button', { name: fill(o.codes.revealLabel, { code: '•••• 9Q4X' }) })
+      .click();
+    await expect(page.getByText('ITUNES-7K2M-9Q4X')).toBeVisible();
+    const order = api.last(`GET /api/orders/${IDS.codes}`);
+    api.on(`GET /api/orders/${IDS.codes}`, 500, { statusCode: 500, code: 'INTERNAL_ERROR' });
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await expect(page.getByText(o.detail.stale)).toBeVisible();
+    await expect(page.getByText('ITUNES-7K2M-9Q4X')).toBeVisible();
+    expect(order).toBeTruthy();
+    withOrders(api);
+    await page.getByRole('button', { name: o.retry }).click();
+    await expect(page.getByText(o.detail.stale)).toBeHidden();
+  });
+
+  test('a first read that fails offers a retry', async ({ page, api }) => {
+    withOrders(api).on(`GET /api/orders/${IDS.topUp}`, 500, {
+      statusCode: 500,
+      code: 'INTERNAL_ERROR',
+    });
+    await page.goto(`/orders/${IDS.topUp}`);
+    await expect(page.getByText(o.detail.loadFailed)).toBeVisible();
+    withOrders(api);
+    await page.getByRole('button', { name: o.retry }).click();
+    await expect(page.getByText('5123456789')).toBeVisible();
   });
 
   test('a refused reveal says what to do next', async ({ page, api }) => {

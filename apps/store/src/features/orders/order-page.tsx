@@ -72,7 +72,7 @@ type State =
   | { status: 'loading' }
   | { status: 'failed' }
   | { status: 'missing' }
-  | { status: 'ready'; order: Order };
+  | { status: 'ready'; order: Order; stale?: boolean };
 
 /**
  * One order (S08 screens, S09 rules LT1–LT3): the number with copy, the stage and its sentence,
@@ -92,14 +92,23 @@ export function OrderPage() {
   const customer = useCustomer();
   const merchant = customer.status === 'signedIn' && customer.merchant;
 
+  const latest = useRef(0);
+
+  // Only the newest read lands, and a failed re-read keeps the order shown with a notice, so the
+  // revealed codes stay and an older answer never replaces a newer one (audit A04-8).
   const load = useCallback(async () => {
+    const read = ++latest.current;
     const result = await getOrder(id);
+    if (read !== latest.current) return;
     if (!result.ok && result.reason === 'UNAUTHORIZED') {
       router.replace(`/sign-in?next=${encodeURIComponent(`/orders/${id}`)}`);
       return;
     }
     if (!result.ok) {
-      return setState({ status: result.reason === 'NOT_FOUND' ? 'missing' : 'failed' });
+      if (result.reason === 'NOT_FOUND') return setState({ status: 'missing' });
+      return setState((current) =>
+        current.status === 'ready' ? { ...current, stale: true } : { status: 'failed' },
+      );
     }
     setState({ status: 'ready', order: result.data });
   }, [id, router]);
@@ -146,6 +155,14 @@ export function OrderPage() {
   const { order } = state;
   return (
     <div className="flex flex-col gap-6">
+      {state.stale && (
+        <div className="flex flex-col gap-2">
+          <FormAlert tone="warning">{t('orders.detail.stale')}</FormAlert>
+          <Button variant="outline" size="xl" className="self-start" onClick={() => void load()}>
+            {t('orders.retry')}
+          </Button>
+        </div>
+      )}
       <Card className="gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -518,6 +535,7 @@ function CodeRow({ orderId, code }: { orderId: string; code: OrderCode }) {
             size="xl"
             className="shrink-0"
             disabled={busy}
+            aria-label={t('orders.codes.revealLabel', { code: code.masked })}
             onClick={() => void reveal()}
           >
             <EyeIcon />

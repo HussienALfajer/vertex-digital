@@ -26,6 +26,7 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
+import { ltr } from '../../lib/format';
 import { orderPolicyQuery, useSetOrderPolicy } from './orders.queries';
 
 type PolicyField = keyof OrderPolicy;
@@ -54,7 +55,7 @@ const parsedValue = (field: PolicyField, text: string) =>
 
 const defaultOf = (field: PolicyField) =>
   DOLLAR_FIELDS.includes(field)
-    ? formatUsd(ORDER_POLICY_DEFAULTS[field])
+    ? ltr(formatUsd(ORDER_POLICY_DEFAULTS[field]))
     : ORDER_POLICY_DEFAULTS[field];
 
 /** "/orders/policy" (S08 screens): the policy's fields with their defaults, re-authenticated. */

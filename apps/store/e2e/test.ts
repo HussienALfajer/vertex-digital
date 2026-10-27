@@ -62,7 +62,7 @@ export const ALL_ON = Object.fromEntries(
 
 type Route = Parameters<Parameters<Page['route']>[1]>[0];
 type Answer =
-  | { status: number; body: unknown }
+  | { status: number; body: unknown; delayMs?: number }
   | { status: 200; image: true }
   | { status: 200; events: string; delayMs: number };
 
@@ -168,8 +168,9 @@ export class MockApi {
     return this.requests.findLast((request) => request.key === key);
   }
 
-  on(key: string, status: number, body: unknown = {}): this {
-    this.answers.set(key, { status, body });
+  /** Answers `key`, after `delayMs` when a test acts while the request is in flight (A04-1). */
+  on(key: string, status: number, body: unknown = {}, delayMs = 0): this {
+    this.answers.set(key, { status, body, delayMs });
     return this;
   }
 
@@ -219,6 +220,7 @@ export class MockApi {
       await route.fulfill({ status: 200, contentType: 'text/event-stream', body: answer.events });
       return;
     }
+    if (answer.delayMs) await new Promise((done) => setTimeout(done, answer.delayMs));
     await route.fulfill({ status: answer.status, json: answer.body });
   }
 }

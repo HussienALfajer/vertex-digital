@@ -287,6 +287,19 @@ describe('POST /api/admin/orders (rules AP1–AP13)', () => {
     expect(notice).toMatchObject({ kind: 'admin_order_placed' });
   });
 
+  it('places one order for one key sent twice at once (audit A04-15)', async () => {
+    const item = await product(ids.codeGameId, 'code', 1.8);
+    const key = randomUUID();
+    const answers = await Promise.all([order(item, {}, key), order(item, {}, key)]);
+    expect(answers.map((answer) => answer.status).sort()).toEqual([200, 201]);
+    const [first, second] = await Promise.all(answers.map((answer) => answer.json()));
+    expect((first as { id: string }).id).toBe((second as { id: string }).id);
+    const placed = await test.db.execute<{ count: number }>(
+      sql`select count(*)::int as count from orders where idempotency_key = ${key}`,
+    );
+    expect(placed.rows[0]?.count).toBe(1);
+  });
+
   it('asks for a recent re-authentication, a key and the admin (AP2, ADR 0007)', async () => {
     const item = await product(ids.codeGameId, 'code', 1.8);
     const buyer = await customer();

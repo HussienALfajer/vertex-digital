@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { formatClock, useTimeLeft } from '@/features/deposits/use-time-left';
 import { useNotificationEvents, useVisibleAgain } from '@/features/notifications/live';
@@ -66,9 +66,12 @@ export function OrdersList() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailure, setMoreFailure] = useState<Failure | null>(null);
+  // The list being shown: an answer for another `?checkout=` is dropped (audit A04-9).
+  const shown = useRef(checkoutId);
 
   const load = useCallback(async () => {
     const page = await listOrders(undefined, fetch, checkoutId);
+    if (shown.current !== checkoutId) return;
     if (!page.ok && page.reason === 'UNAUTHORIZED') {
       const back = checkoutId ? `/orders?checkout=${checkoutId}` : '/orders';
       router.replace(`/sign-in?next=${encodeURIComponent(back)}`);
@@ -84,13 +87,17 @@ export function OrdersList() {
   }, [router, checkoutId]);
 
   useEffect(() => {
+    shown.current = checkoutId;
+    setState({ status: 'loading' });
+    setLoadingMore(false);
+    setMoreFailure(null);
     void load();
-  }, [load]);
+  }, [load, checkoutId]);
 
   /** The newest page again, merged over the cards already loaded. */
   const refresh = useCallback(async () => {
     const page = await listOrders(undefined, fetch, checkoutId);
-    if (!page.ok) return;
+    if (!page.ok || shown.current !== checkoutId) return;
     setState((previous) => {
       if (previous.status !== 'ready') {
         return {
@@ -123,6 +130,7 @@ export function OrdersList() {
     setMoreFailure(null);
     setLoadingMore(true);
     const page = await listOrders(cursor, fetch, checkoutId);
+    if (shown.current !== checkoutId) return;
     setLoadingMore(false);
     if (!page.ok) return setMoreFailure(page.reason);
     setState((previous) =>

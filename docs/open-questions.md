@@ -7,6 +7,7 @@ Decisions that belong to the owner. Agents must not guess answers to these. When
 | Q1 | Off-server backup destination (shared need with Vertex Hub) | Launch | Required: the system holds customer money. Interim (owner, 2026-10-20): the daily backups stay on the production server until the owner subscribes to a second server; the destination is set up and a restore tested then |
 | Q3 | License for the public repository (none means all rights reserved) | Anytime | — |
 | Q23 | How long a credited USDT deposit keeps its exact amount reserved (S04 rule U4, `USDT_RESERVATION_GRACE_DAYS` = 7; audit A02, worker finding): after the grace another customer's new deposit may draw the same tail, and a customer who sends an old exact amount again (a saved exchange withdrawal) credits that other customer automatically | The pilot | 30 days: at pilot volumes each amount still has 99 tails per network, and a resent amount is far likelier than a tail shortage. Until answered, 7 days stays |
+| Q24 | A player ID whose check is cached but the day's check quota is used up (S09 rule PV8; audit A04-21): the purchase now treats it as unchecked (no confirmation asked, the cached "not found" ignored), although reading the cache costs no supplier call | The pilot | Apply an unexpired cached answer whatever the quota: a known-invalid ID asks for the customer's confirmation, a known-valid one keeps its name on the order. Until answered, the purchase keeps today's behaviour |
 
 ## Resolved
 

@@ -640,10 +640,11 @@ describe('gifts and share links (S10 rules GF1–GF5, RC1–RC3, SH1–SH5)', ()
     expect(image.status).toBe(200);
     expect(image.headers.get('content-type')).toBe('image/png');
     expect(image.headers.get('cache-control')).toBe('public, max-age=300');
-    expect(await sharp(Buffer.from(await image.arrayBuffer())).metadata()).toMatchObject({
-      width: 1080,
-      height: 1080,
-    });
+    const drawn = Buffer.from(await image.arrayBuffer());
+    expect(await sharp(drawn).metadata()).toMatchObject({ width: 1080, height: 1080 });
+    // Kept a few minutes per link and data: the same image again (audit A04-22).
+    const again = await client.get(`/api/shares/${token}/image?format=square`, { origin: null });
+    expect(Buffer.from(await again.arrayBuffer()).equals(drawn)).toBe(true);
     expect((await client.get(`/api/shares/${token}/image?format=banner`)).status).toBe(400);
 
     // A live gift link exists; revoking it is final, a new link is a new token (GF4, RC3).
@@ -661,6 +662,8 @@ describe('gifts and share links (S10 rules GF1–GF5, RC1–RC3, SH1–SH5)', ()
     expect((await revoke(link?.id as string)).status).toBe(204);
     expect((await client.get(`/api/shares/${token}`)).status).toBe(404);
     expect((await client.get(`/api/shares/${token}/image`)).status).toBe(404);
+    // A kept drawing never outlives its link.
+    expect((await client.get(`/api/shares/${token}/image?format=square`)).status).toBe(404);
     expect((await giftLink(other)).status).toBe(404);
     const fresh = await json<{ url: string }>(await giftLink(), 201);
     expect(tokenOf(fresh.url)).not.toBe(token);
@@ -683,6 +686,16 @@ describe('gifts and share links (S10 rules GF1–GF5, RC1–RC3, SH1–SH5)', ()
     );
     expect(created).toMatchObject({ kind: 'receipt', showPrice: true, playerDisplay: 'masked' });
     expect(created.url).toMatch(/\/r\/[A-Za-z0-9_-]{22}$/);
+    // Another customer's order is not found, never shared (audit A04-15).
+    const stranger = await buyer(0);
+    expect(
+      (
+        await client.put(`/api/orders/${order.id}/receipt-link`, {
+          cookie: stranger.cookie,
+          body: {},
+        })
+      ).status,
+    ).toBe(404);
     const token = tokenOf(created.url);
     expect(await json(await client.get(`/api/shares/${token}`), 200)).toMatchObject({
       kind: 'receipt',

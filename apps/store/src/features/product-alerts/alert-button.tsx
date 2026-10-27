@@ -13,19 +13,7 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { ta } from './i18n';
-import { cancelProductAlert, createProductAlert, listProductAlerts } from './requests';
-
-/** One read of a game's active alerts per page view, shared by every button of the game. */
-const gameAlerts = new Map<string, Promise<ProductAlert[]>>();
-
-function readGameAlerts(gameId: string): Promise<ProductAlert[]> {
-  let read = gameAlerts.get(gameId);
-  if (!read) {
-    read = listProductAlerts({ gameId }).then((result) => (result.ok ? result.data.items : []));
-    gameAlerts.set(gameId, read);
-  }
-  return read;
-}
+import { cancelProductAlert, createProductAlert, readGameAlerts } from './requests';
 
 /**
  * "نبّهني عند التوفر" on an unavailable pack and "نبّهني عند انخفاض السعر" on an available one
@@ -83,7 +71,6 @@ export function AlertButton({
     setFailure(null);
     const result = await createProductAlert(productId, kind);
     setBusy(false);
-    gameAlerts.delete(gameId);
     if (result.ok) {
       setAlert(result.data);
       setJustSet(true);
@@ -98,7 +85,6 @@ export function AlertButton({
     setFailure(null);
     const result = await cancelProductAlert(current.id);
     setBusy(false);
-    gameAlerts.delete(gameId);
     if (result.ok || result.reason === 'NOT_FOUND') {
       setAlert(null);
       setJustSet(false);

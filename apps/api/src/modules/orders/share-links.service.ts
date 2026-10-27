@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   type AdminOrder,
@@ -38,6 +39,10 @@ const HOUR = 60 * 60 * 1000;
 /** The cover width the image draws from: the stored WebP variant (S09 rule SF5). */
 const COVER_WIDTH = 640;
 
+/** Rendered share images kept, and for how long (the browser's own cache is 5 minutes). */
+const RENDERED_MAX = 200;
+const RENDERED_MS = 5 * 60 * 1000;
+
 /**
  * Share links (S10 rules GF4, RC1–RC3, SH1, SH2, AD1): the customer's receipt and gift links on
  * their own orders (20 changes per hour), the public page data and image of a live token, and the
@@ -46,6 +51,8 @@ const COVER_WIDTH = 640;
  */
 @Injectable()
 export class ShareLinksService {
+  private readonly rendered = new Map<string, { png: Buffer; until: number }>();
+
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
@@ -139,16 +146,33 @@ export class ShareLinksService {
     return (await this.share(token)).share;
   }
 
-  /** Rule SH2: the link's image, rendered on each request (HTTP caches it). */
+  /**
+   * Rule SH2: the link's image. The link is read on each request (a revoked one is gone at once);
+   * the drawing is kept a few minutes per link, format and data, so repeated reads of one link
+   * cost a cache hit instead of a render (audit A04-22).
+   */
   async image(token: string, format: ShareImageFormat): Promise<Buffer> {
     const { share, coverFileId } = await this.share(token);
+    const key = createHash('sha256')
+      .update(JSON.stringify([token, format, coverFileId, share]))
+      .digest('base64url');
+    const kept = this.rendered.get(key);
+    if (kept && kept.until > Date.now()) return kept.png;
     const cover = coverFileId ? await this.files.catalogVariant(coverFileId, COVER_WIDTH) : null;
-    return renderShareImage(
+    const png = await renderShareImage(
       share,
       format,
       cover ? await cover.read() : null,
       `${this.env.STORE_URL}${sharePath(share.kind, token)}`,
     );
+    this.rendered.delete(key);
+    this.rendered.set(key, { png, until: Date.now() + RENDERED_MS });
+    // The oldest drawing leaves first once the cache is full.
+    for (const old of this.rendered.keys()) {
+      if (this.rendered.size <= RENDERED_MAX) break;
+      this.rendered.delete(old);
+    }
+    return png;
   }
 
   private async share(token: string) {
