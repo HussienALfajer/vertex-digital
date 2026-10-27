@@ -279,7 +279,7 @@ function AssignAccountDialog({
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
-  // One read once typing pauses, not one per keystroke (audit A05-80).
+  // One read once typing pauses, not one per keystroke (audit A05-79).
   const [search, setSearch] = useState('');
   useEffect(() => {
     const timer = setTimeout(() => setSearch(q.trim()), SEARCH_PAUSE_MS);

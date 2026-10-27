@@ -628,7 +628,8 @@ export class FazercardsAdapter implements SupplierAdapter {
         schema: orderReplySchema,
         errorCode: fzrErrorCode,
         definitiveCodes: FZR_DEFINITIVE_ORDER_CODES,
-        timeoutMs: this.options.timeoutMs ?? ORDER_TIMEOUT_MS,
+        // A shorter client timeout never cuts the order's own (audit A05-53).
+        timeoutMs: Math.max(this.options.timeoutMs ?? 0, ORDER_TIMEOUT_MS),
       });
       return orderOutcome(reply.order, request.quantity, parts.type === 'gift');
     } catch (error) {

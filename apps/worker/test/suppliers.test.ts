@@ -1042,6 +1042,8 @@ describe('suppliers.sync: audit F9 regressions', () => {
       expect(syncs().map((job) => job.data)).toEqual([
         { supplierId: ids.fake, supplierCode: 'fake', trigger: 'admin' },
       ]);
+      // No retry, as the schedule's (audit A05-62).
+      expect(syncs()[0]?.options).toMatchObject({ retryLimit: 0 });
     }));
 
   it('keeps a cost observed after the run began reading (audit A05-8)', () =>

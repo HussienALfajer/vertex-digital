@@ -615,7 +615,8 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
       trigger: 'admin',
     };
     await db.transaction((tx) =>
-      bossJobSender(this.pgBoss.boss).send(tx, QUEUES.suppliersSync, payload),
+      // No retry, as the schedule's (S07; audit A05-62).
+      bossJobSender(this.pgBoss.boss).send(tx, QUEUES.suppliersSync, payload, { retryLimit: 0 }),
     );
     this.logger.log(`Credentials of ${supplier.code} replaced during a run: testing them`);
   }

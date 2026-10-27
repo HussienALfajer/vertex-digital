@@ -36,6 +36,25 @@ describe('verifyHmacSignature', () => {
     ).toBe(true);
   });
 
+  it('accepts a hex signature in capitals, never a base64 one (audit A05-54)', () => {
+    expect(
+      verifyHmacSignature({ secret, signedPayload, signature: signature.toUpperCase(), now }),
+    ).toBe(true);
+    const base64 = hmacSha256(secret, signedPayload, 'base64');
+    expect(
+      verifyHmacSignature({ secret, signedPayload, signature: base64, encoding: 'base64', now }),
+    ).toBe(true);
+    expect(
+      verifyHmacSignature({
+        secret,
+        signedPayload,
+        signature: base64.toUpperCase(),
+        encoding: 'base64',
+        now,
+      }),
+    ).toBe(false);
+  });
+
   it('refuses a wrong signature, secret or payload', () => {
     expect(verifyHmacSignature({ secret, signedPayload, signature: 'ab'.repeat(32), now })).toBe(
       false,

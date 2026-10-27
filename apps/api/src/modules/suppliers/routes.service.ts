@@ -331,7 +331,7 @@ export class RoutesService {
 
   /**
    * Rule RT1 again: refused while another route holds the offer; S16 SC6: refused for an ignored
-   * offer; RT7: a manual route refused beside another live one (audit A05-12, A05-72).
+   * offer; RT7: a manual route refused beside another live one (audit A05-12, A05-71).
    */
   async restore(actor: Actor, routeId: string): Promise<ProductRouting> {
     return this.changeRoute(routeId, async (tx, product, route, supplierCode) => {

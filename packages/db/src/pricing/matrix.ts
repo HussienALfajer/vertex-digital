@@ -28,7 +28,7 @@ export async function priceMatrix(
   query: { gameId?: string; q?: string; listIds?: readonly string[]; warnings?: boolean },
   context: RoutingContext,
 ): Promise<PriceMatrix> {
-  // Retail first, then at most the other columns the contract allows (audit A05-70).
+  // Retail first, then at most the other columns the contract allows (audit A05-69).
   const wanted = [
     ROOT_PRICE_LIST_IDS.retail,
     ...(query.listIds ?? DEFAULT_COLUMNS)

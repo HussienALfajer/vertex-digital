@@ -37,7 +37,7 @@ import {
   FolderTreeIcon,
   SearchIcon,
 } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
@@ -515,6 +515,8 @@ function Filters({
 }) {
   const { t } = useTranslation();
   const [q, setQ] = useState(search.cq ?? '');
+  // The box follows the URL on back and forward (audit A05-51).
+  useEffect(() => setQ(search.cq ?? ''), [search.cq]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

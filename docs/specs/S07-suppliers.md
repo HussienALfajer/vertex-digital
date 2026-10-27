@@ -176,7 +176,7 @@ The switches (`/api/admin/switches`, S05) take the three new values unchanged.
 
 ## Jobs and integrations
 Queues in `packages/contracts` `QUEUES`; payloads carry ids only.
-- `suppliers.sync` (`stately` per supplier; payload `{ supplierId, trigger }`): SY1–SY4. Retries: none; the next schedule tries again. Safe twice: the running-run index and upserts by `(supplier_id, offer_id)`.
+- `suppliers.sync` (a plain queue: the running-run index keeps one run per supplier; payload `{ supplierId, trigger }`): SY1–SY4. Retries: none (`retryLimit: 0` on every send); the next schedule tries again. Safe twice: the running-run index and upserts by `(supplier_id, offer_id)`.
 - `suppliers.sync-schedule` (every 15 minutes): enqueues `suppliers.sync` per eligible supplier.
 - `suppliers.balances` (every 5 minutes): H5.
 - `suppliers.health` (every minute): H1–H4 and SY5's stale repricing. Safe twice: a state is written only when it differs from the newest row.

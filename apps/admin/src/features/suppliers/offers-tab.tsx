@@ -427,15 +427,10 @@ function CategoryChip({
   return (
     <Badge tone="outline" className="h-8 gap-2 ps-3 pe-1">
       {t('suppliers.offers.categoryFilter')} <bdi>{name}</bdi>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="size-6"
-        aria-label={t('suppliers.offers.clearCategory')}
-        onClick={onClear}
-      >
+      {/* Audit A05-48: an icon button with its tooltip. */}
+      <TipButton label={t('suppliers.offers.clearCategory')} onClick={onClear}>
         <XIcon />
-      </Button>
+      </TipButton>
     </Badge>
   );
 }
@@ -457,6 +452,8 @@ function Filters({
 }) {
   const { t } = useTranslation();
   const [q, setQ] = useState(search.q ?? '');
+  // The box follows the URL on back and forward (audit A05-51).
+  useEffect(() => setQ(search.q ?? ''), [search.q]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -540,15 +537,12 @@ function Filters({
           {search.group && (
             <Badge tone="outline" className="h-8 gap-2 ps-3 pe-1">
               {t('suppliers.offers.groupFilter')} <bdi>{search.group}</bdi>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="size-6"
-                aria-label={t('suppliers.offers.clearGroup')}
+              <TipButton
+                label={t('suppliers.offers.clearGroup')}
                 onClick={() => onSearch({ group: undefined })}
               >
                 <XIcon />
-              </Button>
+              </TipButton>
             </Badge>
           )}
           <Button

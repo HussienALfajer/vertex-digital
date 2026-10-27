@@ -52,6 +52,8 @@ export function verifyHmacSignature(input: VerifySignatureInput): boolean {
       return false;
     }
   }
-  const expected = hmacSha256(input.secret, input.signedPayload, input.encoding);
-  return safeEqual(expected, input.signature);
+  const encoding = input.encoding ?? 'hex';
+  const expected = hmacSha256(input.secret, input.signedPayload, encoding);
+  // Hex is the same digest in either case (audit A05-54); base64 is case-sensitive.
+  return safeEqual(expected, encoding === 'hex' ? input.signature.toLowerCase() : input.signature);
 }

@@ -601,7 +601,7 @@ describe('import and link (rules SC7–SC14, IM2)', () => {
     expect((await post(`/api/admin/suppliers/offers/${newId()}/ignore`)).status).toBe(404);
   });
 
-  it('refuses restoring a route whose offer was ignored meanwhile (SC6, A05-72)', async () => {
+  it('refuses restoring a route whose offer was ignored meanwhile (SC6, A05-71)', async () => {
     await json(await post(`/api/admin/routes/${ids.route}/archive`), 200);
     await json(await post(`/api/admin/suppliers/offers/${offers.uc60}/ignore`), 200);
     expect(

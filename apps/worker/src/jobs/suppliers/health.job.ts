@@ -37,8 +37,10 @@ import {
   suppliers,
   type Transaction,
   telegramMessages,
+  withoutQueryParameters,
 } from '@vertex-digital/db';
 import { and, asc, desc, eq, gte, isNull, lt, ne, notInArray, or, sql } from 'drizzle-orm';
+import { PgTransaction } from 'drizzle-orm/pg-core';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -95,11 +97,22 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
   async check(now = new Date(), db: Executor = this.db): Promise<void> {
     const policy = await currentSupplierPolicy(db);
     const states = await supplierStates(db, { fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED });
+    // Audit A05-59: one supplier's failure leaves the others judged and the stale costs
+    // repriced; the run then fails naming it, so pg-boss reports it.
+    const failed: string[] = [];
     for (const supplier of states) {
       if (supplier.code === 'manual' || !supplier.available) continue;
-      const verdict = await this.judge(db, supplier, policy, now);
-      if (verdict) await this.change(db, supplier, verdict, now);
-      await this.tell(db, supplier, now);
+      try {
+        const verdict = await this.judge(db, supplier, policy, now);
+        if (verdict) await this.change(db, supplier, verdict, now);
+        await this.tell(db, supplier, now);
+      } catch (error) {
+        // In a caller's transaction (the tests) the failure has spoiled it: nothing else can run.
+        if (db instanceof PgTransaction) throw error;
+        const reported = withoutQueryParameters(error) as Error;
+        this.logger.error(`Health of ${supplier.code} failed: ${reported.message}`);
+        failed.push(supplier.code);
+      }
     }
     await this.repriceStale(db, policy, now);
     for (const supplier of states) {
@@ -107,6 +120,7 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
         await this.reportStale(db, supplier, policy, now);
       }
     }
+    if (failed.length > 0) throw new Error(`Supplier health failed for ${failed.join(', ')}`);
   }
 
   private async standing(db: Executor, supplierId: string): Promise<HealthStanding> {

@@ -419,7 +419,7 @@ function TargetDialog({
           <Picker
             label={t('pricing.overrides.productOptional')}
             placeholder={t('pricing.overrides.wholeGame')}
-            // The whole game stays a choice once a pack is picked (audit A05-78).
+            // The whole game stays a choice once a pack is picked (audit A05-77).
             items={[
               { value: WHOLE_GAME, label: t('pricing.overrides.wholeGame') },
               ...products.map((item) => ({ value: item.id, label: item.nameAr })),

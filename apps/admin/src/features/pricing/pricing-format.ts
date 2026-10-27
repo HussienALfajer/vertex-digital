@@ -1,4 +1,9 @@
-import { BASIS_POINTS, CURRENCY_SCALE, type MarginRuleValues } from '@vertex-digital/contracts';
+import {
+  BASIS_POINTS,
+  CURRENCY_SCALE,
+  formatAmountInput,
+  type MarginRuleValues,
+} from '@vertex-digital/contracts';
 
 /*
  * The rule form's and the calculator's typed values: a percent with up to 2 decimals in basis
@@ -48,7 +53,8 @@ export function ruleTexts(rule: MarginRuleValues): {
   fixed: string;
   minimum: string;
 } {
-  const dollars = (units: number) => (units / CURRENCY_SCALE.USD).toFixed(2);
+  // Exact, through the contracts' formatter: never `/` on an amount (audit A05-76).
+  const dollars = (units: number) => formatAmountInput('USD', units);
   return {
     percent: formatPercentBp(rule.percentBp),
     fixed: dollars(rule.fixedUsdUnits),
