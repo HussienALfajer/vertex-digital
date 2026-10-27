@@ -1,6 +1,6 @@
 # A07 Customers, support and notifications
 
-Status: in progress
+Status: merged (PR [#192](https://github.com/HussienALfajer/vertex-digital/pull/192))
 Branch: fix/audit-a07-customers · Started: 2026-10-28 · Specs: S05 (bot, notifications), S12, S15 (web push) · ADRs: 0019, 0026, 0029
 
 ## Scope
