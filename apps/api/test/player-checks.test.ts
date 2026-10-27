@@ -210,6 +210,22 @@ const writeState = async (state: object) => {
 const setQuota = (quota: number) =>
   test.db.update(suppliers).set({ validationDailyQuota: quota }).where(eq(suppliers.id, ids.fake));
 
+/**
+ * A quota already used up today (a quota of 0 is no check at all, PV1). On a database with no
+ * check today, one call at 00:00 Damascus stands for it: far from the worker tests' health
+ * window, which reads recent calls.
+ */
+const useUpQuota = async () => {
+  if ((await callsOfFake()) === 0) {
+    await test.db.execute(
+      sql`insert into supplier_calls (id, supplier_id, operation, result, latency_ms, created_at)
+        values (${newId()}, ${ids.fake}, 'validate_player', 'ok', 1,
+          (now() at time zone 'Asia/Damascus')::date::timestamp at time zone 'Asia/Damascus')`,
+    );
+  }
+  await setQuota(await callsOfFake());
+};
+
 beforeAll(async () => {
   await rm(STATE_FILE, { force: true });
   test = await startApp();
@@ -472,16 +488,7 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
     const customer = await buyer();
     const known = fresh();
     expect(await json(await check(customer, item, known), 200)).toMatchObject({ result: 'valid' });
-    // A quota already used up today. On a database with no check today, one call at 00:00
-    // Damascus stands for it: far from the worker tests' health window, which reads recent calls.
-    if ((await callsOfFake()) === 0) {
-      await test.db.execute(
-        sql`insert into supplier_calls (id, supplier_id, operation, result, latency_ms, created_at)
-          values (${newId()}, ${ids.fake}, 'validate_player', 'ok', 1,
-            (now() at time zone 'Asia/Damascus')::date::timestamp at time zone 'Asia/Damascus')`,
-      );
-    }
-    await setQuota(await callsOfFake());
+    await useUpQuota();
     try {
       // Refusals by the quota call no supplier: they never count toward the limits (PV4).
       for (let i = 0; i < 12; i += 1) {
@@ -612,6 +619,53 @@ describe('the purchase with checks and reservations (rules PV8, RS1, RS2, RS8)',
       201,
     );
     expect(codeOrder.playerName).toBeNull();
+  });
+
+  it('applies an unexpired cached check with the quota used up (Q24, audit A04-21)', async () => {
+    const item = await product(ids.gameId, 'direct', 0.88);
+    const customer = await buyer({ funds: usd(20) });
+    const valid = fresh();
+    await json(await check(customer, item, valid), 200);
+    const spy = vi
+      .spyOn(FakeSupplierAdapter.prototype, 'validatePlayer')
+      .mockResolvedValueOnce({ valid: false });
+    const wrong = fresh();
+    await json(await check(customer, item, wrong), 200);
+    spy.mockRestore();
+    const playerCheckOf = async (id: string) =>
+      (
+        await test.db
+          .select({ playerCheck: orders.playerCheck })
+          .from(orders)
+          .where(eq(orders.id, id))
+      )[0]?.playerCheck;
+
+    await useUpQuota();
+    try {
+      // A known-invalid ID still needs the confirmation, a known-valid one keeps its name.
+      expect(await json(await purchase(customer, item, { playerId: wrong }), 409)).toMatchObject({
+        code: 'PLAYER_NOT_CONFIRMED',
+      });
+      const confirmed = await json<{ id: string }>(
+        await purchase(customer, item, { playerId: wrong, confirmPlayer: true }),
+        201,
+      );
+      expect(await playerCheckOf(confirmed.id)).toBe('invalid_confirmed');
+      const named = await json<{ id: string; playerName: string | null }>(
+        await purchase(customer, item, { playerId: valid }),
+        201,
+      );
+      expect(named.playerName).toBe(`Player ${valid.slice(-4)}`);
+      expect(await playerCheckOf(named.id)).toBe('valid');
+      // Nothing cached: no check is possible, so no confirmation is asked (PV8).
+      const unchecked = await json<{ id: string }>(
+        await purchase(customer, item, { playerId: fresh() }),
+        201,
+      );
+      expect(await playerCheckOf(unchecked.id)).toBe('none');
+    } finally {
+      await setQuota(1_000_000);
+    }
   });
 
   it('reserves a short order with its deadline, at most 3, and queues the payment run', async () => {

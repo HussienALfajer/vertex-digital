@@ -199,7 +199,8 @@ export class PlayerChecksService {
 
   /**
    * Rule PV8 for the purchase, in its transaction: null when no check is possible for this
-   * customer now (rule PV1), else what the cache holds for these fields. S19 PC3: a cached account
+   * customer now (rule PV1), else what the cache holds for these fields; with the day's quota used
+   * up, the cached answer if there is one (Q24), else null. S19 PC3: a cached account
    * on a region the game does not allow is `region_mismatch` whatever the provider can do now
    * (paused, out of quota), so a confirmation never buys a pack for another region.
    */
@@ -233,8 +234,10 @@ export class PlayerChecksService {
         tx,
         plan.targets.map((target) => target.supplier.id),
       );
+      // Q24 (audit A04-21): with the quota used up nothing more can be asked, but reading the
+      // cache costs no supplier call, so an unexpired answer still applies.
       if (!plan.targets.some((target) => (used.get(target.supplier.id) ?? 0) < target.quota)) {
-        return null;
+        return answer ?? null;
       }
     }
     return answer ?? { result: 'none' };
