@@ -1326,7 +1326,9 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
         },
       });
       await calls(tx, 'error', 'error', 'error');
-      const checkedAt = new Date();
+      // The calls are stamped in microseconds and `checkedAt` in milliseconds: within the same
+      // millisecond they would fall after it, out of the window (seen when this file ran fast).
+      const checkedAt = new Date(Date.now() + 1);
       sent.length = 0;
       await health.check(checkedAt, tx);
       const down = await standing(tx);
@@ -1514,7 +1516,10 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
       expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
       sent.length = 0;
       // Audit A05-17: the product left on its stale cost is not locked and repriced again.
-      const relocked = vi.spyOn(health as never, 'repriceStaleProducts' as never);
+      const relocked = vi.spyOn(
+        health as unknown as { repriceStaleProducts: () => Promise<void> },
+        'repriceStaleProducts',
+      );
       await health.check(new Date(), tx);
       expect(relocked).not.toHaveBeenCalled();
       relocked.mockRestore();

@@ -217,8 +217,14 @@ export class FazercardsAdapter implements SupplierAdapter {
         readCategoryIds.push(categoryId);
       } catch (error) {
         if (!(error instanceof SupplierError)) throw error;
-        // A refused key or plan refuses every category: stop at the first (audit A05-14).
-        if (error.details.status === 401 || error.details.status === 403) throw error;
+        // A refused key or a lapsed plan refuses every category: stop at the first (audit
+        // A05-14). Another 403 (a product not enabled for the key) is this category's alone.
+        if (
+          error.details.status === 401 ||
+          error.details.supplierCode === FZR_SUBSCRIPTION_INACTIVE
+        ) {
+          throw error;
+        }
         // FazerCards' own 404 is a category it no longer knows; a gateway's is a failure (A05-19).
         if (error.details.status === 404 && error.details.supplierCode !== undefined) {
           readCategoryIds.push(categoryId);
@@ -628,8 +634,7 @@ export class FazercardsAdapter implements SupplierAdapter {
         schema: orderReplySchema,
         errorCode: fzrErrorCode,
         definitiveCodes: FZR_DEFINITIVE_ORDER_CODES,
-        // A shorter client timeout never cuts the order's own (audit A05-53).
-        timeoutMs: Math.max(this.options.timeoutMs ?? 0, ORDER_TIMEOUT_MS),
+        timeoutMs: this.options.timeoutMs ?? ORDER_TIMEOUT_MS,
       });
       return orderOutcome(reply.order, request.quantity, parts.type === 'gift');
     } catch (error) {

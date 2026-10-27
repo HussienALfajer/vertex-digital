@@ -268,7 +268,7 @@ describe('FazercardsAdapter catalog (FC3, FC4)', () => {
     expect(readCategoryIds).toEqual(['topup.free_fire_mena']);
   });
 
-  it('stops at the first category refused for the plan (audit A05-14)', async () => {
+  it('stops at the first category refused for the plan, not for another 403 (A05-14)', async () => {
     const before = server.requests.length;
     server.reply({
       status: 403,
@@ -278,6 +278,15 @@ describe('FazercardsAdapter catalog (FC3, FC4)', () => {
       details: { status: 403, supplierCode: 'subscription_inactive' },
     });
     expect(server.requests.length - before).toBe(1);
+    server.reply(
+      { status: 403, body: { ok: false, error: 'Product not enabled for this key' } },
+      { body: fixture('topup-offers-free-fire') },
+    );
+    const { readCategoryIds } = await adapter().listOffersIn([
+      'topup.blocked',
+      'topup.free_fire_mena',
+    ]);
+    expect(readCategoryIds).toEqual(['topup.free_fire_mena']);
   });
 
   it('throws when every category failed, and answers nothing for no category', async () => {

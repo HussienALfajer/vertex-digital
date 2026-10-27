@@ -460,8 +460,7 @@ export class WdgzoneAdapter implements SupplierAdapter {
         schema: purchaseReplySchema,
         errorCode: wdgErrorCode,
         definitiveCodes: WDG_DEFINITIVE_PURCHASE_CODES,
-        // A shorter client timeout never cuts the purchase's own (audit A05-53).
-        timeoutMs: Math.max(this.options.timeoutMs ?? 0, PURCHASE_TIMEOUT_MS),
+        timeoutMs: this.options.timeoutMs ?? PURCHASE_TIMEOUT_MS,
       });
       const supplierOrderId = String(reply.data.order_id);
       const charged = chargedUnits(reply.data.total);

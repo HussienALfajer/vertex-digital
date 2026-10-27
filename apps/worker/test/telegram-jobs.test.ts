@@ -531,6 +531,8 @@ describe('the messages of PR 4', () => {
       marginGuarded: 1,
       suppliersNotHealthy: [{ supplierNameAr: 'WDGZone', state: 'degraded' }],
       balancesLow: [{ supplierNameAr: 'WDGZone', currency: 'USD', amountUnits: 20 * USD }],
+      syncsFailing: [],
+      plansInactive: [],
       ordersDelivered: 7,
       ordersPartiallyRefunded: 1,
       ordersRefunded: 2,

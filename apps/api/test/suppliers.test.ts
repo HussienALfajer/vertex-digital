@@ -1412,6 +1412,39 @@ describe('reviews (rules P3, P4, P5)', () => {
     });
   });
 
+  it('a minimum raised during a hold still pauses the held price (A05-10)', async () => {
+    const held = await product(`حد مرفوع ${run}`);
+    const values = { percentBp: 0, fixedUsdUnits: usd(0.3), minMarginUsdUnits: usd(0.1) };
+    await json(
+      await put('/api/admin/pricing/rules', { scope: 'product', targetId: held, ...values }),
+      200,
+    );
+    await fakeOffer('held-raised', { cost: 1 });
+    await json(
+      await post(`/api/admin/catalog/products/${held}/routes`, {
+        offerId: offers['held-raised'],
+        fieldMap: { playerId: 'player_id' },
+      }),
+      201,
+    );
+    // $1.30 held at a cost of $1.12: $0.18 of margin, above the row's $0.10.
+    await syncCost('held-raised', 1.12, [held]);
+    expect(await routing(held)).toMatchObject({
+      currentPrice: { priceUsdUnits: usd(1.3) },
+      availability: 'available',
+    });
+    await json(
+      await put('/api/admin/pricing/rules', {
+        scope: 'product',
+        targetId: held,
+        ...values,
+        minMarginUsdUnits: usd(0.25),
+      }),
+      200,
+    );
+    expect((await routing(held)).availability).toBe('paused_by_margin_guard');
+  });
+
   it('adjusting the margin to the held price writes the new rule and cost (A05-1)', async () => {
     const held = await product(`هامش ثابت ${run}`);
     await fakeOffer('held-margin', { cost: 1 });
