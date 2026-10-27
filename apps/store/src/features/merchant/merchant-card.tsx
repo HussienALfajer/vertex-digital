@@ -29,12 +29,15 @@ export function MerchantCard({
 }) {
   const [state, setState] = useState<MerchantApplicationState | null | 'failed'>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [reads, setReads] = useState(0);
   const merchant = profile.merchant;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `reads` is the retry's trigger.
   useEffect(() => {
     if (merchant) return;
+    setState(null);
     void getMerchantApplication().then((result) => setState(result.ok ? result.data : 'failed'));
-  }, [merchant]);
+  }, [merchant, reads]);
 
   if (merchant) {
     return (
@@ -75,7 +78,23 @@ export function MerchantCard({
       </Card>
     );
   }
-  if (state === 'failed') return null;
+  // A failed read says so with a retry, instead of the card disappearing (audit A06-19).
+  if (state === 'failed') {
+    return (
+      <Card data-testid="merchant-card">
+        <CardTitle>{t('merchant.card.title')}</CardTitle>
+        <CardDescription role="alert">{t('merchant.loadFailed')}</CardDescription>
+        <Button
+          variant="outline"
+          size="xl"
+          className="self-start"
+          onClick={() => setReads((count) => count + 1)}
+        >
+          {t('account.retry')}
+        </Button>
+      </Card>
+    );
+  }
   if (state === null) return <Skeleton className="h-28 w-full" aria-hidden="true" />;
   const application = state.application;
   const open = application && ['under_review', 'info_requested'].includes(application.status);

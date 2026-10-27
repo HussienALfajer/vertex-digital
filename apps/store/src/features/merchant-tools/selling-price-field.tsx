@@ -32,10 +32,10 @@ export function SellingPriceField({
         value={[currency]}
         onValueChange={(value) => value[0] && onCurrency(value[0])}
       >
-        <ToggleGroupItem value="syp" className="h-10 px-4 text-md">
+        <ToggleGroupItem value="syp" className="h-11 px-4 text-md">
           {tm('prices.syp')}
         </ToggleGroupItem>
-        <ToggleGroupItem value="usd" className="h-10 px-4 text-md">
+        <ToggleGroupItem value="usd" className="h-11 px-4 text-md">
           {tm('prices.usd')}
         </ToggleGroupItem>
       </ToggleGroup>

@@ -7,6 +7,7 @@ export {
   receiptSettingsOf,
   removeMerchantLogo,
   saveReceiptSettings,
+  setMerchantLogo,
 } from './counter.js';
 export {
   type AlertEventRow,
@@ -19,6 +20,7 @@ export {
   type MerchantListPrice,
   merchantListPrices,
   merchantWatchRows,
+  recentGameUnits,
   recentPlayers,
   shownGames,
   type WatchedRows,
@@ -26,6 +28,7 @@ export {
   watchSuggestions,
 } from './reads.js';
 export {
+  type OrderSaleRefusal,
   ownSellingPrice,
   type RateRow,
   rateInForce,

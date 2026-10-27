@@ -8,6 +8,7 @@ import {
   QUEUES,
 } from '@vertex-digital/contracts';
 import { and, asc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { recordAudit } from '../audit/index.js';
 import type { Executor, Transaction } from '../client.js';
 import { lockCustomer } from '../customers/state.js';
@@ -60,9 +61,11 @@ export function liveLevels(db: Executor): Promise<MerchantLevelRow[]> {
 }
 
 /**
- * LV2, DB3: the customer's net wallet purchases posted in `[from, to)`: purchase debits less refund
- * credits (owner-funded orders never touch the wallet). Negative when refunds of earlier purchases
- * outweigh the period's.
+ * LV2, DB3: the customer's net wallet purchases of `[from, to)`: the purchase debits posted in the
+ * period, less the refund credits of the orders those purchases paid, whenever the refund posted
+ * (Q26, audit A06-23). A refund after midnight of an order paid before it lowers the month that
+ * paid it, so orders bought to fail at a month's end never keep that month's level. Owner-funded
+ * orders never touch the wallet. Never negative: a refund lowers only its own purchase's month.
  */
 export async function netPurchases(
   db: Executor,
@@ -72,16 +75,25 @@ export async function netPurchases(
 ): Promise<number> {
   const wallet = await findCustomerWallet(db, customerId);
   if (wallet === null) return 0;
+  // Every refund journal is one order's (`orders.refund_journal_id`); its month is the month of
+  // that order's purchase journal (a checkout's orders share theirs).
+  const refunded = alias(orders, 'refunded');
+  const paidBy = alias(ledgerJournals, 'paid_by');
   const [row] = await db
     .select({ net: sql<string>`coalesce(-sum(${ledgerPostings.amountUnits}), 0)::text` })
     .from(ledgerPostings)
     .innerJoin(ledgerJournals, eq(ledgerJournals.id, ledgerPostings.journalId))
+    .leftJoin(
+      refunded,
+      and(eq(ledgerJournals.kind, 'refund'), eq(refunded.refundJournalId, ledgerJournals.id)),
+    )
+    .leftJoin(paidBy, eq(paidBy.id, refunded.purchaseJournalId))
     .where(
       and(
         eq(ledgerPostings.accountId, wallet),
         inArray(ledgerJournals.kind, ['purchase', 'refund']),
-        gte(ledgerJournals.createdAt, from),
-        lt(ledgerJournals.createdAt, to),
+        gte(sql`coalesce(${paidBy.createdAt}, ${ledgerJournals.createdAt})`, from),
+        lt(sql`coalesce(${paidBy.createdAt}, ${ledgerJournals.createdAt})`, to),
       ),
     );
   return Number(row?.net ?? 0);

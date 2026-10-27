@@ -2,11 +2,14 @@ import { damascusMonth, monthRange } from '@vertex-digital/contracts';
 import {
   createDatabase,
   customers,
+  type Database,
   ensureCustomerWallet,
   ensureSystemAccount,
   merchantApplications,
+  merchantsToCompare,
   newId,
   postJournal,
+  statementEmailMerchants,
 } from '@vertex-digital/db';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -188,6 +191,103 @@ describe('merchant tools jobs (S21 LV4, AL2, AL4)', () => {
       },
     ]);
     expect(await sent(quiet)).toEqual([]);
+  });
+});
+
+/**
+ * The database with its `failAt`-th transaction (from 0) refused: the job's merchant at that place
+ * in its list throws (audit A06-33). `calls` counts the transactions asked for.
+ */
+function poisoned(failAt: number) {
+  const state = { calls: 0 };
+  const proxy = new Proxy(db, {
+    get(target, property, receiver) {
+      if (property !== 'transaction') return Reflect.get(target, property, receiver);
+      return (...args: Parameters<Database['transaction']>) =>
+        state.calls++ === failAt
+          ? Promise.reject(new Error('A poisoned merchant'))
+          : target.transaction(...args);
+    },
+  });
+  return { db: proxy as Database, state };
+}
+
+/** A wallet entry of `amountUnits` for the customer, this month. */
+async function credit(customerId: string, amountUnits = 1_000_000) {
+  await db.transaction(async (tx) => {
+    await postJournal(tx, {
+      idempotencyKey: `test:${newId()}`,
+      kind: 'adjustment',
+      postings: [
+        { accountId: await ensureCustomerWallet(tx, customerId), amountUnits },
+        {
+          accountId: await ensureSystemAccount(tx, {
+            code: 'adjustments:test_funds',
+            kind: 'adjustments',
+            currency: 'USD',
+          }),
+          amountUnits: -amountUnits,
+        },
+      ],
+    });
+  });
+}
+
+describe('one failing merchant in the merchant jobs (audit A06-33)', () => {
+  const env = { SUPPLIER_FAKE_ENABLED: true } as Env;
+
+  it('A06-33: tells the merchants after a failing one their statement, then fails the run', async () => {
+    const poison = await merchant();
+    const active = await merchant();
+    await credit(poison);
+    await credit(active);
+    const month = damascusMonth(new Date());
+    const nextFirst = new Date(monthRange(month).end.getTime() + 8 * 60 * 60 * 1000);
+    const list = await statementEmailMerchants(db, month);
+    expect(list.indexOf(poison)).toBeLessThan(list.indexOf(active));
+    const { db: failing, state } = poisoned(list.indexOf(poison));
+    const job = new MerchantStatementEmailsJob(pgBoss, failing);
+    await expect(job.sendAll(nextFirst)).rejects.toThrow(
+      'Statement notices failed for 1 merchants',
+    );
+    expect(state.calls).toBe(list.length);
+    const told = async (customerId: string) =>
+      (
+        await db.execute(
+          sql`select 1 from customer_notifications where customer_id = ${customerId}
+            and event = 'merchant_statement_ready'`,
+        )
+      ).rows.length;
+    expect(await told(active)).toBe(1);
+    expect(await told(poison)).toBe(0);
+    // The retry tells the one that failed, and nobody twice.
+    await new MerchantStatementEmailsJob(pgBoss, db).sendAll(nextFirst);
+    expect([await told(active), await told(poison)]).toEqual([1, 1]);
+  });
+
+  it('A06-33: compares and digests every merchant after a failing one, then fails the run', async () => {
+    const productId = await product();
+    const [{ gameId } = { gameId: '' }] = (
+      await db.execute<{ gameId: string }>(
+        sql`select game_id as "gameId" from catalog_products where id = ${productId}`,
+      )
+    ).rows;
+    for (let index = 0; index < 2; index += 1) {
+      const shop = await merchant({ dailyEmail: true });
+      await db.execute(sql`insert into merchant_watches (id, customer_id, game_id)
+        values (${newId()}, ${shop}, ${gameId})`);
+    }
+    const compared = await merchantsToCompare(db);
+    expect(compared.length).toBeGreaterThanOrEqual(2);
+    const comparing = poisoned(0);
+    await expect(
+      new MerchantWatchAlertsJob(pgBoss, comparing.db, env).compareAll(new Date()),
+    ).rejects.toThrow('Watch comparison failed for 1 merchants');
+    expect(comparing.state.calls).toBe(compared.length);
+    const digesting = poisoned(0);
+    const job = new MerchantWatchAlertsJob(pgBoss, digesting.db, env);
+    await expect(job.digestAll(new Date())).rejects.toThrow('Daily digest failed for 1 merchants');
+    expect(digesting.state.calls).toBeGreaterThanOrEqual(2);
   });
 });
 

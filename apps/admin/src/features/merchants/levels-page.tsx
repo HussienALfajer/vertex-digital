@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   formatAmountInput,
   formatUsd,
+  MERCHANT_LEVELS_MAX,
   type MerchantLevel,
   merchantLevelInputSchema,
   parseUsd,
@@ -61,6 +62,8 @@ export function MerchantLevelsPage() {
   const archive = useArchiveMerchantLevel();
   const live = levels.data?.items.filter((level) => level.archivedAt === null) ?? [];
   const archived = levels.data?.items.filter((level) => level.archivedAt !== null) ?? [];
+  // LV1: at most 10 live levels; the button says so before the dialog is filled (audit A06-51).
+  const full = live.length >= MERCHANT_LEVELS_MAX;
 
   return (
     <>
@@ -68,13 +71,22 @@ export function MerchantLevelsPage() {
         title={t('merchants.levels.title')}
         description={t('merchants.levels.subtitle')}
         actions={
-          <Button onClick={() => setEditing('new')}>
+          <Button
+            disabled={full}
+            aria-describedby={full ? 'levels-full' : undefined}
+            onClick={() => setEditing('new')}
+          >
             <PlusIcon />
             {t('merchants.levels.add')}
           </Button>
         }
       />
       <p className="text-muted-foreground text-sm">{t('merchants.levels.note')}</p>
+      {full && (
+        <p id="levels-full" className="text-sm text-status-warning-foreground">
+          {t('merchants.levels.full', { max: MERCHANT_LEVELS_MAX })}
+        </p>
+      )}
       {levels.isPending && (
         <div className="flex flex-col gap-2" aria-hidden="true">
           {[0, 1, 2].map((row) => (
@@ -290,6 +302,7 @@ function LevelDialog({ level, onDone }: { level: MerchantLevel | null; onDone: (
             items={items}
             value={listId}
             onChange={setListId}
+            read={lists}
           />
           <FieldDescription>{t('merchants.levels.hints.list')}</FieldDescription>
         </Field>

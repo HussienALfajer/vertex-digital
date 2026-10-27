@@ -25,12 +25,15 @@ import {
   PageHeader,
   Skeleton,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArrowRightIcon, CircleAlertIcon, PinIcon, UserRoundIcon } from 'lucide-react';
 import { type FormEvent, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopyButton } from '../../components/copy-button';
 import { FormAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
+import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince, ltr } from '../../lib/format';
 import { CHIP_TONES, statusChips } from '../customers/customer-labels';
@@ -62,7 +65,7 @@ export function ApplicationPage({ id }: { id: string }) {
 
   const back = (
     <Button variant="outline" render={<Link to="/merchants/applications" />}>
-      <ArrowRightIcon className="rtl:-scale-x-100" />
+      <ArrowRightIcon className="ltr:-scale-x-100" />
       {t('merchants.application.back')}
     </Button>
   );
@@ -115,17 +118,7 @@ export function ApplicationPage({ id }: { id: string }) {
           </Badge>
         )}
       </div>
-      {reviewing && (
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setDecision('approve')}>{t('merchants.decisions.approve')}</Button>
-          <Button variant="outline" onClick={() => setDecision('request_info')}>
-            {t('merchants.decisions.request_info')}
-          </Button>
-          <Button variant="destructive" onClick={() => setDecision('reject')}>
-            {t('merchants.decisions.reject')}
-          </Button>
-        </div>
-      )}
+      {reviewing && <Decisions application={data} onDecide={setDecision} />}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex flex-col gap-6">
           <FormCard application={data} onPhoto={() => setPhotoOpen(true)} />
@@ -154,6 +147,47 @@ export function ApplicationPage({ id }: { id: string }) {
         )}
       </Dialog>
     </>
+  );
+}
+
+/**
+ * The decisions on an application under review. A frozen or archived applicant cannot be approved
+ * (S20 edge case 10): approval waits until the profile's state is undone, or the admin rejects
+ * (audit A06-46). The profile read is the customer card's, shared through the query cache.
+ */
+function Decisions({
+  application,
+  onDecide,
+}: {
+  application: AdminMerchantApplication;
+  onDecide: (decision: Decision) => void;
+}) {
+  const { t } = useTranslation();
+  const profile = useQuery(customerQuery(application.customer.id));
+  const blocked = profile.data !== undefined && profile.data.status !== 'active';
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap gap-2">
+        <Button
+          disabled={blocked}
+          aria-describedby={blocked ? 'approve-blocked' : undefined}
+          onClick={() => onDecide('approve')}
+        >
+          {t('merchants.decisions.approve')}
+        </Button>
+        <Button variant="outline" onClick={() => onDecide('request_info')}>
+          {t('merchants.decisions.request_info')}
+        </Button>
+        <Button variant="destructive" onClick={() => onDecide('reject')}>
+          {t('merchants.decisions.reject')}
+        </Button>
+      </div>
+      {blocked && (
+        <p id="approve-blocked" className="text-sm text-muted-foreground">
+          {t('merchants.decisions.customerBlocked')}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -315,7 +349,7 @@ function CustomerCard({ application }: { application: AdminMerchantApplication }
         {application.customer.email}
       </bdi>
       {profile.isPending && <Skeleton className="h-40 w-full" />}
-      {profile.isError && <FormAlert>{errorMessage(t, profile.error)}</FormAlert>}
+      {profile.isError && <ReadFailure error={profile.error} onRetry={() => profile.refetch()} />}
       {profile.isSuccess && <CustomerFacts customer={profile.data} application={application} />}
     </Card>
   );
@@ -388,7 +422,7 @@ function CustomerFacts({
 function ApproveDialog({ id, onDone }: { id: string; onDone: () => void }) {
   const { t } = useTranslation();
   const approve = useApproveApplication(id);
-  const items = useListItems();
+  const { items, lists } = useListItems();
   const [listId, setListId] = useState<string>(ROOT_PRICE_LIST_IDS.wholesale);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -399,7 +433,12 @@ function ApproveDialog({ id, onDone }: { id: string; onDone: () => void }) {
       await approve.mutateAsync(listId === ROOT_PRICE_LIST_IDS.wholesale ? undefined : listId);
       onDone();
     } catch (error) {
-      setFailure(errorMessage(t, error));
+      // Audit A06-46: the applicant was frozen or archived meanwhile; refreshing never helps.
+      setFailure(
+        error instanceof ApiError && error.code === 'CUSTOMER_STATE_INVALID'
+          ? t('merchants.decisions.customerBlocked')
+          : errorMessage(t, error),
+      );
     }
   }
 
@@ -417,11 +456,13 @@ function ApproveDialog({ id, onDone }: { id: string; onDone: () => void }) {
             items={items}
             value={listId}
             onChange={setListId}
+            read={lists}
           />
         </Field>
         {failure && <FormAlert>{failure}</FormAlert>}
         <DialogFooter>
-          <Button type="submit" disabled={approve.isPending}>
+          {/* The list must have loaded, so a failed read never approves on wholesale unseen. */}
+          <Button type="submit" disabled={approve.isPending || !lists.isSuccess}>
             {t('merchants.decisions.approve')}
           </Button>
         </DialogFooter>
@@ -446,6 +487,7 @@ function MessageDialog({
   const mutation = decision === 'reject' ? reject : requestInfo;
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -454,7 +496,7 @@ function MessageDialog({
       String(new FormData(event.currentTarget).get('message') ?? ''),
     );
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await mutation.mutateAsync(parsed.data);
       onDone();
@@ -469,7 +511,7 @@ function MessageDialog({
         <DialogTitle>{t(`merchants.decisions.${decision}Title`)}</DialogTitle>
         <DialogDescription>{t(`merchants.decisions.${decision}Description`)}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t(`merchants.decisions.${decision}Field`)}</FieldLabel>
           <Textarea name="message" rows={4} maxLength={500} />

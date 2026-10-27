@@ -12,6 +12,7 @@ import {
   FieldError,
   FieldLabel,
   Textarea,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -92,6 +93,7 @@ function RemoveLogoDialog({ customerId, onDone }: { customerId: string; onDone: 
   const remove = useRemoveMerchantLogo(customerId);
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -100,7 +102,7 @@ function RemoveLogoDialog({ customerId, onDone }: { customerId: string; onDone: 
       reason: String(new FormData(event.currentTarget).get('reason') ?? ''),
     });
     setInvalid(!parsed.success);
-    if (!parsed.success) return;
+    if (!parsed.success) return focusInvalid();
     try {
       await remove.mutateAsync(parsed.data);
       onDone();
@@ -115,7 +117,7 @@ function RemoveLogoDialog({ customerId, onDone }: { customerId: string; onDone: 
         <DialogTitle>{t('merchants.profile.removeTitle')}</DialogTitle>
         <DialogDescription>{t('merchants.profile.removeDescription')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
         <Field invalid={invalid}>
           <FieldLabel>{t('merchants.fields.reason')}</FieldLabel>
           <Textarea name="reason" rows={3} maxLength={500} />

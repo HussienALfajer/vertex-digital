@@ -1352,6 +1352,8 @@ export const orderSummarySchema = z
     number: z.string(),
     stage: orderStageSchema,
     productNameAr: z.string(),
+    /** S21 PS5: a code pack's delivered order offers "طباعة الأكواد" at the counter. */
+    productKind: productKindSchema,
     game: orderGame.extend({ cover: catalogImageSchema.nullable() }),
     quantity: z.int().positive(),
     /** S16 rule AP11: null on a gift or a compensation from the store (no price shown). */

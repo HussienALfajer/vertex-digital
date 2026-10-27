@@ -207,7 +207,13 @@ export type SellingPrices = z.infer<typeof sellingPricesSchema>;
 
 /** The games of the merchant area's game pickers, in the store's order. */
 export const merchantGameSchema = z
-  .object({ id: z.uuid(), slug: z.string(), nameAr: z.string() })
+  .object({
+    id: z.uuid(),
+    slug: z.string(),
+    nameAr: z.string(),
+    /** PS1: the merchant's units of the game bought in the last 30 days, net of refunds. */
+    recentUnits: z.int().nonnegative(),
+  })
   .meta({ id: 'MerchantGame' });
 
 export type MerchantGame = z.infer<typeof merchantGameSchema>;

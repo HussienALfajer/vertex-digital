@@ -213,6 +213,8 @@ export async function merchantPage(
       and(
         eq(customers.accountType, 'merchant'),
         isNull(merchantProfiles.revokedAt),
+        // An archived account cannot sign in: it is no working merchant (audit A06-26).
+        isNull(customers.archivedAt),
         input.listId ? eq(priceLists.id, input.listId) : undefined,
         input.levelId === 'none'
           ? isNull(merchantProfiles.levelId)

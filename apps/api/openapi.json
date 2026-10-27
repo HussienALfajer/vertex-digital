@@ -22056,12 +22056,18 @@
           },
           "nameAr": {
             "type": "string"
+          },
+          "recentUnits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
           "id",
           "slug",
-          "nameAr"
+          "nameAr",
+          "recentUnits"
         ],
         "additionalProperties": false
       },
@@ -24361,6 +24367,9 @@
           "productNameAr": {
             "type": "string"
           },
+          "productKind": {
+            "$ref": "#/components/schemas/ProductKind"
+          },
           "game": {
             "type": "object",
             "properties": {
@@ -24453,6 +24462,7 @@
           "number",
           "stage",
           "productNameAr",
+          "productKind",
           "game",
           "quantity",
           "totalUsdUnits",

@@ -569,7 +569,7 @@ function PhotoField({
             type="button"
             variant="outline"
             size="icon"
-            className="absolute end-2 top-2"
+            className="absolute end-2 top-2 size-11"
             aria-label={t('merchant.fields.removePhoto')}
             onClick={() => onChange(null)}
           >

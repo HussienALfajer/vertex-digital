@@ -7,7 +7,7 @@ import {
   type MerchantApplicationValues,
   reapplyAvailableAt,
 } from '@vertex-digital/contracts';
-import { and, asc, desc, eq, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, lte, notInArray, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
 import type { Database, Executor, Transaction } from '../client.js';
 import { CustomerError } from '../customers/state.js';
@@ -326,7 +326,9 @@ export async function lockApplicant(tx: Transaction, customerId: string) {
 /**
  * The worker's `merchants.expire-applications` (MA4, edge case 14): applications waiting for
  * information longer than `info_expiry_days` from `info_requested_at`, each in its own
- * transaction, `FOR UPDATE SKIP LOCKED`; the status check makes a second run a no-op.
+ * transaction, `FOR UPDATE SKIP LOCKED`; the status check makes a second run a no-op. One that
+ * fails is passed over for the rest of the run, so it never holds the later ones back, and the
+ * run then throws naming it (audit A06-29); the next run tries it again.
  */
 export async function expireMerchantApplications(
   db: Database,
@@ -336,25 +338,38 @@ export async function expireMerchantApplications(
   const settings = await currentMerchantSettings(db);
   const cutoff = sql`${now.toISOString()}::timestamptz - make_interval(days => ${settings.infoExpiryDays})`;
   let expired = 0;
+  const failed: string[] = [];
   for (;;) {
-    const moved = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .select()
-        .from(merchantApplications)
-        .where(
-          and(
-            eq(merchantApplications.status, 'info_requested' satisfies MerchantApplicationStatus),
-            lte(merchantApplications.infoRequestedAt, cutoff),
-          ),
-        )
-        .orderBy(asc(merchantApplications.infoRequestedAt), asc(merchantApplications.id))
-        .limit(1)
-        .for('update', { skipLocked: true });
-      if (!row) return false;
-      await moveApplication(tx, context, row, 'expire', { actor: { kind: 'system' } });
-      return true;
-    });
-    if (!moved) return expired;
-    expired += 1;
+    let current: string | null = null;
+    try {
+      const moved = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(merchantApplications)
+          .where(
+            and(
+              eq(merchantApplications.status, 'info_requested' satisfies MerchantApplicationStatus),
+              lte(merchantApplications.infoRequestedAt, cutoff),
+              failed.length > 0 ? notInArray(merchantApplications.id, failed) : undefined,
+            ),
+          )
+          .orderBy(asc(merchantApplications.infoRequestedAt), asc(merchantApplications.id))
+          .limit(1)
+          .for('update', { skipLocked: true });
+        if (!row) return false;
+        current = row.id;
+        await moveApplication(tx, context, row, 'expire', { actor: { kind: 'system' } });
+        return true;
+      });
+      if (!moved) break;
+      expired += 1;
+    } catch (error) {
+      if (current === null) throw error;
+      failed.push(current);
+    }
   }
+  if (failed.length > 0) {
+    throw new Error(`Merchant applications not expired: ${failed.join(', ')}`);
+  }
+  return expired;
 }

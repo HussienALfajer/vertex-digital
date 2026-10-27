@@ -83,16 +83,96 @@ test.describe('merchants', () => {
     await expect(page.getByText(m.events.resubmitted)).toBeVisible();
   });
 
-  test('rejects with the reason the customer reads (MA4)', async ({ page, admin }) => {
+  test('rejects with the reason the customer reads, an empty one refused in place (MA4, A06-49)', async ({
+    page,
+    admin,
+  }) => {
     const application = seed(admin);
     await page.goto(`/merchants/applications/${application.id}`);
     await page.getByRole('button', { name: m.decisions.reject, exact: true }).click();
     const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: m.decisions.reject }).click();
+    await expect(dialog.getByText(m.validation.message)).toBeVisible();
+    await expect(dialog.getByLabel(m.decisions.rejectField)).toBeFocused();
     await dialog.getByLabel(m.decisions.rejectField).fill('لم نتمكن من التحقق من المحل');
     await dialog.getByRole('button', { name: m.decisions.reject }).click();
     await expect(page.getByText(m.statuses.rejected).first()).toBeVisible();
     await page.goto('/merchants/applications');
     await expect(page.getByText(m.applications.empty.under_review)).toBeVisible();
+  });
+
+  test('a frozen applicant cannot be approved, and a freeze meanwhile says why (A06-46)', async ({
+    page,
+    admin,
+  }) => {
+    admin.signedIn = true;
+    const frozen = admin.merchants.seedApplication(CUSTOMER_IDS.rami);
+    await page.goto(`/merchants/applications/${frozen.id}`);
+    await expect(page.getByText(m.decisions.customerBlocked)).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: m.decisions.approve, exact: true }),
+    ).toBeDisabled();
+    await expect(page.getByRole('button', { name: m.decisions.reject, exact: true })).toBeEnabled();
+
+    // Frozen after the page loaded: the approval's refusal says what to do, not to refresh.
+    const application = admin.merchants.seedApplication(CUSTOMER_IDS.sara);
+    await page.goto(`/merchants/applications/${application.id}`);
+    await expect(page.getByText(m.customer.since)).toBeVisible();
+    const sara = admin.customers.find(CUSTOMER_IDS.sara);
+    if (sara) sara.frozenAt = new Date().toISOString();
+    await page.getByRole('button', { name: m.decisions.approve, exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: m.decisions.approve }).click();
+    await expect(dialog.getByText(m.decisions.customerBlocked)).toBeVisible();
+    expect(admin.merchants.isMerchant(CUSTOMER_IDS.sara)).toBe(false);
+  });
+
+  test('a failed read of the lists in the approval offers a retry (A06-44)', async ({
+    page,
+    admin,
+  }) => {
+    const application = seed(admin);
+    let fail = true;
+    await page.route('**/api/admin/pricing/lists', (route) =>
+      fail
+        ? route.fulfill({
+            status: 500,
+            json: { statusCode: 500, code: 'INTERNAL_ERROR', message: 'x' },
+          })
+        : route.fallback(),
+    );
+    await page.goto(`/merchants/applications/${application.id}`);
+    await page.getByRole('button', { name: m.decisions.approve, exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(ar.errors.generic)).toBeVisible();
+    await expect(dialog.getByRole('button', { name: m.decisions.approve })).toBeDisabled();
+    fail = false;
+    await dialog.getByRole('button', { name: ar.common.retry }).click();
+    await expect(dialog.getByRole('combobox', { name: m.fields.priceList })).toBeVisible();
+    await dialog.getByRole('button', { name: m.decisions.approve }).click();
+    await expect(page.getByText(m.statuses.approved).first()).toBeVisible();
+  });
+
+  test('a failed read of the applicant’s summary offers a retry (A06-45)', async ({
+    page,
+    admin,
+  }) => {
+    const application = seed(admin);
+    let fail = true;
+    await page.route(`**/api/admin/customers/${CUSTOMER_IDS.sara}`, (route) =>
+      fail
+        ? route.fulfill({
+            status: 500,
+            json: { statusCode: 500, code: 'INTERNAL_ERROR', message: 'x' },
+          })
+        : route.fallback(),
+    );
+    await page.goto(`/merchants/applications/${application.id}`);
+    await expect(page.getByText(ar.errors.generic)).toBeVisible();
+    fail = false;
+    await page.getByRole('button', { name: ar.common.retry }).click();
+    await expect(page.getByText(m.customer.since)).toBeVisible();
+    await expect(page.getByText(ar.errors.generic)).toHaveCount(0);
   });
 
   test('grants from the profile, lists the merchant and revokes it (MA6, MA7)', async ({

@@ -312,7 +312,13 @@ export const customerStateChangeSchema = z
 export type CustomerStateChange = z.infer<typeof customerStateChangeSchema>;
 
 /** `CUSTOMER_NOT_ARCHIVABLE`'s `details.blockers` (rule AR1). */
-export const ARCHIVE_BLOCKERS = ['balance', 'open_orders', 'open_deposits'] as const;
+/** S12 AR1; an open merchant application waits for the admin's decision first (audit A06-26). */
+export const ARCHIVE_BLOCKERS = [
+  'balance',
+  'open_orders',
+  'open_deposits',
+  'open_merchant_application',
+] as const;
 
 export type ArchiveBlocker = (typeof ARCHIVE_BLOCKERS)[number];
 

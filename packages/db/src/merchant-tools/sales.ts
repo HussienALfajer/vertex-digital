@@ -6,6 +6,7 @@ import {
   type SellingSettings,
   saleUnitUsd,
   sellingPrice,
+  sellingPriceTooHigh,
 } from '@vertex-digital/contracts';
 import { and, desc, eq } from 'drizzle-orm';
 import type { Executor, Transaction } from '../client.js';
@@ -161,22 +162,29 @@ export async function recordMerchantSale(
     .values({ orderId: order.id, customerId: order.customerId, ...sale });
 }
 
+/** Why `setOrderSale` wrote nothing: no rate to convert a SYP price at, or above $10,000 at it. */
+export type OrderSaleRefusal = 'no_rate' | 'too_high';
+
 /**
  * SP5: the merchant's own sale price of an order, set or changed later (`manual`), converted at the
- * sale's rate, else the order's display rate. Null when a SYP price has no rate to convert at.
+ * sale's rate, else the order's display rate. The $10,000 limit is checked at that same rate (audit
+ * A06-35), so a stored sale is never above it.
  */
 export async function setOrderSale(
   tx: Transaction,
   order: { id: string; customerId: string; displayRateId: string | null },
   input: SellingPriceInput,
-): Promise<SaleValues | null> {
+): Promise<{ ok: true; sale: SaleValues } | { ok: false; reason: OrderSaleRefusal }> {
   const [current] = await tx
     .select({ rateId: merchantOrderSales.rateId })
     .from(merchantOrderSales)
     .where(eq(merchantOrderSales.orderId, order.id))
     .for('update');
   const rate = await rateById(tx, current?.rateId ?? order.displayRateId);
-  if (input.currency === 'syp' && rate === null) return null;
+  if (input.currency === 'syp' && rate === null) return { ok: false, reason: 'no_rate' };
+  if (sellingPriceTooHigh(input, rate ? rateFromNumeric(rate.sypPerUsd) : '1')) {
+    return { ok: false, reason: 'too_high' };
+  }
   const sale: SaleValues = {
     currency: input.currency,
     unitAmountUnits: input.amountUnits,
@@ -192,5 +200,5 @@ export async function setOrderSale(
     .insert(merchantOrderSales)
     .values({ orderId: order.id, customerId: order.customerId, ...sale })
     .onConflictDoUpdate({ target: merchantOrderSales.orderId, set: sale });
-  return sale;
+  return { ok: true, sale };
 }

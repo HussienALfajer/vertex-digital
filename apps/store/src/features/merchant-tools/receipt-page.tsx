@@ -58,12 +58,13 @@ export function ReceiptPage() {
   if (state.status !== 'ready') {
     return <MerchantPageStatus state={state} onRetry={reload} skeleton={<MerchantSkeleton />} />;
   }
+  // An uploaded logo is the receipt's at once (BR3): it joins the saved settings in place, so a
+  // WhatsApp number typed but not saved stays in the form (audit A06-11).
   return (
     <ReceiptForm
-      key={state.data.logoFileId ?? 'none'}
       saved={state.data}
       onSaved={(data) => setState({ status: 'ready', data })}
-      onLogo={reload}
+      onLogo={(logoFileId) => setState({ status: 'ready', data: { ...state.data, logoFileId } })}
     />
   );
 }
@@ -75,7 +76,7 @@ function ReceiptForm({
 }: {
   saved: ReceiptSettings;
   onSaved: (settings: ReceiptSettings) => void;
-  onLogo: () => Promise<void>;
+  onLogo: (logoFileId: string) => void;
 }) {
   const [whatsapp, setWhatsapp] = useState(saved.whatsapp ?? '');
   const [showWhatsapp, setShowWhatsapp] = useState(saved.showWhatsapp);
@@ -120,7 +121,7 @@ function ReceiptForm({
         result.reason === 'IMAGE_INVALID' ? tm('receipt.logoInvalid') : errorText(result.reason),
       );
     }
-    await onLogo();
+    onLogo(result.data.fileId);
   }
 
   const preview: OrderPrint = {

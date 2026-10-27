@@ -23,19 +23,33 @@ import {
 } from '@vertex-digital/ui/components/select';
 import { Textarea } from '@vertex-digital/ui/components/textarea';
 import { DownloadIcon, FileUpIcon, SearchCheckIcon, TrashIcon, WalletIcon } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type ChangeEvent, useCallback, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { freesCheckoutKey } from '@/features/cart/checkout-key';
 import { lineRefusals, payCart } from '@/features/cart/requests';
 import { centsParam } from '@/features/deposits/amounts';
+import { sendAttempt } from '@/features/purchase/attempt';
+import { isFrozenCustomer, useCustomer } from '@/features/purchase/session';
 import { apiRequest, type Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
-import { useIdempotentRequest } from '@/lib/idempotency';
 import { tm } from './i18n';
 import { MerchantPageStatus, MerchantSkeleton, useMerchantRead } from './merchant-state';
 import { checkBulk, getMerchantGames } from './requests';
+
+// S20 MT2: a directly granted merchant accepts the terms here, loaded only on that refusal.
+const TermsSheet = dynamic(() =>
+  import('@/features/merchant/terms-sheet').then((module) => module.TermsSheet),
+);
+
+/**
+ * The payment's key slot in session storage, apart from the cart's: a retry of the same lines
+ * after a lost answer, even after a reload, replays the first checkout (rule CT5, audit A06-5).
+ */
+const ATTEMPT = 'bulk';
 
 /** BK5: the last 10 bulk payments kept on this device (ids and counts, nothing personal). */
 const RECENT_KEY = 'vd-bulk-checkouts';
@@ -63,7 +77,7 @@ function keepRecent(entry: RecentCheckout): void {
 function template(game: StoreGame): string {
   const keys = game.fields.map((field) => field.key);
   const lines = [`# ${[...keys, 'pack', 'quantity'].join(', ')}`];
-  for (const pack of game.products.slice(0, 5)) {
+  for (const pack of game.products) {
     const example = keys.map((key) => (key.includes('id') ? '5123456789' : key));
     lines.push([...example, pack.gameAmount ?? pack.nameAr, '1'].join(', '));
   }
@@ -105,18 +119,25 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
   const [pending, setPending] = useState(false);
   const [recent] = useState(readRecent);
   const fileRef = useRef<HTMLInputElement>(null);
-  const send = useIdempotentRequest();
+  // S21 MA1: a frozen merchant reads only; S20 MT2: the terms sheet after a refusal.
+  const frozen = isFrozenCustomer(useCustomer());
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const game = games.find((item) => item.id === gameId) ?? null;
 
   async function check() {
     if (!gameId || text.trim() === '') return;
     setFailure(null);
     setNotice(null);
+    setTermsAccepted(false);
     setRefusals(new Map());
     setPending(true);
     const answer = await checkBulk({ gameId, text });
     setPending(false);
-    if (!answer.ok) return setFailure(answer.reason);
+    if (!answer.ok) {
+      if (answer.reason === 'MERCHANT_TERMS_REQUIRED') setTermsOpen(true);
+      return setFailure(answer.reason);
+    }
     setResult(answer.data);
     setConfirmed(new Set());
   }
@@ -157,10 +178,20 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
   );
   const balance = result?.balanceUsdUnits ?? 0;
   const shortfall = total > balance ? total - balance : 0;
+  // Nothing is sent that is sure to be refused: a frozen account, a line to fix or confirm, or a
+  // total above the balance (audit A06-4, A06-10).
+  const payable =
+    result !== null &&
+    !frozen &&
+    invalidCount === 0 &&
+    confirmCount === 0 &&
+    lines.length > 0 &&
+    shortfall === 0;
 
   async function pay() {
-    if (!result || invalidCount > 0 || confirmCount > 0 || lines.length === 0) return;
+    if (!payable) return;
     setFailure(null);
+    setTermsAccepted(false);
     setRefusals(new Map());
     setPending(true);
     const body = {
@@ -173,10 +204,16 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
         confirmPlayer: line.needsConfirmation && confirmed.has(line.line),
       })),
     };
-    const answer = await send(JSON.stringify(body), (key) => payCart(body, key));
+    const answer = await sendAttempt(
+      ATTEMPT,
+      JSON.stringify(body),
+      (key) => payCart(body, key),
+      freesCheckoutKey,
+    );
     setPending(false);
     if (!answer.ok) {
       if (answer.reason === 'CHECKOUT_REFUSED') setRefusals(lineRefusals(answer.details));
+      if (answer.reason === 'MERCHANT_TERMS_REQUIRED') setTermsOpen(true);
       return setFailure(answer.reason);
     }
     keepRecent({
@@ -194,6 +231,7 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
           <h2 className="text-lg font-bold">{tm('bulk.title')}</h2>
           <p className="text-sm text-muted-foreground">{tm('bulk.body')}</p>
         </div>
+        {frozen && <FormAlert>{tm('common.frozen')}</FormAlert>}
         <Field>
           <FieldLabel>{tm('bulk.game')}</FieldLabel>
           <Select
@@ -251,7 +289,7 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
           </Button>
           <Button
             size="xl"
-            disabled={pending || !game || text.trim() === ''}
+            disabled={frozen || pending || !game || text.trim() === ''}
             onClick={() => void check()}
           >
             <SearchCheckIcon aria-hidden="true" />
@@ -260,7 +298,18 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
         </div>
         {notice && <FormAlert>{notice}</FormAlert>}
         {failure && !result && <FormAlert>{errorText(failure)}</FormAlert>}
+        {termsAccepted && <FormAlert tone="success">{tm('bulk.termsAccepted')}</FormAlert>}
       </Card>
+      {termsOpen && (
+        <TermsSheet
+          open={termsOpen}
+          onOpenChange={setTermsOpen}
+          onAccepted={() => {
+            setFailure(null);
+            setTermsAccepted(true);
+          }}
+        />
+      )}
 
       {result && (
         <Card className="gap-4">
@@ -313,6 +362,11 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
                       </>
                     )}
                   </p>
+                  {line.unitPriceUsdUnits !== null && (
+                    <p className="text-xs text-muted-foreground">
+                      {tm('bulk.unitPrice', { amount: ltr(formatUsd(line.unitPriceUsdUnits)) })}
+                    </p>
+                  )}
                   {line.check && (
                     <p className="text-sm text-muted-foreground">
                       {line.check.result === 'valid'
@@ -399,12 +453,8 @@ function BulkForm({ games }: { games: MerchantGame[] }) {
               {failure === 'CHECKOUT_REFUSED' ? tm('bulk.refused') : errorText(failure)}
             </FormAlert>
           )}
-          <Button
-            size="xl"
-            disabled={pending || invalidCount > 0 || confirmCount > 0 || lines.length === 0}
-            onClick={() => void pay()}
-          >
-            {pending ? tm('bulk.paying') : tm('bulk.pay')}
+          <Button size="xl" disabled={pending || !payable} onClick={() => void pay()}>
+            {pending ? tm('bulk.paying') : tm('bulk.payTotal', { amount: ltr(formatUsd(total)) })}
           </Button>
         </Card>
       )}

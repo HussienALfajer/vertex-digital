@@ -3,9 +3,12 @@ import type { Metadata } from 'next';
 import { type ReactNode, Suspense } from 'react';
 import { tm } from '@/features/merchant-tools/i18n';
 import { MerchantNav, MerchantNavLinks } from '@/features/merchant-tools/merchant-nav';
+import { t } from '@/lib/i18n';
 
+// A title of its own here would cut the root template from the tools pages: they keep the
+// store name after their own (audit A06-55).
 export const metadata: Metadata = {
-  title: tm('title'),
+  title: { default: tm('title'), template: `%s · ${t('app.name')}` },
   robots: { index: false },
 };
 

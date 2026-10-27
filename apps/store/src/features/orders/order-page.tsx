@@ -42,7 +42,6 @@ import { centsParam } from '@/features/deposits/amounts';
 import { CopyButton } from '@/features/deposits/copy-button';
 import { Line } from '@/features/deposits/panel';
 import { formatClock, useTimeLeft } from '@/features/deposits/use-time-left';
-import { tm } from '@/features/merchant-tools/i18n';
 import { useNotificationEvents, useVisibleAgain } from '@/features/notifications/live';
 import { useBalance } from '@/features/purchase/customer';
 import { useCustomer } from '@/features/purchase/session';
@@ -52,6 +51,7 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
+import { to } from './i18n';
 import { GameCover, repeatHref } from './orders-list';
 import { cancelOrder, getOrder, revealCode } from './requests';
 import { GiftSection, ReceiptSheet, shareable } from './share-links';
@@ -340,11 +340,11 @@ export function OrderPage() {
       {/* S21 VF1: every order's verification QR. */}
       <Card className="flex-row items-center gap-4">
         <span className="rounded-lg bg-white p-1">
-          <LazyVerificationQr code={order.verificationCode} size={96} label={tm('qr.title')} />
+          <LazyVerificationQr code={order.verificationCode} size={96} label={to('qr.title')} />
         </span>
         <div className="flex flex-col gap-1">
-          <h2 className="font-bold">{tm('qr.title')}</h2>
-          <p className="text-sm text-muted-foreground">{tm('qr.hint')}</p>
+          <h2 className="font-bold">{to('qr.title')}</h2>
+          <p className="text-sm text-muted-foreground">{to('qr.hint')}</p>
         </div>
       </Card>
       <ProblemCard order={order} onChanged={() => void load()} />

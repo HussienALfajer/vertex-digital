@@ -102,10 +102,10 @@ export function ApplicationsPage({
           </Button>
         </div>
       )}
-      {list.isSuccess && rows.length === 0 && (
+      {list.isSuccess && rows.length === 0 && !list.isPlaceholderData && (
         <EmptyState icon={<InboxIcon />} title={t(`merchants.applications.empty.${tab}`)} />
       )}
-      {rows.length > 0 && <ApplicationsTable rows={rows} />}
+      {rows.length > 0 && <ApplicationsTable rows={rows} loading={list.isPlaceholderData} />}
       {list.hasNextPage && (
         <Button
           variant="outline"
@@ -120,12 +120,19 @@ export function ApplicationsPage({
   );
 }
 
-function ApplicationsTable({ rows }: { rows: AdminMerchantApplicationRow[] }) {
+function ApplicationsTable({
+  rows,
+  loading,
+}: {
+  rows: AdminMerchantApplicationRow[];
+  /** Another tab's rows, kept while this one loads (audit A06-47). */
+  loading: boolean;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const now = new Date();
   return (
-    <Table>
+    <Table className={loading ? 'opacity-60' : undefined} aria-busy={loading}>
       <TableHeader>
         <TableRow>
           <TableHead>{t('merchants.columns.tradeName')}</TableHead>

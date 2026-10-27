@@ -47,6 +47,7 @@ import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { type CartLine, clearCart, readCart, removeLine, restoreLine, updateLine } from './cart';
+import { freesCheckoutKey } from './checkout-key';
 import { checkoutLine, lineRefusals, payCart } from './requests';
 import { useCart } from './use-cart';
 
@@ -56,33 +57,6 @@ const TermsSheet = dynamic(() =>
 
 /** The attempt key's slot in session storage: one cart, one attempt at a time (rule CT5). */
 const ATTEMPT = 'cart';
-
-/**
- * The checkout's refusals decided after the API looked the key up (rule CT5): no checkout holds
- * the key, so the changed cart may go with a new one. `IDEMPOTENCY_KEY_REUSED` too: the key's
- * first checkout was written and the customer is told to check their orders (F6-14).
- */
-const REFUSED_AFTER_LOOKUP: ReadonlySet<Failure> = new Set<Failure>([
-  'CHECKOUT_REFUSED',
-  'INSUFFICIENT_BALANCE',
-  'PURCHASES_STOPPED',
-  'IDEMPOTENCY_KEY_REUSED',
-  'MERCHANT_TERMS_REQUIRED',
-]);
-
-/** Refusals answered before the key is looked up (the body's schema, the access guard). */
-const REFUSED_BEFORE_LOOKUP: ReadonlySet<Failure> = new Set<Failure>([
-  'VALIDATION_FAILED',
-  'EMAIL_NOT_VERIFIED',
-]);
-
-/**
- * Whether a refusal frees the key: one decided after the lookup, or one answered before it while
- * no earlier answer was lost. Anything else keeps the key: the first request may have paid.
- */
-function freesKey(reason: Failure, unsettled: boolean): boolean {
-  return REFUSED_AFTER_LOOKUP.has(reason) || (REFUSED_BEFORE_LOOKUP.has(reason) && !unsettled);
-}
 
 type Prices =
   | { status: 'loading' }
@@ -260,7 +234,7 @@ export function CartPage() {
       ATTEMPT,
       JSON.stringify(body),
       (key) => payCart(body, key),
-      freesKey,
+      freesCheckoutKey,
     );
     if (result.ok) {
       clearCart();

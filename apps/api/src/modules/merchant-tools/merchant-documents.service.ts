@@ -35,6 +35,9 @@ import { statementFileName, statementWorkbook } from './statement-workbook.js';
 
 const HOUR = 60 * 60 * 1000;
 
+/** A06-40: statement pages a merchant may read in an hour (each sums a month of the ledger). */
+const STATEMENT_READS_PER_HOUR = 60;
+
 const rateLimited = () => new CodedException(429, 'RATE_LIMITED', 'Too many requests, try later');
 
 const monthInvalid = () =>
@@ -149,8 +152,22 @@ export class MerchantDocumentsService {
     };
   }
 
-  /** `GET /api/merchant/statements/:month` (ST2): the balance equation checked (A13). */
-  async statement(customerId: string, month: string): Promise<Statement> {
+  /** `GET /api/merchant/statements/:month` (ST2): 60 an hour (A06-40). */
+  async statementPage(customerId: string, month: string): Promise<Statement> {
+    await requireMerchant(this.db, customerId);
+    const allowed = await withinLimits(this.db, [
+      {
+        key: `statement-read:customer:${customerId}`,
+        max: STATEMENT_READS_PER_HOUR,
+        windowMs: HOUR,
+      },
+    ]);
+    if (!allowed) throw rateLimited();
+    return this.statement(customerId, month);
+  }
+
+  /** A month's statement, the balance equation checked (A13). */
+  private async statement(customerId: string, month: string): Promise<Statement> {
     await requireMerchant(this.db, customerId);
     const account = await statementAccount(this.db, customerId);
     if (!account) throw refusals.notMerchant();

@@ -42,6 +42,7 @@ import {
   merchantWatchRows,
   monthsPurchases,
   netPurchases,
+  recentGameUnits,
   sellingSettingsOf,
   shownGames,
   watchSuggestions,
@@ -134,7 +135,11 @@ export class MerchantToolsService {
   /** `GET /api/merchant/games`: the store's games, for the merchant area's pickers. */
   async games(customerId: string): Promise<MerchantGames> {
     await this.merchant(customerId);
-    return { items: await shownGames(this.db) };
+    const [games, units] = await Promise.all([
+      shownGames(this.db),
+      recentGameUnits(this.db, customerId),
+    ]);
+    return { items: games.map((game) => ({ ...game, recentUnits: units.get(game.id) ?? 0 })) };
   }
 
   /** `GET /api/merchant/selling-settings` (SP1). */
@@ -249,7 +254,11 @@ export class MerchantToolsService {
     const product = await this.product(productId);
     if (input.currency === 'syp') {
       const rate = await this.rates.current();
-      if (!rate || sellingPriceTooHigh(input, rate.sypPerUsd)) {
+      // A06-41: no rate is its own refusal, not a price above the limit.
+      if (!rate) {
+        throw refusals.invalid('currency', 'No exchange rate in force to convert a SYP price at');
+      }
+      if (sellingPriceTooHigh(input, rate.sypPerUsd)) {
         throw refusals.invalid('amountUnits', 'Above $10,000 at the rate in force');
       }
     }

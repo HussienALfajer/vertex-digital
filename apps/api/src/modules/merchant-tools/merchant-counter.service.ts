@@ -11,11 +11,11 @@ import {
   orderQuantityMax,
   orderTotal,
   type PlayerCheck,
+  type PlayerCheckRequest,
   parseBulkLines,
   type ReceiptSettings,
   type RecentPlayers,
   type SellingPriceInput,
-  sellingPriceTooHigh,
   type UpdateReceiptSettings,
   type UploadedLogo,
 } from '@vertex-digital/contracts';
@@ -33,6 +33,7 @@ import {
   recentPlayers,
   requireMerchantTerms,
   saveReceiptSettings,
+  setMerchantLogo,
   setOrderSale,
   shownGames,
   withinLimits,
@@ -45,10 +46,15 @@ import { CodedException } from '../../core/errors/index.js';
 import type { RequestMeta } from '../../core/http/request-meta.js';
 import { FilesService, type ServedFile } from '../files/index.js';
 import { PlayerChecksService } from '../orders/index.js';
-import { RatesService } from '../rates/index.js';
 import { refusals, requireMerchant } from './merchant-access.js';
 
 const HOUR = 60 * 60 * 1000;
+
+/** A06-32: the bulk check's player checks run this many at a time, through the pool. */
+const BULK_CHECKS_AT_ONCE = 5;
+
+/** A06-32: no player check starts this long after the bulk check began (each takes 5 s at most). */
+const BULK_CHECK_BUDGET_MS = 30_000;
 
 const isUuid = (value: string) => z.uuid().safeParse(value).success;
 
@@ -64,7 +70,6 @@ export class MerchantCounterService {
     @Inject(ENV) private readonly env: Env,
     private readonly files: FilesService,
     private readonly playerChecks: PlayerChecksService,
-    private readonly rates: RatesService,
   ) {}
 
   /** `GET /api/merchant/recent-players?gameId` (PS2). */
@@ -125,8 +130,10 @@ export class MerchantCounterService {
       game.packs.map((pack) => pack.id),
       routingContext(this.env),
     );
-    const checks = new Map<string, PlayerCheck>();
-    const lines: BulkCheckLine[] = [];
+    const drafts: (Omit<BulkCheckLine, 'check' | 'needsConfirmation'> & { key: string | null })[] =
+      [];
+    // Edge case 9: the same id on several lines is checked once.
+    const toCheck = new Map<string, PlayerCheckRequest>();
     for (const line of parsed) {
       const pack = line.productId ? packs.get(line.productId) : undefined;
       const unit = pack ? (prices.get(pack.id)?.priceUsdUnits ?? null) : null;
@@ -147,17 +154,13 @@ export class MerchantCounterService {
           }
         }
       }
-      let check: PlayerCheck | null = null;
+      let key: string | null = null;
       if (pack && errors.length === 0 && pack.kind === 'direct') {
-        // Edge case 9: the same id on several lines is checked once.
-        const key = JSON.stringify(canonicalFields(fields));
-        check =
-          checks.get(key) ??
-          (await this.playerChecks.checkLine(customerId, { productId: pack.id, fields }, meta));
-        checks.set(key, check);
+        key = JSON.stringify(canonicalFields(fields));
+        if (!toCheck.has(key)) toCheck.set(key, { productId: pack.id, fields });
       }
       const payable = pack !== undefined && unit !== null && errors.length === 0;
-      lines.push({
+      drafts.push({
         line: line.line,
         fields: pack?.kind === 'code' ? {} : fields,
         product: pack ? { id: pack.id, nameAr: pack.nameAr } : null,
@@ -165,11 +168,15 @@ export class MerchantCounterService {
         unitPriceUsdUnits: unit,
         totalUsdUnits:
           payable && line.quantity !== null ? orderTotal(unit as number, line.quantity) : null,
-        check,
-        needsConfirmation: bulkNeedsConfirmation(check),
         errors,
+        key,
       });
     }
+    const checks = await this.checkPlayers(customerId, toCheck, meta);
+    const lines: BulkCheckLine[] = drafts.map(({ key, ...line }) => {
+      const check = key === null ? null : (checks.get(key) ?? null);
+      return { ...line, check, needsConfirmation: bulkNeedsConfirmation(check) };
+    });
     const wallet = await findCustomerWallet(this.db, customerId);
     return {
       lines,
@@ -182,6 +189,48 @@ export class MerchantCounterService {
       ),
       balanceUsdUnits: wallet === null ? 0 : await accountBalance(this.db, wallet),
     };
+  }
+
+  /**
+   * BK2 (audit A06-32): the distinct ids of a bulk list checked through the pool, at most
+   * `BULK_CHECKS_AT_ONCE` at a time, and none started once `bulkCheckBudgetMs` has passed: those
+   * answer `unavailable` ("لم يُفحص") and spend no quota, so 50 new ids answer well within nginx's
+   * 60 seconds (each check takes at most 5 s, PV6). A failing check stops new ones and fails the
+   * request once the running ones end.
+   */
+  private async checkPlayers(
+    customerId: string,
+    requests: ReadonlyMap<string, PlayerCheckRequest>,
+    meta: RequestMeta,
+  ): Promise<Map<string, PlayerCheck>> {
+    const deadline = Date.now() + this.bulkCheckBudgetMs();
+    const queue = [...requests];
+    const checks = new Map<string, PlayerCheck>();
+    const failures: unknown[] = [];
+    const worker = async () => {
+      for (let next = queue.shift(); next && failures.length === 0; next = queue.shift()) {
+        const [key, request] = next;
+        if (Date.now() >= deadline) {
+          checks.set(key, { result: 'unavailable', reason: 'supplier' });
+          continue;
+        }
+        try {
+          checks.set(key, await this.playerChecks.checkLine(customerId, request, meta));
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(BULK_CHECKS_AT_ONCE, queue.length) }, () => worker()),
+    );
+    if (failures.length > 0) throw failures[0];
+    return checks;
+  }
+
+  /** The time after which a bulk check starts no player check (a method, so a test shortens it). */
+  bulkCheckBudgetMs(): number {
+    return BULK_CHECK_BUDGET_MS;
   }
 
   /** `GET /api/merchant/receipt-settings` (BR3). */
@@ -216,16 +265,12 @@ export class MerchantCounterService {
       { key: `merchant-logo:customer:${customerId}`, max: 10, windowMs: HOUR },
     ]);
     if (!allowed) throw new CodedException(429, 'RATE_LIMITED', 'Too many requests, try later');
-    const current = await receiptSettingsOf(this.db, customerId);
-    if (!current) throw refusals.notMerchant();
+    if (!(await receiptSettingsOf(this.db, customerId))) throw refusals.notMerchant();
     const prepared = await this.files.prepare('merchant_logo', upload);
     const fileId = await this.db.transaction(async (tx) => {
       const id = await this.files.record(tx, prepared);
-      await saveReceiptSettings(tx, customerId, {
-        showWhatsapp: current.showWhatsapp,
-        whatsapp: current.whatsapp,
-        logoFileId: id,
-      });
+      // A06-39: only the logo changes; a WhatsApp saved meanwhile is kept.
+      if (!(await setMerchantLogo(tx, customerId, id))) throw refusals.notMerchant();
       return id;
     });
     return { fileId };
@@ -242,19 +287,22 @@ export class MerchantCounterService {
     return file;
   }
 
-  /** `PUT /api/orders/:id/sale` (SP5): the merchant's own order, at the order's rate. */
+  /**
+   * `PUT /api/orders/:id/sale` (SP5): the merchant's own order (paid while a merchant, A06-36),
+   * at the order's rate, and the $10,000 limit at that rate too (A06-35).
+   */
   async setSale(customerId: string, orderId: string, input: SellingPriceInput): Promise<OrderSale> {
     await requireMerchant(this.db, customerId, true);
     const order = isUuid(orderId) ? await ownOrderForSale(this.db, customerId, orderId) : null;
     if (!order) throw refusals.notFound('order');
-    if (input.currency === 'syp') {
-      const rate = await this.rates.current();
-      if (!rate || sellingPriceTooHigh(input, rate.sypPerUsd)) {
-        throw refusals.invalid('amountUnits', 'Above $10,000 at the rate in force');
-      }
+    const result = await this.db.transaction((tx) => setOrderSale(tx, order, input));
+    if (!result.ok) {
+      // A06-41: each refusal names its own cause.
+      throw result.reason === 'too_high'
+        ? refusals.invalid('amountUnits', "Above $10,000 at the order's rate")
+        : refusals.invalid('currency', 'The order has no exchange rate to convert a SYP price at');
     }
-    const sale = await this.db.transaction((tx) => setOrderSale(tx, order, input));
-    if (!sale) throw refusals.invalid('currency', 'No rate to convert a SYP price at');
+    const { sale } = result;
     return {
       currency: sale.currency,
       unitAmountUnits: sale.unitAmountUnits,

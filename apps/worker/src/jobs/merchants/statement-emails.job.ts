@@ -5,6 +5,7 @@ import {
   type Database,
   sendStatementReady,
   statementEmailMerchants,
+  withoutQueryParameters,
 } from '@vertex-digital/db';
 import { DATABASE } from '../../core/database/database.module.js';
 import { PgBossService } from '../../core/jobs/pg-boss.service.js';
@@ -16,7 +17,8 @@ export const STATEMENT_EMAILS_CRON = '0 8 1 * *';
  * `merchants.statement-emails` (S21 ST4), monthly: `merchant_statement_ready` with a link to last
  * month's statement for every merchant with at least one wallet entry that month, each in a
  * transaction of their own. Safe twice: a month's notification already written is not written
- * again (`sendStatementReady`, the dedupe key `statement:<customer>:<month>`).
+ * again (`sendStatementReady`, the dedupe key `statement:<customer>:<month>`). A merchant that fails
+ * is logged by id and skipped; the run fails at its end.
  */
 @Injectable()
 export class MerchantStatementEmailsJob implements OnApplicationBootstrap {
@@ -48,11 +50,21 @@ export class MerchantStatementEmailsJob implements OnApplicationBootstrap {
     const month = previousMonth(damascusMonth(now));
     const jobs = bossJobSender(this.pgBoss.boss);
     let sent = 0;
+    // Audit A06-33: one merchant's failure leaves the others told; the run then fails, so pg-boss
+    // reports and retries it, and the merchants already told are skipped by the dedupe.
+    let failed = 0;
     for (const customerId of await statementEmailMerchants(this.db, month)) {
-      if (await this.db.transaction((tx) => sendStatementReady(tx, jobs, customerId, month))) {
-        sent += 1;
+      try {
+        if (await this.db.transaction((tx) => sendStatementReady(tx, jobs, customerId, month))) {
+          sent += 1;
+        }
+      } catch (error) {
+        const reported = withoutQueryParameters(error) as Error;
+        this.logger.error(`Statement notice of customer ${customerId} failed: ${reported.message}`);
+        failed += 1;
       }
     }
+    if (failed > 0) throw new Error(`Statement notices failed for ${failed} merchants`);
     return sent;
   }
 }

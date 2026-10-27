@@ -126,6 +126,11 @@ export function SummarySection({
     ['customers.limits.dailyDeposit', limits.effective.dailyDeposit],
     ['customers.limits.dailyPurchase', limits.effective.dailyPurchase],
   ] as const;
+  // S21 LV5: with no assigned list, a merchant with a level pays the level's list (audit A06-50).
+  const levelOfList =
+    customer.pricing.assignedListId === null && customer.pricing.accountType === 'merchant'
+      ? (customer.merchant?.level ?? null)
+      : null;
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <Card className="gap-4">
@@ -232,7 +237,9 @@ export function SummarySection({
               <Badge tone={customer.pricing.assignedListId ? 'gold' : 'neutral'}>
                 {customer.pricing.assignedListId
                   ? t('customers.pricing.assigned')
-                  : t('customers.pricing.default')}
+                  : levelOfList
+                    ? t('customers.pricing.fromLevel', { name: levelOfList.nameAr })
+                    : t('customers.pricing.default')}
               </Badge>
             </span>
           </Fact>

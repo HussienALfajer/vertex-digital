@@ -237,6 +237,10 @@ test.describe('the statements (F38, ST1–ST3)', () => {
 
     await page.goto('/merchant/statements/2020-01');
     await expect(page.getByText(tools.statements.invalid)).toBeVisible();
+    // Its print page says the same, with no retry that could never succeed (A06-18).
+    await page.goto('/merchant/statements/2020-01/print');
+    await expect(page.getByText(tools.statements.invalid)).toBeVisible();
+    await expect(page.getByRole('button', { name: tools.common.retry })).toHaveCount(0);
   });
 
   test('shows a statement in the light theme', async ({ page, api }, testInfo) => {

@@ -383,9 +383,12 @@ const CONTENT: { [Template in EmailTemplate]: (params: EmailParams<Template>) =>
     ],
     link: MERCHANT_PAGE,
   }),
-  customer_merchant_approved: () => ({
+  // The kind of price the approval set, never assumed wholesale (audit A06-27).
+  customer_merchant_approved: ({ priceKind }) => ({
     subject: 'تمت الموافقة على حساب التاجر',
-    lines: ['وافقنا على حساب التاجر الخاص بك، وأصبحت أسعار التاجر تظهر لك في صفحات الألعاب.'],
+    lines: [
+      `وافقنا على حساب التاجر الخاص بك، وتظهر لك ${PRICE_KIND_LABELS[priceKind]} في صفحات الألعاب.`,
+    ],
     link: { label: 'عرض حسابي', path: '/account' },
   }),
   customer_merchant_rejected: ({ availableAt }) => ({

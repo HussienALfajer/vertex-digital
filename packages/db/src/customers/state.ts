@@ -4,6 +4,7 @@ import {
   type CustomerStatus,
   customerStatus,
   type ErrorCode,
+  OPEN_APPLICATION_STATUSES,
 } from '@vertex-digital/contracts';
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { recordAudit } from '../audit/index.js';
@@ -16,6 +17,7 @@ import {
   customerSessions,
   customers,
   deposits,
+  merchantApplications,
   orders,
   supportTickets,
 } from '../schema/index.js';
@@ -189,6 +191,17 @@ export async function archiveBlockers(
     )
     .limit(1);
   if (openDeposit) blockers.push('open_deposits');
+  const [openApplication] = await tx
+    .select({ id: merchantApplications.id })
+    .from(merchantApplications)
+    .where(
+      and(
+        eq(merchantApplications.customerId, customerId),
+        inArray(merchantApplications.status, [...OPEN_APPLICATION_STATUSES]),
+      ),
+    )
+    .limit(1);
+  if (openApplication) blockers.push('open_merchant_application');
   return blockers;
 }
 

@@ -7,6 +7,7 @@ import {
   dailyDigestMerchants,
   merchantsToCompare,
   sendDailyDigest,
+  withoutQueryParameters,
 } from '@vertex-digital/db';
 import { ENV, type Env } from '../../core/config/env.js';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -64,12 +65,10 @@ export class MerchantWatchAlertsJob implements OnApplicationBootstrap {
       fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED,
     };
     let events = 0;
-    for (const customerId of await merchantsToCompare(this.db)) {
-      const result = await this.db.transaction((tx) =>
-        compareMerchantWatches(tx, context, customerId),
-      );
+    await this.eachMerchant('Watch comparison', await merchantsToCompare(this.db), async (id) => {
+      const result = await this.db.transaction((tx) => compareMerchantWatches(tx, context, id));
       events += result?.events ?? 0;
-    }
+    });
     return events;
   }
 
@@ -77,11 +76,31 @@ export class MerchantWatchAlertsJob implements OnApplicationBootstrap {
   async digestAll(now: Date): Promise<number> {
     const jobs = bossJobSender(this.pgBoss.boss);
     let sent = 0;
-    for (const customerId of await dailyDigestMerchants(this.db)) {
-      if (await this.db.transaction((tx) => sendDailyDigest(tx, { jobs, now }, customerId))) {
-        sent += 1;
+    await this.eachMerchant('Daily digest', await dailyDigestMerchants(this.db), async (id) => {
+      if (await this.db.transaction((tx) => sendDailyDigest(tx, { jobs, now }, id))) sent += 1;
+    });
+    return sent;
+  }
+
+  /**
+   * Audit A06-33: each merchant in turn, one's failure logged by id and the others still run; the
+   * run then fails, so pg-boss reports and retries it (a retry finds the done ones done).
+   */
+  private async eachMerchant(
+    step: string,
+    customerIds: readonly string[],
+    work: (customerId: string) => Promise<void>,
+  ): Promise<void> {
+    let failed = 0;
+    for (const customerId of customerIds) {
+      try {
+        await work(customerId);
+      } catch (error) {
+        const reported = withoutQueryParameters(error) as Error;
+        this.logger.error(`${step} of customer ${customerId} failed: ${reported.message}`);
+        failed += 1;
       }
     }
-    return sent;
+    if (failed > 0) throw new Error(`${step} failed for ${failed} merchants`);
   }
 }
