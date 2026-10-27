@@ -1,5 +1,4 @@
 import {
-  FAQ_ANSWER_MAX,
   type FaqItem,
   type FaqSection,
   parseRichText,
@@ -202,7 +201,6 @@ export function FaqItemDialog({
             <Textarea
               value={answer}
               rows={10}
-              maxLength={FAQ_ANSWER_MAX}
               dir="rtl"
               className="[unicode-bidi:plaintext]"
               onChange={(event) => setAnswer(event.target.value)}

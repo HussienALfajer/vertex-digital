@@ -1,15 +1,27 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   type ContentState,
+  contentPagePath,
   parseRichText,
   RICH_TEXT_PROBLEMS,
   type RichTextProblem,
   type RichTextProblemReason,
 } from '@vertex-digital/contracts';
-import { Badge, cn, RichText, ToggleGroup, ToggleGroupItem } from '@vertex-digital/ui';
+import {
+  Badge,
+  Button,
+  Callout,
+  cn,
+  RichText,
+  ToggleGroup,
+  ToggleGroupItem,
+} from '@vertex-digital/ui';
+import type { TFunction } from 'i18next';
+import { CircleAlertIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../lib/api/client';
+import { errorCode, errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
 import { faqQuery, pagesQuery } from './content.queries';
 import { formatDamascus } from './damascus-time';
@@ -31,6 +43,36 @@ const STATE_TONES = {
 export function StateBadge({ state }: { state: ContentState }) {
   const { t } = useTranslation();
   return <Badge tone={STATE_TONES[state]}>{t(`content.states.${state}`)}</Badge>;
+}
+
+/**
+ * A failed read over data already shown (audit A08-6): the screen and what is typed in it stay,
+ * with this notice and a retry; only a first read that fails shows the failure alone.
+ */
+export function StaleRead({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Callout
+      tone="warning"
+      icon={<CircleAlertIcon />}
+      title={t('content.staleRead')}
+      action={
+        <Button variant="outline" onClick={onRetry}>
+          {t('common.retry')}
+        </Button>
+      }
+    />
+  );
+}
+
+/**
+ * Edge case 7, BN6: a reorder refused because the list changed elsewhere (it is read again on
+ * settle) says so, not "check the fields" (audit A08-12).
+ */
+export function reorderFailure(t: TFunction, error: unknown): string {
+  return errorCode(error) === 'VALIDATION_FAILED'
+    ? t('content.reorderStale')
+    : errorMessage(t, error);
 }
 
 /** "من … إلى …" in Damascus time (BN4), or "بلا جدول". */
@@ -101,13 +143,15 @@ function usePublishedPaths(): ReadonlySet<string> | null {
   const pages = useQuery(pagesQuery);
   const faq = useQuery(faqQuery(false));
   if (!pages.data || !faq.data) return null;
-  // A page's path is its name with hyphens (S20: `merchant_terms` is `/merchant-terms`).
   const paths = pages.data
     .filter((page) => page.latestVersion)
-    .map((page) => `/${page.page.replaceAll('_', '-')}`);
+    .map((page) => contentPagePath(page.page));
   if ((faq.data.publication?.items ?? 0) > 0) paths.push('/faq');
   return new Set(paths);
 }
+
+/** A link field as the one link of a body, so `LinkWarnings` checks it (edge case 20, A08-15). */
+export const linkMarkdown = (path: string) => (path.trim() ? `[x](${path.trim()})` : '');
 
 /** Edge case 20: a link to a page or the FAQ before it is published shows a 404 in the store. */
 export function LinkWarnings({ source }: { source: string }) {

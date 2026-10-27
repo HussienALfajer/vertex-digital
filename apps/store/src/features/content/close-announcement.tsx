@@ -38,6 +38,12 @@ export function CloseAnnouncement({
         writeDismissed(storageKey);
         const bar = barOf(button.current);
         if (bar) bar.hidden = true;
+        // The focused button is gone with its bar: the page's content takes the focus (A08-38).
+        const main = document.querySelector('main');
+        if (main) {
+          if (!main.hasAttribute('tabindex')) main.tabIndex = -1;
+          main.focus({ preventScroll: true });
+        }
       }}
     >
       {children}

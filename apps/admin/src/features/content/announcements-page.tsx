@@ -36,10 +36,12 @@ import {
   useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ArchiveIcon, ArchiveRestoreIcon, MegaphoneIcon, PencilIcon, PlusIcon } from 'lucide-react';
-import { type FormEvent, useId, useState } from 'react';
+import { type FormEvent, useId, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
+import { useVisibleAgain } from '../../lib/admin-stream';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
 import { ScheduleFields } from './banner-dialog';
@@ -49,7 +51,15 @@ import {
   useAnnouncementAction,
   useSaveAnnouncement,
 } from './content.queries';
-import { refusedFields, ScheduleText, StateBadge, StorePreview } from './content-parts';
+import {
+  LinkWarnings,
+  linkMarkdown,
+  refusedFields,
+  ScheduleText,
+  StaleRead,
+  StateBadge,
+  StorePreview,
+} from './content-parts';
 import { fromDamascusInput } from './damascus-time';
 
 /**
@@ -66,11 +76,14 @@ export function AnnouncementsPage({
   const { t } = useTranslation();
   const archivedId = useId();
   const announcements = useQuery(announcementsQuery(archived));
+  // States follow the clock, and AN2's confirmation names the enabled one: read again (A08-23).
+  useVisibleAgain(() => void announcements.refetch());
   const action = useAnnouncementAction();
   const [editing, setEditing] = useState<Announcement | 'new' | null>(null);
   const [replacing, setReplacing] = useState<{ next: Announcement; current: Announcement } | null>(
     null,
   );
+  const [archiving, setArchiving] = useState<Announcement | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
   async function act(id: string, verb: RowAction) {
@@ -83,15 +96,8 @@ export function AnnouncementsPage({
   }
 
   if (announcements.isPending) return <Skeleton className="h-64 w-full" aria-hidden="true" />;
-  if (announcements.isError) {
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <FormAlert>{errorMessage(t, announcements.error)}</FormAlert>
-        <Button variant="outline" onClick={() => announcements.refetch()}>
-          {t('common.retry')}
-        </Button>
-      </div>
-    );
+  if (!announcements.data) {
+    return <ReadFailure error={announcements.error} onRetry={() => announcements.refetch()} />;
   }
   const list = announcements.data;
   const live = list.filter((row) => !row.archivedAt);
@@ -104,6 +110,7 @@ export function AnnouncementsPage({
 
   return (
     <div className="flex flex-col gap-6">
+      {announcements.isError && <StaleRead onRetry={() => announcements.refetch()} />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label htmlFor={archivedId} className="flex cursor-pointer items-center gap-2 text-sm">
           <Checkbox
@@ -145,6 +152,7 @@ export function AnnouncementsPage({
           <TableBody>
             {list.map((row) => {
               const archivedRow = !!row.archivedAt;
+              const name = { name: row.text };
               return (
                 <TableRow key={row.id} data-testid="announcement-row">
                   <TableCell className="max-w-md">
@@ -168,7 +176,7 @@ export function AnnouncementsPage({
                   </TableCell>
                   <TableCell>
                     <Switch
-                      aria-label={t('content.announcements.enableLabel')}
+                      aria-label={t('content.announcements.enableLabel', name)}
                       checked={row.enabled}
                       disabled={archivedRow || action.isPending}
                       onCheckedChange={(value) => toggle(row, value)}
@@ -177,7 +185,13 @@ export function AnnouncementsPage({
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
                       {!archivedRow && (
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(row)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-11"
+                          aria-label={t('content.actions.editNamed', name)}
+                          onClick={() => setEditing(row)}
+                        >
                           <PencilIcon />
                           {t('content.actions.edit')}
                         </Button>
@@ -185,8 +199,17 @@ export function AnnouncementsPage({
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-11"
+                        aria-label={t(
+                          archivedRow
+                            ? 'content.actions.restoreNamed'
+                            : 'content.actions.archiveNamed',
+                          name,
+                        )}
                         disabled={action.isPending}
-                        onClick={() => void act(row.id, archivedRow ? 'restore' : 'archive')}
+                        onClick={() =>
+                          archivedRow ? void act(row.id, 'restore') : setArchiving(row)
+                        }
                       >
                         {archivedRow ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
                         {archivedRow ? t('content.actions.restore') : t('content.actions.archive')}
@@ -207,6 +230,22 @@ export function AnnouncementsPage({
           />
         )}
       </Dialog>
+      <ConfirmDialog
+        open={archiving !== null}
+        onClose={() => setArchiving(null)}
+        title={t('content.announcements.archiveTitle')}
+        body={
+          archiving?.state === 'live'
+            ? t('content.announcements.archiveLiveBody', { text: archiving.text })
+            : t('content.announcements.archiveBody', { text: archiving?.text ?? '' })
+        }
+        action={t('content.actions.archive')}
+        destructive
+        pending={action.isPending}
+        onConfirm={async () => {
+          if (archiving) await action.mutateAsync({ id: archiving.id, action: 'archive' });
+        }}
+      />
       <ConfirmDialog
         open={replacing !== null}
         onClose={() => setReplacing(null)}
@@ -240,6 +279,7 @@ function AnnouncementDialog({
   const [errors, setErrors] = useState<Partial<Record<AnnouncementField, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
+  const clipped = usePhoneClip(text, linkPath.trim() !== '');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -311,6 +351,11 @@ function AnnouncementDialog({
           <FieldDescription>
             {t('content.announcements.textHint', { count: text.trim().length })}
           </FieldDescription>
+          {clipped.cut && (
+            <p className="text-sm text-status-warning-foreground" data-testid="phone-clip">
+              {t('content.announcements.phoneClip')}
+            </p>
+          )}
           <FieldError match={!!errors.text}>{errors.text}</FieldError>
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -325,6 +370,7 @@ function AnnouncementDialog({
               onChange={(event) => setLinkPath(event.target.value)}
             />
             <FieldDescription>{t('content.linkHint')}</FieldDescription>
+            <LinkWarnings source={linkMarkdown(linkPath)} />
             <FieldError match={!!errors.linkPath}>{errors.linkPath}</FieldError>
           </Field>
           <Field>
@@ -361,6 +407,7 @@ function AnnouncementDialog({
             )}
           </div>
         </StorePreview>
+        {clipped.probe}
         {failure && <FormAlert>{failure}</FormAlert>}
         <InvalidAlert show={Object.values(errors).some(Boolean)} />
         <DialogFooter>
@@ -371,4 +418,36 @@ function AnnouncementDialog({
       </form>
     </DialogContent>
   );
+}
+
+/**
+ * Whether the bar cuts the text at the store's phone width (AN1 allows 140 characters; two lines hold about
+ * 75 there): an unseen bar at 375 px is measured as the text changes (audit A08-32).
+ */
+function usePhoneClip(text: string, linked: boolean) {
+  const { t } = useTranslation();
+  const box = useRef<HTMLDivElement>(null);
+  const [cut, setCut] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the bar is measured again whenever its text or link changes
+  useLayoutEffect(() => {
+    const shown = box.current?.querySelector('[data-slot="announcement-text"]');
+    setCut(!!shown && shown.scrollHeight > shown.clientHeight + 1);
+  }, [text, linked]);
+  const probe = (
+    <div
+      ref={box}
+      aria-hidden="true"
+      className="pointer-events-none invisible absolute -z-10 h-0 overflow-hidden"
+    >
+      <div className="w-[375px]">
+        <AnnouncementBar
+          tone="info"
+          text={text.trim()}
+          action={linked ? <span>{t('content.announcements.details')}</span> : undefined}
+          close={<span className="size-11 shrink-0" />}
+        />
+      </div>
+    </div>
+  );
+  return { cut, probe };
 }

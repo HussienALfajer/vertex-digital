@@ -1,7 +1,8 @@
 import { parseRichText } from '@vertex-digital/contracts';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { RichText } from './rich-text';
+import { AnnouncementBar } from './announcement-bar';
+import { type RichLink, RichText } from './rich-text';
 
 const render = (source: string) =>
   renderToStaticMarkup(<RichText blocks={parseRichText(source).blocks} />);
@@ -53,5 +54,26 @@ describe('RichText (S14 MD5)', () => {
     expect(html).toBe(
       '<div data-slot="rich-text" class="flex flex-col gap-4 text-md text-foreground max-w-prose" lang="ar"></div>',
     );
+  });
+});
+
+describe('RichText links (audit A08-42)', () => {
+  it('renders links through the link component the app gives', () => {
+    const Routed: RichLink = ({ href, children }) => (
+      <a data-routed="" href={href}>
+        {children}
+      </a>
+    );
+    const html = renderToStaticMarkup(
+      <RichText blocks={parseRichText('- [الأسئلة](/faq)').blocks} link={Routed} />,
+    );
+    expect(html).toContain('<a data-routed="" href="/faq">الأسئلة</a>');
+  });
+});
+
+describe('AnnouncementBar (S14 AN1)', () => {
+  it('keeps the padding off the clamped text, so no third line shows (audit A08-31)', () => {
+    const html = renderToStaticMarkup(<AnnouncementBar tone="info" text="نص الإعلان" />);
+    expect(html).toMatch(/<p data-slot="announcement-text" class="line-clamp-2">/);
   });
 });

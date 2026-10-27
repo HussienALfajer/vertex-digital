@@ -121,9 +121,14 @@ export class FilesService {
 
   /**
    * Re-encodes and writes an upload; `RECEIPT_INVALID` (`IMAGE_INVALID` for catalog images) when
-   * it is not an accepted image.
+   * it is not an accepted image. `accept` sees the re-encoded size before anything is written, so
+   * a refusal by size leaves no file behind (audit A08-2).
    */
-  async prepare(kind: StoredFileKind, upload: Buffer | undefined): Promise<PreparedImage> {
+  async prepare(
+    kind: StoredFileKind,
+    upload: Buffer | undefined,
+    accept?: (size: { width: number; height: number }) => void,
+  ): Promise<PreparedImage> {
     if (!upload || upload.length === 0) throw invalid(kind);
     const output = OUTPUT[kind];
     const decode = () =>
@@ -153,6 +158,7 @@ export class FilesService {
       // Not an image, truncated, or above the pixel limit (a decompression bomb).
       throw invalid(kind);
     }
+    accept?.({ width: encoded.info.width, height: encoded.info.height });
     const id = newId();
     const storageKey = `${kind}/${id.slice(-2)}/${id}.${output.format}`;
     await this.storage.put(storageKey, encoded.data);

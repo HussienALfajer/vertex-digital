@@ -185,11 +185,21 @@ export class ContentPagesService {
     };
   }
 
-  /** The published pages for the store's site content (SL1, TA1, SL4). */
+  /**
+   * The published pages for the store's site content (SL1, TA1, SL4): titles and dates only, never
+   * the bodies (audit A08-3).
+   */
   async publishedTitles(): Promise<{ page: ContentPage; title: string; updatedAt: string }[]> {
-    const newest = await this.newestVersions(this.db);
+    const rows = await this.db
+      .selectDistinctOn([contentPageVersions.page], {
+        page: contentPageVersions.page,
+        title: contentPageVersions.title,
+        publishedAt: contentPageVersions.publishedAt,
+      })
+      .from(contentPageVersions)
+      .orderBy(contentPageVersions.page, desc(contentPageVersions.version));
     return CONTENT_PAGES.flatMap((page) => {
-      const version = newest.get(page);
+      const version = rows.find((row) => row.page === page);
       return version
         ? [{ page, title: version.title, updatedAt: version.publishedAt.toISOString() }]
         : [];

@@ -100,19 +100,25 @@ export class ContentHomeService {
 
   // Banners ---------------------------------------------------------------------------------------
 
-  /** Rule BN2: a catalog image of at least 1200 × 600 px and a 2:1 ratio within 2%. */
+  /**
+   * Rule BN2: a catalog image of at least 1200 × 600 px and a 2:1 ratio within 2%, checked before
+   * the file is written (audit A08-2).
+   */
   async uploadBannerImage(upload: Buffer | undefined): Promise<BannerImage> {
-    const prepared = await this.files.prepare('catalog_image', upload);
-    const width = prepared.row.width as number;
-    const height = prepared.row.height as number;
-    if (width < BANNER_MIN_WIDTH || height < BANNER_MIN_HEIGHT) {
-      throw imageRefused('too_small');
-    }
-    if (Math.abs(width / height - BANNER_RATIO) > BANNER_RATIO * BANNER_RATIO_TOLERANCE) {
-      throw imageRefused('ratio');
-    }
+    const prepared = await this.files.prepare('catalog_image', upload, ({ width, height }) => {
+      if (width < BANNER_MIN_WIDTH || height < BANNER_MIN_HEIGHT) {
+        throw imageRefused('too_small');
+      }
+      if (Math.abs(width / height - BANNER_RATIO) > BANNER_RATIO * BANNER_RATIO_TOLERANCE) {
+        throw imageRefused('ratio');
+      }
+    });
     await this.db.transaction((tx) => this.files.record(tx, prepared));
-    return { fileId: prepared.row.id, width, height };
+    return {
+      fileId: prepared.row.id,
+      width: prepared.row.width as number,
+      height: prepared.row.height as number,
+    };
   }
 
   async banners(archived: boolean, now = new Date()): Promise<Banner[]> {

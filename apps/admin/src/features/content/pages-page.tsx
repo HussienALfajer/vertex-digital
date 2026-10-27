@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import type { PageSummary } from '@vertex-digital/contracts';
+import { contentPagePath, type PageSummary } from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
@@ -14,44 +14,40 @@ import {
 } from '@vertex-digital/ui';
 import { PencilIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
-import { errorMessage } from '../../lib/errors';
+import { ReadFailure } from '../../components/read-failure';
+import { useVisibleAgain } from '../../lib/admin-stream';
 import { formatDate } from '../../lib/format';
 import { pagesQuery } from './content.queries';
+import { StaleRead } from './content-parts';
 
 /** "الصفحات" (S14 PG1): the four fixed pages, their state and whether the draft is ahead. */
 export function PagesPage() {
   const { t } = useTranslation();
   const pages = useQuery(pagesQuery);
+  useVisibleAgain(() => void pages.refetch());
 
   if (pages.isPending) return <Skeleton className="h-64 w-full" aria-hidden="true" />;
-  if (pages.isError) {
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <FormAlert>{errorMessage(t, pages.error)}</FormAlert>
-        <Button variant="outline" onClick={() => pages.refetch()}>
-          {t('common.retry')}
-        </Button>
-      </div>
-    );
-  }
+  if (!pages.data) return <ReadFailure error={pages.error} onRetry={() => pages.refetch()} />;
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t('content.pages.page')}</TableHead>
-          <TableHead>{t('content.pages.state')}</TableHead>
-          <TableHead>
-            <span className="sr-only">{t('content.actions.edit')}</span>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {pages.data.map((page) => (
-          <PageRow key={page.page} page={page} />
-        ))}
-      </TableBody>
-    </Table>
+    <div className="flex flex-col gap-4">
+      {pages.isError && <StaleRead onRetry={() => pages.refetch()} />}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('content.pages.page')}</TableHead>
+            <TableHead>{t('content.pages.state')}</TableHead>
+            <TableHead>
+              <span className="sr-only">{t('content.actions.edit')}</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {pages.data.map((page) => (
+            <PageRow key={page.page} page={page} />
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -62,7 +58,7 @@ function PageRow({ page }: { page: PageSummary }) {
       <TableCell>
         <span className="font-medium">{page.title}</span>
         <span className="block text-sm text-muted-foreground" dir="ltr">
-          /{page.page}
+          {contentPagePath(page.page)}
         </span>
       </TableCell>
       <TableCell>
@@ -85,7 +81,8 @@ function PageRow({ page }: { page: PageSummary }) {
       <TableCell className="text-end">
         <Button
           variant="outline"
-          size="sm"
+          className="h-11"
+          aria-label={t('content.actions.editNamed', { name: page.title })}
           render={<Link to="/content/pages/$page" params={{ page: page.page }} />}
         >
           <PencilIcon />

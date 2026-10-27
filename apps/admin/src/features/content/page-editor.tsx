@@ -41,11 +41,21 @@ import {
   toast,
   useFocusInvalid,
 } from '@vertex-digital/ui';
-import { ArrowRightIcon, EyeIcon, HistoryIcon, SaveIcon, SendIcon } from 'lucide-react';
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  CopyIcon,
+  EyeIcon,
+  HistoryIcon,
+  SaveIcon,
+  SendIcon,
+} from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
+import { useCopy } from '../../lib/clipboard';
 import { errorCode, errorMessage } from '../../lib/errors';
 import { formatDate } from '../../lib/format';
 import {
@@ -61,8 +71,10 @@ import {
   RichPreview,
   refusedFields,
   refusedProblems,
+  StaleRead,
   StorePreview,
 } from './content-parts';
+import { formatDamascusDay } from './damascus-time';
 
 /**
  * One page's editor (S14 PG3–PG6): the title and the limited-Markdown body with its problems by
@@ -81,18 +93,16 @@ export function PageEditor({ page }: { page: ContentPage }) {
 
   const back = (
     <Button variant="ghost" render={<Link to="/content/pages" />}>
-      <ArrowRightIcon />
+      <ArrowRightIcon className="ltr:-scale-x-100" />
       {t('content.pages.back')}
     </Button>
   );
-  if (draft.isError) {
+  // Only a first read that fails replaces the editor; a later one keeps the typed text (A08-6).
+  if (draft.isError && !draft.data) {
     return (
       <div className="flex flex-col items-start gap-3">
         {back}
-        <FormAlert>{errorMessage(t, draft.error)}</FormAlert>
-        <Button variant="outline" onClick={() => draft.refetch()}>
-          {t('common.retry')}
-        </Button>
+        <ReadFailure error={draft.error} onRetry={() => draft.refetch()} />
       </div>
     );
   }
@@ -111,6 +121,8 @@ export function PageEditor({ page }: { page: ContentPage }) {
       page={page}
       initial={initial}
       current={draft.data}
+      readFailed={draft.isError}
+      onRetryRead={() => void draft.refetch()}
       back={back}
       onReload={async () => {
         const fresh = await draft.refetch();
@@ -127,6 +139,8 @@ function Editor({
   page,
   initial,
   current,
+  readFailed,
+  onRetryRead,
   back,
   onReload,
   onReplaced,
@@ -135,6 +149,9 @@ function Editor({
   initial: PageDraft;
   /** The newest read of the draft: its versions and published state. */
   current: PageDraft;
+  /** The newest read failed: `current` is the one before it. */
+  readFailed: boolean;
+  onRetryRead: () => void;
   back: React.ReactNode;
   onReload: () => Promise<void>;
   /** A restore answered a new draft: the editor starts again from it. */
@@ -148,6 +165,7 @@ function Editor({
   const [body, setBody] = useState(initial.body);
   const [saved, setSaved] = useState<Saved>(initial);
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [bodyError, setBodyError] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -190,8 +208,18 @@ function Editor({
     const parsed = savePageDraftSchema.safeParse({ title, body, revision: saved.revision });
     const titleIssue = parsed.error?.issues.some((issue) => issue.path[0] === 'title');
     setTitleError(titleIssue ? t('content.pages.errors.title') : null);
+    // The length is refused here, not cut by the field (audit A08-26); problems are per line.
+    const bodyIssue = parsed.error?.issues.some(
+      (issue) => issue.path[0] === 'body' && issue.path.length === 1,
+    );
+    setBodyError(bodyIssue ? t('content.pages.errors.body', { max: PAGE_BODY_MAX }) : null);
     if (!parsed.success) return showInvalid();
     if (save.isPending) return;
+    // Nothing to save: no new revision, audit entry or stale tab elsewhere (audit A08-24).
+    if (!dirty) {
+      toast.add({ title: t('content.pages.nothingToSave') });
+      return;
+    }
     try {
       const result = await save.mutateAsync(parsed.data);
       setSaved({ title: result.title, body: result.body, revision: result.revision });
@@ -199,13 +227,15 @@ function Editor({
     } catch (error) {
       refused(error);
     }
-  }, [title, body, saved.revision, save, refused, showInvalid, t]);
+  }, [title, body, dirty, saved.revision, save, refused, showInvalid, t]);
 
-  // Ctrl+S (or ⌘S) saves the draft instead of the browser saving the page.
+  // Ctrl+S (or ⌘S) saves the draft instead of the browser saving the page; not under a dialog
+  // (publish, stale, a version, leaving), whose question comes first (audit A08-24).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
+        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
         void submit();
       }
     };
@@ -219,7 +249,7 @@ function Editor({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={initial.title}
+        title={saved.title}
         description={
           published
             ? t('content.pages.published', {
@@ -246,6 +276,7 @@ function Editor({
       {dirty && (
         <p className="-mt-3 text-sm text-muted-foreground">{t('content.pages.saveFirst')}</p>
       )}
+      {readFailed && <StaleRead onRetry={onRetryRead} />}
 
       <Tabs
         value={view}
@@ -279,23 +310,23 @@ function Editor({
             />
             <FieldError match={!!titleError}>{titleError}</FieldError>
           </Field>
-          <Field invalid={shownProblems.length > 0}>
+          <Field invalid={shownProblems.length > 0 || !!bodyError}>
             <FieldLabel>{t('content.pages.body')}</FieldLabel>
             <Textarea
               value={body}
               rows={22}
-              maxLength={PAGE_BODY_MAX}
               dir="rtl"
               // Each line takes the direction of its own first letter (an English line stays LTR).
               className="[unicode-bidi:plaintext]"
               onChange={(event) => setBody(event.target.value)}
             />
             <FieldDescription>{t('content.syntax')}</FieldDescription>
+            <FieldError match={!!bodyError}>{bodyError}</FieldError>
           </Field>
           <ProblemList problems={shownProblems} />
           <LinkWarnings source={deferredBody} />
           {failure && <FormAlert>{failure}</FormAlert>}
-          <InvalidAlert show={!!titleError || serverProblems.length > 0} />
+          <InvalidAlert show={!!titleError || !!bodyError || serverProblems.length > 0} />
         </form>
         <StorePreview className={cn(view === 'edit' && 'max-lg:hidden')}>
           <PagePreview title={deferredTitle} body={deferredBody} />
@@ -347,6 +378,7 @@ function Editor({
       />
       <StaleDialog
         open={stale}
+        edits={`${title}\n\n${body}`}
         onReload={async () => {
           setStale(false);
           await onReload();
@@ -373,7 +405,9 @@ function PagePreview({ title, body, date }: { title: string; body: string; date?
     <article className="flex flex-col gap-2 px-4 py-8">
       <h1 className="text-2xl font-bold">{title}</h1>
       <p className="text-sm text-muted-foreground">
-        {t('content.pages.updated', { date: formatDate(date ?? new Date().toISOString()) })}
+        {t('content.pages.updated', {
+          date: formatDamascusDay(date ?? new Date().toISOString()),
+        })}
       </p>
       <div className="mt-4 max-w-[70ch]">
         <RichPreview source={body} />
@@ -383,9 +417,19 @@ function PagePreview({ title, body, date }: { title: string; body: string; date?
 }
 
 /** PG3: another tab saved or published first; the editor offers to reload the stored draft. */
-function StaleDialog({ open, onReload }: { open: boolean; onReload: () => Promise<void> }) {
+function StaleDialog({
+  open,
+  edits,
+  onReload,
+}: {
+  open: boolean;
+  /** The typed title and body, copied before the reload replaces them (audit A08-9). */
+  edits: string;
+  onReload: () => Promise<void>;
+}) {
   const { t } = useTranslation();
   const [pending, setPending] = useState(false);
+  const { copy, copied } = useCopy();
   return (
     <AlertDialog open={open}>
       <AlertDialogContent>
@@ -394,6 +438,10 @@ function StaleDialog({ open, onReload }: { open: boolean; onReload: () => Promis
           <AlertDialogDescription>{t('content.stale.body')}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
+          <Button variant="outline" onClick={() => void copy(edits)}>
+            {copied ? <CheckIcon /> : <CopyIcon />}
+            {copied ? t('content.stale.copied') : t('content.stale.copy')}
+          </Button>
           <Button
             disabled={pending}
             onClick={async () => {
@@ -461,13 +509,19 @@ function Versions({
                 <TableCell>{formatDate(version.publishedAt)}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => setViewing(version.version)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-11"
+                      onClick={() => setViewing(version.version)}
+                    >
                       <EyeIcon />
                       {t('content.versions.view')}
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
+                      className="h-11"
                       onClick={() => setRestoring(version.version)}
                     >
                       {t('content.versions.restore')}
@@ -518,7 +572,7 @@ function VersionDialog({ page, version }: { page: ContentPage; version: number }
         <DialogTitle>{t('content.versions.viewTitle', { version })}</DialogTitle>
       </DialogHeader>
       {read.isPending && <Skeleton className="h-64 w-full" aria-hidden="true" />}
-      {read.isError && <FormAlert>{errorMessage(t, read.error)}</FormAlert>}
+      {read.isError && <ReadFailure error={read.error} onRetry={() => read.refetch()} />}
       {read.data && (
         <StorePreview>
           <PagePreview title={read.data.title} body={read.data.body} date={read.data.publishedAt} />

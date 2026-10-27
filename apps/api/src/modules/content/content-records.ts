@@ -93,6 +93,14 @@ export const refusals = {
     ),
 };
 
+/**
+ * The FAQ's lock without a change: archiving or restoring a row already in that state answers it
+ * unchanged and leaves the revision as it was, so no "unpublished changes" appear (audit A08-1).
+ */
+export async function lockFaqRevision(tx: Transaction): Promise<void> {
+  await tx.select({ id: contentSettings.id }).from(contentSettings).for('update');
+}
+
 /** Rule FQ6: every FAQ change increments the working revision, which also serializes them. */
 export async function bumpFaqRevision(tx: Transaction): Promise<number> {
   const [row] = await tx

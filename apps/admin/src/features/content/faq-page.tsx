@@ -36,6 +36,8 @@ import { type DragEvent, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
+import { useVisibleAgain } from '../../lib/admin-stream';
 import { errorCode, errorMessage } from '../../lib/errors';
 import { formatDate, formatSince } from '../../lib/format';
 import { MoveButton } from '../catalog/catalog-parts';
@@ -46,7 +48,7 @@ import {
   usePublishFaq,
   useReorderFaq,
 } from './content.queries';
-import { RichPreview, StorePreview } from './content-parts';
+import { RichPreview, reorderFailure, StaleRead, StorePreview } from './content-parts';
 import { FaqItemDialog, FaqSectionDialog } from './faq-dialogs';
 import { faqOrder, withItemMoved, withSectionMoved } from './faq-order';
 
@@ -71,6 +73,7 @@ export function FaqPage({
   const { t } = useTranslation();
   const archivedId = useId();
   const faq = useQuery(faqQuery(archived));
+  useVisibleAgain(() => void faq.refetch());
   const reorder = useReorderFaq();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -81,27 +84,19 @@ export function FaqPage({
       await reorder.mutateAsync(order);
     } catch (error) {
       // Edge case 7: a stale list is refused; the working copy is read again on settle.
-      setFailure(errorMessage(t, error));
+      setFailure(reorderFailure(t, error));
     }
   }
 
   if (faq.isPending) return <Skeleton className="h-64 w-full" aria-hidden="true" />;
-  if (faq.isError) {
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <FormAlert>{errorMessage(t, faq.error)}</FormAlert>
-        <Button variant="outline" onClick={() => faq.refetch()}>
-          {t('common.retry')}
-        </Button>
-      </div>
-    );
-  }
+  if (!faq.data) return <ReadFailure error={faq.error} onRetry={() => faq.refetch()} />;
   const copy = faq.data;
   const live = copy.sections.filter((section) => !section.archivedAt);
   const order = faqOrder(copy);
 
   return (
     <div className="flex flex-col gap-6">
+      {faq.isError && <StaleRead onRetry={() => faq.refetch()} />}
       <PublishBar copy={copy} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label htmlFor={archivedId} className="flex cursor-pointer items-center gap-2 text-sm">
@@ -184,9 +179,11 @@ function SectionList({
       if (dragging?.sectionId === sectionId) event.preventDefault();
     },
     onDrop: (event: DragEvent) => {
+      // A section dropped over another section's questions bubbles up to that card (A08-10).
+      if (dragging?.sectionId !== sectionId) return;
       event.preventDefault();
       event.stopPropagation();
-      if (dragging?.sectionId === sectionId && dragging.index !== index) {
+      if (dragging.index !== index) {
         onOrder(
           sectionId
             ? withItemMoved(order, sectionId, dragging.index, index)
@@ -246,14 +243,16 @@ function SectionCard({
   const { t } = useTranslation();
   const archive = useArchiveSection();
   const [failure, setFailure] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const archived = !!section.archivedAt;
   const itemIds = order.sections[position]?.itemIds ?? [];
   const liveItems = section.items.filter((item) => !item.archivedAt).length;
+  const name = { name: section.title };
 
-  async function toggleArchive() {
+  async function restore() {
     setFailure(null);
     try {
-      await archive.mutateAsync({ id: section.id, archive: !archived });
+      await archive.mutateAsync({ id: section.id, archive: false });
     } catch (error) {
       setFailure(errorMessage(t, error));
     }
@@ -273,7 +272,7 @@ function SectionCard({
         {!archived && (
           <>
             <MoveButton
-              label={t('content.actions.moveUp')}
+              label={t('content.actions.moveUpNamed', name)}
               disabled={pending}
               onClick={
                 position > 0
@@ -284,7 +283,7 @@ function SectionCard({
               <ArrowUpIcon />
             </MoveButton>
             <MoveButton
-              label={t('content.actions.moveDown')}
+              label={t('content.actions.moveDownNamed', name)}
               disabled={pending}
               onClick={
                 position < count - 1
@@ -294,7 +293,13 @@ function SectionCard({
             >
               <ArrowDownIcon />
             </MoveButton>
-            <Button variant="ghost" size="sm" onClick={() => onEdit({ kind: 'section', section })}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-11"
+              aria-label={t('content.actions.editNamed', name)}
+              onClick={() => onEdit({ kind: 'section', section })}
+            >
               <PencilIcon />
               {t('content.actions.edit')}
             </Button>
@@ -303,14 +308,31 @@ function SectionCard({
         <Button
           variant="ghost"
           size="sm"
+          className="h-11"
+          aria-label={t(
+            archived ? 'content.actions.restoreNamed' : 'content.actions.archiveNamed',
+            name,
+          )}
           disabled={archive.isPending}
-          onClick={() => void toggleArchive()}
+          onClick={() => (archived ? void restore() : setConfirming(true))}
         >
           {archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
           {archived ? t('content.actions.restore') : t('content.actions.archive')}
         </Button>
       </div>
       {failure && <FormAlert>{failure}</FormAlert>}
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        title={t('content.faq.archiveSectionTitle', { title: section.title })}
+        body={t('content.faq.archiveSectionBody')}
+        action={t('content.actions.archive')}
+        destructive
+        pending={archive.isPending}
+        onConfirm={async () => {
+          await archive.mutateAsync({ id: section.id, archive: true });
+        }}
+      />
       {section.items.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('content.faq.noQuestions')}</p>
       ) : (
@@ -338,6 +360,7 @@ function SectionCard({
           <Button
             variant="outline"
             size="sm"
+            className="h-11"
             disabled={liveItems >= FAQ_ITEMS_PER_SECTION_MAX}
             onClick={() => onEdit({ kind: 'item', item: null, sectionId: section.id })}
           >
@@ -373,13 +396,15 @@ function ItemRow({
   const { t } = useTranslation();
   const archive = useArchiveItem();
   const [failure, setFailure] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const archived = !!item.archivedAt;
   const movable = !archived && !sectionArchived;
+  const name = { name: item.question };
 
-  async function toggleArchive() {
+  async function restore() {
     setFailure(null);
     try {
-      await archive.mutateAsync({ id: item.id, archive: !archived });
+      await archive.mutateAsync({ id: item.id, archive: false });
     } catch (error) {
       setFailure(errorMessage(t, error));
     }
@@ -399,14 +424,14 @@ function ItemRow({
         {movable && (
           <>
             <MoveButton
-              label={t('content.actions.moveUp')}
+              label={t('content.actions.moveUpNamed', name)}
               disabled={pending}
               onClick={index > 0 ? () => onMove(index - 1) : undefined}
             >
               <ArrowUpIcon />
             </MoveButton>
             <MoveButton
-              label={t('content.actions.moveDown')}
+              label={t('content.actions.moveDownNamed', name)}
               disabled={pending}
               onClick={index < count - 1 ? () => onMove(index + 1) : undefined}
             >
@@ -414,8 +439,15 @@ function ItemRow({
             </MoveButton>
           </>
         )}
-        {!archived && (
-          <Button variant="ghost" size="sm" onClick={onEdit}>
+        {/* A question under an archived section is edited once its section is back (A08-17). */}
+        {movable && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-11"
+            aria-label={t('content.actions.editNamed', name)}
+            onClick={onEdit}
+          >
             <PencilIcon />
             {t('content.actions.edit')}
           </Button>
@@ -423,14 +455,31 @@ function ItemRow({
         <Button
           variant="ghost"
           size="sm"
+          className="h-11"
+          aria-label={t(
+            archived ? 'content.actions.restoreNamed' : 'content.actions.archiveNamed',
+            name,
+          )}
           disabled={archive.isPending}
-          onClick={() => void toggleArchive()}
+          onClick={() => (archived ? void restore() : setConfirming(true))}
         >
           {archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
           {archived ? t('content.actions.restore') : t('content.actions.archive')}
         </Button>
       </div>
       {failure && <FormAlert>{failure}</FormAlert>}
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        title={t('content.faq.archiveItemTitle')}
+        body={t('content.faq.archiveItemBody', { question: item.question })}
+        action={t('content.actions.archive')}
+        destructive
+        pending={archive.isPending}
+        onConfirm={async () => {
+          await archive.mutateAsync({ id: item.id, archive: true });
+        }}
+      />
     </li>
   );
 }
@@ -444,6 +493,7 @@ function PublishBar({ copy }: { copy: FaqWorkingCopy }) {
   const publish = usePublishFaq();
   const [previewing, setPreviewing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [stale, setStale] = useState(false);
   const ahead = copy.revision > (copy.publication?.revision ?? 0);
   return (
     <div
@@ -468,11 +518,19 @@ function PublishBar({ copy }: { copy: FaqWorkingCopy }) {
         </span>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => setPreviewing(true)}>
+        <Button variant="outline" size="sm" className="h-11" onClick={() => setPreviewing(true)}>
           <EyeIcon />
           {t('content.faq.preview')}
         </Button>
-        <Button size="sm" disabled={!ahead} onClick={() => setConfirming(true)}>
+        <Button
+          size="sm"
+          className="h-11"
+          disabled={!ahead}
+          onClick={() => {
+            setStale(false);
+            setConfirming(true);
+          }}
+        >
           <SendIcon />
           {t('content.faq.publish')}
         </Button>
@@ -497,13 +555,22 @@ function PublishBar({ copy }: { copy: FaqWorkingCopy }) {
         action={t('content.faq.publish')}
         pending={publish.isPending}
         onConfirm={async () => {
-          await publish.mutateAsync(copy.revision);
+          try {
+            await publish.mutateAsync(copy.revision);
+          } catch (error) {
+            if (errorCode(error) !== 'CONTENT_STALE') throw error;
+            // FQ6: what was previewed is gone; the bar asks for a new review (A08-13).
+            setStale(true);
+            return;
+          }
           toast.add({ title: t('content.faq.publishedToast'), type: 'success' });
         }}
-        describeFailure={(error) =>
-          errorCode(error) === 'CONTENT_STALE' ? t('content.faq.stale') : undefined
-        }
       />
+      {stale && (
+        <div className="basis-full">
+          <FormAlert>{t('content.faq.stale')}</FormAlert>
+        </div>
+      )}
     </div>
   );
 }

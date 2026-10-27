@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 import { t } from '@/lib/i18n';
+import { ContentLink } from './content-link';
 import { getPublishedPage } from './data';
 import { pageDescription, updatedText } from './texts';
 
@@ -21,16 +22,24 @@ export async function ContentPageView({ page }: { page: ContentPage }) {
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-2 px-4 py-10 md:py-16">
       <h1 className="text-3xl font-bold">{data.title}</h1>
       <p className="text-sm text-muted-foreground">{updatedText(data.updatedAt)}</p>
-      <RichText blocks={parseRichText(data.body).blocks} className="mt-6 max-w-[70ch]" />
+      <RichText
+        blocks={parseRichText(data.body).blocks}
+        link={ContentLink}
+        className="mt-6 max-w-[70ch]"
+      />
     </article>
   );
 }
 
-/** The page's own title and a description from its first paragraph. */
+/**
+ * The page's own title and a description from its first paragraph; "not found" with `noindex`
+ * only while unpublished, the site's own title when the read failed (audit A08-40).
+ */
 export async function contentPageMetadata(page: ContentPage): Promise<Metadata> {
   await connection();
-  const data = await getPublishedPage(page).catch(() => null);
-  if (!data) return { title: t('notFound.title'), robots: { index: false } };
+  const data = await getPublishedPage(page).catch(() => undefined);
+  if (data === undefined) return {};
+  if (data === null) return { title: t('notFound.title'), robots: { index: false } };
   return { title: data.title, description: pageDescription(parseRichText(data.body).blocks) };
 }
 
