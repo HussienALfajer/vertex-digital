@@ -2,7 +2,8 @@
 # Prepares a Claude Code cloud session: Node 24 on PATH, PostgreSQL 17 running, packages installed,
 # `.env` with the dev and test databases. Run by the SessionStart hook in .claude/settings.json on
 # every start and resume; it does nothing outside cloud sessions. The VM itself is provisioned once
-# by scripts/cloud-setup.sh (the environment's setup script).
+# by the environment's setup script: the shared `vertex` environment's, which covers
+# scripts/cloud-setup.sh.
 #
 # Standard output reaches Claude's context, so it prints a short status only; details go to the log.
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
@@ -29,7 +30,14 @@ export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 [ -n "${CLAUDE_ENV_FILE:-}" ] && echo "export COREPACK_ENABLE_DOWNLOAD_PROMPT=0" >>"$CLAUDE_ENV_FILE"
 status+=("node $(node --version 2>/dev/null)")
 
-# PostgreSQL 17 in Docker, as in CI; the image's PostgreSQL 16 service is the fallback.
+# PostgreSQL 17 in Docker, as in CI; the image's PostgreSQL 16 service is the fallback. A server
+# that already answers on 127.0.0.1:5432 (the shared `vertex` environment's `vertex-postgres`, or
+# another Vertex repository's session in the same VM) is reused with the password `postgres`:
+# a second server cannot bind the port.
+existing_postgres() {
+  command -v pg_isready >/dev/null && pg_isready -q -h 127.0.0.1 -p 5432
+}
+
 start_docker_postgres() {
   if ! $SUDO docker info >/dev/null 2>&1; then
     ($SUDO dockerd >/tmp/dockerd.log 2>&1 &)
@@ -51,7 +59,15 @@ start_service_postgres() {
   $SUDO su postgres -c "psql -qc \"ALTER USER postgres PASSWORD 'postgres'\"" >/dev/null
 }
 
-if start_docker_postgres >>"$LOG" 2>&1; then
+if existing_postgres; then
+  version=$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -tAc 'SHOW server_version' 2>>"$LOG" | cut -d' ' -f1)
+  status+=("postgres ${version:-?} (existing server on 5432)")
+  case "$version" in
+    17*) ;;
+    "") problems+=("A PostgreSQL server answers on 127.0.0.1:5432 but refused the postgres/postgres login; see $LOG") ;;
+    *) problems+=("The PostgreSQL server on 127.0.0.1:5432 is $version, while CI and production use 17") ;;
+  esac
+elif start_docker_postgres >>"$LOG" 2>&1; then
   status+=("postgres 17 (docker)")
 elif start_service_postgres >>"$LOG" 2>&1; then
   status+=("postgres 16 (fallback service)")
