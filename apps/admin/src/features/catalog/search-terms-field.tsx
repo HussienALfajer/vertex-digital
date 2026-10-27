@@ -37,6 +37,12 @@ export function SearchTermsField({
     if (event.key !== 'Enter') return;
     // Enter adds a chip; it never submits the game form.
     event.preventDefault();
+    addTyped();
+  }
+
+  // Leaving the field adds what was typed too, so a press on "حفظ" keeps it (audit A03-25).
+  function addTyped() {
+    if (!typed.trim()) return;
     const result = addSearchTerm(terms, typed);
     setRefusal(result.refusal);
     if (result.term === null) return;
@@ -90,6 +96,7 @@ export function SearchTermsField({
           setRefusal(null);
         }}
         onKeyDown={add}
+        onBlur={addTyped}
       />
       <FieldDescription>
         {t('catalog.searchTerms.hint', { count: terms.length, max: MAX_SEARCH_TERMS })}

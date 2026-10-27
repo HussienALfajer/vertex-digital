@@ -92,9 +92,17 @@ export function QuickBuyRow() {
       type: 'success',
       actionProps: {
         children: tq('row.undo'),
-        onClick: () => {
+        onClick: async () => {
           restore(item, at);
-          void setQuickBuyHidden(item.savedPlayer.id, false);
+          // A refused undo takes the card away again: the server still hides it (audit A03-32).
+          if (!(await setQuickBuyHidden(item.savedPlayer.id, false)).ok) {
+            setState((current) =>
+              current.status === 'ready'
+                ? { status: 'ready', items: current.items.filter((other) => other !== item) }
+                : current,
+            );
+            toast.add({ title: tq('row.undoFailed'), type: 'error' });
+          }
         },
       },
     });

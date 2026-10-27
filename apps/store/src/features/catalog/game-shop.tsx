@@ -111,7 +111,10 @@ export function GameShop({
     router.replace(`${pathname}${query}`, { scroll: false });
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: once, for the URL the page opened at.
+  // What the URL asks of the buy box: read when the page opens and again when a search command
+  // changes it on this same page (S22 SC3, audit A03-9); `choose` drops these keys.
+  const asked = ['repeat', 'player', 'line', 'via'].map((key) => searchParams.get(key)).join('|');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `asked` holds the parameters read.
   useEffect(() => {
     const repeat = searchParams.get('repeat');
     const player = searchParams.get('player');
@@ -140,11 +143,11 @@ export function GameShop({
         if (!product || !buyable(product)) return setRepeatFailed(true);
         choose(product.id, 1, next);
       });
-  }, []);
+  }, [asked]);
 
   const box = open && (
     <BuyBox
-      key={`${open.id}:${quantity}:${intent?.kind ?? ''}`}
+      key={`${open.id}:${quantity}:${intent?.kind ?? ''}:${intent?.kind === 'player' ? intent.savedId : ''}`}
       game={data.game}
       fields={data.fields}
       product={open}

@@ -1,10 +1,12 @@
-import type { CatalogImage } from '@vertex-digital/contracts';
+import { CATALOG_IMAGE_MAX_BYTES, type CatalogImage } from '@vertex-digital/contracts';
 import { Button } from '@vertex-digital/ui';
 import { ImageIcon, UploadIcon, XIcon } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { errorMessage } from '../../lib/errors';
 import { useUploadImage } from './catalog.queries';
+
+const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 /**
  * A catalog image field (rule CT10): uploaded at once, re-encoded by the API, previewed here; the
@@ -42,6 +44,17 @@ export function ImageUpload({
   async function choose(file: File | undefined) {
     if (!file) return;
     setFailure(null);
+    // Refused here before a slow line carries it up (audit A03-27); the API checks again.
+    const refused = !ACCEPTED_TYPES.includes(file.type)
+      ? 'IMAGE_INVALID'
+      : file.size > CATALOG_IMAGE_MAX_BYTES
+        ? 'PAYLOAD_TOO_LARGE'
+        : null;
+    if (refused) {
+      setFailure(t(`errors.api.${refused}`));
+      if (input.current) input.current.value = '';
+      return;
+    }
     try {
       onChange(await upload.mutateAsync(file));
     } catch (uploadError) {
@@ -67,7 +80,7 @@ export function ImageUpload({
       <input
         ref={input}
         type="file"
-        accept="image/png,image/jpeg,image/webp"
+        accept={ACCEPTED_TYPES.join(',')}
         className="sr-only"
         tabIndex={-1}
         aria-hidden="true"

@@ -18,6 +18,7 @@ import {
   type OrderContext,
   orders,
   productRoutes,
+  queueStoreRevalidate,
   queueTelegramMessage,
   type RoutingContext,
   recordObservedCost,
@@ -65,19 +66,22 @@ export function routingContext(env: Pick<Env, 'SUPPLIER_FAKE_ENABLED'>, now = ne
 
 /**
  * S17 rule WR8, in the transaction that failed the attempt: a send refused as out of stock marks
- * a finite-stock offer out until the next sync and reprices what it serves. Only a first send can
+ * a finite-stock offer out until the next sync, reprices what it serves and refreshes the store. Only a first send can
  * fail an attempt (S16 RS1: a refused re-send is `unknown`), so a re-send marks nothing.
  */
 export async function markStockRefusal(
   tx: Transaction,
   applied: AppliedOutcome,
   outcome: AttemptOutcome,
-  context: RoutingContext,
+  context: RoutingContext & { jobs: JobSender },
 ): Promise<boolean> {
   const { attempt } = applied;
   if (!applied.applied || outcome.status !== 'failed' || attempt.offerId === null) return false;
   if (outcome.supplierErrorCode !== OUT_OF_STOCK_CODE) return false;
-  return markOfferOutOfStock(tx, attempt.offerId, context);
+  if (!(await markOfferOutOfStock(tx, attempt.offerId, context))) return false;
+  // S09 rule SF4: the store shows the availability this changed (audit A03-3).
+  await queueStoreRevalidate(tx, context.jobs);
+  return true;
 }
 
 /**

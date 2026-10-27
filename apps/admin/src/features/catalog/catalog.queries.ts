@@ -91,7 +91,10 @@ export const gameQuery = (id: string) =>
 
 const invalidateCatalog = (queryClient: QueryClient) =>
   Promise.all(
-    ['catalog', 'pricing'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+    // Routes and offers name the packs, the audit trail records the change (audit A03-23).
+    ['catalog', 'pricing', 'suppliers', 'audit'].map((key) =>
+      queryClient.invalidateQueries({ queryKey: [key] }),
+    ),
   );
 
 /**

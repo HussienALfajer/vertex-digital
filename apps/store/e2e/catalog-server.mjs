@@ -13,7 +13,8 @@
 // the current 5 minutes, so it reads "منذ نحو 5 دقائق" for 5 minutes at least, while the store's
 // 60-second content cache serves it; one floored from 5 minutes ago turned into "10" whenever the
 // next 5-minute mark passed in between). Started by playwright.config.ts; the port is the first
-// argument.
+// argument. Audit A03-7: `/_flaky?slug=flaky-…&fail=1` makes that game's read fail until
+// `fail=0`, for the error view's retry.
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 
@@ -32,6 +33,8 @@ const port = Number(process.argv[2] ?? 4002);
 /** Share token → the `X-Forwarded-For` values its reads carried. */
 const forwardedFor = new Map();
 const TELEGRAM_URL = 'https://t.me/vertex_support_test';
+/** Audit A03-7: game slugs whose read fails until `/_flaky?slug=&fail=0`; PUBG's data otherwise. */
+const failing = new Set();
 
 const NO_CONTENT = { announcement: null, banners: [], pages: [], faqPublished: false };
 const FIVE_MINUTES = 5 * 60 * 1000;
@@ -110,6 +113,18 @@ createServer((request, response) => {
       G2MEXX: { target: 'home' },
     };
     if (targets[quick[1]]) return json(response, 200, targets[quick[1]]);
+  }
+  if (path === '/_flaky') {
+    const slug = url.searchParams.get('slug') ?? '';
+    if (url.searchParams.get('fail') === '1') failing.add(slug);
+    else failing.delete(slug);
+    return json(response, 200, { failing: [...failing] });
+  }
+  const flaky = /^\/api\/catalog\/games\/(flaky-[a-z0-9-]+)$/.exec(path);
+  if (flaky) {
+    if (failing.has(flaky[1])) return json(response, 503, { code: 'INTERNAL_ERROR' });
+    const pubg = games['pubg-mobile'];
+    return json(response, 200, { ...pubg, game: { ...pubg.game, slug: flaky[1] } });
   }
   const game = /^\/api\/catalog\/games\/([a-z0-9-]+)$/.exec(path);
   if (game && !empty && games[game[1]]) return json(response, 200, games[game[1]]);

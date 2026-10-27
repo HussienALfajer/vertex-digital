@@ -1222,8 +1222,11 @@ describe('two routes of one supplier (S17 WR8, WR9)', () => {
       const { item, web, webOffer, auto } = await webAndAuto(tx);
       fakeState = fakeSupplierStateSchema.parse({ stockCounts: { 'fake-uc-325': 0 } });
       const order = await buy(tx, item);
+      sent.length = 0;
       await fulfil.fulfil(order.id, tx);
       const [first] = await attemptsOf(tx, order.id);
+      // S09 SF4: the store learns the pack's availability changed (audit A03-3).
+      expect(sent.filter((job) => job.queue === 'store.revalidate')).toHaveLength(1);
       expect(first).toMatchObject({
         routeId: web,
         status: 'failed',
@@ -1253,7 +1256,9 @@ describe('two routes of one supplier (S17 WR8, WR9)', () => {
       const { item, webOffer } = await webAndAuto(tx, null);
       fakeState = fakeSupplierStateSchema.parse({ outOfStock: ['fake-uc-325'] });
       const order = await buy(tx, item);
+      sent.length = 0;
       await fulfil.fulfil(order.id, tx);
+      expect(sent.filter((job) => job.queue === 'store.revalidate')).toEqual([]);
       expect((await attemptsOf(tx, order.id))[0]).toMatchObject({
         status: 'failed',
         supplierErrorCode: 'OUT_OF_STOCK',
@@ -1269,7 +1274,7 @@ describe('two routes of one supplier (S17 WR8, WR9)', () => {
       expect(resent).toMatchObject({ status: 'unknown', supplierErrorCode: 'OUT_OF_STOCK' });
       const [attempt] = await attemptsOf(tx, order.id);
       const applied = { applied: true, order, attempt } as unknown as AppliedOutcome;
-      const context = { now: new Date(), fakeEnabled: true };
+      const context = { now: new Date(), fakeEnabled: true, jobs };
       expect(await markStockRefusal(tx, applied, resent, context)).toBe(false);
     });
   });

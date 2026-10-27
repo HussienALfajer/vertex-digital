@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { useBlocker, useNavigate } from '@tanstack/react-router';
 import {
   ACCENT_DARK_SURFACE,
   ACCENT_LIGHT_SURFACE,
@@ -23,12 +23,14 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Skeleton,
   Switch,
   Textarea,
   useFocusInvalid,
 } from '@vertex-digital/ui';
-import { type FormEvent, useId, useState } from 'react';
+import { type FormEvent, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
@@ -84,11 +86,35 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
   // Audit A5: saving while an image uploads would save the image it is replacing.
   const [coverUploading, setCoverUploading] = useState(false);
   const [idGuideUploading, setIdGuideUploading] = useState(false);
-  const pending = create.isPending || update.isPending || coverUploading || idGuideUploading;
+  const [supplierCoverPending, setSupplierCoverPending] = useState(false);
+  const pending =
+    create.isPending ||
+    update.isPending ||
+    coverUploading ||
+    idGuideUploading ||
+    supplierCoverPending;
+  // Audit A03-12: what was typed is kept across the tabs (the panel stays mounted) and leaving
+  // the page asks first. A ref, so a save's own navigation reads it at once.
+  const dirty = useRef(false);
+  const touch = () => {
+    dirty.current = true;
+  };
+  const changed =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      set(value);
+      touch();
+    };
+  const blocker = useBlocker({
+    shouldBlockFn: ({ current, next }) => dirty.current && current.pathname !== next.pathname,
+    enableBeforeUnload: () => dirty.current,
+    withResolver: true,
+  });
 
   const items = (categories.data ?? []).map((item) => ({ value: item.id, label: item.nameAr }));
-  // A game in an archived category still shows it, though it cannot be picked again.
-  if (game && !items.some((item) => item.value === game.categoryId)) {
+  // A game in an archived category still shows it, though it cannot be picked again (only once
+  // the list is read: before, every category would read as archived, audit A03-14).
+  if (game && categories.isSuccess && !items.some((item) => item.value === game.categoryId)) {
     items.push({ value: game.categoryId, label: t('catalog.game.archivedCategoryName') });
   }
 
@@ -123,17 +149,26 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
     try {
       if (game) {
         await update.mutateAsync(parsed.data);
+        dirty.current = false;
         setSaved(true);
       } else {
         const created = await create.mutateAsync(
           parsed.data as Parameters<typeof create.mutateAsync>[0],
         );
+        dirty.current = false;
         await navigate({ to: '/catalog/games/$id', params: { id: created.id } });
       }
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined;
       const field = code ? FIELD_OF_CODE[code] : undefined;
-      if (code === 'ACCENT_CONTRAST_TOO_LOW' && error instanceof ApiError) {
+      const missing =
+        error instanceof ApiError && code === 'CATALOG_INCOMPLETE'
+          ? (error.details as { missing?: string[] } | undefined)?.missing
+          : undefined;
+      if (missing?.includes('cover')) {
+        // An active game keeps its cover (rule CT3), said where the cover is (audit A03-13).
+        setErrors({ cover: t('catalog.game.coverRequired') });
+      } else if (code === 'ACCENT_CONTRAST_TOO_LOW' && error instanceof ApiError) {
         const ratio = (error.details as { ratio?: unknown } | undefined)?.ratio;
         setErrors({
           accentColor: t('catalog.game.accentRefused', { ratio: ltr(`${String(ratio)}:1`) }),
@@ -143,7 +178,7 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
       } else if (code === 'VALIDATION_FAILED' && refusesSearchTerms(error)) {
         setErrors({ searchTerms: t('catalog.searchTerms.invalid') });
       } else {
-        return setFailure(errorMessage(t, error));
+        return setFailure(catalogFailure(t, error));
       }
       focusInvalid();
     }
@@ -152,7 +187,13 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <Card>
-        <form ref={ref} className="flex flex-col gap-5" onSubmit={submit} noValidate>
+        <form
+          ref={ref}
+          className="flex flex-col gap-5"
+          onSubmit={submit}
+          onChange={touch}
+          noValidate
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <Field invalid={!!errors.nameAr}>
               <FieldLabel>{t('catalog.fields.nameAr')}</FieldLabel>
@@ -188,18 +229,29 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
             </Field>
             <Field invalid={!!errors.categoryId}>
               <FieldLabel render={<span />}>{t('catalog.fields.category')}</FieldLabel>
-              <Select items={items} value={category} onValueChange={(value) => setCategory(value)}>
-                <SelectTrigger aria-label={t('catalog.fields.category')}>
-                  <SelectValue placeholder={t('catalog.fields.chooseCategory')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {items.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {categories.isPending ? (
+                <Skeleton className="h-8 w-full" />
+              ) : categories.isError ? (
+                <div className="flex flex-col items-start gap-2">
+                  <FormAlert>{errorMessage(t, categories.error)}</FormAlert>
+                  <Button variant="outline" size="sm" onClick={() => void categories.refetch()}>
+                    {t('common.retry')}
+                  </Button>
+                </div>
+              ) : (
+                <Select items={items} value={category} onValueChange={changed(setCategory)}>
+                  <SelectTrigger aria-label={t('catalog.fields.category')}>
+                    <SelectValue placeholder={t('catalog.fields.chooseCategory')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {items.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {game && <FieldDescription>{t('catalog.fields.categoryMove')}</FieldDescription>}
               <FieldError match={!!errors.categoryId}>{errors.categoryId}</FieldError>
             </Field>
@@ -210,20 +262,27 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
                 label={t('catalog.fields.cover')}
                 hint={t('catalog.fields.coverHint')}
                 image={cover}
-                onChange={setCover}
+                onChange={changed(setCover)}
                 onPendingChange={setCoverUploading}
+                error={errors.cover}
               />
-              {game && <SupplierCoverButton gameId={game.id} onCover={setCover} />}
+              {game && (
+                <SupplierCoverButton
+                  gameId={game.id}
+                  onCover={setCover}
+                  onPendingChange={setSupplierCoverPending}
+                />
+              )}
             </div>
             <ImageUpload
               label={t('catalog.fields.idGuide')}
               hint={t('catalog.fields.idGuideHint')}
               image={idGuide}
-              onChange={setIdGuide}
+              onChange={changed(setIdGuide)}
               onPendingChange={setIdGuideUploading}
             />
           </div>
-          <AccentField value={accent} onChange={setAccent} error={errors.accentColor} />
+          <AccentField value={accent} onChange={changed(setAccent)} error={errors.accentColor} />
           <Field invalid={!!errors.regionNotesAr}>
             <FieldLabel>{t('catalog.fields.regionNotes')}</FieldLabel>
             <Textarea
@@ -238,7 +297,7 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
           {game && (
             <SearchTermsField
               terms={searchTerms}
-              onChange={setSearchTerms}
+              onChange={changed(setSearchTerms)}
               error={errors.searchTerms}
             />
           )}
@@ -253,6 +312,16 @@ export function GameForm({ game, categoryId }: { game?: GameDetail; categoryId?:
             {game ? t('catalog.game.save') : t('catalog.game.create')}
           </Button>
         </form>
+        <ConfirmDialog
+          open={blocker.status === 'blocked'}
+          onClose={() => blocker.reset?.()}
+          title={t('catalog.game.leave.title')}
+          body={t('catalog.game.leave.body')}
+          action={t('catalog.game.leave.leave')}
+          destructive
+          pending={false}
+          onConfirm={async () => blocker.proceed?.()}
+        />
       </Card>
       <div className="flex flex-col gap-6">
         {game ? (

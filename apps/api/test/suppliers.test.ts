@@ -1478,6 +1478,29 @@ describe('catalog changes that move a price (audit A2)', () => {
     expect(await priceOf(productId)).toBe(usd(1.7));
   });
 
+  it("a pack's maximum quantity edit reprices it on the routes it may use now (audit A03-2)", async () => {
+    await reauthenticate();
+    const { productId } = await pricedGame('bounded');
+    await json(
+      await post(`/api/admin/catalog/products/${productId}/routes/manual`, {
+        costUsdUnits: usd(2),
+      }),
+      201,
+    );
+    const cheap = (await routing(productId)).routes.find((route) => route.basis);
+    expect(await priceOf(productId)).toBe(price(1));
+    // The cheaper offer takes at most 5 units per order (S19), recorded without a repricing.
+    await test.db
+      .update(supplierOffers)
+      .set({ maxQuantity: 5 })
+      .where(eq(supplierOffers.id, (cheap as Routing['routes'][number]).offer.id));
+
+    await json(await patch(`/api/admin/catalog/products/${productId}`, { maxQuantity: 8 }), 200);
+    expect(await priceOf(productId)).toBe(price(2));
+    await json(await patch(`/api/admin/catalog/products/${productId}`, { maxQuantity: 5 }), 200);
+    expect(await priceOf(productId)).toBe(price(1));
+  });
+
   it('a rule change waiting on a repricing that holds its pack does not deadlock (F8-3)', async () => {
     await reauthenticate();
     const { gameId, productId } = await pricedGame('deadlock');

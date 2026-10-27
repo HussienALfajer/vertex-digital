@@ -348,6 +348,41 @@ test.describe('supplier catalog', () => {
     ).toBe(null);
   });
 
+  test('Save waits for the supplier cover; a failed read of the linked categories retries (audit A03-20, A03-16)', async ({
+    page,
+    admin,
+  }) => {
+    synced(admin);
+    const { game } = freeFire(admin);
+    admin.supplierCatalog.link('fake-ff', game.id);
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/cover\/from-supplier$/, async (route) => {
+      await held;
+      await route.fallback();
+    });
+    await page.goto(`/catalog/games/${game.id}`);
+    await page
+      .getByRole('button', { name: s.gameLinks.cover.replace('{{supplier}}', s.names.fake) })
+      .click();
+    const save = page.getByRole('button', { name: ar.catalog.game.save });
+    await expect(save).toBeDisabled();
+    release();
+    await expect(save).toBeEnabled();
+
+    // The first read and TanStack's two retries of a server fault.
+    await page.route(
+      /\/supplier-categories$/,
+      (route) => route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR' } }),
+      { times: 3 },
+    );
+    await page.goto(`/catalog/games/${game.id}?tab=products`);
+    await page.getByRole('button', { name: ar.common.retry }).click();
+    await expect(page.getByRole('link', { name: 'Free Fire', exact: true })).toBeVisible();
+  });
+
   test('S18: links an offer to a suggested pack in a few clicks', async ({ page, admin }) => {
     synced(admin);
     const { game, product } = freeFire(admin);

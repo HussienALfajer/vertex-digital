@@ -87,7 +87,7 @@ export class CatalogStoreService {
 
   /** `GET /api/catalog/games/:slug` (rules SF1–SF3, BB1); a paused or archived game is not found. */
   async game(slug: string): Promise<StoreGame> {
-    const [found] = (await this.shownGames()).filter(({ game }) => game.slug === slug);
+    const [found] = await this.shownGames(slug);
     if (!found) throw refusals.notFound('game');
     const { game } = found;
     const [fields, products, rate, images] = await Promise.all([
@@ -163,7 +163,7 @@ export class CatalogStoreService {
    * and never a list's name; the public reads above stay retail for everyone.
    */
   async customerPrices(customerId: string, slug: string): Promise<CustomerPrices> {
-    const [found] = (await this.shownGames()).filter(({ game }) => game.slug === slug);
+    const [found] = await this.shownGames(slug);
     if (!found) throw refusals.notFound('game');
     const [products, rate, pricing] = await Promise.all([
       this.liveProducts([found.game.id]),
@@ -264,7 +264,8 @@ export class CatalogStoreService {
   }
 
   /** Rule SF1: active, unarchived games of unarchived categories, category then game order. */
-  private async shownGames() {
+  /** The shown games in store order; one game's row only for a slug (audit A03-37). */
+  private async shownGames(slug?: string) {
     return this.db
       .select({ game: catalogGames, category: catalogCategories })
       .from(catalogGames)
@@ -274,6 +275,7 @@ export class CatalogStoreService {
           eq(catalogGames.status, 'active'),
           isNull(catalogGames.archivedAt),
           isNull(catalogCategories.archivedAt),
+          slug === undefined ? undefined : eq(catalogGames.slug, slug),
         ),
       )
       .orderBy(

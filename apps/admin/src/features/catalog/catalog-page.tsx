@@ -300,7 +300,8 @@ function Games({ category, search }: { category: Category; search: CatalogSearch
                   ? {
                       up: index > 0 ? () => move(index, -1) : undefined,
                       down: index < items.length - 1 ? () => move(index, 1) : undefined,
-                      pending: reorder.isPending,
+                      // Another category's games, kept while this one loads (audit A03-19).
+                      pending: reorder.isPending || games.isPlaceholderData,
                     }
                   : undefined
               }

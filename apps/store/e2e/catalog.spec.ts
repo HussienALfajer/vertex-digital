@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { cheapestPackCombination, formatSyp, formatUsd } from '@vertex-digital/contracts';
 import ar from '../src/messages/ar.json' with { type: 'json' };
 import { CATALOG, PUBG, pack, searchIndex } from './catalog';
-import { E2E_REVALIDATE_SECRET, EMPTY_STORE_URL } from './servers';
+import { CATALOG_PORT, E2E_REVALIDATE_SECRET, EMPTY_STORE_URL } from './servers';
 import { expect, screenshot, test } from './test';
 
 /*
@@ -133,6 +133,24 @@ test.describe('game page (rules SF1–SF3, SF6, CL1–CL3)', () => {
     await expect(page.getByRole('heading', { level: 2, name: /UC$/ }).last()).toBeVisible();
   });
 
+  test('a failed read shows the error view; its retry reads the game again (audit A03-7)', async ({
+    browser,
+    request,
+  }) => {
+    // A page of its own: the browser logs the failed server render, which is the case under test.
+    const page = await browser.newPage({ baseURL: test.info().project.use.baseURL });
+    const slug = `flaky-${Math.random().toString(36).slice(2, 8)}`;
+    const flaky = (fail: 0 | 1) =>
+      request.get(`http://127.0.0.1:${CATALOG_PORT}/_flaky?slug=${slug}&fail=${fail}`);
+    await flaky(1);
+    await page.goto(`/games/${slug}`);
+    await expect(page.getByText(ar.error.title)).toBeVisible();
+    await flaky(0);
+    await page.getByRole('button', { name: ar.error.retry }).click();
+    await expect(page.getByRole('button', { name: /^60 UC/ })).toBeVisible();
+    await page.close();
+  });
+
   test('an unknown or paused game is not found, with a way home', async ({ page, api: _api }) => {
     await page.goto('/games/no-such-game');
     await expect(page.getByText(ar.notFound.title, { exact: true })).toBeVisible();
@@ -258,6 +276,18 @@ test.describe('search (rules SR1–SR6)', () => {
     expect(reads()).toHaveLength(2);
   });
 
+  test('a failed index read offers a retry (audit A03-8)', async ({ page, api }) => {
+    api.on('GET /api/catalog/search-index', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/');
+    const dialog = page.getByRole('dialog', { name: ar.search.title });
+    await pressUntilOpen(page, dialog, 'Control+k');
+    await expect(dialog.getByRole('alert')).toBeVisible();
+    api.on('GET /api/catalog/search-index', 200, searchIndex());
+    await dialog.getByRole('button', { name: ar.error.retry }).click();
+    await dialog.getByRole('combobox').fill('pubg');
+    await expect(dialog.getByRole('option').first()).toContainText('ببجي موبايل');
+  });
+
   test('"/" opens it, an empty query shows the recent searches, and no results say so', async ({
     page,
     api,
@@ -273,6 +303,10 @@ test.describe('search (rules SR1–SR6)', () => {
     await page.getByRole('button', { name: ar.search.open }).first().click();
     await expect(dialog.getByText(ar.search.recent)).toBeVisible();
     await expect(dialog.getByRole('option')).toHaveText(['itunes']);
+    // A recent search fills the field and keeps the focus there (audit A03-29).
+    await dialog.getByRole('option').first().click();
+    await expect(dialog.getByRole('combobox')).toHaveValue('itunes');
+    await expect(dialog.getByRole('combobox')).toBeFocused();
     await dialog.getByRole('combobox').fill('zzzz');
     await expect(dialog.getByText(fill(ar.search.noResults, { query: 'zzzz' }))).toBeVisible();
     await dialog.getByRole('combobox').fill('');
