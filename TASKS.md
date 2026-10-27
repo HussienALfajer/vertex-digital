@@ -10,7 +10,7 @@ Plan `docs/audits/README.md`, report `docs/audits/A07-customers.md`. Specs S05 (
 - [x] Re-test live with screenshots
 - [x] `pnpm verify` (checker) and the reviewer; findings fixed (verify passed after the architecture fix; the reviewer found nothing blocking)
 - [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
-- [ ] Deploy, production smoke test, README `deployed`
+- [x] Deploy, production smoke test, README `deployed` (`e9977c6`)
 
 # TASKS — Audit A06 Merchants (branch `fix/audit-a06-merchants`)
 
