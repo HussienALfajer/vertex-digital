@@ -1,6 +1,6 @@
 # A05 Suppliers and pricing
 
-Status: in progress
+Status: merged (PR [#188](https://github.com/HussienALfajer/vertex-digital/pull/188))
 Branch: fix/audit-a05-suppliers · Started: 2026-10-27 · Specs: S06 (pricing), S07, S16, S17, S18, S19, S20 (price lists) · ADRs: 0005, 0020, 0021, 0030–0035
 
 ## Scope
