@@ -1,6 +1,6 @@
 # A06 Merchants
 
-Status: merged (PR [#190](https://github.com/HussienALfajer/vertex-digital/pull/190))
+Status: deployed (`60f46b0`, 2026-10-27; PR [#190](https://github.com/HussienALfajer/vertex-digital/pull/190))
 Branch: fix/audit-a06-merchants · Started: 2026-10-27 · Specs: S20 (merchants), S21 · ADRs: 0035, 0036
 
 ## Scope
@@ -110,4 +110,6 @@ Local stack (API from its build, worker, store, panel; fake supplier; WDGZone pa
 ## Checks
 - `pnpm verify` on the final tree (2026-10-27, base `b2346ec`, 85 changed files): pass in 5m 4s. Lint; typecheck, test and build (25 tasks, 17 run); migrations in step with the schema; OpenAPI in step with the API (`openapi.json` and the panel's `schema.gen.ts` regenerated for `open_merchant_application`); store E2E `convenience`, `merchant-counter`, `merchant-documents`, `merchant`, `orders`: 186 passed; admin E2E `merchant-levels`, `merchants`: 18 passed. Earlier in the session: store `merchant-tools` and the four merchant specs (90 passed), admin `customers` with the two merchant specs (34 passed), api `merchants`, `merchant-tools`, `merchant-counter`, `merchant-documents`, worker `merchants` and `email`, db `merchants` and `orders`, ui `button`.
 - Reviewer (fresh context, the A06 report, S20, S21, ADR 0035, 0036; money, security and fraud): no blocking issues.
-- CI, the deploy and the production smoke test: below once done.
+- **CI:** green on #190 (lint, typecheck, tests, build, the four E2E shards, the secret scan); merged as `60f46b0` by auto-merge.
+- **Deploy:** `60f46b0` on 2026-10-27 at 21:32 UTC through `vertexdigital-deploy` under `systemd-run` (the owner's link to the server dropped twice before it): no migration, no new secret and no `deploy/` change, so `provision.sh` was not re-run; the deploy's health checks passed.
+- **Production smoke test (no money, no sign-in):** the store's `/`, `/merchant`, `/merchant/pos` (titled "نقطة البيع · Vertex Digital", A06-55), `/merchant-terms`, `/account/merchant` and `/api/health` answer 200; `/api/merchant/dashboard` and `/api/merchant/games` answer 401 signed out; an unknown verification code answers 404; the panel's `/merchants/applications` answers 200 and `/api/admin/merchant-applications` 401 signed out.
