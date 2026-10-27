@@ -46,7 +46,7 @@ import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { ltr } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { type CartLine, clearCart, readCart, removeLine, updateLine } from './cart';
+import { type CartLine, clearCart, readCart, removeLine, restoreLine, updateLine } from './cart';
 import { checkoutLine, lineRefusals, payCart } from './requests';
 import { useCart } from './use-cart';
 
@@ -100,11 +100,14 @@ type Sending =
  * retail ones when it pays another list.
  */
 async function loadPrices(signedIn: boolean): Promise<Prices> {
-  const index = await getSearchIndex();
+  const slugs = signedIn ? [...new Set((readCart() ?? []).map((line) => line.gameSlug))] : [];
+  // The index and the account's own prices are read together (audit A04-38).
+  const [index, own] = await Promise.all([
+    getSearchIndex(),
+    Promise.all(slugs.map((slug) => readCustomerPrices(slug))),
+  ]);
   if (!index.ok) return { status: 'failed' };
   const products = new Map(index.data.products.map((item) => [item.id, item]));
-  const slugs = signedIn ? [...new Set((readCart() ?? []).map((line) => line.gameSlug))] : [];
-  const own = await Promise.all(slugs.map((slug) => readCustomerPrices(slug)));
   for (const result of own) {
     // Never the retail figure in place of the account's own: a failed read offers the retry.
     if (!result) return { status: 'failed' };
@@ -143,6 +146,8 @@ export function CartPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState<Sending>({ status: 'idle' });
   const [termsOpen, setTermsOpen] = useState(false);
+  // The last line removed, with its place, for "تراجع" (audit A04-30).
+  const [removed, setRemoved] = useState<{ line: CartLine; at: number } | null>(null);
   const [slide, setSlide] = useState(0);
   const lastBody = useRef<CheckoutRequest | null>(null);
 
@@ -185,11 +190,29 @@ export function CartPage() {
       <EmptyState
         icon={<ShoppingCartIcon />}
         title={t('cart.emptyTitle')}
-        description={t('cart.emptyBody')}
+        description={
+          removed
+            ? t('cart.removed', { name: removed.line.display.productNameAr })
+            : t('cart.emptyBody')
+        }
         action={
-          <Button size="xl" render={<Link href="/" />}>
-            {t('cart.browse')}
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2">
+            {removed && (
+              <Button
+                variant="outline"
+                size="xl"
+                onClick={() => {
+                  restoreLine(removed.line, removed.at);
+                  setRemoved(null);
+                }}
+              >
+                {t('cart.undo')}
+              </Button>
+            )}
+            <Button size="xl" render={<Link href="/" />}>
+              {t('cart.browse')}
+            </Button>
+          </div>
         }
       />
     );
@@ -307,6 +330,7 @@ export function CartPage() {
               price={gone(line) ? null : priceNow(prices, line)}
               movedFrom={movedFrom.get(line.id) ?? null}
               refusal={refusals.get(line.id) ?? null}
+              locked={sending.status === 'sending'}
               onQuantity={(quantity) => {
                 changed();
                 updateLine(line.id, { quantity });
@@ -322,12 +346,32 @@ export function CartPage() {
               }}
               onRemove={() => {
                 changed();
+                setRemoved({ line, at: lines.indexOf(line) });
                 removeLine(line.id);
               }}
             />
           </li>
         ))}
       </ul>
+      {removed && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-muted px-4 py-2 text-sm"
+        >
+          <span>{t('cart.removed', { name: removed.line.display.productNameAr })}</span>
+          <Button
+            variant="outline"
+            size="xl"
+            onClick={() => {
+              changed();
+              restoreLine(removed.line, removed.at);
+              setRemoved(null);
+            }}
+          >
+            {t('cart.undo')}
+          </Button>
+        </div>
+      )}
 
       <Card className="gap-4">
         <dl className="flex flex-col gap-2">
@@ -355,6 +399,15 @@ export function CartPage() {
             </div>
           )}
         </dl>
+        {/* A failed balance read says so with a retry (audit A04-35). */}
+        {signedIn && balance.status === 'failed' && (
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">{t('purchase.balanceFailed')}</span>
+            <Button variant="outline" size="xl" onClick={refreshBalance}>
+              {t('purchase.retry')}
+            </Button>
+          </div>
+        )}
         {notice && <FormAlert>{notice}</FormAlert>}
         {sending.status === 'failed' && <FormAlert>{sending.message}</FormAlert>}
         <Pay
@@ -379,7 +432,11 @@ export function CartPage() {
         />
       </Card>
       {termsOpen && (
-        <TermsSheet open={termsOpen} onOpenChange={setTermsOpen} onAccepted={() => {}} />
+        <TermsSheet
+          open={termsOpen}
+          onOpenChange={setTermsOpen}
+          onAccepted={() => setNotice(t('merchant.terms.slideAgain'))}
+        />
       )}
     </div>
   );
@@ -511,6 +568,7 @@ function LineCard({
   price,
   movedFrom,
   refusal,
+  locked,
   onQuantity,
   onConfirm,
   onRemove,
@@ -520,6 +578,8 @@ function LineCard({
   price: number | null | undefined;
   movedFrom: number | null;
   refusal: CheckoutLineRefusal | null;
+  /** While the checkout is in flight the lines stay as sent (audit A04-1). */
+  locked: boolean;
   onQuantity: (quantity: number) => void;
   onConfirm: () => void;
   onRemove: () => void;
@@ -562,6 +622,7 @@ function LineCard({
           size="icon"
           className="size-11 shrink-0"
           aria-label={t('cart.remove', { name: line.display.productNameAr })}
+          disabled={locked}
           onClick={onRemove}
         >
           <Trash2Icon />
@@ -607,7 +668,7 @@ function LineCard({
               size="xl"
               className="w-11 px-0"
               aria-label={t('purchase.less')}
-              disabled={line.quantity <= 1}
+              disabled={locked || line.quantity <= 1}
               onClick={() => onQuantity(line.quantity - 1)}
             >
               <MinusIcon />
@@ -620,7 +681,7 @@ function LineCard({
               size="xl"
               className="w-11 px-0"
               aria-label={t('purchase.more')}
-              disabled={line.quantity >= line.maxQuantity}
+              disabled={locked || line.quantity >= line.maxQuantity}
               onClick={() => onQuantity(line.quantity + 1)}
             >
               <PlusIcon />
@@ -654,7 +715,13 @@ function LineCard({
         )}
       </div>
       {refusal && (
-        <Refusal line={line} refusal={refusal} confirmId={confirmId} onConfirm={onConfirm} />
+        <Refusal
+          line={line}
+          refusal={refusal}
+          confirmId={confirmId}
+          locked={locked}
+          onConfirm={onConfirm}
+        />
       )}
     </Card>
   );
@@ -665,11 +732,13 @@ function Refusal({
   line,
   refusal,
   confirmId,
+  locked,
   onConfirm,
 }: {
   line: CartLine;
   refusal: CheckoutLineRefusal;
   confirmId: string;
+  locked: boolean;
   onConfirm: () => void;
 }) {
   switch (refusal.code) {
@@ -711,6 +780,7 @@ function Refusal({
             <Checkbox
               id={confirmId}
               checked={false}
+              disabled={locked}
               onCheckedChange={(checked) => checked && onConfirm()}
             />
             <span className="text-base">{t('purchase.confirmPlayer')}</span>

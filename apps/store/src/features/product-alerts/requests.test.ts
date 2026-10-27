@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { cancelProductAlert, createProductAlert, listProductAlerts } from './requests';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  cancelProductAlert,
+  createProductAlert,
+  listProductAlerts,
+  readGameAlerts,
+} from './requests';
 
 function fetcher(status: number, body: unknown) {
   const calls: { url: string; method: string; body: unknown }[] = [];
@@ -9,6 +14,8 @@ function fetcher(status: number, body: unknown) {
   }) as typeof globalThis.fetch;
   return { fetch, calls };
 }
+
+afterEach(() => vi.unstubAllGlobals());
 
 const GAME = '0199e000-0000-7000-8000-0000000000b1';
 const PACK = '0199e000-0000-7000-8000-0000000000c1';
@@ -47,5 +54,17 @@ describe('product alerts (S22 PA1, PA6, PA7)', () => {
       data: null,
     });
     expect(cancelled.calls[0]).toMatchObject({ url: '/api/product-alerts/a1', method: 'DELETE' });
+  });
+
+  it('reads a game’s alerts once, again after any change (audit A04-40)', async () => {
+    const reads = fetcher(200, { items: [] });
+    vi.stubGlobal('fetch', reads.fetch);
+    await readGameAlerts(GAME);
+    await readGameAlerts(GAME);
+    expect(reads.calls).toHaveLength(1);
+    // "تنبيهاتي" cancels one: the game page reads its alerts again.
+    await cancelProductAlert('a1', fetcher(204, null).fetch);
+    await readGameAlerts(GAME);
+    expect(reads.calls).toHaveLength(2);
   });
 });

@@ -10,6 +10,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { LocalTime } from '@/features/shares/local-time';
+import { t } from '@/lib/i18n';
 import { apiInternalUrl } from '@/lib/server-env';
 import { tm } from './i18n';
 
@@ -69,7 +70,7 @@ export async function VerifyPage({ params }: { params: Promise<{ code: string }>
           <p className="flex items-center gap-2 text-accent-text">
             <VertexMark className="w-7" />
             <span className="text-base font-bold text-foreground" dir="ltr">
-              VERTEX DIGITAL
+              {t('app.wordmark')}
             </span>
           </p>
         )}

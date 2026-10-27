@@ -84,6 +84,47 @@ test('a stream event moves a card to "finished" without a reload (rule LR5)', as
   await expect(column(page, 'at_supplier').getByText('VO-NEWW63')).toBeHidden();
 });
 
+test('the open side sheet follows its order on the stream (audit A04-13)', async ({
+  page,
+  admin,
+}) => {
+  admin.stream = {
+    events: [{ event: 'order', data: { orderId: ORDER_IDS.held, status: 'delivered' } }],
+    delayMs: 4_000,
+    retryMs: 600_000,
+  };
+  await openLive(page, admin);
+  await cardOf(page, 'VO-HELD23').click();
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByRole('button', { name: o.decisions.refund.open })).toBeVisible();
+  admin.orders.deliver(ORDER_IDS.held);
+  await expect(sheet.getByRole('button', { name: o.decisions.refund.open })).toBeHidden({
+    timeout: 10_000,
+  });
+});
+
+test('a failed read after a good one keeps the board with a notice (audit A04-14)', async ({
+  page,
+  admin,
+}) => {
+  await openLive(page, admin);
+  await expect(cardOf(page, 'VO-HELD23')).toBeVisible();
+  // Every read of the board fails until the server is back.
+  const failing = /\/api\/admin\/orders\/live/;
+  let failed = 0;
+  await page.route(failing, (route) => {
+    failed += 1;
+    return route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR' } });
+  });
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect.poll(() => failed, { timeout: 10_000 }).toBeGreaterThanOrEqual(3);
+  await expect(page.getByText(live.stale)).toBeVisible({ timeout: 15_000 });
+  await expect(cardOf(page, 'VO-HELD23')).toBeVisible();
+  await page.unroute(failing);
+  await page.getByRole('button', { name: ar.common.retry }).click();
+  await expect(page.getByText(live.stale)).toBeHidden();
+});
+
 test('filters live in the URL: the manual supplier only', async ({ page, admin }) => {
   await openLive(page, admin, '?supplier=manual');
   await expect(column(page, 'manual').getByText('VO-MANU45')).toBeVisible();

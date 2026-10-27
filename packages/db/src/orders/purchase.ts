@@ -90,6 +90,8 @@ export interface PurchaseCommon {
       productKind: 'direct' | 'code';
       isTest: boolean;
       fields: Record<string, string>;
+      /** The line's routing state, already read: the lookup reads it again only without it. */
+      routing?: ProductRoutingState;
     },
   ) => Promise<PlayerCheckLookup | null>;
   ipAddress?: string | null;
@@ -314,6 +316,8 @@ export async function prepareLine(
     productKind: product.kind,
     isTest: common.isTest,
     fields,
+    // Read once per line: a 50-line checkout holds its locks for every query (audit A04-6).
+    routing: usable,
   });
   if (lookup?.result === 'region_mismatch') {
     throw new OrderError('PLAYER_REGION_MISMATCH', 'The account is on another region', {

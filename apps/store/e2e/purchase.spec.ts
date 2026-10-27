@@ -207,6 +207,21 @@ test.describe('buy box', () => {
     expect(sent?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  test('a failed balance read says so and reads it again (audit A04-35)', async ({ page, api }) => {
+    signedIn(api)
+      .on('GET /api/wallet', 500, { statusCode: 500, code: 'INTERNAL_ERROR' })
+      .on('POST /api/player-checks', 200, { result: 'valid', playerName: 'Lina_99' });
+    await page.goto('/games/pubg-mobile');
+    await choose(page, '60 UC');
+    await idField(page).fill('51234567');
+    await expect(buyBox(page).getByText(p.balanceFailed)).toBeVisible();
+    api.on('GET /api/wallet', 200, { balanceUnits: 50 * USD, syp: null, reservedUsdUnits: 0 });
+    await buyBox(page).getByRole('button', { name: p.retry }).click();
+    await expect(
+      buyBox(page).getByText(fill(p.balanceAfterLine, { balance: `⁦${formatUsd(49_010_000)}⁩` })),
+    ).toBeVisible();
+  });
+
   test('an id the supplier cannot find needs the confirmation, then goes with confirmPlayer', async ({
     page,
     api,

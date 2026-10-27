@@ -11,7 +11,6 @@ import { type AdminApi, expect, PASSWORD, screenshot, TOTP_CODE, test } from './
  */
 
 const o = ar.orders;
-
 const fill = (text: string, values: Record<string, string | number>) =>
   Object.entries(values).reduce(
     (result, [key, value]) => result.replace(`{{${key}}}`, String(value)),
@@ -150,6 +149,29 @@ test.describe('orders', () => {
     await expect(rows(page)).toHaveCount(4);
   });
 
+  test('event reasons read in Arabic; a supplier’s own text stays as it came (audit A04-46)', async ({
+    page,
+    admin,
+  }) => {
+    const held = admin.orders.orders.find((row) => row.id === ORDER_IDS.held) as AdminOrder;
+    const base = held.events[0] as AdminOrder['events'][number];
+    held.events = [
+      ...held.events,
+      { ...base, id: `${base.id.slice(0, -3)}401`, toStatus: 'needs_review', reason: 'hard_limit' },
+      {
+        ...base,
+        id: `${base.id.slice(0, -3)}402`,
+        kind: 'note',
+        toStatus: null,
+        reason: 'Out of stock',
+      },
+    ];
+    await open(page, admin, `/orders/${ORDER_IDS.held}`);
+    await expect(page.getByText(o.events.reasons.hard_limit)).toBeVisible();
+    await expect(page.getByText('hard_limit')).toHaveCount(0);
+    await expect(page.getByText('Out of stock')).toBeVisible();
+  });
+
   test('polls a held order again, then refunds it with re-authentication (rules D4, D5)', async ({
     page,
     admin,
@@ -175,8 +197,14 @@ test.describe('orders', () => {
     await page.getByRole('button', { name: o.decisions.refund.open }).click();
     dialog = page.getByRole('dialog');
     await expect(dialog.getByText(o.decisions.refund.warning)).toBeVisible();
+    // The amount, the units and the wallet it goes back to, on the text and the button (A04-2).
+    await expect(
+      dialog.getByText(fill(o.decisions.refund.toWallet_one, { amount: '⁦$0.99⁩', name: 'سارة' })),
+    ).toBeVisible();
     await dialog.getByLabel(o.decisions.reason).fill('لا جواب من المورد منذ ساعة');
-    await dialog.getByRole('button', { name: o.decisions.refund.submit }).click();
+    await dialog
+      .getByRole('button', { name: fill(o.decisions.refund.submitAmount, { amount: '⁦$0.99⁩' }) })
+      .click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText(o.statuses.refunded, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(o.decisions.heldHelp)).toBeHidden();
@@ -187,13 +215,21 @@ test.describe('orders', () => {
     page,
     admin,
   }) => {
+    // An order the owner paid goes back to the owner's money, never a wallet (S16 AP10, A04-2).
+    const manual = admin.orders.orders.find((row) => row.id === ORDER_IDS.manual) as AdminOrder;
+    manual.payer = 'owner';
     await open(page, admin, `/orders/${ORDER_IDS.manual}`);
     await expect(page.getByText(o.decisions.manualHelp)).toBeVisible();
     await expect(page.getByRole('button', { name: o.decisions.delivered.open })).toBeHidden();
     await page.getByRole('button', { name: o.decisions.refund.open }).click();
     const dialog = page.getByRole('dialog');
+    await expect(
+      dialog.getByText(fill(o.decisions.refund.toOwner_two, { amount: '⁦$21.20⁩' })),
+    ).toBeVisible();
     await dialog.getByLabel(o.decisions.reason).fill('لا يتوفر الكود الآن');
-    await dialog.getByRole('button', { name: o.decisions.refund.submit }).click();
+    await dialog
+      .getByRole('button', { name: fill(o.decisions.refund.submitAmount, { amount: '⁦$21.20⁩' }) })
+      .click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText(o.statuses.refunded, { exact: true }).first()).toBeVisible();
   });

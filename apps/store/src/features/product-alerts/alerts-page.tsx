@@ -154,7 +154,7 @@ function AlertCard({ alert, children }: { alert: ProductAlert; children?: React.
       {alert.game.cover ? (
         // biome-ignore lint/performance/noImgElement: catalog images are stored re-encoded and served immutable by the API (S06).
         <img
-          src={alert.game.cover.url}
+          src={`${alert.game.cover.url}?w=160`}
           alt=""
           width={56}
           height={56}

@@ -478,6 +478,49 @@ test.describe('the cart (CT1–CT6)', () => {
     expect(second?.headers['idempotency-key']).not.toBe(first?.headers['idempotency-key']);
   });
 
+  test('a removed line comes back in its place with "تراجع" (audit A04-30)', async ({
+    page,
+    api,
+  }) => {
+    await seedCart(page, [line(p60), line(p325, { fields: { player_id: '51234568' } })]);
+    signedIn(api).on('GET /api/catalog/search-index', 200, searchIndex());
+    await page.goto('/cart');
+    await page.getByRole('button', { name: fill(c.remove, { name: '60 UC' }) }).click();
+    await expect(page.getByText(fill(c.removed, { name: '60 UC' }))).toBeVisible();
+    expect(await cartCount(page)).toBe(1);
+    await page.getByRole('button', { name: c.undo }).click();
+    expect(await cartCount(page)).toBe(2);
+    await expect(
+      page.getByRole('button', { name: fill(c.remove, { name: '60 UC' }) }),
+    ).toBeVisible();
+    // The last line removed leaves the empty cart with the same way back.
+    await page.getByRole('button', { name: fill(c.remove, { name: '60 UC' }) }).click();
+    await page.getByRole('button', { name: fill(c.remove, { name: '325 UC' }) }).click();
+    await expect(page.getByText(c.emptyTitle)).toBeVisible();
+    await page.getByRole('button', { name: c.undo }).click();
+    expect(await cartCount(page)).toBe(1);
+  });
+
+  test('the lines stay as sent while the checkout is in flight (audit A04-1)', async ({
+    page,
+    api,
+  }) => {
+    await seedCart(page, [line(p60), line(p325, { fields: { player_id: '51234568' } })]);
+    signedIn(api)
+      .on('GET /api/catalog/search-index', 200, searchIndex())
+      .on('POST /api/checkouts', 402, { code: 'INSUFFICIENT_BALANCE' }, 1500);
+    await page.goto('/cart');
+    await page.getByRole('slider').focus();
+    await page.keyboard.press('End');
+    // In flight: no line can change and no second slide shows until the first answers.
+    const remove = page.getByRole('button', { name: fill(c.remove, { name: '325 UC' }) });
+    await expect(remove).toBeDisabled();
+    await expect(page.getByRole('slider')).toHaveCount(0);
+    await expect(page.getByText(ar.errors.INSUFFICIENT_BALANCE)).toBeVisible();
+    await expect(remove).toBeEnabled();
+    expect(api.requests.filter((r) => r.key === 'POST /api/checkouts')).toHaveLength(1);
+  });
+
   test('a line refused for the account region says why (S19 PC3)', async ({ page, api }) => {
     await seedCart(page, [line(p60)]);
     signedIn(api)

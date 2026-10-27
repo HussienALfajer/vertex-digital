@@ -11,6 +11,7 @@ import {
 import {
   Badge,
   Button,
+  Callout,
   Card,
   cn,
   EmptyState,
@@ -77,7 +78,12 @@ export function LivePage({
 }) {
   const { t } = useTranslation();
   const board = useQuery({ ...liveBoardQuery(liveQuery(search)), refetchInterval: REFRESH_MS });
-  const refetch = useDebounced(() => void board.refetch(), EVENT_DEBOUNCE_MS);
+  // A read in flight (its retries too) is joined, not restarted: events keep coming while the API
+  // fails, and a restarted read would never end in the error the stale notice shows (A04-14).
+  const refetch = useDebounced(
+    () => void board.refetch({ cancelRefetch: false }),
+    EVENT_DEBOUNCE_MS,
+  );
   useAdminStream(refetch);
   useVisibleAgain(refetch);
   const [sound, setSound] = useLiveSound();
@@ -123,6 +129,19 @@ export function LivePage({
           }
         />
       )}
+      {/* A failed read after a good one keeps the board with a notice (audit A04-14). */}
+      {board.isError && board.data && (
+        <Callout
+          tone="warning"
+          icon={<CircleAlertIcon />}
+          title={t('orders.live.stale')}
+          action={
+            <Button variant="outline" onClick={() => board.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
       {board.data && (
         <>
           {LIVE_COLUMNS.every((column) => board.data.columns[column].count === 0) && (
@@ -136,7 +155,10 @@ export function LivePage({
             <TabsList className="w-full">
               {LIVE_COLUMNS.map((column) => (
                 <TabsTrigger key={column} value={column} className="flex-1">
-                  {t(`orders.live.columns.${column}`)} ({board.data.columns[column].count})
+                  {t('orders.live.tab', {
+                    name: t(`orders.live.columns.${column}`),
+                    n: board.data.columns[column].count,
+                  })}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -172,10 +194,12 @@ function useNow(): number {
 
 /** Rule LR6: the tab's title starts with `(n)`, the orders waiting on the admin. */
 function useTabTitle(waiting: number) {
+  const { t } = useTranslation();
   const base = useRef(document.title);
   useEffect(() => {
-    document.title = waiting > 0 ? `(${waiting}) ${base.current}` : base.current;
-  }, [waiting]);
+    document.title =
+      waiting > 0 ? t('orders.live.tabTitle', { n: waiting, title: base.current }) : base.current;
+  }, [waiting, t]);
   useEffect(() => {
     const original = base.current;
     return () => {

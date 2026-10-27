@@ -200,7 +200,7 @@ const callsOfFake = async () =>
  * the worker's health tests read the fake's recent calls, so rows left here would change them.
  * The write itself is tested once, in a rolled-back transaction.
  */
-const recorded: { supplierId: string; operation: string; result: string }[] = [];
+const recorded: { supplierId: string; operation: string; result: string; error?: unknown }[] = [];
 
 const writeState = async (state: object) => {
   await mkdir(dirname(STATE_FILE), { recursive: true });
@@ -403,6 +403,8 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
     });
     await writeState({});
     expect(recorded.at(-1)?.result).toBe('error');
+    // The cause is kept for the call's row (audit A04-7).
+    expect(recorded.at(-1)?.error).toBeInstanceOf(Error);
     // Not cached: the next check asks again and finds the player.
     expect(await json(await check(customer, item, playerId), 200)).toMatchObject({
       result: 'valid',
@@ -416,6 +418,10 @@ describe('POST /api/player-checks (rules PV1–PV7)', () => {
       reason: 'supplier',
     });
     expect(Date.now() - started).toBeGreaterThanOrEqual(4_900);
+    expect(recorded.at(-1)).toMatchObject({
+      result: 'error',
+      error: { details: { failure: 'timeout' } },
+    });
     spy.mockRestore();
   });
 

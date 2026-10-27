@@ -12,6 +12,7 @@ import {
   SUPPLIER_CODES,
   type SupplierCode,
 } from '@vertex-digital/contracts';
+import { fromDamascusInput } from '../content/damascus-time';
 
 /*
  * The orders page's tab, filters and page as the URL holds them (S08 screens), so a view can be
@@ -93,10 +94,22 @@ export function withFilter(
   return next as OrderSearch;
 }
 
-/** The API's query for a search: dates as the start of `from` and the end of `to`, local time. */
+/** The start of a Damascus calendar day, whatever the browser's zone (audit A04-52). */
+function damascusDayStart(date: string): string {
+  return fromDamascusInput(`${date}T00:00`) ?? new Date(`${date}T00:00:00Z`).toISOString();
+}
+
+/** The day after `YYYY-MM-DD`, as `YYYY-MM-DD`. */
+function nextDay(date: string): string {
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+}
+
+/** The API's query for a search: dates as the start of `from` and the end of `to`, Damascus days. */
 export function listQuery(search: OrderSearch) {
-  const dayStart = (date: string) => new Date(`${date}T00:00:00`).toISOString();
-  const dayEnd = (date: string) => new Date(`${date}T23:59:59.999`).toISOString();
+  const dayStart = damascusDayStart;
+  const dayEnd = (date: string) =>
+    new Date(Date.parse(damascusDayStart(nextDay(date))) - 1).toISOString();
   return {
     tab: tabOf(search),
     ...(search.q && { q: search.q }),

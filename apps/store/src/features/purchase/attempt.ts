@@ -52,7 +52,9 @@ export async function sendAttempt<Data>(
   frees: (reason: Failure, unsettled: boolean) => boolean,
 ): Promise<Result<Data>> {
   const attempt = attemptFor(load(productId), body);
-  save(productId, attempt);
+  // Unsettled while it is in flight: an edited body sent before this one answers keeps the key,
+  // so it is refused or replayed instead of paid beside it (audit A04-1).
+  save(productId, { ...attempt, unsettled: true });
   const result = await request(attempt.key);
   save(
     productId,

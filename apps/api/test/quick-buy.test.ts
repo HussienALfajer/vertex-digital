@@ -649,6 +649,13 @@ describe('product alerts (S22 PA1, PA6–PA8)', () => {
     expect(
       (await client.delete(`/api/product-alerts/${drop.id}`, { cookie: stranger.cookie })).status,
     ).toBe(404);
+    // A malformed id is not found either, as on the orders routes (audit A04-24).
+    expect(
+      await json(
+        await client.delete('/api/product-alerts/not-an-id', { cookie: customer.cookie }),
+        404,
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
     expect(
       (
         await json<{ items: unknown[] }>(

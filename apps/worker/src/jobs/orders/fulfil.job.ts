@@ -36,6 +36,7 @@ import {
   orderContext,
   quoteBeforeSend,
   reportLateResult,
+  retryOnDeadlock,
   routingContext,
 } from './order-calls.js';
 
@@ -88,20 +89,25 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
     // S18 PQ1, PQ2: the offer's cost now; a cost above the price paid is never bought.
     const quote = await quoteBeforeSend(db, this.registry, attempt);
     const outcome = quote.refusal ?? (await askSupplier(db, this.registry, attempt, 'place'));
-    const applied = await db.transaction(async (tx) => {
-      const context = orderContext(this.pgBoss, this.codesKey);
-      const routing = routingContext(this.env);
-      const result = await applyOutcome(tx, context, attempt.id, outcome, { by: 'supplier' });
-      // Closed while the call was out (a webhook): a different answer is a conflict (rule F5).
-      if (!result.applied) {
-        await reportLateResult(tx, context, result, outcome, { kind: 'supplier' });
-      }
-      await markStockRefusal(tx, result, outcome, { ...routing, jobs: context.jobs });
-      await markSubscriptionRefusal(tx, result, outcome, { ...routing, jobs: context.jobs });
-      await applyQuotedCost(tx, result.attempt, quote, routing);
-      if (result.applied) await checkCharge(tx, result, { ...routing, jobs: context.jobs });
-      return result;
-    });
+    // The outcome and the offer's stock, plan and cost in one transaction (S17 WR8, S18 PQ3),
+    // run again if it is a deadlock's victim: a refund locks the wallet, then the repricing the
+    // products, while a purchase locks a product, then the wallet (audit A04-4).
+    const applied = await retryOnDeadlock(() =>
+      db.transaction(async (tx) => {
+        const context = orderContext(this.pgBoss, this.codesKey);
+        const routing = routingContext(this.env);
+        const result = await applyOutcome(tx, context, attempt.id, outcome, { by: 'supplier' });
+        // Closed while the call was out (a webhook): a different answer is a conflict (rule F5).
+        if (!result.applied) {
+          await reportLateResult(tx, context, result, outcome, { kind: 'supplier' });
+        }
+        await markStockRefusal(tx, result, outcome, { ...routing, jobs: context.jobs });
+        await markSubscriptionRefusal(tx, result, outcome, { ...routing, jobs: context.jobs });
+        await applyQuotedCost(tx, result.attempt, quote, routing);
+        if (result.applied) await checkCharge(tx, result, { ...routing, jobs: context.jobs });
+        return result;
+      }),
+    );
     return { kind: 'sent', attempt: applied.attempt, manual: false };
   }
 

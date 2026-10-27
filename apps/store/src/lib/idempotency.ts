@@ -58,7 +58,8 @@ export function createIdempotentRequest(newKey?: () => string): IdempotentReques
   let last: Attempt | null = null;
   return async (body, request) => {
     const attempt = attemptFor(last, body, newKey);
-    last = attempt;
+    // Unsettled while in flight: an edited body sent before the answer keeps the key (A04-1).
+    last = { ...attempt, unsettled: true };
     const result = await request(attempt.key);
     last = afterAnswer(attempt, result);
     return result;

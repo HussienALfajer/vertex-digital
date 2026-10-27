@@ -19,12 +19,14 @@ import {
   type Database,
   findCustomerWallet,
   gameListPrices,
+  orders,
   ownerSpentToday,
   purchasedLastDay,
   type Transaction,
   withinLimits,
 } from '@vertex-digital/db';
-import type { z } from 'zod';
+import { and, eq, isNotNull } from 'drizzle-orm';
+import { z } from 'zod';
 import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -83,9 +85,19 @@ export class AdminPurchasesService {
     idempotencyKey: string,
     body: AdminPurchaseBody,
   ): Promise<{ order: AdminOrder; created: boolean }> {
-    const allowed = await withinLimits(this.db, [
-      { key: `admin-order:${actor.adminId}`, max: 30, windowMs: TEN_MINUTES },
-    ]);
+    // A key that already holds an admin order is a replay: it spends no limit (audit A04-19).
+    const [held] = z.uuid().safeParse(idempotencyKey).success
+      ? await this.db
+          .select({ id: orders.id })
+          .from(orders)
+          .where(and(eq(orders.idempotencyKey, idempotencyKey), isNotNull(orders.adminId)))
+          .limit(1)
+      : [];
+    const allowed =
+      held !== undefined ||
+      (await withinLimits(this.db, [
+        { key: `admin-order:${actor.adminId}`, max: 30, windowMs: TEN_MINUTES },
+      ]));
     if (!allowed) throw orderRefusals.rateLimited();
     try {
       const { order, created } = await this.db.transaction(async (tx) => {

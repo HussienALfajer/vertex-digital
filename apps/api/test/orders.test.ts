@@ -522,12 +522,14 @@ describe('POST /api/orders (rules O1–O6)', () => {
   it('limits purchases to 10 per 10 minutes per customer', async () => {
     const item = await product(ids.gameId, 'direct', 0.88);
     const customer = await buyer(usd(10));
-    const key = randomUUID();
-    for (let index = 0; index < 10; index += 1) await purchase(customer, item, {}, key);
-    expect(await body(await purchase(customer, item, {}, key))).toMatchObject({
+    const keys = Array.from({ length: 10 }, () => randomUUID());
+    for (const key of keys) await purchase(customer, item, {}, key);
+    expect(await body(await purchase(customer, item, {}, randomUUID()))).toMatchObject({
       status: 429,
       code: 'RATE_LIMITED',
     });
+    // A retry of a purchase that was written gets it back, whatever the limit (audit A04-19).
+    expect((await purchase(customer, item, {}, keys[0])).status).toBe(200);
   });
 
   it('needs a signed-in customer, and refuses the admin session', async () => {
@@ -1062,6 +1064,33 @@ describe('races and limits (spec "Tests": concurrency and idempotency)', () => {
       (entry) => entry.action === 'order.attempt_resolved',
     );
     expect(resolved).toHaveLength(1);
+  });
+
+  it('refuses a resolve key sent again for a refund (audit A04-15)', async () => {
+    const item = await product(ids.gameId, 'direct', 0.88);
+    const customer = await buyer();
+    const order = await json<{ id: string }>(await purchase(customer, item), 201);
+    const attemptId = await send(order.id, item);
+    await hold(order.id);
+    await reauthenticate();
+    const key = randomUUID();
+    await json(
+      await adminPost(
+        `/api/admin/orders/${order.id}/attempts/${attemptId}/resolve`,
+        { outcome: 'failed', reason: 'رفضه المورد هاتفياً' },
+        { 'idempotency-key': key },
+      ),
+      200,
+    );
+    expect(
+      await body(
+        await adminPost(
+          `/api/admin/orders/${order.id}/refund`,
+          { reason: 'استرداد بعد الفشل' },
+          { 'idempotency-key': key },
+        ),
+      ),
+    ).toMatchObject({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
   });
 
   it('commits a purchase before a stop, or refuses it after (rule O2, edge case 3)', async () => {

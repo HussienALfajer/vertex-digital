@@ -1,3 +1,17 @@
+# TASKS — Audit A04 Purchase, orders and fulfilment (branch `fix/audit-a04-orders`)
+
+Plan `docs/audits/README.md`, report `docs/audits/A04-orders.md`. Specs S08, S10, S11, S16 (admin orders), S22 (order help, alerts); ADR 0004, 0013, 0022, 0023, 0024, 0025, 0030.
+
+- [x] Start: branch, README status `in progress`, report file, this list
+- [x] Map and audit (api, database, worker, store, admin, tests, observability); known leads checked
+- [x] Live browser test (store and admin screens of the group)
+- [x] Findings shown to the owner (decision pending: A04-21, PV8 cached answer when the quota is used up)
+- [x] Fixes P0 → P3, each with its regression test (47 fixed; A04-17 and A04-18 partly, A04-21 waits for Q24; the report says why for the rest)
+- [x] Re-test live with screenshots
+- [x] `pnpm verify` (checker) and the reviewer; findings fixed (the repricing kept in the outcome's transaction with a deadlock retry; `/orders/new` never shows the previous customer)
+- [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
+- [ ] Deploy, production smoke test, README `deployed`
+
 # TASKS — Audit A03 Catalog and storefront (branch `fix/audit-a03-catalog`)
 
 Plan `docs/audits/README.md`, report `docs/audits/A03-catalog.md`. Specs S06 (catalog), S09, S22 (quick links, search commands); ADR 0020, 0034, 0037.

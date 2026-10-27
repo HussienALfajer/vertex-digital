@@ -6,7 +6,6 @@ import {
   Header,
   HttpCode,
   Param,
-  ParseUUIDPipe,
   Post,
   Query,
   Res,
@@ -72,7 +71,7 @@ export class ProductAlertsController {
   @ApiNoContentResponse({ description: 'Cancelled' })
   async cancel(
     @CurrentCustomer() customer: CustomerIdentity,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
   ): Promise<void> {
     await this.alerts.cancel(customer.id, id);
   }

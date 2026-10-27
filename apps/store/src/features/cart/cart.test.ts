@@ -7,6 +7,7 @@ import {
   readCart,
   removeLine,
   replaceLine,
+  restoreLine,
   splitCount,
   updateLine,
 } from './cart';
@@ -131,6 +132,16 @@ describe('the cart (rules CT1–CT3)', () => {
     clearCart();
     expect(storage.getItem(CART_KEY)).toBeNull();
     expect(readCart()).toEqual([]);
+  });
+
+  it('puts a removed line back in its place, once (audit A04-30)', () => {
+    const [first, second] = added(addToCart([line(), line({ productId: OTHER })]));
+    if (!first || !second) throw new Error('two lines');
+    removeLine(first.id);
+    expect(restoreLine(first, 0)).toBe(true);
+    expect(readCart()?.map((item) => item.id)).toEqual([first.id, second.id]);
+    expect(restoreLine(first, 0)).toBe(false);
+    expect(readCart()).toHaveLength(2);
   });
 
   it('drops what it cannot read', () => {

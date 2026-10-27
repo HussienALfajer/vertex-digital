@@ -60,6 +60,31 @@ export function orderContext(
 }
 
 /** What repricing reads from the worker: the time and the fake supplier's switch. */
+/** PostgreSQL's deadlock: the transaction it picked was rolled back and may simply run again. */
+const DEADLOCK_DETECTED = '40P01';
+
+function isDeadlock(error: unknown): boolean {
+  for (let cause = error; cause instanceof Error; cause = cause.cause) {
+    if ((cause as { code?: unknown }).code === DEADLOCK_DETECTED) return true;
+  }
+  return false;
+}
+
+/**
+ * Runs `transaction` again, up to `attempts` times in all, when PostgreSQL picked it as a
+ * deadlock's victim (audit A04-4): an outcome's transaction is safe to run again, since
+ * `applyOutcome` applies only to an open attempt and the steps after it are idempotent.
+ */
+export async function retryOnDeadlock<T>(transaction: () => Promise<T>, attempts = 3): Promise<T> {
+  for (let run = 1; ; run += 1) {
+    try {
+      return await transaction();
+    } catch (error) {
+      if (run >= attempts || !isDeadlock(error)) throw error;
+    }
+  }
+}
+
 export function routingContext(env: Pick<Env, 'SUPPLIER_FAKE_ENABLED'>, now = new Date()) {
   return { now, fakeEnabled: env.SUPPLIER_FAKE_ENABLED } satisfies RoutingContext;
 }

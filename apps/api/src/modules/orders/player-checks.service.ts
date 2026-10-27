@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   canonicalFields,
   cleanPlayerName,
@@ -32,7 +32,7 @@ import {
   validationsToday,
   withinLimits,
 } from '@vertex-digital/db';
-import type { PlayerValidation } from '@vertex-digital/suppliers';
+import { type PlayerValidation, SupplierError } from '@vertex-digital/suppliers';
 import { and, desc, eq, gt } from 'drizzle-orm';
 import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
@@ -93,6 +93,7 @@ type Requester = { kind: 'customer'; id: string } | { kind: 'admin'; id: string 
  */
 @Injectable()
 export class PlayerChecksService {
+  private readonly logger = new Logger(PlayerChecksService.name);
   private readonly key: Buffer;
 
   constructor(
@@ -210,12 +211,15 @@ export class PlayerChecksService {
       productKind: 'direct' | 'code';
       isTest: boolean;
       fields: Record<string, string>;
+      routing?: ProductRoutingState;
     },
   ): Promise<PlayerCheckLookup | null> {
     if (order.productKind !== 'direct') return null;
-    const state = (await productRoutingStates(tx, [order.productId], routingContext(this.env))).get(
-      order.productId,
-    );
+    const state =
+      order.routing ??
+      (await productRoutingStates(tx, [order.productId], routingContext(this.env))).get(
+        order.productId,
+      );
     if (!state) return null;
     const plan = await this.plan(tx, state, order.isTest);
     const cached = await this.cached(tx, order.gameId, this.fieldsHash(order.gameId, order.fields));
@@ -428,6 +432,7 @@ export class PlayerChecksService {
     if (!allowed) throw orderRefusals.rateLimited();
     const started = performance.now();
     let answer: PlayerValidation | null = null;
+    let failure: unknown = null;
     let timer: NodeJS.Timeout | undefined;
     try {
       answer = await Promise.race([
@@ -440,8 +445,18 @@ export class PlayerChecksService {
           timer = setTimeout(() => reject(new Timeout()), PLAYER_CHECK_TIMEOUT_MS);
         }),
       ]);
-    } catch {
-      answer = null;
+    } catch (error) {
+      // Kept for the call's row and the log, so a timeout, a refused key and a 5xx differ
+      // (audit A04-7); never the fields.
+      failure =
+        error instanceof Timeout
+          ? new SupplierError('retryable', 'Player check timed out', { failure: 'timeout' })
+          : error;
+      this.logger.warn(
+        `Player check through ${target.supplier.code} failed: ${
+          failure instanceof SupplierError ? (failure.details.failure ?? 'other') : 'other'
+        }`,
+      );
     } finally {
       clearTimeout(timer);
     }
@@ -452,6 +467,7 @@ export class PlayerChecksService {
         operation: 'validate_player',
         result: answer === null ? 'error' : 'ok',
         latencyMs,
+        error: failure,
       });
       if (answer === null) return { result: 'unavailable', reason: 'supplier' } as const;
       const result = answer.valid ? 'valid' : 'invalid';

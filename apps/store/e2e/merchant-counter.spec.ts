@@ -8,6 +8,7 @@ import type {
   SellingPrices,
 } from '@vertex-digital/contracts';
 import tools from '../src/features/merchant-tools/messages.ar.json' with { type: 'json' };
+import ar from '../src/messages/ar.json' with { type: 'json' };
 import { PUBG } from './catalog';
 import { expect, type MockApi, screenshot, test } from './test';
 
@@ -453,6 +454,29 @@ test.describe('the order page, printing and verification (F34, F35)', () => {
       purpose: 'print',
     });
     await screenshot(page, testInfo, 'merchant-print-codes-80');
+  });
+
+  test('codes not delivered yet say so with no retry (audit A04-44)', async ({ page, api }) => {
+    signedIn(api)
+      .on(`GET /api/orders/${CODE_ORDER_ID}/print`, 200, print({ orderId: CODE_ORDER_ID }))
+      .on(`POST /api/orders/${CODE_ORDER_ID}/codes/release`, 409, {
+        statusCode: 409,
+        code: 'CODES_NOT_DELIVERED',
+      });
+    await page.goto(`/orders/${CODE_ORDER_ID}/print?paper=80&content=codes`);
+    await expect(page.getByText(ar.errors.CODES_NOT_DELIVERED)).toBeVisible();
+    await expect(page.getByRole('button', { name: tools.common.retry })).toHaveCount(0);
+  });
+
+  test('signing in comes back to the same paper and content (audit A04-32)', async ({
+    page,
+    api,
+  }) => {
+    api.on(`GET /api/orders/${ORDER_ID}/print`, 401, { statusCode: 401, code: 'UNAUTHORIZED' });
+    await page.goto(`/orders/${ORDER_ID}/print?paper=58&content=codes`);
+    await expect(page).toHaveURL(
+      `/sign-in?next=${encodeURIComponent(`/orders/${ORDER_ID}/print?paper=58&content=codes`)}`,
+    );
   });
 
   test('prints on A4', async ({ page, api }, testInfo) => {

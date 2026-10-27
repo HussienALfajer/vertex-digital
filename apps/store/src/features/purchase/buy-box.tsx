@@ -179,6 +179,8 @@ export function BuyBox({
   const [forceConfirm, setForceConfirm] = useState(false);
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // S20 MT2: the terms were accepted after a refused slide; nothing was paid yet (audit A04-31).
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [sending, setSending] = useState<Sending>({ status: 'idle' });
   // S20 MT2: a directly granted merchant accepts the terms in a sheet, then slides again.
   const [termsOpen, setTermsOpen] = useState(false);
@@ -352,7 +354,7 @@ export function BuyBox({
     }
     if (player.rejected) return setTrusted(null);
     setTrusted(fieldsKey(result.values));
-    if (jump && !editing && !stopped && shortfall === null) openConfirm('buy');
+    if (jump && !editing && !stopped && !frozen && shortfall === null) openConfirm('buy');
   }
 
   /** "معرّف جديد": empty fields to type another ID. */
@@ -682,7 +684,11 @@ export function BuyBox({
 
   // S20 MT2: in either step, so a refused slide on the confirmation opens it too.
   const termsSheet = termsOpen && (
-    <TermsSheet open={termsOpen} onOpenChange={setTermsOpen} onAccepted={() => {}} />
+    <TermsSheet
+      open={termsOpen}
+      onOpenChange={setTermsOpen}
+      onAccepted={() => setTermsAccepted(true)}
+    />
   );
 
   if (step === 'confirm') {
@@ -764,6 +770,9 @@ export function BuyBox({
           </p>
         )}
         {sending.status === 'failed' && <FormAlert>{sending.message}</FormAlert>}
+        {termsAccepted && sending.status === 'idle' && (
+          <FormAlert tone="success">{t('merchant.terms.slideAgain')}</FormAlert>
+        )}
         {sending.status === 'sending' ? (
           <p
             role="status"
@@ -798,7 +807,7 @@ export function BuyBox({
             setSending({ status: 'idle' });
           }}
         >
-          <ArrowRightIcon className="ltr:rotate-180" aria-hidden="true" />
+          <ArrowRightIcon className="ltr:-scale-x-100" aria-hidden="true" />
           {t('purchase.back')}
         </Button>
       </div>
@@ -938,6 +947,7 @@ export function BuyBox({
           reserveBlocked={reserveBlocked}
           orderBack={`/games/${game.slug}?pack=${product.id}`}
           onSignIn={signIn}
+          onRetryBalance={refreshBalance}
           onProceed={(next) => void proceed(next)}
         />
       )}
@@ -994,6 +1004,7 @@ function Actions({
   reserveBlocked,
   orderBack,
   onSignIn,
+  onRetryBalance,
   onProceed,
 }: {
   customer: Customer;
@@ -1006,6 +1017,7 @@ function Actions({
   reserveBlocked: boolean;
   orderBack: string;
   onSignIn: () => void;
+  onRetryBalance: () => void;
   onProceed: (mode: Mode) => void;
 }) {
   if (customer.status === 'loading') return <Skeleton className="h-11 w-full" />;
@@ -1049,6 +1061,15 @@ function Actions({
         <p className="text-sm text-muted-foreground">
           {t('purchase.balanceAfterLine', { balance: ltr(formatUsd(balance.units - total)) })}
         </p>
+      )}
+      {/* A failed read says so with a retry instead of hiding the balance (audit A04-35). */}
+      {balance.status === 'failed' && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">{t('purchase.balanceFailed')}</span>
+          <Button variant="outline" size="xl" onClick={onRetryBalance}>
+            {t('purchase.retry')}
+          </Button>
+        </div>
       )}
       <Button size="xl" onClick={() => onProceed('buy')}>
         {t('purchase.continue')}

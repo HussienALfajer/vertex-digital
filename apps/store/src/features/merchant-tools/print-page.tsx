@@ -17,7 +17,9 @@ import Link from 'next/link';
 import { notFound, useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { VerificationQr } from '@/features/orders/verification-qr';
+import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 import { tm } from './i18n';
 import { getOrderPrint, logoPath, releaseCodes } from './requests';
 
@@ -41,7 +43,7 @@ type Content = 'receipt' | 'codes';
 
 type State =
   | { status: 'loading' }
-  | { status: 'failed'; codes: boolean }
+  | { status: 'failed'; codes: boolean; final?: boolean }
   | { status: 'missing' }
   | { status: 'ready'; print: OrderPrint; codes: ReleasedCodes['codes'] | null };
 
@@ -76,7 +78,9 @@ export function PrintPage() {
     void (async () => {
       const result = await getOrderPrint(id);
       if (!result.ok && result.reason === 'UNAUTHORIZED') {
-        router.replace(`/sign-in?next=${encodeURIComponent(`/orders/${id}/print`)}`);
+        // Back to this print as asked, its paper and content kept (audit A04-32).
+        const back = `${window.location.pathname}${window.location.search}`;
+        router.replace(`/sign-in?next=${encodeURIComponent(back)}`);
         return;
       }
       if (!result.ok) {
@@ -90,7 +94,14 @@ export function PrintPage() {
         return setState({ status: 'ready', print: result.data, codes: null });
       }
       const released = await releaseCodes(id, { purpose: 'print' });
-      if (!released.ok) return setState({ status: 'failed', codes: true });
+      // Codes not delivered yet: a retry cannot change that, so none is offered (audit A04-44).
+      if (!released.ok) {
+        return setState({
+          status: 'failed',
+          codes: true,
+          final: released.reason === 'CODES_NOT_DELIVERED',
+        });
+      }
       setState({ status: 'ready', print: result.data, codes: released.data.codes });
     })();
   }, [id, content, router]);
@@ -141,11 +152,19 @@ export function PrintPage() {
       {state.status === 'failed' && (
         <EmptyState
           icon={<CircleAlertIcon />}
-          title={state.codes ? tm('print.codesFailed') : tm('print.loadFailed')}
+          title={
+            state.final
+              ? errorText('CODES_NOT_DELIVERED')
+              : state.codes
+                ? tm('print.codesFailed')
+                : tm('print.loadFailed')
+          }
           action={
-            <Button variant="outline" size="xl" onClick={() => window.location.reload()}>
-              {tm('common.retry')}
-            </Button>
+            state.final ? undefined : (
+              <Button variant="outline" size="xl" onClick={() => window.location.reload()}>
+                {tm('common.retry')}
+              </Button>
+            )
           }
         />
       )}
@@ -183,7 +202,7 @@ export function ReceiptPrint({ print, logoUrl }: { print: OrderPrint; logoUrl?: 
           {print.issuer.kind === 'merchant' ? (
             <bdi>{print.issuer.tradeName}</bdi>
           ) : (
-            'VERTEX DIGITAL'
+            t('app.wordmark')
           )}
         </p>
         {print.whatsapp && (

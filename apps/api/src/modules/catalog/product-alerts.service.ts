@@ -14,6 +14,7 @@ import {
   ProductAlertError,
   withinLimits,
 } from '@vertex-digital/db';
+import { z } from 'zod';
 import { ENV, type Env } from '../../core/config/env.js';
 import { routingContext } from '../../core/config/routing-context.js';
 import { DATABASE } from '../../core/database/database.module.js';
@@ -61,9 +62,9 @@ export class ProductAlertsService {
     }
   }
 
-  /** PA6: another customer's or an unknown alert is not found. */
+  /** PA6: another customer's, an unknown or a malformed id is not found (audit A04-24). */
   async cancel(customerId: string, id: string): Promise<void> {
-    if (!(await cancelProductAlert(this.db, customerId, id)))
+    if (!z.uuid().safeParse(id).success || !(await cancelProductAlert(this.db, customerId, id)))
       throw new CodedException(404, 'NOT_FOUND', 'No such alert');
   }
 }
