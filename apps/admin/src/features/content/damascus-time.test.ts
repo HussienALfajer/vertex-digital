@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromDamascusInput, toDamascusInput } from './damascus-time';
+import { formatDamascusDay, fromDamascusInput, toDamascusInput } from './damascus-time';
 
 describe('Damascus schedule fields (S14 BN4)', () => {
   it('shows an instant as Damascus wall-clock time (UTC+3)', () => {
@@ -19,5 +19,13 @@ describe('Damascus schedule fields (S14 BN4)', () => {
   it('refuses a malformed value', () => {
     expect(fromDamascusInput('')).toBeNull();
     expect(fromDamascusInput('2026-10-11 01:30')).toBeNull();
+  });
+});
+
+describe('formatDamascusDay (S14 PG2, audit A08-27)', () => {
+  it('names the Damascus day, as the store does, whatever the viewer zone', () => {
+    // 22:30 UTC on the 10th is already the 11th in Damascus.
+    expect(formatDamascusDay('2026-10-10T22:30:00.000Z')).toMatch(/^11 /);
+    expect(formatDamascusDay('2026-10-10T22:30:00.000Z')).toContain('2026');
   });
 });

@@ -57,7 +57,12 @@ test.describe('home with content (SL1, SL2, AN3)', () => {
       '/privacy',
     );
     await expect(footer.getByRole('link', { name: ar.footer.refund })).toHaveCount(0);
-    await expect(footer.getByRole('link', { name: ar.footer.about })).toHaveCount(0);
+    await expect(footer.getByRole('link', { name: ar.footer.about })).toHaveAttribute(
+      'href',
+      '/about',
+    );
+    // The merchant terms are published but kept out of the footer (S20).
+    await expect(footer.getByRole('link', { name: 'شروط حساب التاجر' })).toHaveCount(0);
     await screenshot(page, testInfo, 'home-content-dark');
 
     await page.addInitScript(lightTheme);
@@ -243,6 +248,9 @@ test.describe('content pages (PG2, FQ5, FQ7)', () => {
     expect(sitemap).toContain('/terms</loc>');
     expect(sitemap).toContain('/privacy</loc>');
     expect(sitemap).not.toContain('/refund</loc>');
+    // A page at its store path, never its name (A08-33).
+    expect(sitemap).toContain('/merchant-terms</loc>');
+    expect(sitemap).not.toContain('/merchant_terms');
     const plain = await (await request.get('/sitemap.xml')).text();
     expect(plain).not.toContain('/faq</loc>');
     expect(plain).not.toContain('/terms</loc>');
@@ -286,5 +294,158 @@ test.describe('sign-up and support (TA1, SL3)', () => {
     await page.goto('/support');
     await expect(page.getByRole('heading', { level: 1, name: ar.support.title })).toBeVisible();
     await expect(page.getByRole('link', { name: ar.support.faqCallout.link })).toHaveCount(0);
+  });
+});
+
+test.describe('audit A08', () => {
+  test('/about, /privacy and /merchant-terms open with their own title (A08-47)', async ({
+    page,
+    api: _api,
+  }) => {
+    for (const [path, title] of [
+      ['/about', 'من نحن'],
+      ['/privacy', 'سياسة الخصوصية'],
+      ['/merchant-terms', 'شروط حساب التاجر'],
+    ] as const) {
+      await page.goto(at(path));
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
+      await expect(page).toHaveTitle(new RegExp(title));
+    }
+  });
+
+  test('an unpublished /faq is titled not found, with noindex (A08-39)', async ({
+    page,
+    api: _api,
+  }) => {
+    await page.goto('/faq');
+    await expect(page.getByText(ar.notFound.title, { exact: true })).toBeVisible();
+    await expect(page).toHaveTitle(new RegExp(ar.notFound.title));
+    await expect(page).not.toHaveTitle(new RegExp(c.faq.title));
+    await expect(page.locator('meta[name="robots"][content*="noindex"]')).not.toHaveCount(0);
+  });
+
+  test('a link in a page navigates inside the store, not by a new load (A08-42)', async ({
+    page,
+    api,
+  }) => {
+    api.on('GET /api/support/tickets', 401, { code: 'UNAUTHORIZED' });
+    await page.goto(at('/terms'));
+    await page.evaluate(() => {
+      (window as { kept?: boolean }).kept = true;
+    });
+    await page.locator('article blockquote').getByRole('link', { name: 'الدعم' }).click();
+    await expect(page).toHaveURL(/\/support$/);
+    expect(await page.evaluate(() => (window as { kept?: boolean }).kept)).toBe(true);
+  });
+
+  test('closing the bar gives the focus to the page; no third line shows (A08-31, A08-38)', async ({
+    page,
+    api: _api,
+  }) => {
+    await page.goto(at('/'));
+    const bar = page.getByRole('region', { name: c.announcement.label });
+    const text = bar.locator('[data-slot="announcement-text"]');
+    await expect(text).toHaveCSS('padding-bottom', '0px');
+    await expect(text).toHaveCSS('-webkit-line-clamp', '2');
+    await bar.getByRole('button', { name: c.announcement.close }).focus();
+    await page.keyboard.press('Enter');
+    await expect(bar).toBeHidden();
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('MAIN');
+  });
+
+  test('the support callout link is a 44 px target (A08-43)', async ({ page, api }) => {
+    api.on('GET /api/support/tickets', 401, { code: 'UNAUTHORIZED' });
+    await page.goto(at('/support'));
+    const link = page.locator('main').getByRole('link', { name: ar.support.faqCallout.link });
+    expect((await link.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  });
+});
+
+test.describe('carousel (A08-34, A08-35, A08-36)', () => {
+  test('before hydration the first banner shows in full, then it is centred', async ({
+    browser,
+    page,
+    api: _api,
+  }) => {
+    const plain = await browser.newContext({ javaScriptEnabled: false });
+    const raw = await plain.newPage();
+    await raw.goto(at('/'));
+    const slides = raw.locator('[data-testid="banner-carousel"] [data-active]');
+    // The real slides only, the first one active: no dimmed copy in front of it.
+    await expect(slides).toHaveCount(fixtures.site.banners.length);
+    await expect(slides.first()).toHaveAttribute('data-active', 'true');
+    await plain.close();
+
+    await page.goto(at('/'));
+    const carousel = page.getByTestId('banner-carousel');
+    await expect(carousel.locator('[data-active]')).toHaveCount(3 * fixtures.site.banners.length);
+    const offset = await carousel.evaluate((section) => {
+      const track = section.querySelector('[data-slot="banner-track"]') as HTMLElement;
+      const active = track.querySelector('[data-active="true"]') as HTMLElement;
+      const a = active.getBoundingClientRect();
+      const t = track.getBoundingClientRect();
+      return Math.abs(a.left + a.width / 2 - (t.left + t.width / 2));
+    });
+    expect(offset).toBeLessThan(2);
+    // Every dot is a 44 px target (A08-35).
+    for (const dot of await carousel.getByRole('button', { name: /عرض البانر/ }).all()) {
+      const box = await dot.boundingBox();
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test('hydrated while hidden, it starts once shown and moves on (A08-34)', async ({
+    page,
+    api: _api,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'one width is enough for the timing');
+    test.setTimeout(30_000);
+    // The carousel stays without a width for 4 seconds, past its first 3-second timer.
+    await page.addInitScript(() => {
+      new MutationObserver((_, observer) => {
+        const section = document.querySelector<HTMLElement>('[data-testid="banner-carousel"]');
+        if (!section) return;
+        observer.disconnect();
+        section.style.display = 'none';
+        setTimeout(() => section.style.removeProperty('display'), 4_000);
+      }).observe(document, { childList: true, subtree: true });
+    });
+    await page.goto(at('/'));
+    const dots = page.getByTestId('banner-carousel').getByRole('button', { name: /عرض البانر/ });
+    await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true', { timeout: 10_000 });
+  });
+
+  test('a keyboard focus holds it even after the mouse leaves (A08-36)', async ({
+    page,
+    api: _api,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'one width is enough for the timing');
+    test.setTimeout(30_000);
+    await page.goto(at('/'));
+    const carousel = page.getByTestId('banner-carousel');
+    const dots = carousel.getByRole('button', { name: /عرض البانر/ });
+    await expect(dots.first()).toHaveAttribute('aria-current', 'true');
+    await dots.first().focus();
+    await carousel.hover();
+    await page.mouse.move(0, 0);
+    await page.waitForTimeout(4_000);
+    await expect(dots.first()).toHaveAttribute('aria-current', 'true');
+  });
+});
+
+test.describe('carousel on a touch screen (A08-36)', () => {
+  test.use({ hasTouch: true });
+
+  test('a tap pauses it only while the finger is down', async ({ page, api: _api }, testInfo) => {
+    test.skip(testInfo.project.name !== 'phone', 'the phone width has no arrows');
+    test.setTimeout(30_000);
+    await page.goto(at('/'));
+    const dots = page.getByTestId('banner-carousel').getByRole('button', { name: /عرض البانر/ });
+    await expect(dots.first()).toHaveAttribute('aria-current', 'true');
+    await dots.nth(1).tap();
+    await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true');
+    // Released, it moves on by itself again.
+    await expect(dots.first()).toHaveAttribute('aria-current', 'true', { timeout: 6_000 });
   });
 });

@@ -1,7 +1,16 @@
 'use client';
 
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { Children, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Children,
+  type FocusEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 /** S14 SL2, owner 2026-10-19: the next banner every 3 seconds. */
 const ADVANCE_MS = 3_000;
@@ -52,8 +61,10 @@ const arrow =
  * its neighbours peeking on both sides, dimmed; an endless loop (a hidden copy of the slides on
  * each side, the track moved back to the real ones once it settles), CSS scroll-snap for swiping,
  * arrows from `sm`, and dots whose current one fills over the 3 seconds. Advances while visible,
- * paused while hovered, focused or touched, never under `prefers-reduced-motion`. The slides are
- * rendered on the server and passed in as children.
+ * paused while hovered, focused from the keyboard or touched, never under `prefers-reduced-motion`
+ * (which also moves without a smooth scroll). The slides are rendered on the server and passed in
+ * as children; the copies join after hydration, so the server's page starts on the first banner
+ * in full (audit A08-34).
  */
 export function BannerCarousel({
   label,
@@ -73,7 +84,15 @@ export function BannerCarousel({
   const count = slides.length;
   // Positions run over the three copies; the real slides are count … 2 × count − 1.
   const [position, setPosition] = useState(count);
-  const [paused, setPaused] = useState(false);
+  const [ready, setReady] = useState(false);
+  // Snapping starts once the first real slide is centred: snapping while the copies join would
+  // re-snap the track to a neighbour of the slide it was on (audit A08-34).
+  const [centred, setCentred] = useState(false);
+  // Each reason to pause on its own, so ending one never resumes over another (audit A08-36).
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [touched, setTouched] = useState(false);
+  const paused = hovered || focused || touched;
   const [still, setStill] = useState(false);
   const [visible, setVisible] = useState(true);
   const current = ((position % count) + count) % count;
@@ -110,22 +129,47 @@ export function BannerCarousel({
       const element = track.current;
       if (!element) return;
       window.clearTimeout(settleTimer.current);
-      center(element, element.children[toReal(element) + by], 'smooth');
+      center(element, element.children[toReal(element) + by], still ? 'instant' : 'smooth');
     },
-    [toReal],
+    [toReal, still],
   );
 
-  // Start on the first real slide, with a copy on each side.
+  // The copies join once hydrated; reduced motion is followed as it changes (audit A08-37).
   useEffect(() => {
-    const element = track.current;
-    if (element && count > 1) center(element, element.children[count], 'instant');
-    setStill(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    setReady(count > 1);
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setStill(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
   }, [count]);
+
+  // Start on the first real slide, with a copy on each side, once the track has a width: a
+  // carousel hydrated inside a streamed boundary that is still hidden measures nothing (A08-34).
+  useLayoutEffect(() => {
+    const element = track.current;
+    if (!ready || !element) return;
+    const start = () => {
+      center(element, element.children[count], 'instant');
+      setCentred(true);
+    };
+    if (element.clientWidth > 0) {
+      start();
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth === 0) return;
+      observer.disconnect();
+      start();
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ready, count]);
 
   // Follow the scroll; once it settles in a copy, jump to the same real slide unseen.
   useEffect(() => {
     const element = track.current;
-    if (!element || count < 2) return;
+    if (!element || !ready) return;
     const onScroll = () => {
       setPosition(nearest(element));
       window.clearTimeout(settleTimer.current);
@@ -136,7 +180,7 @@ export function BannerCarousel({
       element.removeEventListener('scroll', onScroll);
       window.clearTimeout(settleTimer.current);
     };
-  }, [count, toReal]);
+  }, [ready, toReal]);
 
   // A hidden tab arms no timer; coming back arms a fresh one, so the loop never stalls.
   useEffect(() => {
@@ -148,10 +192,12 @@ export function BannerCarousel({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `position` restarts the wait after every move, whoever made it
   useEffect(() => {
-    if (count < 2 || paused || still || !visible) return;
+    // Armed once centred: a timer firing on a track still without a width moves nothing and would
+    // never be armed again (audit A08-34).
+    if (!centred || paused || still || !visible) return;
     const timer = window.setTimeout(() => step(1), ADVANCE_MS);
     return () => window.clearTimeout(timer);
-  }, [count, paused, still, visible, position, step]);
+  }, [centred, paused, still, visible, position, step]);
 
   if (count < 2) {
     return (
@@ -161,29 +207,37 @@ export function BannerCarousel({
     );
   }
 
-  const copies = [...slides, ...slides, ...slides];
+  // Before hydration the real slides alone, the first one in full; after it, a copy on each side.
+  const copies = ready ? [...slides, ...slides, ...slides] : slides;
+  const offset = ready ? 0 : count;
+  // A tap focuses the dot it pressed: only a keyboard focus holds the carousel.
+  const keyboardFocus = (event: FocusEvent) =>
+    event.target instanceof Element && event.target.matches(':focus-visible');
   return (
     <section
       aria-roledescription="carousel"
       aria-label={label}
       data-testid="banner-carousel"
       className="relative flex flex-col gap-3"
-      onPointerEnter={() => setPaused(true)}
-      onPointerLeave={(event) => event.pointerType === 'mouse' && setPaused(false)}
-      onFocus={() => setPaused(true)}
-      onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setPaused(false)}
-      onTouchStart={() => setPaused(true)}
+      onPointerEnter={(event) => event.pointerType === 'mouse' && setHovered(true)}
+      onPointerLeave={(event) => event.pointerType === 'mouse' && setHovered(false)}
+      onFocus={(event) => setFocused(keyboardFocus(event))}
+      onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(false)}
+      onTouchStart={() => setTouched(true)}
+      onTouchEnd={() => setTouched(false)}
+      onTouchCancel={() => setTouched(false)}
     >
       <div className="relative">
         <div
           ref={track}
-          className="flex snap-x snap-mandatory gap-3 overflow-x-auto data-jumping:*:transition-none overscroll-x-contain py-1 [scrollbar-width:none] sm:gap-4"
+          data-slot="banner-track"
+          className={`flex gap-3 overflow-x-auto data-jumping:*:transition-none overscroll-x-contain py-1 [scrollbar-width:none] sm:gap-4 ${centred ? 'snap-x snap-mandatory' : ''}`}
         >
-          {copies.map((slide, index) =>
-            index >= count && index < 2 * count ? (
+          {copies.map((slide, at) => {
+            const index = at + offset;
+            return index >= count && index < 2 * count ? (
               // biome-ignore lint/a11y/useSemanticElements: the ARIA carousel pattern's slide is a group
               <div
-                // biome-ignore lint/suspicious/noArrayIndexKey: the copies keep the server order
                 key={index}
                 role="group"
                 aria-roledescription="slide"
@@ -196,7 +250,6 @@ export function BannerCarousel({
             ) : (
               // The copies are for the eye only: out of the accessibility tree and the tab order.
               <div
-                // biome-ignore lint/suspicious/noArrayIndexKey: the copies keep the server order
                 key={index}
                 aria-hidden="true"
                 inert
@@ -205,8 +258,8 @@ export function BannerCarousel({
               >
                 {slide}
               </div>
-            ),
-          )}
+            );
+          })}
         </div>
         <button
           type="button"
@@ -232,7 +285,7 @@ export function BannerCarousel({
             type="button"
             aria-label={dotLabel}
             aria-current={index === current ? 'true' : undefined}
-            className="group flex h-11 items-center justify-center px-1"
+            className="group flex h-11 min-w-11 items-center justify-center px-1"
             onClick={() => step(index - current)}
           >
             <span

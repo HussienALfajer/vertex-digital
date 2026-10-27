@@ -1,20 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { type ActivityItem, activityAge, formatDeliveryDuration } from '@vertex-digital/contracts';
-import {
-  ActivityFeed,
-  type ActivityFeedItem,
-  Button,
-  Card,
-  Skeleton,
-  Switch,
-} from '@vertex-digital/ui';
+import { ActivityFeed, type ActivityFeedItem, Card, Skeleton, Switch } from '@vertex-digital/ui';
 import type { TFunction } from 'i18next';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
 import { errorMessage } from '../../lib/errors';
 import { activityQuery, settingsQuery, useSetLiveActivity } from './content.queries';
-import { StorePreview } from './content-parts';
+import { StaleRead, StorePreview } from './content-parts';
 
 /** One delivery in the store's words (LA2, LA4, LA5); the panel's preview links nowhere. */
 export function activityFeedItem(t: TFunction, item: ActivityItem, now: Date): ActivityFeedItem {
@@ -47,21 +41,12 @@ export function ActivityPage() {
   if (settings.isPending || activity.isPending) {
     return <Skeleton className="h-64 w-full" aria-hidden="true" />;
   }
-  if (settings.isError || activity.isError) {
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <FormAlert>{errorMessage(t, settings.error ?? activity.error)}</FormAlert>
-        <Button
-          variant="outline"
-          onClick={() => {
-            void settings.refetch();
-            void activity.refetch();
-          }}
-        >
-          {t('common.retry')}
-        </Button>
-      </div>
-    );
+  const retry = () => {
+    void settings.refetch();
+    void activity.refetch();
+  };
+  if (!settings.data || !activity.data) {
+    return <ReadFailure error={settings.error ?? activity.error} onRetry={retry} />;
   }
   const preview = activity.data;
   const enabled = settings.data.liveActivityEnabled;
@@ -69,6 +54,7 @@ export function ActivityPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {(settings.isError || activity.isError) && <StaleRead onRetry={retry} />}
       <Card className="gap-3 p-4">
         <label
           htmlFor={switchId}
@@ -100,7 +86,12 @@ export function ActivityPage() {
           minimum: preview.minimum,
         })}
       </p>
-      {preview.visible ? (
+      {/* Edge case 17: switched off, nothing would show, whatever the count (audit A08-7). */}
+      {!enabled ? (
+        <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-muted-foreground">
+          {t('content.activity.offPreview')}
+        </p>
+      ) : preview.visible ? (
         <StorePreview>
           <div className="p-4">
             <ActivityFeed

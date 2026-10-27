@@ -1,5 +1,13 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { ACTIVITY_MINIMUM, priceFromCost, QUEUES } from '@vertex-digital/contracts';
+import { readdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import {
+  ACTIVITY_MINIMUM,
+  ANNOUNCEMENTS_MAX,
+  FAQ_ITEMS_PER_SECTION_MAX,
+  priceFromCost,
+  QUEUES,
+} from '@vertex-digital/contracts';
 import {
   announcements,
   applyOutcome,
@@ -763,6 +771,46 @@ describe('FAQ (FQ1–FQ7)', () => {
     ).toBe(false);
     // The sections other runs left are restored for nothing: they were this run's or archived.
   });
+
+  it('leaves the revision alone when an archive or restore changes nothing (A08-1)', async () => {
+    const parent = await section(`قسم ثابت ${run}`);
+    const question = await item(parent.id, `سؤال ثابت ${run}`);
+    const before = (await working()).revision;
+    // Restoring what is live and archiving twice change nothing after the first archive.
+    await json(await adminPost(`/api/admin/content/faq/items/${question.id}/restore`), 200);
+    await json(await adminPost(`/api/admin/content/faq/sections/${parent.id}/restore`), 200);
+    expect((await working()).revision).toBe(before);
+    await json(await adminPost(`/api/admin/content/faq/items/${question.id}/archive`), 200);
+    const archived = (await working()).revision;
+    expect(archived).toBe(before + 1);
+    await json(await adminPost(`/api/admin/content/faq/items/${question.id}/archive`), 200);
+    await json(await adminPost(`/api/admin/content/faq/sections/${parent.id}/archive`), 200);
+    await json(await adminPost(`/api/admin/content/faq/sections/${parent.id}/archive`), 200);
+    expect((await working()).revision).toBe(archived + 1);
+    expect(
+      (await auditOf(test.db, parent.id)).filter(
+        (entry) => entry.action === 'faq_section.archived',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('refuses a 31st question in a section (FQ2, A08-4)', async () => {
+    const parent = await section(`قسم ممتلئ ${run}`);
+    for (let index = 0; index < FAQ_ITEMS_PER_SECTION_MAX; index += 1) {
+      await item(parent.id, `سؤال رقم ${index} ${run}`);
+    }
+    expect(
+      await code(
+        await adminPost('/api/admin/content/faq/items', {
+          sectionId: parent.id,
+          question: `سؤال زائد ${run}`,
+          answer: 'جواب',
+        }),
+        409,
+      ),
+    ).toBe('CONTENT_LIMIT_REACHED');
+    await json(await adminPost(`/api/admin/content/faq/sections/${parent.id}/archive`), 200);
+  });
 });
 
 describe('banners (BN1–BN6)', () => {
@@ -880,6 +928,47 @@ describe('banners (BN1–BN6)', () => {
     );
   });
 
+  it('writes no file for a refused banner image (A08-2)', async () => {
+    const files = () =>
+      readdir(resolve(process.env.FILES_ROOT as string), { recursive: true }).catch(() => []);
+    const before = (await files()).length;
+    expect(await code(await upload(1000, 500), 400)).toBe('IMAGE_INVALID');
+    expect(await code(await upload(1200, 1200), 400)).toBe('IMAGE_INVALID');
+    expect((await files()).length).toBe(before);
+  });
+
+  it('keeps an unchanged past start on edit and refuses enabling an archived banner (BN4, A08-4)', async () => {
+    const image = await json<{ fileId: string }>(await upload(1600, 800), 201);
+    const banner = await create(image.fileId, {
+      startsAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const startsAt = new Date(Date.now() - 60_000);
+    await test.db.update(banners).set({ startsAt }).where(eq(banners.id, banner.id));
+    const edited = await json<{ altText: string; startsAt: string }>(
+      await adminPatch(`/api/admin/content/banners/${banner.id}`, {
+        imageFileId: image.fileId,
+        altText: `بانر معدّل ${run}`,
+        startsAt: startsAt.toISOString(),
+      }),
+      200,
+    );
+    expect(edited).toMatchObject({ altText: `بانر معدّل ${run}`, startsAt: startsAt.toISOString() });
+    expect(
+      await code(
+        await adminPatch(`/api/admin/content/banners/${banner.id}`, {
+          imageFileId: image.fileId,
+          altText: `بانر معدّل ${run}`,
+          startsAt: new Date(Date.now() - 120_000).toISOString(),
+        }),
+        400,
+      ),
+    ).toBe('VALIDATION_FAILED');
+    await json(await adminPost(`/api/admin/content/banners/${banner.id}/archive`), 200);
+    expect(await code(await adminPost(`/api/admin/content/banners/${banner.id}/enable`), 400)).toBe(
+      'VALIDATION_FAILED',
+    );
+  });
+
   it('enables at most 5 (BN3)', async () => {
     const image = await json<{ fileId: string }>(await upload(1600, 800), 201);
     await test.db.update(banners).set({ enabled: false }).where(eq(banners.enabled, true));
@@ -951,6 +1040,32 @@ describe('announcements (AN1–AN4)', () => {
         404,
       ),
     ).toBe('NOT_FOUND');
+  });
+
+  it('refuses enabling an archived announcement and a 21st unarchived one (AN2, A08-4)', async () => {
+    const archived = await create(`إعلان مؤرشف ${run}`);
+    await json(await adminPost(`/api/admin/content/announcements/${archived.id}/archive`), 200);
+    expect(
+      await code(await adminPost(`/api/admin/content/announcements/${archived.id}/enable`), 400),
+    ).toBe('VALIDATION_FAILED');
+    const live = (await json<unknown[]>(await adminGet('/api/admin/content/announcements'), 200))
+      .length;
+    const made: string[] = [];
+    for (let index = live; index < ANNOUNCEMENTS_MAX; index += 1) {
+      made.push((await create(`إعلان رقم ${index} ${run}`)).id);
+    }
+    expect(
+      await code(
+        await adminPost('/api/admin/content/announcements', { text: `إعلان زائد ${run}` }),
+        409,
+      ),
+    ).toBe('CONTENT_LIMIT_REACHED');
+    expect(
+      await code(await adminPost(`/api/admin/content/announcements/${archived.id}/restore`), 409),
+    ).toBe('CONTENT_LIMIT_REACHED');
+    for (const id of made) {
+      await json(await adminPost(`/api/admin/content/announcements/${id}/archive`), 200);
+    }
   });
 
   it('leaves one enabled after concurrent enables (AN2, edge case 11)', async () => {

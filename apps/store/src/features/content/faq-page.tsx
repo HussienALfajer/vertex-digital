@@ -4,6 +4,7 @@ import { ChevronDownIcon } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 import { t } from '@/lib/i18n';
+import { ContentLink } from './content-link';
 import { getPublishedFaq } from './data';
 import { updatedText } from './texts';
 
@@ -65,7 +66,7 @@ export async function FaqView() {
                 />
               </summary>
               <div className="px-4 pb-4">
-                <RichText blocks={parseRichText(item.answer).blocks} />
+                <RichText blocks={parseRichText(item.answer).blocks} link={ContentLink} />
               </div>
             </details>
           ))}

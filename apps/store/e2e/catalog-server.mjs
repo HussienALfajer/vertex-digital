@@ -76,7 +76,7 @@ createServer((request, response) => {
     return json(response, 200, full ? activity(url.searchParams.get('game')) : { items: [] });
   }
   if (path === '/api/content/faq' && full) return json(response, 200, content.faq);
-  const page = /^\/api\/content\/pages\/([a-z]+)$/.exec(path);
+  const page = /^\/api\/content\/pages\/([a-z_]+)$/.exec(path);
   if (page && full && content.pages[page[1]]) return json(response, 200, content.pages[page[1]]);
   if (path === '/_seen') {
     const seen = forwardedFor.get(url.searchParams.get('token')) ?? new Set();

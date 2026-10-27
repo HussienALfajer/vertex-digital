@@ -8,6 +8,8 @@ import {
   bannerInputSchema,
   bannerOrderSchema,
   bannerState,
+  CONTENT_PAGES,
+  contentPagePath,
   faqOrderSchema,
   floorToFiveMinutes,
   formatDeliveryDuration,
@@ -25,6 +27,18 @@ const id = (n: number) => `0190f0a0-0000-7000-8000-${String(n).padStart(12, '0')
 const blocks = (source: string): RichBlock[] => parseRichText(source).blocks;
 const reasons = (source: string) =>
   richTextProblems(source).map((problem) => `${problem.line}:${problem.reason}`);
+
+describe('contentPagePath (audit A08-33)', () => {
+  it('gives each page its store path', () => {
+    expect(CONTENT_PAGES.map(contentPagePath)).toEqual([
+      '/terms',
+      '/privacy',
+      '/refund',
+      '/about',
+      '/merchant-terms',
+    ]);
+  });
+});
 
 describe('linkPathSchema (MD4)', () => {
   it.each(['/', '/faq', '/games/pubg-mobile', '/terms#section-2', '/faq#q-0190f0a0', '/a.b_c~d/'])(

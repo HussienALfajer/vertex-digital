@@ -33,7 +33,7 @@ NestJS 12 HTTP API, a modular monolith (ADR 0001, 0002). Code shape: ADR 0011. A
 ## Rules to apply yourself
 - ESM: relative imports end in `.js`. No speculative helpers: they arrive with their first use.
 - Money routes: `@IdempotencyKey()` with a replay of the first result (`201` written, `200` replayed); the wallet row is locked first so parallel requests with one key or one reversal queue instead of meeting the balance check. Pattern to copy: `src/modules/wallet/wallet-adjustments.service.ts`, `test/wallet.test.ts` (concurrency and double submit).
-- Uploads: `FileInterceptor('file', { limits: { fileSize } })` on the route (multer turns an oversized file into `413 PAYLOAD_TOO_LARGE`), then `FilesService.prepare` before the transaction and `record` inside it; send stored images with `sendImage` (`modules/files/served-file.ts`, from the files module's `index.ts`). Pattern to copy: `DepositsService.submitReceipt`.
+- Uploads: `FileInterceptor('file', { limits: { fileSize } })` on the route (multer turns an oversized file into `413 PAYLOAD_TOO_LARGE`), then `FilesService.prepare` before the transaction (a refusal by the image's size goes in its `accept` check, which runs before the file is written, audit A08-2) and `record` inside it; send stored images with `sendImage` (`modules/files/served-file.ts`, from the files module's `index.ts`). Pattern to copy: `DepositsService.submitReceipt`.
 - A write that claims a payment reference and credits a wallet locks the wallet first (`lockCustomerWallet`), then claims: the same order everywhere, or two such writes for one customer deadlock.
 - Never log or return tokens, passwords, TOTP secrets, receipts or personal data beyond what the caller may see.
 

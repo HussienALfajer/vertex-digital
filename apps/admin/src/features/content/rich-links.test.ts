@@ -28,4 +28,10 @@ describe('unpublishedTargets (S14 edge case 20)', () => {
       '/about/',
     ]);
   });
+
+  it('watches the merchant terms at their hyphenated path (A08-15)', () => {
+    expect(unpublishedTargets(['/merchant-terms', '/merchant_terms'], new Set())).toEqual([
+      '/merchant-terms',
+    ]);
+  });
 });

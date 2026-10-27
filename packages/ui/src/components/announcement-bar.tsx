@@ -38,7 +38,12 @@ function AnnouncementBar({ tone, text, action, close, className, ...props }: Ann
     >
       <div className="mx-auto flex max-w-6xl items-center gap-2 ps-4 pe-1 text-sm">
         <Icon aria-hidden="true" className="size-4 shrink-0" />
-        <p className="line-clamp-2 min-w-0 flex-1 py-3">{text}</p>
+        {/* The padding sits outside the clamped text, or a third line shows in it (audit A08-31). */}
+        <div className="min-w-0 flex-1 py-3">
+          <p data-slot="announcement-text" className="line-clamp-2">
+            {text}
+          </p>
+        </div>
         {/* Outside the clamped text, so a long text never hides the link. */}
         {action && <span className="shrink-0">{action}</span>}
         {close}

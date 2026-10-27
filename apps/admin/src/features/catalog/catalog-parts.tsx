@@ -43,7 +43,11 @@ export function AvailabilityBadge({ availability }: { availability: ProductAvail
   );
 }
 
-/** Move up or down (rule CT5): an icon button with its tooltip; a gap at either end. */
+/**
+ * Move up or down (rule CT5): an icon button with its tooltip, disabled at either end. It stays
+ * focusable while disabled (an order saving, the row now first or last), so a keyboard user keeps
+ * their place after a move (audit A08-11).
+ */
 export function MoveButton({
   label,
   onClick,
@@ -55,7 +59,6 @@ export function MoveButton({
   disabled?: boolean;
   children: ReactNode;
 }) {
-  if (!onClick) return <span className="size-8" aria-hidden="true" />;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -64,7 +67,8 @@ export function MoveButton({
             variant="ghost"
             size="icon-sm"
             aria-label={label}
-            disabled={disabled}
+            disabled={disabled || !onClick}
+            focusableWhenDisabled
             onClick={onClick}
           />
         }

@@ -1,3 +1,17 @@
+# TASKS — Audit A08 Content (branch `fix/audit-a08-content`)
+
+Plan `docs/audits/README.md`, report `docs/audits/A08-content.md`. Spec S14; ADR 0028.
+
+- [x] Start: branch, README status `in progress`, report file, this list
+- [x] Map and audit (api, database, worker, store, admin, tests, observability); known leads checked
+- [x] Live browser test (store and admin screens of the group)
+- [x] Findings shown to the owner (no decision needed)
+- [x] Fixes P0 → P3, each with its regression test (39 fixed, 4 partly, 1 deferred, 3 moved to A10)
+- [x] Re-test live with screenshots
+- [x] `pnpm verify` (checker) and the reviewer; findings fixed (verify passed; the reviewer's A08-34 timer finding fixed and tested)
+- [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge (#194)
+- [ ] Deploy, production smoke test, README `deployed`
+
 # TASKS — Audit A07 Customers, support and notifications (branch `fix/audit-a07-customers`)
 
 Plan `docs/audits/README.md`, report `docs/audits/A07-customers.md`. Specs S05 (bot, notifications), S12, S15 (web push); ADR 0019, 0026, 0029.

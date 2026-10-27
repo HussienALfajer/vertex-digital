@@ -1,4 +1,9 @@
-import type { RichBlock, RichInline } from '@vertex-digital/contracts';
+import {
+  CONTENT_PAGES,
+  contentPagePath,
+  type RichBlock,
+  type RichInline,
+} from '@vertex-digital/contracts';
 
 /** Every link target of a parsed body, in order, each once. */
 export function linkTargets(blocks: RichBlock[]): string[] {
@@ -25,11 +30,11 @@ export function linkTargets(blocks: RichBlock[]): string[] {
 }
 
 /**
- * S14 edge case 20: the targets that point at one of the four pages or `/faq` while it is not
+ * S14 edge case 20: the targets that point at one of the content pages or `/faq` while it is not
  * published (the store answers 404 there until then). `published` holds the paths that are.
  */
 export function unpublishedTargets(targets: string[], published: ReadonlySet<string>): string[] {
-  const watched = new Set(['/terms', '/privacy', '/refund', '/about', '/faq']);
+  const watched = new Set([...CONTENT_PAGES.map(contentPagePath), '/faq']);
   return targets.filter((target) => {
     const path = target.split('#')[0]?.replace(/\/+$/, '') ?? '';
     return watched.has(path) && !published.has(path);

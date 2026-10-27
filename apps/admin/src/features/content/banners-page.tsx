@@ -31,7 +31,10 @@ import {
 } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
+import { useVisibleAgain } from '../../lib/admin-stream';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
 import { MoveButton } from '../catalog/catalog-parts';
@@ -42,7 +45,7 @@ import {
   useBannerAction,
   useReorderBanners,
 } from './content.queries';
-import { ScheduleText, StateBadge } from './content-parts';
+import { reorderFailure, ScheduleText, StaleRead, StateBadge } from './content-parts';
 import { moved } from './faq-order';
 
 /**
@@ -59,30 +62,26 @@ export function BannersPage({
   const { t } = useTranslation();
   const archivedId = useId();
   const banners = useQuery(bannersQuery(archived));
+  // States follow the clock (scheduled, live, ended): read again when the tab is seen (A08-23).
+  useVisibleAgain(() => void banners.refetch());
   const reorder = useReorderBanners();
   const action = useBannerAction();
   const [editing, setEditing] = useState<Banner | 'new' | null>(null);
+  const [archiving, setArchiving] = useState<Banner | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  async function run(request: () => Promise<unknown>) {
+  async function run(request: () => Promise<unknown>, describe = errorMessage) {
     setFailure(null);
     try {
       await request();
     } catch (error) {
-      setFailure(errorMessage(t, error));
+      setFailure(describe(t, error));
     }
   }
 
   if (banners.isPending) return <Skeleton className="h-64 w-full" aria-hidden="true" />;
-  if (banners.isError) {
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <FormAlert>{errorMessage(t, banners.error)}</FormAlert>
-        <Button variant="outline" onClick={() => banners.refetch()}>
-          {t('common.retry')}
-        </Button>
-      </div>
-    );
+  if (!banners.data) {
+    return <ReadFailure error={banners.error} onRetry={() => banners.refetch()} />;
   }
   const list = banners.data;
   const live = list.filter((banner) => !banner.archivedAt);
@@ -91,9 +90,12 @@ export function BannersPage({
   const endedEnabled = live.some((banner) => banner.state === 'ended');
   const pending = reorder.isPending || action.isPending;
   const act = (id: string, verb: RowAction) => run(() => action.mutateAsync({ id, action: verb }));
+  const move = (from: number, to: number) =>
+    run(() => reorder.mutateAsync(moved(ids, from, to)), reorderFailure);
 
   return (
     <div className="flex flex-col gap-6">
+      {banners.isError && <StaleRead onRetry={() => banners.refetch()} />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-4">
           <Badge
@@ -144,6 +146,7 @@ export function BannersPage({
             {list.map((banner) => {
               const index = ids.indexOf(banner.id);
               const archivedRow = !!banner.archivedAt;
+              const name = { name: banner.altText };
               return (
                 <TableRow key={banner.id} data-testid="banner-row">
                   <TableCell>
@@ -180,28 +183,28 @@ export function BannersPage({
                       {!archivedRow && (
                         <>
                           <MoveButton
-                            label={t('content.actions.moveUp')}
+                            label={t('content.actions.moveUpNamed', name)}
                             disabled={pending}
-                            onClick={
-                              index > 0
-                                ? () => run(() => reorder.mutateAsync(moved(ids, index, index - 1)))
-                                : undefined
-                            }
+                            onClick={index > 0 ? () => move(index, index - 1) : undefined}
                           >
                             <ArrowUpIcon />
                           </MoveButton>
                           <MoveButton
-                            label={t('content.actions.moveDown')}
+                            label={t('content.actions.moveDownNamed', name)}
                             disabled={pending}
                             onClick={
-                              index < ids.length - 1
-                                ? () => run(() => reorder.mutateAsync(moved(ids, index, index + 1)))
-                                : undefined
+                              index < ids.length - 1 ? () => move(index, index + 1) : undefined
                             }
                           >
                             <ArrowDownIcon />
                           </MoveButton>
-                          <Button variant="ghost" size="sm" onClick={() => setEditing(banner)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-11"
+                            aria-label={t('content.actions.editNamed', name)}
+                            onClick={() => setEditing(banner)}
+                          >
                             <PencilIcon />
                             {t('content.actions.edit')}
                           </Button>
@@ -210,8 +213,17 @@ export function BannersPage({
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-11"
+                        aria-label={t(
+                          archivedRow
+                            ? 'content.actions.restoreNamed'
+                            : 'content.actions.archiveNamed',
+                          name,
+                        )}
                         disabled={pending}
-                        onClick={() => void act(banner.id, archivedRow ? 'restore' : 'archive')}
+                        onClick={() =>
+                          archivedRow ? void act(banner.id, 'restore') : setArchiving(banner)
+                        }
                       >
                         {archivedRow ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
                         {archivedRow ? t('content.actions.restore') : t('content.actions.archive')}
@@ -224,6 +236,23 @@ export function BannersPage({
           </TableBody>
         </Table>
       )}
+      {/* BN5: archiving takes a live banner off the store; a restore brings it back off, last. */}
+      <ConfirmDialog
+        open={archiving !== null}
+        onClose={() => setArchiving(null)}
+        title={t('content.banners.archiveTitle', { name: archiving?.altText ?? '' })}
+        body={
+          archiving?.state === 'live'
+            ? t('content.banners.archiveLiveBody')
+            : t('content.banners.archiveBody')
+        }
+        action={t('content.actions.archive')}
+        destructive
+        pending={action.isPending}
+        onConfirm={async () => {
+          if (archiving) await action.mutateAsync({ id: archiving.id, action: 'archive' });
+        }}
+      />
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         {editing !== null && (
           <BannerDialog

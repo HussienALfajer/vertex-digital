@@ -48,3 +48,11 @@ export function fromDamascusInput(value: string): string | null {
   const offset = Date.parse(`${toDamascusInput(new Date(asUtc).toISOString())}:00Z`) - asUtc;
   return new Date(asUtc - offset).toISOString();
 }
+
+const day = new Intl.DateTimeFormat('ar-SY-u-nu-latn', {
+  timeZone: 'Asia/Damascus',
+  dateStyle: 'long',
+});
+
+/** "آخر تحديث" as the store shows it (PG2): the Damascus day, whatever the viewer's zone (A08-27). */
+export const formatDamascusDay = (iso: string) => day.format(new Date(iso));

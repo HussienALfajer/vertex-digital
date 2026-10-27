@@ -10,24 +10,36 @@ import type {
   SaveFaqSection,
   SavePageDraft,
 } from '@vertex-digital/contracts';
-import { api, call } from '../../lib/api/client';
+import { api, BACKGROUND_REQUEST, call } from '../../lib/api/client';
 import { useReauthentication } from '../account/reauthentication';
 
 /*
  * Store content (S14): the four pages, the FAQ, banners, announcements and live activity. Keys
  * start with `content`. A change can move another tab's figures (an enable disables another
- * announcement, a publish clears a badge), so every mutation reads the module again.
+ * announcement, a publish clears a badge), so every mutation reads the module again. A read of what
+ * is already shown (after a change, the tab seen again) is background work (rule D4, audit A08-23).
  */
+
+type Key = readonly unknown[];
+const again = (client: { getQueryData: (key: Key) => unknown }, queryKey: Key) =>
+  client.getQueryData(queryKey) === undefined ? undefined : BACKGROUND_REQUEST;
 
 export const pagesQuery = queryOptions({
   queryKey: ['content', 'pages'],
-  queryFn: () => call(api.GET('/api/admin/content/pages')),
+  queryFn: ({ client, queryKey }) =>
+    call(api.GET('/api/admin/content/pages', { headers: again(client, queryKey) })),
 });
 
 export const pageQuery = (page: ContentPage) =>
   queryOptions({
     queryKey: ['content', 'page', page],
-    queryFn: () => call(api.GET('/api/admin/content/pages/{page}', { params: { path: { page } } })),
+    queryFn: ({ client, queryKey }) =>
+      call(
+        api.GET('/api/admin/content/pages/{page}', {
+          params: { path: { page } },
+          headers: again(client, queryKey),
+        }),
+      ),
   });
 
 export const pageVersionQuery = (page: ContentPage, version: number) =>
@@ -46,10 +58,11 @@ export const pageVersionQuery = (page: ContentPage, version: number) =>
 export const faqQuery = (archived: boolean) =>
   queryOptions({
     queryKey: ['content', 'faq', { archived }],
-    queryFn: () =>
+    queryFn: ({ client, queryKey }) =>
       call(
         api.GET('/api/admin/content/faq', {
           params: { query: { archived: archived ? 'true' : undefined } },
+          headers: again(client, queryKey),
         }),
       ),
   });
@@ -57,10 +70,11 @@ export const faqQuery = (archived: boolean) =>
 export const bannersQuery = (archived: boolean) =>
   queryOptions({
     queryKey: ['content', 'banners', { archived }],
-    queryFn: () =>
+    queryFn: ({ client, queryKey }) =>
       call(
         api.GET('/api/admin/content/banners', {
           params: { query: { archived: archived ? 'true' : undefined } },
+          headers: again(client, queryKey),
         }),
       ),
   });
@@ -68,22 +82,25 @@ export const bannersQuery = (archived: boolean) =>
 export const announcementsQuery = (archived: boolean) =>
   queryOptions({
     queryKey: ['content', 'announcements', { archived }],
-    queryFn: () =>
+    queryFn: ({ client, queryKey }) =>
       call(
         api.GET('/api/admin/content/announcements', {
           params: { query: { archived: archived ? 'true' : undefined } },
+          headers: again(client, queryKey),
         }),
       ),
   });
 
 export const settingsQuery = queryOptions({
   queryKey: ['content', 'settings'],
-  queryFn: () => call(api.GET('/api/admin/content/settings')),
+  queryFn: ({ client, queryKey }) =>
+    call(api.GET('/api/admin/content/settings', { headers: again(client, queryKey) })),
 });
 
 export const activityQuery = queryOptions({
   queryKey: ['content', 'activity'],
-  queryFn: () => call(api.GET('/api/admin/content/activity')),
+  queryFn: ({ client, queryKey }) =>
+    call(api.GET('/api/admin/content/activity', { headers: again(client, queryKey) })),
 });
 
 /** A content change through the re-authentication wrapper (rule D5), reading the module again. */

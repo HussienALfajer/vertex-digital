@@ -20,13 +20,13 @@ import {
   useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ImageIcon, UploadIcon } from 'lucide-react';
-import { type DragEvent, type FormEvent, useRef, useState } from 'react';
+import { type DragEvent, type FormEvent, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { useSaveBanner, useUploadBannerImage } from './content.queries';
-import { refusedFields, StorePreview } from './content-parts';
+import { LinkWarnings, linkMarkdown, refusedFields, StorePreview } from './content-parts';
 import { fromDamascusInput, toDamascusInput } from './damascus-time';
 
 type BannerField = 'imageFileId' | 'altText' | 'linkPath' | 'startsAt' | 'endsAt';
@@ -43,6 +43,8 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
   const input = useRef<HTMLInputElement>(null);
   const [imageId, setImageId] = useState(banner?.imageFileId ?? null);
   const [altText, setAltText] = useState(banner?.altText ?? '');
+  const [linkPath, setLinkPath] = useState(banner?.linkPath ?? '');
+  const imageErrorId = useId();
   const [errors, setErrors] = useState<Partial<Record<BannerField, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const { ref, focusInvalid } = useFocusInvalid();
@@ -50,7 +52,8 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
   const [refused, setRefused] = useState(false);
 
   async function choose(file: File | undefined) {
-    if (!file) return;
+    // One upload at a time, so the image kept is the one chosen last (audit A08-18).
+    if (!file || upload.isPending) return;
     setErrors((current) => ({ ...current, imageFileId: undefined }));
     try {
       setImageId((await upload.mutateAsync(file)).fileId);
@@ -144,6 +147,10 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
             <button
               type="button"
               data-testid="banner-drop"
+              aria-label={url ? t('content.banners.replace') : t('content.banners.drop')}
+              aria-invalid={errors.imageFileId ? true : undefined}
+              aria-describedby={errors.imageFileId ? imageErrorId : undefined}
+              disabled={upload.isPending}
               className="flex aspect-[2/1] w-full items-center justify-center overflow-hidden rounded-md border-2 border-dashed border-border bg-muted text-muted-foreground hover:border-primary focus-visible:outline-2 focus-visible:outline-ring"
               onClick={() => input.current?.click()}
               onDragOver={(event: DragEvent) => event.preventDefault()}
@@ -179,6 +186,7 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-11"
                 disabled={upload.isPending}
                 onClick={() => input.current?.click()}
               >
@@ -191,7 +199,7 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
               </Button>
             </div>
             {errors.imageFileId && (
-              <p role="alert" className="text-sm text-destructive-text">
+              <p id={imageErrorId} role="alert" className="text-sm text-destructive-text">
                 {errors.imageFileId}
               </p>
             )}
@@ -213,12 +221,14 @@ export function BannerDialog({ banner, onDone }: { banner: Banner | null; onDone
             <Input
               name="linkPath"
               dir="ltr"
-              defaultValue={banner?.linkPath ?? ''}
+              value={linkPath}
               placeholder="/games/pubg-mobile"
               maxLength={200}
               autoComplete="off"
+              onChange={(event) => setLinkPath(event.target.value)}
             />
             <FieldDescription>{t('content.linkHint')}</FieldDescription>
+            <LinkWarnings source={linkMarkdown(linkPath)} />
             <FieldError match={!!errors.linkPath}>{errors.linkPath}</FieldError>
           </Field>
           <ScheduleFields

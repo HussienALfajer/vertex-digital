@@ -14,6 +14,9 @@ export const contentPageSchema = z.enum(CONTENT_PAGES).meta({ id: 'ContentPage' 
 
 export type ContentPage = z.infer<typeof contentPageSchema>;
 
+/** A page's store path, its name with hyphens: `merchant_terms` is `/merchant-terms` (A08-33). */
+export const contentPagePath = (page: ContentPage): string => `/${page.replaceAll('_', '-')}`;
+
 /** The design system's callout tones (rule AN1). */
 export const ANNOUNCEMENT_TONES = ['info', 'warning'] as const;
 

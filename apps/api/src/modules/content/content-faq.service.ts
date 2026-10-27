@@ -33,6 +33,7 @@ import {
   FAQ_ENTITY_ID,
   type FaqItemRow,
   type FaqSectionRow,
+  lockFaqRevision,
   refusals,
   toFaqItem,
   toFaqSection,
@@ -126,9 +127,10 @@ export class ContentFaqService {
   /** Rule FQ3: hidden with its questions from the next publication; their own state kept. */
   async archiveSection(actor: Actor, id: string): Promise<FaqSection> {
     return this.db.transaction(async (tx) => {
-      await bumpFaqRevision(tx);
+      await lockFaqRevision(tx);
       const before = await this.section(tx, id);
       if (before.archivedAt !== null) return toFaqSection(before);
+      await bumpFaqRevision(tx);
       const [row] = await tx
         .update(faqSections)
         .set({ archivedAt: sql`now()` })
@@ -145,9 +147,10 @@ export class ContentFaqService {
   /** Rule FQ3: under the section limit, last in the order. */
   async restoreSection(actor: Actor, id: string): Promise<FaqSection> {
     return this.db.transaction(async (tx) => {
-      await bumpFaqRevision(tx);
+      await lockFaqRevision(tx);
       const before = await this.section(tx, id);
       if (before.archivedAt === null) return toFaqSection(before);
+      await bumpFaqRevision(tx);
       if ((await this.liveSections(tx)) >= FAQ_SECTIONS_MAX) throw refusals.limit(FAQ_SECTIONS_MAX);
       const [row] = await tx
         .update(faqSections)
@@ -216,9 +219,10 @@ export class ContentFaqService {
 
   async archiveItem(actor: Actor, id: string): Promise<FaqItem> {
     return this.db.transaction(async (tx) => {
-      await bumpFaqRevision(tx);
+      await lockFaqRevision(tx);
       const before = await this.item(tx, id);
       if (before.archivedAt !== null) return toFaqItem(before);
+      await bumpFaqRevision(tx);
       const [row] = await tx
         .update(faqItems)
         .set({ archivedAt: sql`now()` })
@@ -235,9 +239,10 @@ export class ContentFaqService {
   /** Rule FQ3: under an unarchived section, within its limit, last in its order. */
   async restoreItem(actor: Actor, id: string): Promise<FaqItem> {
     return this.db.transaction(async (tx) => {
-      await bumpFaqRevision(tx);
+      await lockFaqRevision(tx);
       const before = await this.item(tx, id);
       if (before.archivedAt === null) return toFaqItem(before);
+      await bumpFaqRevision(tx);
       await this.liveSection(tx, before.sectionId);
       await this.checkItemRoom(tx, before.sectionId);
       const [row] = await tx
@@ -348,9 +353,19 @@ export class ContentFaqService {
     return { sections: newest.sections, updatedAt: newest.publishedAt.toISOString() };
   }
 
-  /** Whether the store links to `/faq` (SL1, SL3). */
+  /**
+   * Whether the store links to `/faq` (SL1, SL3): the newest publication holds a question, asked
+   * of the database rather than parsing the snapshot (audit A08-3).
+   */
   async isPublished(): Promise<boolean> {
-    return (await this.newestPublication()) !== null;
+    const [row] = await this.db
+      .select({
+        published: sql<boolean>`jsonb_path_exists(${faqPublications.sections}, '$[*].items[0]')`,
+      })
+      .from(faqPublications)
+      .orderBy(desc(faqPublications.publishedAt))
+      .limit(1);
+    return row?.published ?? false;
   }
 
   private async newestPublication() {

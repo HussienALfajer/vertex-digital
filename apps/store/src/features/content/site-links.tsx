@@ -74,7 +74,11 @@ export async function FaqCallout() {
       icon={<MessageCircleQuestionIcon />}
       title={t('support.faqCallout.title')}
       description={
-        <Link href="/faq" prefetch={false} className="font-medium underline underline-offset-4">
+        <Link
+          href="/faq"
+          prefetch={false}
+          className="inline-flex min-h-11 items-center font-medium underline underline-offset-4"
+        >
           {t('support.faqCallout.link')}
         </Link>
       }

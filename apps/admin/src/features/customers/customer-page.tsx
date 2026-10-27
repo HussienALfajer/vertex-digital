@@ -227,7 +227,8 @@ function Header({ customer }: { customer: AdminCustomer }) {
 
 /**
  * S14 TA3: the terms and privacy versions in force at sign-up, or "قبل نشر …" for a customer who
- * signed up before the page was published.
+ * signed up before the page was published; a test customer is made in the panel and accepts
+ * nothing (audit A08-28).
  */
 function AcceptedVersions({ customer }: { customer: AdminCustomer }) {
   const { t } = useTranslation();
@@ -235,6 +236,13 @@ function AcceptedVersions({ customer }: { customer: AdminCustomer }) {
     ['terms', customer.termsVersion],
     ['privacy', customer.privacyVersion],
   ] as const;
+  if (customer.isTest) {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="accepted-versions">
+        {t('customers.profile.accepted.testCustomer')}
+      </p>
+    );
+  }
   return (
     <ul className="flex flex-col text-sm text-muted-foreground" data-testid="accepted-versions">
       {pages.map(([page, accepted]) => (
