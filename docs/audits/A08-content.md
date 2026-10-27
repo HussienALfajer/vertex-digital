@@ -1,6 +1,6 @@
 # A08 Content
 
-Status: merged (PR link set when opened)
+Status: merged (PR [#194](https://github.com/HussienALfajer/vertex-digital/pull/194))
 Branch: fix/audit-a08-content · Started: 2026-10-28 · Specs: S14 · ADRs: 0028 (and 0015 for the dismissal script)
 
 ## Scope

@@ -19,7 +19,7 @@ In a new session (Opus, effort `high`), the owner writes one line, for example "
 | A05 | Suppliers and pricing | deployed | [A05-suppliers.md](A05-suppliers.md) | [#188](https://github.com/HussienALfajer/vertex-digital/pull/188) | `3f2def4` (2026-10-27) |
 | A06 | Merchants | deployed | [A06-merchants.md](A06-merchants.md) | [#190](https://github.com/HussienALfajer/vertex-digital/pull/190) | `60f46b0` (2026-10-27) |
 | A07 | Customers, support and notifications | deployed | [A07-customers.md](A07-customers.md) | [#192](https://github.com/HussienALfajer/vertex-digital/pull/192) | `e9977c6` (2026-10-28) |
-| A08 | Content | in progress | [A08-content.md](A08-content.md) | | |
+| A08 | Content | merged | [A08-content.md](A08-content.md) | [#194](https://github.com/HussienALfajer/vertex-digital/pull/194) | |
 | A09 | Control, reconciliation and reports | not started | | | |
 | A10 | Platform, performance and operations | not started | | | |
 
