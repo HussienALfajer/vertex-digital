@@ -154,6 +154,7 @@ Money is USD units (micro-dollars, ADR 0003). SYP is display only and never stor
   - `valid`: the order stores `player_check = valid` and the name;
   - `invalid` or no row: `confirmPlayer: true` is required (else `409 PLAYER_NOT_CONFIRMED`), and the order stores `invalid_confirmed` or `unchecked_confirmed`;
   - validation not possible: `none`, and `confirmPlayer` is ignored.
+  - The day's check quota used up (PV5): an unexpired cached answer still applies as above, since reading the cache calls no supplier; with no row, validation is not possible (owner, 2026-10-27, Q24).
   - The purchase never calls a supplier. An order refused by the supplier for the account still refunds at once (S08 F1 `inputRejected`).
 
 ### Reservations (`awaiting_balance`, A02, A15; owner 2026-10-09)
