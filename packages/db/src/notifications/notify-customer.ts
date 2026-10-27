@@ -20,7 +20,10 @@ import {
 } from '../schema/index.js';
 import { type JobSender, queueEmail } from './email-outbox.js';
 
-/** The `LISTEN` channel of new notifications; the payload is the notification id (rule NT6). */
+/**
+ * The `LISTEN` channel of new notifications (rule NT6); the payload is
+ * `<customer id>:<notification id>`, so the API reads only what an open stream shows (A07-31).
+ */
 export const CUSTOMER_NOTIFICATIONS_CHANNEL = 'customer_notifications';
 
 /** S09 rule LT2: every order status change, from the `orders_notify` trigger (migration 0035). */
@@ -52,7 +55,9 @@ export async function notifyCustomer<Event extends NotificationEvent>(
     .values({ id: newId(), customerId: input.customerId, event: input.event, params })
     .returning({ id: customerNotifications.id, createdAt: customerNotifications.createdAt });
   if (!row) throw new Error('The notification was not written');
-  await tx.execute(sql`select pg_notify(${CUSTOMER_NOTIFICATIONS_CHANNEL}, ${row.id})`);
+  await tx.execute(
+    sql`select pg_notify(${CUSTOMER_NOTIFICATIONS_CHANNEL}, ${`${input.customerId}:${row.id}`})`,
+  );
   // A center-only call (S10 CT8) sends neither email nor push.
   if (options.email === false) return { notificationId: row.id, emailId: null };
   if (isPushNotificationEvent(input.event)) await queuePush(tx, jobs, input.customerId, row.id);

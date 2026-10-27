@@ -304,10 +304,11 @@ describe('linking (rule TG3)', () => {
     });
     await sendText(stranger, `/start ${expired}`);
     const replies = await repliesTo(stranger.chat.id);
-    // The first use of `code` linked the stranger; every later attempt is refused.
+    // The first use of `code` linked the stranger; every later attempt is refused, with one
+    // reply per chat per 10 minutes (audit A07-27: a flood of codes sends no more).
     expect(replies.map((reply) => reply.params)).toEqual([
       { reply: 'welcome' },
-      ...Array(4).fill({ reply: 'invalid_code' }),
+      { reply: 'invalid_code' },
     ]);
     expect((await liveLink())?.chatId).toBe(stranger.chat.id);
   });

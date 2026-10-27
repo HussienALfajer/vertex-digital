@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   ADMIN_TICKET_TABS,
@@ -37,9 +37,11 @@ import { InboxIcon, SearchIcon, SettingsIcon, XIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
+import { useVisibleAgain } from '../../lib/admin-stream';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince } from '../../lib/format';
 import { CHIP_TONES } from '../customers/customer-labels';
+import { customerQuery } from '../customers/customers.queries';
 import { ticketListQuery } from './support.queries';
 import { type SupportSearch, tabOf, withFilter } from './support-search';
 import { TICKET_STATUS_TONES } from './ticket-labels';
@@ -48,7 +50,8 @@ const ALL = 'all';
 
 /**
  * "الدعم" (S12 TK12): the queue's tabs ("بانتظار ردّك" oldest first), the type and customer
- * filters and the search by ticket number, all in the URL; a row opens the thread.
+ * filters and the search by ticket number, all in the URL; a row opens the thread. Read again in
+ * the background when the tab is seen again (audit A07-10).
  */
 export function SupportPage({
   search,
@@ -59,6 +62,7 @@ export function SupportPage({
 }) {
   const { t } = useTranslation();
   const list = useInfiniteQuery(ticketListQuery(search));
+  useVisibleAgain(() => void list.refetch());
   const tab = tabOf(search);
   const tickets = list.data?.pages.flatMap((page) => page.items) ?? [];
   const filtered = !!search.category || !!search.problem || !!search.customerId || !!search.q;
@@ -150,10 +154,16 @@ export function SupportPage({
         <NumberSearch key={search.q ?? ''} search={search} onSearch={onSearch} />
         {search.customerId && (
           <div className="flex items-center gap-2">
-            <Badge tone="info">{t('support.filters.oneCustomer')}</Badge>
+            <CustomerChip
+              customerId={search.customerId}
+              name={
+                tickets.find((ticket) => ticket.customer.id === search.customerId)?.customer.name
+              }
+            />
             <Button
               variant="ghost"
               size="sm"
+              className="h-11"
               onClick={() => onSearch(withFilter(search, { customerId: undefined }))}
             >
               <XIcon />
@@ -177,13 +187,13 @@ export function SupportPage({
           </Button>
         </div>
       )}
-      {list.isSuccess && tickets.length === 0 && (
+      {list.isSuccess && tickets.length === 0 && !list.isPlaceholderData && (
         <EmptyState
           icon={<InboxIcon />}
           title={filtered ? t('support.empty.filtered') : t(`support.empty.${tab}`)}
         />
       )}
-      {tickets.length > 0 && <TicketTable tickets={tickets} />}
+      {tickets.length > 0 && <TicketTable tickets={tickets} loading={list.isPlaceholderData} />}
       {list.hasNextPage && (
         <Button
           variant="outline"
@@ -195,6 +205,23 @@ export function SupportPage({
         </Button>
       )}
     </>
+  );
+}
+
+/**
+ * TK12 (audit A07-44): the customer filter names the customer, from the queue's rows, else from
+ * the customer's profile while no row shows.
+ */
+function CustomerChip({ customerId, name }: { customerId: string; name: string | undefined }) {
+  const { t } = useTranslation();
+  const customer = useQuery({ ...customerQuery(customerId), enabled: !name });
+  const shown = name ?? customer.data?.name;
+  return (
+    <Badge tone="info">
+      {shown
+        ? t('support.filters.customerChip', { name: shown })
+        : t('support.filters.oneCustomer')}
+    </Badge>
   );
 }
 
@@ -243,19 +270,22 @@ function NumberSearch({
 /**
  * The tickets as rows (TK12): number, customer with the frozen chip, type, link, subject, status
  * and last activity; a row opens the thread. The customer profile's tab leaves out the customer.
+ * `loading`: another tab's or filter's rows, dimmed while the next load (audit A07-15).
  */
 export function TicketTable({
   tickets,
   withCustomer = true,
+  loading = false,
 }: {
   tickets: AdminTicketSummary[];
   withCustomer?: boolean;
+  loading?: boolean;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const now = new Date();
   return (
-    <Table>
+    <Table className={loading ? 'opacity-60' : undefined} aria-busy={loading}>
       <TableHeader>
         <TableRow>
           <TableHead>{t('support.columns.number')}</TableHead>

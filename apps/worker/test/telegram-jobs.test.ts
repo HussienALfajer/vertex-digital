@@ -363,6 +363,46 @@ describe('the deposit card (rules TC1, TC2, TC6)', () => {
       expect(cards).toHaveLength(2);
     });
   });
+
+  it('waits out a 429 by queueing the card after `retry_after` (A07-26)', async () => {
+    const sent: { data: unknown; options: Record<string, unknown> }[] = [];
+    const boss = {
+      boss: {
+        send: async (_queue: string, data: unknown, options: Record<string, unknown>) => {
+          sent.push({ data, options });
+          return null;
+        },
+      },
+    } as unknown as PgBossService;
+    const bot = new TelegramBot({
+      transport: 'log',
+      apiUrl: 'http://127.0.0.1:9',
+      logDir: tmpdir(),
+    });
+    const tooMany = new TelegramApiError(429, 'Too Many Requests: retry after 37', 37);
+    bot.call = async () => {
+      throw tooMany;
+    };
+    bot.callWithFile = bot.call;
+    const job = new DepositCardJob(boss, bot, db, env);
+    await isolated(async (tx) => {
+      await tx.insert(depositSettings).values({
+        ...DEPOSIT_SETTINGS_DEFAULTS,
+        shamCashAccountName: 'Vertex',
+        shamCashAccountNumber: '0933000000',
+        adminId: newId(),
+      });
+      const id = await submitted(tx, 20);
+      await link(tx);
+      expect(await job.sync(id, tx)).toBe('deferred');
+      expect(sent).toEqual([
+        {
+          data: { depositId: id },
+          options: expect.objectContaining({ singletonKey: id, startAfter: 37 }),
+        },
+      ]);
+    });
+  });
 });
 
 describe('the review reminder (rules RM1–RM4)', () => {
@@ -723,6 +763,24 @@ describe('the messages of PR 4', () => {
     expect(
       renderTelegramMessage('ticket_opened', { ...ticket, orderProblem: 'code_used' }, LINKS).text,
     ).toContain('المشكلة: الكود مستخدم مسبقاً');
+  });
+
+  it('render a ticket subject as code, so a link in it is never clickable (A07-24)', () => {
+    const subject = 'ادخل https://evil.example/login @someone';
+    const message = renderTelegramMessage(
+      'ticket_opened',
+      {
+        ticketId: newId(),
+        number: 'VT-7KQ2MX',
+        category: 'other' as const,
+        subject,
+        hasImages: false,
+        customerEmail: 'a@example.com',
+      },
+      LINKS,
+    );
+    const [span] = message.codeSpans ?? [];
+    expect(span && message.text.slice(span.offset, span.offset + span.length)).toBe(subject);
   });
 
   it('render a purchase from the panel with its mode and the owner cap, never fields (S16 AP13)', () => {

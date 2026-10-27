@@ -185,7 +185,7 @@ export function SummarySection({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>{t('customers.limits.title')}</CardTitle>
           {onEditLimits && (
-            <Button variant="outline" size="sm" onClick={onEditLimits}>
+            <Button variant="outline" size="sm" className="h-11" onClick={onEditLimits}>
               <PencilIcon />
               {t('customers.actions.limits')}
             </Button>
@@ -215,7 +215,7 @@ export function SummarySection({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>{t('customers.pricing.title')}</CardTitle>
           {onChangePriceList && (
-            <Button variant="outline" size="sm" onClick={onChangePriceList}>
+            <Button variant="outline" size="sm" className="h-11" onClick={onChangePriceList}>
               <PencilIcon />
               {t('customers.pricing.change')}
             </Button>
@@ -408,7 +408,7 @@ export function DepositsSection({ customerId }: { customerId: string }) {
   );
 }
 
-/** "التذاكر": the queue filtered to the customer, every status. */
+/** "التذاكر": the queue filtered to the customer, every status, with the way to it (A07-44). */
 export function TicketsSection({ customerId }: { customerId: string }) {
   const { t } = useTranslation();
   const list = useInfiniteQuery(ticketListQuery({ status: 'all', customerId }));
@@ -420,6 +420,14 @@ export function TicketsSection({ customerId }: { customerId: string }) {
   }
   return (
     <>
+      <Button
+        variant="outline"
+        className="self-start"
+        render={<Link to="/support" search={{ status: 'all', customerId }} />}
+      >
+        <LifeBuoyIcon />
+        {t('customers.lists.allTickets')}
+      </Button>
       <TicketTable tickets={tickets} withCustomer={false} />
       <LoadMore list={list} />
     </>

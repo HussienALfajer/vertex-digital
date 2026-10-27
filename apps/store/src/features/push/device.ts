@@ -111,17 +111,21 @@ export async function enablePush(publicKey: string): Promise<EnableOutcome> {
   return registered.ok ? { outcome: 'enabled' } : { outcome: 'failed', reason: registered.reason };
 }
 
-/** PC4 off: the browser forgets the subscription, then the API deletes its row (PS8). */
+/**
+ * PC4 off: the API deletes the row (PS8), then the browser forgets the subscription. In that
+ * order: a failed `DELETE` leaves the switch on with the subscription still held, so "try again"
+ * has something to retry (audit A07-37).
+ */
 export async function disablePush(): Promise<{ ok: true } | { ok: false; reason: Failure }> {
   const subscription = await currentSubscription();
   if (!subscription) return { ok: true };
-  const { endpoint } = subscription;
-  await subscription.unsubscribe().catch(() => false);
   const removed = await apiRequest<null>('/api/push/subscription', {
     method: 'DELETE',
-    body: { endpoint },
+    body: { endpoint: subscription.endpoint },
   });
-  return removed.ok ? { ok: true } : { ok: false, reason: removed.reason };
+  if (!removed.ok) return { ok: false, reason: removed.reason };
+  await subscription.unsubscribe().catch(() => false);
+  return { ok: true };
 }
 
 /**

@@ -32,6 +32,8 @@ export interface RenderedTelegramMessage {
   text: string;
   /** Rows of inline buttons. */
   buttons?: TelegramButton[][];
+  /** Spans shown as code, by UTF-16 offset: Telegram makes no link or mention clickable there. */
+  codeSpans?: { offset: number; length: number }[];
 }
 
 const CHANNELS: Record<SwitchChannel, string> = { admin: 'اللوحة', telegram: 'تيليجرام' };
@@ -757,16 +759,21 @@ export function renderTelegramMessage<Kind extends TelegramMessageKind>(
     case 'ticket_reply': {
       // S12 TK8: never the message or the images.
       const ticket = params as TelegramMessageParams<'ticket_opened'>;
+      const head = [
+        kind === 'ticket_opened'
+          ? `🎫 تذكرة جديدة ${ticket.number} · ${TICKET_CATEGORY_LABELS[ticket.category]}`
+          : `💬 ردّ العميل على التذكرة ${ticket.number} · ${TICKET_CATEGORY_LABELS[ticket.category]}`,
+        ...(ticket.orderProblem ? [`المشكلة: ${ORDER_PROBLEM_LABELS[ticket.orderProblem]}`] : []),
+      ].join('\n');
       return {
         text: [
-          kind === 'ticket_opened'
-            ? `🎫 تذكرة جديدة ${ticket.number} · ${TICKET_CATEGORY_LABELS[ticket.category]}`
-            : `💬 ردّ العميل على التذكرة ${ticket.number} · ${TICKET_CATEGORY_LABELS[ticket.category]}`,
-          ...(ticket.orderProblem ? [`المشكلة: ${ORDER_PROBLEM_LABELS[ticket.orderProblem]}`] : []),
+          head,
           ticket.subject,
           `${ticket.customerEmail}${ticket.hasImages ? ' · مع صور' : ''}`,
           `افتح في اللوحة: ${links.admin}/support/${ticket.ticketId}`,
         ].join('\n'),
+        // Audit A07-24: the customer's subject as code, so no link in it is clickable (TK7).
+        codeSpans: [{ offset: head.length + 1, length: ticket.subject.length }],
       };
     }
     case 'validation_quota_reached': {

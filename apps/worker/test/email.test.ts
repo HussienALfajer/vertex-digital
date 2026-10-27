@@ -8,7 +8,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENV, type Env } from '../src/core/config/env.js';
 import { DATABASE } from '../src/core/database/database.module.js';
-import type { Mailer } from '../src/core/email/mailer.js';
+import { Mailer, SMTP_TIMEOUTS } from '../src/core/email/mailer.js';
 import { PgBossService } from '../src/core/jobs/pg-boss.service.js';
 import { renderEmail } from '../src/jobs/email/email-templates.js';
 import { PurgeCodesJob } from '../src/jobs/email/purge-codes.job.js';
@@ -428,5 +428,22 @@ describe('email.purge-codes (rule E4)', () => {
     expect(await app.get(PgBossService).boss.getSchedules(QUEUES.emailPurgeCodes)).toEqual([
       expect.objectContaining({ cron: '*/10 * * * *' }),
     ]);
+  });
+});
+
+describe('the SMTP transport', () => {
+  it('gives up on a hung server in seconds, not minutes (A07-29)', () => {
+    const mailer = new Mailer({
+      EMAIL_TRANSPORT: 'smtp',
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: 2525,
+      SMTP_SECURE: false,
+      SMTP_USER: 'user',
+      SMTP_PASSWORD: 'password',
+    } as Env);
+    const options = (mailer as unknown as { transport: { options: Record<string, unknown> } })
+      .transport.options;
+    expect(options).toMatchObject(SMTP_TIMEOUTS);
+    expect(SMTP_TIMEOUTS.socketTimeout).toBeLessThanOrEqual(30_000);
   });
 });

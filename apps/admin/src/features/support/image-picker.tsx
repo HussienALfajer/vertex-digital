@@ -18,7 +18,8 @@ function readAsDataUrl(file: File): Promise<string> {
 /**
  * Up to 3 images for a ticket message (TK11), previewed from the files and removable one by one;
  * files of another type, over 5 MB or past the third are refused here with their reason (the API
- * checks again and re-encodes them).
+ * checks again and re-encodes them). The refusals go when the parent empties the files after a
+ * send (audit A07-52).
  */
 export function ImagePicker({
   files,
@@ -33,6 +34,14 @@ export function ImagePicker({
   const input = useRef<HTMLInputElement>(null);
   const [previews, setPreviews] = useState<string[]>([]);
   const [refused, setRefused] = useState<{ name: string; reason: ImageRefusal }[]>([]);
+  const shown = useRef(files.length);
+
+  useEffect(() => {
+    // Emptied from outside (a message sent): its refusals no longer apply. A pick that refused
+    // every file keeps the files empty, so it keeps its refusals.
+    if (shown.current > 0 && files.length === 0) setRefused([]);
+    shown.current = files.length;
+  }, [files]);
 
   useEffect(() => {
     let current = true;
@@ -63,7 +72,7 @@ export function ImagePicker({
         {files.map((file, index) => (
           <div
             key={`${file.name}-${file.size}-${file.lastModified}`}
-            className="relative size-20 overflow-hidden rounded-md border border-border bg-muted"
+            className="relative size-24 overflow-hidden rounded-md border border-border bg-muted"
           >
             {previews[index] && (
               <img
@@ -79,7 +88,7 @@ export function ImagePicker({
                     type="button"
                     variant="secondary"
                     size="icon-sm"
-                    className="absolute end-1 top-1"
+                    className="absolute end-1 top-1 size-11"
                     aria-label={t('support.images.remove', { n: index + 1 })}
                     disabled={disabled}
                     onClick={() => remove(index)}
@@ -97,6 +106,7 @@ export function ImagePicker({
             type="button"
             variant="outline"
             size="sm"
+            className="h-11"
             disabled={disabled}
             onClick={() => input.current?.click()}
           >

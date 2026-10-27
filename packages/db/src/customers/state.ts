@@ -160,7 +160,11 @@ export async function setCustomerLimits(
   await tx
     .insert(customerLimits)
     .values({ customerId: customer.id, ...input.limits })
-    .onConflictDoUpdate({ target: customerLimits.customerId, set: { ...input.limits } });
+    // Audit A07-25: `$onUpdate` is not applied to an upsert's conflict branch.
+    .onConflictDoUpdate({
+      target: customerLimits.customerId,
+      set: { ...input.limits, updatedAt: sql`now()` },
+    });
   await recordAudit(tx, {
     ...entry(input.actor, customer.id, input.reason),
     action: 'customer.limits_changed',

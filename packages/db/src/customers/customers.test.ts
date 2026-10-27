@@ -3,6 +3,7 @@ import { createDatabase } from '../client.js';
 import { newId } from '../id.js';
 import { customers } from '../schema/index.js';
 import { customerSignals } from './reads.js';
+import { setCustomerLimits } from './state.js';
 
 /*
  * The S12 tables and the guards of migration 0043, on PostgreSQL as the app role (the owner only
@@ -146,6 +147,35 @@ describe('customer limits (LM5)', () => {
     ]) {
       await expect(insert(values)).rejects.toThrow(/customer_limits_/);
     }
+  });
+
+  it('stamp a change of the overrides (A07-25)', async () => {
+    const customerId = await customer();
+    const set = (perDepositUsdUnits: number) =>
+      db.transaction((tx) =>
+        setCustomerLimits(tx, {
+          customerId,
+          limits: {
+            perDepositUsdUnits,
+            dailyDepositUsdUnits: null,
+            dailyPurchaseUsdUnits: null,
+          },
+          reason: 'حد مخصص للتجربة',
+          actor: { adminId: newId(), ipAddress: null, userAgent: null },
+        }),
+      );
+    const stamp = async () =>
+      (
+        await pool.query<{ updated_at: Date }>(
+          'select updated_at from customer_limits where customer_id = $1',
+          [customerId],
+        )
+      ).rows[0]?.updated_at.getTime();
+    await set(50_000_000);
+    const first = await stamp();
+    await pool.query('select pg_sleep(0.01)');
+    await set(60_000_000);
+    expect(await stamp()).toBeGreaterThan(first ?? Number.POSITIVE_INFINITY);
   });
 });
 

@@ -1,4 +1,5 @@
 import {
+  type InfiniteData,
   infiniteQueryOptions,
   keepPreviousData,
   queryOptions,
@@ -24,6 +25,9 @@ import { type SupportSearch, tabOf } from './support-search';
 /** The navigation badge reads the `open` count every minute in the background (TK13). */
 const COUNT_REFRESH_MS = 60_000;
 
+/** An open thread is read again every minute, as the badge is (audit A07-10). */
+export const THREAD_REFRESH_MS = 60_000;
+
 export const supportOpenCountQuery = queryOptions({
   queryKey: ['support', 'open-count'],
   queryFn: () =>
@@ -41,7 +45,7 @@ export const supportOpenCountQuery = queryOptions({
 export const ticketListQuery = (search: SupportSearch) =>
   infiniteQueryOptions({
     queryKey: ['support', 'list', search],
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ pageParam, client, queryKey }) =>
       call(
         api.GET('/api/admin/support/tickets', {
           params: {
@@ -54,6 +58,13 @@ export const ticketListQuery = (search: SupportSearch) =>
               cursor: pageParam,
             } as never,
           },
+          // Audit A07-10: a page already shown, read again (the tab seen again, a change), is
+          // background work; a first read or "عرض المزيد" is the admin's (rule D4).
+          headers: client
+            .getQueryData<InfiniteData<unknown, string | undefined>>(queryKey)
+            ?.pageParams.includes(pageParam)
+            ? BACKGROUND_REQUEST
+            : undefined,
         }),
       ),
     initialPageParam: undefined as string | undefined,
@@ -61,10 +72,17 @@ export const ticketListQuery = (search: SupportSearch) =>
     placeholderData: keepPreviousData,
   });
 
+/** The thread; once shown, read again in the background (audit A07-10, rule D4). */
 export const ticketQuery = (id: string) =>
   queryOptions({
     queryKey: ['support', 'ticket', id],
-    queryFn: () => call(api.GET('/api/admin/support/tickets/{id}', { params: { path: { id } } })),
+    queryFn: ({ client, queryKey }) =>
+      call(
+        api.GET('/api/admin/support/tickets/{id}', {
+          params: { path: { id } },
+          headers: client.getQueryData(queryKey) ? BACKGROUND_REQUEST : undefined,
+        }),
+      ),
   });
 
 /** The ticket's history in the side panel: its audit entries, newest first. */

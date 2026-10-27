@@ -7,8 +7,9 @@ import { EmptyState } from '@vertex-digital/ui/components/empty-state';
 import { Skeleton } from '@vertex-digital/ui/components/skeleton';
 import { CircleAlertIcon, LifeBuoyIcon, LogInIcon, MessageSquarePlusIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
+import { useVisibleAgain } from '@/features/notifications/live';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatRelative } from '@/lib/format';
@@ -21,34 +22,58 @@ type State =
   | { status: 'loading' }
   | { status: 'signedOut' }
   | { status: 'failed' }
-  | { status: 'ready'; tickets: TicketSummary[]; nextCursor: string | null };
+  | {
+      status: 'ready';
+      tickets: TicketSummary[];
+      nextCursor: string | null;
+      /** A later read failed: the list shown is the last one read (audit A07-6). */
+      stale?: boolean;
+    };
 
 /**
  * The customer's tickets on `/support` (S12 TK12): newest activity first, 20 at a time, a dot on
  * a ticket whose last message is the team's. Read in the browser with the session, never cached;
  * signed out, the page asks to sign in (the Telegram card above still shows). A reply arrives
- * live (`ticket_replied`) and the list is read again.
+ * live (`ticket_replied`) and the list is read again, as when the tab shows again (audit A07-9).
+ * Only the newest read lands (a reload drops a "عرض المزيد" in flight); a failed reload keeps the
+ * list shown with a notice (audit A07-6).
  */
 export function TicketsList() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailure, setMoreFailure] = useState<Failure | null>(null);
 
+  const latest = useRef(0);
+
   const load = useCallback(async () => {
+    const reading = ++latest.current;
     const page = await listTickets();
+    if (reading !== latest.current) return;
+    setLoadingMore(false);
     if (!page.ok && page.reason === 'UNAUTHORIZED') return setState({ status: 'signedOut' });
-    if (!page.ok) return setState({ status: 'failed' });
+    if (!page.ok) {
+      return setState((current) =>
+        current.status === 'ready' ? { ...current, stale: true } : { status: 'failed' },
+      );
+    }
+    setMoreFailure(null);
     setState({ status: 'ready', tickets: page.data.items, nextCursor: page.data.nextCursor });
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+  // Signed out, nothing to refresh: the stream and the reply events need a session too.
+  useVisibleAgain(() => {
+    if (state.status === 'ready') void load();
+  });
 
   const loadMore = async (cursor: string) => {
+    const reading = latest.current;
     setMoreFailure(null);
     setLoadingMore(true);
     const page = await listTickets({ cursor });
+    if (reading !== latest.current) return;
     setLoadingMore(false);
     if (!page.ok) return setMoreFailure(page.reason);
     setState((previous) =>
@@ -104,10 +129,19 @@ export function TicketsList() {
       {t('support.newTicket')}
     </Button>
   );
+  const stale = state.stale && (
+    <div className="flex flex-col gap-2">
+      <FormAlert tone="warning">{t('support.stale')}</FormAlert>
+      <Button variant="outline" size="xl" className="self-start" onClick={() => void load()}>
+        {t('support.retry')}
+      </Button>
+    </div>
+  );
   if (state.tickets.length === 0) {
     return (
       <>
         <OnTicketReplied onReply={load} />
+        {stale}
         <EmptyState
           icon={<LifeBuoyIcon />}
           title={t('support.emptyTitle')}
@@ -120,6 +154,7 @@ export function TicketsList() {
   return (
     <section className="flex flex-col gap-3" aria-labelledby="support-tickets">
       <OnTicketReplied onReply={load} />
+      {stale}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="support-tickets" className="text-lg font-bold">
           {t('support.listTitle')}

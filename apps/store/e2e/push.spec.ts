@@ -276,6 +276,33 @@ test.describe('this device and the preferences (PC4, PP1, PP2)', () => {
     expect((await pushRecord(page)).unsubscribed).toBe(1);
   });
 
+  test('a failed "off" keeps the subscription to try again, and each change says it is saved (A07-37)', async ({
+    page,
+    api,
+  }) => {
+    withPush(api).on('DELETE /api/push/subscription', 500, { code: 'INTERNAL_ERROR' });
+    await pushBrowser(page, { permission: 'granted', heldKey: PUBLIC_KEY });
+    await page.goto('/account');
+    const device = page.getByRole('switch', { name: p.device.label });
+    await expect(device).toBeChecked();
+    await device.click();
+    await expect(page.getByText(p.device.offFailed)).toBeVisible();
+    // Still subscribed: the switch stays on and "try again" has something to remove.
+    await expect(device).toBeChecked();
+    expect((await pushRecord(page)).unsubscribed).toBe(0);
+
+    api.on('DELETE /api/push/subscription', 204, null);
+    await device.click();
+    await expect(page.getByText(p.device.offSaved)).toBeVisible();
+    await expect(device).not.toBeChecked();
+    expect((await pushRecord(page)).unsubscribed).toBe(1);
+    await expect(page.getByText(p.device.offFailed)).toHaveCount(0);
+
+    await device.click();
+    await expect(page.getByText(p.device.onSaved)).toBeVisible();
+    await expect(device).toBeChecked();
+  });
+
   test('the switch is disabled with the hint once denied', async ({ page, api }) => {
     withPush(api);
     await pushBrowser(page, { permission: 'denied' });

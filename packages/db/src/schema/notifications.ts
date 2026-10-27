@@ -56,6 +56,10 @@ export const emailOutbox = pgTable(
   (table) => [
     index('email_outbox_status_idx').on(table.status, table.createdAt),
     index('email_outbox_customer_id_idx').on(table.customerId, table.createdAt.desc()),
+    // `email.purge-codes`: the code emails whose parameters still wait to be cleared (A07-28).
+    index('email_outbox_expiring_idx')
+      .on(table.expiresAt)
+      .where(sql`${table.params} is not null and ${table.expiresAt} is not null`),
   ],
 );
 

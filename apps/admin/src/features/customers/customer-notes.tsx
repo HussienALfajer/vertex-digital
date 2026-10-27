@@ -1,5 +1,9 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { type CustomerNote, createCustomerNoteSchema } from '@vertex-digital/contracts';
+import {
+  type AdminCustomer,
+  type CustomerNote,
+  createCustomerNoteSchema,
+} from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
@@ -18,6 +22,7 @@ import {
 import { ArchiveIcon, NotebookPenIcon, PinIcon, PinOffIcon } from 'lucide-react';
 import { type FormEvent, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
@@ -32,9 +37,17 @@ import {
 /**
  * "الملاحظات" (rule SN2): add a note (optionally pinned, which replaces the pinned one), the
  * notes newest first with pin, unpin and archive, the archived ones behind "عرض المؤرشفة". Notes
- * never reach the customer, Telegram or email; their text never changes.
+ * never reach the customer, Telegram or email; their text never changes. Archiving asks first,
+ * quoting the note, and so does pinning over the pinned note (audit A07-13).
  */
-export function NotesSection({ customerId }: { customerId: string }) {
+export function NotesSection({
+  customerId,
+  pinnedNote,
+}: {
+  customerId: string;
+  /** The profile's pinned note, the one a pin replaces. */
+  pinnedNote: AdminCustomer['pinnedNote'];
+}) {
   const { t } = useTranslation();
   const [archived, setArchived] = useState(false);
   const list = useInfiniteQuery(customerNotesQuery(customerId, archived));
@@ -47,7 +60,7 @@ export function NotesSection({ customerId }: { customerId: string }) {
         <h2 className="text-lg font-bold">
           {archived ? t('customers.notes.showArchived') : t('customers.sections.notes')}
         </h2>
-        <Button variant="ghost" size="sm" onClick={() => setArchived(!archived)}>
+        <Button variant="ghost" size="sm" className="h-11" onClick={() => setArchived(!archived)}>
           {archived ? t('customers.notes.hideArchived') : t('customers.notes.showArchived')}
         </Button>
       </div>
@@ -62,7 +75,7 @@ export function NotesSection({ customerId }: { customerId: string }) {
       {notes.length > 0 && (
         <ul className="flex flex-col gap-3">
           {notes.map((note) => (
-            <NoteItem key={note.id} customerId={customerId} note={note} />
+            <NoteItem key={note.id} customerId={customerId} note={note} pinnedNote={pinnedNote} />
           ))}
         </ul>
       )}
@@ -143,10 +156,36 @@ function AddNote({ customerId }: { customerId: string }) {
   );
 }
 
-function NoteItem({ customerId, note }: { customerId: string; note: CustomerNote }) {
+/** The start of a note, to name it in a confirmation. */
+const EXCERPT_LENGTH = 80;
+
+function useExcerpt() {
   const { t } = useTranslation();
+  return (body: string) =>
+    body.length > EXCERPT_LENGTH
+      ? t('customers.notes.excerpt', { text: body.slice(0, EXCERPT_LENGTH).trimEnd() })
+      : body;
+}
+
+function NoteItem({
+  customerId,
+  note,
+  pinnedNote,
+}: {
+  customerId: string;
+  note: CustomerNote;
+  pinnedNote: AdminCustomer['pinnedNote'];
+}) {
+  const { t } = useTranslation();
+  const excerpt = useExcerpt();
   const action = useNoteAction(customerId);
   const [failure, setFailure] = useState<string | null>(null);
+  // The kind outlives the dialog, so its text does not change while it fades out.
+  const [confirm, setConfirm] = useState<{ open: boolean; kind: 'pin' | 'archive' }>({
+    open: false,
+    kind: 'archive',
+  });
+  const replaces = pinnedNote && pinnedNote.id !== note.id ? pinnedNote : null;
 
   async function run(next: NoteAction) {
     setFailure(null);
@@ -178,6 +217,7 @@ function NoteItem({ customerId, note }: { customerId: string; note: CustomerNote
             <Button
               variant="outline"
               size="sm"
+              className="h-11"
               disabled={action.isPending}
               onClick={() => run('unpin')}
             >
@@ -188,8 +228,9 @@ function NoteItem({ customerId, note }: { customerId: string; note: CustomerNote
             <Button
               variant="outline"
               size="sm"
+              className="h-11"
               disabled={action.isPending}
-              onClick={() => run('pin')}
+              onClick={() => (replaces ? setConfirm({ open: true, kind: 'pin' }) : run('pin'))}
             >
               <PinIcon />
               {t('customers.notes.pin')}
@@ -198,8 +239,9 @@ function NoteItem({ customerId, note }: { customerId: string; note: CustomerNote
           <Button
             variant="ghost"
             size="sm"
+            className="h-11"
             disabled={action.isPending}
-            onClick={() => run('archive')}
+            onClick={() => setConfirm({ open: true, kind: 'archive' })}
           >
             <ArchiveIcon />
             {t('customers.notes.archive')}
@@ -207,6 +249,30 @@ function NoteItem({ customerId, note }: { customerId: string; note: CustomerNote
         </div>
       )}
       {failure && <FormAlert>{failure}</FormAlert>}
+      <ConfirmDialog
+        open={confirm.open}
+        onClose={() => setConfirm((current) => ({ ...current, open: false }))}
+        title={
+          confirm.kind === 'pin' ? t('customers.notes.pinTitle') : t('customers.notes.archiveTitle')
+        }
+        body={
+          confirm.kind === 'pin'
+            ? t('customers.notes.pinBody', { excerpt: excerpt(replaces?.body ?? '') })
+            : note.pinned
+              ? t('customers.notes.archiveBodyPinned', { excerpt: excerpt(note.body) })
+              : t('customers.notes.archiveBody', { excerpt: excerpt(note.body) })
+        }
+        action={
+          confirm.kind === 'pin'
+            ? t('customers.notes.pinConfirm')
+            : t('customers.notes.archiveConfirm')
+        }
+        destructive={confirm.kind === 'archive'}
+        pending={action.isPending}
+        onConfirm={async () => {
+          await action.mutateAsync({ noteId: note.id, action: confirm.kind });
+        }}
+      />
     </li>
   );
 }

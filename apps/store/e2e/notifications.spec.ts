@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import ar from '../src/messages/ar.json' with { type: 'json' };
 import { expect, type MockApi, screenshot, test } from './test';
 
@@ -62,6 +63,12 @@ const withNotifications = (api: MockApi) =>
 
 const unread = (count: string) => ar.header.notificationsUnread.replace('{count}', count);
 
+const STREAM = 'GET /api/notifications/stream';
+
+/** The tab is looked at again (S09 rule LT2): what the browser fires on coming back to a tab. */
+const visibleAgain = (page: Page) =>
+  page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+
 test.describe('notifications', () => {
   test('the bell shows the live unread count and opens the list', async ({ page, api }) => {
     withNotifications(api).stream('GET /api/notifications/stream', [
@@ -118,6 +125,207 @@ test.describe('notifications', () => {
     withNotifications(api);
     await page.getByRole('button', { name: ar.notifications.retry }).click();
     await expect(page.getByText(/أُضيف .*\$20\.00/)).toBeVisible();
+  });
+
+  test('a live notification arrives at the top of the list and is marked read (A07-17)', async ({
+    page,
+    api,
+  }) => {
+    const fresh = {
+      id: 'n5',
+      event: 'deposit_credited',
+      params: { depositId: DEPOSIT, referenceCode: 'VD-9ZZ4N', creditedUsdUnits: 7 * USD },
+      readAt: null,
+      createdAt: minutesAgo(0),
+    };
+    withNotifications(api).stream(
+      STREAM,
+      [
+        { event: 'unread', data: { unreadCount: 0 } },
+        { event: 'notification', data: { notification: fresh, unreadCount: 1 } },
+      ],
+      2000,
+    );
+    await page.goto('/notifications');
+    const rows = page.locator('main ul:not([aria-hidden]) > li');
+    await expect(rows).toHaveCount(4);
+    await expect(rows).toHaveCount(5);
+    // The reference keeps a word joiner after its prefix, so it never breaks at the hyphen.
+    await expect(rows.first()).toContainText('9ZZ4N');
+    await expect
+      .poll(() => api.last('POST /api/notifications/read')?.body)
+      .toEqual({ upToId: 'n5' });
+  });
+
+  test('a resync reads the list again; a failed read keeps it with a notice (A07-6)', async ({
+    page,
+    api,
+  }) => {
+    withNotifications(api).stream(STREAM, [{ event: 'resync', data: {} }], 3000);
+    await page.goto('/notifications');
+    await expect(page.getByText(/أُضيف .*\$20\.00/)).toBeVisible();
+    api.on('GET /api/notifications', 500, { code: 'INTERNAL_ERROR' });
+    await expect(page.getByText(ar.notifications.stale)).toBeVisible();
+    await expect(page.getByText(/أُضيف .*\$20\.00/)).toBeVisible();
+    await expect(page.getByText(ar.notifications.loadFailed)).toHaveCount(0);
+    api.on('GET /api/notifications', 200, {
+      items: ITEMS.slice(1),
+      nextCursor: null,
+      unreadCount: 1,
+    });
+    await page.getByRole('button', { name: ar.notifications.retry }).click();
+    await expect(page.getByText(ar.notifications.stale)).toHaveCount(0);
+    await expect(page.getByText(/أُضيف .*\$20\.00/)).toHaveCount(0);
+    await expect(page.getByText(/لم يصل التحويل إلى حسابنا/)).toBeVisible();
+  });
+
+  test('a failed "عرض المزيد" keeps the list and can be pressed again (A07-17)', async ({
+    page,
+    api,
+  }) => {
+    withNotifications(api)
+      .on('GET /api/notifications', 200, {
+        items: ITEMS.slice(0, 2),
+        nextCursor: 'page-2',
+        unreadCount: 2,
+      })
+      .on('GET /api/notifications?cursor=page-2', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/notifications');
+    await expect(page.getByText(/أُضيف .*\$20\.00/)).toBeVisible();
+    await page.getByRole('button', { name: ar.notifications.loadMore }).click();
+    await expect(page.getByRole('alert').filter({ hasText: ar.errors.UNKNOWN })).toBeVisible();
+    await expect(page.getByText(/أُضيف .*\$20\.00/)).toBeVisible();
+    api.on('GET /api/notifications?cursor=page-2', 200, {
+      items: ITEMS.slice(2),
+      nextCursor: null,
+      unreadCount: 0,
+    });
+    await page.getByRole('button', { name: ar.notifications.loadMore }).click();
+    await expect(page.getByText(/لم يصل التحويل إلى حسابنا/)).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: ar.errors.UNKNOWN })).toHaveCount(0);
+  });
+
+  test('the tab seen again reads the list again and drops a "عرض المزيد" in flight (A07-7, A07-9)', async ({
+    page,
+    api,
+  }) => {
+    withNotifications(api)
+      .on('GET /api/notifications', 200, {
+        items: ITEMS.slice(0, 2),
+        nextCursor: 'page-2',
+        unreadCount: 2,
+      })
+      .on(
+        'GET /api/notifications?cursor=page-2',
+        200,
+        { items: ITEMS.slice(2), nextCursor: null, unreadCount: 0 },
+        2000,
+      );
+    await page.goto('/notifications');
+    await expect(page.getByText(/أُضيف .*\$20\.00/)).toBeVisible();
+    await page.getByRole('button', { name: ar.notifications.loadMore }).click();
+    await expect(page.getByRole('button', { name: ar.notifications.loadingMore })).toBeDisabled();
+    const reads = api.count('GET /api/notifications');
+    await visibleAgain(page);
+    await expect.poll(() => api.count('GET /api/notifications')).toBeGreaterThan(reads);
+    // The older page answers after the fresh list: it belonged to the list replaced.
+    await page.waitForTimeout(2500);
+    await expect(page.getByText(/لم يصل التحويل إلى حسابنا/)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: ar.notifications.loadMore })).toBeEnabled();
+  });
+
+  test('the bell keeps the stream’s count over a read that answers after it (A07-7)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on('GET /api/notifications', 200, { items: [], nextCursor: null, unreadCount: 1 }, 1500)
+      .stream(STREAM, [
+        { event: 'resync', data: {} },
+        { event: 'unread', data: { unreadCount: 5 } },
+      ]);
+    await page.goto('/');
+    await expect(page.getByRole('link', { name: unread('5') })).toBeVisible();
+    await expect.poll(() => api.count('GET /api/notifications')).toBe(1);
+    await page.waitForTimeout(2000);
+    await expect(page.getByRole('link', { name: unread('5') })).toBeVisible();
+  });
+
+  test('a stream refused for a session that ended is not opened again (A07-2)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on(STREAM, 401, { code: 'UNAUTHORIZED' })
+      .on('GET /api/notifications', 401, { code: 'UNAUTHORIZED' });
+    await page.goto('/');
+    await expect.poll(() => api.count('GET /api/notifications')).toBe(1);
+    // The first retry would come 5 seconds after the refusal.
+    await page.waitForTimeout(6_000);
+    expect(api.count(STREAM)).toBe(1);
+  });
+
+  test('a stream refused by a passing fault is opened again after 5 seconds (A07-2)', async ({
+    page,
+    api,
+  }) => {
+    withNotifications(api).on(STREAM, 502, {});
+    await page.goto('/');
+    await expect.poll(() => api.count('GET /api/notifications')).toBe(1);
+    api.stream(STREAM, [{ event: 'unread', data: { unreadCount: 3 } }]);
+    await expect.poll(() => api.count(STREAM), { timeout: 8_000 }).toBe(2);
+    await expect(page.getByRole('link', { name: unread('3') })).toBeVisible();
+  });
+
+  test('a stream replaced by another tab stays closed until this tab is seen again (A07-3)', async ({
+    page,
+    api,
+  }) => {
+    withNotifications(api).stream(
+      STREAM,
+      [
+        { event: 'unread', data: { unreadCount: 0 } },
+        { event: 'replaced', data: {} },
+      ],
+      0,
+      300,
+    );
+    await page.goto('/');
+    await expect(
+      page.getByRole('link', { name: ar.header.notifications, exact: true }),
+    ).toBeVisible();
+    await expect.poll(() => api.count(STREAM)).toBe(1);
+    // The browser would reconnect 300 ms after the body ended; replaced, the page does not.
+    await page.waitForTimeout(1_500);
+    expect(api.count(STREAM)).toBe(1);
+    api.stream(STREAM, [{ event: 'unread', data: { unreadCount: 3 } }]);
+    await visibleAgain(page);
+    await expect.poll(() => api.count(STREAM)).toBe(2);
+    await expect(page.getByRole('link', { name: unread('3') })).toBeVisible();
+  });
+
+  test('the bell and the rows do not prefetch the pages they open (A07-35)', async ({
+    page,
+    api,
+  }) => {
+    const prefetched: string[] = [];
+    page.on('request', (request) => {
+      const headers = request.headers();
+      if (headers['next-router-prefetch'] || headers.rsc)
+        prefetched.push(new URL(request.url()).pathname);
+    });
+    withNotifications(api);
+    await page.goto('/');
+    await expect(
+      page.getByRole('link', { name: ar.header.notifications, exact: true }),
+    ).toBeVisible();
+    await page.waitForTimeout(1000);
+    await page.goto('/notifications');
+    await expect(page.getByText(/أُضيف .*\$20\.00/)).toBeVisible();
+    await page.waitForTimeout(1000);
+    expect(
+      prefetched.filter((path) => path === '/notifications' || path.startsWith('/wallet/deposits')),
+    ).toEqual([]);
   });
 
   test('without a session the page sends to sign-in', async ({ page, api }) => {

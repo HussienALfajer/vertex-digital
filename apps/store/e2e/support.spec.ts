@@ -206,6 +206,15 @@ const png = (name: string, size?: number) => ({
 
 const imagesInput = (page: Page) => page.getByTestId('ticket-images').first();
 
+/**
+ * The tab is looked at again (audit A07-9): what the browser fires on coming back to a tab. The
+ * header's bell reads the unread count then.
+ */
+function visibleAgain(page: Page, api: MockApi) {
+  api.on('GET /api/notifications', 200, { items: [], nextCursor: null, unreadCount: 0 });
+  return page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+}
+
 const buyBox = (page: Page) =>
   page.getByRole('dialog').or(page.getByRole('complementary', { name: ar.game.buyBox }));
 
@@ -364,6 +373,25 @@ test.describe('support pages (S12)', () => {
     await page.getByRole('button', { name: s.retry }).click();
     await expect(page.locator('main').getByRole('listitem')).toHaveCount(3);
   });
+
+  test('the tab seen again reads the list; a failed read keeps it with a notice (A07-6, A07-9)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on('GET /api/support/tickets', 200, { items: LIST, nextCursor: null });
+    await page.goto('/support');
+    const cards = page.locator('main').getByRole('listitem');
+    await expect(cards).toHaveCount(3);
+    api.on('GET /api/support/tickets', 500, { code: 'INTERNAL_ERROR' });
+    await visibleAgain(page, api);
+    await expect(page.getByText(s.stale)).toBeVisible();
+    await expect(cards).toHaveCount(3);
+    await expect(page.getByText(s.loadFailed)).toHaveCount(0);
+    api.on('GET /api/support/tickets', 200, { items: LIST.slice(0, 1), nextCursor: null });
+    await page.getByRole('button', { name: s.retry }).click();
+    await expect(cards).toHaveCount(1);
+    await expect(page.getByText(s.stale)).toHaveCount(0);
+  });
 });
 
 test.describe('a new ticket (S12 TK1)', () => {
@@ -479,6 +507,127 @@ test.describe('a new ticket (S12 TK1)', () => {
       `/sign-in?next=${encodeURIComponent('/support/new?category=account')}`,
     );
   });
+
+  test('the prefilled order is read together with the list (A07-40)', async ({ page, api }) => {
+    signedIn(api)
+      .on(
+        'GET /api/orders',
+        200,
+        { items: [orderSummary(ORDER_ID, 'VO-7KQ2MX')], nextCursor: null },
+        2500,
+      )
+      .on(`GET /api/orders/${OLD_ORDER_ID}`, 200, order(OLD_ORDER_ID, 'VO-OLD234'));
+    await page.goto(`/support/new?category=order&order=${OLD_ORDER_ID}`);
+    await expect.poll(() => api.count(`GET /api/orders/${OLD_ORDER_ID}`)).toBe(1);
+    // The list has not answered yet.
+    await expect(page.getByRole('radio')).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: /VO-OLD234/ })).toBeChecked();
+  });
+
+  test('a session that ends on submit signs in and comes back with the type and the order (A07-38)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on('GET /api/orders', 200, {
+        items: [orderSummary(ORDER_ID, 'VO-7KQ2MX')],
+        nextCursor: null,
+      })
+      .on(`GET /api/orders/${ORDER_ID}`, 200, order(ORDER_ID, 'VO-7KQ2MX'))
+      .on('POST /api/support/tickets', 401, { code: 'UNAUTHORIZED' });
+    const form = `/support/new?category=order&order=${ORDER_ID}`;
+    await page.goto(form);
+    await expect(page.getByRole('radio', { name: /VO-7KQ2MX/ })).toBeChecked();
+    await page.getByLabel(s.new.subject).fill('لم يصل شحن 60 UC');
+    await page.getByLabel(s.new.message).fill('طلبت قبل ساعة ولم يصل.');
+    api.on('GET /api/auth/get-session', 200, null);
+    await page.getByRole('button', { name: s.new.submit }).click();
+    await expect(page).toHaveURL(`/sign-in?next=${encodeURIComponent(form)}`);
+  });
+
+  test('the picker: a failed read offers a retry, and a refused submit lands on it (A07-34, A07-17)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on('GET /api/orders', 500, { code: 'INTERNAL_ERROR' });
+    await page.goto('/support/new?category=order');
+    await expect(page.getByText(s.new.linksFailed)).toBeVisible();
+    await page.getByLabel(s.new.subject).fill('لم يصل شحن 60 UC');
+    await page.getByLabel(s.new.message).fill('طلبت قبل ساعة ولم يصل.');
+    await page.getByRole('button', { name: s.new.submit }).click();
+    await expect(page.getByText(s.validation.order)).toBeVisible();
+    await expect(page.getByRole('button', { name: s.retry })).toBeFocused();
+    expect(api.last('POST /api/support/tickets')).toBeUndefined();
+
+    api.on('GET /api/orders', 200, {
+      items: [orderSummary(ORDER_ID, 'VO-7KQ2MX')],
+      nextCursor: null,
+    });
+    await page.getByRole('button', { name: s.retry }).click();
+    const choice = page.getByRole('radio', { name: /VO-7KQ2MX/ });
+    await expect(choice).toBeVisible();
+    // The error is the radio group's description.
+    const describedBy = await page.getByRole('radiogroup').getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    await expect(page.locator(`[id="${describedBy}"]`)).toHaveText(s.validation.order);
+    await page.getByRole('button', { name: s.new.submit }).click();
+    await expect(choice).toBeFocused();
+
+    // Nothing to pick: the notice saying what to do takes the focus.
+    api.on('GET /api/orders', 200, { items: [], nextCursor: null });
+    await page.reload();
+    await expect(page.getByText(s.new.noOrders)).toBeVisible();
+    await page.getByLabel(s.new.subject).fill('لم يصل شحن 60 UC');
+    await page.getByLabel(s.new.message).fill('طلبت قبل ساعة ولم يصل.');
+    await page.getByRole('button', { name: s.new.submit }).click();
+    await expect(page.getByText(s.new.noOrders)).toBeFocused();
+  });
+
+  test('the server’s image refusals, and a lost answer that keeps the key across a reload (A07-17, A07-39)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api).on('POST /api/support/tickets', 400, { code: 'IMAGE_INVALID' });
+    await page.goto('/support/new?category=account');
+    await page.getByLabel(s.new.subject).fill('تغيير رقم الهاتف');
+    await page.getByLabel(s.new.message).fill('أريد تغيير رقم هاتفي.');
+    await imagesInput(page).setInputFiles([png('one.png')]);
+    await page.getByRole('button', { name: s.new.submit }).click();
+    await expect(
+      page.getByRole('alert').filter({ hasText: ar.errors.IMAGE_INVALID }),
+    ).toBeVisible();
+    const key = api.last('POST /api/support/tickets')?.headers['idempotency-key'];
+
+    api.on('POST /api/support/tickets', 413, { code: 'PAYLOAD_TOO_LARGE' });
+    await page.getByRole('button', { name: s.new.submit }).click();
+    await expect(
+      page.getByRole('alert').filter({ hasText: ar.errors.PAYLOAD_TOO_LARGE }),
+    ).toBeVisible();
+    await expect(page.getByLabel(s.new.subject)).toHaveValue('تغيير رقم الهاتف');
+    expect(api.last('POST /api/support/tickets')?.headers['idempotency-key']).toBe(key);
+
+    // No answer worth trusting: the ticket may exist. After a reload, even without the image, the
+    // retry sends the same key, so the API returns that ticket instead of opening a second one.
+    api.on('POST /api/support/tickets', 500, { code: 'INTERNAL_ERROR' });
+    await page.getByRole('button', { name: s.new.submit }).click();
+    await expect(page.getByRole('alert').filter({ hasText: ar.errors.UNKNOWN })).toBeVisible();
+    await page.reload();
+    await page.getByLabel(s.new.subject).fill('تغيير رقم الهاتف');
+    await page.getByLabel(s.new.message).fill('أريد تغيير رقم هاتفي.');
+    const opened = ticket({
+      category: 'account',
+      order: null,
+      subject: 'تغيير رقم الهاتف',
+      status: 'open',
+      lastAuthor: 'customer',
+      messages: [message(1, { body: 'أريد تغيير رقم هاتفي.' })],
+    });
+    api.on('POST /api/support/tickets', 201, opened);
+    thread(api, opened);
+    await page.getByRole('button', { name: s.new.submit }).click();
+    await expect(page).toHaveURL(`/support/${TICKET_ID}`);
+    expect(api.last('POST /api/support/tickets')?.headers['idempotency-key']).toBe(key);
+  });
 });
 
 test.describe('a ticket’s thread (S12 TK3–TK7)', () => {
@@ -494,6 +643,10 @@ test.describe('a ticket’s thread (S12 TK3–TK7)', () => {
       'href',
       `/orders/${ORDER_ID}`,
     );
+    // A touch target (A07-42).
+    expect(
+      (await page.getByRole('link', { name: 'VO-7KQ2MX' }).boundingBox())?.height,
+    ).toBeGreaterThanOrEqual(44);
     const bubbles = page.locator('main ol > li');
     await expect(bubbles).toHaveCount(2);
     await expect(bubbles.nth(0)).toContainText(s.ticket.you);
@@ -628,6 +781,122 @@ test.describe('a ticket’s thread (S12 TK3–TK7)', () => {
     await expect(page.locator('main ol > li')).toHaveCount(2);
     await expect(page.getByText(s.ticket.team)).toBeVisible();
   });
+
+  test('a failed close says why inside the dialog, with progress on its button (A07-8)', async ({
+    page,
+    api,
+  }) => {
+    thread(signedIn(api)).on(
+      `POST /api/support/tickets/${TICKET_ID}/close`,
+      500,
+      { code: 'INTERNAL_ERROR' },
+      800,
+    );
+    await page.goto(`/support/${TICKET_ID}`);
+    await page.getByRole('button', { name: s.ticket.close }).click();
+    const dialog = page.getByRole('alertdialog');
+    await dialog.getByRole('button', { name: s.ticket.closeConfirm }).click();
+    await expect(dialog.getByRole('button', { name: s.ticket.closing })).toBeDisabled();
+    await expect(dialog.getByRole('alert')).toHaveText(ar.errors.UNKNOWN);
+
+    api.on(`POST /api/support/tickets/${TICKET_ID}/close`, 200, {
+      ...ticket(),
+      status: 'closed',
+      closedAt: new Date().toISOString(),
+      closedBy: 'customer',
+    });
+    await dialog.getByRole('button', { name: s.ticket.closeConfirm }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText(s.ticket.reopenNote)).toBeVisible();
+  });
+
+  test('the tab seen again reads the thread; a failed read keeps it and the typed reply (A07-6, A07-9)', async ({
+    page,
+    api,
+  }) => {
+    thread(signedIn(api));
+    await page.goto(`/support/${TICKET_ID}`);
+    const bubbles = page.locator('main ol > li');
+    await expect(bubbles).toHaveCount(2);
+    await page.getByLabel(s.ticket.reply).fill('ما زلت أنتظر.');
+    api.on(`GET /api/support/tickets/${TICKET_ID}`, 500, { code: 'INTERNAL_ERROR' });
+    await visibleAgain(page, api);
+    await expect(page.getByText(s.ticket.stale)).toBeVisible();
+    await expect(bubbles).toHaveCount(2);
+    await expect(page.getByLabel(s.ticket.reply)).toHaveValue('ما زلت أنتظر.');
+
+    // Closed meanwhile by the auto-close: the page says the reply reopens it.
+    thread(api, ticket({ status: 'closed', closedAt: minutesAgo(1), closedBy: 'system' }));
+    await page.getByRole('button', { name: s.retry }).click();
+    await expect(page.getByText(s.ticket.reopenNote)).toBeVisible();
+    await expect(page.getByText(s.ticket.autoClosed)).toBeVisible();
+    await expect(page.getByText(s.ticket.stale)).toHaveCount(0);
+  });
+
+  test('a read started before a reply was saved does not hide it (A07-7)', async ({
+    page,
+    api,
+  }) => {
+    const before = ticket({ status: 'open', lastAuthor: 'customer', messages: [message(1)] });
+    thread(signedIn(api), before);
+    await page.goto(`/support/${TICKET_ID}`);
+    const bubbles = page.locator('main ol > li');
+    await expect(bubbles).toHaveCount(1);
+    api.on(`GET /api/support/tickets/${TICKET_ID}`, 200, before, 2000);
+    await visibleAgain(page, api);
+    api.on(
+      `POST /api/support/tickets/${TICKET_ID}/messages`,
+      201,
+      ticket({
+        status: 'open',
+        lastAuthor: 'customer',
+        messages: [message(1), message(2, { body: 'هل من جديد؟' })],
+      }),
+    );
+    await page.getByLabel(s.ticket.reply).fill('هل من جديد؟');
+    await page.getByRole('button', { name: s.ticket.send }).click();
+    await expect(bubbles).toHaveCount(2);
+    await page.waitForTimeout(2500);
+    await expect(bubbles).toHaveCount(2);
+  });
+
+  test('reply refusals: a rate limit, then a lost answer that keeps the key across an edit and a reload (A07-17, A07-39)', async ({
+    page,
+    api,
+  }) => {
+    const reply = `POST /api/support/tickets/${TICKET_ID}/messages`;
+    thread(
+      signedIn(api),
+      ticket({ status: 'open', lastAuthor: 'customer', messages: [message(1)] }),
+    ).on(reply, 429, { code: 'RATE_LIMITED' });
+    await page.goto(`/support/${TICKET_ID}`);
+    await page.getByLabel(s.ticket.reply).fill('هل من جديد؟');
+    await page.getByRole('button', { name: s.ticket.send }).click();
+    await expect(page.getByRole('alert').filter({ hasText: ar.errors.RATE_LIMITED })).toBeVisible();
+    await expect(page.getByLabel(s.ticket.reply)).toHaveValue('هل من جديد؟');
+    const key = api.last(reply)?.headers['idempotency-key'];
+
+    api.on(reply, 500, { code: 'INTERNAL_ERROR' });
+    await page.getByRole('button', { name: s.ticket.send }).click();
+    await expect(page.getByRole('alert').filter({ hasText: ar.errors.UNKNOWN })).toBeVisible();
+    expect(api.last(reply)?.headers['idempotency-key']).toBe(key);
+
+    // The message may be saved: an edited retry, even after a reload, goes with the same key.
+    await page.reload();
+    await page.getByLabel(s.ticket.reply).fill('هل من جديد؟ ما زلت أنتظر.');
+    api.on(
+      reply,
+      201,
+      ticket({
+        status: 'open',
+        lastAuthor: 'customer',
+        messages: [message(1), message(2, { body: 'هل من جديد؟' })],
+      }),
+    );
+    await page.getByRole('button', { name: s.ticket.send }).click();
+    await expect(page.locator('main ol > li')).toHaveCount(2);
+    expect(api.last(reply)?.headers['idempotency-key']).toBe(key);
+  });
 });
 
 test.describe('"تحتاج مساعدة؟" on the order page', () => {
@@ -706,10 +975,13 @@ for (const theme of ['dark', 'light'] as const) {
     await expect(page.getByText(s.emptyTitle)).toBeVisible();
     await screenshot(page, testInfo, `s12-support-empty-${theme}`);
 
-    api.on('GET /api/orders', 200, {
-      items: [orderSummary(ORDER_ID, 'VO-7KQ2MX'), orderSummary(OLD_ORDER_ID, 'VO-OLD234')],
-      nextCursor: null,
-    });
+    // The prefilled order is read beside the list (audit A07-40).
+    api
+      .on('GET /api/orders', 200, {
+        items: [orderSummary(ORDER_ID, 'VO-7KQ2MX'), orderSummary(OLD_ORDER_ID, 'VO-OLD234')],
+        nextCursor: null,
+      })
+      .on(`GET /api/orders/${ORDER_ID}`, 200, order(ORDER_ID, 'VO-7KQ2MX'));
     await page.goto(`/support/new?category=order&order=${ORDER_ID}`);
     await expect(page.getByRole('radio', { name: /VO-7KQ2MX/ })).toBeChecked();
     await page.getByLabel(s.new.subject).fill('لم يصل شحن 60 UC');

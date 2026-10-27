@@ -24,10 +24,11 @@ import {
   Textarea,
   useFocusInvalid,
 } from '@vertex-digital/ui';
-import { ArrowRightIcon, CircleAlertIcon, UserRoundSearchIcon } from 'lucide-react';
+import { ArchiveIcon, ArrowRightIcon, CircleAlertIcon, UserRoundSearchIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatDate, ltr } from '../../lib/format';
@@ -107,6 +108,28 @@ function NewTicketForm({ customerId }: { customerId: string }) {
           action={
             <Button variant="outline" onClick={() => customer.refetch()}>
               {t('common.retry')}
+            </Button>
+          }
+        />
+      </>
+    );
+  }
+
+  // TK10 (audit A07-48): an archived customer gets no ticket; the way back is the profile.
+  if (customer.data.status === 'archived') {
+    return (
+      <>
+        <PageHeader title={t('support.new.title')} actions={back} />
+        <EmptyState
+          icon={<ArchiveIcon />}
+          title={t('support.new.archivedTitle')}
+          description={t('support.new.archivedBody')}
+          action={
+            <Button
+              variant="outline"
+              render={<Link to="/customers/$id" params={{ id: customerId }} />}
+            >
+              {t('support.new.toProfile')}
             </Button>
           }
         />
@@ -230,6 +253,7 @@ function NewTicketForm({ customerId }: { customerId: string }) {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-11"
                   render={<Link to="/support/$id" params={{ id: existing }} />}
                 >
                   {t('support.new.existing')}
@@ -253,11 +277,23 @@ interface PickerProps {
   invalid: boolean;
 }
 
+/** The read a link picker's items come from. */
+interface LinkRead {
+  isPending: boolean;
+  isError: boolean;
+  error: unknown;
+  refetch: () => unknown;
+}
+
+/**
+ * The order or deposit to link. A failed read shows inside the field with a retry, so a refused
+ * submit still shows the link's error beside it and focuses the retry (audit A07-14).
+ */
 function LinkSelect({
   label,
   empty,
   items,
-  pending,
+  read,
   value,
   onChange,
   invalid,
@@ -265,14 +301,16 @@ function LinkSelect({
   label: string;
   empty: string;
   items: { value: string; label: string }[] | undefined;
-  pending: boolean;
+  read: LinkRead;
 }) {
   const { t } = useTranslation();
-  if (pending) return <Skeleton className="h-16 w-full" aria-hidden="true" />;
+  if (read.isPending) return <Skeleton className="h-16 w-full" aria-hidden="true" />;
   return (
     <Field invalid={invalid}>
-      <FieldLabel>{label}</FieldLabel>
-      {items && items.length === 0 ? (
+      <FieldLabel render={read.isError ? <span /> : undefined}>{label}</FieldLabel>
+      {read.isError ? (
+        <ReadFailure error={read.error} onRetry={() => read.refetch()} />
+      ) : items && items.length === 0 ? (
         <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (
         <Select items={items ?? []} value={value} onValueChange={(next) => onChange(next ?? null)}>
@@ -301,16 +339,13 @@ function OrderPicker({ customerId, ...props }: PickerProps) {
     value: order.id,
     label: `${ltr(order.number)} · ${order.product.nameAr} · ${ltr(formatUsd(order.totalUsdUnits))} · ${t(`orders.statuses.${order.status}`)}`,
   }));
-  if (orders.isError) {
-    return <FormAlert>{errorMessage(t, orders.error)}</FormAlert>;
-  }
   return (
     <LinkSelect
       {...props}
       label={t('support.new.order')}
       empty={t('support.new.noOrders')}
       items={items}
-      pending={orders.isPending}
+      read={orders}
     />
   );
 }
@@ -323,16 +358,13 @@ function DepositPicker({ customerId, ...props }: PickerProps) {
     value: deposit.id,
     label: `${ltr(deposit.referenceCode)} · ${t(`wallets.methods.${deposit.method}`)} · ${ltr(formatUsd(deposit.declaredUsdUnits))} · ${t(`deposits.statuses.${deposit.status}`)} · ${formatDate(deposit.createdAt)}`,
   }));
-  if (deposits.isError) {
-    return <FormAlert>{errorMessage(t, deposits.error)}</FormAlert>;
-  }
   return (
     <LinkSelect
       {...props}
       label={t('support.new.deposit')}
       empty={t('support.new.noDeposits')}
       items={items}
-      pending={deposits.isPending}
+      read={deposits}
     />
   );
 }

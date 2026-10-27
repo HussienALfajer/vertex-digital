@@ -14,12 +14,12 @@ import {
 import {
   type Database,
   newId,
-  readAll,
   supportAttachments,
   supportMessages,
   supportTickets,
   type Transaction,
   ticketDepositLink,
+  ticketLinkLabels,
   ticketOrderLink,
 } from '@vertex-digital/db';
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
@@ -55,6 +55,10 @@ export const ticketRefusals = {
     }),
   keyReused: () =>
     new CodedException(409, 'IDEMPOTENCY_KEY_REUSED', 'The key was used for another message'),
+  customerArchived: () =>
+    new CodedException(409, 'CUSTOMER_STATE_INVALID', 'The customer is archived', {
+      status: 'archived',
+    }),
 };
 
 /** Attempts at a free ticket number: 31⁶ numbers make a second attempt already rare. */
@@ -228,6 +232,10 @@ export async function messageByKey(db: Executor, idempotencyKey: string) {
       body: supportMessages.body,
       ticketId: supportMessages.ticketId,
       customerId: supportTickets.customerId,
+      category: supportTickets.category,
+      orderId: supportTickets.orderId,
+      depositId: supportTickets.depositId,
+      subject: supportTickets.subject,
     })
     .from(supportMessages)
     .innerJoin(supportTickets, eq(supportTickets.id, supportMessages.ticketId))
@@ -249,18 +257,37 @@ const iso = (date: Date | null) => date?.toISOString() ?? null;
 
 /** A ticket as the lists show it (TK12). */
 export async function ticketSummary(db: Executor, row: TicketRow): Promise<TicketSummary> {
-  const [order, deposit] = await readAll(db, [
-    () => (row.orderId ? ticketOrderLink(db, row.orderId) : null),
-    () => (row.depositId ? ticketDepositLink(db, row.depositId) : null),
-  ]);
+  const [summary] = await ticketSummaries(db, [row]);
+  if (!summary) throw new Error('No summary for the ticket');
+  return summary;
+}
+
+/** A page of tickets as the lists show them, their links read for the page at once (A07-21). */
+export async function ticketSummaries(
+  db: Executor,
+  rows: readonly TicketRow[],
+): Promise<TicketSummary[]> {
+  const labels = await ticketLinkLabels(db, {
+    orderIds: rows.flatMap((row) => (row.orderId ? [row.orderId] : [])),
+    depositIds: rows.flatMap((row) => (row.depositId ? [row.depositId] : [])),
+  });
+  return rows.map((row) => summaryOf(row, labels));
+}
+
+function summaryOf(
+  row: TicketRow,
+  labels: { orders: Map<string, string>; deposits: Map<string, string> },
+): TicketSummary {
+  const orderNumber = row.orderId ? labels.orders.get(row.orderId) : undefined;
+  const referenceCode = row.depositId ? labels.deposits.get(row.depositId) : undefined;
   const customerAt = row.lastCustomerMessageAt?.getTime() ?? 0;
   const adminAt = row.lastAdminMessageAt?.getTime() ?? 0;
   return {
     id: row.id,
     number: row.number,
     category: row.category,
-    order: order && { id: order.id, number: order.number },
-    deposit: deposit && { id: deposit.id, referenceCode: deposit.referenceCode },
+    order: row.orderId && orderNumber ? { id: row.orderId, number: orderNumber } : null,
+    deposit: row.depositId && referenceCode ? { id: row.depositId, referenceCode } : null,
     subject: row.subject,
     orderProblem: row.orderProblem,
     status: row.status,

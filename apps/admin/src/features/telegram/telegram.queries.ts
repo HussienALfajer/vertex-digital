@@ -10,9 +10,18 @@ import { useReauthentication } from '../account/reauthentication';
 /** How often the page reads the status while the link waits to be opened on the phone. */
 const LINK_POLL_MS = 3000;
 
+/** How often the page reads the status while the last message waits to be sent (audit A07-43). */
+export const MESSAGE_POLL_MS = 3000;
+
+/** Once shown, read again in the background (the test message's status, rule D4). */
 export const telegramStatusQuery = queryOptions({
   queryKey: ['telegram', 'status'],
-  queryFn: () => call(api.GET('/api/admin/telegram')),
+  queryFn: ({ client, queryKey }) =>
+    call(
+      api.GET('/api/admin/telegram', {
+        headers: client.getQueryData(queryKey) ? BACKGROUND_REQUEST : undefined,
+      }),
+    ),
 });
 
 /** While a link is shown: the status in the background, until the chat is linked. */

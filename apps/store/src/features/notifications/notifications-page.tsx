@@ -33,20 +33,26 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime, formatRelative } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { notificationHref, notificationText } from './labels';
-import { announceUnread, useNotificationEvents } from './live';
+import { announceUnread, useNotificationEvents, useVisibleAgain } from './live';
 import { listNotifications, markNotificationsRead } from './requests';
 
 type State =
   | { status: 'loading' }
   | { status: 'failed' }
-  | { status: 'ready'; items: CustomerNotification[]; nextCursor: string | null };
+  | {
+      status: 'ready';
+      items: CustomerNotification[];
+      nextCursor: string | null;
+      /** A later read failed: the list shown is the last one read (audit A07-6). */
+      stale?: boolean;
+    };
 
 const ICONS: Record<NotificationEvent, LucideIcon> = {
   deposit_credited: ArrowDownToLineIcon,
@@ -86,7 +92,10 @@ async function markShown(newest: CustomerNotification | undefined) {
 /**
  * The notification center (S05 screens, rules NT4, NT5): newest first, 20 at a time. Opening it
  * marks what it shows as read; those keep their highlight for this visit. New notifications
- * arrive live at the top. Read in the browser, never cached.
+ * arrive live at the top. Read in the browser, never cached; read again after a `resync` and when
+ * the tab shows again (audit A07-9). Only the newest read lands, a reload drops a "عرض المزيد" in
+ * flight (its page belongs to the list replaced, audit A07-7), and a failed reload keeps the list
+ * shown with a notice (A07-6).
  */
 export function NotificationsPage() {
   const router = useRouter();
@@ -94,13 +103,23 @@ export function NotificationsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailure, setMoreFailure] = useState<Failure | null>(null);
 
+  const latest = useRef(0);
+
   const load = useCallback(async () => {
+    const reading = ++latest.current;
     const page = await listNotifications();
+    if (reading !== latest.current) return;
+    setLoadingMore(false);
     if (!page.ok && page.reason === 'UNAUTHORIZED') {
       router.replace('/sign-in?next=%2Fnotifications');
       return;
     }
-    if (!page.ok) return setState({ status: 'failed' });
+    if (!page.ok) {
+      return setState((current) =>
+        current.status === 'ready' ? { ...current, stale: true } : { status: 'failed' },
+      );
+    }
+    setMoreFailure(null);
     setState({ status: 'ready', items: page.data.items, nextCursor: page.data.nextCursor });
     void markShown(page.data.items[0]);
   }, [router]);
@@ -108,6 +127,7 @@ export function NotificationsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+  useVisibleAgain(() => void load());
 
   useNotificationEvents((event) => {
     if (event.type === 'resync') return void load();
@@ -122,9 +142,11 @@ export function NotificationsPage() {
   });
 
   const loadMore = async (cursor: string) => {
+    const reading = latest.current;
     setMoreFailure(null);
     setLoadingMore(true);
     const page = await listNotifications(cursor);
+    if (reading !== latest.current) return;
     setLoadingMore(false);
     if (!page.ok) return setMoreFailure(page.reason);
     setState((previous) =>
@@ -159,11 +181,25 @@ export function NotificationsPage() {
       />
     );
   }
+  const stale = state.stale && (
+    <div className="flex flex-col gap-2">
+      <FormAlert tone="warning">{t('notifications.stale')}</FormAlert>
+      <Button variant="outline" size="xl" className="self-start" onClick={() => void load()}>
+        {t('notifications.retry')}
+      </Button>
+    </div>
+  );
   if (state.items.length === 0) {
-    return <EmptyState icon={<BellIcon />} title={t('notifications.empty')} />;
+    return (
+      <div className="flex flex-col gap-3">
+        {stale}
+        <EmptyState icon={<BellIcon />} title={t('notifications.empty')} />
+      </div>
+    );
   }
   return (
     <div className="flex flex-col gap-3">
+      {stale}
       <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
         {state.items.map((notification) => (
           <NotificationRow key={notification.id} notification={notification} />
@@ -192,6 +228,7 @@ function NotificationRow({ notification }: { notification: CustomerNotification 
     <li>
       <Link
         href={notificationHref(notification)}
+        prefetch={false}
         className={
           unread
             ? 'flex items-start gap-3 bg-accent/10 p-4 hover:bg-muted'

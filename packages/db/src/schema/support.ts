@@ -68,6 +68,13 @@ export const supportTickets = pgTable(
     index('support_tickets_customer_idx').on(table.customerId, table.updatedAt.desc()),
     index('support_tickets_queue_idx').on(table.status, table.lastCustomerMessageAt),
     index('support_tickets_auto_close_idx').on(table.status, table.lastAdminMessageAt),
+    // The admin queue's tabs by newest activity, one status or all (audit A07-21).
+    index('support_tickets_status_activity_idx').on(
+      table.status,
+      table.updatedAt.desc(),
+      table.id.desc(),
+    ),
+    index('support_tickets_activity_idx').on(table.updatedAt.desc(), table.id.desc()),
     // One ticket that is not closed per order and per deposit (TK1, TK4, TK5).
     uniqueIndex('support_tickets_open_order_idx')
       .on(table.orderId)

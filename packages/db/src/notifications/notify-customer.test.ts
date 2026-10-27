@@ -29,7 +29,8 @@ const heard: string[] = [];
 beforeAll(async () => {
   listener = await connection.pool.connect();
   listener.on('notification', (message) => {
-    if (message.channel === CUSTOMER_NOTIFICATIONS_CHANNEL) heard.push(message.payload ?? '');
+    if (message.channel === CUSTOMER_NOTIFICATIONS_CHANNEL)
+      heard.push(message.payload?.split(':')[1] ?? '');
   });
   await listener.query(`listen ${CUSTOMER_NOTIFICATIONS_CHANNEL}`);
 });

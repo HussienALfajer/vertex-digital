@@ -29,15 +29,25 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { FormAlert } from '@/components/form-alert';
 import { CopyButton } from '@/features/deposits/copy-button';
+import { useVisibleAgain } from '@/features/notifications/live';
+import { sendAttempt } from '@/features/purchase/attempt';
 import type { Failure } from '@/lib/api';
 import { errorText } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { useIdempotentRequest } from '@/lib/idempotency';
-import { attemptSignature, BODY_MAX, bodyLength, bodyValid, messageBody } from './form';
+import { serverNow } from '@/lib/server-clock';
+import {
+  attemptSignature,
+  BODY_MAX,
+  bodyLength,
+  bodyValid,
+  freesSupportKey,
+  messageBody,
+  replySlot,
+} from './form';
 import { ImagePicker } from './image-picker';
 import { categoryText, newTicketHref, STATUS_TONES, statusText } from './labels';
 import { OnTicketReplied } from './on-ticket-replied';
@@ -47,7 +57,12 @@ type State =
   | { status: 'loading' }
   | { status: 'failed' }
   | { status: 'missing' }
-  | { status: 'ready'; ticket: Ticket };
+  | {
+      status: 'ready';
+      ticket: Ticket;
+      /** A later read failed: the thread shown is the last one read (audit A07-6). */
+      stale?: boolean;
+    };
 
 /**
  * One ticket (S12 screens, TK3–TK7, TK11): the header with its number, subject, type, link and
@@ -55,21 +70,30 @@ type State =
  * end side under the store's name, plain text only; the images opening full size; the reply box
  * with images; "إغلاق التذكرة" with a confirmation. Closed, a reply within 7 days reopens it;
  * later the page offers a new ticket of the same type and link. Read in the browser with the
- * session, never cached; another customer's ticket is the 404 page. A reply arrives live.
+ * session, never cached; another customer's ticket is the 404 page. A reply arrives live, and the
+ * tab shown again reads the ticket again (audit A07-9). Only the newest answer lands: a read
+ * started before a reply or a close was saved is dropped (A07-7), and a failed re-read keeps the
+ * thread and the reply box (with what was typed) on screen with a notice (A07-6).
  */
 export function TicketPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<State>({ status: 'loading' });
+  const latest = useRef(0);
 
   const load = useCallback(async () => {
+    const reading = ++latest.current;
     const result = await getTicket(id);
+    if (reading !== latest.current) return;
     if (!result.ok && result.reason === 'UNAUTHORIZED') {
       router.replace(`/sign-in?next=${encodeURIComponent(`/support/${id}`)}`);
       return;
     }
     if (!result.ok) {
-      return setState({ status: result.reason === 'NOT_FOUND' ? 'missing' : 'failed' });
+      if (result.reason === 'NOT_FOUND') return setState({ status: 'missing' });
+      return setState((current) =>
+        current.status === 'ready' ? { ...current, stale: true } : { status: 'failed' },
+      );
     }
     setState({ status: 'ready', ticket: result.data });
   }, [id, router]);
@@ -77,6 +101,7 @@ export function TicketPage() {
   useEffect(() => {
     void load();
   }, [load]);
+  useVisibleAgain(() => void load());
 
   if (state.status === 'missing') notFound();
   if (state.status === 'loading') return <TicketSkeleton />;
@@ -102,17 +127,29 @@ export function TicketPage() {
   }
 
   const { ticket } = state;
-  const update = (next: Ticket) => setState({ status: 'ready', ticket: next });
-  // TK4: the API's answer, and the clock for a page left open past the 7 days.
+  // The answer of a reply or a close is newer than any read still in flight.
+  const update = (next: Ticket) => {
+    latest.current++;
+    setState({ status: 'ready', ticket: next });
+  };
+  // TK4: the API's answer, and the server's clock for a page left open past the 7 days (A07-36).
   const canReply =
     ticket.canReply &&
     customerCanReply(
       { status: ticket.status, closedAt: ticket.closedAt ? new Date(ticket.closedAt) : null },
-      new Date(),
+      new Date(serverNow()),
     );
   return (
     <div className="flex flex-col gap-6">
       <OnTicketReplied ticketId={ticket.id} onReply={() => void load()} />
+      {state.stale && (
+        <div className="flex flex-col gap-2">
+          <FormAlert tone="warning">{t('support.ticket.stale')}</FormAlert>
+          <Button variant="outline" size="xl" className="self-start" onClick={() => void load()}>
+            {t('support.retry')}
+          </Button>
+        </div>
+      )}
       <Button
         variant="link"
         size="xl"
@@ -162,6 +199,7 @@ function TicketHeader({ ticket, onChange }: { ticket: Ticket; onChange: (next: T
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
 
+  // A refusal shows inside the dialog, where the customer is looking (audit A07-8).
   const close = async () => {
     setBusy(true);
     setFailure(null);
@@ -170,6 +208,11 @@ function TicketHeader({ ticket, onChange }: { ticket: Ticket; onChange: (next: T
     if (!result.ok) return setFailure(result.reason);
     setConfirming(false);
     onChange(result.data);
+  };
+  const setDialog = (open: boolean) => {
+    if (busy) return;
+    setConfirming(open);
+    if (open) setFailure(null);
   };
 
   return (
@@ -195,7 +238,7 @@ function TicketHeader({ ticket, onChange }: { ticket: Ticket; onChange: (next: T
             <span aria-hidden="true">·</span>
             <Link
               href={`/orders/${ticket.order.id}`}
-              className="text-primary underline-offset-4 hover:underline"
+              className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
             >
               <bdi dir="ltr">{ticket.order.number}</bdi>
             </Link>
@@ -206,7 +249,7 @@ function TicketHeader({ ticket, onChange }: { ticket: Ticket; onChange: (next: T
             <span aria-hidden="true">·</span>
             <Link
               href={`/wallet/deposits/${ticket.deposit.id}`}
-              className="text-primary underline-offset-4 hover:underline"
+              className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
             >
               <bdi dir="ltr">{ticket.deposit.referenceCode}</bdi>
             </Link>
@@ -214,29 +257,25 @@ function TicketHeader({ ticket, onChange }: { ticket: Ticket; onChange: (next: T
         )}
       </p>
       {ticket.status !== 'closed' && (
-        <Button
-          variant="outline"
-          size="xl"
-          className="self-start"
-          onClick={() => setConfirming(true)}
-        >
+        <Button variant="outline" size="xl" className="self-start" onClick={() => setDialog(true)}>
           <LockIcon aria-hidden="true" />
           {t('support.ticket.close')}
         </Button>
       )}
-      {failure && <FormAlert>{errorText(failure)}</FormAlert>}
-      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+      <AlertDialog open={confirming} onOpenChange={setDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('support.ticket.closeTitle')}</AlertDialogTitle>
             <AlertDialogDescription>{t('support.ticket.closeBody')}</AlertDialogDescription>
           </AlertDialogHeader>
+          {failure && <FormAlert>{errorText(failure)}</FormAlert>}
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" size="xl" />}>
+            <AlertDialogClose render={<Button variant="outline" size="xl" disabled={busy} />}>
               {t('support.ticket.keep')}
             </AlertDialogClose>
             <Button size="xl" disabled={busy} onClick={() => void close()}>
-              {t('support.ticket.closeConfirm')}
+              {busy && <LoaderCircleIcon className="animate-spin" aria-hidden="true" />}
+              {busy ? t('support.ticket.closing') : t('support.ticket.closeConfirm')}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -314,8 +353,9 @@ function Attachment({ src, n }: { src: string; n: number }) {
 type Refusal = { reason: Failure; ticketId?: string };
 
 /**
- * The reply box (TK7): text and up to 3 images, one `Idempotency-Key` per attempt. On a closed
- * ticket within 7 days it says that the reply reopens it (TK4).
+ * The reply box (TK7): text and up to 3 images, one `Idempotency-Key` per attempt, kept in this
+ * tab's session storage so a retry after a lost answer and a reload sends the same key (audit
+ * A07-39). On a closed ticket within 7 days it says that the reply reopens it (TK4).
  */
 function ReplyBox({
   ticket,
@@ -331,7 +371,6 @@ function ReplyBox({
   const [showError, setShowError] = useState(false);
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
-  const sendOnce = useIdempotentRequest();
   const { ref, focusInvalid } = useFocusInvalid();
   const invalid = showError && !bodyValid(text, files.length);
 
@@ -342,8 +381,11 @@ function ReplyBox({
     if (!bodyValid(text, files.length)) return focusInvalid();
     const body = messageBody(text, files.length, t('support.images.attached'));
     setSending(true);
-    const result = await sendOnce(attemptSignature({ ticket: ticket.id, body }, files), (key) =>
-      replyToTicket(ticket.id, body, files, key),
+    const result = await sendAttempt(
+      replySlot(ticket.id),
+      attemptSignature({ ticket: ticket.id, body }, files),
+      (key) => replyToTicket(ticket.id, body, files, key),
+      freesSupportKey,
     );
     setSending(false);
     if (result.ok) {

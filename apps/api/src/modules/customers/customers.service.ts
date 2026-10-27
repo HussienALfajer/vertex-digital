@@ -29,12 +29,12 @@ import {
   CustomerError,
   customerAcceptedVersions,
   customerActiveSessions,
+  customerHistoryScope,
   customerLimitOverrides,
   customerNotes,
   customerPage,
   customerPasskeyRows,
   customerProfileFacts,
-  customerRecordIds,
   customerSignals,
   customerSignInRows,
   type Database,
@@ -252,7 +252,7 @@ export class CustomersService {
   /** `GET …/history`: audit entries of the customer and their orders, deposits and tickets. */
   async history(id: string, query: CursorQuery): Promise<AuditPage> {
     await this.existing(id);
-    return this.audit.list(query, await customerRecordIds(this.db, id));
+    return this.audit.list(query, customerHistoryScope(id));
   }
 
   /** `GET …/notes`: active notes newest first, or the archived ones (SN2). */

@@ -151,6 +151,10 @@ export class NotificationStreamService implements OnApplicationShutdown {
 
   private countConnect(key: string): void {
     const now = Date.now();
+    // Audit A07-30: keys with no connect in the last minute leave, so the map stays small.
+    for (const [other, times] of this.connects) {
+      if (times.every((at) => now - at >= 60_000)) this.connects.delete(other);
+    }
     const recent = (this.connects.get(key) ?? []).filter((at) => now - at < 60_000);
     if (recent.length >= CONNECTS_PER_MINUTE) {
       this.connects.set(key, recent);
@@ -244,7 +248,15 @@ export class NotificationStreamService implements OnApplicationShutdown {
     for (const stream of this.streams.get(ADMIN_KEY) ?? []) send(stream.response, 'order', event);
   }
 
-  private async deliver(notificationId: string): Promise<void> {
+  /**
+   * `<customer id>:<notification id>`: a customer with no open stream here costs no read (audit
+   * A07-31). A bare id is a write of the release before, during a deploy.
+   */
+  private async deliver(payload: string): Promise<void> {
+    const [first, second] = payload.split(':');
+    const customerId = second ? first : undefined;
+    const notificationId = second ?? first;
+    if (!notificationId || (customerId !== undefined && !this.streams.has(customerId))) return;
     try {
       const found = await this.notifications.find(notificationId);
       const streams = found ? this.streams.get(found.customerId) : undefined;

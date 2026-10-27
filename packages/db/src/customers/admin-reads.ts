@@ -303,15 +303,23 @@ export async function customerProfileFacts(
   };
 }
 
-/** Rule CS4: the ids whose audit entries make the customer's history. */
-export async function customerRecordIds(db: Executor, customerId: string): Promise<string[]> {
-  const result = await db.execute<{ id: string }>(
-    sql`select ${customerId}::uuid as id
-        union all select id from orders where customer_id = ${customerId}
-        union all select id from deposits where customer_id = ${customerId}
-        union all select id from support_tickets where customer_id = ${customerId}`,
-  );
-  return result.rows.map((row) => row.id);
+/**
+ * Rule CS4: the audit entries that make the customer's history, as a filter: the customer and
+ * their orders, deposits and tickets, each branch by its entity type so it uses the
+ * `(entity_type, entity_id)` index however many orders the customer has (audit A07-5).
+ */
+export function customerHistoryScope(customerId: string): SQL {
+  const records = (entityType: string, ids: SQL) =>
+    and(eq(auditEntries.entityType, entityType), inArray(auditEntries.entityId, ids));
+  return or(
+    and(eq(auditEntries.entityType, 'customer'), eq(auditEntries.entityId, customerId)),
+    records('order', sql`(select id from orders where customer_id = ${customerId})`),
+    records('deposit', sql`(select id from deposits where customer_id = ${customerId})`),
+    records(
+      'support_ticket',
+      sql`(select id from support_tickets where customer_id = ${customerId})`,
+    ),
+  ) as SQL;
 }
 
 /** Rule CS4: the customer's sessions that have not expired, newest first. */

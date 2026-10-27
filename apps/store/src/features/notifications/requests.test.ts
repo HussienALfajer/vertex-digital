@@ -3,6 +3,7 @@ import {
   getUnreadCount,
   listNotifications,
   markNotificationsRead,
+  sessionEnded,
   setNotificationPreference,
 } from './requests';
 
@@ -32,6 +33,15 @@ describe('notification requests', () => {
       await getUnreadCount(fetcher(200, { items: [], nextCursor: null, unreadCount: 4 }).fetch),
     ).toBe(4);
     expect(await getUnreadCount(fetcher(401, { code: 'UNAUTHORIZED' }).fetch)).toBeNull();
+  });
+
+  it('tell a session that ended from a passing fault after a refused stream (A07-2)', async () => {
+    expect(await sessionEnded(fetcher(401, { code: 'UNAUTHORIZED' }).fetch)).toBe(true);
+    expect(await sessionEnded(fetcher(502, {}).fetch)).toBe(false);
+    expect(await sessionEnded(fetcher(429, {}).fetch)).toBe(false);
+    expect(
+      await sessionEnded(fetcher(200, { items: [], nextCursor: null, unreadCount: 0 }).fetch),
+    ).toBe(false);
   });
 
   it('mark read up to an id and save one choice per channel', async () => {

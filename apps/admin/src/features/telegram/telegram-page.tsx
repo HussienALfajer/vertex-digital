@@ -18,8 +18,9 @@ import { ConfirmDialog } from '../../components/confirm-dialog';
 import { CopyButton } from '../../components/copy-button';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
-import { formatDateTime } from '../../lib/format';
+import { formatDateTime, ltr } from '../../lib/format';
 import {
+  MESSAGE_POLL_MS,
   telegramLinkPollQuery,
   telegramStatusQuery,
   useCreateLinkCode,
@@ -38,16 +39,22 @@ const SERVER_VARIABLES = [
 /**
  * "تيليجرام" (S05, F07): the bot's state. Not configured: the server variables it needs. Not
  * linked: a single-use link with its QR code and countdown, then the page waits for the phone
- * (rule TG3). Linked: who, since when, the last message, a test and unlinking.
+ * (rule TG3). Linked: who, since when, the last message, a test and unlinking; while the last
+ * message waits to be sent, its status is read again in the background (audit A07-43).
  */
 export function TelegramPage() {
   const { t } = useTranslation();
-  const status = useQuery(telegramStatusQuery);
+  const status = useQuery({
+    ...telegramStatusQuery,
+    refetchInterval: (query) =>
+      query.state.data?.lastMessage?.status === 'pending' ? MESSAGE_POLL_MS : false,
+  });
   return (
     <>
       <PageHeader title={t('telegram.title')} description={t('telegram.subtitle')} />
       {status.isPending && <Skeleton className="h-64 w-full" aria-hidden="true" />}
-      {status.isError && (
+      {/* A failed background read keeps what was shown. */}
+      {status.isError && !status.data && (
         <div className="flex flex-col items-start gap-3">
           <FormAlert>{errorMessage(t, status.error)}</FormAlert>
           <Button variant="outline" onClick={() => status.refetch()}>
@@ -55,7 +62,7 @@ export function TelegramPage() {
           </Button>
         </div>
       )}
-      {status.isSuccess &&
+      {status.data &&
         (!status.data.configured ? (
           <NotConfigured />
         ) : status.data.link ? (
@@ -304,7 +311,11 @@ function Linked({
           open
           onClose={() => setConfirming(false)}
           title={t('telegram.unlink.title')}
-          body={t('telegram.unlink.body')}
+          body={
+            link.username
+              ? t('telegram.unlink.bodyNamed', { account: ltr(`@${link.username}`) })
+              : t('telegram.unlink.body')
+          }
           action={t('telegram.unlink.action')}
           destructive
           pending={unlink.isPending}

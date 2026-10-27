@@ -100,7 +100,11 @@ export const telegramMessages = pgTable(
     sentAt: timestamp('sent_at', { withTimezone: true }),
     ...timestamps(),
   },
-  (table) => [index('telegram_messages_created_at_idx').on(table.createdAt.desc())],
+  (table) => [
+    index('telegram_messages_created_at_idx').on(table.createdAt.desc()),
+    // The supplier health and balance jobs read the newest messages of a kind (audit A07-28).
+    index('telegram_messages_kind_idx').on(table.kind, table.createdAt.desc(), table.id.desc()),
+  ],
 );
 
 /** Updates already handled (rule TG5): a redelivery finds its id and does nothing. */
@@ -157,7 +161,11 @@ export const telegramDepositCards = pgTable(
     remindedAt: timestamp('reminded_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.depositId, table.submittedAt] })],
+  (table) => [
+    primaryKey({ columns: [table.depositId, table.submittedAt] }),
+    // A button press finds its card by the message it was pressed on (audit A07-28).
+    index('telegram_deposit_cards_message_idx').on(table.chatId, table.messageId),
+  ],
 );
 
 /** The bot's own state, one row (rule RM3): when the last review reminder was sent. */
