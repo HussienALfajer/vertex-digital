@@ -1,6 +1,6 @@
 # A02 Wallet, ledger and deposits
 
-Status: merged ([#178](https://github.com/HussienALfajer/vertex-digital/pull/178))
+Status: deployed (`610a388`, 2026-10-27; PR [#178](https://github.com/HussienALfajer/vertex-digital/pull/178))
 Branch: fix/audit-a02-wallet · Started: 2026-10-27 · Specs: S02, S03, S04 · ADRs: 0003, 0006, 0017, 0018
 
 ## Scope
@@ -99,4 +99,5 @@ Re-test after the fixes (same stack, API and worker restarted on the new code):
 ## Checks
 - `pnpm verify` on the final tree (2026-10-27): pass in 1m 53s. Lint; typecheck, test and build (25 tasks); migrations in step; OpenAPI in step; store E2E `deposits`, `wallet` 56 passed; admin E2E `deposits`, `usdt-deposits`, `wallets` 37 passed; then store E2E `usdt-deposits` and `store` (the first-load budgets) 37 passed. Earlier full runs failed on lint (import order), the API's module-boundary test (the wallet module read `usdt_transfers`: the read moved to `packages/db` `recordedUsdtTransfer`) and once on `worker/test/suppliers.test.ts` (supplier health), which passed on its own rerun and is not touched here.
 - Reviewer: first pass, 2 blocking findings (A02-1 left the review open to a transfer whose owner could no longer be credited automatically; `packages/db/CLAUDE.md` stale), both fixed; second pass, 1 (the first fix also bounced an honest customer whose exchange took its fee, once the scanner had recorded the transfer: narrowed to an amount another deposit asked for, with a test pinning the review); third pass, none left.
-- CI, the deploy and the production smoke test: recorded after the merge.
+- CI: the PR's run green; the merge's run (40421466205) failed once on a flaky admin E2E outside the group (`merchants.spec.ts` "requests information, then approves…": the mock read before the approval's answer, failed on its first try and passed on its retry, which `failOnFlakyTests` counts as a failure), green on the re-run; the test waits for the mock since (`expect.poll`).
+- Deployed `610a388` on 2026-10-27 (detached `systemd-run`; no migration, 96 applied), then `provision.sh` re-run for the `vddeposit` location (A02-25), `nginx -t` clean. Production smoke test, no money: `/api/health`, `/wallet`, `/wallet/deposit`, `/wallet/deposits` and the panel's `/deposits`, `/wallets`, `/rates` answer 200; `/api/wallet`, `/api/deposits` and `/api/admin/deposits/counts` answer 401 without a session; the API, the store and the worker online after the switch, the deploy's worker heartbeat check passed.
