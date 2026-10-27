@@ -99,6 +99,9 @@ test('a wrong password and a wrong code say what happened', async ({ page, admin
   ).toBeVisible();
 
   await signInWithPassword(page);
+  // The code step first, as the other sign-ins wait for it: typed sooner, the code went into
+  // the password form still on screen (CI on #179).
+  await expect(page.getByRole('heading', { name: ar.login.twoFactor.title })).toBeVisible();
   await page.getByRole('textbox').first().pressSequentially('000000');
   await expect(
     page.getByRole('alert').filter({ hasText: ar.errors.auth.INVALID_CODE }),

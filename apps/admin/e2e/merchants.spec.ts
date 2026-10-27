@@ -77,7 +77,9 @@ test.describe('merchants', () => {
     await page.getByRole('dialog').getByRole('button', { name: m.decisions.approve }).click();
     await reauthenticate(page);
     await expect(page.getByText(m.statuses.approved).first()).toBeVisible();
-    expect(admin.merchants.isMerchant(CUSTOMER_IDS.sara)).toBe(true);
+    // The mock's state, once the approval's answer landed: the status text can show first (a
+    // flake on main's CI after #178).
+    await expect.poll(() => admin.merchants.isMerchant(CUSTOMER_IDS.sara)).toBe(true);
     await expect(page.getByText(m.events.resubmitted)).toBeVisible();
   });
 
