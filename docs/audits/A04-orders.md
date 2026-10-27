@@ -1,6 +1,6 @@
 # A04 Purchase, orders and fulfilment
 
-Status: deployed (`7914ca2`, 2026-10-27; PR [#182](https://github.com/HussienALfajer/vertex-digital/pull/182))
+Status: deployed (`7914ca2`, 2026-10-27; PR [#182](https://github.com/HussienALfajer/vertex-digital/pull/182)); A04-21 deployed as `8cef153` the same day (PR [#184](https://github.com/HussienALfajer/vertex-digital/pull/184))
 Branch: fix/audit-a04-orders · Started: 2026-10-27 · Specs: S08, S10, S11, S16 (admin orders), S22 (order help, alerts) · ADRs: 0004, 0013, 0022, 0023, 0024, 0025, 0030
 
 ## Scope
@@ -106,5 +106,6 @@ Local stack (fresh production catalog snapshot, `db:reset-local`, `db:seed-local
 - **Live re-test:** the cart's line controls locked during a held checkout ("ندفع سلتك…", no slide); the refund dialog's "يُعاد $0.56 (وحدة واحدة) إلى محفظة أحمد الحلبي" and "استرداد $0.56"; Enter in `/orders/new` opening "تأكيد الشراء" ("تشتري 110 جوهرة × 1 بـ $1.02 من مال المالك الآن"), cancel paying nothing; the leave prompt; the live room's tab counts; the timeline's "تجاوز المهلة القصوى دون جواب".
 - **CI:** green on #182 (lint, typecheck, tests, build, the four E2E shards, the secret scan); merged as `7914ca2` by auto-merge.
 - **Deploy (2026-10-27):** `7914ca2` through `systemd-run`, no migration ("Migrations are up to date.", 96 files), health checks passed at 14:54 UTC; no `deploy/` change, so `provision.sh` was not re-run. The health timer restarted nothing this time; the worker scheduled `orders.sweep` and `orders.waiting-sweep` and logged no sweep error after the switch.
+- **A04-21 (Q24) deploy (2026-10-27):** `8cef153` through `systemd-run`, no migration, health checks passed at 15:28 UTC; the store, a game page, `/api/health` and the panel's `/login` answer 200, a signed-out player check 401.
 - **Production smoke test (no money, no sign-in):** `/`, `/cart` (the empty cart), `/orders`, `/account/alerts`, `/api/health` and the panel's `/login` and `/orders/live` answer 200; `/api/orders` and `/api/admin/orders` answer 401 signed out; an unknown share token and verification code answer 404, as does an alert on a malformed product id (A04-11); the panel's `/orders/new` sends a signed-out admin to `/login?redirect=%2Forders%2Fnew`; no console error on the cart. Two leads found, recorded in the README: a signed-out visitor's buy box opens the notification stream, which answers 401 and is opened again with backoff (A07), and FazerCards' sync fails with HTTP 403 `subscription_inactive` every 15 minutes (A05).
 
