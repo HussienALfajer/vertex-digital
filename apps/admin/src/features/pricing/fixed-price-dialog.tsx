@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import {
   formatAmountInput,
   formatUsd,
@@ -24,6 +25,7 @@ import {
   FieldLabel,
   Input,
   Skeleton,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +47,7 @@ export function FixedPriceDialog({
   chain,
   rules,
   initial,
+  rulesLink = false,
   onDone,
 }: {
   listId: string;
@@ -53,6 +56,8 @@ export function FixedPriceDialog({
   /** The live rules of every list of the chain. */
   rules: MarginRule[];
   initial?: { gameId: string; productId: string; priceUsdUnits: number | null };
+  /** From a matrix cell: the way to the list's rules instead (S20 screens, audit A05-43). */
+  rulesLink?: boolean;
   onDone: () => void;
 }) {
   const { t } = useTranslation();
@@ -64,6 +69,7 @@ export function FixedPriceDialog({
   );
   const [invalid, setInvalid] = useState<'product' | 'price' | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const games = useQuery(allGamesQuery);
   const game = useQuery({ ...gameQuery(gameId ?? ''), enabled: !!gameId });
   const matrix = useQuery(priceMatrixQuery({ gameId: gameId ?? undefined, lists: [listId] }));
@@ -93,8 +99,14 @@ export function FixedPriceDialog({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFailure(null);
-    if (!productId) return setInvalid('product');
-    if (!valid || price === null) return setInvalid('price');
+    if (!productId) {
+      setInvalid('product');
+      return focusInvalid();
+    }
+    if (!valid || price === null) {
+      setInvalid('price');
+      return focusInvalid();
+    }
     setInvalid(null);
     try {
       await save.mutateAsync({ listId, productId, priceUsdUnits: price });
@@ -111,7 +123,7 @@ export function FixedPriceDialog({
         <DialogTitle>{t('pricing.fixed.title')}</DialogTitle>
         <DialogDescription>{t('pricing.fixed.description')}</DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+      <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field>
             <FieldLabel render={<span />}>{t('pricing.scopes.game')}</FieldLabel>
@@ -127,6 +139,7 @@ export function FixedPriceDialog({
                 setGameId(value);
                 setProductId(null);
               }}
+              read={games}
             />
           </Field>
           <Field invalid={invalid === 'product'}>
@@ -137,6 +150,7 @@ export function FixedPriceDialog({
               items={products.map((item) => ({ value: item.id, label: item.nameAr }))}
               value={productId}
               onChange={setProductId}
+              read={gameId ? game : undefined}
             />
             <FieldError match={invalid === 'product'}>
               {t('pricing.fixed.productRequired')}
@@ -208,6 +222,14 @@ export function FixedPriceDialog({
         )}
         {failure && <FormAlert>{failure}</FormAlert>}
         <DialogFooter>
+          {rulesLink && (
+            <Button
+              variant="ghost"
+              render={<Link to="/pricing/lists/$id" params={{ id: listId }} />}
+            >
+              {t('pricing.fixed.listRules')}
+            </Button>
+          )}
           <Button type="submit" disabled={save.isPending}>
             {save.isPending
               ? t('pricing.form.saving')

@@ -67,8 +67,12 @@ type Executor = Database | Transaction;
 type SyncRunRow = typeof supplierSyncRuns.$inferSelect;
 type OfferRow = typeof supplierOffers.$inferSelect;
 
-/** A run left `running` this long was lost in a crash: the next run closes it (rule SY1). */
-export const ABANDONED_RUN_MINUTES = 10;
+/**
+ * A run left `running` this long was lost in a crash: the next run closes it (rule SY1). Above the
+ * longest read seen, WDGZone's paced pages at 15 minutes 18 seconds (audit A05-16: at 10 minutes
+ * the next run closed a run still reading, 7 times in production).
+ */
+export const ABANDONED_RUN_MINUTES = 30;
 
 const FIELD_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
 
@@ -616,7 +620,7 @@ export class SupplierSyncJob implements OnApplicationBootstrap {
     this.logger.log(`Credentials of ${supplier.code} replaced during a run: testing them`);
   }
 
-  /** Runs left `running` over 10 minutes by a crash, but the payload's own (rule SY1). */
+  /** Runs left `running` over `ABANDONED_RUN_MINUTES` by a crash, but the payload's own (SY1). */
   private async closeAbandoned(db: Executor, supplierId: string, keep?: string): Promise<void> {
     await db
       .update(supplierSyncRuns)

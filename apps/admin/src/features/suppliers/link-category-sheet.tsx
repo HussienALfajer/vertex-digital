@@ -33,6 +33,7 @@ import { CircleCheckIcon, XIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert, InvalidAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { allGamesQuery, gameQuery } from '../catalog/catalog.queries';
@@ -105,6 +106,8 @@ export function LinkCategorySheet({
           <FieldLabel>{t('suppliers.linkCategory.game')}</FieldLabel>
           {games.isPending ? (
             <Skeleton className="h-10 w-full" />
+          ) : games.isError ? (
+            <ReadFailure error={games.error} onRetry={() => games.refetch()} />
           ) : (
             <Select items={gameItems} value={gameId} onValueChange={(value) => setGameId(value)}>
               <SelectTrigger>

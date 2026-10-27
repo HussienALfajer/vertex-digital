@@ -2,12 +2,14 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import {
   formatUsd,
   PRICE_MATRIX_MAX_LISTS,
+  PRICE_MATRIX_MAX_PRODUCTS,
   type PriceMatrixCell,
   ROOT_PRICE_LIST_IDS,
 } from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
+  Callout,
   Checkbox,
   Dialog,
   DialogContent,
@@ -31,6 +33,7 @@ import { Grid3x3Icon } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
 import { errorMessage } from '../../lib/errors';
 import { ltr } from '../../lib/format';
 import { allGamesQuery } from '../catalog/catalog.queries';
@@ -65,10 +68,8 @@ export function MatrixPage({
   const games = useQuery(allGamesQuery);
   const lists = useQuery(priceListsQuery);
   const matrix = useQuery(priceMatrixQuery(search));
-  const [q, setQ] = useState(search.q ?? '');
   const [opened, setOpened] = useState<{ listId: string; row: MatrixRow } | null>(null);
   const warningsId = useId();
-  useEffect(() => setQ(search.q ?? ''), [search.q]);
 
   const live = (lists.data ?? []).filter(
     (list) => list.archivedAt === null && list.id !== ROOT_PRICE_LIST_IDS.retail,
@@ -95,27 +96,14 @@ export function MatrixPage({
               }))}
               value={search.gameId ?? null}
               onChange={(gameId) => onSearch({ ...search, gameId, q: undefined })}
+              read={games}
             />
           </Field>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              const text = q.trim();
-              onSearch({
-                ...search,
-                q: text || undefined,
-                gameId: text ? undefined : search.gameId,
-              });
-            }}
-          >
-            <Field>
-              <FieldLabel>{t('pricing.matrix.search')}</FieldLabel>
-              <Input name="q" value={q} onChange={(event) => setQ(event.target.value)} />
-            </Field>
-          </form>
+          <MatrixSearchForm search={search} onSearch={onSearch} />
         </div>
         <fieldset className="flex flex-wrap items-center gap-4">
           <legend className="mb-2 text-sm font-medium">{t('pricing.matrix.lists')}</legend>
+          {lists.isError && <ReadFailure error={lists.error} onRetry={() => lists.refetch()} />}
           {live.map((list) => (
             <label
               key={list.id}
@@ -158,46 +146,62 @@ export function MatrixPage({
         ) : matrix.data.rows.length === 0 ? (
           <EmptyState icon={<Grid3x3Icon />} title={t('pricing.matrix.empty')} />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('pricing.columns.product')}</TableHead>
-                <TableHead>{t('pricing.matrix.cost')}</TableHead>
-                {matrix.data.lists.map((list) => (
-                  <TableHead key={list.id}>{list.name}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {matrix.data.rows.map((row) => (
-                <TableRow key={row.productId}>
-                  <TableCell className="whitespace-normal">
-                    <span className="font-medium">{row.productNameAr}</span>
-                    <span className="block text-xs text-muted-foreground">{row.gameNameAr}</span>
-                  </TableCell>
-                  <TableCell className="tabular-nums">
-                    {row.costUsdUnits === null ? '—' : ltr(formatUsd(row.costUsdUnits))}
-                  </TableCell>
-                  {row.cells.map((cell) => (
-                    <TableCell key={cell.priceListId} className="align-top">
-                      <button
-                        type="button"
-                        className="flex w-full flex-col items-start gap-1 rounded-md p-1 text-start hover:bg-muted"
-                        aria-label={t('pricing.matrix.openCell', {
-                          list: matrix.data.lists.find((list) => list.id === cell.priceListId)
-                            ?.name,
-                          product: row.productNameAr,
-                        })}
-                        onClick={() => setOpened({ listId: cell.priceListId, row })}
-                      >
-                        <MatrixCell cell={cell} />
-                      </button>
-                    </TableCell>
+          <>
+            {matrix.data.rows.length >= PRICE_MATRIX_MAX_PRODUCTS && (
+              <Callout
+                tone="info"
+                title={t('pricing.matrix.truncated', { max: PRICE_MATRIX_MAX_PRODUCTS })}
+              />
+            )}
+            <Table
+              // Audit A05-37: another game's or search's rows stay while the next load, dimmed.
+              className={matrix.isPlaceholderData ? 'opacity-60' : undefined}
+              aria-busy={matrix.isPlaceholderData}
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('pricing.columns.product')}</TableHead>
+                  <TableHead>{t('pricing.matrix.cost')}</TableHead>
+                  {matrix.data.lists.map((list) => (
+                    <TableHead key={list.id}>{list.name}</TableHead>
                   ))}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {matrix.data.rows.map((row) => (
+                  <TableRow key={row.productId}>
+                    <TableCell className="whitespace-normal">
+                      <span className="font-medium">{row.productNameAr}</span>
+                      <span className="block text-xs text-muted-foreground">{row.gameNameAr}</span>
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {row.costUsdUnits === null ? '—' : ltr(formatUsd(row.costUsdUnits))}
+                    </TableCell>
+                    {row.cells.map((cell) => (
+                      <TableCell key={cell.priceListId} className="align-top">
+                        <button
+                          type="button"
+                          disabled={matrix.isPlaceholderData}
+                          className="flex w-full flex-col items-start gap-1 rounded-md p-1 text-start hover:bg-muted"
+                          onClick={() => setOpened({ listId: cell.priceListId, row })}
+                        >
+                          {/* Audit A05-39: the price and warnings stay in the button's name. */}
+                          <span className="sr-only">
+                            {t('pricing.matrix.openCell', {
+                              list: matrix.data.lists.find((list) => list.id === cell.priceListId)
+                                ?.name,
+                              product: row.productNameAr,
+                            })}
+                          </span>
+                          <MatrixCell cell={cell} />
+                        </button>
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
         )}
       </div>
       <Dialog open={!!opened} onOpenChange={(open) => !open && setOpened(null)}>
@@ -211,6 +215,40 @@ export function MatrixPage({
         )}
       </Dialog>
     </>
+  );
+}
+
+/**
+ * The search box on its own: typing re-renders this form, not the whole table (audit A05-38). It
+ * follows the URL on back and forward.
+ */
+function MatrixSearchForm({
+  search,
+  onSearch,
+}: {
+  search: MatrixSearch;
+  onSearch: (next: MatrixSearch) => void;
+}) {
+  const { t } = useTranslation();
+  const [q, setQ] = useState(search.q ?? '');
+  useEffect(() => setQ(search.q ?? ''), [search.q]);
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        const text = q.trim();
+        onSearch({
+          ...search,
+          q: text || undefined,
+          gameId: text ? undefined : search.gameId,
+        });
+      }}
+    >
+      <Field>
+        <FieldLabel>{t('pricing.matrix.search')}</FieldLabel>
+        <Input name="q" value={q} onChange={(event) => setQ(event.target.value)} />
+      </Field>
+    </form>
   );
 }
 
@@ -274,6 +312,7 @@ function CellDialog({
         productId: row.productId,
         priceUsdUnits: cell?.fixedPriceUsdUnits ?? null,
       }}
+      rulesLink
       onDone={onDone}
     />
   );

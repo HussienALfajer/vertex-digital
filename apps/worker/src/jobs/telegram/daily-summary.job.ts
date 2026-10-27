@@ -496,7 +496,9 @@ export class DailySummaryJob implements OnApplicationBootstrap {
       // repeats them every day they last.
       syncsFailing: inUse.flatMap((state, index) => {
         const failedRuns = streaks[index]?.count ?? 0;
-        return failedRuns >= FAILING_SYNC_RUNS ? [{ supplierNameAr: state.nameAr, failedRuns }] : [];
+        return failedRuns >= FAILING_SYNC_RUNS
+          ? [{ supplierNameAr: state.nameAr, failedRuns }]
+          : [];
       }),
       plansInactive: inUse
         .filter((state) => state.subscriptionInactive)

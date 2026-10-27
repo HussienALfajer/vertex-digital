@@ -483,8 +483,7 @@ export class PricingService {
     const { current } = state;
     // The decision accepts the basis's cost and the governing rule (Q21): the row in force stays
     // only when it already holds both (audit A05-1).
-    const unchanged =
-      retailRowInForce(state) && current?.costUsdUnits === state.basis.costUsdUnits;
+    const unchanged = retailRowInForce(state) && current?.costUsdUnits === state.basis.costUsdUnits;
     const retailRow =
       unchanged && current
         ? current

@@ -309,7 +309,10 @@ test.describe('suppliers', () => {
       .first()
       .getByRole('switch', { name: s.routes.enabled })
       .click();
-    await page.getByRole('alertdialog').getByRole('button', { name: s.routes.stop.disable }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: s.routes.stop.disable })
+      .click();
     await expect(drawer.getByText(s.routes.priceHeld)).toBeVisible();
     await expect(drawer.getByText('$0.98').first()).toBeVisible();
 
@@ -573,6 +576,40 @@ test.describe('suppliers and reviews: audit A05', () => {
     fail = false;
     await dialog.getByRole('button', { name: ar.common.retry }).click();
     await expect(page.getByLabel(ar.pricing.form.percent, { exact: true })).toBeVisible();
+  });
+});
+
+test.describe('suppliers: failed reads and pages (audit A05)', () => {
+  test("the add-route dialog's failed offer read offers a retry (A05-27)", async ({
+    page,
+    admin,
+  }) => {
+    const { game } = mapped(admin);
+    let fail = true;
+    await page.route('**/api/admin/suppliers/fake/offers?**', (route) =>
+      fail
+        ? route.fulfill({
+            status: 500,
+            json: { statusCode: 500, code: 'INTERNAL_ERROR', message: 'x' },
+          })
+        : route.fallback(),
+    );
+    const drawer = await openRoutes(page, game.id, '60 UC');
+    await drawer.getByRole('button', { name: s.routes.add, exact: true }).click();
+    const add = page.getByRole('dialog', { name: s.routes.addTitle });
+    await choose(page, add, s.routes.supplier, 'مورد تجريبي');
+    await expect(add.getByText(ar.errors.generic)).toBeVisible();
+    fail = false;
+    await add.getByRole('button', { name: ar.common.retry }).click();
+    await expect(add.getByText(ar.errors.generic)).toBeHidden();
+    await expect(add.getByRole('textbox', { name: s.routes.offerSearch })).toBeVisible();
+  });
+
+  test('a page of offers past the end shows the last page (A05-26)', async ({ page, admin }) => {
+    mapped(admin);
+    await page.goto('/suppliers/fake?tab=offers&page=9');
+    await expect(page).not.toHaveURL(/page=9/);
+    await expect(page.getByText('Fake UC 60').first()).toBeVisible();
   });
 });
 

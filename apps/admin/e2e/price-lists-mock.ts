@@ -67,6 +67,8 @@ export class PriceListsMock {
   fixed: StoredFixed[] = [];
   /** AT2: assigned lists by customer id. */
   assigned = new Map<string, string>();
+  /** S21 LV6: live merchant levels holding a list, by its id (set per test). */
+  levelsOn = new Map<string, number>();
 
   constructor(
     private readonly catalog: CatalogMock,
@@ -212,8 +214,9 @@ export class PriceListsMock {
       const children = this.lists.filter(
         (row) => row.parentListId === list.id && !row.archivedAt,
       ).length;
-      if (accounts > 0 || children > 0) {
-        return error(409, 'PRICE_LIST_IN_USE', { accounts, children });
+      const levels = this.levelsOn.get(list.id) ?? 0;
+      if (accounts > 0 || children > 0 || levels > 0) {
+        return error(409, 'PRICE_LIST_IN_USE', { accounts, children, levels });
       }
       list.archivedAt = new Date().toISOString();
       this.fixed = this.fixed.filter((row) => row.priceListId !== list.id);

@@ -70,6 +70,12 @@ const STALE_NEWS_MS = 2 * 60_000;
 @Injectable()
 export class SupplierHealthJob implements OnApplicationBootstrap {
   private readonly logger = new Logger(SupplierHealthJob.name);
+  /**
+   * Audit A05-17: the stale cost each product was last repriced on, by its confirmation time. A
+   * product left on the same stale cost (no other usable route) is not locked and repriced again
+   * every minute; a new confirmation, or a restart, reprices it once more.
+   */
+  private readonly repricedOnStale = new Map<string, number | null>();
 
   constructor(
     private readonly pgBoss: PgBossService,
@@ -304,15 +310,41 @@ export class SupplierHealthJob implements OnApplicationBootstrap {
           or(isNull(supplierOffers.costConfirmedAt), lt(supplierOffers.costConfirmedAt, cutoff)),
         ),
       );
-    if (stale.length === 0) return;
+    const seen = (row: (typeof stale)[number]) => row.confirmedAt?.getTime() ?? null;
+    const due = stale.filter(
+      (row) =>
+        !this.repricedOnStale.has(row.productId) ||
+        this.repricedOnStale.get(row.productId) !== seen(row),
+    );
+    // Products no longer on a stale cost are forgotten, so a later staleness counts again.
+    const staleIds = new Set(stale.map((row) => row.productId));
+    for (const id of this.repricedOnStale.keys()) {
+      if (!staleIds.has(id)) this.repricedOnStale.delete(id);
+    }
+    if (due.length === 0) return;
     // A cost that went stale since the last runs changes what the store shows; one stale for longer
     // was already refreshed (S09 rule SF4), so a failing sync does not refresh the store every minute.
-    const newlyStale = stale.some(
+    const newlyStale = due.some(
       (row) => row.confirmedAt && row.confirmedAt.getTime() >= cutoff.getTime() - STALE_NEWS_MS,
     );
+    await this.repriceStaleProducts(
+      db,
+      due.map((row) => row.productId),
+      newlyStale,
+      now,
+    );
+    for (const row of due) this.repricedOnStale.set(row.productId, seen(row));
+  }
+
+  private async repriceStaleProducts(
+    db: Executor,
+    productIds: string[],
+    newlyStale: boolean,
+    now: Date,
+  ): Promise<void> {
     await db.transaction(async (tx) => {
       const repriced = await repriceProducts(tx, {
-        productIds: stale.map((row) => row.productId),
+        productIds,
         cause: 'route_change',
         context: { now, fakeEnabled: this.env.SUPPLIER_FAKE_ENABLED },
       });

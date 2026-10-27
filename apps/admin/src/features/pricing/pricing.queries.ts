@@ -57,7 +57,8 @@ export const rulesQuery = listRulesQuery();
 export const previewQuery = (body: PricingPreviewRequest | null) =>
   queryOptions({
     queryKey: ['pricing', 'preview', body],
-    queryFn: () => call(api.POST('/api/admin/pricing/preview', { body: body as PricingPreviewRequest })),
+    queryFn: () =>
+      call(api.POST('/api/admin/pricing/preview', { body: body as PricingPreviewRequest })),
     enabled: body !== null,
     placeholderData: keepPreviousData,
   });

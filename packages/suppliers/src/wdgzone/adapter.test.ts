@@ -822,10 +822,11 @@ describe('WdgzoneAdapter getOrder', () => {
       supplierCode: 'ORDER_REFUNDED',
       reason: 'Failed and refunded by WDGZone',
     });
+    // Audit A05-18: a 410 without WDG's body (a proxy, an error page) refunds nothing.
     server.reply({ status: 410, body: '' });
-    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toMatchObject({
-      supplierCode: 'ORDER_FAILED',
-    });
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toMatchObject({ status: 'unknown' });
+    server.reply({ status: 410, body: '<html>Gone</html>' });
+    expect(await adapter().getOrder(ATTEMPT_ID, placed)).toMatchObject({ status: 'unknown' });
   });
 
   it.each([

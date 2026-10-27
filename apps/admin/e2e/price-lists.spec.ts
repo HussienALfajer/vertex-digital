@@ -115,7 +115,7 @@ test.describe('price lists', () => {
     await expect(row).not.toContainText('$0.89');
   });
 
-  test("a matrix cell whose rules fail to load says so in its dialog, with a retry (A05-9)", async ({
+  test('a matrix cell whose rules fail to load says so in its dialog, with a retry (A05-9)', async ({
     page,
     admin,
   }) => {
@@ -132,7 +132,9 @@ test.describe('price lists', () => {
     await page.goto(`/pricing/matrix?gameId=${game.id}`);
     await page
       .getByRole('button', {
-        name: ar.pricing.matrix.openCell.replace('{{list}}', 'الجملة').replace('{{product}}', '60 UC'),
+        name: ar.pricing.matrix.openCell
+          .replace('{{list}}', 'الجملة')
+          .replace('{{product}}', '60 UC'),
       })
       .click();
     const dialog = page.getByRole('dialog');
@@ -168,6 +170,72 @@ test.describe('price lists', () => {
     await result.getByRole('button', { name: ar.common.retry }).click();
     await page.getByRole('dialog').getByLabel(ar.pricing.fixed.price, { exact: true }).fill('1.5');
     await expect(result).toContainText('$1.50');
+  });
+
+  test('archiving a list a merchant level holds names the levels (A05-40)', async ({
+    page,
+    admin,
+  }) => {
+    seed(admin);
+    const vip = admin.priceLists.addList('VIP', ROOT_PRICE_LIST_IDS.wholesale, 300);
+    admin.priceLists.levelsOn.set(vip.id, 1);
+    await page.goto('/pricing/lists');
+    await page
+      .getByRole('row', { name: /VIP/ })
+      .getByRole('button', { name: ar.pricing.actions.archive })
+      .click();
+    const dialog = page.getByRole('alertdialog');
+    await dialog.getByRole('button', { name: ar.pricing.actions.archive }).click();
+    await expect(dialog).toContainText(
+      ar.pricing.lists.inUse
+        .replace('{{accounts}}', '0')
+        .replace('{{children}}', '0')
+        .replace('{{levels}}', '1'),
+    );
+  });
+
+  test('a taken list name is refused under the name field, focused (A05-41, A05-42)', async ({
+    page,
+    admin,
+  }) => {
+    seed(admin);
+    admin.priceLists.addList('VIP', ROOT_PRICE_LIST_IDS.wholesale, 300);
+    await page.goto('/pricing/lists');
+    await page.getByRole('button', { name: ar.pricing.lists.create }).click();
+    const dialog = page.getByRole('dialog');
+    const name = dialog.getByLabel(ar.pricing.lists.columns.name, { exact: true });
+    await name.fill('VIP');
+    await choose(page, ar.pricing.lists.columns.parent, 'الجملة');
+    await dialog.getByRole('button', { name: ar.pricing.lists.save }).click();
+    await expect(dialog.getByText(ar.errors.api.PRICE_LIST_NAME_TAKEN)).toBeVisible();
+    await expect(name).toBeFocused();
+  });
+
+  test("a matrix cell's name carries its price, and the lists' failed read a retry (A05-39, A05-36)", async ({
+    page,
+    admin,
+  }) => {
+    const { game } = seed(admin);
+    let fail = true;
+    await page.route('**/api/admin/pricing/lists', (route) =>
+      fail
+        ? route.fulfill({
+            status: 500,
+            json: { statusCode: 500, code: 'INTERNAL_ERROR', message: 'x' },
+          })
+        : route.fallback(),
+    );
+    await page.goto(`/pricing/matrix?gameId=${game.id}`);
+    await expect(page.getByText(ar.errors.generic)).toBeVisible();
+    fail = false;
+    await page.getByRole('button', { name: ar.common.retry }).click();
+    await expect(page.getByRole('checkbox', { name: 'الجملة' })).toBeVisible();
+    const cell = page.getByRole('button', {
+      name: ar.pricing.matrix.openCell
+        .replace('{{product}}', '60 UC')
+        .replace('{{list}}', 'الجملة'),
+    });
+    await expect(cell).toHaveAccessibleName(/\$0\.93/);
   });
 
   test('assigns the cost list from the profile (AT2)', async ({ page, admin }) => {

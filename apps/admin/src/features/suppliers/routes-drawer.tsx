@@ -52,6 +52,7 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { FormAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import { formatDateTime, formatSince, ltr } from '../../lib/format';
@@ -705,7 +706,7 @@ function PriceHistory({ productId }: { productId: string }) {
         {t('suppliers.prices.title')}
       </h3>
       {prices.isPending && <Skeleton className="h-32 w-full" aria-hidden="true" />}
-      {prices.isError && <FormAlert>{errorMessage(t, prices.error)}</FormAlert>}
+      {prices.isError && <ReadFailure error={prices.error} onRetry={() => prices.refetch()} />}
       {prices.isSuccess &&
         (prices.data.items.length === 0 ? (
           <EmptyState icon={<HistoryIcon />} title={t('suppliers.prices.empty')} />

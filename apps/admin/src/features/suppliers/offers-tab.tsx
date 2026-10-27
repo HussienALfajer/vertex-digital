@@ -40,7 +40,7 @@ import {
   SearchIcon,
   XIcon,
 } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
 import { errorMessage } from '../../lib/errors';
@@ -108,7 +108,14 @@ export function OffersBrowser({
     (name) => name !== 'page' && !(categoryId && name === 'categoryId'),
   );
   const page = search.page ?? 1;
-  const pageCount = Math.max(1, Math.ceil((offers.data?.total ?? 0) / LIST_PAGE_SIZE));
+  const total = offers.data?.total;
+  const pageCount = Math.max(1, Math.ceil((total ?? 0) / LIST_PAGE_SIZE));
+  // A page past the end (its last offers imported, an old link) shows the last page (A05-26).
+  useEffect(() => {
+    if (total !== undefined && total > 0 && page > pageCount) {
+      onSearch({ ...search, page: pageCount > 1 ? pageCount : undefined });
+    }
+  }, [total, page, pageCount, search, onSearch]);
 
   const set = (next: OfferSearch) => onSearch({ ...search, ...next, page: undefined });
   const selectable = (offer: SupplierOffer) =>

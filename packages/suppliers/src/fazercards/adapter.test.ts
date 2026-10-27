@@ -256,6 +256,30 @@ describe('FazercardsAdapter catalog (FC3, FC4)', () => {
     expect(new Set(offers.map((o) => o.categoryId))).toEqual(new Set(['topup.free_fire_mena']));
   });
 
+  it("counts a 404 as empty only in FazerCards' words (audit A05-19)", async () => {
+    server.reply(
+      { status: 404, body: '<html>Not Found</html>' },
+      { body: fixture('topup-offers-free-fire') },
+    );
+    const { readCategoryIds } = await adapter().listOffersIn([
+      'topup.gone',
+      'topup.free_fire_mena',
+    ]);
+    expect(readCategoryIds).toEqual(['topup.free_fire_mena']);
+  });
+
+  it('stops at the first category refused for the plan (audit A05-14)', async () => {
+    const before = server.requests.length;
+    server.reply({
+      status: 403,
+      body: { ok: false, error: 'Subscription inactive', code: 'subscription_inactive' },
+    });
+    await expect(adapter().listOffersIn(['topup.a', 'topup.b', 'topup.c'])).rejects.toMatchObject({
+      details: { status: 403, supplierCode: 'subscription_inactive' },
+    });
+    expect(server.requests.length - before).toBe(1);
+  });
+
   it('throws when every category failed, and answers nothing for no category', async () => {
     server.reply({ status: 503, body: { ok: false } });
     await expect(adapter().listOffersIn(['topup.a', 'topup.b'])).rejects.toBeInstanceOf(
@@ -693,6 +717,15 @@ describe('FazercardsAdapter orders (FC5, FC6)', () => {
       status: 'unknown',
       failure: 'timeout',
     });
+  });
+
+  it("reads a completed gift card's codes when the poll's reply names no kind (A05-21)", async () => {
+    server.reply({
+      body: { ok: true, order: { id: 'ord-104', status: 'completed', cards: ['TEST-CODE-0003'] } },
+    });
+    expect(
+      await adapter().getOrder(ATTEMPT_ID, { supplierOrderId: 'ord-104', quantity: 1 }),
+    ).toMatchObject({ status: 'delivered', codes: ['TEST-CODE-0003'] });
   });
 
   it('polls by ord-N: processing, completed with codes, refunded, not found', async () => {

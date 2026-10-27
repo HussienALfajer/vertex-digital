@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type PriceList, priceListNameSchema } from '@vertex-digital/contracts';
+import {
+  PRICE_LIST_MAX_DEPTH,
+  type PriceList,
+  priceListNameSchema,
+} from '@vertex-digital/contracts';
 import {
   Badge,
   Button,
@@ -24,6 +28,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  useFocusInvalid,
 } from '@vertex-digital/ui';
 import { ListIcon } from 'lucide-react';
 import { type FormEvent, useId, useState } from 'react';
@@ -163,7 +168,11 @@ export function PriceListsPage() {
       <Dialog open={creating} onOpenChange={setCreating}>
         {creating && lists.data && (
           <ListNameDialog
-            parents={lists.data.filter((list) => list.archivedAt === null && list.ready)}
+            // A child sits one level below its parent: lists at the depth limit take none (A05-41).
+            parents={lists.data.filter(
+              (list) =>
+                list.archivedAt === null && list.ready && list.chain.length < PRICE_LIST_MAX_DEPTH,
+            )}
             onDone={() => setCreating(false)}
           />
         )}
@@ -184,8 +193,9 @@ export function PriceListsPage() {
         }}
         describeFailure={(error) => {
           if (!(error instanceof ApiError) || error.code !== 'PRICE_LIST_IN_USE') return undefined;
-          const details = error.details as { accounts: number; children: number };
-          return t('pricing.lists.inUse', details);
+          // S21 LV6: a merchant level may hold the list too (audit A05-40).
+          const details = error.details as { accounts: number; children: number; levels?: number };
+          return t('pricing.lists.inUse', { levels: 0, ...details });
         }}
       />
     </>
@@ -208,22 +218,34 @@ function ListNameDialog({
   const rename = useRenamePriceList();
   const [name, setName] = useState(list?.name ?? '');
   const [parentId, setParentId] = useState<string | null>(null);
-  const [invalid, setInvalid] = useState<'name' | 'parent' | null>(null);
+  const [invalid, setInvalid] = useState<'name' | 'taken' | 'parent' | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const { ref, focusInvalid } = useFocusInvalid();
   const pending = create.isPending || rename.isPending;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFailure(null);
     const parsed = priceListNameSchema.safeParse(name);
-    if (!parsed.success) return setInvalid('name');
-    if (!list && !parentId) return setInvalid('parent');
+    if (!parsed.success) {
+      setInvalid('name');
+      return focusInvalid();
+    }
+    if (!list && !parentId) {
+      setInvalid('parent');
+      return focusInvalid();
+    }
     setInvalid(null);
     try {
       if (list) await rename.mutateAsync({ id: list.id, name: parsed.data });
       else await create.mutateAsync({ name: parsed.data, parentListId: parentId as string });
       onDone();
     } catch (error) {
+      // A taken name is said under the name field (audit A05-41).
+      if (error instanceof ApiError && error.code === 'PRICE_LIST_NAME_TAKEN') {
+        setInvalid('taken');
+        return focusInvalid();
+      }
       setFailure(errorMessage(t, error));
     }
   }
@@ -238,8 +260,8 @@ function ListNameDialog({
           {list ? t('pricing.lists.renameHint') : t('pricing.lists.createHint')}
         </DialogDescription>
       </DialogHeader>
-      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
-        <Field invalid={invalid === 'name'}>
+      <form ref={ref} className="flex flex-col gap-4" onSubmit={submit} noValidate>
+        <Field invalid={invalid === 'name' || invalid === 'taken'}>
           <FieldLabel>{t('pricing.lists.columns.name')}</FieldLabel>
           <Input
             name="name"
@@ -248,6 +270,9 @@ function ListNameDialog({
             onChange={(event) => setName(event.target.value)}
           />
           <FieldError match={invalid === 'name'}>{t('pricing.lists.nameInvalid')}</FieldError>
+          <FieldError match={invalid === 'taken'}>
+            {t('errors.api.PRICE_LIST_NAME_TAKEN')}
+          </FieldError>
         </Field>
         {!list && (
           <Field invalid={invalid === 'parent'}>

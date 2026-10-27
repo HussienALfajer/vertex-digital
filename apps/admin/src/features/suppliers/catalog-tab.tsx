@@ -335,6 +335,18 @@ function SearchResults({
     );
   }
   if (results.data.items.length === 0) {
+    // A page past the end: back to the last one (audit A05-26).
+    if (results.data.total > 0 && page > 1) {
+      const last = Math.max(1, Math.ceil(results.data.total / CATEGORY_PAGE_SIZE));
+      return (
+        <div className="flex flex-col items-start gap-3">
+          <EmptyState icon={<FolderTreeIcon />} title={t('suppliers.catalog.noMatch')} />
+          <Button variant="outline" onClick={() => onPage(last)}>
+            {t('suppliers.catalog.lastPage')}
+          </Button>
+        </div>
+      );
+    }
     return <EmptyState icon={<FolderTreeIcon />} title={t('suppliers.catalog.noMatch')} />;
   }
   return (

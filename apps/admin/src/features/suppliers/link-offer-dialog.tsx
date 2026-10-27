@@ -16,8 +16,7 @@ import {
 import { SearchIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormAlert } from '../../components/form-alert';
-import { errorMessage } from '../../lib/errors';
+import { ReadFailure } from '../../components/read-failure';
 import { gameQuery } from '../catalog/catalog.queries';
 import { AddRouteDialog } from './add-route-dialog';
 import { linkCandidatesQuery } from './suppliers.queries';
@@ -80,8 +79,10 @@ export function LinkOfferDialog({ offer, onDone }: { offer: SupplierOffer; onDon
           </TipButton>
         </form>
         {candidates.isPending && <Skeleton className="h-40 w-full" />}
-        {candidates.isError && <FormAlert>{errorMessage(t, candidates.error)}</FormAlert>}
-        {game.isError && <FormAlert>{errorMessage(t, game.error)}</FormAlert>}
+        {candidates.isError && (
+          <ReadFailure error={candidates.error} onRetry={() => candidates.refetch()} />
+        )}
+        {game.isError && <ReadFailure error={game.error} onRetry={() => game.refetch()} />}
         {candidates.isSuccess &&
           (candidates.data.length === 0 ? (
             <p className="text-sm text-muted-foreground">

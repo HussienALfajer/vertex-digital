@@ -32,6 +32,7 @@ import {
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormAlert } from '../../components/form-alert';
+import { ReadFailure } from '../../components/read-failure';
 import { ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/errors';
 import {
@@ -183,6 +184,8 @@ export function AddRouteDialog({
             <FieldLabel>{t('suppliers.routes.supplier')}</FieldLabel>
             {suppliers.isPending ? (
               <Skeleton className="h-10 w-full" />
+            ) : suppliers.isError ? (
+              <ReadFailure error={suppliers.error} onRetry={() => suppliers.refetch()} />
             ) : (
               <Select
                 items={supplierItems}
@@ -224,16 +227,27 @@ export function AddRouteDialog({
               </Button>
             </form>
             {offers.isPending && <Skeleton className="h-32 w-full" />}
-            {offers.isError && <FormAlert>{errorMessage(t, offers.error)}</FormAlert>}
+            {offers.isError && (
+              <ReadFailure error={offers.error} onRetry={() => offers.refetch()} />
+            )}
             {offers.isSuccess &&
               (offers.data.items.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t('suppliers.routes.noOffers')}</p>
               ) : (
-                <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+                // Audit A05-25: the previous search's or supplier's offers stay while the next
+                // load, dimmed and not choosable.
+                <ul
+                  className={cn(
+                    'flex max-h-64 flex-col gap-1 overflow-y-auto',
+                    offers.isPlaceholderData && 'opacity-60',
+                  )}
+                  aria-busy={offers.isPlaceholderData}
+                >
                   {offers.data.items.map((item) => (
                     <li key={item.id}>
                       <button
                         type="button"
+                        disabled={offers.isPlaceholderData}
                         aria-pressed={offer?.id === item.id}
                         onClick={() => choose(item)}
                         className={cn(

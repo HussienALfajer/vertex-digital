@@ -109,10 +109,15 @@ export function CategoryChangeDialog({
     <ConfirmDialog
       open
       onClose={onClose}
-      title={t(kind === 'unlink' ? 'suppliers.gameLinks.unlinkTitle' : 'suppliers.catalog.ignoreTitle')}
-      body={t(kind === 'unlink' ? 'suppliers.gameLinks.unlinkBody' : 'suppliers.catalog.ignoreBody', {
-        name: node.name,
-      })}
+      title={t(
+        kind === 'unlink' ? 'suppliers.gameLinks.unlinkTitle' : 'suppliers.catalog.ignoreTitle',
+      )}
+      body={t(
+        kind === 'unlink' ? 'suppliers.gameLinks.unlinkBody' : 'suppliers.catalog.ignoreBody',
+        {
+          name: node.name,
+        },
+      )}
       action={t(`suppliers.catalog.${kind}`)}
       destructive={kind === 'unlink'}
       pending={change.isPending}

@@ -129,7 +129,8 @@ const registry = {
 } as unknown as SupplierRegistry;
 
 const sync = new SupplierSyncJob(pgBoss, registry, db, env);
-const health = new SupplierHealthJob(pgBoss, registry, db, env);
+// A new one per test: it remembers what it repriced (audit A05-17), which a rollback undoes.
+let health = new SupplierHealthJob(pgBoss, registry, db, env);
 const balances = new SupplierBalancesJob(pgBoss, registry, db, env);
 const schedule = new SupplierSyncScheduleJob(pgBoss, db, env);
 
@@ -199,6 +200,7 @@ async function isolated(work: (tx: Transaction) => Promise<void>): Promise<void>
   const rollback = new Error('rollback');
   await expect(
     db.transaction(async (tx) => {
+      health = new SupplierHealthJob(pgBoss, registry, db, env);
       await prepare(tx);
       await work(tx);
       throw rollback;
@@ -631,7 +633,6 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
         expect(alerts[0]?.dedupeKey).toBe(`sync-failing:fake:${failed[0]?.id}`);
         expect(alerts[0]?.params).toMatchObject({ reason: 'runs_failed', failedRuns: 3 });
 
-
         // A definitive refusal is `refused`, its code kept.
         current = {
           listOffers: async () => {
@@ -722,13 +723,28 @@ describe('suppliers.sync (rules SY1–SY4)', () => {
       });
       expect(await sync.sync(payload({ runId: running?.id }), tx)).toBeNull();
 
+      // Audit A05-16: a run reading for 16 minutes (WDG's longest is 15) is still running.
+      const [slow] = await tx
+        .insert(supplierSyncRuns)
+        .values({
+          id: newId(),
+          supplierId: ids.fake,
+          trigger: 'schedule',
+          startedAt: new Date(Date.now() - 16 * 60_000),
+        })
+        .returning();
+      expect(await sync.sync(payload(), tx)).toBeNull();
+      await tx
+        .update(supplierSyncRuns)
+        .set({ status: 'succeeded', finishedAt: new Date() })
+        .where(eq(supplierSyncRuns.id, slow?.id as string));
       const [lost] = await tx
         .insert(supplierSyncRuns)
         .values({
           id: newId(),
           supplierId: ids.fake,
           trigger: 'schedule',
-          startedAt: new Date(Date.now() - 11 * 60_000),
+          startedAt: new Date(Date.now() - 31 * 60_000),
         })
         .returning();
       expect(await sync.sync(payload(), tx)).toMatchObject({ status: 'succeeded' });
@@ -1495,7 +1511,11 @@ describe('suppliers.health (rules H1–H4, SY5)', () => {
       });
       expect(sent.some((job) => job.queue === QUEUES.storeRevalidate)).toBe(true);
       sent.length = 0;
+      // Audit A05-17: the product left on its stale cost is not locked and repriced again.
+      const relocked = vi.spyOn(health as never, 'repriceStaleProducts' as never);
       await health.check(new Date(), tx);
+      expect(relocked).not.toHaveBeenCalled();
+      relocked.mockRestore();
       expect(await messages(tx, 'supplier_sync_failing')).toHaveLength(1);
       // S09 rule SF4: costs stale for long and nothing repriced: the store is not refreshed again,
       // until a cost goes stale anew.

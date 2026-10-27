@@ -252,7 +252,11 @@ export function ReviewsPage({
           )
         ) : (
           <>
-            <Table>
+            {/* Audit A05-37: the previous page's rows stay while the next load, dimmed. */}
+            <Table
+              className={reviews.isPlaceholderData ? 'opacity-60' : undefined}
+              aria-busy={reviews.isPlaceholderData}
+            >
               <TableHeader>
                 <TableRow>
                   {open && (
@@ -368,15 +372,25 @@ export function ReviewsPage({
                         <span className="flex flex-col items-stretch gap-1">
                           <Button
                             size="sm"
-                            disabled={decide.isPending}
+                            disabled={decide.isPending || reviews.isPlaceholderData}
                             onClick={() => setAccepting([review])}
                           >
                             {t('pricing.reviews.accept')}
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => setAdjusting(review)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={reviews.isPlaceholderData}
+                            onClick={() => setAdjusting(review)}
+                          >
                             {t('pricing.reviews.adjust')}
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setPausing(review)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={reviews.isPlaceholderData}
+                            onClick={() => setPausing(review)}
+                          >
                             {t('pricing.reviews.pause')}
                           </Button>
                         </span>

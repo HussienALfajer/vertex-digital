@@ -34,7 +34,12 @@ import { notSupported, outcomeOfOrderError, SupplierError } from '../core/errors
 import { verifyHmacSignature } from '../core/hmac.js';
 import { SupplierHttp, type SupplierRequest } from '../core/http.js';
 import { fetchImageFromHosts, imageUrlAllowed } from '../core/image.js';
-import { FZR_DEFINITIVE_ORDER_CODES, FZR_SUBSCRIPTION_INACTIVE, fzrErrorCode } from './errors.js';
+import {
+  FZR_DEFINITIVE_ORDER_CODES,
+  FZR_SUBSCRIPTION_INACTIVE,
+  fzrCategoryErrorCode,
+  fzrErrorCode,
+} from './errors.js';
 import {
   balanceReplySchema,
   categoriesPageSchema,
@@ -211,7 +216,11 @@ export class FazercardsAdapter implements SupplierAdapter {
         offers.push(...(await this.categoryOffers(parts)));
         readCategoryIds.push(categoryId);
       } catch (error) {
-        if (error instanceof SupplierError && error.details.status === 404) {
+        if (!(error instanceof SupplierError)) throw error;
+        // A refused key or plan refuses every category: stop at the first (audit A05-14).
+        if (error.details.status === 401 || error.details.status === 403) throw error;
+        // FazerCards' own 404 is a category it no longer knows; a gateway's is a failure (A05-19).
+        if (error.details.status === 404 && error.details.supplierCode !== undefined) {
           readCategoryIds.push(categoryId);
         } else {
           failure = error;
@@ -229,7 +238,7 @@ export class FazercardsAdapter implements SupplierAdapter {
         method: 'GET',
         path: `topups/offers?${query}`,
         schema: topupOffersReplySchema,
-        errorCode: fzrErrorCode,
+        errorCode: fzrCategoryErrorCode,
       });
       const fields = fieldSpecsOf(reply.fields ?? []);
       const name = reply.name?.trim().slice(0, 200) || parts.id;
@@ -264,7 +273,7 @@ export class FazercardsAdapter implements SupplierAdapter {
       method: 'GET',
       path: `giftcards/cards?${query}`,
       schema: giftCardsReplySchema,
-      errorCode: fzrErrorCode,
+      errorCode: fzrCategoryErrorCode,
     });
     const name = reply.name?.trim().slice(0, 200) || parts.id;
     return reply.offers.flatMap((item): SupplierOffer[] => {
@@ -644,7 +653,9 @@ export class FazercardsAdapter implements SupplierAdapter {
         schema: orderReplySchema,
         errorCode: fzrErrorCode,
       });
-      return orderOutcome(reply.order, placed.quantity, reply.order.kind === 'gift_card');
+      // A gift card by its kind, or by the codes it carries when the kind is left out (A05-21).
+      const gift = reply.order.kind === 'gift_card' || (reply.order.cards?.length ?? 0) > 0;
+      return orderOutcome(reply.order, placed.quantity, gift);
     } catch (error) {
       // No poll refusal is definitive: the order may exist whatever the reply says.
       const outcome = outcomeOfOrderError(error);
