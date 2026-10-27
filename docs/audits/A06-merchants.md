@@ -1,6 +1,6 @@
 # A06 Merchants
 
-Status: merged (PR pending its number)
+Status: merged (PR [#190](https://github.com/HussienALfajer/vertex-digital/pull/190))
 Branch: fix/audit-a06-merchants · Started: 2026-10-27 · Specs: S20 (merchants), S21 · ADRs: 0035, 0036
 
 ## Scope
