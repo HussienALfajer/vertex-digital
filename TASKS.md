@@ -10,7 +10,7 @@ Plan `docs/audits/README.md`, report `docs/audits/A04-orders.md`. Specs S08, S10
 - [x] Re-test live with screenshots
 - [x] `pnpm verify` (checker) and the reviewer; findings fixed (the repricing kept in the outcome's transaction with a deadlock retry; `/orders/new` never shows the previous customer)
 - [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
-- [ ] Deploy, production smoke test, README `deployed`
+- [x] Deploy, production smoke test, README `deployed`
 
 # TASKS — Audit A03 Catalog and storefront (branch `fix/audit-a03-catalog`)
 

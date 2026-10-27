@@ -15,7 +15,7 @@ In a new session (Opus, effort `high`), the owner writes one line, for example "
 | A01 | Identity and access | deployed | [A01-identity.md](A01-identity.md) | [#177](https://github.com/HussienALfajer/vertex-digital/pull/177) | `097b869` (2026-10-27) |
 | A02 | Wallet, ledger and deposits | deployed | [A02-wallet.md](A02-wallet.md) | [#178](https://github.com/HussienALfajer/vertex-digital/pull/178) | `610a388` (2026-10-27) |
 | A03 | Catalog and storefront | deployed | [A03-catalog.md](A03-catalog.md) | [#180](https://github.com/HussienALfajer/vertex-digital/pull/180) | `788f309` (2026-10-27) |
-| A04 | Purchase, orders and fulfilment | merged | [A04-orders.md](A04-orders.md) | [#182](https://github.com/HussienALfajer/vertex-digital/pull/182) | |
+| A04 | Purchase, orders and fulfilment | deployed | [A04-orders.md](A04-orders.md) | [#182](https://github.com/HussienALfajer/vertex-digital/pull/182) | `7914ca2` (2026-10-27) |
 | A05 | Suppliers and pricing | not started | | | |
 | A06 | Merchants | not started | | | |
 | A07 | Customers, support and notifications | not started | | | |
@@ -75,7 +75,7 @@ Each group owns its screens and everything behind them: API modules, worker jobs
 - **DB:** `suppliers.ts`, `pricing.ts`, `price-lists.ts`.
 - **Specs and ADRs:** S06 (pricing), S07, S16, S17, S18, S19, S20 (price lists); ADR 0005, 0020, 0021, 0030–0035.
 - **E2E:** admin `suppliers`, `supplier-catalog`, `supplier-fields`, `pricing`, `price-lists`.
-- **Known leads:** a literal NUL byte in `suppliers/category-page.tsx:91` (git treats the file as binary); category unlink and ignore, route archive, enable and priority, and review accept (single and bulk) run with no confirmation (`catalog-tab.tsx:469`, `category-page.tsx:198`, `routes-drawer.tsx:375-418`, `reviews-page.tsx:209,364`); content rendered outside `DialogContent` (`matrix-page.tsx:234`, `reviews-page.tsx:454-457`); the price preview posts on every keystroke (`pricing.queries.ts:57-63`); `as never` casts in the pricing and supplier queries; USD amounts without `ltr()` (`connection-tab.tsx:513`, `routes-drawer.tsx:234`); from A03: the supplier import sets `catalog_products.game_amount` from pack names, which gave PUBG Mobile's subscriptions, passes, offers and WOW coins an amount the calculator read as UC (A03-1, fixed in the data).
+- **Known leads:** FazerCards' sync fails with HTTP 403 `subscription_inactive` on `list_categories` and `list_offers` every 15 minutes in production (worker log, 2026-10-27, A04 deploy): the account's subscription or the stored key needs the owner, and the failed syncs raise no visible alert; a literal NUL byte in `suppliers/category-page.tsx:91` (git treats the file as binary); category unlink and ignore, route archive, enable and priority, and review accept (single and bulk) run with no confirmation (`catalog-tab.tsx:469`, `category-page.tsx:198`, `routes-drawer.tsx:375-418`, `reviews-page.tsx:209,364`); content rendered outside `DialogContent` (`matrix-page.tsx:234`, `reviews-page.tsx:454-457`); the price preview posts on every keystroke (`pricing.queries.ts:57-63`); `as never` casts in the pricing and supplier queries; USD amounts without `ltr()` (`connection-tab.tsx:513`, `routes-drawer.tsx:234`); from A03: the supplier import sets `catalog_products.game_amount` from pack names, which gave PUBG Mobile's subscriptions, passes, offers and WOW coins an amount the calculator read as UC (A03-1, fixed in the data).
 
 ### A06 Merchants
 - **Store:** `/merchant` and its tabs (dashboard, `pos`, `bulk`, `prices`, `price-list`, `statements`, `statements/[month]`, `alerts`, `receipt`), the two print pages, `/merchant-terms`, `/account/merchant`.
@@ -93,7 +93,7 @@ Each group owns its screens and everything behind them: API modules, worker jobs
 - **DB:** `customers.ts`, `support.ts`, `notifications.ts`, `telegram.ts`.
 - **Specs and ADRs:** S05 (bot, notifications), S12, S15 (web push); ADR 0019, 0026, 0029.
 - **E2E:** store `notifications`, `push`, `support`; admin `customers`, `support`, `telegram`.
-- **Known leads:** ticket picker errors are plain `<p>` instead of `FieldError` (`new-ticket-page.tsx:208,223`); no merchant-applications badge in the sidebar although the dashboard raises it.
+- **Known leads:** the buy box subscribes to the notification stream for a signed-out visitor too (`purchase/customer.ts:31`, `notifications/live.ts:34`): the stream answers 401 and is opened again every 5 s, doubling up to a minute, for as long as a game page is open (A04 production smoke test); ticket picker errors are plain `<p>` instead of `FieldError` (`new-ticket-page.tsx:208,223`); no merchant-applications badge in the sidebar although the dashboard raises it.
 
 ### A08 Content
 - **Store:** `/about`, `/faq`, `/terms`, `/privacy`, `/refund`, the announcement bar, home banners, live activity.
