@@ -60,24 +60,7 @@
       "Bash(gh run list*)",
       "Bash(gh run view*)"
     ],
-    "ask": [
-      "Bash(git push origin main*)",
-      "Bash(git push -u origin main*)",
-      "Bash(pnpm add *)",
-      "Bash(pnpm remove *)",
-      "Bash(pnpm db:migrate*)",
-      "Bash(pnpm db:setup-local*)",
-      "Bash(*supplier:smoke*)",
-      "Bash(gh repo create*)"
-    ],
     "deny": [
-      "Read(**/.env)",
-      "Read(**/.env.local)",
-      "Read(**/.env.*.local)",
-      "Read(**/.env.development)",
-      "Read(**/.env.production)",
-      "Read(**/.env.test)",
-      "Edit(**/.env)",
       "Read(./brand/fonts/private/**)",
       "Read(./.data/**)",
       "Read(./pnpm-lock.yaml)",

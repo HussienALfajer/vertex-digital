@@ -21,7 +21,7 @@
 - `/db-migration`: change the schema, generate and review the migration, test it.
 - `/audit-group <A01…A10>`: run one group of the comprehensive audit (`docs/audits/README.md`): map, audit every dimension, live browser test, fix every finding with a regression test, reviewer, PR with auto-merge, production deploy. The owner may also just write "ابدأ المجموعة A02".
 - `/supplier-adapter <supplier>`: add or change a supplier adapter in `packages/suppliers` with recorded fixtures, error mapping and webhook verification.
-- There is no shipping skill: every task ends by opening its PR with auto-merge right away, following "Finishing a task" in `AGENTS.md`. In the desktop app, turn on the PR's Auto-fix afterwards, so a failing CI run comes back to the session to fix.
+- There is no shipping skill: every task ends by opening its PR with auto-merge right away, following "Finishing a task" in `AGENTS.md`. In the desktop app, turn on the PR's Auto-fix right after opening it, without asking (the owner's standing approval, 2026-10-27), so a failing CI run, a conflict or a review comment comes back to the session to fix.
 
 ## Context hygiene
 
