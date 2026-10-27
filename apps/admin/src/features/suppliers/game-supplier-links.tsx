@@ -6,7 +6,7 @@ import type {
   SupplierCategoryNode,
   SupplierCode,
 } from '@vertex-digital/contracts';
-import { Badge, Button, Card } from '@vertex-digital/ui';
+import { Badge, Button, Card, Skeleton } from '@vertex-digital/ui';
 import { ImageDownIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,7 +34,15 @@ export function GameSupplierLinks({ game }: { game: GameDetail }) {
         </div>
         {game.archivedAt === null && <ActivateAllButton gameId={game.id} variant="outline" />}
       </div>
-      {linked.isError && <FormAlert>{errorMessage(t, linked.error)}</FormAlert>}
+      {linked.isPending && <Skeleton className="h-12 w-full" aria-hidden="true" />}
+      {linked.isError && (
+        <div className="flex flex-col items-start gap-2">
+          <FormAlert>{errorMessage(t, linked.error)}</FormAlert>
+          <Button variant="outline" size="sm" onClick={() => void linked.refetch()}>
+            {t('common.retry')}
+          </Button>
+        </div>
+      )}
       {linked.isSuccess &&
         (linked.data.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('suppliers.gameLinks.none')}</p>
@@ -106,9 +114,12 @@ function UnlinkDialog({ node, onClose }: { node: SupplierCategoryNode; onClose: 
 export function SupplierCoverButton({
   gameId,
   onCover,
+  onPendingChange,
 }: {
   gameId: string;
   onCover: (cover: CatalogImage | null) => void;
+  /** The form's Save waits meanwhile, or it would save the cover this replaces (audit A03-20). */
+  onPendingChange: (pending: boolean) => void;
 }) {
   const { t } = useTranslation();
   const linked = useQuery(gameCategoriesQuery(gameId));
@@ -126,6 +137,7 @@ export function SupplierCoverButton({
   async function use(source: SupplierCategoryNode) {
     setFailure(null);
     setPending(source.supplierCode);
+    onPendingChange(true);
     try {
       const game = await cover.mutateAsync({
         supplier: source.supplierCode,
@@ -136,6 +148,7 @@ export function SupplierCoverButton({
       setFailure(errorMessage(t, error));
     } finally {
       setPending(null);
+      onPendingChange(false);
     }
   }
 

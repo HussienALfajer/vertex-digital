@@ -134,6 +134,17 @@ server {
         include snippets/vertexdigital-proxy.conf;
     }
 
+    # The public whole-catalog reads the browser makes (S09 SR2: the search dialog and the cart's
+    # price check; the storefront), each computing every pack's routing: a zone of their own, in
+    # place of the general one here and tighter (audit A03-4). The store's server reads them on
+    # 127.0.0.1, not through here.
+    location ~* ^/api/catalog/(?:storefront|search-index)/?$ {
+        limit_req zone=vdcatalog burst=30 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3060;
+        include snippets/vertexdigital-proxy.conf;
+    }
+
     # Code reveals (S08 rule C2), on top of the API's per-customer counter.
     location ~* "^/api/orders/[0-9a-f-]{36}/codes/[0-9a-f-]{36}/reveal/?$" {
         limit_req zone=vdreveal burst=10 nodelay;

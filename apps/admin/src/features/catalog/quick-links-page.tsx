@@ -122,6 +122,12 @@ export function QuickLinksPage({
             ))}
           </TabsList>
         </Tabs>
+        {search.productId && rows[0] && (
+          // The pack the page is filtered to (audit A03-21).
+          <span className="text-sm text-muted-foreground">
+            {t('catalog.quickLinks.filteredBy', { name: rows[0].productNameAr })}
+          </span>
+        )}
         {search.productId && (
           <Button
             variant="outline"

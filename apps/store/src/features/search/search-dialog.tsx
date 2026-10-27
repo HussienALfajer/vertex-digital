@@ -82,15 +82,17 @@ export function SearchDialog({
   useEffect(() => {
     if (!open) return;
     setPlayers(null);
+    let live = true;
     void readSession().then(async (session) => {
-      if (!session || session.user.emailVerified === false) return;
+      if (!live || !session || session.user.emailVerified === false) return;
       document.documentElement.setAttribute('data-private-prices-hint', '');
       const [account, saved] = await Promise.all([
         apiRequest<{ priceKind: string }>('/api/account'),
         listSavedPlayers(),
       ]);
       rememberPrivatePrices(!account.ok || account.data.priceKind !== 'retail');
-      if (saved.ok) {
+      // A closed dialog keeps no late answer (audit A03-31).
+      if (live && saved.ok) {
         setPlayers(
           saved.data.items
             .filter((item) => item.gameShown)
@@ -98,12 +100,19 @@ export function SearchDialog({
         );
       }
     });
+    return () => {
+      live = false;
+    };
   }, [open]);
 
+  // A failed read is tried again on the retry button or the next open (audit A03-8).
+  const [attempt, setAttempt] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` asks for the read again.
   useEffect(() => {
     if (!open) return;
     setRecent(readRecentSearches());
     if (cachedIndex && Date.now() - cachedAt < INDEX_FRESH_MS) return;
+    if (!cachedIndex) setState({ status: 'loading' });
     let live = true;
     void getSearchIndex().then((result) => {
       if (!live) return;
@@ -118,7 +127,7 @@ export function SearchDialog({
     return () => {
       live = false;
     };
-  }, [open]);
+  }, [open, attempt]);
 
   const results = useMemo(
     () =>
@@ -237,9 +246,14 @@ export function SearchDialog({
             </div>
           )}
           {state.status === 'failed' && (
-            <p className="p-4 text-sm text-destructive-text" role="alert">
-              {errorText(state.reason)}
-            </p>
+            <div className="flex flex-col items-start gap-3 p-4">
+              <p className="text-sm text-destructive-text" role="alert">
+                {errorText(state.reason)}
+              </p>
+              <Button variant="outline" size="xl" onClick={() => setAttempt((n) => n + 1)}>
+                {t('error.retry')}
+              </Button>
+            </div>
           )}
           {state.status === 'ready' && !trimmed && recent.length === 0 && (
             <p className="p-4 text-sm text-muted-foreground">{t('search.hint')}</p>
@@ -249,7 +263,8 @@ export function SearchDialog({
               <h3 className="text-xs font-medium text-muted-foreground">{t('search.recent')}</h3>
               <Button
                 variant="ghost"
-                size="sm"
+                size="xl"
+                className="px-3 text-sm"
                 onClick={() => {
                   clearRecentSearches();
                   setRecent([]);
@@ -285,6 +300,8 @@ export function SearchDialog({
                 aria-selected={index === current}
                 tabIndex={-1}
                 onMouseMove={() => setActive(index)}
+                // The focus stays in the field, so typing and Enter go on (audit A03-29).
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => choose(option)}
                 onKeyDown={() => undefined}
                 className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 ${index === current ? 'bg-muted' : ''} ${isUnavailable(option) ? 'opacity-60' : ''}`}

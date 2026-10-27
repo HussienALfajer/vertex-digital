@@ -89,85 +89,91 @@ export function Calculator({
           {t('calculator.invalid', { max: CALCULATOR_MAX_TARGET.toLocaleString('en-US') })}
         </FieldError>
       </Field>
-      {result && (
-        <div className="flex flex-col gap-3" aria-live="polite">
-          <ul className="flex flex-col gap-2">
-            {result.lines.map((line) => {
-              const pack = byId.get(line.packId);
-              if (!pack) return null;
-              return (
-                <li
-                  key={line.packId}
-                  className="flex items-center justify-between gap-3 rounded-md border border-border p-2 ps-3"
-                >
-                  <span className="flex flex-col">
-                    <span className="font-medium">
-                      <bdi>{pack.nameAr}</bdi> × {line.count}
+      {/* Mounted before its first result, so screen readers announce it (audit A03-33). */}
+      <div aria-live="polite" className="contents">
+        {result && (
+          <div className="flex flex-col gap-3">
+            <ul className="flex flex-col gap-2">
+              {result.lines.map((line) => {
+                const pack = byId.get(line.packId);
+                if (!pack) return null;
+                return (
+                  <li
+                    key={line.packId}
+                    className="flex items-center justify-between gap-3 rounded-md border border-border p-2 ps-3"
+                  >
+                    <span className="flex flex-col">
+                      <span className="font-medium">
+                        <bdi>{pack.nameAr}</bdi> × {line.count}
+                      </span>
+                      <bdi
+                        dir="ltr"
+                        className="text-end text-sm text-muted-foreground tabular-nums"
+                      >
+                        {formatUsd(pack.priceUsdUnits)}
+                      </bdi>
                     </span>
-                    <bdi dir="ltr" className="text-end text-sm text-muted-foreground tabular-nums">
-                      {formatUsd(pack.priceUsdUnits)}
-                    </bdi>
-                  </span>
-                  <Button variant="outline" size="xl" onClick={() => onBuy(pack.id, line.count)}>
-                    {t('calculator.buy')}
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-          <dl className="flex flex-col gap-1 text-sm">
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted-foreground">{t('calculator.totalAmount')}</dt>
-              <dd className="font-bold tabular-nums">
-                {result.totalAmount.toLocaleString('en-US')}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted-foreground">{t('calculator.totalPrice')}</dt>
-              <dd className="flex flex-col items-end">
-                <bdi dir="ltr" className="text-lg font-bold tabular-nums">
-                  {formatUsd(result.totalUsdUnits)}
-                </bdi>
-                {totalSyp !== null && (
-                  <span className="text-muted-foreground tabular-nums">
-                    {t('catalog.price.syp', { amount: formatSyp(totalSyp) })}
-                  </span>
-                )}
-              </dd>
-            </div>
-          </dl>
-          {result.overshoot > 0 && (
-            <p className="text-sm text-muted-foreground">
-              {t('calculator.overshoot', {
-                amount: result.totalAmount.toLocaleString('en-US'),
-                extra: result.overshoot.toLocaleString('en-US'),
-              })}
-            </p>
-          )}
-          <p className="text-xs text-muted-foreground">{t('calculator.separate')}</p>
-          {storedLineCount() !== null && (
-            <Button
-              size="xl"
-              onClick={() => {
-                const lines = result.lines.flatMap((line) => {
-                  const pack = byId.get(line.packId);
-                  return pack ? [{ product: pack, count: line.count }] : [];
-                });
-                const count = lines.reduce(
-                  (sum, line) => sum + splitCount(line.count, line.product.maxQuantity).length,
-                  0,
+                    <Button variant="outline" size="xl" onClick={() => onBuy(pack.id, line.count)}>
+                      {t('calculator.buy')}
+                    </Button>
+                  </li>
                 );
-                if (count > CART_LINES_MAX) return setTooMany(true);
-                onAddAll(lines);
-              }}
-            >
-              <ShoppingCartIcon aria-hidden="true" />
-              {t('calculator.addAll')}
-            </Button>
-          )}
-          {tooMany && <FormAlert>{t('calculator.tooMany', { max: CART_LINES_MAX })}</FormAlert>}
-        </div>
-      )}
+              })}
+            </ul>
+            <dl className="flex flex-col gap-1 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">{t('calculator.totalAmount')}</dt>
+                <dd className="font-bold tabular-nums">
+                  {result.totalAmount.toLocaleString('en-US')}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">{t('calculator.totalPrice')}</dt>
+                <dd className="flex flex-col items-end">
+                  <bdi dir="ltr" className="text-lg font-bold tabular-nums">
+                    {formatUsd(result.totalUsdUnits)}
+                  </bdi>
+                  {totalSyp !== null && (
+                    <span className="text-muted-foreground tabular-nums">
+                      {t('catalog.price.syp', { amount: formatSyp(totalSyp) })}
+                    </span>
+                  )}
+                </dd>
+              </div>
+            </dl>
+            {result.overshoot > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {t('calculator.overshoot', {
+                  amount: result.totalAmount.toLocaleString('en-US'),
+                  extra: result.overshoot.toLocaleString('en-US'),
+                })}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">{t('calculator.separate')}</p>
+            {storedLineCount() !== null && (
+              <Button
+                size="xl"
+                onClick={() => {
+                  const lines = result.lines.flatMap((line) => {
+                    const pack = byId.get(line.packId);
+                    return pack ? [{ product: pack, count: line.count }] : [];
+                  });
+                  const count = lines.reduce(
+                    (sum, line) => sum + splitCount(line.count, line.product.maxQuantity).length,
+                    0,
+                  );
+                  if (count > CART_LINES_MAX) return setTooMany(true);
+                  onAddAll(lines);
+                }}
+              >
+                <ShoppingCartIcon aria-hidden="true" />
+                {t('calculator.addAll')}
+              </Button>
+            )}
+            {tooMany && <FormAlert>{t('calculator.tooMany', { max: CART_LINES_MAX })}</FormAlert>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

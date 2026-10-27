@@ -63,6 +63,7 @@ export function SearchButton() {
         size="xl"
         className="w-11 px-0 md:w-auto md:px-3"
         aria-label={t('search.open')}
+        aria-haspopup="dialog"
         aria-keyshortcuts="Control+K Meta+K /"
         onClick={() => {
           setLoaded(true);
@@ -90,6 +91,7 @@ export function SearchField() {
   return (
     <button
       type="button"
+      aria-haspopup="dialog"
       onClick={openSearch}
       className="flex h-14 w-full max-w-2xl items-center gap-3 rounded-lg border border-input bg-surface px-4 text-start text-md text-muted-foreground transition-colors duration-150 hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >

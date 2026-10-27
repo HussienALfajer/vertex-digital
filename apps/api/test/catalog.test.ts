@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { CATALOG_IMAGE_MAX_BYTES, CATALOG_IMAGE_WIDTHS } from '@vertex-digital/contracts';
+import { CATALOG_IMAGE_MAX_BYTES, CATALOG_IMAGE_WIDTHS, QUEUES } from '@vertex-digital/contracts';
 import {
   catalogCategories,
   catalogGames,
@@ -10,7 +10,8 @@ import {
 } from '@vertex-digital/db';
 import { asc, eq, inArray } from 'drizzle-orm';
 import sharp from 'sharp';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { JobsService } from '../src/core/jobs/index.js';
 import { FilesService } from '../src/modules/files/index.js';
 import { api, auditOf, body, removeAccounts, seedCustomer } from './helpers.js';
 import { startApp, type TestApp } from './start-app.js';
@@ -155,14 +156,35 @@ afterAll(async () => {
 });
 
 describe('access', () => {
+  const id = `${run.padEnd(8, '0')}-0000-7000-8000-000000000000`;
+  // Every admin catalog route (audit A03-38).
   const routes: [string, string][] = [
     ['GET', '/api/admin/catalog/categories'],
     ['POST', '/api/admin/catalog/categories'],
     ['PUT', '/api/admin/catalog/categories/order'],
+    ['PATCH', `/api/admin/catalog/categories/${id}`],
+    ['POST', `/api/admin/catalog/categories/${id}/archive`],
+    ['POST', `/api/admin/catalog/categories/${id}/restore`],
+    ['PUT', `/api/admin/catalog/categories/${id}/games/order`],
     ['GET', '/api/admin/catalog/games'],
     ['POST', '/api/admin/catalog/games'],
+    ['GET', `/api/admin/catalog/games/${id}`],
+    ['PATCH', `/api/admin/catalog/games/${id}`],
+    ['POST', `/api/admin/catalog/games/${id}/archive`],
+    ['POST', `/api/admin/catalog/games/${id}/restore`],
+    ['POST', `/api/admin/catalog/games/${id}/activate-all`],
+    ['POST', `/api/admin/catalog/games/${id}/fields`],
+    ['PUT', `/api/admin/catalog/games/${id}/fields/order`],
+    ['PATCH', `/api/admin/catalog/fields/${id}`],
+    ['POST', `/api/admin/catalog/fields/${id}/archive`],
+    ['POST', `/api/admin/catalog/fields/${id}/restore`],
+    ['POST', `/api/admin/catalog/games/${id}/products`],
+    ['PUT', `/api/admin/catalog/games/${id}/products/order`],
+    ['PATCH', `/api/admin/catalog/products/${id}`],
+    ['POST', `/api/admin/catalog/products/${id}/archive`],
+    ['POST', `/api/admin/catalog/products/${id}/restore`],
     ['POST', '/api/admin/catalog/images'],
-    ['PATCH', `/api/admin/catalog/products/${run.padEnd(8, '0')}-0000-7000-8000-000000000000`],
+    ['GET', '/api/admin/quick-links'],
   ];
 
   it('answers 401 without a session and to a customer session', async () => {
@@ -185,6 +207,33 @@ describe('access', () => {
   it('never caches admin answers', async () => {
     const response = await get('/categories');
     expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+});
+
+describe('store refresh (S09 rule SF4, audit A03-5)', () => {
+  it('queues store.revalidate after a successful write of either controller, never after a read or a refusal', async () => {
+    const send = vi.spyOn(test.app.get(JobsService), 'send');
+    const refreshes = () =>
+      send.mock.calls.filter(([, queue]) => queue === QUEUES.storeRevalidate).length;
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 200));
+    try {
+      const category = await newCategory();
+      await expect.poll(refreshes).toBe(1);
+      await json(await get('/categories'), 200);
+      await json(await post('/categories', { slug: category.slug, nameAr: 'فئة أخرى' }), 409);
+      await settle();
+      expect(refreshes()).toBe(1);
+      // The items controller: a game's fields and packs.
+      const game = await newGame(category.id);
+      await expect.poll(refreshes).toBe(2);
+      await json(await post(`/games/${game.id}/fields`, playerId), 201);
+      await expect.poll(refreshes).toBe(3);
+      await json(await get(`/games/${game.id}`), 200);
+      await settle();
+      expect(refreshes()).toBe(3);
+    } finally {
+      send.mockRestore();
+    }
   });
 });
 
@@ -1152,6 +1201,52 @@ describe('store routes (S09 rules SF1, SF5, SS1–SS3, SR2, AD1)', () => {
     expect((await client.get('/api/catalog/games/no-such-game')).status).toBe(404);
     await json(await post(`/games/${shown.id}/archive`), 200);
     expect((await client.get(`/api/catalog/games/${row?.slug}`)).status).toBe(404);
+  });
+
+  it('hide an archived category, archived packs and paused games; a paused pack shows unpriced (audit A03-6)', async () => {
+    const category = await newCategory();
+    const game = await activeGame(category.id);
+    const [kept] = game.products;
+    const extra = await json<{ id: string }>(
+      await post(`/games/${game.id}/products`, { kind: 'direct', nameAr: '325 UC' }),
+      201,
+    );
+    const [row] = await test.db.select().from(catalogGames).where(eq(catalogGames.id, game.id));
+    const slug = row?.slug as string;
+    const index = async () =>
+      json<{ games: { id: string }[]; products: { id: string; available: boolean }[] }>(
+        await client.get('/api/catalog/search-index'),
+        200,
+      );
+
+    await json(await patch(`/products/${kept?.id}`, { status: 'paused' }), 200);
+    await json(await post(`/products/${extra.id}/archive`), 200);
+    const page = await json<{
+      products: { id: string; available: boolean; priceUsdUnits: null }[];
+    }>(await client.get(`/api/catalog/games/${slug}`), 200);
+    expect(page.products).toEqual([
+      expect.objectContaining({ id: kept?.id, available: false, priceUsdUnits: null }),
+    ]);
+    const listed = await index();
+    expect(listed.products.filter((product) => product.id === kept?.id)).toEqual([
+      expect.objectContaining({ available: false }),
+    ]);
+    expect(JSON.stringify(listed)).not.toContain(extra.id);
+
+    await json(await patch(`/games/${game.id}`, { status: 'paused' }), 200);
+    expect(JSON.stringify(await index())).not.toContain(game.id);
+    await json(await patch(`/games/${game.id}`, { status: 'active' }), 200);
+    expect((await index()).games.map((entry) => entry.id)).toContain(game.id);
+
+    // The API archives only an empty category (CT1); the reads hide a game under one regardless.
+    await test.db
+      .update(catalogCategories)
+      .set({ archivedAt: new Date() })
+      .where(eq(catalogCategories.id, category.id));
+    const storefront = await client.get('/api/catalog/storefront');
+    expect(JSON.stringify(await storefront.json())).not.toContain(game.id);
+    expect(JSON.stringify(await index())).not.toContain(game.id);
+    expect((await client.get(`/api/catalog/games/${slug}`)).status).toBe(404);
   });
 
   it('stores search terms normalized and unique, audited with the game, in the index', async () => {

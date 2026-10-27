@@ -906,6 +906,75 @@ test.describe('quick buy (S22 F40)', () => {
     );
   });
 
+  test('a search command on the game page it names applies the saved ID too (audit A03-9)', async ({
+    page,
+    api,
+  }) => {
+    signedIn(api)
+      .on('GET /api/catalog/search-index', 200, searchIndex())
+      .on('GET /api/account', 200, { priceKind: 'retail' })
+      .on('GET /api/saved-players', 200, { items: [MINE, BROTHER] });
+    await page.goto('/games/pubg-mobile');
+    await openSearch(page);
+    await page.getByRole('dialog').getByRole('combobox').fill('٦٦٠ ببجي لحسابي');
+    await page.getByRole('dialog').getByRole('combobox').press('Enter');
+    await expect(page).toHaveURL(`/games/pubg-mobile?pack=${p660.id}&player=${MINE.id}`);
+    await expect(buyBox(page).getByRole('slider', { name: p.slidePay })).toBeVisible();
+  });
+
+  test('the sheet says a new price and slides again; a gone pack says so (audit A03-11)', async ({
+    page,
+    api,
+  }) => {
+    const raised = (p660.priceUsdUnits as number) + 250_000;
+    signedIn(api)
+      .on('GET /api/quick-buy', 200, { items: [card(MINE, p660)] })
+      .on('POST /api/orders', 409, {
+        statusCode: 409,
+        code: 'PRICE_CHANGED',
+        message: 'Price changed',
+        details: { unitPriceUsdUnits: raised },
+      });
+    await page.goto('/');
+    const row = page.getByRole('region', { name: qb.row.title });
+    await row.getByRole('button', { name: /^اشحن 660 UC/ }).click();
+    const sheet = page.getByRole('dialog');
+    const slide = async () => {
+      await sheet.getByRole('slider', { name: p.slidePay }).focus();
+      await page.keyboard.press('End');
+    };
+    await slide();
+    await expect(
+      sheet.getByText(fill(p.priceChanged, { price: ltr(formatUsd(raised)) })),
+    ).toBeVisible();
+    api.on('POST /api/orders', 409, {
+      statusCode: 409,
+      code: 'PRODUCT_UNAVAILABLE',
+      message: 'Unavailable',
+    });
+    await slide();
+    await expect(sheet.getByText(p.packGone)).toBeVisible();
+    // The second slide sent the new price.
+    expect(api.last('POST /api/orders')?.body).toMatchObject({
+      expectedUnitPriceUsdUnits: raised,
+    });
+  });
+
+  test('an undo the server refuses hides the card again (audit A03-32)', async ({ page, api }) => {
+    signedIn(api)
+      .on('GET /api/quick-buy', 200, { items: [card(MINE, p660), card(BROTHER, p60)] })
+      .on(`PATCH /api/saved-players/${BROTHER.id}`, 200, { ...BROTHER, quickBuyHidden: true });
+    await page.goto('/');
+    const row = page.getByRole('region', { name: qb.row.title });
+    await row.getByRole('button', { name: fill(qb.row.menu, { label: 'أخي' }) }).click();
+    await page.getByRole('menuitem', { name: qb.row.hide }).click();
+    await expect(row.getByRole('listitem')).toHaveCount(1);
+    api.on(`PATCH /api/saved-players/${BROTHER.id}`, 500, { code: 'INTERNAL_ERROR' });
+    await page.getByRole('button', { name: qb.row.undo }).click();
+    await expect(page.getByText(qb.row.undoFailed)).toBeVisible();
+    await expect(row.getByRole('listitem')).toHaveCount(1);
+  });
+
   test('"معرّفاتي" shows or hides an ID on the home page (QB5)', async ({ page, api }) => {
     signedIn(api)
       .on('GET /api/saved-players', 200, { items: [MINE] })

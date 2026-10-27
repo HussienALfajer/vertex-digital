@@ -63,6 +63,7 @@ export function FieldDialog({
   const create = useCreateField(gameId);
   const update = useUpdateField();
   const requiredId = useId();
+  const boundsId = useId();
   const [type, setType] = useState<InputFieldType>(field?.type ?? 'digits');
   const [required, setRequired] = useState(field?.required ?? true);
   const [options, setOptions] = useState<SelectOption[]>(
@@ -217,6 +218,7 @@ export function FieldDialog({
                 <Input
                   name="minLength"
                   dir="ltr"
+                  aria-describedby={errors.bounds ? boundsId : undefined}
                   inputMode="numeric"
                   defaultValue={field?.minLength ?? ''}
                   autoComplete="off"
@@ -227,6 +229,7 @@ export function FieldDialog({
                 <Input
                   name="maxLength"
                   dir="ltr"
+                  aria-describedby={errors.bounds ? boundsId : undefined}
                   inputMode="numeric"
                   defaultValue={field?.maxLength ?? ''}
                   autoComplete="off"
@@ -237,7 +240,7 @@ export function FieldDialog({
               {t(`catalog.inputFields.boundsHint.${type as 'digits' | 'text'}`)}
             </p>
             {errors.bounds && (
-              <p role="alert" className="text-sm text-destructive-text">
+              <p id={boundsId} role="alert" className="text-sm text-destructive-text">
                 {errors.bounds}
               </p>
             )}

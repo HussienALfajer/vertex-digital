@@ -98,7 +98,7 @@ export class OrdersPollJob implements OnApplicationBootstrap {
       // read or a re-send never marks the offer.
       const routing = routingContext(this.env);
       if (call === 'place') {
-        await markStockRefusal(tx, applied, outcome, routing);
+        await markStockRefusal(tx, applied, outcome, { ...routing, jobs: context.jobs });
         await markSubscriptionRefusal(tx, applied, outcome, { ...routing, jobs: context.jobs });
       }
       await applyQuotedCost(tx, applied.attempt, quote, routing);

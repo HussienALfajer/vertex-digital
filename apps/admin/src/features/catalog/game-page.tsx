@@ -117,7 +117,8 @@ export function GamePage({
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value="data">
+        {/* Kept mounted, so what was typed survives a look at another tab (audit A03-12). */}
+        <TabsContent value="data" keepMounted>
           <GameForm game={data} />
         </TabsContent>
         <TabsContent value="fields">

@@ -1,3 +1,17 @@
+# TASKS — Audit A03 Catalog and storefront (branch `fix/audit-a03-catalog`)
+
+Plan `docs/audits/README.md`, report `docs/audits/A03-catalog.md`. Specs S06 (catalog), S09, S22 (quick links, search commands); ADR 0020, 0034, 0037.
+
+- [x] Start: branch, README status `in progress`, report file, this list
+- [x] Map and audit (api, database, worker, store, admin, tests, observability); known leads checked
+- [x] Live browser test (store and admin screens of the group)
+- [x] Findings shown to the owner (A03-1 decided: clear the amounts in the data)
+- [x] Fixes P0 → P3, each with its regression test (32 fixed; 4 moved to A10, 3 deferred, the report says why)
+- [x] Re-test live with screenshots
+- [x] `pnpm verify` (checker) and the reviewer; findings fixed (tests for A03-16, A03-20, A03-25)
+- [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
+- [ ] Deploy, the A03-1 data fix on production, production smoke test, README `deployed`
+
 # TASKS — Audit A02 Wallet, ledger and deposits (branch `fix/audit-a02-wallet`)
 
 Plan `docs/audits/README.md`, report `docs/audits/A02-wallet.md`. Specs S02, S03, S04; ADR 0003, 0006, 0017, 0018.

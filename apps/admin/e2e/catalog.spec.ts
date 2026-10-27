@@ -383,6 +383,110 @@ test.describe('search terms (S09 rule AD1)', () => {
     await expect(
       page.getByRole('list', { name: ar.catalog.searchTerms.list }).getByRole('listitem'),
     ).toHaveText(['pubg', 'ببجي']);
+
+    // A term typed without Enter is kept when "حفظ" is pressed (audit A03-25).
+    await page.getByLabel(ar.catalog.searchTerms.label, { exact: true }).fill('ببجي موبايل');
+    await page.getByRole('button', { name: ar.catalog.game.save }).click();
+    await expect(page.getByText(ar.catalog.game.saved)).toBeVisible();
+    expect(admin.lastBody(`PATCH /api/admin/catalog/games/${game.id}`)).toMatchObject({
+      searchTerms: ['pubg', 'ببجي', 'ببجي موبايل'],
+    });
+  });
+});
+
+test.describe('the game form (audit A03)', () => {
+  /** An active, complete game: cover, a required field and a direct pack. */
+  function activeGame(admin: AdminApi) {
+    const game = admin.catalog.addGame({
+      categorySlug: 'games',
+      slug: 'pubg-mobile',
+      nameAr: 'ببجي موبايل',
+      nameEn: 'PUBG Mobile',
+      status: 'active',
+      cover: true,
+    });
+    admin.catalog.addField(game.id, { key: 'player_id', labelAr: 'معرّف اللاعب' });
+    admin.catalog.addProduct(game.id, { nameAr: '60 UC', gameAmount: 60 });
+    return game;
+  }
+
+  test('keeps what was typed across the tabs and asks before leaving it (A03-12)', async ({
+    page,
+    admin,
+  }) => {
+    const game = activeGame(admin);
+    await open(page, admin, `/catalog/games/${game.id}`);
+    await field(page, ar.catalog.fields.nameAr).fill('ببجي موبايل الجديدة');
+    await page.getByRole('tab', { name: ar.catalog.game.tabs.products }).click();
+    await page.getByRole('tab', { name: ar.catalog.game.tabs.data }).click();
+    await expect(field(page, ar.catalog.fields.nameAr)).toHaveValue('ببجي موبايل الجديدة');
+
+    await page.getByRole('link', { name: ar.catalog.game.back }).click();
+    const leave = page.getByRole('alertdialog');
+    await expect(leave).toContainText(ar.catalog.game.leave.body);
+    await leave.getByRole('button', { name: ar.common.cancel }).click();
+    await expect(page).toHaveURL(`/catalog/games/${game.id}`);
+    await page.getByRole('button', { name: ar.catalog.game.save }).click();
+    await expect(page.getByText(ar.catalog.game.saved)).toBeVisible();
+    // Saved: leaving asks nothing.
+    await page.getByRole('link', { name: ar.catalog.game.back }).click();
+    await expect(page).toHaveURL('/catalog');
+  });
+
+  test('an active game saved without its cover says so under the cover (A03-13)', async ({
+    page,
+    admin,
+  }) => {
+    const game = activeGame(admin);
+    await open(page, admin, `/catalog/games/${game.id}`);
+    await page.getByRole('button', { name: ar.catalog.image.remove }).first().click();
+    await page.getByRole('button', { name: ar.catalog.game.save }).click();
+    await expect(page.getByText(ar.catalog.game.coverRequired)).toBeVisible();
+    await expect(page.getByText(ar.errors.api.CATALOG_INCOMPLETE)).toHaveCount(0);
+  });
+
+  test('refuses an image of another type before sending it (A03-27)', async ({ page, admin }) => {
+    const game = activeGame(admin);
+    await open(page, admin, `/catalog/games/${game.id}`);
+    await page
+      .locator('input[type=file]')
+      .first()
+      .setInputFiles({ name: 'cover.gif', mimeType: 'image/gif', buffer: PNG });
+    await expect(page.getByText(ar.errors.api.IMAGE_INVALID)).toBeVisible();
+    expect(admin.lastBody('POST /api/admin/catalog/images')).toBeUndefined();
+  });
+
+  test('a failed categories read offers a retry, in the form and in the dialog (A03-14, A03-15)', async ({
+    page,
+    admin,
+  }) => {
+    const game = activeGame(admin);
+    admin.signedIn = true;
+    // The first read and TanStack's two retries of a server fault.
+    await page.route(
+      /\/api\/admin\/catalog\/categories(\?|$)/,
+      (route) => route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR' } }),
+      { times: 3 },
+    );
+    await page.goto(`/catalog/games/${game.id}`);
+    await expect(page.getByText(ar.catalog.game.archivedCategoryName)).toHaveCount(0);
+    await page.getByRole('button', { name: ar.common.retry }).click();
+    await expect(page.getByRole('combobox', { name: ar.catalog.fields.category })).toContainText(
+      'ألعاب',
+    );
+
+    // The dialog's own read: the archived categories.
+    await page.goto('/catalog');
+    await page.getByRole('button', { name: ar.catalog.categories.manage }).click();
+    const dialog = page.getByRole('dialog');
+    await page.route(
+      /\/api\/admin\/catalog\/categories\?archived=true/,
+      (route) => route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR' } }),
+      { times: 3 },
+    );
+    await dialog.getByRole('tab', { name: ar.catalog.filters.archived, exact: true }).click();
+    await dialog.getByRole('button', { name: ar.common.retry }).click();
+    await expect(dialog.getByText(ar.catalog.categories.noneArchived)).toBeVisible();
   });
 });
 

@@ -73,3 +73,13 @@ describe('the nginx deposit zone (ADR 0008, S03 rule SC6)', () => {
     expect(inZone(zone, `/api/deposits/${id}`)).toBe(false);
   });
 });
+
+describe('the nginx catalog zone (audit A03-4)', () => {
+  it('covers the public whole-catalog reads, not a game page or an image', () => {
+    const zone = zonePatterns('digital.vertexmedia.pro', 'vdcatalog');
+    expect(inZone(zone, '/api/catalog/storefront')).toBe(true);
+    expect(inZone(zone, '/api/catalog/search-index')).toBe(true);
+    expect(inZone(zone, '/api/catalog/games/pubg-mobile')).toBe(false);
+    expect(inZone(zone, '/api/catalog/images/0199a000-0000-7000-8000-0000000000d1')).toBe(false);
+  });
+});

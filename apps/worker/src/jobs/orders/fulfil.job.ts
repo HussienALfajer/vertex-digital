@@ -96,7 +96,7 @@ export class OrdersFulfilJob implements OnApplicationBootstrap {
       if (!result.applied) {
         await reportLateResult(tx, context, result, outcome, { kind: 'supplier' });
       }
-      await markStockRefusal(tx, result, outcome, routing);
+      await markStockRefusal(tx, result, outcome, { ...routing, jobs: context.jobs });
       await markSubscriptionRefusal(tx, result, outcome, { ...routing, jobs: context.jobs });
       await applyQuotedCost(tx, result.attempt, quote, routing);
       if (result.applied) await checkCharge(tx, result, { ...routing, jobs: context.jobs });

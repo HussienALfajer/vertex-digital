@@ -370,6 +370,14 @@ export class CatalogItemsService {
             .returning();
           row = updated as ProductRow;
           await auditCatalog(tx, actor, 'catalog_product.updated', productEntity(id), changed);
+          // RT4 (S19): the maximum quantity decides which routes can serve the pack (audit A03-2).
+          if (changed.after.maxQuantity !== undefined && row.archivedAt === null) {
+            await repriceProducts(tx, {
+              productIds: [id],
+              cause: 'route_change',
+              context: routingContext(this.env),
+            });
+          }
         }
         return this.product(tx, row);
       }),

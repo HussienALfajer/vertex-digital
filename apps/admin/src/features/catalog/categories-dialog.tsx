@@ -77,7 +77,14 @@ export function CategoriesDialog() {
         </TabsList>
       </Tabs>
       {categories.isPending && <Skeleton className="h-32 w-full" aria-hidden="true" />}
-      {categories.isError && <FormAlert>{errorMessage(t, categories.error)}</FormAlert>}
+      {categories.isError && (
+        <div className="flex flex-col items-start gap-2">
+          <FormAlert>{errorMessage(t, categories.error)}</FormAlert>
+          <Button variant="outline" size="sm" onClick={() => void categories.refetch()}>
+            {t('common.retry')}
+          </Button>
+        </div>
+      )}
       {categories.isSuccess && items.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {archived ? t('catalog.categories.noneArchived') : t('catalog.categories.none')}
