@@ -1,6 +1,6 @@
 # A07 Customers, support and notifications
 
-Status: merged (PR [#192](https://github.com/HussienALfajer/vertex-digital/pull/192))
+Status: deployed (`e9977c6`, 2026-10-28; PR [#192](https://github.com/HussienALfajer/vertex-digital/pull/192))
 Branch: fix/audit-a07-customers · Started: 2026-10-28 · Specs: S05 (bot, notifications), S12, S15 (web push) · ADRs: 0019, 0026, 0029
 
 ## Scope
@@ -108,4 +108,6 @@ Local stack from the builds (`api-build`, worker, store, panel) on the dev datab
 ## Checks
 - `pnpm verify` on the final tree (base f404e8b, 82 changed files): pass in 4m 44s; lint, typecheck, test and build (25 tasks), migrations and OpenAPI in step, the whole E2E suites of the store (624 passed) and the panel (313 passed). The first full run failed on the api architecture test (`support-records.ts` read `customers`, the `auth` module's table: `lockTicketCustomer` moved to `packages/db/src/support`), a format error and the store's `.next/types` left by the stopped dev server; all three were fixed and the run above is the final one.
 - Reviewer (fresh context, the specs S12, S05, S15, Q28): nothing blocking.
-- CI, the deploy and the production smoke test: recorded with the deploy.
+- CI: every check of PR #192 passed (lint, typecheck, the secrets scan, the four E2E shards); auto-merge merged it as `e9977c6`.
+- Deploy (2026-10-28): `vertexdigital-deploy` detached with `systemd-run`, built, snapshot, migration 0096 applied (97 migrations), switched to `e9977c6` and healthy; `provision.sh` re-run for the `vdstream` zone (nginx reloaded, the fail2ban jails active), the health timer on, PM2 online.
+- Production smoke test, no money: the home page, `/support`, `/notifications`, `/api/health`, `/api/support/channels` and the panel answer 200; the stream answers an anonymous request 401 once; a signed-out game page with a pack chosen sends no `/api/notifications` request in 10 s and logs no console error (A07-2).
