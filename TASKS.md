@@ -10,7 +10,7 @@ Plan `docs/audits/README.md`, report `docs/audits/A05-suppliers.md`. Specs S06 (
 - [x] Re-test live with screenshots
 - [x] `pnpm verify` (checker) and the reviewer; findings fixed (A05-10 raised minimum, A05-14 per-category 403, A05-62, docs; A05-81 found)
 - [x] Report complete, README `merged`, ROADMAP audit line; PR with auto-merge
-- [ ] Deploy, production smoke test, README `deployed`
+- [x] Deploy, production smoke test, README `deployed`
 
 # TASKS — Audit A04 Purchase, orders and fulfilment (branch `fix/audit-a04-orders`)
 
